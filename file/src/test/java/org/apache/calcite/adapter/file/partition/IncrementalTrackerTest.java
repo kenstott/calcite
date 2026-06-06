@@ -331,6 +331,20 @@ public class IncrementalTrackerTest {
     assertFalse(cc.isSourceFilesModified(0L));
   }
 
+  // ===== Freshness token default methods =====
+
+  @Test void testNoopGetFreshnessTokenReturnsNull() {
+    // Default interface method: NOOP has no persistence, so every pipeline is "first run"
+    assertNull(IncrementalTracker.NOOP.getFreshnessToken("any_pipeline"));
+  }
+
+  @Test void testNoopPutFreshnessTokenIsNoOp() {
+    // Must not throw; token not retained (NOOP)
+    IncrementalTracker.NOOP.putFreshnessToken("any_pipeline", "token-xyz");
+    assertNull(IncrementalTracker.NOOP.getFreshnessToken("any_pipeline"),
+        "NOOP tracker must not retain tokens");
+  }
+
   // ===== Static utility methods =====
 
   @Test void testComputeDimensionSignatureEmptyList() {

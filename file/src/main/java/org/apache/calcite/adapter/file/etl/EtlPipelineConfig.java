@@ -206,6 +206,21 @@ public class EtlPipelineConfig {
   }
 
   /**
+   * Returns the name of the per-row modification field used by {@code computed_delta}.
+   *
+   * <p>Reads from {@code source.incremental.dateField} if the source is HTTP and has
+   * an incremental config, since that field already names the modification-date column.
+   * Returns null when the field is not configured (computed_delta then falls back to
+   * full-upsert without modification filtering, writing every fetched row).
+   */
+  public String getModifiedField() {
+    if (source != null && source.getIncremental() != null) {
+      return source.getIncremental().getDateField();
+    }
+    return null;
+  }
+
+  /**
    * Creates a new builder for EtlPipelineConfig.
    */
   public static Builder builder() {

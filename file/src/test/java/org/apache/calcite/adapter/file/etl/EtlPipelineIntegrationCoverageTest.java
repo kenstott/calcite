@@ -909,7 +909,7 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("err_act", rangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString());
     Method m =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig defaults = EtlPipelineConfig.ErrorHandlingConfig.defaults();

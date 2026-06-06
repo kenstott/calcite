@@ -242,6 +242,8 @@ public class EtlPipeline {
     LOGGER.debug("Memory at pipeline_start: {}", startSnap);
 
     MaterializationWriter writer = null;
+    // Freshness token probed in Phase 3b; stored to tracker after a successful commit.
+    String probedFreshnessToken = null;
 
     try {
       boolean forceReprocessAll = false;
@@ -265,10 +267,23 @@ public class EtlPipeline {
           incrementalTracker.invalidateTableCompletion(pipelineName);
           forceReprocessAll = true;
         } else {
-          // Data exists — fall through to dimension expansion and the period-aware filter,
-          // which processes only the periods whose latest marker isn't 'complete'.
-          LOGGER.debug("Pipeline '{}' has a table-level marker and data — expanding for per-period filter",
-              pipelineName);
+          // Data exists — check if the zero-row empty-result TTL has expired.
+          // If it has, invalidate so the pipeline re-runs the empty batches.
+          long emptyTtlMillisForCacheCheck = materializeConfig != null
+              && materializeConfig.getOptions() != null
+              ? materializeConfig.getOptions().getEmptyResultTtlMillis()
+              : 0;
+          if (cached.isEmptyResultTtlExpired(emptyTtlMillisForCacheCheck)) {
+            LOGGER.info("Pipeline '{}': empty-result TTL expired — invalidating for re-run",
+                pipelineName);
+            incrementalTracker.invalidateTableCompletion(pipelineName);
+            forceReprocessAll = true;
+          } else {
+            // Data exists and TTL not expired — fall through to dimension expansion and the
+            // period-aware filter, which processes only periods whose marker isn't 'complete'.
+            LOGGER.debug("Pipeline '{}' has a table-level marker and data — expanding for "
+                + "per-period filter", pipelineName);
+          }
         }
       } else if (materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
@@ -458,6 +473,12 @@ public class EtlPipeline {
           String tableLocation = baseDirectory + "/" + pipelineName;
           cachedRowCount = readRowCountFromIceberg(tableLocation);
         }
+        // If we couldn't read from Iceberg (table not reachable / parquet format),
+        // use the tracker's cached row count as the authoritative figure — it was set
+        // at the prior successful commit.
+        if (cachedRowCount == 0 && cached != null && cached.rowCount > 0) {
+          cachedRowCount = cached.rowCount;
+        }
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash,
             dimensionSignature, cachedRowCount);
         // Per-period markers: every period is fully processed here (neededCount==0).
@@ -474,6 +495,7 @@ public class EtlPipeline {
             .totalRows(cachedRowCount)
             .successfulBatches(0)
             .skippedBatches(totalBatches)
+            .skippedEntirePipeline(true)
             .elapsedMs(elapsed)
             .build();
       } else if (totalBatches == 0) {
@@ -490,9 +512,68 @@ public class EtlPipeline {
             .build();
       }
 
+      // Dataset-type gate (standard mode only, not partitioned):
+      // snapshot → reduce to the single most-recent combination and never skip via
+      //   period-complete (the open period always re-runs for a snapshot source).
+      String datasetType = config.getDatasetType(); // "delta" by default
+      if (!usePartitionedExpansion && "snapshot".equals(datasetType)
+          && combinations != null && !combinations.isEmpty()) {
+        // Keep only the first combo (most-recent — YEAR_RANGE emits descending)
+        List<Map<String, String>> snapshotCombo =
+            Collections.singletonList(combinations.get(0));
+        combinations = snapshotCombo;
+        totalBatches = 1;
+        standardUnprocessedIndices = new HashSet<Integer>(Collections.singletonList(0));
+        neededCount = 1;
+        skippedBatches = 0;
+        dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
+        LOGGER.info("dataset_type=snapshot: processing only the most-recent combination: {}",
+            combinations.get(0));
+      }
+
       // Phase 3: Create data source based on type
       LOGGER.info("Phase 3: Creating data source (type={})", config.getSourceType());
       DataSource dataSource = createDataSource(config);
+
+      // Phase 3b: Freshness skip-gate (pre-download types only).
+      // If freshness: is configured and the source hasn't changed since the last successful
+      // commit, skip the fetch and the materialize — no new Iceberg snapshot is created.
+      // hash-type is post-download and is handled after the fetch; deferred for now.
+      FreshnessConfig freshnessConfig = config.getFreshness();
+      if (freshnessConfig != null
+          && freshnessConfig.getType() != FreshnessConfig.Type.HASH
+          && dataSource instanceof HttpSource) {
+        HttpSource httpSource = (HttpSource) dataSource;
+        try {
+          HttpSource.ProbeResult probeResult =
+              httpSource.probe(freshnessConfig, Collections.<String, String>emptyMap());
+          String currentToken = FreshnessCheck.token(
+              freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
+          String previousToken = incrementalTracker.getFreshnessToken(pipelineName);
+          if (!FreshnessCheck.changed(previousToken, currentToken)) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            LOGGER.info("Pipeline '{}': freshness check UNCHANGED (token={}) — skipping fetch "
+                + "and commit ({}ms)", pipelineName, currentToken, elapsed);
+            return EtlResult.builder()
+                .pipelineName(pipelineName)
+                .totalRows(0)
+                .successfulBatches(0)
+                .skippedBatches(totalBatches)
+                .elapsedMs(elapsed)
+                .build();
+          }
+          LOGGER.info("Pipeline '{}': freshness check CHANGED (prev={}, cur={}) — proceeding",
+              pipelineName,
+              previousToken == null ? "<none>" : previousToken,
+              currentToken == null ? "<null>" : currentToken);
+          // Capture so we can persist it after a successful commit
+          probedFreshnessToken = currentToken;
+        } catch (Exception e) {
+          LOGGER.warn("Pipeline '{}': freshness probe failed ({}), proceeding with full fetch",
+              pipelineName, e.getMessage());
+          // Probe failure = treat as changed; don't skip
+        }
+      }
 
       // Phase 4: Create and initialize materialization writer
       MaterializeConfig.Format format = materializeConfig != null
@@ -1151,6 +1232,13 @@ public class EtlPipeline {
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
         LOGGER.info("Marked pipeline '{}' as complete with configHash={}, signature={}, rows={}",
             pipelineName, configHash, dimensionSignature, totalRows);
+        // Persist the freshness token so the next run can skip if unchanged.
+        // Only written on a clean run (no failed batches) to avoid caching a partial state.
+        if (probedFreshnessToken != null) {
+          incrementalTracker.putFreshnessToken(pipelineName, probedFreshnessToken);
+          LOGGER.info("Pipeline '{}': persisted freshness token after clean commit: {}",
+              pipelineName, probedFreshnessToken);
+        }
       }
       // Per-period markers: mark each period whose full combo set is now processed,
       // even if OTHER periods in this table failed — markCompletedPeriods self-guards
@@ -1365,9 +1453,17 @@ public class EtlPipeline {
     return "at " + rateStr + " ~" + etaStr;
   }
 
+  /** Tracker key suffix for the computed_delta high-water mark. */
+  private static final String COMPUTED_DELTA_HWM_SUFFIX = "::computed_delta_hwm";
+
   private long processSingleBatch(EtlPipelineConfig config, Map<String, String> variables,
       DataSource dataSource, MaterializationWriter writer,
       int processedCount, String pipelineName) throws IOException {
+
+    // Enrich variables with period_start / period_end when backfill_period is set.
+    // This is a delta-only feature; snapshot/computed_delta don't use it, but the
+    // enrichment is a no-op if backfillPeriod is null (which it is for non-delta tables).
+    variables = enrichWithPeriodBounds(variables, config.getBackfillPeriod());
 
     // Document sources use dataWriter directly — serialize writes
     if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
@@ -1398,8 +1494,52 @@ public class EtlPipeline {
       data = dataSource.fetch(variables);
     }
 
+    // computed_delta: filter rows to only those whose modifiedField advanced since the
+    // last stored high-water mark.  The HWM is stored via the freshness-token slot
+    // so it persists across runs without a new tracker abstraction.
+    // NOTE: this materialises the iterator into memory when computed_delta is active
+    // so we can capture max(modifiedField) before writing. For very large payloads
+    // this is a deliberate trade-off (the whole dump is being pulled anyway).
+    final String computedDeltaHwmKey = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
+    String newComputedDeltaHwm = null; // set below if computed_delta active + rows filtered
+    if ("computed_delta".equals(config.getDatasetType())) {
+      String modifiedField = config.getModifiedField();
+      String prevHwm = incrementalTracker.getFreshnessToken(computedDeltaHwmKey);
+      LOGGER.info("computed_delta: modifiedField={}, prevHwm={}", modifiedField, prevHwm);
+
+      if (modifiedField != null && !modifiedField.isEmpty()) {
+        // Materialise the full pull, filter to changed rows, track new HWM
+        List<Map<String, Object>> allRows = new ArrayList<Map<String, Object>>();
+        while (data.hasNext()) {
+          allRows.add(data.next());
+        }
+        List<Map<String, Object>> changedRows = new ArrayList<Map<String, Object>>();
+        String maxSeen = prevHwm;
+        for (Map<String, Object> row : allRows) {
+          Object modVal = row.get(modifiedField);
+          String modStr = modVal == null ? null : String.valueOf(modVal);
+          // Track max modified
+          if (modStr != null && (maxSeen == null || modStr.compareTo(maxSeen) > 0)) {
+            maxSeen = modStr;
+          }
+          // Include row if modified is newer than prevHwm (or if this is first run)
+          if (prevHwm == null || modStr == null || modStr.compareTo(prevHwm) > 0) {
+            changedRows.add(row);
+          }
+        }
+        LOGGER.info("computed_delta: {} of {} rows changed (maxModified={})",
+            changedRows.size(), allRows.size(), maxSeen);
+        data = changedRows.iterator();
+        newComputedDeltaHwm = maxSeen; // will be persisted after the write
+      } else {
+        // No modifiedField configured: write all rows (full-upsert fallback)
+        LOGGER.info("computed_delta: no modifiedField configured — writing all rows (full upsert)");
+      }
+    }
+
     // Serialize all writer and tracker operations to prevent concurrent DuckDB access.
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
+    final String finalNewComputedDeltaHwm = newComputedDeltaHwm;
     synchronized (writeLock) {
       HttpSourceConfig sourceConfig = config.getSource();
       boolean hasResponsePartitioning = sourceConfig != null
@@ -1424,6 +1564,12 @@ public class EtlPipeline {
         }
         incrementalTracker.markProcessedWithRowCount(
             pipelineName, pipelineName, variables, null, batchRows);
+        // Persist computed_delta HWM after a successful write
+        if (finalNewComputedDeltaHwm != null) {
+          incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
+          LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
+              finalNewComputedDeltaHwm, pipelineName);
+        }
       }
 
       LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
@@ -1464,7 +1610,7 @@ public class EtlPipeline {
    * @param config Pipeline configuration
    * @return DataSource instance (HttpSource or ConstantsSource)
    */
-  private DataSource createDataSource(EtlPipelineConfig config) {
+  protected DataSource createDataSource(EtlPipelineConfig config) {
     String sourceType = config.getSourceType();
 
     if (EtlPipelineConfig.SOURCE_TYPE_CONSTANTS.equals(sourceType)) {
@@ -2364,6 +2510,155 @@ public class EtlPipeline {
     } catch (IOException e) {
       LOGGER.debug("Self-heal attempt failed for {}: {}", variables, e.getMessage());
       return 0;
+    }
+  }
+
+  // ===== Dataset-type / Backfill helpers =====
+
+  /**
+   * Returns a copy of {@code variables} enriched with {@code period_start} and
+   * {@code period_end} when {@code backfill_period} is configured on the pipeline.
+   *
+   * <p>The window boundaries are computed from the combination's canonical period
+   * values (year, quarter, month, week, day) at the requested granularity:
+   * <ul>
+   *   <li>{@code annual} — full calendar year: {@code YYYY-01-01} / {@code YYYY-12-31}</li>
+   *   <li>{@code quarterly} — ISO quarter boundaries: {@code YYYY-Q1-01-01} → {@code YYYY-03-31}, etc.</li>
+   *   <li>{@code monthly} — first/last day of the month</li>
+   *   <li>{@code weekly} — ISO week Monday / Sunday</li>
+   *   <li>{@code daily} — the single day</li>
+   * </ul>
+   *
+   * <p>If the combo does not carry the required period value for the requested
+   * granularity (e.g. no {@code quarter} field for {@code quarterly}), the method
+   * returns the original map unchanged — the source template can still use the raw
+   * dimension variables, or the call is a no-op.
+   *
+   * @param variables    the current dimension combination
+   * @param backfillPeriod  one of {@code annual|quarterly|monthly|weekly|daily}, or null
+   * @return enriched copy (or original if no enrichment possible), never null
+   */
+  static Map<String, String> enrichWithPeriodBounds(Map<String, String> variables,
+      String backfillPeriod) {
+    if (backfillPeriod == null || backfillPeriod.isEmpty()) {
+      return variables;
+    }
+    try {
+      java.time.LocalDate start = null;
+      java.time.LocalDate end = null;
+
+      String yearStr = variables.get("year");
+      if (yearStr == null) {
+        return variables; // Can't compute without year
+      }
+      int year;
+      try {
+        year = Integer.parseInt(yearStr);
+      } catch (NumberFormatException e) {
+        return variables;
+      }
+
+      switch (backfillPeriod.toLowerCase()) {
+      case "annual":
+        start = java.time.LocalDate.of(year, 1, 1);
+        end = java.time.LocalDate.of(year, 12, 31);
+        break;
+
+      case "quarterly": {
+        String qStr = variables.get("quarter");
+        if (qStr == null) {
+          return variables;
+        }
+        // Quarter may be stored as "1","2","3","4" or "01".."04"
+        int q;
+        try {
+          q = Integer.parseInt(qStr.trim());
+        } catch (NumberFormatException e) {
+          return variables;
+        }
+        int startMonth = (q - 1) * 3 + 1;
+        start = java.time.LocalDate.of(year, startMonth, 1);
+        // End: last day of the third month of the quarter
+        java.time.YearMonth endYm = java.time.YearMonth.of(year, startMonth + 2);
+        end = endYm.atEndOfMonth();
+        break;
+      }
+
+      case "monthly": {
+        String mStr = variables.get("month");
+        if (mStr == null) {
+          return variables;
+        }
+        int month;
+        try {
+          month = Integer.parseInt(mStr.trim());
+        } catch (NumberFormatException e) {
+          return variables;
+        }
+        java.time.YearMonth ym = java.time.YearMonth.of(year, month);
+        start = ym.atDay(1);
+        end = ym.atEndOfMonth();
+        break;
+      }
+
+      case "weekly": {
+        String wStr = variables.get("week");
+        if (wStr == null) {
+          return variables;
+        }
+        int week;
+        try {
+          week = Integer.parseInt(wStr.trim());
+        } catch (NumberFormatException e) {
+          return variables;
+        }
+        // Use ISO week: week 1 Monday of the given ISO week-year
+        java.time.LocalDate weekStart = java.time.LocalDate.now()
+            .with(java.time.temporal.IsoFields.WEEK_BASED_YEAR, year)
+            .with(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR, week)
+            .with(java.time.DayOfWeek.MONDAY);
+        start = weekStart;
+        end = weekStart.plusDays(6);
+        break;
+      }
+
+      case "daily": {
+        String dStr = variables.get("day");
+        String mStr = variables.get("month");
+        if (dStr == null || mStr == null) {
+          return variables;
+        }
+        int month;
+        int day;
+        try {
+          month = Integer.parseInt(mStr.trim());
+          day = Integer.parseInt(dStr.trim());
+        } catch (NumberFormatException e) {
+          return variables;
+        }
+        start = java.time.LocalDate.of(year, month, day);
+        end = start;
+        break;
+      }
+
+      default:
+        return variables;
+      }
+
+      if (start == null || end == null) {
+        return variables;
+      }
+
+      Map<String, String> enriched = new LinkedHashMap<String, String>(variables);
+      enriched.put("period_start", start.toString()); // ISO-8601: YYYY-MM-DD
+      enriched.put("period_end", end.toString());
+      return enriched;
+
+    } catch (Exception e) {
+      // Never fail a batch due to period-bounds computation
+      LOGGER.debug("enrichWithPeriodBounds failed for {} / {}: {}",
+          backfillPeriod, variables, e.getMessage());
+      return variables;
     }
   }
 }
