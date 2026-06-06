@@ -409,8 +409,18 @@ fi  # end iceberg/data teardown (only when --rebuild)
 
   # One descending sequence from today: daily (current year) first, then historical (older
   # years, newest→oldest via the schema's year_range `descending: true`).
+  #
+  # --rebuild only: set GOVDATA_FRESH_START=true on the DAILY (first) worker so it writes
+  # a schema-scoped "_period_cleared" sentinel before marking any new completions. This
+  # makes isPeriodComplete ignore all prior-run period markers (compaction-safe, latest-wins).
+  # The HISTORICAL worker deliberately does NOT get GOVDATA_FRESH_START so it does NOT
+  # re-clear and does not erase the daily worker's freshly-written period completes.
   log_info "$WORKER_ID: DQ ETL — standard DAILY worker (current year) for schema=$SCHEMA"
-  GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily --force
+  if $REBUILD; then
+    GOVDATA_FRESH_START=true GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily --force
+  else
+    GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily --force
+  fi
   ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-daily"
 
   _dq_start_year="${REBUILD_START_YEAR:-$(get_dq_start_year "$SCHEMA")}"

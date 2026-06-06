@@ -161,4 +161,72 @@ public class S3HivePeriodMarkerTest {
     m.put("geography", geography);
     return m;
   }
+
+  /**
+   * Proves the clearProcessedKeys sentinel gates isProcessed: after recording a processed key for
+   * a schemaA pipeline combo, clearProcessedKeys(schemaA) makes isProcessed treat it as
+   * unprocessed; a later record makes it processed again; and clearProcessedKeys(schemaA) does
+   * NOT affect schemaB.
+   */
+  @Test
+  @EnabledIfEnvironmentVariable(named = "AWS_ENDPOINT_OVERRIDE", matches = ".+")
+  void clearProcessedKeysSentinelGatesIsProcessed() throws InterruptedException {
+    Map<String, String> config = new HashMap<String, String>();
+    config.put("accessKeyId", System.getenv("AWS_ACCESS_KEY_ID"));
+    config.put("secretAccessKey", System.getenv("AWS_SECRET_ACCESS_KEY"));
+    config.put("region", "us-east-1");
+    String bucket = System.getenv("GOVDATA_DQ_TRACKER_BUCKET");
+    if (bucket == null || bucket.isEmpty()) {
+      bucket = "govdata-tracker-v1-dq";
+    }
+    // Use unique prefix per test run to avoid interference
+    String prefix = "s3://" + bucket + "/__fix3_processed_cleared_test__" + System.nanoTime();
+    S3HivePipelineTracker tracker =
+        new S3HivePipelineTracker(prefix, System.getenv("AWS_ENDPOINT_OVERRIDE"), config);
+
+    // Unique schema + pipeline names so parallel test runs never collide
+    long ts = System.nanoTime();
+    String schemaA = "schemaA_" + ts;
+    String schemaB = "schemaB_" + ts;
+    String pipelineA = schemaA + "_pipeline1";
+    String pipelineB = schemaB + "_pipeline1";
+    Map<String, String> combo2024 = Collections.singletonMap("year", "2024");
+    Map<String, String> combo2025 = Collections.singletonMap("year", "2025");
+
+    // 1. Record processed combos for both schemas
+    tracker.markProcessedWithRowCount(pipelineA, pipelineA, combo2024, null, 100);
+    tracker.markProcessedWithRowCount(pipelineB, pipelineB, combo2024, null, 100);
+    tracker.flushPending();
+
+    assertTrue(tracker.isProcessed(pipelineA, pipelineA, combo2024),
+        "schemaA combo should be processed before clear");
+    assertTrue(tracker.isProcessed(pipelineB, pipelineB, combo2024),
+        "schemaB combo should be processed before clear");
+
+    // Ensure 1ms gap so sentinel is strictly newer than the marks above
+    Thread.sleep(2);
+
+    // 2. Clear schemaA's processed keys only
+    tracker.clearProcessedKeys(schemaA);
+
+    // schemaA's prior mark should now be invisible
+    assertFalse(tracker.isProcessed(pipelineA, pipelineA, combo2024),
+        "after clearProcessedKeys(schemaA), schemaA combo should be unprocessed");
+
+    // schemaB must be unaffected
+    assertTrue(tracker.isProcessed(pipelineB, pipelineB, combo2024),
+        "schemaB combo must NOT be affected by clearing schemaA");
+
+    // 3. A fresh mark for schemaA (newer than sentinel) should be visible again
+    Thread.sleep(2);
+    tracker.markProcessedWithRowCount(pipelineA, pipelineA, combo2025, null, 50);
+    tracker.flushPending();
+
+    assertTrue(tracker.isProcessed(pipelineA, pipelineA, combo2025),
+        "fresh mark after clearProcessedKeys should be visible (newer than sentinel)");
+
+    // 4. The old 2024 combo (pre-sentinel) for schemaA is still invisible
+    assertFalse(tracker.isProcessed(pipelineA, pipelineA, combo2024),
+        "old schemaA combo (pre-sentinel) should still be unprocessed");
+  }
 }

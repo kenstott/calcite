@@ -1212,8 +1212,30 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public boolean isProcessed(String alternateName, String sourceTable,
       Map<String, String> keyValues) {
     String sourceKey = flattenKeyValues(keyValues);
-    String state = readLatestState(sourceKey, alternateName, "incremental");
-    return "complete".equals(state);
+    // Check whether a schema-scoped processed-cleared sentinel exists (written by freshStart).
+    // If so, a "complete" marker is only honoured when its as_of is AFTER the sentinel.
+    long clearedAt = getProcessedClearedSentinelAsOf(alternateName);
+    if (clearedAt <= 0) {
+      // No sentinel: use the fast string-only read.
+      String state = readLatestState(sourceKey, alternateName, "incremental");
+      return "complete".equals(state);
+    }
+    // Sentinel exists: must compare timestamps.
+    String[] result = readLatestStateAndAsOf(sourceKey, alternateName, "incremental");
+    String stateStr = result[0];
+    if (!"complete".equals(stateStr)) {
+      return false;
+    }
+    long processedAt = 0;
+    if (result[1] != null) {
+      try {
+        processedAt = Long.parseLong(result[1]);
+      } catch (NumberFormatException e) {
+        // treat as 0
+      }
+    }
+    // Only "complete" if the marker was written AFTER the sentinel.
+    return processedAt > clearedAt;
   }
 
   @Override public boolean isProcessedWithTtl(String alternateName, String sourceTable,
@@ -1622,6 +1644,39 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private static final String PERIOD_SOURCE_KEY = "_period_complete";
   private static final String PERIOD_PHASE = "period_completion";
 
+  /**
+   * Fixed source_key for schema-scoped period-cleared sentinels written by
+   * {@link #clearPeriodCompletions}. The schema name lives in {@code table_name}.
+   * Also lives at year=0 (COMPLETION_YEAR) via the same {@code completionYearFor} logic.
+   */
+  private static final String PERIOD_CLEARED_SOURCE_KEY = "_period_cleared";
+
+  /**
+   * In-memory cache of schema-name → cleared-sentinel as_of timestamp.
+   * Populated when the sentinel is written (this process) or read from S3.
+   * A value of 0 means "not cleared" (sentinel not found).
+   */
+  private final Map<String, Long> periodClearedAsOfCache =
+      new ConcurrentHashMap<String, Long>();
+
+  /**
+   * Fixed source_key for schema-scoped processed-cleared sentinels written by
+   * {@link #clearProcessedKeys}. The schema name lives in {@code table_name}.
+   * Lives at year=0 (COMPLETION_YEAR) via the {@code completionYearFor} routing.
+   */
+  private static final String PROCESSED_CLEARED_SOURCE_KEY = "_processed_cleared";
+
+  /** Phase label for processed-key cleared sentinels. */
+  private static final String PROCESSED_CLEARED_PHASE = "incremental_cleared";
+
+  /**
+   * In-memory cache of schema-name → processed-cleared-sentinel as_of timestamp.
+   * Populated when the sentinel is written (this process) or read from S3.
+   * A value of 0 means "not cleared" (sentinel not found).
+   */
+  private final Map<String, Long> processedClearedAsOfCache =
+      new ConcurrentHashMap<String, Long>();
+
   @Override public void flushPending() {
     flushPendingStates();
   }
@@ -1629,13 +1684,49 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   @Override public boolean isPeriodComplete(String pipelineName,
       Map<String, String> periodValues) {
     String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
-    String cached = periodCompletionCache.get(periodKey);
-    if (cached != null) {
-      return "complete".equals(cached);
+
+    // Look up the cleared-sentinel asOf for this pipeline's schema (0 = no clear recorded).
+    // Uses longest-prefix matching so "econ_reference_*" doesn't collide with "econ_*".
+    long clearedAt = getClearedSentinelAsOf(pipelineName);
+
+    // Cache shortcut: if no clear ever recorded, the simple state check is sufficient.
+    if (clearedAt <= 0) {
+      String cached = periodCompletionCache.get(periodKey);
+      if (cached != null) {
+        return "complete".equals(cached);
+      }
+      String state = readLatestState(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE);
+      periodCompletionCache.put(periodKey, state == null ? "" : state);
+      return "complete".equals(state);
     }
-    String state = readLatestState(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE);
-    periodCompletionCache.put(periodKey, state == null ? "" : state);
-    return "complete".equals(state);
+
+    // A clear sentinel exists: must compare as_of timestamps.
+    // Bypass the string-only cache and read state+asOf from S3.
+    String[] stateResult = readLatestStateAndAsOf(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE);
+    String stateStr = stateResult[0];
+    long completedAt = 0;
+    if (stateResult[1] != null) {
+      try {
+        completedAt = Long.parseLong(stateResult[1]);
+      } catch (NumberFormatException e) {
+        // treat as 0
+      }
+    }
+
+    if (!"complete".equals(stateStr)) {
+      periodCompletionCache.put(periodKey, stateStr == null ? "" : stateStr);
+      return false;
+    }
+
+    // The period's "complete" marker was written before or at the clear: treat as not complete.
+    if (completedAt <= clearedAt) {
+      periodCompletionCache.remove(periodKey);
+      return false;
+    }
+
+    // The completion is newer than the clear: it is genuinely complete.
+    periodCompletionCache.put(periodKey, "complete");
+    return true;
   }
 
   @Override public void markPeriodComplete(String pipelineName,
@@ -1653,6 +1744,267 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
     writeState(PERIOD_SOURCE_KEY, periodKey, PERIOD_PHASE, "invalidate", 0, null, null, null);
     periodCompletionCache.put(periodKey, "invalidate");
+  }
+
+  @Override public void clearPeriodCompletions(String schemaName) {
+    LOGGER.info("clearPeriodCompletions({}): writing cleared sentinel at year=0", schemaName);
+    long asOf = System.currentTimeMillis();
+    // Write the sentinel immediately (not buffered) so subsequent isPeriodComplete calls in
+    // this same process see it without requiring an explicit flushPending.
+    writeStateWithAsOf(PERIOD_CLEARED_SOURCE_KEY, schemaName, PERIOD_PHASE, "cleared",
+        0, null, null, null, asOf);
+    periodClearedAsOfCache.put(schemaName, asOf);
+    // Invalidate any period-complete cache entries for this schema's pipelines.
+    // pipelineName format is "<schema>_<table>", so entries prefixed with schemaName+"_" belong here.
+    String prefix = schemaName + "_";
+    for (String key : new ArrayList<String>(periodCompletionCache.keySet())) {
+      // periodKey format: "year_quarter_month_week_day_dow_pipelineName"
+      // The pipeline name is the last '_'-delimited segment — but easier: check if the
+      // periodKey contains the pipeline prefix (schemaName + "_") as a substring after the
+      // last period-slot separator. We detect this by checking that the periodKey ends with
+      // "_" + schemaName + "_" + something, i.e. contains "_" + prefix.
+      if (key.contains("_" + prefix)) {
+        periodCompletionCache.remove(key);
+      }
+    }
+    LOGGER.info("clearPeriodCompletions({}): sentinel asOf={}, cache entries invalidated",
+        schemaName, asOf);
+  }
+
+  @Override public void clearProcessedKeys(String schemaName) {
+    LOGGER.info("clearProcessedKeys({}): writing processed-cleared sentinel at year=0", schemaName);
+    long asOf = System.currentTimeMillis();
+    // Write the sentinel immediately (not buffered) so subsequent isProcessed calls in
+    // this same process see it without requiring an explicit flushPending.
+    writeStateWithAsOf(PROCESSED_CLEARED_SOURCE_KEY, schemaName, PROCESSED_CLEARED_PHASE,
+        "cleared", 0, null, null, null, asOf);
+    processedClearedAsOfCache.put(schemaName, asOf);
+    // Evict processedKeysCache entries belonging to this schema's pipelines.
+    // Pipeline names start with "<schemaName>_"; the cache key is the pipeline name (alternateName).
+    String prefix = schemaName + "_";
+    for (String key : new ArrayList<String>(processedKeysCache.keySet())) {
+      if (key.startsWith(prefix) || key.equals(schemaName)) {
+        processedKeysCache.remove(key);
+      }
+    }
+    LOGGER.info("clearProcessedKeys({}): sentinel asOf={}, processedKeysCache entries evicted",
+        schemaName, asOf);
+  }
+
+  /**
+   * Returns the as_of timestamp of the latest "_processed_cleared" sentinel for the schema
+   * that owns the given pipeline name, using longest-prefix matching.
+   *
+   * <p>Mirrors {@link #getClearedSentinelAsOf}: the sentinel's {@code table_name} is the schema
+   * name and the pipeline prefix match uses the same longest-prefix algorithm.
+   *
+   * @param pipelineName fully-qualified pipeline name (e.g. "energy_eia_coal_mines")
+   * @return as_of millis of the processed-cleared sentinel, or 0 if no sentinel found
+   */
+  private long getProcessedClearedSentinelAsOf(String pipelineName) {
+    // First pass: check in-memory cache for a schema that matches this pipeline.
+    String bestMatch = null;
+    int bestLen = -1;
+    for (String schemaName : processedClearedAsOfCache.keySet()) {
+      String prefix = schemaName + "_";
+      if (pipelineName.startsWith(prefix) && schemaName.length() > bestLen) {
+        bestMatch = schemaName;
+        bestLen = schemaName.length();
+      }
+    }
+    if (bestMatch != null) {
+      return processedClearedAsOfCache.get(bestMatch);
+    }
+
+    // Second pass: not in cache. Derive candidate schema names from the pipeline name
+    // (longest prefix first) and query S3 for each, caching misses as 0L.
+    List<String> candidates = new ArrayList<String>();
+    String[] parts = pipelineName.split("_", -1);
+    for (int len = parts.length - 1; len >= 1; len--) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < len; i++) {
+        if (i > 0) {
+          sb.append('_');
+        }
+        sb.append(parts[i]);
+      }
+      candidates.add(sb.toString());
+    }
+
+    for (String candidate : candidates) {
+      Long cached = processedClearedAsOfCache.get(candidate);
+      if (cached != null) {
+        if (cached > 0) {
+          return cached;
+        }
+        continue; // cached miss
+      }
+      // Not cached: query S3 for this candidate schema sentinel
+      String[] result = readLatestStateAndAsOf(PROCESSED_CLEARED_SOURCE_KEY, candidate,
+          PROCESSED_CLEARED_PHASE);
+      String stateStr = result[0];
+      String asOfStr = result[1];
+      if ("cleared".equals(stateStr) && asOfStr != null) {
+        long asOf = 0;
+        try {
+          asOf = Long.parseLong(asOfStr);
+        } catch (NumberFormatException e) {
+          // ignore
+        }
+        if (asOf > 0) {
+          processedClearedAsOfCache.put(candidate, asOf);
+          return asOf;
+        }
+      }
+      // Not found: cache as miss
+      processedClearedAsOfCache.put(candidate, 0L);
+    }
+
+    return 0L;
+  }
+
+  /**
+   * Read the latest (state, as_of) for a (source_key, table_name, phase) combination.
+   *
+   * @return String[2] where [0]=state (may be null if not found), [1]=as_of as decimal string
+   *         (may be null if not found)
+   */
+  private String[] readLatestStateAndAsOf(String sourceKey, String tableName, String phase) {
+    String year = completionYearFor(sourceKey, System.currentTimeMillis());
+    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
+        + "/*.parquet";
+    String sql = "SELECT state, as_of FROM read_parquet('" + glob + "', "
+        + "hive_partitioning=true, union_by_name=true) "
+        + "WHERE source_key = ? AND table_name = ? AND phase = ? "
+        + "ORDER BY as_of DESC LIMIT 1";
+
+    synchronized (connectionLock) {
+      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+        stmt.setString(1, sourceKey);
+        stmt.setString(2, tableName);
+        stmt.setString(3, phase);
+        try (ResultSet rs = stmt.executeQuery()) {
+          if (rs.next()) {
+            return new String[]{rs.getString("state"), String.valueOf(rs.getLong("as_of"))};
+          }
+        }
+      } catch (SQLException e) {
+        LOGGER.debug("No tracker state found for {}/{}/{}: {}",
+            sourceKey, tableName, phase, e.getMessage());
+      }
+    }
+    return new String[]{null, null};
+  }
+
+  /**
+   * Write a state row with an explicitly supplied {@code asOf} timestamp.
+   *
+   * <p>Used by {@link #clearPeriodCompletions} to ensure the cleared sentinel is
+   * written with a known timestamp that can be compared to subsequent period completes.
+   */
+  private void writeStateWithAsOf(String sourceKey, String tableName, String phase,
+      String state, long rowCount, String configHash, String signature,
+      String errorMessage, long asOf) {
+    ensureShutdownHook();
+    boolean shouldFlush = false;
+    synchronized (connectionLock) {
+      pendingStates.add(
+          new PendingState(sourceKey, tableName, phase,
+          state, rowCount, configHash, signature, errorMessage, asOf));
+      if (pendingStates.size() >= PENDING_FLUSH_THRESHOLD) {
+        shouldFlush = true;
+      }
+    }
+    if (shouldFlush) {
+      flushPendingStates();
+    }
+    // Flush immediately so the sentinel is durable before the caller proceeds.
+    flushPendingStates();
+  }
+
+  /**
+   * Returns the as_of timestamp of the latest "_period_cleared" sentinel for the schema
+   * that owns the given pipeline name, using longest-prefix matching.
+   *
+   * <p>Schema derivation: the sentinel's {@code table_name} is the schema name.  A pipeline
+   * "energy_eia_electricity_generation" belongs to schema "energy" because
+   * {@code "energy_" + "eia_electricity_generation"} matches — and not to any longer prefix
+   * like "energy_eia" (which would also need to be a registered sentinel). The longest
+   * registered schema name whose name followed by "_" is a prefix of pipelineName wins.
+   *
+   * <p>If no sentinel is known in memory, S3 is queried once per schema and the result
+   * is cached (including "not found" as 0L).
+   *
+   * @param pipelineName fully-qualified pipeline name (e.g. "energy_eia_electricity_generation")
+   * @return as_of millis of the cleared sentinel, or 0 if no sentinel found
+   */
+  private long getClearedSentinelAsOf(String pipelineName) {
+    // First pass: find all schema names in cache that match this pipeline as a prefix.
+    String bestMatch = null;
+    int bestLen = -1;
+    for (String schemaName : periodClearedAsOfCache.keySet()) {
+      String prefix = schemaName + "_";
+      if (pipelineName.startsWith(prefix) && schemaName.length() > bestLen) {
+        bestMatch = schemaName;
+        bestLen = schemaName.length();
+      }
+    }
+    if (bestMatch != null) {
+      return periodClearedAsOfCache.get(bestMatch);
+    }
+
+    // Second pass: not in cache at all. Attempt an S3 read for the candidate schema derived
+    // from the pipeline name. We read the sentinel for the longest prefix of pipelineName
+    // that a schema name could be. Since we don't know all schema names a priori, we check
+    // by reading the _period_cleared source key for the portion of pipelineName up to each
+    // underscore, longest first. Stop at the first match (or after exhausting candidates).
+    // This is O(#underscores) S3 reads at most, and results are cached so it happens once
+    // per pipeline per JVM.
+    List<String> candidates = new ArrayList<String>();
+    String[] parts = pipelineName.split("_", -1);
+    // Build candidates from longest schema prefix to shortest.
+    // e.g. "energy_eia_electricity_generation" → "energy_eia_electricity", "energy_eia", "energy"
+    for (int len = parts.length - 1; len >= 1; len--) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < len; i++) {
+        if (i > 0) {
+          sb.append('_');
+        }
+        sb.append(parts[i]);
+      }
+      candidates.add(sb.toString());
+    }
+
+    for (String candidate : candidates) {
+      // Check if already cached as a miss (0L means "checked, not found")
+      Long cached = periodClearedAsOfCache.get(candidate);
+      if (cached != null) {
+        if (cached > 0) {
+          return cached;
+        }
+        continue; // cached miss, skip to next
+      }
+      // Not cached: query S3 for this candidate schema sentinel
+      String[] result = readLatestStateAndAsOf(PERIOD_CLEARED_SOURCE_KEY, candidate, PERIOD_PHASE);
+      String stateStr = result[0];
+      String asOfStr = result[1];
+      if ("cleared".equals(stateStr) && asOfStr != null) {
+        long asOf = 0;
+        try {
+          asOf = Long.parseLong(asOfStr);
+        } catch (NumberFormatException e) {
+          // ignore
+        }
+        if (asOf > 0) {
+          periodClearedAsOfCache.put(candidate, asOf);
+          return asOf;
+        }
+      }
+      // Not found for this candidate: cache as miss
+      periodClearedAsOfCache.put(candidate, 0L);
+    }
+
+    return 0L;
   }
 
   @Override public void clearAllCompletions() {
@@ -1755,6 +2107,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return COMPLETION_YEAR;
     }
     if (FRESHNESS_SOURCE_KEY.equals(sourceKey)) {
+      return COMPLETION_YEAR;
+    }
+    if (PERIOD_CLEARED_SOURCE_KEY.equals(sourceKey)) {
+      return COMPLETION_YEAR;
+    }
+    if (PROCESSED_CLEARED_SOURCE_KEY.equals(sourceKey)) {
       return COMPLETION_YEAR;
     }
     return "_table_complete".equals(sourceKey) ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
