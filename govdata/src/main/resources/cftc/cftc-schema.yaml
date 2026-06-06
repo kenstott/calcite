@@ -1,0 +1,853 @@
+# ============================================================================
+# CFTC Swap Data Repository (SDR) Schema
+# ============================================================================
+#
+# Source: DTCC Global Trade Repository (GTR) — CFTC jurisdiction
+#   Public dissemination mandated by 17 CFR Part 43 (Dodd-Frank)
+#   URL pattern: https://kgc0418-tdw-data-0.s3.amazonaws.com/cftc/eod/
+#              CFTC_CUMULATIVE_{ASSET_CLASS}_{YYYY}_{MM}_{DD}.zip
+#
+# Coverage: 2024-01-01 to present (post-Part-43/45 rewrite schema)
+#   Earlier data (2021-2023) has a different field structure — not included.
+#
+# Asset classes: RATES, CREDITS, FOREX, EQUITIES, COMMODITIES
+# Frequency: Daily EOD files (published ~00:15 UTC next calendar day)
+# Legal status: Publicly mandated dissemination; no auth required
+#
+# ============================================================================
+
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+schema:
+  name: cftc
+  description: >
+    CFTC swap trade data from DTCC's public price dissemination feed, mandated
+    under Dodd-Frank (17 CFR Part 43). Covers interest rate swaps, credit default
+    swaps, FX derivatives, equity derivatives, and commodity derivatives.
+    Daily EOD files from 2024-01-01 onward.
+
+columnTemplates:
+
+  trade_date_column: &trade_date_column
+    name: trade_date
+    type: date
+    nullable: false
+    comment: Calendar date of the trade (derived from event_timestamp)
+
+  year_column: &year_column
+    name: year
+    type: integer
+    nullable: false
+    comment: Calendar year (partition key)
+
+  month_column: &month_column
+    name: month
+    type: integer
+    nullable: false
+    comment: Calendar month 1-12 (partition key)
+
+  asset_class_column: &asset_class_column
+    name: asset_class
+    type: string
+    nullable: false
+    comment: CFTC asset class — IR (rates), CR (credit), FX, EQ (equity), CO (commodity)
+
+partitionedTables:
+
+  - name: cftc_trades
+    pattern: "type=cftc_trades/asset_class=*/year=*/month=*/cftc_trades.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: asset_class
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+        - name: month
+          type: INTEGER
+    comment: >
+      CFTC swap trade public dissemination records from DTCC GTR. Each row is one
+      reported swap event (new trade, amendment, termination, correction). Covers all
+      five CFTC asset classes: IR (interest rate), CR (credit/CDS), FX, EQ (equity),
+      CO (commodity). Partitioned by asset_class/year/month. Daily EOD files from
+      2024-01-01; weekends and holidays produce no file (skipped cleanly).
+      For new trades only: WHERE action_type = 'NEWT'. For live trades: exclude
+      action_type IN ('TERM','CORR','EROR'). Join on dissemination_id /
+      original_dissemination_id to reconstruct amendment chains.
+
+    columns:
+      # --- Identity & lifecycle ---
+      - name: dissemination_id
+        type: string
+        nullable: false
+        source: "Dissemination Identifier"
+        comment: Unique identifier assigned by DTCC for this dissemination event (PK)
+      - name: original_dissemination_id
+        type: string
+        nullable: true
+        source: "Original Dissemination Identifier"
+        comment: References the original NEWT dissemination_id for amendments/terminations
+      - name: action_type
+        type: string
+        nullable: false
+        source: "Action type"
+        comment: "NEWT=new trade, AMND=amendment, TERM=termination, CORR=correction, EROR=error, NOVA=novation"
+      - name: event_type
+        type: string
+        nullable: true
+        source: "Event type"
+        comment: "TRAD=trade, NOVA=novation, CLRG=clearing"
+      - name: event_timestamp
+        type: timestamp
+        nullable: false
+        source: "Event timestamp"
+        comment: UTC timestamp of the swap event
+      - name: amendment_indicator
+        type: string
+        nullable: true
+        source: "Amendment indicator"
+        comment: Indicates whether the record is an amendment to a prior submission
+
+      # --- Product classification ---
+      - <<: *asset_class_column
+        source: "Asset Class"
+      - name: product_name
+        type: string
+        nullable: true
+        source: "Product name"
+        comment: Standard product description (e.g. 'Swap OIS USD', 'Index CDS')
+      - name: unique_product_identifier
+        type: string
+        nullable: true
+        source: "Unique Product Identifier"
+        comment: UPI code identifying the swap product per ANNA DSB taxonomy
+      - name: upi_fisn
+        type: string
+        nullable: true
+        source: "UPI FISN"
+        comment: Financial Instrument Short Name from UPI
+      - name: upi_underlier_name
+        type: string
+        nullable: true
+        source: "UPI Underlier Name"
+        comment: Underlier name from UPI (e.g. 'USD-SOFR-COMPOUND', 'CDX.NA.IG')
+
+      # --- Clearing & execution ---
+      - name: cleared
+        type: string
+        nullable: true
+        source: "Cleared"
+        comment: "C=cleared, U=uncleared, I=not applicable"
+      - name: mandatory_clearing_indicator
+        type: boolean
+        nullable: true
+        source: "Mandatory clearing indicator"
+        comment: Whether this swap is subject to mandatory clearing under CFTC rules
+      - name: execution_timestamp
+        type: timestamp
+        nullable: true
+        source: "Execution Timestamp"
+        comment: UTC timestamp when the trade was executed
+      - name: platform_identifier
+        type: string
+        nullable: true
+        source: "Platform identifier"
+        comment: SEF or DCM venue identifier where the trade was executed
+      - name: block_trade_election_indicator
+        type: boolean
+        nullable: true
+        source: "Block trade election indicator"
+        comment: True if the trade qualifies as a block trade (delayed reporting)
+      - name: large_notional_off_facility_swap_indicator
+        type: boolean
+        nullable: true
+        source: "Large notional off-facility swap election indicator"
+        comment: True if large notional off-facility swap delayed reporting elected
+      - name: prime_brokerage_transaction_indicator
+        type: boolean
+        nullable: true
+        source: "Prime brokerage transaction indicator"
+        comment: True if this is a prime brokerage transaction
+
+      # --- Trade dates ---
+      - name: effective_date
+        type: date
+        nullable: true
+        source: "Effective Date"
+        comment: Date the swap begins accruing
+      - name: expiration_date
+        type: date
+        nullable: true
+        source: "Expiration Date"
+        comment: Scheduled maturity/expiration date of the swap
+      - name: maturity_date_underlier
+        type: date
+        nullable: true
+        source: "Maturity date of the underlier"
+        comment: Maturity date of the underlying instrument (for options/swaptions)
+      - name: first_exercise_date
+        type: date
+        nullable: true
+        source: "First exercise date"
+        comment: Earliest exercise date for options
+
+      # --- Notional ---
+      - name: notional_amount_leg1
+        type: double
+        nullable: true
+        source: "Notional amount-Leg 1"
+        comment: Notional principal amount for leg 1 (commas removed by DuckDB auto-detect)
+      - name: notional_amount_leg2
+        type: double
+        nullable: true
+        source: "Notional amount-Leg 2"
+        comment: Notional principal amount for leg 2
+      - name: notional_currency_leg1
+        type: string
+        nullable: true
+        source: "Notional currency-Leg 1"
+        comment: ISO 4217 currency code for leg 1 notional
+      - name: notional_currency_leg2
+        type: string
+        nullable: true
+        source: "Notional currency-Leg 2"
+        comment: ISO 4217 currency code for leg 2 notional
+      - name: notional_quantity_leg1
+        type: double
+        nullable: true
+        source: "Notional quantity-Leg 1"
+        comment: Physical quantity for commodity/equity swaps leg 1
+      - name: notional_quantity_leg2
+        type: double
+        nullable: true
+        source: "Notional quantity-Leg 2"
+        comment: Physical quantity for commodity/equity swaps leg 2
+      - name: total_notional_quantity_leg1
+        type: double
+        nullable: true
+        source: "Total notional quantity-Leg 1"
+        comment: Aggregate quantity over the life of the swap leg 1
+      - name: total_notional_quantity_leg2
+        type: double
+        nullable: true
+        source: "Total notional quantity-Leg 2"
+        comment: Aggregate quantity over the life of the swap leg 2
+      - name: quantity_unit_of_measure_leg1
+        type: string
+        nullable: true
+        source: "Quantity unit of measure-Leg 1"
+        comment: Unit of measure for notional quantity leg 1 (BBL, MMBTU, MWH, etc.)
+      - name: quantity_unit_of_measure_leg2
+        type: string
+        nullable: true
+        source: "Quantity unit of measure-Leg 2"
+        comment: Unit of measure for notional quantity leg 2
+      - name: quantity_frequency_leg1
+        type: string
+        nullable: true
+        source: "Quantity frequency-Leg 1"
+        comment: Frequency at which quantity is delivered/settled leg 1
+      - name: quantity_frequency_leg2
+        type: string
+        nullable: true
+        source: "Quantity frequency-Leg 2"
+        comment: Frequency at which quantity is delivered/settled leg 2
+      - name: quantity_frequency_multiplier_leg1
+        type: double
+        nullable: true
+        source: "Quantity frequency multiplier-Leg 1"
+        comment: Multiplier applied to quantity frequency leg 1
+      - name: quantity_frequency_multiplier_leg2
+        type: double
+        nullable: true
+        source: "Quantity frequency multiplier-Leg 2"
+        comment: Multiplier applied to quantity frequency leg 2
+      - name: notional_amount_effective_leg1
+        type: double
+        nullable: true
+        source: "Notional amount in effect on associated effective date-Leg 1"
+        comment: Notional in effect on the effective date for leg 1 (step-up swaps)
+      - name: notional_amount_effective_leg2
+        type: double
+        nullable: true
+        source: "Notional amount in effect on associated effective date-Leg 2"
+        comment: Notional in effect on the effective date for leg 2
+      - name: effective_date_notional_leg1
+        type: date
+        nullable: true
+        source: "Effective date of the notional amount-Leg 1"
+        comment: Date the notional amount takes effect for leg 1
+      - name: effective_date_notional_leg2
+        type: date
+        nullable: true
+        source: "Effective date of the notional amount-Leg 2"
+        comment: Date the notional amount takes effect for leg 2
+      - name: end_date_notional_leg1
+        type: date
+        nullable: true
+        source: "End date of the notional amount-Leg 1"
+        comment: Date the notional amount expires for leg 1
+      - name: end_date_notional_leg2
+        type: date
+        nullable: true
+        source: "End date of the notional amount-Leg 2"
+        comment: Date the notional amount expires for leg 2
+
+      # --- Rates ---
+      - name: fixed_rate_leg1
+        type: double
+        nullable: true
+        source: "Fixed rate-Leg 1"
+        comment: Fixed coupon rate for leg 1 as a decimal (e.g. 0.036515 = 3.6515%)
+      - name: fixed_rate_leg2
+        type: double
+        nullable: true
+        source: "Fixed rate-Leg 2"
+        comment: Fixed coupon rate for leg 2 as a decimal
+      - name: fixed_rate_day_count_leg1
+        type: string
+        nullable: true
+        source: "Fixed rate day count convention-leg 1"
+        comment: Day count convention for fixed leg 1 (A004=ACT/360, A006=30/360, etc.)
+      - name: fixed_rate_day_count_leg2
+        type: string
+        nullable: true
+        source: "Fixed rate day count convention-leg 2"
+        comment: Day count convention for fixed leg 2
+      - name: floating_rate_day_count_leg1
+        type: string
+        nullable: true
+        source: "Floating rate day count convention-leg 1"
+        comment: Day count convention for floating leg 1
+      - name: floating_rate_day_count_leg2
+        type: string
+        nullable: true
+        source: "Floating rate day count convention-leg 2"
+        comment: Day count convention for floating leg 2
+      - name: floating_rate_reset_freq_period_leg1
+        type: string
+        nullable: true
+        source: "Floating rate reset frequency period-leg 1"
+        comment: Reset period unit for floating leg 1 (MNTH, WEEK, YEAR, EXPI, etc.)
+      - name: floating_rate_reset_freq_period_leg2
+        type: string
+        nullable: true
+        source: "Floating rate reset frequency period-leg 2"
+        comment: Reset period unit for floating leg 2
+      - name: floating_rate_reset_freq_multiplier_leg1
+        type: double
+        nullable: true
+        source: "Floating rate reset frequency period multiplier-leg 1"
+        comment: Multiplier for reset frequency period leg 1
+      - name: floating_rate_reset_freq_multiplier_leg2
+        type: double
+        nullable: true
+        source: "Floating rate reset frequency period multiplier-leg 2"
+        comment: Multiplier for reset frequency period leg 2
+      - name: fixed_rate_payment_freq_period_leg1
+        type: string
+        nullable: true
+        source: "Fixed rate payment frequency period-Leg 1"
+        comment: Payment frequency period unit for fixed leg 1
+      - name: fixed_rate_payment_freq_period_leg2
+        type: string
+        nullable: true
+        source: "Fixed rate payment frequency period-Leg 2"
+        comment: Payment frequency period unit for fixed leg 2
+      - name: floating_rate_payment_freq_period_leg1
+        type: string
+        nullable: true
+        source: "Floating rate payment frequency period-Leg 1"
+        comment: Payment frequency period unit for floating leg 1
+      - name: floating_rate_payment_freq_period_leg2
+        type: string
+        nullable: true
+        source: "Floating rate payment frequency period-Leg 2"
+        comment: Payment frequency period unit for floating leg 2
+      - name: fixed_rate_payment_freq_multiplier_leg1
+        type: double
+        nullable: true
+        source: "Fixed rate payment frequency period multiplier-Leg 1"
+        comment: Payment frequency multiplier for fixed leg 1
+      - name: fixed_rate_payment_freq_multiplier_leg2
+        type: double
+        nullable: true
+        source: "Fixed rate payment frequency period multiplier-Leg 2"
+        comment: Payment frequency multiplier for fixed leg 2
+      - name: floating_rate_payment_freq_multiplier_leg1
+        type: double
+        nullable: true
+        source: "Floating rate payment frequency period multiplier-Leg 1"
+        comment: Payment frequency multiplier for floating leg 1
+      - name: floating_rate_payment_freq_multiplier_leg2
+        type: double
+        nullable: true
+        source: "Floating rate payment frequency period multiplier-Leg 2"
+        comment: Payment frequency multiplier for floating leg 2
+
+      # --- Spread & price ---
+      - name: spread_leg1
+        type: double
+        nullable: true
+        source: "Spread-Leg 1"
+        comment: Spread over floating index for leg 1 (basis points or decimal per convention)
+      - name: spread_leg2
+        type: double
+        nullable: true
+        source: "Spread-Leg 2"
+        comment: Spread over floating index for leg 2
+      - name: spread_currency_leg1
+        type: string
+        nullable: true
+        source: "Spread currency-Leg 1"
+        comment: Currency of spread leg 1
+      - name: spread_currency_leg2
+        type: string
+        nullable: true
+        source: "Spread currency-Leg 2"
+        comment: Currency of spread leg 2
+      - name: spread_notation_leg1
+        type: string
+        nullable: true
+        source: "Spread notation-Leg 1"
+        comment: Notation for spread leg 1 (ABSC=absolute, PRCT=percent)
+      - name: spread_notation_leg2
+        type: string
+        nullable: true
+        source: "Spread notation-Leg 2"
+        comment: Notation for spread leg 2
+      - name: price
+        type: double
+        nullable: true
+        source: "Price"
+        comment: Transaction price (commodity/equity swaps)
+      - name: price_unit_of_measure
+        type: string
+        nullable: true
+        source: "Price unit of measure"
+        comment: Unit of measure for price
+      - name: price_currency
+        type: string
+        nullable: true
+        source: "Price currency"
+        comment: Currency of price
+      - name: price_notation
+        type: string
+        nullable: true
+        source: "Price notation"
+        comment: Price notation type
+      - name: post_priced_swap_indicator
+        type: boolean
+        nullable: true
+        source: "Post-priced swap indicator"
+        comment: True if the price is determined after execution
+
+      # --- Options ---
+      - name: option_type
+        type: string
+        nullable: true
+        source: "Option Type"
+        comment: "CALL, PUT, OTHR — option type for swaptions/options"
+      - name: option_style
+        type: string
+        nullable: true
+        source: "Option Style"
+        comment: "EURO=European, AMER=American, BERM=Bermudan"
+      - name: strike_price
+        type: double
+        nullable: true
+        source: "Strike Price"
+        comment: Strike price for options/swaptions
+      - name: strike_price_currency
+        type: string
+        nullable: true
+        source: "Strike price currency/currency pair"
+        comment: Currency or currency pair of the strike price
+      - name: strike_price_notation
+        type: string
+        nullable: true
+        source: "Strike price notation"
+        comment: Notation type for strike price
+      - name: embedded_option_type
+        type: string
+        nullable: true
+        source: "Embedded Option type"
+        comment: Type of embedded option (callable, putable, etc.)
+      - name: option_premium_amount
+        type: double
+        nullable: true
+        source: "Option Premium Amount"
+        comment: Premium paid for the option
+      - name: option_premium_currency
+        type: string
+        nullable: true
+        source: "Option Premium Currency"
+        comment: Currency of the option premium
+
+      # --- FX-specific ---
+      - name: exchange_rate
+        type: double
+        nullable: true
+        source: "Exchange rate"
+        comment: Agreed exchange rate for FX swaps/forwards
+      - name: exchange_rate_basis
+        type: string
+        nullable: true
+        source: "Exchange rate basis"
+        comment: Basis for the exchange rate quotation
+      - name: call_amount
+        type: double
+        nullable: true
+        source: "Call amount"
+        comment: Call leg notional for FX swaps
+      - name: call_currency
+        type: string
+        nullable: true
+        source: "Call currency"
+        comment: Currency of the call leg
+      - name: put_amount
+        type: double
+        nullable: true
+        source: "Put amount"
+        comment: Put leg notional for FX swaps
+      - name: put_currency
+        type: string
+        nullable: true
+        source: "Put currency"
+        comment: Currency of the put leg
+
+      # --- Underlier ---
+      - name: underlier_id_leg1
+        type: string
+        nullable: true
+        source: "Underlier ID-Leg 1"
+        comment: Identifier of the underlier for leg 1 (ISIN, index ticker, etc.)
+      - name: underlier_id_leg2
+        type: string
+        nullable: true
+        source: "Underlier ID-Leg 2"
+        comment: Identifier of the underlier for leg 2
+      - name: underlier_id_source_leg1
+        type: string
+        nullable: true
+        source: "Underlier ID source-Leg 1"
+        comment: Identification scheme for underlier ID leg 1 (ISIN, INDX, etc.)
+      - name: underlying_asset_name
+        type: string
+        nullable: true
+        source: "Underlying Asset Name"
+        comment: Human-readable name of the underlier (e.g. 'CDX.NA.IG', 'WTI Crude')
+      - name: underlying_asset_subtype_leg1
+        type: string
+        nullable: true
+        source: "Underlying asset subtype or underlying contract subtype-Leg 1"
+        comment: Subtype classification of the underlier leg 1
+      - name: underlying_asset_subtype_leg2
+        type: string
+        nullable: true
+        source: "Underlying asset subtype or underlying contract subtype-Leg 2"
+        comment: Subtype classification of the underlier leg 2
+      - name: maturity_date_underlier_leg1
+        type: string
+        nullable: true
+        source: "Maturity date of the underlier"
+        comment: Maturity of the underlying instrument
+
+      # --- Other payment ---
+      - name: other_payment_amount
+        type: double
+        nullable: true
+        source: "Other payment amount"
+        comment: Additional payment (e.g. upfront fee, points)
+      - name: other_payment_type
+        type: string
+        nullable: true
+        source: "Other payment type"
+        comment: Type of other payment (UPFR=upfront, UFRO=upfront from other)
+      - name: other_payment_currency
+        type: string
+        nullable: true
+        source: "Other payment currency"
+        comment: Currency of other payment
+
+      # --- Settlement ---
+      - name: settlement_currency_leg1
+        type: string
+        nullable: true
+        source: "Settlement currency-Leg 1"
+        comment: Settlement currency for leg 1
+      - name: settlement_currency_leg2
+        type: string
+        nullable: true
+        source: "Settlement currency-Leg 2"
+        comment: Settlement currency for leg 2
+      - name: settlement_location
+        type: string
+        nullable: true
+        source: "Settlement location"
+        comment: Settlement location/CCP (e.g. CME, LCH, ICE)
+      - name: collateralisation_category
+        type: string
+        nullable: true
+        source: "Collateralisation category"
+        comment: "FLCL=fully collateralised, PRCL=partially, UNCL=uncollateralised"
+      - name: delivery_type
+        type: string
+        nullable: true
+        source: "Delivery Type"
+        comment: "PHYS=physical delivery, CASH=cash settlement, OPTL=optional"
+      - name: physical_delivery_location_leg1
+        type: string
+        nullable: true
+        source: "Physical delivery location-Leg 1"
+        comment: Delivery point for commodity/physical swaps
+
+      # --- Package ---
+      - name: package_indicator
+        type: boolean
+        nullable: true
+        source: "Package indicator"
+        comment: True if this trade is part of a multi-leg package transaction
+      - name: package_transaction_price
+        type: double
+        nullable: true
+        source: "Package transaction price"
+        comment: Price of the package as a whole
+      - name: package_transaction_price_currency
+        type: string
+        nullable: true
+        source: "Package transaction price currency"
+        comment: Currency of the package price
+      - name: package_transaction_price_notation
+        type: string
+        nullable: true
+        source: "Package transaction price notation"
+        comment: Notation for package price
+      - name: package_transaction_spread
+        type: double
+        nullable: true
+        source: "Package transaction spread"
+        comment: Spread component of the package transaction
+      - name: package_transaction_spread_currency
+        type: string
+        nullable: true
+        source: "Package transaction spread currency"
+        comment: Currency of the package spread
+      - name: package_transaction_spread_notation
+        type: string
+        nullable: true
+        source: "Package transaction spread notation"
+        comment: Notation for package spread
+
+      # --- Misc ---
+      - name: non_standardized_term_indicator
+        type: boolean
+        nullable: true
+        source: "Non-standardized term indicator"
+        comment: True if the trade contains non-standard bespoke terms
+      - name: custom_basket_indicator
+        type: boolean
+        nullable: true
+        source: "Custom basket indicator"
+        comment: True if underlier is a custom basket
+      - name: index_factor
+        type: double
+        nullable: true
+        source: "Index factor"
+        comment: Current index factor for ABS/MBS underliers
+
+      # --- Partition columns (derived at ingest) ---
+      - <<: *trade_date_column
+      - <<: *year_column
+      - <<: *month_column
+
+    constraints:
+      primaryKey: [dissemination_id]
+
+    dimensions:
+      type:
+        - cftc_trades
+      asset_class:
+        - RATES
+        - CREDITS
+        - FOREX
+        - EQUITIES
+        - COMMODITIES
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2024}"
+        end: current
+        minYear: 2024
+        dataLag: 0
+        releaseMonth: 1
+      month:
+        - "01"
+        - "02"
+        - "03"
+        - "04"
+        - "05"
+        - "06"
+        - "07"
+        - "08"
+        - "09"
+        - "10"
+        - "11"
+        - "12"
+      day:
+        - "01"
+        - "02"
+        - "03"
+        - "04"
+        - "05"
+        - "06"
+        - "07"
+        - "08"
+        - "09"
+        - "10"
+        - "11"
+        - "12"
+        - "13"
+        - "14"
+        - "15"
+        - "16"
+        - "17"
+        - "18"
+        - "19"
+        - "20"
+        - "21"
+        - "22"
+        - "23"
+        - "24"
+        - "25"
+        - "26"
+        - "27"
+        - "28"
+        - "29"
+        - "30"
+        - "31"
+
+    source:
+      type: http
+      url: "https://kgc0418-tdw-data-0.s3.amazonaws.com/cftc/eod/CFTC_CUMULATIVE_{asset_class}_{year}_{month}_{day}.zip"
+      method: GET
+      extractPattern: "*.csv"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 5.0
+        maxRetries: 2
+        skipOn: [403, 404]    # weekends, holidays, future dates, invalid day combos
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=cftc_trades/asset_class=*/year=*/month=*/"
+      partition:
+        columns: [type, asset_class, year, month]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [asset_class, year, month]
+        incrementalKeys: [asset_class, year, month]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+views:
+
+  - name: rate_swaps
+    type: view
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, cleared, mandatory_clearing_indicator, notional_amount_leg1, notional_currency_leg1, fixed_rate_leg1, fixed_rate_leg2, floating_rate_reset_freq_period_leg1, floating_rate_day_count_leg1, settlement_location, collateralisation_category, platform_identifier, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'IR'"
+    comment: >
+      Interest rate swaps filtered view. Covers vanilla IRS, OIS (SOFR, EFFR), basis swaps,
+      cross-currency swaps, and swaptions in the RATES asset class. Key columns: fixed_rate_leg1/leg2
+      (coupon as decimal), floating_rate_reset_freq_period_leg1 (EXPI=at-expiry OIS,
+      MNTH=monthly reset), settlement_location (LCH, CME, etc.), upi_underlier_name
+      (e.g. 'USD-SOFR-COMPOUND'). Filter action_type = 'NEWT' for new executions only.
+
+  - name: credit_default_swaps
+    type: view
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, cleared, mandatory_clearing_indicator, notional_amount_leg1, notional_currency_leg1, fixed_rate_leg1, spread_leg1, spread_notation_leg1, underlying_asset_name, underlier_id_leg1, underlier_id_source_leg1, underlying_asset_subtype_leg1, settlement_location, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'CR'"
+    comment: >
+      Credit default swaps filtered view. Covers single-name CDS and CDS index products
+      (CDX.NA.IG, CDX.NA.HY, iTraxx). Key columns: spread_leg1 (running spread in bps),
+      fixed_rate_leg1 (standard coupon — typically 100bps IG or 500bps HY), underlying_asset_name
+      (reference entity or index name), underlier_id_leg1 (ISIN or index identifier).
+      Filter action_type = 'NEWT' AND cleared = 'C' for cleared index CDS activity.
+
+  - name: fx_derivatives
+    type: view
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, notional_amount_leg2, notional_currency_leg2, call_amount, call_currency, put_amount, put_currency, exchange_rate, exchange_rate_basis, option_type, option_style, strike_price, strike_price_currency, option_premium_amount, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'FX'"
+    comment: >
+      FX derivatives filtered view. Covers FX swaps, cross-currency swaps, FX forwards,
+      FX options, and NDFs. Key columns: notional_currency_leg1/leg2 (currency pair),
+      exchange_rate (agreed FX rate), call_amount/put_amount (for FX options),
+      option_type (CALL/PUT), strike_price (option strike rate). The notional_currency_leg1
+      and notional_currency_leg2 pair identifies the currency pair (e.g. USD/EUR).
+
+  - name: equity_derivatives
+    type: view
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, price, price_currency, strike_price, option_type, option_style, underlying_asset_name, underlier_id_leg1, underlying_asset_subtype_leg1, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'EQ'"
+    comment: >
+      Equity derivatives filtered view. Covers total return swaps (TRS), equity options,
+      variance swaps, and correlation swaps. Key columns: underlying_asset_name (single
+      stock or index name), underlier_id_leg1 (ISIN or index ticker), price (equity price
+      at execution), strike_price (for options), option_type/option_style.
+
+  - name: commodity_derivatives
+    type: view
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, notional_quantity_leg1, quantity_unit_of_measure_leg1, price, price_currency, price_unit_of_measure, fixed_rate_leg1, spread_leg1, underlying_asset_name, underlier_id_leg1, physical_delivery_location_leg1, delivery_type, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'CO'"
+    comment: >
+      Commodity derivatives filtered view. Covers energy swaps (crude oil, nat gas, power),
+      agricultural swaps, and metals swaps. Key columns: notional_quantity_leg1 (physical
+      quantity), quantity_unit_of_measure_leg1 (BBL=barrels, MMBTU=gas, MWH=power),
+      price/price_unit_of_measure (commodity price), physical_delivery_location_leg1
+      (delivery hub — e.g. Henry Hub, NYMEX WTI), delivery_type (PHYS vs CASH).
+
+  - name: swap_activity
+    type: view
+    sql: "SELECT trade_date, asset_class, action_type, cleared, COUNT(*) AS trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 WHEN notional_currency_leg2 = 'USD' THEN notional_amount_leg2 ELSE notional_amount_leg1 END) AS total_usd_notional, COUNT(CASE WHEN cleared = 'C' THEN 1 END) AS cleared_count, COUNT(CASE WHEN cleared != 'C' THEN 1 END) AS uncleared_count FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades GROUP BY trade_date, asset_class, action_type, cleared"
+    comment: >
+      Daily swap activity summary across all asset classes. Columns: trade_date, asset_class
+      (IR/CR/FX/EQ/CO), action_type (NEWT/AMND/TERM/CORR), cleared (C/U/I), trade_count
+      (number of swap events), total_usd_notional (USD-equivalent notional — uses leg1 if
+      USD, leg2 if not; approximate for cross-currency), cleared_count / uncleared_count.
+      Primary dashboard for market activity monitoring, clearing adoption rates, and
+      daily volume surveillance. Filter action_type = 'NEWT' for execution-only volumes.
+
+  - name: clearing_activity
+    type: view
+    sql: "SELECT trade_date, asset_class, settlement_location, COUNT(*) AS cleared_trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 ELSE notional_amount_leg1 END) AS total_notional FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE cleared = 'C' AND action_type = 'NEWT' GROUP BY trade_date, asset_class, settlement_location"
+    comment: >
+      Cleared swap activity by CCP. Columns: trade_date, asset_class, settlement_location
+      (CCP name — LCH, CME, ICE), cleared_trade_count, total_notional. Enables CCP market
+      share analysis and clearing mandate compliance monitoring by asset class.
+
+# ============================================================================
+# END OF SCHEMA
+# ============================================================================
+# STATISTICS:
+#   - 1 partitioned table (cftc_trades)
+#   - 110 columns across all asset classes (uniform 17 CFR Part 43 schema)
+#   - 7 SQL views
+#
+# DATA NOTES:
+#   - minYear: 2024 — Part 43/45 rewrite effective 2023-12-29; pre-2024 has
+#     different field structure. Historical backfill requires a separate pass.
+#   - weekends/holidays: no file published; 403 skipped cleanly via skipOn
+#   - Notional amounts in source CSV have comma thousands separators —
+#     DuckDB auto_detect handles these correctly
+#   - Cleared field: C=cleared, U=uncleared, I=not applicable
+#   - action_type NEWT=new, AMND=amendment, TERM=termination,
+#     CORR=correction, EROR=error, NOVA=novation
