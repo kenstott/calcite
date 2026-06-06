@@ -1375,7 +1375,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
 
     // Load tracker data for this table on demand — avoids full-bucket scan across all schemas
     if (!processedKeysCache.containsKey(alternateName)) {
-      processedKeysCache.put(alternateName, loadProcessedKeysForTable(alternateName));
+      processedKeysCache.put(alternateName, loadProcessedKeysForTable(alternateName, allCombinations));
     }
 
     Set<String> processedKeys = processedKeysCache.get(alternateName);
@@ -1399,17 +1399,37 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     return unprocessed;
   }
 
-  /** Scan tracker batch files for a single table and return its processed source keys. */
-  private Set<String> loadProcessedKeysForTable(String tableName) {
+  /**
+   * Return a table's processed source keys, reading only the year partitions its
+   * combinations actually occupy (year=0 for non-period keys, via completionYearFor).
+   * Replaces the old defunct full-bucket scan over a wildcard year and a non-existent
+   * source_key prefix, which listed every schema's markers and matched nothing written.
+   */
+  private Set<String> loadProcessedKeysForTable(String tableName,
+      List<Map<String, String>> allCombinations) {
     Set<String> result = new HashSet<String>();
-    String globPath = bucketPath + "/year=*/source_key=_batch_*/*.parquet";
 
-    // WHERE table_name = ? scopes the scan to this table — no cross-schema full-bucket reads
+    // Deterministic partitions for these combinations: year=0 for non-period keys, the
+    // real year for period keys. A brace glob {y1,y2,...} reads only those partitions
+    // (and tolerates partitions that have no files) — no year=* across all schemas.
+    long now = System.currentTimeMillis();
+    java.util.TreeSet<String> years = new java.util.TreeSet<String>();
+    for (Map<String, String> combo : allCombinations) {
+      years.add(completionYearFor(flattenKeyValues(combo), now));
+    }
+    if (years.isEmpty()) {
+      return result;
+    }
+    String globPath = bucketPath + "/year={" + String.join(",", years)
+        + "}/source_key=*/*.parquet";
+
+    // WHERE table_name = ? scopes to this table; the brace glob scopes the file listing
+    // to this table's own year partitions (no cross-schema full-bucket reads).
     String sql = "SELECT source_key FROM ("
         + "  SELECT source_key, state, ROW_NUMBER() OVER "
         + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
         + "  FROM read_parquet('" + globPath + "', "
-        + "hive_partitioning=false, union_by_name=true) "
+        + "hive_partitioning=true, union_by_name=true) "
         + "  WHERE phase = 'incremental' AND table_name = ?"
         + ") WHERE rn = 1 AND state = 'complete'";
 
@@ -2155,10 +2175,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         }
       }
     }
-    // Fall back to current year from timestamp
-    java.util.Calendar cal = java.util.Calendar.getInstance();
-    cal.setTimeInMillis(asOf);
-    return String.valueOf(cal.get(java.util.Calendar.YEAR));
+    // No period component in the key → non-period (un-segmented) table. Use the fixed
+    // year=0 partition rather than the wall-clock year, so the marker's location is a
+    // deterministic function of its key (a run in 2026 vs 2025 must land in the same
+    // place). This lets reads pin the partition instead of scanning year=*. Period keys
+    // hit one of the branches above and return their real year.
+    return COMPLETION_YEAR;
   }
 
   // ===== Write-Behind Buffering =====
