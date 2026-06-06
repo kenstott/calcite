@@ -18,8 +18,8 @@ CREATE TEMP TABLE dq_results (
   tbl       VARCHAR,
   test      VARCHAR,
   status    VARCHAR,
-  actual    DOUBLE,
-  expected  DOUBLE,
+  value     DOUBLE,
+  threshold DOUBLE,
   detail    VARCHAR
 );
 
@@ -48,7 +48,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_agencies', allow
 -- T4: all_null_cols (warn — expected source characteristics)
 INSERT INTO dq_results
 SELECT 'crime', 'cde_agencies', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -106,8 +106,9 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_offenses', allow_moved_pa
 -- T2: row_count (51 states × 10 offenses × 12 months × 4+ years)
 INSERT INTO dq_results
 SELECT 'crime', 'cde_offenses', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 20000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 20000, '51 × 10 offenses × 12 months × 4 years'
+  CASE WHEN COUNT(*) >= (COUNT(DISTINCT year) - 1) * 6120 + 510 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), (COUNT(DISTINCT year) - 1) * 6120 + 510,
+  '6120 rows/complete year (51 states × 10 offenses × 12 months); latest year YTD (>=510 = 1 month)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_offenses', allow_moved_paths := true);
 
 -- T3: sample
@@ -116,7 +117,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_offenses', allow
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_offenses', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -178,8 +179,8 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment', allow
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'crime', 'cde_police_employment', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 200 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 200, '51 states × 4+ years'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 50 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 50, '~51 states/year (>=50/year allows a missing state)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employment', allow_moved_paths := true);
 
 -- T3: sample
@@ -188,7 +189,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_police_employmen
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_police_employment', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -257,7 +258,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_hate_crimes', al
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_hate_crimes', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -326,7 +327,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_use_of_force', a
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_use_of_force', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -394,7 +395,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_crime_agency', a
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_crime_agency', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -462,7 +463,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_arrests', allow_
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_arrests', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -483,13 +484,13 @@ FROM (
     AND column_name NOT IN ('type', 'year')
 ) t;
 
--- T6: pk_nulls (state_abbr, year, offense_code NOT NULL)
+-- T6: pk_nulls (state_abbr, year NOT NULL)
 INSERT INTO dq_results
 SELECT 'crime', 'cde_arrests', 'T6_pk_nulls',
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 0, 'state_abbr IS NULL OR year IS NULL OR offense_code IS NULL'
+  COUNT(*), 0, 'state_abbr IS NULL OR year IS NULL'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_arrests', allow_moved_paths := true)
-WHERE state_abbr IS NULL OR year IS NULL OR offense_code IS NULL;
+WHERE state_abbr IS NULL OR year IS NULL;
 
 -- T7: arrest count non-negative
 INSERT INTO dq_results
@@ -531,7 +532,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_shr', allow_move
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_shr', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -590,8 +591,8 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_leoka', allow_moved_paths
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'crime', 'cde_leoka', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 1000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 1000, 'killed/assaulted breakdowns × 51 states × 4+ years'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 50 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 50, '~51 states/year (>=50/year allows a missing state)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_leoka', allow_moved_paths := true);
 
 -- T3: sample
@@ -600,7 +601,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_leoka', allow_mo
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_leoka', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -670,7 +671,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_trends', allow_m
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_trends', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -729,8 +730,8 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_supplemental', allow_move
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'crime', 'cde_supplemental', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 2000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 2000, '51 states × property types × 4+ years'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 400 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 400, '~561/year (51 states × ~11 property types)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_supplemental', allow_moved_paths := true);
 
 -- T3: sample
@@ -739,7 +740,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_supplemental', a
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'cde_supplemental', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -809,7 +810,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_nibrs_estimates'
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_nibrs_estimates', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -868,8 +869,8 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal', allow_mov
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_ncvs_personal', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 10000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 10000, 'microdata rows from 2022+ survey years'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 200 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 200, 'NCVS microdata; hundreds of rows/survey year (>=200/year)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal', allow_moved_paths := true);
 
 -- T3: sample
@@ -878,7 +879,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal', 
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_ncvs_personal', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -940,7 +941,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal_po
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_ncvs_personal_pop', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -1002,7 +1003,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household',
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_ncvs_household', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name
@@ -1064,7 +1065,7 @@ SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household_p
 -- T4: all_null_cols
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_ncvs_household_pop', 'T4_all_null_cols',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0, STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name

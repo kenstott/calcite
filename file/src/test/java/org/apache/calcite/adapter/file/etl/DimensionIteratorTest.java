@@ -237,6 +237,67 @@ public class DimensionIteratorTest {
     assertEquals(String.valueOf(currentYear - 2), combinations.get(2).get("year"));
   }
 
+  @Test void testDimensionIteratorMonthlyYtd() {
+    int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+    // Calendar.MONTH is 0-based, so it equals the number of the last fully completed month.
+    int lastCompletedMonth = Calendar.getInstance().get(Calendar.MONTH);
+
+    Map<String, DimensionConfig> dimensions = new LinkedHashMap<String, DimensionConfig>();
+    dimensions.put("year", DimensionConfig.builder()
+        .name("year")
+        .type(DimensionType.YEAR_RANGE)
+        .start(currentYear - 2)
+        .end(null)  // "current"
+        .monthlyYtd(true)
+        .build());
+
+    DimensionIterator iterator = new DimensionIterator();
+    List<Map<String, String>> combinations = iterator.expand(dimensions);
+
+    // Completed years always carry the full year (month=12).
+    assertEquals("12", findByYear(combinations, currentYear - 2).get("month"));
+    assertEquals("12", findByYear(combinations, currentYear - 1).get("month"));
+
+    // The current year is year-to-date: the last completed month, or dropped in January.
+    Map<String, String> thisYear = findByYear(combinations, currentYear);
+    if (lastCompletedMonth >= 1) {
+      String expected = lastCompletedMonth < 10
+          ? "0" + lastCompletedMonth : String.valueOf(lastCompletedMonth);
+      assertEquals(expected, thisYear.get("month"));
+    } else {
+      assertEquals(null, thisYear);  // January: current year has no completed month yet
+    }
+  }
+
+  @Test void testDimensionConfigFromMapMonthlyYtd() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "yearRange");
+    map.put("start", 2010);
+    map.put("end", "current");
+    map.put("dataLag", 1);
+    map.put("monthlyYTD", true);
+
+    DimensionConfig config = DimensionConfig.fromMap("year", map);
+    assertEquals(DimensionType.YEAR_RANGE, config.getType());
+    assertTrue(config.isMonthlyYtd());
+    // Default is false when the flag is absent.
+    Map<String, Object> noFlag = new HashMap<String, Object>();
+    noFlag.put("type", "yearRange");
+    noFlag.put("start", 2010);
+    assertEquals(false, DimensionConfig.fromMap("year", noFlag).isMonthlyYtd());
+  }
+
+  /** Returns the first combination whose year equals the given value, or null if none. */
+  private static Map<String, String> findByYear(List<Map<String, String>> combos, int year) {
+    String target = String.valueOf(year);
+    for (Map<String, String> combo : combos) {
+      if (target.equals(combo.get("year"))) {
+        return combo;
+      }
+    }
+    return null;
+  }
+
   @Test void testDimensionIteratorCartesianProduct() {
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<String, DimensionConfig>();
     dimensions.put("year", DimensionConfig.builder()

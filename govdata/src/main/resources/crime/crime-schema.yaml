@@ -189,8 +189,8 @@ dimension_values:
   arrest_offenses: &arrest_offenses
     - 'all'
 
-  # Year range for FBI CDE data
-  # Override: CRIME_START_YEAR for crime-only, GOVDATA_START_YEAR for all schemas
+  # Year range for FBI CDE data. Start floor 2010; the factory-set GOVDATA_START_YEAR
+  # system property overrides it for all schemas.
   crime_year_range: &crime_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -323,8 +323,9 @@ partitionedTables:
     dimensions:
       type:
         - offense
-      year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      year:
+        <<: *crime_year_range
+        monthlyYTD: true
       state_abbr: *all_state_abbrs
       offense: *ucr_core_offenses
 
@@ -486,7 +487,7 @@ partitionedTables:
       type:
         - hate_crime
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
 
     columns:
@@ -606,7 +607,7 @@ partitionedTables:
       type:
         - agency_offense
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
       offense: *ucr_core_offenses
       ori:
@@ -698,17 +699,13 @@ partitionedTables:
       type:
         - arrest
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
       offense: *arrest_offenses
 
     columns:
       - <<: *state_abbr_column
       - <<: *year_column
-      - name: offense_code
-        type: string
-        nullable: false
-        comment: Arrest offense category (e.g., drug-abuse, dui, violent-crime)
       - <<: *section_column
         comment: Data section (age, sex, race, ethnicity)
       - <<: *category_column
@@ -767,7 +764,7 @@ partitionedTables:
       type:
         - shr
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
 
     columns:
@@ -861,7 +858,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeLeokaTransformer"
 
     materialize:
       format: iceberg
@@ -896,7 +893,6 @@ partitionedTables:
     dimensions:
       type:
         - trends
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     columns:
       - name: offense_name
@@ -962,7 +958,7 @@ partitionedTables:
       type:
         - supplemental
       year: *crime_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      month: ["12"]
       state_abbr: *all_state_abbrs
 
     columns:
@@ -1055,10 +1051,6 @@ partitionedTables:
         type: string
         nullable: true
         comment: Primary domain (Incident count, Weapon involved, etc.)
-      - name: estimate_domain_2
-        type: string
-        nullable: true
-        comment: Secondary domain
       - name: estimate_geographic_location
         type: string
         nullable: true
@@ -1208,10 +1200,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: Metropolitan statistical area indicator
-      - name: series_weight
-        type: double
+      - name: series
+        type: string
         nullable: true
-        comment: Survey series weight
+        comment: Series victimization indicator
       - name: newwgt
         type: double
         nullable: true
@@ -1279,10 +1271,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: Year and quarter
-      - name: age
+      - name: ager
         type: string
         nullable: true
-        comment: Respondent age
+        comment: Respondent age category
       - name: sex
         type: string
         nullable: true
@@ -1299,14 +1291,22 @@ partitionedTables:
         type: string
         nullable: true
         comment: Marital status
-      - name: education
+      - name: educatn1
         type: string
         nullable: true
-        comment: Education level
-      - name: income
+        comment: Education level (detailed)
+      - name: educatn2
         type: string
         nullable: true
-        comment: Household income category
+        comment: Education level (recoded)
+      - name: hincome1
+        type: string
+        nullable: true
+        comment: Household income category (detailed)
+      - name: hincome2
+        type: string
+        nullable: true
+        comment: Household income category (recoded)
       - name: region
         type: string
         nullable: true
@@ -1401,18 +1401,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: Metropolitan statistical area indicator
-      - name: tenure
+      - name: hincome1
         type: string
         nullable: true
-        comment: Home ownership status
-      - name: income
+        comment: Household income category (detailed)
+      - name: hincome2
         type: string
         nullable: true
-        comment: Household income category
-      - name: series_weight
-        type: double
+        comment: Household income category (recoded)
+      - name: series
+        type: string
         nullable: true
-        comment: Survey series weight
+        comment: Series victimization indicator
       - name: wgtviccy
         type: double
         nullable: true
@@ -1487,18 +1487,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: Metropolitan statistical area indicator
-      - name: tenure
+      - name: hincome1
         type: string
         nullable: true
-        comment: Home ownership status
-      - name: income
+        comment: Household income category (detailed)
+      - name: hincome2
         type: string
         nullable: true
-        comment: Household income category
-      - name: hhsize
+        comment: Household income category (recoded)
+      - name: hnumber
         type: string
         nullable: true
-        comment: Household size
+        comment: Number of persons in household
       - name: wgthhcy
         type: double
         nullable: true
@@ -1589,7 +1589,7 @@ constraints:
         targetColumns: [ori]
 
   cde_arrests:
-    primaryKey: [state_abbr, year, offense_code, section, category, label]
+    primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
@@ -1628,7 +1628,6 @@ constraints:
       - endpoint_id
       - indicator_name
       - estimate_domain_1
-      - estimate_domain_2
       - time_series_start_year
 
 # ============================================================================
