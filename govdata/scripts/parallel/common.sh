@@ -571,6 +571,10 @@ generate_single_schema_model() {
     cyber_threat)
       operand_body="\"dataSource\": \"cyber_threat\""
       ;;
+    cftc)
+      operand_body="\"dataSource\": \"cftc\",
+      ${_YEAR_RANGE}"
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1

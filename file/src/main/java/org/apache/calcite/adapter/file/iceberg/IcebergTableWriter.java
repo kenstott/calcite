@@ -39,6 +39,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -721,11 +724,38 @@ public class IcebergTableWriter {
         }
         return value;
       case TIMESTAMP:
-        if (value instanceof java.time.Instant) {
-          return ((java.time.Instant) value).toEpochMilli() * 1000;
+        if (value instanceof LocalDateTime) {
+          return ((LocalDateTime) value).toInstant(ZoneOffset.UTC).toEpochMilli() * 1000;
+        }
+        if (value instanceof Instant) {
+          return ((Instant) value).toEpochMilli() * 1000;
         }
         if (value instanceof java.sql.Timestamp) {
           return ((java.sql.Timestamp) value).getTime() * 1000;
+        }
+        if (value instanceof Long) {
+          // DuckDB JDBC returns TIMESTAMP as microseconds since epoch — convert to LocalDateTime
+          // for Iceberg GenericRecord (TIMESTAMP WITHOUT TIMEZONE expects LocalDateTime)
+          return LocalDateTime.ofInstant(
+              Instant.ofEpochMilli(((Long) value) / 1000), ZoneOffset.UTC);
+        }
+        if (value instanceof String) {
+          String s = ((String) value).trim();
+          if (s.isEmpty()) {
+            return null;
+          }
+          try {
+            // ISO 8601 with Z suffix (e.g. "2026-06-04T13:38:30Z")
+            return LocalDateTime.ofInstant(Instant.parse(s), ZoneOffset.UTC);
+          } catch (Exception e1) {
+            try {
+              // ISO 8601 without timezone (e.g. "2026-06-04T13:38:30")
+              return LocalDateTime.parse(s);
+            } catch (Exception e2) {
+              LOGGER.warn("Could not parse timestamp string '{}': {}", s, e2.getMessage());
+              return null;
+            }
+          }
         }
         return value;
       case LIST:
