@@ -95,7 +95,7 @@ dimension_values:
 
   ref_year_range: &ref_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 

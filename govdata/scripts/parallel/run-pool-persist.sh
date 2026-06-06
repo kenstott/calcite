@@ -30,10 +30,31 @@ for arg in "$@"; do
   fi
 done
 
-# --reset explicitly clears the completed checkpoint; otherwise it persists
-# across restarts so already-finished schemas are never re-run.
+# --reset clears the completed checkpoint so this run re-runs everything;
+# otherwise it persists across restarts so already-finished schemas are never
+# re-run. The checkpoint file is SHARED across concurrent pools, so:
+#   - when a --schema is given, clear only that schema's slots (leave other
+#     concurrent pools' checkpoints intact);
+#   - otherwise (no --schema) clear the whole file.
+# flock serializes against the appender in run-pool.sh, and the read-filter-write
+# uses an atomic temp+rename so a concurrent append can't be lost mid-rewrite.
 if $RESET; then
-  rm -f "$COMPLETED_FILE"
+  _reset_schema=""
+  for ((_i=0; _i<${#POOL_ARGS[@]}; _i++)); do
+    if [ "${POOL_ARGS[$_i]}" = "--schema" ]; then
+      _reset_schema="${POOL_ARGS[$((_i+1))]:-}"
+      break
+    fi
+  done
+  (
+    flock 9
+    if [ -n "$_reset_schema" ] && [ -f "$COMPLETED_FILE" ]; then
+      grep -v "^${_reset_schema}:" "$COMPLETED_FILE" > "${COMPLETED_FILE}.tmp" || true
+      mv -f "${COMPLETED_FILE}.tmp" "$COMPLETED_FILE"
+    else
+      rm -f "$COMPLETED_FILE"
+    fi
+  ) 9>>"${COMPLETED_FILE}.lock"
 fi
 
 # Save args (without --reset) one-per-line so args containing spaces survive.

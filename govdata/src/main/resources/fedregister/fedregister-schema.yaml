@@ -55,7 +55,7 @@ dimension_values:
   # Override: FR_START_YEAR for FR-only, GOVDATA_START_YEAR for all schemas
   fr_year_range: &fr_year_range
     type: yearRange
-    start: "${FR_START_YEAR:${GOVDATA_START_YEAR:2010}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 0
 

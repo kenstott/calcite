@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-06-03
+Last updated: 2026-06-05
 
 ## How to Read This
 
@@ -65,15 +65,15 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
 | crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
 | geo          | 2026-06-01 | PASS    | 0     | 0     | DataProvider cache infrastructure (StorageAwareDataProvider) + WBD GDB cache path fix |
-| fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
-| fedregister  | —          | PENDING | —     | —     | Schema changes pending re-run |
+| fec          | 2026-06-06 | WARN    | 0     | 1     | Truncated 2-cycle DQ rebuild (2024+2026); worker.sh:184 fix landed in 7e9324ec0 (honor get_dq_start_year). 85/86 pass; lone warn: candidate_summaries.T7_total_receipts_nonneg (1 row negative — FEC amendment adjustment) |
+| fedregister  | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 9/9 pass, 65,167 docs (2024–2026 scope) |
 | lands        | 2026-06-03 | PASS    | 0     | 0     | Per-state FIA fan-out + Tier 1 fia_plots/fia_tree_grm/fia_seedlings; 72/72 pass first run |
 | health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
 | patents      | 2026-06-05 | PASS    | 0     | 0     | Faithful recreation (one table per raw dump, no ETL joins; grant_year only on dated sources) + trademark effective_year fix (14k→911k rows, coverage→2023) + period-keyed completion markers. 0 fails verified (38p/2w); 2 trademark checks recalibrated → 0 warn |
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
-| econ_reference | —        | PENDING | —     | —     | Schema changes pending re-run |
+| econ_reference | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 7/7 tables pass; BLS download.bls.gov User-Agent 403 fix (#144) |
 | cyber_threat | —          | PENDING | —     | —     | Schema changes pending re-run |
 | cyber_vuln   | —          | PENDING | —     | —     | Schema changes pending re-run |
 
@@ -218,19 +218,23 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## econ_reference (2026-05-18) — PASS
+## econ_reference (2026-06-05) — PASS
 
-0 fails, 0 warns. 38 checks across 7 tables (T1–T7; nipa_tables and bls_geographies omit T7).
+0 fails, 0 warns. 39 checks across 7 tables (T1–T7; nipa_tables and bls_geographies omit T7). dq-rebuild re-run via an isolated jar after the BLS User-Agent fix (#144).
 
 | Table | Rows | Notes |
 |-------|------|-------|
-| jolts_industries | 28 | BLS JOLTS industry groupings |
-| jolts_dataelements | 8 | Core JOLTS metric codes (JO, HI, QU, TS, LD + OS, UN, UO) |
+| jolts_industries | 56 | BLS JOLTS industry groupings |
+| jolts_dataelements | 20 | JOLTS metric codes incl. all 5 core (JO, HI, QU, TS, LD) |
 | bls_geographies | 82 | States, metro areas, census regions |
 | naics_sectors | 22 | NAICS supersector codes including total nonfarm (00000000) |
 | nipa_tables | 252 | BEA NIPA table catalog across 8 sections |
 | regional_linecodes | 2,769 | BEA Regional line codes across 56 tables |
 | fred_series | 2,050 | FRED series across 5 of 7 configured categories |
+
+### Fixed (2026-06-05) — BLS download.bls.gov 403 (#144)
+
+`download.bls.gov` began returning HTTP 403 for fake-browser User-Agents, serving an HTML block page that parsed to 0 rows — silently emptying `jolts_industries` (28→0) and `jolts_dataelements` (8→0) on the 2026-06-05 dq-rebuild (DQ FAIL, 5 hard fails). Fix: send a self-identifying `User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"` on the 4 `download.bls.gov` JOLTS sources (replaced the hardcoded Chrome UA in `econ-reference-schema.yaml`; added a `headers:` block in `econ-schema.yaml` for `jolts_regional`/`jolts_state`). Verified 200 vs 403. After wiping the stale raw cache and re-running, both JOLTS tables populate (56 / 20 rows) and pass. `econ` schema's `jolts_regional`/`jolts_state` get the same fix on their next run.
 
 **Known issues:**
 - `fred_series`: 5 of 7 configured FRED categories return data; categories 1 (Production & Business Activity) and 3 (Discontinued/Legacy) are capped at 1,000 rows each by the FRED API per-category limit. T7 threshold set to ≥5 categories to account for this.
@@ -268,14 +272,14 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## fedregister (2026-05-19) — PASS
+## fedregister (2026-06-05) — PASS
 
-Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip`). Historical run covers 2019–2026, 96 batches (8 years × 12 months). Schema reduced to `fr_documents` only — `fr_agencies` removed (source `api.federalregister.gov` is CAPTCHA-blocked and not intended to be sourced).
+dq-rebuild re-run via an isolated jar (`sih-govdata-iso-fedregister.jar`) in a dedicated worktree, `run-all-dq --schema fedregister --local-jar`. Full teardown + re-ingest over the dq-rebuild window (2024–2026 DQ scope: daily worker → 2026, historical worker → `get_dq_start_year(fedregister)`=2024 through `INCREMENTAL_YEAR-1`=2025), 36 year/month batches. Pool exit 0, 5 min, 1 Done / 0 Failed. All 9 tests pass.
 
 | Table | Test | Status | Detail |
 |-------|------|--------|--------|
-| fr_documents | T1_existence | PASS | 202,473 rows |
-| fr_documents | T2_row_count | PASS | 202,473 ≥ 150,000 (2019–2026 threshold) |
+| fr_documents | T1_existence | PASS | 65,167 rows |
+| fr_documents | T2_row_count | PASS | 65,167 ≥ 50,000 (2024–2026 threshold) |
 | fr_documents | T4_all_null_cols | PASS | No fully-null columns |
 | fr_documents | T5_all_same_value | PASS | No single-value columns |
 | fr_documents | T6_pk_nulls | PASS | No null document_number/doc_type/publication_date |
@@ -284,8 +288,14 @@ Source switched to govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{y
 | fr_documents | T7_document_number_format | PASS | All document numbers match YYYY-NNNNN |
 | fr_documents | T7_publication_date_format | PASS | All dates match YYYY-MM-DD |
 
+Source: govinfo.gov bulk XML (`https://www.govinfo.gov/bulkdata/FR/{year}/{month:02d}/FR-{year}-{month:02d}.zip`). Schema is `fr_documents` only — `fr_agencies` removed (source `api.federalregister.gov` is CAPTCHA-blocked and not intended to be sourced).
+
 **Freshness (as of 2026-05-22):**
 - `fr_documents`: month dimension (GOVDATA_CURRENT_MONTH) → monthly cache bust; `batchPartitionColumns: [year, month]`, `incrementalKeys: [year, month]`
+
+### Prior run (2026-05-19) — PASS
+
+Historical run covered 2019–2026, 96 batches (8 years × 12 months): 202,473 rows, ≥ 150,000 threshold. The 2026-06-05 row count is lower because the dq-rebuild window is the narrower 2024–2026 DQ scope, not the full historical backfill.
 
 ---
 

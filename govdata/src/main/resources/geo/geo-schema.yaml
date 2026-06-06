@@ -112,14 +112,14 @@ dimension_values:
   # Override: GEO_START_YEAR for GEO-only, GOVDATA_START_YEAR for all schemas
   tiger_year_range: &tiger_year_range
     type: yearRange
-    start: "${GEO_START_YEAR:${GOVDATA_START_YEAR:2002}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     dataLag: 1
 
   # --- Year Range for HUD crosswalk data ---
   # HUD crosswalk updates quarterly with ~3 year lag
   hud_year_range: &hud_year_range
     type: yearRange
-    start: "${GEO_START_YEAR:${GOVDATA_START_YEAR:2000}}"
+    start: "${GOVDATA_START_YEAR:2010}"
     dataLag: 3
 
   # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)

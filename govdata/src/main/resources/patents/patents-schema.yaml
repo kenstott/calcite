@@ -149,7 +149,7 @@ dimension_values:
 
   year_range: &year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2025}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:current}"
     dataLag: 1
     # Process newest year first — one descending sequence from today across daily + historical.
