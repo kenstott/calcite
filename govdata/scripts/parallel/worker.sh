@@ -41,6 +41,7 @@
 #   energy  <initial|weekly|monthly|annual>
 #   patents <historical|daily>
 #   lands   <historical|daily>
+#   cftc    <historical|daily>
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -238,11 +239,28 @@ case "$SCHEMA" in
     exec "$SCRIPT_DIR/worker-lands.sh" "$MODE"
     ;;
 
+  # ── CFTC swap data (daily EOD files, 2024+) ───────────────────────────────
+
+  cftc)
+    case "$MODE" in
+      historical)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2024}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
+        export GOVDATA_END_YEAR=""
+        ;;
+      *) echo "cftc: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+    esac
+    run_etl_inline "$(build_inline_model cftc)" "$WORKER_ID"
+    ;;
+
   *)
     echo "Unknown schema: $SCHEMA" >&2
     echo "Valid schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
-    echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands" >&2
+    echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc" >&2
     exit 1
     ;;
 esac

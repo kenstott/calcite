@@ -30,6 +30,7 @@ import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.edu.EduSchemaFactory;
 import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
 import org.apache.calcite.adapter.govdata.health.HealthSchemaFactory;
+import org.apache.calcite.adapter.govdata.cftc.CftcSchemaFactory;
 import org.apache.calcite.adapter.govdata.lands.LandsSchemaFactory;
 import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
@@ -509,11 +510,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "lands":
         return new LandsSchemaFactory();
 
+      case "cftc":
+      case "swap":
+      case "derivatives":
+        return new CftcSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands");
+            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands, cftc");
     }
   }
 

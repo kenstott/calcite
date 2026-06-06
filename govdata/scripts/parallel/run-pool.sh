@@ -101,7 +101,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)"
@@ -149,7 +149,7 @@ for arg in "$@"; do
       queue+=(health:initial health:daily health:weekly health:monthly)
       queue+=(edu:initial edu:annual edu:biennial)
       queue+=(energy:historical energy:daily)
-      queue+=(patents:historical patents:daily lands:historical lands:daily)
+      queue+=(patents:historical patents:daily lands:historical lands:daily cftc:historical cftc:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -161,7 +161,7 @@ for arg in "$@"; do
       _add_sec_secondary_years
       queue+=(sec_prices:historical ref:historical fec:historical fedregister:historical)
       queue+=(cyber_vuln:initial cyber_threat:initial health:initial edu:initial energy:historical)
-      queue+=(patents:historical lands:historical)
+      queue+=(patents:historical lands:historical cftc:historical)
       ;;
 
     dq)
@@ -171,6 +171,7 @@ for arg in "$@"; do
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
+        cftc:dq
       )
       ;;
 
@@ -183,6 +184,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
+        cftc:dq-rebuild
       )
       ;;
 
@@ -195,6 +197,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
+        cftc:dq-etl-resume
       )
       ;;
 
@@ -213,7 +216,7 @@ for arg in "$@"; do
         health:daily health:weekly health:monthly
         edu:annual edu:biennial
         energy:daily
-        patents:daily lands:daily
+        patents:daily lands:daily cftc:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
