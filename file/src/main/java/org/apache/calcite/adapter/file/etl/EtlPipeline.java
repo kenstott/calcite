@@ -699,6 +699,18 @@ public class EtlPipeline {
         for (int pi = 0; pi < partCount; pi++) {
           String contextValue = contextValues.get(pi);
 
+          // snapshot + partitioned: only process the first (most-recent) context value.
+          // Partitioned expansion emits context values newest-first (same descending order
+          // as YEAR_RANGE), so index 0 is the most-recent period. All later partitions
+          // are skipped — we accumulate them in skippedBatches based on their estimated
+          // sizes (we lazily expand one partition at a time, so for skipped partitions
+          // we mark 0 combos skipped here; the actual counts remain in the tracker).
+          if ("snapshot".equals(datasetType) && pi > 0) {
+            LOGGER.debug("dataset_type=snapshot (partitioned): skipping partition {}/{} ({}={})",
+                pi + 1, partCount, partitionPlan.getContextKey(), contextValue);
+            continue;
+          }
+
           // Lazily expand this single partition (resolves CUSTOM dimension via S3)
           DimensionPartition partition =
               dimensionIterator.expandPartition(partitionPlan, contextValue);
@@ -1494,6 +1506,42 @@ public class EtlPipeline {
       data = dataSource.fetch(variables);
     }
 
+    // hash freshness gate (post-download): if freshness.type==HASH and the fetched content
+    // is identical to the last run, skip the write and return 0 rows (no new snapshot).
+    // We materialise the iterator here regardless (hash type always requires a full pull).
+    FreshnessConfig freshnessConfigForHash = config.getFreshness();
+    boolean hashFreshnessActive = freshnessConfigForHash != null
+        && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
+        && dataSource instanceof HttpSource;
+    // hashFreshnessToken is set if we computed a hash and must store it post-write
+    String hashFreshnessToken = null;
+    if (hashFreshnessActive) {
+      // Materialise so we can hash the full content deterministically
+      List<Map<String, Object>> allRowsForHash = new ArrayList<Map<String, Object>>();
+      while (data.hasNext()) {
+        allRowsForHash.add(data.next());
+      }
+      String currentHash = hashRows(allRowsForHash);
+      String previousHash = incrementalTracker.getFreshnessToken(pipelineName);
+      if (!FreshnessCheck.changed(previousHash, currentHash)) {
+        LOGGER.info("Pipeline '{}' batch {}: hash freshness UNCHANGED (hash={}) — skipping write",
+            pipelineName, processedCount, currentHash);
+        // No write, no snapshot — return 0 rows for this batch
+        // Mark the combo processed with 0 so it is not re-queued immediately
+        synchronized (writeLock) {
+          incrementalTracker.markProcessedWithRowCount(
+              pipelineName, pipelineName, variables, null, 0);
+        }
+        return 0;
+      }
+      LOGGER.debug("Pipeline '{}' batch {}: hash freshness CHANGED (prev={}, cur={}) — writing",
+          pipelineName, processedCount,
+          previousHash == null ? "<none>" : previousHash, currentHash);
+      hashFreshnessToken = currentHash;
+      // Replace the iterator with the materialised list
+      data = allRowsForHash.iterator();
+    }
+
     // computed_delta: filter rows to only those whose modifiedField advanced since the
     // last stored high-water mark.  The HWM is stored via the freshness-token slot
     // so it persists across runs without a new tracker abstraction.
@@ -1518,12 +1566,12 @@ public class EtlPipeline {
         for (Map<String, Object> row : allRows) {
           Object modVal = row.get(modifiedField);
           String modStr = modVal == null ? null : String.valueOf(modVal);
-          // Track max modified
-          if (modStr != null && (maxSeen == null || modStr.compareTo(maxSeen) > 0)) {
+          // Track max modified using type-aware comparison
+          if (modStr != null && (maxSeen == null || compareModifiedValues(modStr, maxSeen) > 0)) {
             maxSeen = modStr;
           }
           // Include row if modified is newer than prevHwm (or if this is first run)
-          if (prevHwm == null || modStr == null || modStr.compareTo(prevHwm) > 0) {
+          if (prevHwm == null || modStr == null || compareModifiedValues(modStr, prevHwm) > 0) {
             changedRows.add(row);
           }
         }
@@ -1540,6 +1588,7 @@ public class EtlPipeline {
     // Serialize all writer and tracker operations to prevent concurrent DuckDB access.
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final String finalNewComputedDeltaHwm = newComputedDeltaHwm;
+    final String finalHashFreshnessToken = hashFreshnessToken;
     synchronized (writeLock) {
       HttpSourceConfig sourceConfig = config.getSource();
       boolean hasResponsePartitioning = sourceConfig != null
@@ -1569,6 +1618,12 @@ public class EtlPipeline {
           incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
           LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
               finalNewComputedDeltaHwm, pipelineName);
+        }
+        // Persist hash freshness token after a successful write
+        if (finalHashFreshnessToken != null) {
+          incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
+          LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
+              finalHashFreshnessToken, pipelineName);
         }
       }
 
@@ -2510,6 +2565,72 @@ public class EtlPipeline {
     } catch (IOException e) {
       LOGGER.debug("Self-heal attempt failed for {}: {}", variables, e.getMessage());
       return 0;
+    }
+  }
+
+  // ===== Hash freshness helper =====
+
+  /**
+   * Computes a deterministic SHA-256 hash over a list of rows.
+   *
+   * <p>Serialisation is stable: for each row, keys are sorted alphabetically and
+   * each entry is rendered as {@code key=value\n}. Rows are then sorted by their
+   * serialised form before concatenation so that row-order variation in the source
+   * response does not produce a false "changed" signal.
+   *
+   * @param rows the fetched rows (may be empty)
+   * @return hex SHA-256 string, or null if hashing fails
+   */
+  static String hashRows(List<Map<String, Object>> rows) {
+    if (rows == null || rows.isEmpty()) {
+      return FreshnessCheck.sha256Hex("");
+    }
+    List<String> serialised = new ArrayList<String>(rows.size());
+    for (Map<String, Object> row : rows) {
+      StringBuilder sb = new StringBuilder();
+      List<String> keys = new ArrayList<String>(row.keySet());
+      java.util.Collections.sort(keys);
+      for (String key : keys) {
+        sb.append(key).append('=').append(row.get(key)).append('\n');
+      }
+      serialised.add(sb.toString());
+    }
+    java.util.Collections.sort(serialised);
+    StringBuilder combined = new StringBuilder();
+    for (String s : serialised) {
+      combined.append(s);
+    }
+    return FreshnessCheck.sha256Hex(combined.toString());
+  }
+
+  // ===== computed_delta HWM comparison =====
+
+  /**
+   * Compares two modification-field values in a type-aware manner.
+   *
+   * <p>Detection rules:
+   * <ol>
+   *   <li><b>Numeric (epoch)</b> — if both values parse as {@code long} without error,
+   *       compare numerically. This correctly handles epoch-millis strings of different
+   *       lengths (e.g. {@code "999"} vs {@code "1000"}) that would mis-sort
+   *       lexicographically.</li>
+   *   <li><b>ISO-8601 string</b> (dates, timestamps) — fall back to lexicographic
+   *       comparison, which is correct for zero-padded ISO forms ({@code YYYY-MM-DD},
+   *       {@code YYYY-MM-DDTHH:mm:ss}, etc.).</li>
+   * </ol>
+   *
+   * @param a first value (non-null)
+   * @param b second value (non-null)
+   * @return negative / zero / positive as with {@link Comparable#compareTo}
+   */
+  static int compareModifiedValues(String a, String b) {
+    // Try numeric parse for both; if either fails, fall back to lexicographic.
+    try {
+      long la = Long.parseLong(a.trim());
+      long lb = Long.parseLong(b.trim());
+      return Long.compare(la, lb);
+    } catch (NumberFormatException e) {
+      return a.compareTo(b);
     }
   }
 
