@@ -65,7 +65,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
 | crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
 | geo          | 2026-06-01 | PASS    | 0     | 0     | DataProvider cache infrastructure (StorageAwareDataProvider) + WBD GDB cache path fix |
-| fec          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| fec          | 2026-06-06 | WARN    | 0     | 1     | Truncated 2-cycle DQ rebuild (2024+2026); worker.sh:184 fix landed in 7e9324ec0 (honor get_dq_start_year). 85/86 pass; lone warn: candidate_summaries.T7_total_receipts_nonneg (1 row negative — FEC amendment adjustment) |
 | fedregister  | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 9/9 pass, 65,167 docs (2024–2026 scope) |
 | lands        | 2026-06-03 | PASS    | 0     | 0     | Per-state FIA fan-out + Tier 1 fia_plots/fia_tree_grm/fia_seedlings; 72/72 pass first run |
 | health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
