@@ -148,7 +148,7 @@ for arg in "$@"; do
       queue+=(cyber_vuln:initial cyber_threat:initial cyber_vuln:daily cyber_vuln:weekly cyber_threat:weekly cyber_threat:hourly cyber_threat:static)
       queue+=(health:initial health:daily health:weekly health:monthly)
       queue+=(edu:initial edu:annual edu:biennial)
-      queue+=(energy:initial energy:weekly energy:monthly energy:annual)
+      queue+=(energy:historical energy:daily)
       queue+=(patents:historical patents:daily lands:historical lands:daily)
       queue+=(econ_reference:daily)
       ;;
@@ -160,7 +160,7 @@ for arg in "$@"; do
       queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
       _add_sec_secondary_years
       queue+=(sec_prices:historical ref:historical fec:historical fedregister:historical)
-      queue+=(cyber_vuln:initial cyber_threat:initial health:initial edu:initial energy:initial)
+      queue+=(cyber_vuln:initial cyber_threat:initial health:initial edu:initial energy:historical)
       queue+=(patents:historical lands:historical)
       ;;
 
@@ -212,7 +212,7 @@ for arg in "$@"; do
         cyber_vuln:daily cyber_vuln:weekly cyber_threat:weekly cyber_threat:hourly
         health:daily health:weekly health:monthly
         edu:annual edu:biennial
-        energy:weekly energy:monthly energy:annual
+        energy:daily
         patents:daily lands:daily
         econ_reference:daily
       )
@@ -622,7 +622,10 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
-        echo "${active_slots[$i]}" >> "${HOME}/.run-pool-completed.state"
+        # flock-guarded append: serializes with run-pool-persist.sh's --reset
+        # read-filter-rewrite so a completion is never lost during a concurrent reset.
+        ( flock 9; echo "${active_slots[$i]}" >> "${HOME}/.run-pool-completed.state" ) \
+          9>>"${HOME}/.run-pool-completed.state.lock"
       else
         ((failed_count++)) || true
         failed_list+=("$id")
