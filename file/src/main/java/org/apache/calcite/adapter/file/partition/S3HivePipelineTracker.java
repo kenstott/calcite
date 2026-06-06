@@ -1664,6 +1664,39 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         0, null, null, null);
   }
 
+  // ===== Freshness Token =====
+
+  /** Source key used for freshness token state rows. */
+  private static final String FRESHNESS_SOURCE_KEY = "_freshness";
+  /** Phase used for freshness token state rows. */
+  private static final String FRESHNESS_PHASE = "freshness_token";
+
+  /** In-memory cache of freshness tokens for this run: pipelineName → token. */
+  private final Map<String, String> freshnessTokenCache =
+      new ConcurrentHashMap<String, String>();
+
+  @Override public String getFreshnessToken(String pipelineName) {
+    String cached = freshnessTokenCache.get(pipelineName);
+    if (cached != null) {
+      return "".equals(cached) ? null : cached;
+    }
+    // Flush pending writes so readLatestState sees any token written this run
+    flushPendingStates();
+    String token = readLatestState(FRESHNESS_SOURCE_KEY, pipelineName, FRESHNESS_PHASE);
+    freshnessTokenCache.put(pipelineName, token != null ? token : "");
+    return token;
+  }
+
+  @Override public void putFreshnessToken(String pipelineName, String token) {
+    if (token == null) {
+      return;
+    }
+    writeState(FRESHNESS_SOURCE_KEY, pipelineName, FRESHNESS_PHASE,
+        token, 0, null, null, null);
+    freshnessTokenCache.put(pipelineName, token);
+    LOGGER.debug("Stored freshness token for '{}': {}", pipelineName, token);
+  }
+
   // ===== Utility Methods =====
 
   private String flattenKeyValues(Map<String, String> keyValues) {
@@ -1719,6 +1752,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    */
   private String completionYearFor(String sourceKey, long asOf) {
     if (PERIOD_SOURCE_KEY.equals(sourceKey)) {
+      return COMPLETION_YEAR;
+    }
+    if (FRESHNESS_SOURCE_KEY.equals(sourceKey)) {
       return COMPLETION_YEAR;
     }
     return "_table_complete".equals(sourceKey) ? COMPLETION_YEAR : extractYear(sourceKey, asOf);

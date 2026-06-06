@@ -242,6 +242,8 @@ public class EtlPipeline {
     LOGGER.debug("Memory at pipeline_start: {}", startSnap);
 
     MaterializationWriter writer = null;
+    // Freshness token probed in Phase 3b; stored to tracker after a successful commit.
+    String probedFreshnessToken = null;
 
     try {
       boolean forceReprocessAll = false;
@@ -493,6 +495,46 @@ public class EtlPipeline {
       // Phase 3: Create data source based on type
       LOGGER.info("Phase 3: Creating data source (type={})", config.getSourceType());
       DataSource dataSource = createDataSource(config);
+
+      // Phase 3b: Freshness skip-gate (pre-download types only).
+      // If freshness: is configured and the source hasn't changed since the last successful
+      // commit, skip the fetch and the materialize — no new Iceberg snapshot is created.
+      // hash-type is post-download and is handled after the fetch; deferred for now.
+      FreshnessConfig freshnessConfig = config.getFreshness();
+      if (freshnessConfig != null
+          && freshnessConfig.getType() != FreshnessConfig.Type.HASH
+          && dataSource instanceof HttpSource) {
+        HttpSource httpSource = (HttpSource) dataSource;
+        try {
+          HttpSource.ProbeResult probeResult =
+              httpSource.probe(freshnessConfig, Collections.<String, String>emptyMap());
+          String currentToken = FreshnessCheck.token(
+              freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
+          String previousToken = incrementalTracker.getFreshnessToken(pipelineName);
+          if (!FreshnessCheck.changed(previousToken, currentToken)) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            LOGGER.info("Pipeline '{}': freshness check UNCHANGED (token={}) — skipping fetch "
+                + "and commit ({}ms)", pipelineName, currentToken, elapsed);
+            return EtlResult.builder()
+                .pipelineName(pipelineName)
+                .totalRows(0)
+                .successfulBatches(0)
+                .skippedBatches(totalBatches)
+                .elapsedMs(elapsed)
+                .build();
+          }
+          LOGGER.info("Pipeline '{}': freshness check CHANGED (prev={}, cur={}) — proceeding",
+              pipelineName,
+              previousToken == null ? "<none>" : previousToken,
+              currentToken == null ? "<null>" : currentToken);
+          // Capture so we can persist it after a successful commit
+          probedFreshnessToken = currentToken;
+        } catch (Exception e) {
+          LOGGER.warn("Pipeline '{}': freshness probe failed ({}), proceeding with full fetch",
+              pipelineName, e.getMessage());
+          // Probe failure = treat as changed; don't skip
+        }
+      }
 
       // Phase 4: Create and initialize materialization writer
       MaterializeConfig.Format format = materializeConfig != null
@@ -1151,6 +1193,13 @@ public class EtlPipeline {
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
         LOGGER.info("Marked pipeline '{}' as complete with configHash={}, signature={}, rows={}",
             pipelineName, configHash, dimensionSignature, totalRows);
+        // Persist the freshness token so the next run can skip if unchanged.
+        // Only written on a clean run (no failed batches) to avoid caching a partial state.
+        if (probedFreshnessToken != null) {
+          incrementalTracker.putFreshnessToken(pipelineName, probedFreshnessToken);
+          LOGGER.info("Pipeline '{}': persisted freshness token after clean commit: {}",
+              pipelineName, probedFreshnessToken);
+        }
       }
       // Per-period markers: mark each period whose full combo set is now processed,
       // even if OTHER periods in this table failed — markCompletedPeriods self-guards
@@ -1464,7 +1513,7 @@ public class EtlPipeline {
    * @param config Pipeline configuration
    * @return DataSource instance (HttpSource or ConstantsSource)
    */
-  private DataSource createDataSource(EtlPipelineConfig config) {
+  protected DataSource createDataSource(EtlPipelineConfig config) {
     String sourceType = config.getSourceType();
 
     if (EtlPipelineConfig.SOURCE_TYPE_CONSTANTS.equals(sourceType)) {

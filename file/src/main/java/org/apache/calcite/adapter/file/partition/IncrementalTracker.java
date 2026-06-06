@@ -510,6 +510,32 @@ public interface IncrementalTracker {
     return false;
   }
 
+  // ===== Freshness Token Tracking =====
+
+  /**
+   * Retrieves the last-stored freshness token for a pipeline.
+   *
+   * <p>The freshness token is the high-water mark written after a successful commit:
+   * it records what the source looked like (ETag, count, hash, etc.) so the next
+   * run can compare and skip if unchanged.
+   *
+   * @param pipelineName The pipeline name
+   * @return The stored token, or null if none (first run or not supported)
+   */
+  default String getFreshnessToken(String pipelineName) {
+    return null; // Default: not supported; treat every run as changed
+  }
+
+  /**
+   * Stores the freshness token after a successful commit.
+   *
+   * @param pipelineName The pipeline name
+   * @param token        The token produced by the freshness check
+   */
+  default void putFreshnessToken(String pipelineName, String token) {
+    // Default: no-op; token not persisted
+  }
+
   /**
    * Flushes any buffered/pending tracker writes so subsequent reads observe them.
    *
