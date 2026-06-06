@@ -1974,12 +1974,27 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     int firstSlash = pathWithoutScheme.indexOf('/');
     String bucket = pathWithoutScheme.substring(0, firstSlash);
     String key = pathWithoutScheme.substring(firstSlash + 1);
-    com.amazonaws.services.s3.model.ObjectMetadata metadata =
-        new com.amazonaws.services.s3.model.ObjectMetadata();
-    metadata.setContentLength(tempFile.length());
-    try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile)) {
-      getS3Client().putObject(bucket, key, fis, metadata);
+    // Retry transient upload truncation: under concurrent flush load (many parallel
+    // PUTs) MinIO/S3 can reset a connection mid-body, returning 400 IncompleteBody
+    // ("did not provide the number of bytes specified by the Content-Length header").
+    // Without a retry that lost the tracker state, so completion markers never persisted
+    // and --etl-resume could not skip finished partitions. Re-open the stream each attempt.
+    Exception lastError = null;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      com.amazonaws.services.s3.model.ObjectMetadata metadata =
+          new com.amazonaws.services.s3.model.ObjectMetadata();
+      metadata.setContentLength(tempFile.length());
+      try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile)) {
+        getS3Client().putObject(bucket, key, fis, metadata);
+        return;
+      } catch (RuntimeException e) {
+        lastError = e;
+        if (attempt < 3) {
+          Thread.sleep(250L * attempt);
+        }
+      }
     }
+    throw lastError;
   }
 
   /**

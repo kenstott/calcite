@@ -926,7 +926,7 @@ get_timeout_config() {
     weather)      echo 360 ;;  # GHCND × 51 states × years — large volume
     geo)          echo 360 ;;  # TIGER shapefiles, geometry parsing
     fec)          echo 240 ;;  # individual contributions 3M+ rows/year
-    crime)        echo 240 ;;  # large dimension expansion × state × offense
+    crime)        echo 720 ;;  # cde_crime_agency ~19k ORIs × offenses; full sweep > 4h
     health)       echo 240 ;;  # 15 tables with cursor pagination
     lands)        echo 240 ;;  # forest inventory biennial, large parcels
     census)       echo 240 ;;  # ACS 5-year span
