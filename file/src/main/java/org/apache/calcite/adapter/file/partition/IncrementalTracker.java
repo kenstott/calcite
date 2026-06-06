@@ -447,25 +447,26 @@ public interface IncrementalTracker {
   String PERIOD_NA = "NA";
 
   /**
-   * Ordered period slots that make up a period-completion key. These are the only
-   * dimension names the marker recognizes — the period dimensions ARE the tracking
-   * mechanism. A schema with a non-canonical period name (e.g. census {@code vintage})
-   * opts into per-period tracking by declaring a canonical {@code year}/{@code quarter}/
-   * {@code month}/{@code day} dimension; the framework intentionally does no aliasing.
-   * Non-period labels such as {@code frequency} are correctly ignored.
+   * Ordered period slots that make up a period-completion key, coarsest to finest.
+   * These are the only dimension names the marker recognizes — the period dimensions
+   * ARE the tracking mechanism. A schema with a non-canonical period name (e.g. census
+   * {@code vintage}) opts into per-period tracking by declaring a canonical
+   * {@code year}/{@code quarter}/{@code month}/{@code week}/{@code day}/{@code day_of_week}
+   * dimension; the framework intentionally does no aliasing. Non-period labels such as
+   * {@code frequency} are correctly ignored.
    */
-  String[] PERIOD_SLOTS = {"year", "quarter", "month", "day"};
+  String[] PERIOD_SLOTS = {"year", "quarter", "month", "week", "day", "day_of_week"};
 
   /**
    * Builds the uniform per-period completion key for a pipeline.
    *
-   * <p>The key is {@code year_quarter_month_day_pipelineName}, with the literal
-   * {@link #PERIOD_NA} substituted for any of the four period slots the pipeline
-   * does not declare. This is the single owner of the key format; both the marker
-   * write and the completion check route through here so the format never drifts.
+   * <p>The key is {@code year_quarter_month_week_day_day_of_week_pipelineName}, with the
+   * literal {@link #PERIOD_NA} substituted for any of the period slots the pipeline does
+   * not declare. This is the single owner of the key format; both the marker write and the
+   * completion check route through here so the format never drifts.
    *
-   * <p>Examples: {@code 2025_NA_NA_NA_patents_patent_grants},
-   * {@code 2022_NA_NA_NA_patents_patent_grants}.
+   * <p>Examples: {@code 2025_NA_NA_NA_NA_NA_patents_patent_grants},
+   * {@code 2026_NA_06_NA_NA_NA_energy_eia_electricity_generation}.
    *
    * <p>Extension seam (not implemented): the key is always the canonical periods; a future
    * optional per-table {@code additionalCompletionKeys: [<dim>...]} operand could ADDITIVELY
@@ -492,7 +493,7 @@ public interface IncrementalTracker {
 
   /**
    * Returns true if the combination carries at least one canonical period slot
-   * ({@code year}/{@code quarter}/{@code month}/{@code day}).
+   * ({@code year}/{@code quarter}/{@code month}/{@code week}/{@code day}/{@code day_of_week}).
    *
    * <p>When false the combo is NOT period-tracked: its key would be all-{@code NA},
    * so every such combo for a pipeline would collide. Callers must NOT apply the
@@ -531,8 +532,8 @@ public interface IncrementalTracker {
    * Checks whether the given period has been completed for a pipeline.
    *
    * <p>Completion is authoritative and period-keyed: the latest append-only marker
-   * for the 5-tuple {@code (year, quarter, month, day, pipelineName)} must be
-   * {@code complete}. A missing or {@code invalidate} latest marker means not done.
+   * for the tuple {@code (year, quarter, month, week, day, day_of_week, pipelineName)}
+   * must be {@code complete}. A missing or {@code invalidate} latest marker means not done.
    *
    * @param pipelineName The pipeline name
    * @param periodValues The dimension combination carrying the period slots
@@ -560,6 +561,56 @@ public interface IncrementalTracker {
    * @param periodValues The dimension combination carrying the period slots
    */
   default void invalidatePeriod(String pipelineName, Map<String, String> periodValues) {
+    // No-op for non-persistent trackers.
+  }
+
+  /**
+   * Writes a schema-scoped "cleared" sentinel that makes all prior period completions
+   * for this schema's pipelines invisible to {@link #isPeriodComplete}.
+   *
+   * <p>One sentinel row is written per schema (not per period) at year=0, using
+   * {@code source_key="_period_cleared"} and {@code table_name=schemaName}.
+   * {@link #isPeriodComplete} compares the period-complete marker's {@code as_of}
+   * against this sentinel's {@code as_of}; a period is complete only if the
+   * complete marker was written <em>after</em> the cleared sentinel.
+   *
+   * <p>This is compaction-safe: the sentinel lives in the normal year=0 store and
+   * survives compaction like any other marker row.
+   *
+   * <p>Concurrency-safe: the sentinel is scoped to {@code schemaName} so it never
+   * affects other schemas' period completions, even when multiple schemas run in
+   * the same tracker bucket.
+   *
+   * @param schemaName The schema whose period completions should be invalidated
+   *                   (e.g. {@code "energy"}, {@code "econ_reference"})
+   */
+  default void clearPeriodCompletions(String schemaName) {
+    // No-op for non-persistent trackers.
+  }
+
+  /**
+   * Writes a schema-scoped "cleared" sentinel that makes all prior per-combo processed-key
+   * states for this schema's pipelines invisible to {@link #isProcessed}.
+   *
+   * <p>One sentinel row is written per schema at year=0, using
+   * {@code source_key="_processed_cleared"} and {@code table_name=schemaName}.
+   * {@link #isProcessed} compares the processed-key marker's {@code as_of} against
+   * this sentinel's {@code as_of}; a combo is considered processed only if its
+   * marker was written <em>after</em> the cleared sentinel.
+   *
+   * <p>This gates {@code markCompletedPeriods}, which calls {@code isProcessed} to decide
+   * whether to promote a combo's year/month period to a period-complete marker.
+   * Without this sentinel, stale per-combo "complete" states from prior runs would be
+   * promoted to period-complete markers, causing the historical pass to skip re-ingestion.
+   *
+   * <p>Same compaction and concurrency guarantees as {@link #clearPeriodCompletions}:
+   * the sentinel lives in the year=0 store, survives compaction, and is scoped to the
+   * target schema so concurrent schemas are not affected.
+   *
+   * @param schemaName The schema whose per-combo processed-key states should be invalidated
+   *                   (e.g. {@code "energy"}, {@code "econ_reference"})
+   */
+  default void clearProcessedKeys(String schemaName) {
     // No-op for non-persistent trackers.
   }
 

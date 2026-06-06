@@ -879,12 +879,12 @@ get_heap_config() {
 get_dq_start_year() {
   local schema=$1
   case "$schema" in
-    energy)   echo 2022 ;;  # SEDS 2-year publication lag
+    energy)   echo $(( $(date +%Y) - 4 )) ;;  # dataLag=2 tables map year=effective+dataLag, so a current-2 start emits only the current year. Need current-2-dataLag = current-4 to land historical generation years (T8 wants MIN<=current-2).
     edu)      echo $(( $(date +%Y) - 3 )) ;;  # 3-year lookback: covers NAEP/CRDC biennial lag; crdc_schools 2021 data DQ-flags correctly via existence check
-    lands)    echo 2023 ;;  # forest inventory biennial
-    census)   echo 2022 ;;  # ACS 5-year span
-    patents)  echo 2022 ;;  # USPTO TRCFECO2 trademark snapshot {year+1}; last published is 2023 → filing year 2022
-    *)        echo 2024 ;;  # annual/sub-annual: 1-year lookback sufficient
+    lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
+    census)   echo $(( $(date +%Y) - 3 )) ;;  # ACS 5-year: dataLag=2 + releaseMonth=12 → effective end current−3 before December
+    patents)  echo $(( $(date +%Y) - 4 )) ;;  # USPTO TRCFECO2 trademark snapshot {year+1} settles slowly; window must reach the last published filing year
+    *)        echo $(( $(date +%Y) - 2 )) ;;  # annual/sub-annual: N−2 safe default (covers dataLag≤2)
   esac
 }
 
@@ -971,8 +971,8 @@ build_inline_model() {
     extra_json="${extra_json},\"freshStart\":true"
   fi
 
-  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}","trackerBackend":"s3","trackerConfig":{"bucket":"${CALCITE_TRACKER_S3_BUCKET}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"},"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \
-    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$extra_json"
+  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s","trackerBackend":"s3","trackerConfig":{"bucket":"${CALCITE_TRACKER_S3_BUCKET}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"},"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \
+    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$extra_json"
 }
 
 # Run the ETL with a given model file

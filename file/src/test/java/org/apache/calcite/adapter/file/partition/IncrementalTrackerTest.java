@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +112,8 @@ public class IncrementalTrackerTest {
   @Test void testPeriodCompletionKeyYearOnlyNaFills() {
     String key = IncrementalTracker.periodCompletionKey(
         "patents_patent_grants", Collections.singletonMap("year", "2022"));
-    // canonical slots are year_quarter_month_day, then the pipeline name
-    assertEquals("2022_NA_NA_NA_patents_patent_grants", key);
+    // canonical slots are year_quarter_month_week_day_day_of_week, then the pipeline name
+    assertEquals("2022_NA_NA_NA_NA_NA_patents_patent_grants", key);
   }
 
   @Test void testPeriodCompletionKeyYearAndQuarter() {
@@ -119,13 +121,13 @@ public class IncrementalTrackerTest {
     combo.put("year", "2026");
     combo.put("quarter", "2026Q2");
     combo.put("geography", "CA"); // non-period dim must be ignored
-    assertEquals("2026_2026Q2_NA_NA_t", IncrementalTracker.periodCompletionKey("t", combo));
+    assertEquals("2026_2026Q2_NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", combo));
   }
 
   @Test void testPeriodCompletionKeyNoPeriodAllNa() {
-    assertEquals("NA_NA_NA_NA_t",
+    assertEquals("NA_NA_NA_NA_NA_NA_t",
         IncrementalTracker.periodCompletionKey("t", Collections.<String, String>emptyMap()));
-    assertEquals("NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", null));
+    assertEquals("NA_NA_NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", null));
   }
 
   @Test void testPeriodCompletionKeyDistinctPerPeriod() {
@@ -163,6 +165,339 @@ public class IncrementalTrackerTest {
     IncrementalTracker.NOOP.invalidatePeriod("p", combo);   // must not throw
     // Non-persistent tracker still cannot prove completion after a mark.
     assertFalse(IncrementalTracker.NOOP.isPeriodComplete("p", combo));
+  }
+
+  @Test void testNoopClearPeriodCompletionsIsNoOp() {
+    // Must not throw and must not affect NOOP's always-false isPeriodComplete
+    IncrementalTracker.NOOP.clearPeriodCompletions("myschema");
+    assertFalse(IncrementalTracker.NOOP.isPeriodComplete("myschema_table",
+        Collections.singletonMap("year", "2022")));
+  }
+
+  @Test void testNoopClearProcessedKeysIsNoOp() {
+    // Must not throw; NOOP.isProcessed always returns false so clearing has no observable effect
+    IncrementalTracker.NOOP.clearProcessedKeys("myschema");
+    assertFalse(IncrementalTracker.NOOP.isProcessed("myschema_table", "myschema_table",
+        Collections.singletonMap("year", "2022")));
+  }
+
+  // ===== clearPeriodCompletions semantics (in-memory stub) =====
+
+  /**
+   * Minimal in-memory IncrementalTracker that implements per-period completion with
+   * schema-scoped clearing semantics — mirrors the S3 implementation's latest-wins
+   * logic without any I/O, so tests are fast and hermetic.
+   */
+  private static class InMemoryPeriodTracker implements IncrementalTracker {
+    /** periodKey -> as_of of the latest "complete" mark (Long.MIN_VALUE = invalidated). */
+    private final Map<String, Long> periodCompleteAsOf = new HashMap<String, Long>();
+    /** schemaName -> as_of of the "cleared" sentinel. */
+    private final Map<String, Long> clearedAsOf = new HashMap<String, Long>();
+
+    @Override public boolean isProcessed(String alt, String src, Map<String, String> kv) {
+      return false;
+    }
+    @Override public boolean isProcessedWithTtl(String alt, String src,
+        Map<String, String> kv, long ttl) {
+      return false;
+    }
+    @Override public void markProcessed(String alt, String src,
+        Map<String, String> kv, String pat) {}
+    @Override public Set<Map<String, String>> getProcessedKeyValues(String alt) {
+      return Collections.emptySet();
+    }
+    @Override public void invalidate(String alt, Map<String, String> kv) {}
+    @Override public void invalidateAll(String alt) {}
+    @Override public Set<Integer> filterUnprocessed(String alt, String src,
+        List<Map<String, String>> combos) {
+      Set<Integer> all = new HashSet<Integer>();
+      for (int i = 0; i < combos.size(); i++) {
+        all.add(i);
+      }
+      return all;
+    }
+    @Override public boolean isTableComplete(String pipe, String sig) { return false; }
+    @Override public void markTableComplete(String pipe, String sig) {}
+    @Override public void invalidateTableCompletion(String pipe) {}
+    @Override public void clearAllCompletions() {}
+
+    @Override public boolean isPeriodComplete(String pipelineName,
+        Map<String, String> periodValues) {
+      String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
+      Long completedAt = periodCompleteAsOf.get(periodKey);
+      if (completedAt == null || completedAt == Long.MIN_VALUE) {
+        return false;
+      }
+      // Find the longest matching schema prefix
+      long clearedAt = getMatchingClearedAsOf(pipelineName);
+      if (clearedAt > 0 && completedAt <= clearedAt) {
+        return false;
+      }
+      return true;
+    }
+
+    @Override public void markPeriodComplete(String pipelineName,
+        Map<String, String> periodValues) {
+      String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
+      periodCompleteAsOf.put(periodKey, System.currentTimeMillis());
+    }
+
+    @Override public void invalidatePeriod(String pipelineName,
+        Map<String, String> periodValues) {
+      String periodKey = IncrementalTracker.periodCompletionKey(pipelineName, periodValues);
+      periodCompleteAsOf.put(periodKey, Long.MIN_VALUE);
+    }
+
+    @Override public void clearPeriodCompletions(String schemaName) {
+      clearedAsOf.put(schemaName, System.currentTimeMillis());
+    }
+
+    private long getMatchingClearedAsOf(String pipelineName) {
+      String bestMatch = null;
+      int bestLen = -1;
+      for (String schemaName : clearedAsOf.keySet()) {
+        String prefix = schemaName + "_";
+        if (pipelineName.startsWith(prefix) && schemaName.length() > bestLen) {
+          bestMatch = schemaName;
+          bestLen = schemaName.length();
+        }
+      }
+      return bestMatch != null ? clearedAsOf.get(bestMatch) : 0L;
+    }
+  }
+
+  @Test void testClearPeriodCompletionsMakesPriorCompleteInvisible() throws InterruptedException {
+    InMemoryPeriodTracker tracker = new InMemoryPeriodTracker();
+    Map<String, String> period = Collections.singletonMap("year", "2022");
+    String pipeline = "schemaA_table1";
+
+    // Mark period complete
+    tracker.markPeriodComplete(pipeline, period);
+    assertTrue(tracker.isPeriodComplete(pipeline, period),
+        "should be complete before clear");
+
+    // Ensure at least 1ms passes so the cleared sentinel is strictly newer
+    Thread.sleep(2);
+
+    // Clear schema A's period completions
+    tracker.clearPeriodCompletions("schemaA");
+    assertFalse(tracker.isPeriodComplete(pipeline, period),
+        "after clearPeriodCompletions, prior mark should be invisible");
+  }
+
+  @Test void testClearPeriodCompletionsDoesNotAffectOtherSchema() throws InterruptedException {
+    InMemoryPeriodTracker tracker = new InMemoryPeriodTracker();
+    Map<String, String> period = Collections.singletonMap("year", "2022");
+    String pipelineA = "schemaA_table1";
+    String pipelineB = "schemaB_table1";
+
+    tracker.markPeriodComplete(pipelineA, period);
+    tracker.markPeriodComplete(pipelineB, period);
+
+    Thread.sleep(2);
+
+    // Clear only schema A
+    tracker.clearPeriodCompletions("schemaA");
+
+    assertFalse(tracker.isPeriodComplete(pipelineA, period),
+        "schemaA period should be invisible after clear");
+    assertTrue(tracker.isPeriodComplete(pipelineB, period),
+        "schemaB period should be unaffected by clearing schemaA");
+  }
+
+  @Test void testClearPeriodCompletionsThenRemark() throws InterruptedException {
+    InMemoryPeriodTracker tracker = new InMemoryPeriodTracker();
+    Map<String, String> period = Collections.singletonMap("year", "2023");
+    String pipeline = "schemaA_table2";
+
+    tracker.markPeriodComplete(pipeline, period);
+    Thread.sleep(2);
+    tracker.clearPeriodCompletions("schemaA");
+    assertFalse(tracker.isPeriodComplete(pipeline, period), "should be gone after clear");
+
+    // Re-mark after the clear: the new mark is newer than the cleared sentinel
+    Thread.sleep(2);
+    tracker.markPeriodComplete(pipeline, period);
+    assertTrue(tracker.isPeriodComplete(pipeline, period),
+        "re-mark after clear should be visible (newer asOf)");
+  }
+
+  @Test void testClearPeriodCompletionsLongestPrefixMatch() throws InterruptedException {
+    InMemoryPeriodTracker tracker = new InMemoryPeriodTracker();
+    Map<String, String> period = Collections.singletonMap("year", "2024");
+    String pipelineEcon = "econ_table1";
+    String pipelineEconRef = "econ_reference_table1";
+
+    tracker.markPeriodComplete(pipelineEcon, period);
+    tracker.markPeriodComplete(pipelineEconRef, period);
+
+    Thread.sleep(2);
+
+    // Clear "econ_reference" only — must NOT affect "econ" pipelines
+    tracker.clearPeriodCompletions("econ_reference");
+
+    assertTrue(tracker.isPeriodComplete(pipelineEcon, period),
+        "econ_table1 should NOT be affected by clearing econ_reference");
+    assertFalse(tracker.isPeriodComplete(pipelineEconRef, period),
+        "econ_reference_table1 SHOULD be affected by clearing econ_reference");
+  }
+
+  // ===== clearProcessedKeys semantics (in-memory stub) =====
+
+  /**
+   * Minimal in-memory IncrementalTracker that implements per-combo processed-key tracking with
+   * schema-scoped clearing semantics — mirrors the S3 implementation's sentinel logic
+   * without any I/O so tests are fast and hermetic.
+   */
+  private static class InMemoryProcessedTracker implements IncrementalTracker {
+    /** flatKey(combo, alternateName) -> as_of of latest "complete" mark (0 = not processed). */
+    private final Map<String, Long> processedAsOf = new HashMap<String, Long>();
+    /** schemaName -> as_of of the "_processed_cleared" sentinel. */
+    private final Map<String, Long> clearedAsOf = new HashMap<String, Long>();
+
+    @Override public boolean isProcessed(String alt, String src, Map<String, String> kv) {
+      String key = alt + "\0" + kv.toString();
+      Long markedAt = processedAsOf.get(key);
+      if (markedAt == null || markedAt == 0L) {
+        return false;
+      }
+      long clearedAt = getClearedForPipeline(alt);
+      if (clearedAt > 0 && markedAt <= clearedAt) {
+        return false;
+      }
+      return true;
+    }
+
+    @Override public boolean isProcessedWithTtl(String alt, String src,
+        Map<String, String> kv, long ttl) {
+      return false;
+    }
+
+    @Override public void markProcessed(String alt, String src,
+        Map<String, String> kv, String pat) {
+      String key = alt + "\0" + kv.toString();
+      processedAsOf.put(key, System.currentTimeMillis());
+    }
+
+    @Override public Set<Map<String, String>> getProcessedKeyValues(String alt) {
+      return Collections.emptySet();
+    }
+
+    @Override public void invalidate(String alt, Map<String, String> kv) {
+      String key = alt + "\0" + kv.toString();
+      processedAsOf.remove(key);
+    }
+
+    @Override public void invalidateAll(String alt) {}
+
+    @Override public Set<Integer> filterUnprocessed(String alt, String src,
+        List<Map<String, String>> combos) {
+      Set<Integer> all = new HashSet<Integer>();
+      for (int i = 0; i < combos.size(); i++) {
+        all.add(i);
+      }
+      return all;
+    }
+
+    @Override public boolean isTableComplete(String pipe, String sig) { return false; }
+    @Override public void markTableComplete(String pipe, String sig) {}
+    @Override public void invalidateTableCompletion(String pipe) {}
+    @Override public void clearAllCompletions() {}
+
+    @Override public void clearProcessedKeys(String schemaName) {
+      clearedAsOf.put(schemaName, System.currentTimeMillis());
+    }
+
+    private long getClearedForPipeline(String pipelineName) {
+      // Longest-prefix match on schema name
+      String bestMatch = null;
+      int bestLen = -1;
+      for (String schemaName : clearedAsOf.keySet()) {
+        String prefix = schemaName + "_";
+        if (pipelineName.startsWith(prefix) && schemaName.length() > bestLen) {
+          bestMatch = schemaName;
+          bestLen = schemaName.length();
+        }
+      }
+      return bestMatch != null ? clearedAsOf.get(bestMatch) : 0L;
+    }
+  }
+
+  @Test void testClearProcessedKeysMakesPriorMarkInvisible() throws InterruptedException {
+    InMemoryProcessedTracker tracker = new InMemoryProcessedTracker();
+    Map<String, String> combo = Collections.singletonMap("year", "2024");
+    String pipeline = "energy_eia_coal_mines";
+
+    // Record a processed mark for a combo in schemaA's pipeline
+    tracker.markProcessed(pipeline, pipeline, combo, null);
+    assertTrue(tracker.isProcessed(pipeline, pipeline, combo),
+        "should be processed before clear");
+
+    // Ensure at least 1ms so sentinel is strictly newer
+    Thread.sleep(2);
+
+    // Clear schema "energy" processed keys
+    tracker.clearProcessedKeys("energy");
+
+    // Prior mark should now be invisible
+    assertFalse(tracker.isProcessed(pipeline, pipeline, combo),
+        "after clearProcessedKeys, prior mark should be invisible");
+  }
+
+  @Test void testClearProcessedKeysThenRemark() throws InterruptedException {
+    InMemoryProcessedTracker tracker = new InMemoryProcessedTracker();
+    Map<String, String> combo = Collections.singletonMap("year", "2024");
+    String pipeline = "energy_eia_coal_mines";
+
+    tracker.markProcessed(pipeline, pipeline, combo, null);
+    Thread.sleep(2);
+    tracker.clearProcessedKeys("energy");
+    assertFalse(tracker.isProcessed(pipeline, pipeline, combo),
+        "should not be processed after clear");
+
+    // Re-mark after the sentinel: new mark is newer than sentinel
+    Thread.sleep(2);
+    tracker.markProcessed(pipeline, pipeline, combo, null);
+    assertTrue(tracker.isProcessed(pipeline, pipeline, combo),
+        "re-mark after clearProcessedKeys should be visible");
+  }
+
+  @Test void testClearProcessedKeysDoesNotAffectOtherSchema() throws InterruptedException {
+    InMemoryProcessedTracker tracker = new InMemoryProcessedTracker();
+    Map<String, String> combo = Collections.singletonMap("year", "2024");
+    String pipelineA = "energy_eia_coal_mines";
+    String pipelineB = "econ_gdp";
+
+    tracker.markProcessed(pipelineA, pipelineA, combo, null);
+    tracker.markProcessed(pipelineB, pipelineB, combo, null);
+    Thread.sleep(2);
+
+    // Clear only "energy" schema
+    tracker.clearProcessedKeys("energy");
+
+    assertFalse(tracker.isProcessed(pipelineA, pipelineA, combo),
+        "energy pipeline combo should be invisible after clearing energy");
+    assertTrue(tracker.isProcessed(pipelineB, pipelineB, combo),
+        "econ pipeline combo should be unaffected by clearing energy");
+  }
+
+  @Test void testClearProcessedKeysLongestPrefixMatch() throws InterruptedException {
+    InMemoryProcessedTracker tracker = new InMemoryProcessedTracker();
+    Map<String, String> combo = Collections.singletonMap("year", "2024");
+    String pipelineEcon = "econ_gdp";
+    String pipelineEconRef = "econ_reference_codes";
+
+    tracker.markProcessed(pipelineEcon, pipelineEcon, combo, null);
+    tracker.markProcessed(pipelineEconRef, pipelineEconRef, combo, null);
+    Thread.sleep(2);
+
+    // Clear "econ_reference" only — must NOT affect "econ" pipelines
+    tracker.clearProcessedKeys("econ_reference");
+
+    assertTrue(tracker.isProcessed(pipelineEcon, pipelineEcon, combo),
+        "econ_gdp should NOT be affected by clearing econ_reference");
+    assertFalse(tracker.isProcessed(pipelineEconRef, pipelineEconRef, combo),
+        "econ_reference_codes SHOULD be affected by clearing econ_reference");
   }
 
   // ===== Default methods =====

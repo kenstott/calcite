@@ -127,10 +127,12 @@ case "$SCHEMA" in
     ;;
 
   # ── Simple year-range schemas ──────────────────────────────────────────────
-  # econ, census, crime, weather share historical/daily logic.
-  # census adds enabledSources; all daily runs pass currentMonth.
+  # econ, census, crime, weather, energy share historical/daily logic.
+  # census adds enabledSources; all daily runs pass currentMonth. Per-table
+  # cadence (energy's weekly/monthly/annual mix) lives in the schema YAML
+  # dimensions (month cache-buster), not in worker flags.
 
-  econ|census|crime|weather)
+  econ|census|crime|weather|energy)
     case "$MODE" in
       historical)
         export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
@@ -226,10 +228,6 @@ case "$SCHEMA" in
 
   edu)
     exec "$SCRIPT_DIR/worker-edu.sh" "$MODE"
-    ;;
-
-  energy)
-    exec "$SCRIPT_DIR/worker-energy.sh" "$MODE"
     ;;
 
   patents)
