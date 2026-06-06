@@ -879,12 +879,12 @@ get_heap_config() {
 get_dq_start_year() {
   local schema=$1
   case "$schema" in
-    energy)   echo 2022 ;;  # SEDS 2-year publication lag
+    energy)   echo $(( $(date +%Y) - 2 )) ;;  # max dataLag=2 (SEDS/elec_gen/fossil/refinery/prices); 1-yr window captures the latest published year
     edu)      echo $(( $(date +%Y) - 3 )) ;;  # 3-year lookback: covers NAEP/CRDC biennial lag; crdc_schools 2021 data DQ-flags correctly via existence check
-    lands)    echo 2023 ;;  # forest inventory biennial
-    census)   echo 2022 ;;  # ACS 5-year span
-    patents)  echo 2022 ;;  # USPTO TRCFECO2 trademark snapshot {year+1}; last published is 2023 → filing year 2022
-    *)        echo 2024 ;;  # annual/sub-annual: 1-year lookback sufficient
+    lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
+    census)   echo $(( $(date +%Y) - 3 )) ;;  # ACS 5-year: dataLag=2 + releaseMonth=12 → effective end current−3 before December
+    patents)  echo $(( $(date +%Y) - 4 )) ;;  # USPTO TRCFECO2 trademark snapshot {year+1} settles slowly; window must reach the last published filing year
+    *)        echo $(( $(date +%Y) - 2 )) ;;  # annual/sub-annual: N−2 safe default (covers dataLag≤2)
   esac
 }
 

@@ -61,11 +61,26 @@ column_templates:
     name: year
     type: INTEGER
 
+  partition_month: &partition_month
+    name: month
+    type: VARCHAR
+
   standard_partitions: &standard_partitions
     style: hive
     columnDefinitions:
       - *partition_type
       - *partition_year
+
+  # Sub-annual tables (EIA monthly + weekly series) partition by year+month so each
+  # per-month fetch lands its own partition. overwritePartitions:true then replaces a
+  # single month rather than the whole year. The framework keys a per-month completion
+  # marker (year_NA_MM_...) off the canonical month dimension.
+  standard_partitions_monthly: &standard_partitions_monthly
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_month
 
   eia_rate_limit: &eia_rate_limit
     requestsPerSecond: 10.0
@@ -87,6 +102,15 @@ column_templates:
 # ============================================================================
 
 dimension_values:
+
+  # Calendar months for sub-annual EIA series. The year range walks each (year, month);
+  # zero-padded to match the EIA v2 YYYY-MM period format used in the URL. Descending so
+  # the daily worker fetches the newest month of the current year first. Each (year, month)
+  # is its own raw-cache entry and its own per-period completion marker.
+  eia_months: &eia_months
+    type: list
+    values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+    descending: true
 
   # Default EIA electricity generation year range (monthly data)
   eia_elec_gen_years: &eia_elec_gen_years
@@ -182,8 +206,8 @@ partitionedTables:
   # EIA ELECTRICITY GENERATION - Monthly generation and fuel consumption by state
   # ---------------------------------------------------------------------------
   - name: eia_electricity_generation
-    pattern: "type=eia_elec_gen/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=eia_elec_gen/year=*/month=*/*.parquet"
+    partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 electric power operational data. Monthly electricity generation
       (thousand MWh), total fuel consumption (MMBtu), fuel consumption for electricity
@@ -195,6 +219,7 @@ partitionedTables:
       type:
         - eia_elec_gen
       year: *eia_elec_gen_years
+      month: *eia_months
 
     columns:
       - name: generation_year
@@ -250,7 +275,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={year}-01&end={year}-12&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content"
+      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={year}-{month}&end={year}-{month}&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -273,14 +298,14 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=eia_elec_gen/year=*/"
+        pattern: "type=eia_elec_gen/year=*/month=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, month]
       iceberg:
         <<: *iceberg_common
         tableName: eia_electricity_generation
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
 
   # ---------------------------------------------------------------------------
   # EIA ELECTRICITY PRICES - Annual retail electricity sales and prices by state
@@ -837,8 +862,8 @@ partitionedTables:
   # EIA FOSSIL FUEL PRODUCTION - Crude oil and natural gas production
   # ---------------------------------------------------------------------------
   - name: eia_fossil_fuel_production
-    pattern: "type=eia_fossil/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=eia_fossil/year=*/month=*/*.parquet"
+    partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 petroleum crude oil production by state and month. The transformer
       also fetches the EIA natural gas production summary endpoint internally and unions
@@ -850,6 +875,7 @@ partitionedTables:
       type:
         - eia_fossil
       year: *eia_fossil_years
+      month: *eia_months
 
     columns:
       - name: production_year
@@ -896,7 +922,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={year}-01&end={year}-12&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={year}-{month}&end={year}-{month}&data[]=value"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -919,14 +945,14 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=eia_fossil/year=*/"
+        pattern: "type=eia_fossil/year=*/month=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, month]
       iceberg:
         <<: *iceberg_common
         tableName: eia_fossil_fuel_production
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
 
   # ---------------------------------------------------------------------------
   # EIA STATE ENERGY CONSUMPTION - SEDS State Energy Data System
@@ -1339,8 +1365,8 @@ partitionedTables:
   # EIA REFINERY OPERATIONS - Monthly refinery input and capacity data
   # ---------------------------------------------------------------------------
   - name: eia_refinery_operations
-    pattern: "type=eia_refinery/year=*/*.parquet"
-    partitions: *standard_partitions
+    pattern: "type=eia_refinery/year=*/month=*/*.parquet"
+    partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 petroleum refinery process data in tall format. One row per EIA area +
       series (process_code) + year-month. Key series include crude inputs to distillation
@@ -1353,6 +1379,7 @@ partitionedTables:
       type:
         - eia_refinery
       year: *eia_refinery_years
+      month: *eia_months
 
     columns:
       - name: report_year
@@ -1394,7 +1421,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={year}-01&end={year}-12&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={year}-{month}&end={year}-{month}&data[]=value"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -1417,14 +1444,14 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=eia_refinery/year=*/"
+        pattern: "type=eia_refinery/year=*/month=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, month]
       iceberg:
         <<: *iceberg_common
         tableName: eia_refinery_operations
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
 
   # ---------------------------------------------------------------------------
   # MSHA COAL MINES - MSHA MinesProdYearly coal production data

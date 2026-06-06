@@ -4,10 +4,13 @@
 
 | Slot | When to run |
 |---|---|
-| `energy:initial` | First-time setup — full historical load |
-| `energy:weekly` | Daily pool — EIA weekly storage and stock data |
-| `energy:monthly` | Daily pool — monthly EIA series refresh |
-| `energy:annual` | Daily pool — annual survey releases |
+| `energy:historical` | First-time setup / backfill — full historical load (`GOVDATA_START_YEAR..`) |
+| `energy:daily` | Daily pool — current-year refresh across all EIA sources |
+
+Energy is a standard daily/historical schema. Per-table cadence (EIA weekly storage/stocks,
+monthly series, annual surveys) is expressed in `energy-schema.yaml` dimensions via the
+framework's canonical period slots (`year`/`quarter`/`month`/`week`/`day`/`day_of_week`),
+**not** in worker modes.
 
 ```bash
 cd scripts/parallel
@@ -22,13 +25,13 @@ cd scripts/parallel
 # — or energy only —
 ./run-pool.sh --schema energy daily
 
-# Force all sub-runs regardless of release window (backfill / manual refresh)
+# Force regardless of release window (backfill / manual refresh)
 # Via run-pool (preferred — memory management, logging, pool coordination)
 ./run-pool.sh --force --schema energy daily
+./run-pool.sh --force --schema energy historical
 # Direct worker invocation (bypasses pool; useful for isolated testing)
-./worker-energy.sh weekly --force
-./worker-energy.sh monthly --force
-./worker-energy.sh annual --force
+./worker.sh energy daily --force
+./worker.sh energy historical --force
 ```
 
 ---

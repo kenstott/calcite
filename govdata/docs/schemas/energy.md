@@ -64,19 +64,21 @@ The schema is served by `EnergySchemaFactory` via `GovDataSchemaFactory` and is 
 
 | Variable | Description |
 |---|---|
-| `GOVDATA_START_YEAR` | Historical start year for all modes (initial, weekly, monthly, annual). Default `2010`. |
+| `GOVDATA_START_YEAR` | Historical start year for the `historical` worker. Default `2010`. |
 
 ---
 
-## Maintenance: worker-energy.sh
+## Maintenance
 
-All energy data maintenance is handled by a single parameterized script:
+Energy is a standard daily/historical schema run through the generic worker:
 
 ```
-scripts/parallel/worker-energy.sh <mode>
+scripts/parallel/worker.sh energy <daily|historical>
 ```
 
-See [Energy Data Maintenance](../operations/energy-maintenance.md) for the full runbook.
+`daily` refreshes the current year; `historical` backfills `GOVDATA_START_YEAR..`. Per-table
+cadence (EIA weekly/monthly/annual sources) lives in `energy-schema.yaml` dimensions, not in
+worker modes. See [Energy Data Maintenance](../operations/energy-maintenance.md) for the full runbook.
 
 ---
 
