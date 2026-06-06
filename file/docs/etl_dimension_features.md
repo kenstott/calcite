@@ -35,6 +35,16 @@ dimensions:
   (`year/quarter/month/week/day/day_of_week`), so per-period tracking works for
   free.
 
+**Year cadence (distinct from refresh frequency).** The `year` dimension can step
+at an interval via `cadenceStart` + `cadenceLength` (e.g. biennial cycles
+anchored at 2010, step 2). Emitted years are the anchored series
+`{cadenceStart + n·cadenceLength}` **filtered to the `[start, end]` window** — the
+anchor sets cycle *alignment*, `start` is the floor, `end` the ceiling. So a
+biennial-anchored-2010 schema with `start: 2011` emits 2012, 2014, 2016…. The
+sub-year providers run for whichever cadence-aligned years the year dimension
+emits; they never touch the year axis. (Here "cadence" = the *year-step rate*,
+not how often data is refreshed.)
+
 ## 2. `format:` — API render only
 
 `format:` (or an inline `{var:fmt}` spec in a URL/param template) renders a
@@ -59,7 +69,7 @@ dataset_type: snapshot | delta | computed_delta   # default: delta
 - **delta** (default = current behavior): walk the declared period dimensions;
   the tracker skips completed partitions and re-fetches new/open ones.
 - **snapshot**: full download every run; for a true snapshot with no freshness
-  sniff, drive cadence with the `*_CURRENT_*` cache-bust vars.
+  sniff, drive the refresh frequency with the `*_CURRENT_*` cache-bust vars.
 - **computed_delta**: full dump every run, but only the rows whose `modified`
   advanced are materialized (upsert by `incrementalKeys`).
 
@@ -71,7 +81,7 @@ backfill_period: annual | quarterly | weekly | daily
 
 Sets the fetch-window granularity of the historical walk (independent of the
 partition grain). Closed windows are fetched once (tracker-complete); the open
-window re-runs on cadence. Must respect the source's date-range cap (e.g. NVD's
+window re-runs each refresh. Must respect the source's date-range cap (e.g. NVD's
 120-day limit → `quarterly` is the finest legal choice there).
 
 ## 4. Freshness check (`snapshot` / `computed_delta`)
