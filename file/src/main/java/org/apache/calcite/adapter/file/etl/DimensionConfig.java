@@ -68,6 +68,7 @@ public class DimensionConfig {
   private final Integer step;
   private final Integer dataLag;
   private final Integer releaseMonth;
+  private final boolean monthlyYtd;
   private final List<String> values;
   private final String sql;
   private final String source;
@@ -92,6 +93,7 @@ public class DimensionConfig {
     this.step = builder.step != null ? builder.step : 1;
     this.dataLag = builder.dataLag != null ? builder.dataLag : 0;
     this.releaseMonth = builder.releaseMonth;
+    this.monthlyYtd = builder.monthlyYtd;
     this.values = builder.values != null
         ? Collections.unmodifiableList(new ArrayList<String>(builder.values))
         : Collections.<String>emptyList();
@@ -178,6 +180,21 @@ public class DimensionConfig {
    */
   public Integer getReleaseMonth() {
     return releaseMonth;
+  }
+
+  /**
+   * Returns whether this YEAR_RANGE injects a per-year {@code month} companion.
+   *
+   * <p>When true, {@link DimensionIterator#expand} stamps {@code month=12} into each
+   * completed-year combination and {@code month=}<i>last completed month</i> into the
+   * current calendar year's combinations (year-to-date), so monthly-cadence feeds fetch
+   * the full year for closed years and a YTD window for the in-progress year. Replaces
+   * the global {@code GOVDATA_CURRENT_MONTH} anti-pattern that truncated historical years.
+   *
+   * @return true if monthlyYTD month injection is enabled
+   */
+  public boolean isMonthlyYtd() {
+    return monthlyYtd;
   }
 
   /**
@@ -441,6 +458,16 @@ public class DimensionConfig {
       }
     }
 
+    // Parse monthlyYTD flag: when true on a YEAR_RANGE, DimensionIterator injects a
+    // per-year `month` companion (12 for completed years, last completed month for the
+    // current calendar year) instead of treating month as an independent axis.
+    Object monthlyYtdObj = map.get("monthlyYTD");
+    if (monthlyYtdObj instanceof Boolean) {
+      builder.monthlyYtd(((Boolean) monthlyYtdObj).booleanValue());
+    } else if (monthlyYtdObj instanceof String) {
+      builder.monthlyYtd(Boolean.parseBoolean((String) monthlyYtdObj));
+    }
+
     // Parse list values
     Object valuesObj = map.get("values");
     if (valuesObj instanceof List) {
@@ -654,6 +681,7 @@ public class DimensionConfig {
     private Integer step;
     private Integer dataLag;
     private Integer releaseMonth;
+    private boolean monthlyYtd;
     private List<String> values;
     private String sql;
     private String source;
@@ -702,6 +730,11 @@ public class DimensionConfig {
 
     public Builder releaseMonth(Integer releaseMonth) {
       this.releaseMonth = releaseMonth;
+      return this;
+    }
+
+    public Builder monthlyYtd(boolean monthlyYtd) {
+      this.monthlyYtd = monthlyYtd;
       return this;
     }
 

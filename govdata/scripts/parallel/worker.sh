@@ -150,6 +150,18 @@ case "$SCHEMA" in
     esac
     case "$SCHEMA" in
       census) EXTRA="${EXTRA:+${EXTRA},}\"enabledSources\":[\"acs\"]" ;;
+      crime)
+        # Optional source fence for crime (e.g. GOVDATA_ENABLED_SOURCES=bjs to re-ingest
+        # only BJS tables and skip the slow CDE agency sweep). When unset, no operand is
+        # added and all sources run. The env fallback in GovDataSchemaFactory does not reach
+        # the inline EtlRunner path, so thread it into the operand here where CrimeSchemaFactory
+        # consumes it via isEnabled hooks.
+        if [ -n "${GOVDATA_ENABLED_SOURCES:-}" ]; then
+          _src_json=$(printf '%s' "$GOVDATA_ENABLED_SOURCES" \
+            | awk -F, '{for(i=1;i<=NF;i++){printf (i>1?",":"")"\""$i"\""}}')
+          EXTRA="${EXTRA:+${EXTRA},}\"enabledSources\":[${_src_json}]"
+        fi
+        ;;
     esac
     run_etl_inline "$(build_inline_model "$SCHEMA" "$EXTRA")" "$WORKER_ID"
     ;;
