@@ -1622,7 +1622,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /**
    * Fixed source_key partition for per-period completion markers, mirroring
    * {@code _table_complete}. Lands all period markers under year={@link #COMPLETION_YEAR}
-   * so reads avoid year=* wildcard scans. The 5-tuple period key lives in table_name.
+   * so reads avoid year=* wildcard scans. The period key (year/quarter/month/week/day/
+   * day_of_week + pipeline) lives in table_name.
    */
   private static final String PERIOD_SOURCE_KEY = "_period_complete";
   private static final String PERIOD_PHASE = "period_completion";

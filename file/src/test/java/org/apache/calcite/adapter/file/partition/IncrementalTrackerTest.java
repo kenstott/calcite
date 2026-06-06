@@ -110,8 +110,8 @@ public class IncrementalTrackerTest {
   @Test void testPeriodCompletionKeyYearOnlyNaFills() {
     String key = IncrementalTracker.periodCompletionKey(
         "patents_patent_grants", Collections.singletonMap("year", "2022"));
-    // canonical slots are year_quarter_month_day, then the pipeline name
-    assertEquals("2022_NA_NA_NA_patents_patent_grants", key);
+    // canonical slots are year_quarter_month_week_day_day_of_week, then the pipeline name
+    assertEquals("2022_NA_NA_NA_NA_NA_patents_patent_grants", key);
   }
 
   @Test void testPeriodCompletionKeyYearAndQuarter() {
@@ -119,13 +119,13 @@ public class IncrementalTrackerTest {
     combo.put("year", "2026");
     combo.put("quarter", "2026Q2");
     combo.put("geography", "CA"); // non-period dim must be ignored
-    assertEquals("2026_2026Q2_NA_NA_t", IncrementalTracker.periodCompletionKey("t", combo));
+    assertEquals("2026_2026Q2_NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", combo));
   }
 
   @Test void testPeriodCompletionKeyNoPeriodAllNa() {
-    assertEquals("NA_NA_NA_NA_t",
+    assertEquals("NA_NA_NA_NA_NA_NA_t",
         IncrementalTracker.periodCompletionKey("t", Collections.<String, String>emptyMap()));
-    assertEquals("NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", null));
+    assertEquals("NA_NA_NA_NA_NA_NA_t", IncrementalTracker.periodCompletionKey("t", null));
   }
 
   @Test void testPeriodCompletionKeyDistinctPerPeriod() {
