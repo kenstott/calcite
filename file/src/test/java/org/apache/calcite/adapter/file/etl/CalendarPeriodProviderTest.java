@@ -114,6 +114,19 @@ public class CalendarPeriodProviderTest {
         values(DimensionType.DAY_OF_WEEK, null, Collections.<String, String>emptyMap()));
   }
 
+  @Test void dimensionConfigParsesPeriodKeysFromRawMap() {
+    // Mirrors the govdata→file passthrough: a schema-YAML dimension map flows
+    // verbatim into DimensionConfig.fromMap (via EtlPipelineConfig/fromDimensionsMap).
+    Map<String, Object> raw = new HashMap<String, Object>();
+    raw.put("type", "week");
+    raw.put("weekYear", "iso");
+    raw.put("format", "%02d");
+    DimensionConfig c = DimensionConfig.fromMap("week", raw);
+    assertEquals(DimensionType.WEEK, c.getType());
+    assertEquals("iso", c.getWeekYear());
+    assertEquals("%02d", c.getFormat());
+  }
+
   @Test void fromStringParsesPeriodTypes() {
     assertEquals(DimensionType.QUARTER, DimensionType.fromString("quarter"));
     assertEquals(DimensionType.MONTH, DimensionType.fromString("month"));

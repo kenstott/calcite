@@ -85,6 +85,7 @@ public class DimensionConfig {
   private final String effectiveYearField;
   private final String effectiveMonthField;
   private final String weekYear;
+  private final String format;
   private final boolean descending;
   private final Integer cadenceStart;
   private final Integer cadenceLength;
@@ -114,6 +115,7 @@ public class DimensionConfig {
     this.effectiveYearField = builder.effectiveYearField;
     this.effectiveMonthField = builder.effectiveMonthField;
     this.weekYear = builder.weekYear;
+    this.format = builder.format;
     this.descending = builder.descending;
     this.cadenceStart = builder.cadenceStart;
     this.cadenceLength = builder.cadenceLength;
@@ -224,6 +226,16 @@ public class DimensionConfig {
    */
   public String getWeekYear() {
     return weekYear;
+  }
+
+  /**
+   * Returns the API-render format for this dimension's value (e.g. {@code "%02d"},
+   * {@code "Q%d"}, {@code "%B"}), applied only to outbound request substitution —
+   * never to the canonical completion-marker/partition value. Null when unset.
+   * Inline {@code {var:fmt}} specs in a URL/param template override this.
+   */
+  public String getFormat() {
+    return format;
   }
 
   /**
@@ -511,6 +523,11 @@ public class DimensionConfig {
       builder.weekYear((String) weekYearObj);
     }
 
+    Object formatObj = map.get("format");
+    if (formatObj instanceof String) {
+      builder.format((String) formatObj);
+    }
+
     Object descendingObj = map.get("descending");
     if (descendingObj instanceof Boolean) {
       builder.descending((Boolean) descendingObj);
@@ -654,6 +671,7 @@ public class DimensionConfig {
     private String effectiveYearField;
     private String effectiveMonthField;
     private String weekYear;
+    private String format;
     private boolean descending;
     private Integer cadenceStart;
     private Integer cadenceLength;
@@ -745,6 +763,11 @@ public class DimensionConfig {
 
     public Builder weekYear(String weekYear) {
       this.weekYear = weekYear;
+      return this;
+    }
+
+    public Builder format(String format) {
+      this.format = format;
       return this;
     }
 

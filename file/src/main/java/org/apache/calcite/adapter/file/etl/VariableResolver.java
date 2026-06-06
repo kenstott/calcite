@@ -200,9 +200,21 @@ public final class VariableResolver {
       return resolveEnvVariable(envMatcher.group(1));
     }
 
+    // Support {name:format} — render the value for API/URL output only (the
+    // canonical value remains in the map for partition/marker keys). e.g.
+    // {month:02d} -> "03", {quarter:Q} -> "Q3", {month:B} -> "March".
+    String name = varExpr;
+    String format = null;
+    int colon = varExpr.indexOf(':');
+    if (colon > 0) {
+      name = varExpr.substring(0, colon);
+      format = varExpr.substring(colon + 1);
+    }
+
     // Regular variable from map
-    if (variables != null && variables.containsKey(varExpr)) {
-      return variables.get(varExpr);
+    if (variables != null && variables.containsKey(name)) {
+      String value = variables.get(name);
+      return format != null ? PeriodFormat.render(value, format) : value;
     }
 
     // Keep original if not found
