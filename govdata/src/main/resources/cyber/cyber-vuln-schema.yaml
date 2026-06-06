@@ -116,7 +116,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true   # snapshot: replace the type=cwe_catalog partition each change
 
   # ==========================================================================
@@ -242,7 +246,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true       # delta: replace only the re-fetched (type,year,quarter) partition
         batchPartitionColumns: [type, year, quarter]
         incrementalKeys: [type, year, quarter]
@@ -326,7 +334,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true       # delta: replace only the re-fetched (type,year,quarter) partition
         batchPartitionColumns: [type, year, quarter]
         incrementalKeys: [type, year, quarter]
@@ -431,7 +443,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true   # snapshot: replace the type=kev_catalog partition each change
 
   # ==========================================================================
@@ -493,7 +509,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true   # snapshot: replace the type=kev_cwes partition each change
 
   # ==========================================================================
@@ -610,7 +630,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true       # snapshot: replace only the re-fetched ecosystem partition
         batchPartitionColumns: [type, ecosystem]
         incrementalKeys: [type, ecosystem]
@@ -686,7 +710,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true   # snapshot: replace the type=vuln_cross_refs partition each run
 
   # ==========================================================================
@@ -781,7 +809,11 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
         overwritePartitions: true       # delta: replace only the re-fetched year's advisory partition
         batchPartitionColumns: [type, year]
         incrementalKeys: [type, year]
