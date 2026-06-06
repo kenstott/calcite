@@ -136,7 +136,7 @@ generate_sec_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -175,7 +175,7 @@ generate_prices_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -211,7 +211,7 @@ generate_nonsec_model() {
         "endYear": 2026,
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
-        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
         "trackerBackend": "s3",
         "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
@@ -232,7 +232,7 @@ generate_nonsec_model() {
         "endYear": 2026,
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
-        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
         "trackerBackend": "s3",
         "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
@@ -252,7 +252,7 @@ generate_nonsec_model() {
         "tigerYear": 2024,
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
-        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
         "trackerBackend": "s3",
         "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
@@ -272,7 +272,7 @@ generate_nonsec_model() {
         "endYear": 2026,
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
-        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
         "trackerBackend": "s3",
         "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
@@ -292,7 +292,7 @@ generate_nonsec_model() {
         "endYear": 2026,
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
-        "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+        "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
         "trackerBackend": "s3",
         "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
         "s3Config": {
@@ -328,7 +328,7 @@ generate_sec_primary_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -373,7 +373,7 @@ generate_sec_reprocess_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -414,7 +414,7 @@ generate_sec_chunks_backfill_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -452,7 +452,7 @@ generate_sec_secondary_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -593,7 +593,7 @@ generate_single_schema_model() {
       ${operand_body},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
       "s3Config": {
@@ -638,7 +638,7 @@ generate_ref_model() {
       "dataSource": "ref",
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
@@ -694,7 +694,7 @@ generate_fec_model() {
       "dataSource": "fec",
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",${start_year_json}${end_year_json}${force_tables_json}
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
       "trackerBackend": "s3",
       "trackerConfig": {
         "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
