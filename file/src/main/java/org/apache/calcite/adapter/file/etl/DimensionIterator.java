@@ -25,6 +25,8 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -151,18 +153,21 @@ public class DimensionIterator {
       return Collections.singletonList(Collections.<String, String>emptyMap());
     }
 
-    // Check if any dimensions are CUSTOM (context-dependent)
+    // Context-aware expansion is needed for CUSTOM dimensions (external resolver)
+    // and for calendar period dimensions (quarter/month/week/day read coarser
+    // periods such as year/month from the context).
     boolean hasCustomDimensions = false;
+    boolean hasPeriodDimensions = false;
     for (DimensionConfig config : dimensions.values()) {
       if (config.getType() == DimensionType.CUSTOM) {
         hasCustomDimensions = true;
-        break;
+      } else if (CalendarPeriodProvider.isPeriodUnit(config.getType())) {
+        hasPeriodDimensions = true;
       }
     }
 
-    // Use context-aware expansion if there are CUSTOM dimensions
     List<Map<String, String>> combinations;
-    if (hasCustomDimensions && dimensionResolver != null) {
+    if ((hasCustomDimensions && dimensionResolver != null) || hasPeriodDimensions) {
       combinations = expandWithContext(dimensions);
     } else {
       combinations = expandStandard(dimensions);
@@ -408,6 +413,9 @@ public class DimensionIterator {
         List<String> values;
         if (config.getType() == DimensionType.CUSTOM) {
           values = resolveCustomWithContext(config, existing);
+        } else if (CalendarPeriodProvider.isPeriodUnit(config.getType())) {
+          values = CalendarPeriodProvider.values(config.getType(), config.getWeekYear(),
+              existing, todayUtc());
         } else {
           values = resolveDimension(config);
         }
@@ -486,11 +494,25 @@ public class DimensionIterator {
         return resolveCustom(config);
       case JSON_CATALOG:
         return resolveJsonCatalog(config);
+      case QUARTER:
+      case MONTH:
+      case WEEK:
+      case DAY:
+      case DAY_OF_WEEK:
+        // Fallback when a period dimension is resolved without context (e.g. no
+        // coarser year dimension). Context-aware expansion is the normal path.
+        return CalendarPeriodProvider.values(config.getType(), config.getWeekYear(),
+            Collections.<String, String>emptyMap(), todayUtc());
       default:
         LOGGER.warn("Unknown dimension type '{}' for '{}', using empty list",
             config.getType(), config.getName());
         return Collections.emptyList();
     }
+  }
+
+  /** Current date in UTC; the anchor for current-period capping in providers. */
+  private static LocalDate todayUtc() {
+    return LocalDate.now(ZoneOffset.UTC);
   }
 
   /**

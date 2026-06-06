@@ -84,6 +84,7 @@ public class DimensionConfig {
   private final Integer maxYear;
   private final String effectiveYearField;
   private final String effectiveMonthField;
+  private final String weekYear;
   private final boolean descending;
   private final Integer cadenceStart;
   private final Integer cadenceLength;
@@ -112,6 +113,7 @@ public class DimensionConfig {
     this.maxYear = builder.maxYear;
     this.effectiveYearField = builder.effectiveYearField;
     this.effectiveMonthField = builder.effectiveMonthField;
+    this.weekYear = builder.weekYear;
     this.descending = builder.descending;
     this.cadenceStart = builder.cadenceStart;
     this.cadenceLength = builder.cadenceLength;
@@ -213,6 +215,15 @@ public class DimensionConfig {
    */
   public String getEffectiveMonthField() {
     return effectiveMonthField;
+  }
+
+  /**
+   * Returns the week-year mode for a {@code WEEK} dimension: {@code "iso"}
+   * (ISO-8601 week-based-year) or {@code "calendar"} (calendar year +
+   * week-of-year). Null when not configured.
+   */
+  public String getWeekYear() {
+    return weekYear;
   }
 
   /**
@@ -495,6 +506,11 @@ public class DimensionConfig {
       builder.effectiveMonthField((String) effectiveMonthFieldObj);
     }
 
+    Object weekYearObj = map.get("weekYear");
+    if (weekYearObj instanceof String) {
+      builder.weekYear((String) weekYearObj);
+    }
+
     Object descendingObj = map.get("descending");
     if (descendingObj instanceof Boolean) {
       builder.descending((Boolean) descendingObj);
@@ -637,6 +653,7 @@ public class DimensionConfig {
     private Integer maxYear;
     private String effectiveYearField;
     private String effectiveMonthField;
+    private String weekYear;
     private boolean descending;
     private Integer cadenceStart;
     private Integer cadenceLength;
@@ -723,6 +740,11 @@ public class DimensionConfig {
 
     public Builder effectiveMonthField(String effectiveMonthField) {
       this.effectiveMonthField = effectiveMonthField;
+      return this;
+    }
+
+    public Builder weekYear(String weekYear) {
+      this.weekYear = weekYear;
       return this;
     }
 
