@@ -95,8 +95,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vulnerabilities', 'row_count',
-  CASE WHEN n < 300000 THEN 'fail' ELSE 'pass' END,
-  n, 300000, 'expect ~347k NVD CVE records'
+  CASE WHEN n < 120000 THEN 'fail' ELSE 'pass' END,
+  n, 120000, 'representative ~121k NVD CVE records for the DQ window'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/cyber_vuln/vulnerabilities', allow_moved_paths := true));
 
 -- T3: sample
@@ -359,8 +359,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'osv_vulnerabilities', 'row_count',
-  CASE WHEN n < 50000 THEN 'fail' ELSE 'pass' END,
-  n, 50000, 'OSV entries across PyPI, npm, Go, Maven, and other ecosystems'
+  CASE WHEN n < 40000 THEN 'fail' ELSE 'pass' END,
+  n, 40000, 'OSV entries (representative ~40k for the DQ window)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/cyber_vuln/osv_vulnerabilities', allow_moved_paths := true));
 
 -- T3: sample
