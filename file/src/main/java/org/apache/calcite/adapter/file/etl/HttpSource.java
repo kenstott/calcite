@@ -2708,6 +2708,10 @@ public class HttpSource implements DataSource {
    *
    * <p>For sidecar-{@code checksum}: issues a {@code GET} against {@code checksum_url}.
    *
+   * <p>For {@code graphql}: issues a {@code POST} of {@code {"query": <query>}} against the
+   * probe URL (defaulting to the source URL) and returns the JSON response body; the
+   * caller extracts the comparable value via the configured {@code path}.
+   *
    * <p>For {@code hash}: no network request is needed here (the caller will hash the
    * fully downloaded body); returns an empty {@link ProbeResult}.
    *
@@ -2750,6 +2754,10 @@ public class HttpSource implements DataSource {
         return probeGet(substituteVariables(freshnessConfig.getCountUrl(), vars), vars);
       }
       return probeGet(effectiveProbeUrl(freshnessConfig, vars), vars);
+
+    case GRAPHQL:
+      return probePost(effectiveProbeUrl(freshnessConfig, vars),
+          substituteVariables(freshnessConfig.getQuery(), vars), vars);
 
     case HASH:
       // Hash is computed over the downloaded body — no separate probe needed.
@@ -2810,6 +2818,48 @@ public class HttpSource implements DataSource {
       applyProbeHeaders(conn, vars);
       int code = conn.getResponseCode();
       LOGGER.debug("Freshness GET {} -> {}", urlString, code);
+      Map<String, String> headers = captureHeaders(conn);
+      String body = null;
+      if (code >= 200 && code < 300) {
+        body = readResponse(conn.getInputStream());
+      }
+      return new ProbeResult(headers, body);
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
+   * Issues a GraphQL {@code POST} to the given endpoint with {@code {"query": <query>}}
+   * as the JSON body, returning headers + response body. Used for the GRAPHQL freshness
+   * probe (e.g. read the global max {@code updatedAt} with one cheap query).
+   */
+  private ProbeResult probePost(String urlString, String query, Map<String, String> vars)
+      throws IOException {
+    if (query == null || query.isEmpty()) {
+      LOGGER.debug("Freshness GraphQL probe skipped: no query configured for {}", urlString);
+      return new ProbeResult(null, null);
+    }
+    String requestBody =
+        OBJECT_MAPPER.writeValueAsString(Collections.singletonMap("query", query));
+    URL url = java.net.URI.create(urlString).toURL();
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    try {
+      conn.setRequestMethod("POST");
+      conn.setConnectTimeout(15000);
+      conn.setReadTimeout(30000);
+      conn.setInstanceFollowRedirects(true);
+      conn.setDoOutput(true);
+      applyProbeHeaders(conn, vars);
+      if (conn.getRequestProperty("Content-Type") == null) {
+        conn.setRequestProperty("Content-Type", "application/json");
+      }
+      try (OutputStream os = conn.getOutputStream()) {
+        os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+        os.flush();
+      }
+      int code = conn.getResponseCode();
+      LOGGER.debug("Freshness GraphQL POST {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
       if (code >= 200 && code < 300) {

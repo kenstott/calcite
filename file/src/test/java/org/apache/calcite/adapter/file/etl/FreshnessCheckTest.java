@@ -84,6 +84,43 @@ public class FreshnessCheckTest {
         FreshnessCheck.token(count, null, "{\"totalResults\":355000}", null));
   }
 
+  @Test void parsesGraphqlQueryAndPath() {
+    FreshnessConfig c = FreshnessConfig.fromMap(map(
+        "type", "graphql",
+        "query", "{ securityAdvisories(first:1){ nodes{ updatedAt } } }",
+        "path", "data.securityAdvisories.nodes[0].updatedAt"));
+    assertEquals(FreshnessConfig.Type.GRAPHQL, c.getType());
+    assertEquals("{ securityAdvisories(first:1){ nodes{ updatedAt } } }", c.getQuery());
+    assertEquals("data.securityAdvisories.nodes[0].updatedAt", c.getQueryPath());
+    // "gql" alias resolves to the same type
+    assertEquals(FreshnessConfig.Type.GRAPHQL, FreshnessConfig.fromMap(map("type", "gql")).getType());
+  }
+
+  @Test void graphqlExtractsValueViaArrayPath() {
+    FreshnessConfig c = FreshnessConfig.fromMap(map(
+        "type", "graphql",
+        "query", "q",
+        "path", "data.securityAdvisories.nodes[0].updatedAt"));
+    String body = "{\"data\":{\"securityAdvisories\":{\"nodes\":"
+        + "[{\"updatedAt\":\"2026-06-05T12:00:00Z\"}]}}}";
+    assertEquals("2026-06-05T12:00:00Z", FreshnessCheck.token(c, null, body, null));
+  }
+
+  @Test void graphqlExtractsScalarTotalCount() {
+    FreshnessConfig c = FreshnessConfig.fromMap(map(
+        "type", "graphql", "query", "q", "path", "data.securityAdvisories.totalCount"));
+    assertEquals("31362",
+        FreshnessCheck.token(c, null, "{\"data\":{\"securityAdvisories\":{\"totalCount\":31362}}}", null));
+  }
+
+  @Test void graphqlMissingNodeYieldsNull() {
+    FreshnessConfig c = FreshnessConfig.fromMap(map(
+        "type", "graphql", "query", "q", "path", "data.securityAdvisories.nodes[5].updatedAt"));
+    // index out of range → null token → treated as "changed" (won't wrongly skip)
+    assertNull(FreshnessCheck.token(c, null,
+        "{\"data\":{\"securityAdvisories\":{\"nodes\":[]}}}", null));
+  }
+
   @Test void checksumSidecarFirstTokenAndObjectMetadata() {
     FreshnessConfig sidecar = FreshnessConfig.fromMap(map("type", "checksum", "checksum_url", "u"));
     assertEquals("d41d8cd98f00b204",

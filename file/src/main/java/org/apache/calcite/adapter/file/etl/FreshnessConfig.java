@@ -25,6 +25,16 @@ import java.util.Map;
  *   type: count
  *   count_probe: { url: "...?resultsPerPage=1", path: "$.totalResults" }
  * }</pre>
+ *
+ * <p>For a GraphQL source, a small POST query reads a cheap signal (e.g. the global
+ * max {@code updatedAt}) and {@code path} extracts the comparable value:
+ *
+ * <pre>{@code
+ * freshness:
+ *   type: graphql
+ *   query: "{ securityAdvisories(first:1, orderBy:{field:UPDATED_AT, direction:DESC}){ nodes{ updatedAt } } }"
+ *   path: data.securityAdvisories.nodes[0].updatedAt
+ * }</pre>
  */
 final class FreshnessConfig {
 
@@ -42,6 +52,13 @@ final class FreshnessConfig {
     CHECKSUM,
     /** Source record count ({@code totalResults}). Pre-download (weak; misses revisions). */
     COUNT,
+    /**
+     * A value (date or scalar) read from a GraphQL endpoint via a small POST query.
+     * Pre-download; the general signal for GraphQL sources — e.g. the global max
+     * {@code updatedAt} of a result set. {@code query} is the GraphQL POST body and
+     * {@code path} extracts the comparable value from the JSON response.
+     */
+    GRAPHQL,
     /** Digest computed over the downloaded body. Post-download (skips commit only). */
     HASH;
 
@@ -63,6 +80,9 @@ final class FreshnessConfig {
         return CHECKSUM;
       case "count":
         return COUNT;
+      case "graphql":
+      case "gql":
+        return GRAPHQL;
       case "hash":
         return HASH;
       default:
@@ -78,11 +98,13 @@ final class FreshnessConfig {
   private final boolean objectMetadata;
   private final String countUrl;
   private final String countPath;
+  private final String query;
+  private final String queryPath;
   private final String normalize;
 
   private FreshnessConfig(Type type, String probeUrl, String versionField,
       String checksumUrl, boolean objectMetadata, String countUrl, String countPath,
-      String normalize) {
+      String query, String queryPath, String normalize) {
     this.type = type;
     this.probeUrl = probeUrl;
     this.versionField = versionField;
@@ -90,6 +112,8 @@ final class FreshnessConfig {
     this.objectMetadata = objectMetadata;
     this.countUrl = countUrl;
     this.countPath = countPath;
+    this.query = query;
+    this.queryPath = queryPath;
     this.normalize = normalize;
   }
 
@@ -127,6 +151,16 @@ final class FreshnessConfig {
     return countPath;
   }
 
+  /** GraphQL query (POST body) for {@link Type#GRAPHQL}; sent to the probe/source URL. */
+  String getQuery() {
+    return query;
+  }
+
+  /** JSON path that extracts the comparable value from the GraphQL response for {@link Type#GRAPHQL}. */
+  String getQueryPath() {
+    return queryPath;
+  }
+
   /** Optional normalization hint for {@link Type#HASH}. */
   String getNormalize() {
     return normalize;
@@ -157,9 +191,11 @@ final class FreshnessConfig {
       countUrl = asString(cp.get("url"));
       countPath = asString(cp.get("path"));
     }
+    String query = asString(map.get("query"));
+    String queryPath = asString(map.get("path"));
     String normalize = asString(map.get("normalize"));
     return new FreshnessConfig(type, probeUrl, versionField, checksumUrl, objectMetadata,
-        countUrl, countPath, normalize);
+        countUrl, countPath, query, queryPath, normalize);
   }
 
   private static String asString(Object o) {

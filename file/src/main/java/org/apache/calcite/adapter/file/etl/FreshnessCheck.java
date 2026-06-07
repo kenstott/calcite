@@ -65,6 +65,8 @@ final class FreshnessCheck {
       return probeBody == null ? null : firstTokenOf(probeBody);
     case COUNT:
       return jsonValue(probeBody, config.getCountPath());
+    case GRAPHQL:
+      return jsonValue(probeBody, config.getQueryPath());
     case HASH:
       return content == null ? null : sha256Hex(content);
     default:
@@ -114,6 +116,8 @@ final class FreshnessCheck {
   /**
    * Reads a value from a JSON body by a simple dot path. Accepts a leading
    * {@code $.} or {@code $}; e.g. {@code $.totalResults}, {@code meta.version}.
+   * Array indices are supported as a {@code [n]} suffix on a segment, e.g.
+   * {@code data.securityAdvisories.nodes[0].updatedAt}.
    */
   private static String jsonValue(String body, String path) {
     if (body == null || path == null || path.isEmpty()) {
@@ -131,12 +135,39 @@ final class FreshnessCheck {
         if (segment.isEmpty() || node == null) {
           continue;
         }
-        node = node.get(segment);
+        node = step(node, segment);
       }
       return node == null || node.isNull() ? null : node.asText();
     } catch (Exception e) {
       return null;
     }
+  }
+
+  /**
+   * Resolves one path segment, which may carry trailing array indices, e.g.
+   * {@code nodes[0]} or {@code matrix[1][2]}.
+   */
+  private static JsonNode step(JsonNode node, String segment) {
+    int bracket = segment.indexOf('[');
+    String field = bracket < 0 ? segment : segment.substring(0, bracket);
+    JsonNode current = field.isEmpty() ? node : node.get(field);
+    if (bracket < 0 || current == null) {
+      return current;
+    }
+    String rest = segment.substring(bracket);
+    while (!rest.isEmpty() && current != null) {
+      int close = rest.indexOf(']');
+      if (rest.charAt(0) != '[' || close < 0) {
+        return null;
+      }
+      try {
+        current = current.get(Integer.parseInt(rest.substring(1, close).trim()));
+      } catch (NumberFormatException e) {
+        return null;
+      }
+      rest = rest.substring(close + 1);
+    }
+    return current;
   }
 
   private static String sha256Hex(byte[] content) {
