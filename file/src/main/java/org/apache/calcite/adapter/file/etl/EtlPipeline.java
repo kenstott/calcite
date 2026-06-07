@@ -253,7 +253,14 @@ public class EtlPipeline {
       MaterializeConfig materializeConfig = config.getMaterialize();
       String configHash = IncrementalTracker.computeConfigHash(config.getDimensions());
 
-      IncrementalTracker.CachedCompletion cached = incrementalTracker.getCachedCompletion(pipelineName);
+      // Completion markers are a *period* concept — a marker means "done for time period T".
+      // A non-period table has no T, so completion / self-heal / per-period filtering does not
+      // apply; it is governed by freshness alone and falls straight through to the freshness
+      // gate + overwrite below. Period is optional and composes with freshness (also optional).
+      boolean hasPeriod = hasPeriodDimension(config);
+
+      IncrementalTracker.CachedCompletion cached =
+          hasPeriod ? incrementalTracker.getCachedCompletion(pipelineName) : null;
       if (cached != null) {
         // A table-level completion marker exists. It is NOT a whole-table skip gate any more:
         // the per-period markers (isPeriodComplete) + the per-batch filter are authoritative,
@@ -285,7 +292,7 @@ public class EtlPipeline {
                 + "per-period filter", pipelineName);
           }
         }
-      } else if (materializeConfig != null
+      } else if (hasPeriod && materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
         // (c) Cold-start recovery, NARROWED: no table-level marker but Iceberg data exists.
         // Do NOT return early for the whole table (that was period-blind). Instead, fall
@@ -398,14 +405,16 @@ public class EtlPipeline {
       // Standard mode stores filtered indices here; partitioned mode filters per-partition in Phase 5
       Set<Integer> standardUnprocessedIndices = null;
 
-      if (forceReprocessAll) {
-        // Stale completion marker detected — skip expensive tracker scans
-        // and reprocess all combinations from scratch
+      if (forceReprocessAll || !hasPeriod) {
+        // forceReprocessAll, or a non-period table (no completion concept): process every
+        // combination — no per-period filter / self-heal scan. The freshness gate (if
+        // configured) still decides skip-vs-fetch, and the writer overwrites the partition.
         neededCount = totalBatches;
         if (!usePartitionedExpansion) {
           standardUnprocessedIndices = allIndicesSet(totalBatches);
         }
-        LOGGER.info("Phase 2: Force reprocess all {} combinations (stale marker)", totalBatches);
+        LOGGER.info("Phase 2: Process all {} combinations ({})", totalBatches,
+            hasPeriod ? "stale marker" : "non-period table — freshness-governed");
       } else if (usePartitionedExpansion) {
         // Partitioned mode: skip Phase 1.5 and Phase 2 pre-filter.
         // Filtering happens lazily per-partition during Phase 5 to avoid
@@ -1744,6 +1753,25 @@ public class EtlPipeline {
   public static EtlPipeline create(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory) {
     return new EtlPipeline(config, storageProvider, baseDirectory);
+  }
+
+  /**
+   * True if any dimension is a calendar period (yearRange/quarter/month/week/day), i.e. the
+   * table is time-segmented. Completion markers only make sense for such tables ("complete for
+   * period T"); a non-period table is governed by freshness alone, so the completion /
+   * self-heal / per-period filter machinery is skipped for it.
+   */
+  private static boolean hasPeriodDimension(EtlPipelineConfig config) {
+    if (config.getDimensions() == null) {
+      return false;
+    }
+    for (DimensionConfig dim : config.getDimensions().values()) {
+      DimensionType t = dim.getType();
+      if (t == DimensionType.YEAR_RANGE || CalendarPeriodProvider.isPeriodUnit(t)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
