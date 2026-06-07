@@ -647,6 +647,14 @@ partitionedTables:
       dow: [0]              # Weekly refresh; cross-reference data changes infrequently
     pattern: "type=vuln_cross_refs.parquet"
     dataset_type: snapshot          # full GHSA rebuild each run (single-source; no period axis)
+    # GraphQL freshness probe: one cheap query reads the global max updatedAt across all
+    # advisories (orderBy UPDATED_AT DESC, first:1). When that timestamp is unchanged since
+    # the last successful commit, the whole 31k-advisory crawl is skipped — no re-fetch, no
+    # new Iceberg snapshot. Any add or edit to any advisory bumps the max updatedAt → re-crawl.
+    freshness:
+      type: graphql
+      query: "{ securityAdvisories(first:1, orderBy:{field:UPDATED_AT, direction:DESC}){ nodes{ updatedAt } } }"
+      path: data.securityAdvisories.nodes[0].updatedAt
     partitions:
       style: hive
       columnDefinitions:
@@ -654,10 +662,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      Cross-reference mappings from CVE identifiers to external advisory IDs.
-      Populated by three sources: GitHub Security Advisories (GHSA), MITRE CVE
-      daily delta ZIPs, and OSV alias lists. Dedup key is (cve_id, external_id,
-      external_source). external_source values: ghsa, nvd, cisa, mitre, github, cve.
+      Cross-reference mappings from CVE identifiers to external advisory IDs,
+      sourced solely from GitHub Security Advisories (GHSA) via the GraphQL API
+      (single source per the one-table = one-source rule; NVD/OSV cross-refs are
+      derived as SQL views over their own tables). Dedup key is
+      (cve_id, external_id, external_source); external_source is 'ghsa'.
 
     columns:
       - name: cve_id
@@ -791,7 +800,7 @@ partitionedTables:
         - advisories
       year:
         type: yearRange
-        start: "2017"               # CISA CSAF repo coverage begins 2017
+        start: "${GOVDATA_START_YEAR:2017}"   # CSAF coverage begins 2017; DQ narrows via GOVDATA_START_YEAR
         end: current
       advisory_path:
         type: custom                # CsafAdvisoryDimensionResolver filters index.txt by year context

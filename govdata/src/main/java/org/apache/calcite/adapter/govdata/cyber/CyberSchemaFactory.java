@@ -119,18 +119,25 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
         ? Collections.emptySet() : new HashSet<>(enabledList);
 
     for (final String table : ALL_VULN_TABLES) {
-      if ("osv_vulnerabilities".equals(table) || "advisories".equals(table)) {
-        continue; // handled separately below with compound checks
+      if ("vuln_cross_refs".equals(table)) {
+        continue; // gated on the GitHub token below
       }
       builder.isEnabled(table, ctx -> enabled.isEmpty() || enabled.contains(table));
     }
 
-    builder.isEnabled("osv_vulnerabilities", ctx ->
-        enabled.isEmpty() || enabled.contains("osv_vulnerabilities"));
-
-    builder.isEnabled("advisories", ctx -> {
-      if (!enabled.isEmpty() && !enabled.contains("advisories")) return false;
-      return githubToken != null && !githubToken.isEmpty();
+    // vuln_cross_refs fetches GitHub Security Advisories via the GraphQL API, which requires
+    // auth — disable it when CYBER_GITHUB_TOKEN is absent so it doesn't 401 the whole schema.
+    // (advisories now uses the PUBLIC cisagov/CSAF repo over raw.githubusercontent — no token —
+    // so it is enabled like any other table above, no longer gated on the GitHub token.)
+    builder.isEnabled("vuln_cross_refs", ctx -> {
+      if (!enabled.isEmpty() && !enabled.contains("vuln_cross_refs")) {
+        return false;
+      }
+      if (githubToken == null || githubToken.isEmpty()) {
+        LOGGER.info("vuln_cross_refs disabled: CYBER_GITHUB_TOKEN not set (GHSA GraphQL needs auth)");
+        return false;
+      }
+      return true;
     });
   }
 
