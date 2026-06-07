@@ -31,6 +31,9 @@ partitionedTables:
     releaseWindow:
       dow: [0]              # MITRE ATT&CK major releases April/October; Sunday catches all updates
     pattern: "type=attack_techniques.parquet"
+    dataset_type: snapshot          # full STIX bundle replaced wholesale each release
+    freshness:
+      type: etag                    # GitHub-raw content-hash ETag; skip when the bundle is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -112,23 +115,6 @@ partitionedTables:
     dimensions:
       type:
         - attack_techniques
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        end: current
-      month:
-        - "01"
-        - "02"
-        - "03"
-        - "04"
-        - "05"
-        - "06"
-        - "07"
-        - "08"
-        - "09"
-        - "10"
-        - "11"
-        - "12"
 
     materialize:
       enabled: true
@@ -141,14 +127,19 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
-        runCompaction: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
   # ==========================================================================
   # IOC URLs — URLhaus malicious URL feed
   # ==========================================================================
   - name: ioc_urls
     pattern: "type=ioc_urls/first_seen=${first_seen}.parquet"
+    dataset_type: snapshot          # full URLhaus dump re-fetched; overwrite replaces each first_seen partition
+    freshness:
+      type: etag                    # abuse.ch content ETag; skip when the dump is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -248,13 +239,18 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
+        snapshotRetentionDays: 1825
         runCompaction: true
+        overwritePartitions: true   # replace each first_seen partition present in the current feed
 
   # ==========================================================================
   # IOC HASHES — MalwareBazaar malware sample hashes
   # ==========================================================================
   - name: ioc_hashes
     pattern: "type=ioc_hashes/first_seen=${first_seen}.parquet"
+    dataset_type: snapshot          # MalwareBazaar recent dump re-fetched; overwrite per first_seen partition
+    freshness:
+      type: etag                    # abuse.ch content ETag; skip when the dump is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -376,13 +372,18 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
+        snapshotRetentionDays: 1825
         runCompaction: true
+        overwritePartitions: true   # replace each first_seen partition present in the current feed
 
   # ==========================================================================
   # IOC IPs — Feodo Tracker C2 IP blocklist
   # ==========================================================================
   - name: ioc_ips
     pattern: "type=ioc_ips/first_seen=${first_seen}.parquet"
+    dataset_type: snapshot          # Feodo blocklist re-fetched; overwrite per first_seen partition
+    freshness:
+      type: etag                    # abuse.ch content ETag; skip when the blocklist is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -474,14 +475,16 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
+        snapshotRetentionDays: 1825
         runCompaction: true
+        overwritePartitions: true   # replace each first_seen partition present in the current feed
 
   # ==========================================================================
   # IOC MIXED — ThreatFox IOC feed (all indicator types)
   # ==========================================================================
   - name: ioc_mixed
     pattern: "type=ioc_mixed/first_seen=${first_seen}.parquet"
-    enabled: "${CYBER_THREATFOX_API_KEY:}"
+    dataset_type: snapshot          # ThreatFox POST API (no HEAD freshness); key-gated in CyberSchemaFactory
     partitions:
       style: hive
       columnDefinitions:
@@ -610,13 +613,18 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
+        snapshotRetentionDays: 1825
         runCompaction: true
+        overwritePartitions: true   # replace each first_seen partition present in the current feed
 
   # ==========================================================================
   # NIST SP 800-53 Rev 5 Controls
   # ==========================================================================
   - name: nist_controls
     pattern: "type=nist_controls.parquet"
+    dataset_type: snapshot
+    freshness:
+      type: etag                    # OSCAL catalog JSON; skip when the GitHub-raw ETag is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -696,14 +704,19 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
-        runCompaction: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
   # ==========================================================================
   # NIST Cybersecurity Framework (CSF) 2.0
   # ==========================================================================
   - name: nist_csf_functions
     pattern: "type=nist_csf_functions.parquet"
+    dataset_type: snapshot
+    freshness:
+      type: etag                    # OSCAL CSF catalog JSON; skip when the GitHub-raw ETag is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -779,14 +792,17 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
-        runCompaction: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
   # ==========================================================================
   # CIS Controls v8 Safeguards
   # ==========================================================================
   - name: cis_controls
     pattern: "type=cis_controls.parquet"
+    dataset_type: snapshot          # no freshness: transformer self-fetches ~153 per-safeguard RST files
     partitions:
       style: hive
       columnDefinitions:
@@ -871,14 +887,17 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
-        runCompaction: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
   # ==========================================================================
   # OWASP Top 10 (2021)
   # ==========================================================================
   - name: owasp_top10
     pattern: "type=owasp_top10.parquet"
+    dataset_type: snapshot          # no freshness: transformer self-fetches 10 per-entry Markdown files
     partitions:
       style: hive
       columnDefinitions:
@@ -949,8 +968,10 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
-        runCompaction: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
   # ==========================================================================
   # ATT&CK → NIST 800-53 Mappings
@@ -959,6 +980,9 @@ partitionedTables:
     releaseWindow:
       dow: [0]              # Updated with each ATT&CK release (April/October); Sunday refresh
     pattern: "type=attack_to_nist_mappings.parquet"
+    dataset_type: snapshot
+    freshness:
+      type: etag                    # single mapping JSON; skip when the GitHub-raw ETag is unchanged
     partitions:
       style: hive
       columnDefinitions:
@@ -1043,15 +1067,17 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
-        runCompaction: false
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
   # ==========================================================================
   # AlienVault OTX Threat Pulses
   # ==========================================================================
   - name: threat_pulses
     pattern: "type=threat_pulses/first_seen=${first_seen}.parquet"
-    enabled: "${CYBER_OTX_API_KEY:}"
+    dataset_type: snapshot          # OTX cursor-paginated GET (no single-probe freshness); key-gated in CyberSchemaFactory
     partitions:
       style: hive
       columnDefinitions:
@@ -1156,7 +1182,9 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
+        snapshotRetentionDays: 1825
         runCompaction: true
+        overwritePartitions: true   # replace each first_seen partition present in the current feed
 
 # ============================================================================
 # CONSTRAINTS

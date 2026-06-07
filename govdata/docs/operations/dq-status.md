@@ -74,7 +74,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
 | econ_reference | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 7/7 tables pass; BLS download.bls.gov User-Agent 403 fix (#144) |
-| cyber_threat | —          | PENDING | —     | —     | Schema changes pending re-run |
+| cyber_threat | 2026-06-07 | WARN    | 0     | 3     | Refresh config added to all 11 tables (dataset_type: snapshot + overwritePartitions; etag freshness on the 7 single-file GET sources). dq-rebuild: 9 enabled tables OK (attack_techniques 697, ioc_urls 75,501, nist_controls 1,196, nist_csf 185, cis_controls 153, owasp_top10 10, attack_to_nist 5,314, ioc_ips 5). etag freshness skip verified (UNCHANGED on re-instantiation, ~0.5s vs full fetch). 3 warns: ioc_mixed + threat_pulses key-gated (no CYBER_THREATFOX/OTX_API_KEY) + ioc_hashes 0 rows — pre-existing MalwareBazaar parse gap (quoted/comma-space CSV not quote-stripped; rowFilter rejects all rows) |
 | cyber_vuln   | 2026-06-07 | WARN    | 0     | 3     | GraphQL freshness probe on vuln_cross_refs (skips the full ~31k GHSA crawl when the global max `updatedAt` is unchanged). `--etl-resume` validated end-to-end: CHANGED → 27,623-row crawl + token persisted; UNCHANGED → 506ms skip (was ~8 min). 8/8 tables OK; row-count expectations recalibrated to representative DQ-window counts (vulnerabilities ~121k, osv ~40k). 3 warns non-fatal (e.g. osv single-ecosystem) |
 
 ---
