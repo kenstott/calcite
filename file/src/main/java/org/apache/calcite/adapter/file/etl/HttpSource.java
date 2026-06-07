@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -2669,6 +2663,250 @@ public class HttpSource implements DataSource {
    */
   public static HttpSource create(HttpSourceConfig config, HooksConfig hooksConfig) {
     return new HttpSource(config, hooksConfig);
+  }
+
+  // --- Freshness Probe ---
+
+  /**
+   * Result of a freshness probe: HTTP response headers plus an optional small body.
+   *
+   * <p>Headers are captured for {@code ETag}, {@code Last-Modified}, {@code Content-Length},
+   * {@code Content-MD5}, {@code x-goog-hash}, and similar pre-download signals. The body
+   * is populated only for {@code VERSION}, {@code COUNT}, and sidecar-{@code CHECKSUM}
+   * probes that issue a small GET.
+   */
+  public static final class ProbeResult {
+    private final Map<String, String> headers;
+    private final String body;
+
+    public ProbeResult(Map<String, String> headers, String body) {
+      this.headers = headers != null ? headers : Collections.<String, String>emptyMap();
+      this.body = body;
+    }
+
+    /** Response headers (case-preserving). */
+    public Map<String, String> getHeaders() {
+      return headers;
+    }
+
+    /** Optional probe body (non-null only for VERSION / COUNT / sidecar-CHECKSUM types). */
+    public String getBody() {
+      return body;
+    }
+  }
+
+  /**
+   * Performs the cheap pre-download freshness probe described by {@code freshnessConfig}.
+   *
+   * <p>For {@code etag / last_modified / size / checksum(object_metadata)}: issues a
+   * {@code HEAD} against the probe URL (defaulting to the source URL), captures the
+   * response headers, and returns them with a null body.
+   *
+   * <p>For {@code version / count}: issues a {@code GET} against the probe URL and
+   * returns the response body (typically a tiny JSON payload) together with response
+   * headers.
+   *
+   * <p>For sidecar-{@code checksum}: issues a {@code GET} against {@code checksum_url}.
+   *
+   * <p>For {@code graphql}: issues a {@code POST} of {@code {"query": <query>}} against the
+   * probe URL (defaulting to the source URL) and returns the JSON response body; the
+   * caller extracts the comparable value via the configured {@code path}.
+   *
+   * <p>For {@code hash}: no network request is needed here (the caller will hash the
+   * fully downloaded body); returns an empty {@link ProbeResult}.
+   *
+   * @param freshnessConfig the freshness configuration (type + probe URL options)
+   * @param variables       dimension variables for URL substitution
+   * @return a {@link ProbeResult}; never null
+   * @throws IOException if the probe request fails
+   */
+  public ProbeResult probe(FreshnessConfig freshnessConfig,
+      Map<String, String> variables) throws IOException {
+    if (freshnessConfig == null) {
+      return new ProbeResult(null, null);
+    }
+
+    Map<String, String> vars =
+        variables != null ? variables : Collections.<String, String>emptyMap();
+
+    switch (freshnessConfig.getType()) {
+    case ETAG:
+    case LAST_MODIFIED:
+    case SIZE:
+      return probeHead(effectiveProbeUrl(freshnessConfig, vars), vars);
+
+    case CHECKSUM:
+      if (freshnessConfig.isObjectMetadata()) {
+        // Object metadata is in the HEAD response (ETag / Content-MD5 / x-goog-hash)
+        return probeHead(effectiveProbeUrl(freshnessConfig, vars), vars);
+      }
+      // Sidecar checksum file: GET the sidecar URL
+      if (freshnessConfig.getChecksumUrl() != null) {
+        return probeGet(substituteVariables(freshnessConfig.getChecksumUrl(), vars), vars);
+      }
+      return probeHead(effectiveProbeUrl(freshnessConfig, vars), vars);
+
+    case VERSION:
+      return probeGet(effectiveProbeUrl(freshnessConfig, vars), vars);
+
+    case COUNT:
+      if (freshnessConfig.getCountUrl() != null) {
+        return probeGet(substituteVariables(freshnessConfig.getCountUrl(), vars), vars);
+      }
+      return probeGet(effectiveProbeUrl(freshnessConfig, vars), vars);
+
+    case GRAPHQL:
+      return probePost(effectiveProbeUrl(freshnessConfig, vars),
+          substituteVariables(freshnessConfig.getQuery(), vars), vars);
+
+    case HASH:
+      // Hash is computed over the downloaded body — no separate probe needed.
+      return new ProbeResult(null, null);
+
+    default:
+      return new ProbeResult(null, null);
+    }
+  }
+
+  /**
+   * Resolves the effective probe URL: the configured {@code probe_url} if present,
+   * otherwise the source URL with variables substituted.
+   */
+  private String effectiveProbeUrl(FreshnessConfig freshnessConfig,
+      Map<String, String> vars) {
+    if (freshnessConfig.getProbeUrl() != null && !freshnessConfig.getProbeUrl().isEmpty()) {
+      return substituteVariables(freshnessConfig.getProbeUrl(), vars);
+    }
+    return substituteVariables(config.getEffectiveUrl(vars), vars);
+  }
+
+  /**
+   * Issues a {@code HEAD} request to the given URL, returning headers.
+   * Reuses the source's User-Agent and auth configuration.
+   */
+  private ProbeResult probeHead(String urlString, Map<String, String> vars) throws IOException {
+    URL url = java.net.URI.create(urlString).toURL();
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    try {
+      conn.setRequestMethod("HEAD");
+      conn.setConnectTimeout(15000);
+      conn.setReadTimeout(15000);
+      conn.setInstanceFollowRedirects(true);
+      applyProbeHeaders(conn, vars);
+      conn.connect();
+      int code = conn.getResponseCode();
+      LOGGER.debug("Freshness HEAD {} -> {}", urlString, code);
+      Map<String, String> headers = captureHeaders(conn);
+      return new ProbeResult(headers, null);
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
+   * Issues a {@code GET} request to the given URL, returning headers + body.
+   * Used for VERSION, COUNT, and sidecar-CHECKSUM probes.
+   */
+  private ProbeResult probeGet(String urlString, Map<String, String> vars) throws IOException {
+    URL url = java.net.URI.create(urlString).toURL();
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    try {
+      conn.setRequestMethod("GET");
+      conn.setConnectTimeout(15000);
+      conn.setReadTimeout(30000);
+      conn.setInstanceFollowRedirects(true);
+      applyProbeHeaders(conn, vars);
+      int code = conn.getResponseCode();
+      LOGGER.debug("Freshness GET {} -> {}", urlString, code);
+      Map<String, String> headers = captureHeaders(conn);
+      String body = null;
+      if (code >= 200 && code < 300) {
+        body = readResponse(conn.getInputStream());
+      }
+      return new ProbeResult(headers, body);
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
+   * Issues a GraphQL {@code POST} to the given endpoint with {@code {"query": <query>}}
+   * as the JSON body, returning headers + response body. Used for the GRAPHQL freshness
+   * probe (e.g. read the global max {@code updatedAt} with one cheap query).
+   */
+  private ProbeResult probePost(String urlString, String query, Map<String, String> vars)
+      throws IOException {
+    if (query == null || query.isEmpty()) {
+      LOGGER.debug("Freshness GraphQL probe skipped: no query configured for {}", urlString);
+      return new ProbeResult(null, null);
+    }
+    String requestBody =
+        OBJECT_MAPPER.writeValueAsString(Collections.singletonMap("query", query));
+    URL url = java.net.URI.create(urlString).toURL();
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    try {
+      conn.setRequestMethod("POST");
+      conn.setConnectTimeout(15000);
+      conn.setReadTimeout(30000);
+      conn.setInstanceFollowRedirects(true);
+      conn.setDoOutput(true);
+      applyProbeHeaders(conn, vars);
+      if (conn.getRequestProperty("Content-Type") == null) {
+        conn.setRequestProperty("Content-Type", "application/json");
+      }
+      try (OutputStream os = conn.getOutputStream()) {
+        os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+        os.flush();
+      }
+      int code = conn.getResponseCode();
+      LOGGER.debug("Freshness GraphQL POST {} -> {}", urlString, code);
+      Map<String, String> headers = captureHeaders(conn);
+      String body = null;
+      if (code >= 200 && code < 300) {
+        body = readResponse(conn.getInputStream());
+      }
+      return new ProbeResult(headers, body);
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
+   * Applies the configured User-Agent, custom headers, and auth to a probe connection.
+   * Mirrors the header/auth logic in {@link #doRequest} without the body handling.
+   */
+  private void applyProbeHeaders(HttpURLConnection conn, Map<String, String> vars) {
+    if (config.getHeaders().get("User-Agent") == null) {
+      conn.setRequestProperty("User-Agent",
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+    }
+    for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
+      String value = substituteVariables(e.getValue(), vars);
+      if (value != null && !value.isEmpty()) {
+        conn.setRequestProperty(e.getKey(), value);
+      }
+    }
+    applyAuth(conn, vars);
+  }
+
+  /**
+   * Collects all response headers from a connection into a plain {@code Map<String,String>}.
+   * The first entry in each header field list is used (standard HTTP behaviour).
+   */
+  private Map<String, String> captureHeaders(HttpURLConnection conn) {
+    Map<String, String> result = new LinkedHashMap<String, String>();
+    Map<String, List<String>> fields = conn.getHeaderFields();
+    if (fields != null) {
+      for (Map.Entry<String, List<String>> e : fields.entrySet()) {
+        String name = e.getKey();
+        List<String> values = e.getValue();
+        if (name != null && values != null && !values.isEmpty()) {
+          result.put(name, values.get(0));
+        }
+      }
+    }
+    return result;
   }
 
   // --- Raw Response Caching (StorageProvider-based, with local filesystem optimization) ---

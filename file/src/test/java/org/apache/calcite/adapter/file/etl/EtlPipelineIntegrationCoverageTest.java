@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -915,7 +909,7 @@ public class EtlPipelineIntegrationCoverageTest {
     EtlPipelineConfig config = httpConfig("err_act", rangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, localStorage(), tempDir.toString());
     Method m =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     m.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig defaults = EtlPipelineConfig.ErrorHandlingConfig.defaults();

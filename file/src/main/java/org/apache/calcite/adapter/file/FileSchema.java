@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file;
 
@@ -3786,6 +3780,52 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * Returns a deep copy of a config value with sensitive entries — auth headers,
+   * API keys, tokens, secrets — masked, so the config can be safely logged. Recurses
+   * through nested Maps and Lists; non-sensitive scalars pass through unchanged.
+   * Without this, logging a table config would leak {@code source.headers} values such
+   * as {@code Authorization: bearer <token>} or {@code apiKey} into log files.
+   */
+  private static Object redactSensitive(Object value) {
+    if (value instanceof Map) {
+      Map<Object, Object> out = new java.util.LinkedHashMap<>();
+      for (Map.Entry<?, ?> e : ((Map<?, ?>) value).entrySet()) {
+        Object k = e.getKey();
+        if (k != null && isSensitiveKey(k.toString())) {
+          out.put(k, "***REDACTED***");
+        } else {
+          out.put(k, redactSensitive(e.getValue()));
+        }
+      }
+      return out;
+    }
+    if (value instanceof List) {
+      List<Object> out = new java.util.ArrayList<>();
+      for (Object o : (List<?>) value) {
+        out.add(redactSensitive(o));
+      }
+      return out;
+    }
+    return value;
+  }
+
+  /** True if a config/header key names a credential whose value must not be logged. */
+  private static boolean isSensitiveKey(String key) {
+    String k = key.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    return k.contains("authorization")
+        || k.contains("apikey")
+        || k.contains("token")
+        || k.contains("password")
+        || k.contains("passwd")
+        || k.contains("secret")
+        || k.contains("credential")
+        || k.contains("accesskey")
+        || k.contains("privatekey")
+        || k.contains("bearer")
+        || k.equals("auth");
+  }
+
+  /**
    * Process partitioned table configurations.
    */
   private void processPartitionedTables(ImmutableMap.Builder<String, Table> builder) {
@@ -3815,7 +3855,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     for (Map<String, Object> partTableConfig : partitionedTables) {
       try {
-        LOGGER.info("Processing partitioned table config: {}", partTableConfig);
+        LOGGER.info("Processing partitioned table config: {}", redactSensitive(partTableConfig));
         PartitionedTableConfig config = PartitionedTableConfig.fromMap(partTableConfig);
 
         // Check if this is a DuckDB+Hive refreshable table that should use lazy initialization

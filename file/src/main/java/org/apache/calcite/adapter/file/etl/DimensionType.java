@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -119,7 +113,33 @@ public enum DimensionType {
    *   <li>{@code indicators[*].items[*].code} - iterate nested arrays</li>
    * </ul>
    */
-  JSON_CATALOG;
+  JSON_CATALOG,
+
+  /**
+   * Calendar quarter (1-4), generated dynamically and capped at the current
+   * (open) quarter. Reads {@code year} from the resolution context for capping.
+   *
+   * <pre>{@code quarter: { type: quarter }}</pre>
+   */
+  QUARTER,
+
+  /** Calendar month (01-12), dynamic, capped at the current month. Reads {@code year}. */
+  MONTH,
+
+  /**
+   * ISO week (01-52/53), dynamic, capped at the current week. Reads {@code year};
+   * honors {@code weekYear: iso|calendar}.
+   */
+  WEEK,
+
+  /**
+   * Calendar day-of-month (01-31), dynamic and calendar-correct (leap/30/31),
+   * capped at today. Reads {@code year} and {@code month} from context.
+   */
+  DAY,
+
+  /** Day-of-week (1-7, Mon-Sun). Fixed set, not capped. */
+  DAY_OF_WEEK;
 
   /**
    * Parses a dimension type from a string value.
@@ -148,6 +168,17 @@ public enum DimensionType {
       case "json_catalog":
       case "jsoncatalog":
         return JSON_CATALOG;
+      case "quarter":
+        return QUARTER;
+      case "month":
+        return MONTH;
+      case "week":
+        return WEEK;
+      case "day":
+        return DAY;
+      case "day_of_week":
+      case "dayofweek":
+        return DAY_OF_WEEK;
       default:
         return LIST;
     }

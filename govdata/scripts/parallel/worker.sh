@@ -34,8 +34,8 @@
 #   econ_reference <daily>          — BLS area/industry codes (year-agnostic)
 #
 # Complex schemas (delegate to specialty worker scripts):
-#   cyber_threat  <initial|daily|weekly|hourly|static>
-#   cyber_vuln    <initial|daily|weekly|hourly|static>
+#   cyber_threat  <historical|daily>
+#   cyber_vuln    <historical|daily>
 #   health  <initial|daily|weekly|monthly>
 #   edu     <initial|annual|biennial>
 #   energy  <initial|weekly|monthly|annual>

@@ -75,7 +75,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
 | econ_reference | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 7/7 tables pass; BLS download.bls.gov User-Agent 403 fix (#144) |
 | cyber_threat | —          | PENDING | —     | —     | Schema changes pending re-run |
-| cyber_vuln   | —          | PENDING | —     | —     | Schema changes pending re-run |
+| cyber_vuln   | 2026-06-07 | WARN    | 0     | 3     | GraphQL freshness probe on vuln_cross_refs (skips the full ~31k GHSA crawl when the global max `updatedAt` is unchanged). `--etl-resume` validated end-to-end: CHANGED → 27,623-row crawl + token persisted; UNCHANGED → 506ms skip (was ~8 min). 8/8 tables OK; row-count expectations recalibrated to representative DQ-window counts (vulnerabilities ~121k, osv ~40k). 3 warns non-fatal (e.g. osv single-ecosystem) |
 
 ---
 

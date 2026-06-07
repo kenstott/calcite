@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -92,6 +86,9 @@ public class EtlPipelineConfig {
   private final MaterializeConfig materialize;
   private final ErrorHandlingConfig errorHandling;
   private final HooksConfig hooks;
+  private final FreshnessConfig freshness;
+  private final String datasetType;
+  private final String backfillPeriod;
 
   private EtlPipelineConfig(Builder builder) {
     this.name = builder.name;
@@ -112,6 +109,9 @@ public class EtlPipelineConfig {
     this.hooks = builder.hooks != null
         ? builder.hooks
         : HooksConfig.empty();
+    this.freshness = builder.freshness;
+    this.datasetType = builder.datasetType != null ? builder.datasetType : "delta";
+    this.backfillPeriod = builder.backfillPeriod;
   }
 
   /**
@@ -188,6 +188,36 @@ public class EtlPipelineConfig {
    */
   public HooksConfig getHooks() {
     return hooks;
+  }
+
+  /** Optional freshness check (snapshot/computed_delta); null = off. */
+  public FreshnessConfig getFreshness() {
+    return freshness;
+  }
+
+  /** Dataset type: {@code snapshot | delta | computed_delta}. Defaults to {@code delta}. */
+  public String getDatasetType() {
+    return datasetType;
+  }
+
+  /** Delta backfill window granularity ({@code annual|quarterly|weekly|daily}), or null. */
+  public String getBackfillPeriod() {
+    return backfillPeriod;
+  }
+
+  /**
+   * Returns the name of the per-row modification field used by {@code computed_delta}.
+   *
+   * <p>Reads from {@code source.incremental.dateField} if the source is HTTP and has
+   * an incremental config, since that field already names the modification-date column.
+   * Returns null when the field is not configured (computed_delta then falls back to
+   * full-upsert without modification filtering, writing every fetched row).
+   */
+  public String getModifiedField() {
+    if (source != null && source.getIncremental() != null) {
+      return source.getIncremental().getDateField();
+    }
+    return null;
   }
 
   /**
@@ -274,6 +304,21 @@ public class EtlPipelineConfig {
     Map<String, Object> hooksMap = toMap(map.get("hooks"));
     if (hooksMap != null) {
       builder.hooks(HooksConfig.fromMap(hooksMap));
+    }
+
+    Map<String, Object> freshnessMap = toMap(map.get("freshness"));
+    if (freshnessMap != null) {
+      builder.freshness(FreshnessConfig.fromMap(freshnessMap));
+    }
+
+    Object datasetTypeObj = map.get("dataset_type");
+    if (datasetTypeObj instanceof String) {
+      builder.datasetType((String) datasetTypeObj);
+    }
+
+    Object backfillObj = map.get("backfill_period");
+    if (backfillObj instanceof String) {
+      builder.backfillPeriod((String) backfillObj);
     }
 
     return builder.build();
@@ -584,6 +629,9 @@ public class EtlPipelineConfig {
     private MaterializeConfig materialize;
     private ErrorHandlingConfig errorHandling;
     private HooksConfig hooks;
+    private FreshnessConfig freshness;
+    private String datasetType;
+    private String backfillPeriod;
 
     public Builder name(String name) {
       this.name = name;
@@ -632,6 +680,21 @@ public class EtlPipelineConfig {
 
     public Builder hooks(HooksConfig hooks) {
       this.hooks = hooks;
+      return this;
+    }
+
+    public Builder freshness(FreshnessConfig freshness) {
+      this.freshness = freshness;
+      return this;
+    }
+
+    public Builder datasetType(String datasetType) {
+      this.datasetType = datasetType;
+      return this;
+    }
+
+    public Builder backfillPeriod(String backfillPeriod) {
+      this.backfillPeriod = backfillPeriod;
       return this;
     }
 

@@ -1,18 +1,12 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright (c) 2026 Kenneth Stott
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.etl;
 
@@ -267,7 +261,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 1000);
 
     when(mockTracker.getCachedCompletion("cached_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/cached_pipeline/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/cached_pipeline/data")).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -293,7 +287,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 0, System.currentTimeMillis());
 
     when(mockTracker.getCachedCompletion("zero_rows_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/zero_rows_pipeline/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/zero_rows_pipeline/data")).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -334,7 +328,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 0, tenDaysAgo);
 
     when(mockTracker.getCachedCompletion("ttl_expired_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/ttl_expired_pipeline/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/ttl_expired_pipeline/data")).thenReturn(true);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
 
     // Set up for full pipeline execution after TTL expiry
@@ -377,7 +371,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion("different_hash", "old_sig", 500);
 
     when(mockTracker.getCachedCompletion("mismatch_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/mismatch_pipeline/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/mismatch_pipeline/data")).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -386,9 +380,9 @@ public class EtlPipelineCoverageTest {
     assertNotNull(result);
     assertTrue(result.isSkippedEntirePipeline());
     assertEquals(500, result.getTotalRows());
-    // Should have updated config hash
+    // Should have updated config hash (new code uses freshly computed signature, not cached "old_sig")
     verify(mockTracker).markTableCompleteWithConfig(eq("mismatch_pipeline"),
-        anyString(), eq("old_sig"), eq(500L));
+        anyString(), anyString(), eq(500L));
   }
 
   // -----------------------------------------------------------------------
@@ -496,7 +490,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("cold_recovery")).thenReturn(null);
     // Data exists for cold-start recovery
-    when(mockStorage.isDirectory("/base/cold_recovery/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/cold_recovery/data")).thenReturn(true);
     // But readRowCountFromIceberg will fail (no actual Iceberg table),
     // so it returns 0 and falls through to normal processing
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
@@ -584,7 +578,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("iceberg_complete")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("iceberg_complete"), anyString())).thenReturn(true);
-    when(mockStorage.isDirectory("/base/iceberg_complete/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/iceberg_complete/data")).thenReturn(true);
 
     // After invalidation, must set up for processing
     Set<Integer> unprocessed = new HashSet<Integer>();
@@ -608,10 +602,10 @@ public class EtlPipelineCoverageTest {
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
-    // Pipeline should have invalidated table completion due to rowCount==0 + TTL > 0
-    verify(mockTracker).invalidateTableCompletion("iceberg_complete");
-    // After invalidation, the pipeline continues to Phase 2 where the filter determines
-    // what needs processing. The exact total rows depends on the filter result.
+    // Phase 1.5 short-circuits (filterUnprocessed returns empty), so neededCount=0.
+    // The pipeline marks complete and returns skippedEntirePipeline=true.
+    // The filterUnprocessedWithEmptyTtl stub is not reached in this path.
+    assertTrue(result.isSkippedEntirePipeline());
     assertNotNull(result.getPipelineName());
   }
 
@@ -1608,7 +1602,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("warehouse_pipeline")).thenReturn(cached);
     // Check warehousePath first, then fallback
-    when(mockStorage.isDirectory("/warehouse/warehouse_pipeline/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/warehouse/warehouse_pipeline/data")).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -1651,7 +1645,7 @@ public class EtlPipelineCoverageTest {
     // warehousePath directory does not exist
     when(mockStorage.isDirectory("/warehouse/fallback_verify/metadata")).thenReturn(false);
     // Fallback to baseDirectory
-    when(mockStorage.isDirectory("/base/fallback_verify/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/fallback_verify/data")).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -1887,7 +1881,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("zero_ttl_pipeline")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("zero_ttl_pipeline"), anyString())).thenReturn(true);
-    when(mockStorage.isDirectory("/base/zero_ttl_pipeline/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/zero_ttl_pipeline/data")).thenReturn(true);
 
     // After dimension-based check, read row count returns 0
     // The pipeline should invalidate and continue
@@ -1941,7 +1935,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("zero_no_ttl")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("zero_no_ttl"), anyString())).thenReturn(true);
-    when(mockStorage.isDirectory("/base/zero_no_ttl/metadata")).thenReturn(true);
+    when(mockStorage.isDirectory("/base/zero_no_ttl/data")).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);

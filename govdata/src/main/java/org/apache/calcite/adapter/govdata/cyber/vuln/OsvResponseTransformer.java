@@ -21,15 +21,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -40,8 +37,9 @@ import java.util.zip.ZipInputStream;
  *
  * <p>Fetches ecosystem ZIPs from {@code https://osv-vulnerabilities.storage.googleapis.com/
  * {ecosystem}/all.zip}. Each ZIP contains one JSON file per vulnerability record.
- * Ecosystems are controlled by the {@code CYBER_OSV_ECOSYSTEMS} environment variable
- * (comma-separated; defaults to a curated subset).
+ * The {@code ecosystem} is a dimension: the engine fans out one combination per
+ * ecosystem and this transformer standardizes exactly one ecosystem per invocation,
+ * read from {@code context.getDimensionValues().get("ecosystem")}.
  *
  * <p>Produces rows for two logical tables depending on the dimension:
  * <ul>
@@ -49,8 +47,8 @@ import java.util.zip.ZipInputStream;
  *   <li>{@code vuln_cross_refs} — alias mappings where an alias is a CVE-YYYY-NNNNN ID</li>
  * </ul>
  *
- * <p>The {@code response} parameter is ignored; all data is fetched directly from
- * the OSV GCS bucket. This is consistent with how {@link NvdResponseTransformer}
+ * <p>The {@code response} parameter is ignored; the ecosystem data is fetched directly
+ * from the OSV GCS bucket. This is consistent with how {@link NvdResponseTransformer}
  * handles multi-page pagination.
  */
 public class OsvResponseTransformer implements ResponseTransformer {
@@ -60,34 +58,26 @@ public class OsvResponseTransformer implements ResponseTransformer {
 
   private static final String OSV_BASE_URL =
       "https://osv-vulnerabilities.storage.googleapis.com";
-  private static final String DEFAULT_ECOSYSTEMS =
-      "PyPI,npm,Go,Maven,RubyGems,NuGet,Packagist,Hex,Pub,CRAN";
   private static final int TIMEOUT_MS = 120_000;
-  private static final long RATE_DELAY_MS = 500L;
 
   @Override public String transform(String response, RequestContext context) {
-    String ecosystemsEnv = System.getenv("CYBER_OSV_ECOSYSTEMS");
-    if (ecosystemsEnv == null || ecosystemsEnv.trim().isEmpty()) {
-      ecosystemsEnv = DEFAULT_ECOSYSTEMS;
+    String ecosystem = context.getDimensionValues().get("ecosystem");
+    if (ecosystem == null || ecosystem.trim().isEmpty()) {
+      throw new IllegalStateException(
+          "OSV: missing required dimension value 'ecosystem'; "
+          + "the engine must fan out one combination per ecosystem");
     }
 
-    String[] ecosystems = ecosystemsEnv.split(",");
+    String eco = ecosystem.trim();
     ArrayNode allRows = MAPPER.createArrayNode();
-
-    for (String ecosystem : ecosystems) {
-      String eco = ecosystem.trim();
-      if (eco.isEmpty()) {
-        continue;
-      }
-      try {
-        processEcosystem(eco, allRows);
-        sleepQuietly(RATE_DELAY_MS);
-      } catch (Exception e) {
-        LOGGER.warn("OSV: failed to process ecosystem {}: {}", eco, e.getMessage());
-      }
+    try {
+      processEcosystem(eco, allRows);
+    } catch (IOException e) {
+      throw new RuntimeException(
+          "OSV: failed to process ecosystem " + eco + ": " + e.getMessage(), e);
     }
 
-    LOGGER.info("OSV: returning {} rows across {} ecosystems", allRows.size(), ecosystems.length);
+    LOGGER.info("OSV: returning {} rows for ecosystem {}", allRows.size(), eco);
     return allRows.toString();
   }
 
@@ -259,13 +249,5 @@ public class OsvResponseTransformer implements ResponseTransformer {
     }
     String t = v.asText();
     return t.isEmpty() ? null : t;
-  }
-
-  private static void sleepQuietly(long ms) {
-    try {
-      Thread.sleep(ms);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
   }
 }
