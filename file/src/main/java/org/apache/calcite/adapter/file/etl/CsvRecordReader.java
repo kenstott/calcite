@@ -77,6 +77,13 @@ public final class CsvRecordReader {
    * embedded {@code ""} replaced with a single {@code "}. Unquoted fields are
    * returned as-is.
    *
+   * <p>Leading whitespace before an opening quote is ignored, so exports that put a
+   * space after each delimiter — e.g. {@code "a", "b", "c"} (MalwareBazaar/abuse.ch
+   * style) — parse the same as {@code "a","b","c"}. This is auto-detected per field:
+   * a quote that follows only whitespace at the field start opens a quoted field (and
+   * the leading whitespace is discarded); a quote after other content is literal. Plain
+   * unquoted fields, including ones with a deliberate leading space, are unaffected.
+   *
    * @param record    a complete record (from {@link #readRecord})
    * @param delimiter the field delimiter character (e.g. {@code ','} for CSV,
    *                  {@code '\t'} for TSV)
@@ -86,6 +93,10 @@ public final class CsvRecordReader {
     java.util.List<String> out = new java.util.ArrayList<>();
     StringBuilder field = new StringBuilder();
     boolean inQuotes = false;
+    // True while the current field has accumulated only whitespace so far — lets an
+    // opening quote that follows a post-delimiter space still be recognized as the
+    // field's wrapping quote (ignore-surrounding-spaces), instead of a literal char.
+    boolean blankPrefix = true;
     int len = record.length();
     for (int i = 0; i < len; i++) {
       char c = record.charAt(i);
@@ -104,10 +115,16 @@ public final class CsvRecordReader {
         if (c == delimiter) {
           out.add(field.toString());
           field.setLength(0);
-        } else if (c == '"' && field.length() == 0) {
-          inQuotes = true;  // opening quote at start of field
+          blankPrefix = true;
+        } else if (c == '"' && blankPrefix) {
+          field.setLength(0);  // discard any leading whitespace before the opening quote
+          inQuotes = true;     // opening quote at (whitespace-only) start of field
+          blankPrefix = false;
         } else {
           field.append(c);
+          if (!Character.isWhitespace(c)) {
+            blankPrefix = false;
+          }
         }
       }
     }
