@@ -10,6 +10,11 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -158,6 +163,11 @@ public class HttpSourceConfig {
   // Use for tables whose transformer downloads its own data and ignores the response parameter.
   private final boolean skipResponseBody;
 
+  // Optional indirection: resolve the real download URL from a JSON response before fetching.
+  // Used for signed-URL / presigned-link services where the configured url returns JSON
+  // pointing at the actual (e.g. S3) download location.
+  private final UrlResolverConfig urlResolver;
+
   private HttpSourceConfig(Builder builder) {
     this.url = builder.url;
     this.method = builder.method != null ? builder.method : HttpMethod.GET;
@@ -193,6 +203,7 @@ public class HttpSourceConfig {
     this.parallel = builder.parallel > 0 ? builder.parallel : 1;
     this.incremental = builder.incremental;
     this.skipResponseBody = builder.skipResponseBody;
+    this.urlResolver = builder.urlResolver;
   }
 
   private static String determineSourceType(Builder builder) {
@@ -390,6 +401,16 @@ public class HttpSourceConfig {
   }
 
   /**
+   * Returns the URL resolver config, or null when the configured url is fetched directly.
+   *
+   * <p>When present, HttpSource first fetches the configured url (a JSON endpoint),
+   * extracts the real download URL from the response, and fetches that instead.
+   */
+  public UrlResolverConfig getUrlResolver() {
+    return urlResolver;
+  }
+
+  /**
    * Returns the row filter configuration for CSV parsing.
    *
    * <p>When set, only rows matching the filter are kept during parsing.
@@ -518,6 +539,10 @@ public class HttpSourceConfig {
     Object extractPatternFallbackObj = map.get("extractPatternFallback");
     if (extractPatternFallbackObj instanceof String) {
       builder.extractPatternFallback((String) extractPatternFallbackObj);
+    }
+    Object urlResolverObj = map.get("urlResolver");
+    if (urlResolverObj instanceof Map) {
+      builder.urlResolver(UrlResolverConfig.fromMap((Map<String, Object>) urlResolverObj));
     }
     Object skipResponseBodyObj = map.get("skipResponseBody");
     if (skipResponseBodyObj instanceof Boolean) {
@@ -1983,6 +2008,42 @@ public class HttpSourceConfig {
    *       length: 60
    * }</pre>
    */
+  /**
+   * Indirection that resolves the real download URL from a JSON response.
+   *
+   * <p>When configured, HttpSource fetches the source {@code url} (a JSON endpoint
+   * such as a signed-URL service), extracts the actual download URL from the response,
+   * then fetches that URL. The resolved URL is treated as self-contained — the source's
+   * query {@code parameters} apply to the resolver request, not the resolved download.
+   *
+   * <p>YAML usage:
+   * <pre>{@code
+   * url: "https://host/s3/signedurl?key=master_files/reta/reta-{year}.zip"
+   * urlResolver:
+   *   urlField: ""        # optional; empty/absent = take the sole value of a one-field object
+   * }</pre>
+   *
+   * <p>{@code urlField} selects a top-level field by literal name (not dot-path, so keys
+   * containing dots or slashes work) and supports {@code {var}} substitution. When absent
+   * or empty, the response must be a single-field object and its only value is used.
+   */
+  public static class UrlResolverConfig {
+    private final String urlField;
+
+    private UrlResolverConfig(String urlField) {
+      this.urlField = urlField;
+    }
+
+    /** Literal top-level field name holding the download URL, or null/empty for sole-value. */
+    public String getUrlField() {
+      return urlField;
+    }
+
+    public static UrlResolverConfig fromMap(Map<String, Object> map) {
+      return new UrlResolverConfig((String) map.get("urlField"));
+    }
+  }
+
   public static class FixedWidthConfig {
 
     /** Single column definition: name, 0-based start position, field length. */
@@ -2035,10 +2096,49 @@ public class HttpSourceConfig {
           }
         }
       }
+      // For very wide layouts (hundreds/thousands of fields), columns may be supplied as a
+      // classpath JSON resource (array of {name,start,length}) instead of inline YAML.
+      Object resourceObj = map.get("columnsResource");
+      if (columns.isEmpty() && resourceObj instanceof String) {
+        columns.addAll(loadColumnsResource((String) resourceObj));
+      }
       String encoding = (String) map.get("encoding");
       Object skipObj = map.get("skipLines");
       int skipLines = skipObj != null ? ((Number) skipObj).intValue() : 0;
       return new FixedWidthConfig(columns, encoding, skipLines);
+    }
+
+    /**
+     * Loads a fixed-width column layout from a classpath JSON resource: an array of
+     * objects with {@code name}, {@code start} (0-based), and {@code length}.
+     */
+    private static List<Column> loadColumnsResource(String resource) {
+      ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+      InputStream in = contextLoader != null
+          ? contextLoader.getResourceAsStream(resource) : null;
+      if (in == null) {
+        in = FixedWidthConfig.class.getClassLoader().getResourceAsStream(resource);
+      }
+      if (in == null) {
+        throw new IllegalArgumentException(
+            "fixedWidth columnsResource not found on classpath: " + resource);
+      }
+      try (InputStream stream = in) {
+        JsonNode array = new ObjectMapper().readTree(stream);
+        if (array == null || !array.isArray()) {
+          throw new IllegalArgumentException(
+              "fixedWidth columnsResource must be a JSON array: " + resource);
+        }
+        List<Column> columns = new ArrayList<Column>();
+        for (JsonNode node : array) {
+          columns.add(new Column(node.get("name").asText(),
+              node.get("start").asInt(), node.get("length").asInt()));
+        }
+        return columns;
+      } catch (IOException e) {
+        throw new IllegalArgumentException(
+            "Failed to read fixedWidth columnsResource: " + resource, e);
+      }
     }
   }
 
@@ -2389,6 +2489,7 @@ public class HttpSourceConfig {
     private String bulkDownload;
     private String extractPattern;
     private String extractPatternFallback;
+    private UrlResolverConfig urlResolver;
     private RowFilterConfig rowFilter;
     private ResponsePartitioningConfig responsePartitioning;
     private WideToNarrowConfig wideToNarrow;
@@ -2477,6 +2578,11 @@ public class HttpSourceConfig {
 
     public Builder extractPatternFallback(String extractPatternFallback) {
       this.extractPatternFallback = extractPatternFallback;
+      return this;
+    }
+
+    public Builder urlResolver(UrlResolverConfig urlResolver) {
+      this.urlResolver = urlResolver;
       return this;
     }
 

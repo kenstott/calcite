@@ -390,10 +390,10 @@ class EtlInterfacesCoverageTest {
 
   @Test void testRowTransformerModifiesRow() {
     RowTransformer transformer = new RowTransformer() {
-      @Override public Map<String, Object> transform(Map<String, Object> row,
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
           RowContext context) {
         row.put("enriched", true);
-        return row;
+        return Collections.singletonList(row);
       }
     };
 
@@ -401,19 +401,20 @@ class EtlInterfacesCoverageTest {
     row.put("id", 1);
 
     RowContext context = RowContext.builder().rowNumber(0).build();
-    Map<String, Object> result = transformer.transform(row, context);
+    List<Map<String, Object>> result = transformer.transform(row, context);
     assertNotNull(result);
-    assertEquals(1, result.get("id"));
-    assertEquals(true, result.get("enriched"));
+    assertEquals(1, result.size());
+    assertEquals(1, result.get(0).get("id"));
+    assertEquals(true, result.get(0).get("enriched"));
   }
 
   @Test void testRowTransformerReturnsNewMap() {
     RowTransformer transformer = new RowTransformer() {
-      @Override public Map<String, Object> transform(Map<String, Object> row,
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
           RowContext context) {
         Map<String, Object> newRow = new LinkedHashMap<String, Object>(row);
         newRow.put("upper_name", ((String) row.get("name")).toUpperCase());
-        return newRow;
+        return Collections.<Map<String, Object>>singletonList(newRow);
       }
     };
 
@@ -421,19 +422,19 @@ class EtlInterfacesCoverageTest {
     row.put("name", "hello");
 
     RowContext context = RowContext.builder().rowNumber(5).build();
-    Map<String, Object> result = transformer.transform(row, context);
-    assertEquals("hello", result.get("name"));
-    assertEquals("HELLO", result.get("upper_name"));
+    List<Map<String, Object>> result = transformer.transform(row, context);
+    assertEquals("hello", result.get(0).get("name"));
+    assertEquals("HELLO", result.get(0).get("upper_name"));
   }
 
-  @Test void testRowTransformerReturnsNullToDropRow() {
+  @Test void testRowTransformerReturnsEmptyToDropRow() {
     RowTransformer transformer = new RowTransformer() {
-      @Override public Map<String, Object> transform(Map<String, Object> row,
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
           RowContext context) {
         if (row.get("id") == null) {
-          return null;
+          return Collections.emptyList();
         }
-        return row;
+        return Collections.singletonList(row);
       }
     };
 
@@ -441,19 +442,42 @@ class EtlInterfacesCoverageTest {
     rowWithoutId.put("name", "orphan");
 
     RowContext context = RowContext.builder().rowNumber(0).build();
-    assertNull(transformer.transform(rowWithoutId, context));
+    assertTrue(transformer.transform(rowWithoutId, context).isEmpty());
+  }
+
+  @Test void testRowTransformerExpandsToManyRows() {
+    RowTransformer transformer = new RowTransformer() {
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
+          RowContext context) {
+        List<Map<String, Object>> out = new java.util.ArrayList<Map<String, Object>>();
+        for (int i = 0; i < 3; i++) {
+          Map<String, Object> r = new LinkedHashMap<String, Object>(row);
+          r.put("part", i);
+          out.add(r);
+        }
+        return out;
+      }
+    };
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    List<Map<String, Object>> result =
+        transformer.transform(row, RowContext.builder().rowNumber(0).build());
+    assertEquals(3, result.size());
+    assertEquals(0, result.get(0).get("part"));
+    assertEquals(2, result.get(2).get("part"));
   }
 
   @Test void testRowTransformerUsesContext() {
     RowTransformer transformer = new RowTransformer() {
-      @Override public Map<String, Object> transform(Map<String, Object> row,
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
           RowContext context) {
         row.put("row_num", context.getRowNumber());
         String year = context.getDimensionValues().get("year");
         if (year != null) {
           row.put("year", year);
         }
-        return row;
+        return Collections.singletonList(row);
       }
     };
 
@@ -464,9 +488,9 @@ class EtlInterfacesCoverageTest {
         .build();
 
     Map<String, Object> row = new HashMap<String, Object>();
-    Map<String, Object> result = transformer.transform(row, context);
-    assertEquals(42L, result.get("row_num"));
-    assertEquals("2024", result.get("year"));
+    List<Map<String, Object>> result = transformer.transform(row, context);
+    assertEquals(42L, result.get(0).get("row_num"));
+    assertEquals("2024", result.get(0).get("year"));
   }
 
   // ========== RowContext ==========

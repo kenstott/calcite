@@ -13,7 +13,9 @@ package org.apache.calcite.adapter.file.etl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -313,7 +315,7 @@ class ValidatorAndResultTest {
 
   @Test void testRowTransformerImplementation() {
     RowTransformer transformer = new RowTransformer() {
-      @Override public Map<String, Object> transform(Map<String, Object> row,
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
           RowContext context) {
         // Add computed field
         Object value = row.get("value");
@@ -325,7 +327,7 @@ class ValidatorAndResultTest {
         if (year != null) {
           row.put("processed_year", year);
         }
-        return row;
+        return Collections.singletonList(row);
       }
     };
 
@@ -338,32 +340,33 @@ class ValidatorAndResultTest {
         .dimensionValues(dims)
         .build();
 
-    Map<String, Object> result = transformer.transform(row, context);
+    List<Map<String, Object>> result = transformer.transform(row, context);
     assertNotNull(result);
-    assertEquals(100.0, result.get("doubled"));
-    assertEquals("2024", result.get("processed_year"));
+    assertEquals(1, result.size());
+    assertEquals(100.0, result.get(0).get("doubled"));
+    assertEquals("2024", result.get(0).get("processed_year"));
   }
 
   @Test void testRowTransformerDropRow() {
     RowTransformer filter = new RowTransformer() {
-      @Override public Map<String, Object> transform(Map<String, Object> row,
+      @Override public List<Map<String, Object>> transform(Map<String, Object> row,
           RowContext context) {
         // Drop rows where value is negative
         Object value = row.get("value");
         if (value instanceof Number && ((Number) value).doubleValue() < 0) {
-          return null; // Drop
+          return Collections.emptyList(); // Drop
         }
-        return row;
+        return Collections.singletonList(row);
       }
     };
 
     Map<String, Object> goodRow = new HashMap<String, Object>();
     goodRow.put("value", 10);
-    assertNotNull(filter.transform(goodRow, RowContext.builder().build()));
+    assertFalse(filter.transform(goodRow, RowContext.builder().build()).isEmpty());
 
     Map<String, Object> badRow = new HashMap<String, Object>();
     badRow.put("value", -5);
-    assertNull(filter.transform(badRow, RowContext.builder().build()));
+    assertTrue(filter.transform(badRow, RowContext.builder().build()).isEmpty());
   }
 
   // --- ResponseTransformer test ---

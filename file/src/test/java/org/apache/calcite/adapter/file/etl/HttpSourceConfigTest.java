@@ -221,12 +221,13 @@ class HttpSourceConfigTest {
 
   @Test void testResponseFormatEnum() {
     HttpSourceConfig.ResponseFormat[] values = HttpSourceConfig.ResponseFormat.values();
-    assertEquals(5, values.length);
+    assertEquals(6, values.length);
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("JSON"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("CSV"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("XML"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("TSV"));
     assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("TEXT"));
+    assertNotNull(HttpSourceConfig.ResponseFormat.valueOf("FIXED_WIDTH"));
   }
 
   @Test void testAuthTypeEnum() {
@@ -241,7 +242,7 @@ class HttpSourceConfigTest {
 
   @Test void testPaginationTypeEnum() {
     HttpSourceConfig.PaginationType[] values = HttpSourceConfig.PaginationType.values();
-    assertEquals(5, values.length);
+    assertEquals(6, values.length);
     assertNotNull(HttpSourceConfig.PaginationType.valueOf("CSV_STREAM"));
   }
 
@@ -290,5 +291,31 @@ class HttpSourceConfigTest {
         .parallel(4)
         .build();
     assertEquals(4, config.getParallel());
+  }
+
+  @Test void testFixedWidthColumnsFromResource() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("columnsResource", "etl-test/fixedwidth-columns.json");
+    map.put("encoding", "ISO-8859-1");
+    HttpSourceConfig.FixedWidthConfig fw = HttpSourceConfig.FixedWidthConfig.fromMap(map);
+
+    assertEquals(3, fw.getColumns().size());
+    assertEquals("ori", fw.getColumns().get(0).getName());
+    assertEquals(0, fw.getColumns().get(0).getStart());
+    assertEquals(7, fw.getColumns().get(0).getLength());
+    assertEquals("actual_murder", fw.getColumns().get(2).getName());
+    assertEquals(9, fw.getColumns().get(2).getStart());
+    assertEquals("ISO-8859-1", fw.getEncoding());
+  }
+
+  @Test void testFixedWidthMissingResourceThrows() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("columnsResource", "etl-test/does-not-exist.json");
+    try {
+      HttpSourceConfig.FixedWidthConfig.fromMap(map);
+      assertTrue(false, "expected IllegalArgumentException for missing resource");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage().contains("not found on classpath"));
+    }
   }
 }

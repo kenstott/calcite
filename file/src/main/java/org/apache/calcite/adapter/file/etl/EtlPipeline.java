@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1529,6 +1530,15 @@ public class EtlPipeline {
       data = dataSource.fetch(variables);
     }
 
+    // Apply configured row transformers as a streaming one-to-many flat-map. Wrapping the
+    // source here means every downstream stage (freshness hashing, computed_delta, write)
+    // operates on the transformed rows. Memory stays bounded — only the fan-out of a single
+    // input row is buffered at a time.
+    List<RowTransformer> rowTransformers = loadRowTransformers(config.getHooks());
+    if (data != null && !rowTransformers.isEmpty()) {
+      data = applyRowTransformers(data, rowTransformers, config, variables);
+    }
+
     // hash freshness gate (post-download): if freshness.type==HASH and the fetched content
     // is identical to the last run, skip the write and return 0 rows (no new snapshot).
     // We materialise the iterator here regardless (hash type always requires a full pull).
@@ -1730,6 +1740,121 @@ public class EtlPipeline {
     // Use sourceStorageProvider for raw cache (not the materialized storage provider)
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
         operatingDirectory);
+  }
+
+  /**
+   * Loads the class-based RowTransformers declared in HooksConfig, in order.
+   *
+   * <p>Expression-based row transformer configs are skipped here — those are computed
+   * columns handled by the materialization writer, not row-level Java hooks.
+   *
+   * @param hooksConfig Hooks configuration (may be null)
+   * @return Ordered list of RowTransformer instances (empty if none configured)
+   */
+  static List<RowTransformer> loadRowTransformers(HooksConfig hooksConfig) {
+    if (hooksConfig == null || hooksConfig.getRowTransformers().isEmpty()) {
+      return Collections.emptyList();
+    }
+    List<RowTransformer> transformers = new ArrayList<RowTransformer>();
+    for (HooksConfig.TransformerConfig tc : hooksConfig.getRowTransformers()) {
+      if (!tc.isClassBased()) {
+        continue;
+      }
+      String className = tc.getClassName();
+      try {
+        Class<?> clazz = Class.forName(className);
+        if (!RowTransformer.class.isAssignableFrom(clazz)) {
+          throw new IllegalArgumentException(
+              "Class " + className + " does not implement RowTransformer");
+        }
+        transformers.add((RowTransformer) clazz.getDeclaredConstructor().newInstance());
+        LOGGER.info("Loaded RowTransformer: {}", className);
+      } catch (ClassNotFoundException e) {
+        throw new IllegalArgumentException("RowTransformer class not found: " + className, e);
+      } catch (Exception e) {
+        throw new IllegalArgumentException(
+            "Failed to instantiate RowTransformer: " + className, e);
+      }
+    }
+    return transformers;
+  }
+
+  /**
+   * Wraps a source iterator with the configured RowTransformer chain as a streaming
+   * one-to-many flat-map.
+   *
+   * <p>Each source row flows through every transformer in order; a transformer may drop,
+   * keep, or expand it, and the next transformer sees the expanded rows. Only the rows
+   * produced from the current source row are buffered, so heap usage is bounded by the
+   * per-row fan-out, not the dataset size.
+   *
+   * <p>When a transformer throws, the configured {@link HooksConfig.HookErrorHandling}
+   * row-transformer action governs the outcome: {@code FAIL} propagates; otherwise the
+   * offending row is dropped (logged, never silent).
+   */
+  static Iterator<Map<String, Object>> applyRowTransformers(
+      final Iterator<Map<String, Object>> source,
+      final List<RowTransformer> transformers,
+      final EtlPipelineConfig config,
+      final Map<String, String> variables) {
+    final HooksConfig.HookErrorHandling.ErrorAction errorAction =
+        config.getHooks() != null && config.getHooks().getErrorHandling() != null
+            ? config.getHooks().getErrorHandling().getRowTransformerAction()
+            : HooksConfig.HookErrorHandling.ErrorAction.FAIL;
+    return new Iterator<Map<String, Object>>() {
+      private final ArrayDeque<Map<String, Object>> pending = new ArrayDeque<Map<String, Object>>();
+      private long rowNumber;
+
+      private void fill() {
+        while (pending.isEmpty() && source.hasNext()) {
+          Map<String, Object> sourceRow = source.next();
+          RowContext context = RowContext.builder()
+              .dimensionValues(variables)
+              .tableConfig(config)
+              .rowNumber(rowNumber++)
+              .build();
+          List<Map<String, Object>> current = Collections.singletonList(sourceRow);
+          for (RowTransformer transformer : transformers) {
+            List<Map<String, Object>> next = new ArrayList<Map<String, Object>>();
+            for (Map<String, Object> row : current) {
+              List<Map<String, Object>> produced;
+              try {
+                produced = transformer.transform(row, context);
+              } catch (RuntimeException e) {
+                if (errorAction == HooksConfig.HookErrorHandling.ErrorAction.FAIL) {
+                  throw e;
+                }
+                LOGGER.warn("RowTransformer {} failed on row {} — dropping row (action={}): {}",
+                    transformer.getClass().getName(), context.getRowNumber(), errorAction,
+                    e.getMessage());
+                continue;
+              }
+              if (produced != null) {
+                next.addAll(produced);
+              }
+            }
+            current = next;
+            if (current.isEmpty()) {
+              break;
+            }
+          }
+          pending.addAll(current);
+        }
+      }
+
+      @Override public boolean hasNext() {
+        fill();
+        return !pending.isEmpty();
+      }
+
+      @Override public Map<String, Object> next() {
+        fill();
+        if (pending.isEmpty()) {
+          throw new NoSuchElementException();
+        }
+        return pending.poll();
+      }
+    };
   }
 
   /**

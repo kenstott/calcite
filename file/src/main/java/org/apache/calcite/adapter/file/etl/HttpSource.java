@@ -87,6 +87,9 @@ public class HttpSource implements DataSource {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HttpSource.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  private static final String DEFAULT_USER_AGENT =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
   @SuppressWarnings("UnusedVariable")
   private static final Pattern VAR_PATTERN = Pattern.compile("\\{([^}]+)\\}");
   @SuppressWarnings("UnusedVariable")
@@ -668,8 +671,7 @@ public class HttpSource implements DataSource {
           conn.setRequestMethod("GET");
           conn.setConnectTimeout(30000);
           conn.setReadTimeout(300000); // 5 min for large CSV files
-          conn.setRequestProperty("User-Agent",
-              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+          conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
           for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
             conn.setRequestProperty(e.getKey(), e.getValue());
           }
@@ -972,22 +974,7 @@ public class HttpSource implements DataSource {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(120000);
 
-      if (config.getHeaders().get("User-Agent") == null) {
-        conn.setRequestProperty("User-Agent",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-      }
-
-      // Set headers (skip headers whose value is empty after substitution — avoids
-      // APIs that treat an empty header as invalid, e.g. NVD's apiKey check)
-      for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-        String value = substituteVariables(e.getValue(), variables);
-        if (value != null && !value.isEmpty()) {
-          conn.setRequestProperty(e.getKey(), value);
-        }
-      }
-
-      // Apply authentication
-      applyAuth(conn, variables);
+      applyHeadersAndAuth(conn, variables);
 
       // Send body
       if (config.getMethod() == HttpSourceConfig.HttpMethod.POST
@@ -1035,8 +1022,16 @@ public class HttpSource implements DataSource {
     // Rate limiting
     enforceRateLimit();
 
-    // Build full URL with query parameters
-    String fullUrl = buildUrlWithParams(baseUrl, params);
+    // Build full URL with query parameters. When a urlResolver is configured, the configured
+    // url + params address a JSON resolver endpoint; the resolved (self-contained) download
+    // URL is fetched instead, so query params are not re-applied to it.
+    HttpSourceConfig.UrlResolverConfig resolver = config.getUrlResolver();
+    String fullUrl;
+    if (resolver != null) {
+      fullUrl = resolveDownloadUrl(buildUrlWithParams(baseUrl, params), resolver, variables);
+    } else {
+      fullUrl = buildUrlWithParams(baseUrl, params);
+    }
 
     HttpSourceConfig.RateLimitConfig rateLimit = config.getRateLimit();
     int retries = 0;
@@ -1073,6 +1068,78 @@ public class HttpSource implements DataSource {
   }
 
   /**
+   * Sets the default User-Agent (when not overridden), the configured headers (skipping
+   * values that are empty after substitution), and authentication on the connection.
+   */
+  private void applyHeadersAndAuth(HttpURLConnection conn, Map<String, String> variables) {
+    if (config.getHeaders().get("User-Agent") == null) {
+      conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
+    }
+    for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
+      String value = substituteVariables(e.getValue(), variables);
+      if (value != null && !value.isEmpty()) {
+        conn.setRequestProperty(e.getKey(), value);
+      }
+    }
+    applyAuth(conn, variables);
+  }
+
+  /**
+   * Resolves the real download URL by fetching a JSON endpoint and extracting a URL from it.
+   *
+   * <p>Used for signed-URL services: {@code resolverUrl} returns JSON pointing at the actual
+   * download location (e.g. a presigned S3 URL). The field is selected by
+   * {@link HttpSourceConfig.UrlResolverConfig#getUrlField()} (literal top-level key, with
+   * {@code {var}} substitution); when absent the response must be a single-field object and
+   * its only value is used.
+   *
+   * @param resolverUrl Fully built resolver endpoint URL (variables and params already applied)
+   * @param resolver Resolver config controlling field selection
+   * @param variables Variable substitution map (for headers/auth and urlField)
+   * @return The resolved download URL
+   */
+  private String resolveDownloadUrl(String resolverUrl,
+      HttpSourceConfig.UrlResolverConfig resolver, Map<String, String> variables)
+      throws IOException {
+    URL url = java.net.URI.create(resolverUrl).toURL();
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    try {
+      conn.setRequestMethod("GET");
+      conn.setConnectTimeout(30000);
+      conn.setReadTimeout(120000);
+      applyHeadersAndAuth(conn, variables);
+
+      int responseCode = conn.getResponseCode();
+      if (responseCode < 200 || responseCode >= 300) {
+        String errorBody = readResponse(conn.getErrorStream());
+        throw new IOException("URL resolver HTTP " + responseCode + " for " + resolverUrl
+            + ": " + errorBody);
+      }
+      JsonNode root = OBJECT_MAPPER.readTree(readResponse(conn.getInputStream()));
+      String field = resolver.getUrlField();
+      JsonNode urlNode;
+      if (field != null && !field.isEmpty()) {
+        urlNode = root.get(substituteVariables(field, variables));
+      } else {
+        if (!root.isObject() || root.size() != 1) {
+          throw new IOException("URL resolver expected a single-field JSON object from "
+              + resolverUrl + ", got: " + root);
+        }
+        urlNode = root.elements().next();
+      }
+      if (urlNode == null || !urlNode.isTextual() || urlNode.asText().isEmpty()) {
+        throw new IOException("URL resolver could not extract a download URL from "
+            + resolverUrl + ": " + root);
+      }
+      String resolved = urlNode.asText();
+      LOGGER.debug("Resolved download URL from {} -> {}", resolverUrl, resolved);
+      return resolved;
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
    * Performs the actual HTTP request.
    *
    * @param urlString Full URL to request
@@ -1089,20 +1156,6 @@ public class HttpSource implements DataSource {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(120000);
 
-      if (config.getHeaders().get("User-Agent") == null) {
-        conn.setRequestProperty("User-Agent",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-      }
-
-      // Set headers from config (skip empty values — avoids APIs treating an empty
-      // header as invalid)
-      for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-        String value = substituteVariables(e.getValue(), variables);
-        if (value != null && !value.isEmpty()) {
-          conn.setRequestProperty(e.getKey(), value);
-        }
-      }
-
       // Log headers being used for debugging
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("HTTP {} {} with {} custom headers",
@@ -1113,8 +1166,7 @@ public class HttpSource implements DataSource {
         }
       }
 
-      // Apply authentication
-      applyAuth(conn, variables);
+      applyHeadersAndAuth(conn, variables);
 
       // Handle POST/PUT body if needed
       if (config.getMethod() == HttpSourceConfig.HttpMethod.POST
@@ -2877,9 +2929,7 @@ public class HttpSource implements DataSource {
    */
   private void applyProbeHeaders(HttpURLConnection conn, Map<String, String> vars) {
     if (config.getHeaders().get("User-Agent") == null) {
-      conn.setRequestProperty("User-Agent",
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-          + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+      conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
     }
     for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
       String value = substituteVariables(e.getValue(), vars);
