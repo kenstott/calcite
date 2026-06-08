@@ -2,9 +2,10 @@
 -- ============================================================
 -- DQ script: cyber_threat schema
 -- Tables: attack_techniques, ioc_urls, ioc_hashes, ioc_ips,
---         ioc_mixed (optional), nist_controls, nist_csf_functions,
+--         ioc_mixed (needs CYBER_THREATFOX_API_KEY), nist_controls, nist_csf_functions,
 --         cis_controls, owasp_top10, attack_to_nist_mappings,
---         threat_pulses (optional)
+--         threat_pulses (needs CYBER_OTX_API_KEY)
+-- A required-but-absent key-gated table is a FAIL, not a warn.
 -- Storage: Iceberg (iceberg_scan)
 -- ============================================================
 
@@ -191,8 +192,8 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashe
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_hashes', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 1000 THEN 'pass' ELSE 'warn' END,
-  COUNT(*), 1000, 'MalwareBazaar feed can return empty on some cycles'
+  CASE WHEN COUNT(*) >= 500 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 500, 'MalwareBazaar recent export ~600-700/cycle; accumulates over time'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true);
 
 -- T3: sample
@@ -209,7 +210,9 @@ FROM (
   SELECT column_name, null_percentage
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type', 'first_seen')
+    -- clamav/vt_percent/imphash/signature are optional MalwareBazaar enrichment fields that
+    -- can be 100% n/a in a single recent batch; exclude from the all-null gate.
+    AND column_name NOT IN ('type', 'first_seen', 'clamav', 'vt_percent', 'imphash', 'signature')
 ) t;
 
 -- T5: all_same_value
@@ -223,7 +226,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen')
+    AND column_name NOT IN ('type', 'first_seen', 'clamav', 'vt_percent', 'imphash', 'signature', 'source')
 ) t;
 
 -- T6: pk_nulls (sha256 NOT NULL)
@@ -335,16 +338,16 @@ FROM (
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_mixed', 'T1_existence',
-  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'warn' END,
-  COUNT(*), 1, 'optional — requires CYBER_THREATFOX_API_KEY'
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'requires CYBER_THREATFOX_API_KEY — missing key / empty table is a fail'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_mixed', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'warn' END,
-  COUNT(*), 100, 'optional — requires CYBER_THREATFOX_API_KEY'
+  CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 100, 'requires CYBER_THREATFOX_API_KEY'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true);
 
 -- T3: sample
@@ -394,12 +397,12 @@ SELECT
   'cyber_threat', 'ioc_mixed', 'T7_expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
   bad, 0,
-  'ioc_type outside expected set (url, hash, ip, ip:port, domain, email)'
+  'ioc_type outside expected set (url, hash, ip, ip:port, domain, md5_hash, sha256_hash, email)'
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true)
   WHERE ioc_type IS NOT NULL
-    AND ioc_type NOT IN ('url', 'hash', 'ip', 'ip:port', 'domain', 'email')
+    AND ioc_type NOT IN ('url', 'hash', 'ip', 'ip:port', 'domain', 'md5_hash', 'sha256_hash', 'email')
 ) t;
 
 -- ============================================================
@@ -766,16 +769,16 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'threat_pulses', 'T1_existence',
-  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'warn' END,
-  COUNT(*), 1, 'optional — requires CYBER_OTX_API_KEY'
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'requires CYBER_OTX_API_KEY — missing key / empty table is a fail'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'threat_pulses', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'warn' END,
-  COUNT(*), 100, 'optional — requires CYBER_OTX_API_KEY'
+  CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 100, 'requires CYBER_OTX_API_KEY'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true);
 
 -- T3: sample
