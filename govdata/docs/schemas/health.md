@@ -68,7 +68,8 @@ The schema is served by `HealthSchemaFactory` via `GovDataSchemaFactory` and is 
 
 | Variable | Description |
 |---|---|
-| `HEALTH_FAERS_START_DATE` | Start date for FAERS adverse events download (YYYYMMDD format, default `20230101`) |
+| `GOVDATA_START_YEAR` | Lower bound for all yearRange dimensions, including FAERS adverse-events day-level windows (default `2010`) |
+| `HEALTH_FDA_API_KEY` | openFDA API key — required for FAERS day-level backfill (no-key quota is 1,000 requests/day) |
 
 ---
 
