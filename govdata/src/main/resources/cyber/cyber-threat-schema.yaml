@@ -12,7 +12,7 @@
 # ============================================================================
 
 schemaName: "${CYBER_THREAT_SCHEMA_NAME:cyber_threat}"
-materializeDirectory: "${CYBER_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/cyber_threat}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Cyber threat intelligence, exploit data, IOC feeds, MITRE ATT&CK taxonomy,
