@@ -1012,18 +1012,18 @@ public class EtlPipeline {
         // Standard (non-partitioned) processing
         int threadCount = getParallelThreadCount();
 
-        if (threadCount > 1 && neededCount > 1) {
-          // Parallel mode: fetch data concurrently, writes are serialized via writeLock
-          LOGGER.info("Using {} parallel threads for {} batches", threadCount, neededCount);
+        // Build fetch units (coalesces multi-combo windows when backfill_period is set).
+        // For null backfill_period this is a 1:1 mapping — behavior byte-identical to today.
+        final List<FetchUnit> fetchUnits =
+            buildFetchUnits(combinations, standardUnprocessedIndices,
+                config.getBackfillPeriod());
+        final int unitCount = fetchUnits.size();
+        LOGGER.info("Dispatch: {} fetch units from {} unprocessed combos (backfill_period={})",
+            unitCount, neededCount, config.getBackfillPeriod());
 
-          // Build work list of variables for unprocessed batches
-          final List<Map<String, String>> workVariables = new ArrayList<Map<String, String>>();
-          for (int idx = 0; idx < combinations.size(); idx++) {
-            if (!standardUnprocessedIndices.contains(idx)) {
-              continue;
-            }
-            workVariables.add(combinations.get(idx));
-          }
+        if (threadCount > 1 && unitCount > 1) {
+          // Parallel mode: fetch data concurrently, writes are serialized via writeLock
+          LOGGER.info("Using {} parallel threads for {} fetch units", threadCount, unitCount);
 
           final AtomicLong parallelTotalRows = new AtomicLong();
           final AtomicInteger parallelSucceeded = new AtomicInteger();
@@ -1037,22 +1037,25 @@ public class EtlPipeline {
           final DataSource dsFinal = dataSource;
           final MaterializationWriter writerFinal = writer;
           final String pipelineNameFinal = pipelineName;
-          final int neededCountFinal = neededCount;
+          final int unitCountFinal = unitCount;
 
           ExecutorService executor = Executors.newFixedThreadPool(threadCount);
           List<Future<Void>> futures = new ArrayList<Future<Void>>();
 
-          for (int wi = 0; wi < workVariables.size(); wi++) {
-            final Map<String, String> vars = workVariables.get(wi);
+          for (int wi = 0; wi < fetchUnits.size(); wi++) {
+            final FetchUnit unit = fetchUnits.get(wi);
 
             futures.add(
                 executor.submit(new Callable<Void>() {
               @Override public Void call() {
                 int currentBatch = parallelProcessed.incrementAndGet();
                 try {
-                  LOGGER.info("Processing batch {}/{}: {}", currentBatch, neededCountFinal, vars);
+                  LOGGER.info("Processing batch {}/{}: fetch={} combos={}",
+                      currentBatch, unitCountFinal,
+                      unit.getFetchVariables(), unit.getCombosToMark().size());
                   long batchRows =
-                      processSingleBatch(cfgFinal, vars, dsFinal, writerFinal, currentBatch, pipelineNameFinal);
+                      processSingleBatch(cfgFinal, unit, dsFinal, writerFinal,
+                          currentBatch, pipelineNameFinal);
                   parallelTotalRows.addAndGet(batchRows);
                   parallelSucceeded.incrementAndGet();
 
@@ -1061,31 +1064,44 @@ public class EtlPipeline {
                   }
                 } catch (Exception e) {
                   String errorMsg =
-                      String.format("Batch %d/%d failed: %s", currentBatch, neededCountFinal, e.getMessage());
+                      String.format("Batch %d/%d failed: %s", currentBatch, unitCountFinal, e.getMessage());
                   LOGGER.error(errorMsg, e);
                   parallelErrors.add(errorMsg);
 
                   EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
                       determineErrorAction(e, cfgFinal.getErrorHandling());
 
-                  // Serialize tracker writes for error marking
+                  // Serialize tracker writes for error marking — mark all combos in the unit
                   synchronized (writeLock) {
                     incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                    String errMsg = e.getMessage();
                     switch (action) {
                       case SKIP:
                         parallelSkipped.incrementAndGet();
-                        incrementalTracker.markProcessedWithError(pipelineNameFinal,
-                            pipelineNameFinal, vars, null, e.getMessage());
+                        for (Map<String, String> combo : unit.getCombosToMark()) {
+                          Map<String, String> markKey =
+                              enrichWithPeriodBounds(combo, cfgFinal.getBackfillPeriod());
+                          incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                              pipelineNameFinal, markKey, null, errMsg);
+                        }
                         break;
                       case WARN:
                       default:
                         parallelFailed.incrementAndGet();
-                        incrementalTracker.markProcessedWithError(pipelineNameFinal,
-                            pipelineNameFinal, vars, null, e.getMessage());
+                        for (Map<String, String> combo : unit.getCombosToMark()) {
+                          Map<String, String> markKey =
+                              enrichWithPeriodBounds(combo, cfgFinal.getBackfillPeriod());
+                          incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                              pipelineNameFinal, markKey, null, errMsg);
+                        }
                         break;
                       case FAIL:
-                        incrementalTracker.markProcessedWithError(pipelineNameFinal,
-                            pipelineNameFinal, vars, null, e.getMessage());
+                        for (Map<String, String> combo : unit.getCombosToMark()) {
+                          Map<String, String> markKey =
+                              enrichWithPeriodBounds(combo, cfgFinal.getBackfillPeriod());
+                          incrementalTracker.markProcessedWithError(pipelineNameFinal,
+                              pipelineNameFinal, markKey, null, errMsg);
+                        }
                         // FAIL action in parallel mode — logged but doesn't abort other threads
                         parallelFailed.incrementAndGet();
                         break;
@@ -1115,43 +1131,49 @@ public class EtlPipeline {
           processedCount += parallelProcessed.get();
 
         } else {
-          // Sequential mode (original behavior)
-          for (int idx = 0; idx < combinations.size(); idx++) {
-            if (!standardUnprocessedIndices.contains(idx)) {
-              continue;
-            }
-
-            Map<String, String> variables = combinations.get(idx);
+          // Sequential mode: iterate fetch units (coalesced or singleton)
+          for (FetchUnit unit : fetchUnits) {
             processedCount++;
 
-            // Self-heal: if data files already exist on storage for this partition,
-            // re-register them in Iceberg and skip re-fetching from source.
-            long healedRows = trySelfHealFromStoredFiles(writer, variables);
-            if (healedRows > 0) {
-              LOGGER.info("Self-heal: skipping source fetch for batch {}/{} {} — "
-                  + "re-registered orphaned files (~{} rows)",
-                  processedCount, neededCount, variables, healedRows);
-              incrementalTracker.markProcessedWithRowCount(pipelineName, pipelineName,
-                  variables, null, healedRows);
-              skippedBatches++;
-              totalRows += healedRows;
-              continue;
+            // Self-heal: only applicable to singleton units (single fine partition).
+            // Coalesced units span multiple fine partitions — skip self-heal and let the
+            // source re-fetch the window (which is what backfill_period is for anyway).
+            if (!unit.isCoalesced()) {
+              Map<String, String> variables = unit.getCombosToMark().get(0);
+              long healedRows = trySelfHealFromStoredFiles(writer, variables);
+              if (healedRows > 0) {
+                LOGGER.info("Self-heal: skipping source fetch for batch {}/{} {} — "
+                    + "re-registered orphaned files (~{} rows)",
+                    processedCount, unitCount, variables, healedRows);
+                // Mark the combo with its today-identical enriched key
+                Map<String, String> markKey =
+                    enrichWithPeriodBounds(variables, config.getBackfillPeriod());
+                incrementalTracker.markProcessedWithRowCount(pipelineName, pipelineName,
+                    markKey, null, healedRows);
+                skippedBatches++;
+                totalRows += healedRows;
+                continue;
+              }
             }
 
             if (progressListener != null) {
-              progressListener.onBatchStart(processedCount, neededCount, variables);
+              progressListener.onBatchStart(processedCount, unitCount,
+                  unit.getFetchVariables());
             }
 
             try {
-              LOGGER.info("Processing batch {}/{}: {}", processedCount, neededCount, variables);
+              LOGGER.info("Processing batch {}/{}: fetch={} combos={}",
+                  processedCount, unitCount,
+                  unit.getFetchVariables(), unit.getCombosToMark().size());
               long batchRows =
-                  processSingleBatch(config, variables, dataSource, writer, processedCount, pipelineName);
+                  processSingleBatch(config, unit, dataSource, writer,
+                      processedCount, pipelineName);
               totalRows += batchRows;
               successfulBatches++;
               consecutiveFailures = 0;
 
               if (progressListener != null) {
-                progressListener.onBatchComplete(processedCount, neededCount, (int) batchRows, null);
+                progressListener.onBatchComplete(processedCount, unitCount, (int) batchRows, null);
               }
 
               if (processedCount % 10 == 0) {
@@ -1172,17 +1194,17 @@ public class EtlPipeline {
             } catch (Exception e) {
               consecutiveFailures++;
               String errorMsg =
-                  String.format("Batch %d/%d failed: %s", processedCount, neededCount, e.getMessage());
+                  String.format("Batch %d/%d failed: %s", processedCount, unitCount, e.getMessage());
 
               // Enhanced diagnostics for HTTP/S3 errors
               String msg = e.getMessage();
-              boolean isHttpError = msg != null && (msg.contains("HTTP") || msg.contains("404") || msg.contains("<!doctype")
-                  || msg.contains("<html") || msg.contains("console.log") || msg.contains("adobe-launch"));
+              boolean isHttpError = msg != null && (msg.contains("HTTP") || msg.contains("404")
+                  || msg.contains("<!doctype") || msg.contains("<html")
+                  || msg.contains("console.log") || msg.contains("adobe-launch"));
 
               if (isHttpError) {
-                LOGGER.error("Batch {}/{} failed with HTTP/API error. Variables: {}. Full cause chain:",
-                    processedCount, neededCount, variables);
-                // Log full exception with cause chain
+                LOGGER.error("Batch {}/{} failed with HTTP/API error. FetchVars: {}. Full cause chain:",
+                    processedCount, unitCount, unit.getFetchVariables());
                 Throwable cause = e;
                 int depth = 0;
                 while (cause != null && depth < 5) {
@@ -1202,8 +1224,13 @@ public class EtlPipeline {
                 LOGGER.error("Aborting table '{}': {} consecutive failures — "
                     + "data source appears unreachable (last error: {})",
                     pipelineName, consecutiveFailures, e.getMessage());
-                incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                    variables, null, e.getMessage());
+                // Mark all combos in the unit with error (whole window retries together)
+                for (Map<String, String> combo : unit.getCombosToMark()) {
+                  Map<String, String> markKey =
+                      enrichWithPeriodBounds(combo, config.getBackfillPeriod());
+                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                      markKey, null, e.getMessage());
+                }
                 throw new IOException("Aborting after " + consecutiveFailures
                     + " consecutive failures", e);
               }
@@ -1213,31 +1240,47 @@ public class EtlPipeline {
 
               switch (action) {
                 case FAIL:
-                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                      variables, null, e.getMessage());
+                  for (Map<String, String> combo : unit.getCombosToMark()) {
+                    Map<String, String> markKey =
+                        enrichWithPeriodBounds(combo, config.getBackfillPeriod());
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        markKey, null, e.getMessage());
+                  }
                   throw new IOException("Pipeline failed at batch " + processedCount, e);
                 case SKIP:
                   skippedBatches++;
-                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                      variables, null, e.getMessage());
+                  for (Map<String, String> combo : unit.getCombosToMark()) {
+                    Map<String, String> markKey =
+                        enrichWithPeriodBounds(combo, config.getBackfillPeriod());
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        markKey, null, e.getMessage());
+                  }
                   LOGGER.warn("Skipping batch {} due to error (will retry after TTL): {}",
                       processedCount, e.getMessage());
                   break;
                 case WARN:
                   failedBatches++;
-                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                      variables, null, e.getMessage());
+                  for (Map<String, String> combo : unit.getCombosToMark()) {
+                    Map<String, String> markKey =
+                        enrichWithPeriodBounds(combo, config.getBackfillPeriod());
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        markKey, null, e.getMessage());
+                  }
                   LOGGER.warn("Batch {} failed (will retry after TTL): {}",
                       processedCount, e.getMessage());
                   break;
                 default:
                   failedBatches++;
-                  incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
-                      variables, null, e.getMessage());
+                  for (Map<String, String> combo : unit.getCombosToMark()) {
+                    Map<String, String> markKey =
+                        enrichWithPeriodBounds(combo, config.getBackfillPeriod());
+                    incrementalTracker.markProcessedWithError(pipelineName, pipelineName,
+                        markKey, null, e.getMessage());
+                  }
               }
 
               if (progressListener != null) {
-                progressListener.onBatchComplete(processedCount, neededCount, 0, e);
+                progressListener.onBatchComplete(processedCount, unitCount, 0, e);
               }
             }
           }
@@ -1491,14 +1534,58 @@ public class EtlPipeline {
   /** Tracker key suffix for the computed_delta high-water mark. */
   private static final String COMPUTED_DELTA_HWM_SUFFIX = "::computed_delta_hwm";
 
+  /**
+   * Compatibility overload for the partitioned-expansion path (CUSTOM dimension resolver),
+   * which processes combos individually and does not use {@link #buildFetchUnits} coalescing.
+   *
+   * <p>Wraps the single combo into a singleton {@link FetchUnit} and delegates to
+   * {@link #processSingleBatch(EtlPipelineConfig, FetchUnit, DataSource, MaterializationWriter, int, String)}.
+   * The fetch variables are enriched at {@code config.getBackfillPeriod()} granularity
+   * (same as today's behavior for partitioned tables).
+   *
+   * <p>Note: the partitioned path never sets {@code backfill_period} in practice today,
+   * so enrichment is a no-op for all existing CUSTOM-dimension tables.
+   */
   private long processSingleBatch(EtlPipelineConfig config, Map<String, String> variables,
       DataSource dataSource, MaterializationWriter writer,
       int processedCount, String pipelineName) throws IOException {
+    // Enrich the single combo at backfillPeriod — same as the old top-of-method enrichment.
+    Map<String, String> fetchVars = enrichWithPeriodBounds(variables, config.getBackfillPeriod());
+    List<Map<String, String>> single =
+        Collections.<Map<String, String>>singletonList(variables);
+    FetchUnit unit = new FetchUnit(fetchVars, single);
+    return processSingleBatch(config, unit, dataSource, writer, processedCount, pipelineName);
+  }
 
-    // Enrich variables with period_start / period_end when backfill_period is set.
-    // This is a delta-only feature; snapshot/computed_delta don't use it, but the
-    // enrichment is a no-op if backfillPeriod is null (which it is for non-delta tables).
-    variables = enrichWithPeriodBounds(variables, config.getBackfillPeriod());
+  /**
+   * Processes a single {@link FetchUnit}: performs ONE fetch using the unit's
+   * pre-computed fetch variables, writes the result once, then marks each of the
+   * unit's fine combos in the tracker.
+   *
+   * <p>For a non-coalesced (singleton) unit the fetch and mark variables are identical
+   * to what the original single-combo {@code processSingleBatch} produced — there is no
+   * change in observable tracker state.
+   *
+   * <p>For a coalesced (multi-combo) unit the fetch uses coarse window bounds while each
+   * combo is marked with {@code enrichWithPeriodBounds(combo, backfillPeriod)} — the same
+   * key a normal single-combo run would have produced for that combo.
+   *
+   * @param config         pipeline configuration
+   * @param fetchUnit      the fetch unit (pre-computed by {@link #buildFetchUnits})
+   * @param dataSource     the data source to fetch from
+   * @param writer         the materialization writer
+   * @param processedCount running count for logging
+   * @param pipelineName   pipeline name
+   * @return total rows written (sum across all partitions in the response)
+   * @throws IOException   on fetch, write, or tracker failure
+   */
+  private long processSingleBatch(EtlPipelineConfig config, FetchUnit fetchUnit,
+      DataSource dataSource, MaterializationWriter writer,
+      int processedCount, String pipelineName) throws IOException {
+
+    // The fetch variables carry the (possibly coarse) window bounds.
+    // For null backfill_period the FetchUnit holds the raw combo — enrichment is a no-op.
+    Map<String, String> variables = fetchUnit.getFetchVariables();
 
     // Document sources use dataWriter directly — serialize writes
     if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
@@ -1506,8 +1593,7 @@ public class EtlPipeline {
       if (dataWriter != null) {
         synchronized (writeLock) {
           long batchRows = dataWriter.write(config, null, variables);
-          incrementalTracker.markProcessedWithRowCount(
-              pipelineName, pipelineName, variables, null, batchRows);
+          markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           return batchRows;
         }
       } else {
@@ -1550,10 +1636,9 @@ public class EtlPipeline {
         LOGGER.info("Pipeline '{}' batch {}: hash freshness UNCHANGED (hash={}) — skipping write",
             pipelineName, processedCount, currentHash);
         // No write, no snapshot — return 0 rows for this batch
-        // Mark the combo processed with 0 so it is not re-queued immediately
+        // Mark all combos in the unit processed with 0 so they are not re-queued immediately
         synchronized (writeLock) {
-          incrementalTracker.markProcessedWithRowCount(
-              pipelineName, pipelineName, variables, null, 0);
+          markCombosProcessed(fetchUnit, config, pipelineName, 0);
         }
         return 0;
       }
@@ -1634,8 +1719,7 @@ public class EtlPipeline {
         } else {
           batchRows = writer.writeBatch(data, variables);
         }
-        incrementalTracker.markProcessedWithRowCount(
-            pipelineName, pipelineName, variables, null, batchRows);
+        markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
         // Persist computed_delta HWM after a successful write
         if (finalNewComputedDeltaHwm != null) {
           incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
@@ -1652,6 +1736,38 @@ public class EtlPipeline {
 
       LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
       return batchRows;
+    }
+  }
+
+  /**
+   * Marks every fine combo in the {@link FetchUnit} as processed in the tracker.
+   *
+   * <p>Each combo is enriched with {@link #enrichWithPeriodBounds(Map, String)} at
+   * {@code config.getBackfillPeriod()} granularity before being written — producing the
+   * SAME key that a normal non-coalesced single-combo run would have written. This is
+   * the critical decoupling: the fetch used a (possibly coarse) window; the mark key is
+   * always per-combo and period-granularity-enriched.
+   *
+   * <p>Must be called <em>inside</em> {@code writeLock} when invoked from the serialized
+   * write block.
+   *
+   * @param fetchUnit    the unit whose combos are to be marked
+   * @param config       pipeline configuration (provides {@code backfill_period})
+   * @param pipelineName pipeline name
+   * @param rowCount     row count to record (shared equally across combos in the unit)
+   */
+  private void markCombosProcessed(FetchUnit fetchUnit, EtlPipelineConfig config,
+      String pipelineName, long rowCount) {
+    String backfillPeriod = config.getBackfillPeriod();
+    for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
+      // Enrich each fine combo at backfillPeriod granularity — today-identical key
+      Map<String, String> markKey = enrichWithPeriodBounds(combo, backfillPeriod);
+      incrementalTracker.markProcessedWithRowCount(
+          pipelineName, pipelineName, markKey, null, rowCount);
+    }
+    if (fetchUnit.isCoalesced()) {
+      LOGGER.info("Coalesced fetch unit: marked {} fine combos processed for '{}'",
+          fetchUnit.getCombosToMark().size(), pipelineName);
     }
   }
 
@@ -2678,6 +2794,238 @@ public class EtlPipeline {
 
   // ===== Dataset-type / Backfill helpers =====
 
+  // -----------------------------------------------------------------------
+  // Fetch-unit coalescing (backfill_period API-pull refinement)
+  // -----------------------------------------------------------------------
+
+  /**
+   * A fetch unit groups one or more fine dimension combinations that share a backfill
+   * window (e.g. all months of the same year under {@code backfill_period: annual}) into
+   * a single API pull.
+   *
+   * <p><b>Fetch variables</b> carry the coarse (or fine, for singletons) window bounds
+   * ({@code period_start}/{@code period_end}) that template into the source URL.
+   *
+   * <p><b>Combos to mark</b> are the individual fine combinations whose per-combo tracker
+   * keys ({@code enrichWithPeriodBounds(combo, backfillPeriod)}) will be written after a
+   * successful fetch+write. Each combo's mark key is byte-identical to what a normal
+   * non-coalesced {@code processSingleBatch} run produces today.
+   *
+   * <p>Coalescing only engages when {@code combosToMark.size() > 1}. A singleton unit
+   * uses fine (monthly) bounds for the fetch — same as today.
+   *
+   * <p>Note: coalescing applies to the STANDARD processing path (sequential and parallel
+   * modes). The CUSTOM/partitioned expansion path is unaffected — it processes combos
+   * individually and does not call {@link #buildFetchUnits}.
+   */
+  static final class FetchUnit {
+    /** Variables passed to {@code dataSource.fetch()} — carries the window bounds. */
+    private final Map<String, String> fetchVariables;
+    /** Fine combos whose tracker entries are updated after a successful write. */
+    private final List<Map<String, String>> combosToMark;
+
+    FetchUnit(Map<String, String> fetchVariables, List<Map<String, String>> combosToMark) {
+      this.fetchVariables = fetchVariables;
+      this.combosToMark = combosToMark;
+    }
+
+    Map<String, String> getFetchVariables() {
+      return fetchVariables;
+    }
+
+    List<Map<String, String>> getCombosToMark() {
+      return combosToMark;
+    }
+
+    boolean isCoalesced() {
+      return combosToMark.size() > 1;
+    }
+  }
+
+  /**
+   * Returns the coarse window key for a combo at the requested backfill granularity.
+   *
+   * <p>For {@code annual}: the key is just {@code year}. For {@code quarterly}:
+   * {@code year + "/" + quarter}. For {@code monthly}: {@code year + "/" + month}.
+   * For {@code weekly}: {@code year + "/" + week}. For {@code daily}: full date string.
+   *
+   * <p>Combos that share the same window key will be coalesced into a single fetch unit.
+   *
+   * @param combo          dimension combination
+   * @param backfillPeriod coarse granularity level
+   * @return non-null string key; empty string if granularity unrecognised or fields missing
+   */
+  static String backfillWindowKey(Map<String, String> combo, String backfillPeriod) {
+    if (backfillPeriod == null || backfillPeriod.isEmpty()) {
+      // No coalescing: each combo is its own window
+      return combo.toString();
+    }
+    String year = combo.get("year");
+    if (year == null) {
+      return combo.toString();
+    }
+    switch (backfillPeriod.toLowerCase()) {
+    case "annual":
+      return year;
+    case "quarterly": {
+      String q = combo.get("quarter");
+      return q != null ? year + "/" + q : combo.toString();
+    }
+    case "monthly": {
+      String m = combo.get("month");
+      return m != null ? year + "/" + m : combo.toString();
+    }
+    case "weekly": {
+      String w = combo.get("week");
+      return w != null ? year + "/" + w : combo.toString();
+    }
+    case "daily": {
+      String m = combo.get("month");
+      String d = combo.get("day");
+      return (m != null && d != null) ? year + "/" + m + "/" + d : combo.toString();
+    }
+    default:
+      return combo.toString();
+    }
+  }
+
+  /**
+   * Returns the finest-present period granularity string for the given combo.
+   *
+   * <p>Priority: {@code daily} > {@code weekly} > {@code monthly} > {@code quarterly} >
+   * {@code annual}. Used to compute fine bounds for singleton fetch units so they are
+   * byte-identical to today's single-combo pull.
+   *
+   * @param combo dimension combination
+   * @return one of {@code daily|weekly|monthly|quarterly|annual|null}
+   */
+  static String finestGranularity(Map<String, String> combo) {
+    if (hasNonEmpty(combo, "day") && hasNonEmpty(combo, "month")) {
+      return "daily";
+    }
+    if (hasNonEmpty(combo, "week")) {
+      return "weekly";
+    }
+    if (hasNonEmpty(combo, "month")) {
+      return "monthly";
+    }
+    if (hasNonEmpty(combo, "quarter")) {
+      return "quarterly";
+    }
+    if (hasNonEmpty(combo, "year")) {
+      return "annual";
+    }
+    return null;
+  }
+
+  private static boolean hasNonEmpty(Map<String, String> map, String key) {
+    String v = map.get(key);
+    return v != null && !v.isEmpty();
+  }
+
+  /**
+   * Groups the unprocessed combinations into {@link FetchUnit}s according to the
+   * {@code backfillPeriod} window strategy.
+   *
+   * <p>Algorithm:
+   * <ol>
+   *   <li>If {@code backfillPeriod} is null, return one unit per combo (fine bounds,
+   *       no period enrichment) — byte-identical to today's behavior.</li>
+   *   <li>Otherwise group combos by {@link #backfillWindowKey}. Groups with more than one
+   *       combo get a COARSE fetch unit (window bounds at {@code backfillPeriod}
+   *       granularity). Singletons get a FINE fetch unit (bounds at the combo's own
+   *       finest-present granularity).</li>
+   * </ol>
+   *
+   * <p>The fetch variables in every unit carry {@code period_start} / {@code period_end};
+   * the mark key for each combo is computed separately via
+   * {@link #enrichWithPeriodBounds(Map, String)} at {@code backfillPeriod} granularity
+   * (same as today's single-combo path).
+   *
+   * <p>Ordering: units are returned in the order their first combo was encountered in the
+   * original index set — preserving the descending-first dimension order.
+   *
+   * @param combinations    all dimension combinations (indexed 0..N-1)
+   * @param unprocessedIdx  indices of combinations that are unprocessed
+   * @param backfillPeriod  the {@code backfill_period} config value, or null
+   * @return ordered list of fetch units; never null
+   */
+  static List<FetchUnit> buildFetchUnits(
+      List<Map<String, String>> combinations,
+      Set<Integer> unprocessedIdx,
+      String backfillPeriod) {
+
+    // Order unprocessed indices to preserve original dimension order
+    List<Integer> ordered = new ArrayList<Integer>(unprocessedIdx);
+    Collections.sort(ordered);
+
+    if (backfillPeriod == null || backfillPeriod.isEmpty()) {
+      // Null backfill: one unit per combo, no bounds enrichment
+      List<FetchUnit> units = new ArrayList<FetchUnit>(ordered.size());
+      for (int idx : ordered) {
+        Map<String, String> combo = combinations.get(idx);
+        List<Map<String, String>> single =
+            Collections.<Map<String, String>>singletonList(combo);
+        units.add(new FetchUnit(combo, single));
+      }
+      return units;
+    }
+
+    // Group by window key (preserving first-seen order)
+    Map<String, List<Map<String, String>>> byWindow =
+        new LinkedHashMap<String, List<Map<String, String>>>();
+    for (int idx : ordered) {
+      Map<String, String> combo = combinations.get(idx);
+      String wk = backfillWindowKey(combo, backfillPeriod);
+      List<Map<String, String>> group = byWindow.get(wk);
+      if (group == null) {
+        group = new ArrayList<Map<String, String>>();
+        byWindow.put(wk, group);
+      }
+      group.add(combo);
+    }
+
+    // Build a FetchUnit per window group
+    List<FetchUnit> units = new ArrayList<FetchUnit>(byWindow.size());
+    for (Map.Entry<String, List<Map<String, String>>> e : byWindow.entrySet()) {
+      List<Map<String, String>> group = e.getValue();
+      Map<String, String> fetchVars;
+      if (group.size() > 1) {
+        // Coalesced: fetch at coarse (backfillPeriod) granularity
+        // Use the first combo as the base (all combos in the group share the same
+        // window-key fields; enrichWithPeriodBounds at backfillPeriod gives the
+        // coarse window bounds regardless of which combo is used)
+        fetchVars = enrichWithPeriodBoundsAt(group.get(0), backfillPeriod);
+      } else {
+        // Singleton: fetch at the combo's own finest-present granularity
+        Map<String, String> combo = group.get(0);
+        String finest = finestGranularity(combo);
+        fetchVars = (finest != null) ? enrichWithPeriodBoundsAt(combo, finest) : combo;
+      }
+      units.add(new FetchUnit(fetchVars, group));
+    }
+    return units;
+  }
+
+  /**
+   * Returns a copy of {@code variables} enriched with {@code period_start} and
+   * {@code period_end} at the specified granularity.
+   *
+   * <p>This is the core implementation, parameterized. It is used both by:
+   * <ul>
+   *   <li>{@link #enrichWithPeriodBounds} — the original entry point (delegates here)</li>
+   *   <li>{@link #buildFetchUnits} — coarse vs fine bounds computation for fetch variables</li>
+   * </ul>
+   *
+   * @param variables   dimension combination
+   * @param granularity one of {@code annual|quarterly|monthly|weekly|daily}
+   * @return enriched copy (or original if granularity unrecognised / required field absent)
+   */
+  static Map<String, String> enrichWithPeriodBoundsAt(Map<String, String> variables,
+      String granularity) {
+    return enrichWithPeriodBoundsInternal(variables, granularity);
+  }
+
   /**
    * Returns a copy of {@code variables} enriched with {@code period_start} and
    * {@code period_end} when {@code backfill_period} is configured on the pipeline.
@@ -2706,6 +3054,16 @@ public class EtlPipeline {
     if (backfillPeriod == null || backfillPeriod.isEmpty()) {
       return variables;
     }
+    return enrichWithPeriodBoundsInternal(variables, backfillPeriod);
+  }
+
+  /**
+   * Core implementation shared by {@link #enrichWithPeriodBounds} and
+   * {@link #enrichWithPeriodBoundsAt}. Callers must have already guarded for
+   * null/empty granularity before invoking.
+   */
+  private static Map<String, String> enrichWithPeriodBoundsInternal(
+      Map<String, String> variables, String granularity) {
     try {
       java.time.LocalDate start = null;
       java.time.LocalDate end = null;
@@ -2721,7 +3079,7 @@ public class EtlPipeline {
         return variables;
       }
 
-      switch (backfillPeriod.toLowerCase()) {
+      switch (granularity.toLowerCase()) {
       case "annual":
         start = java.time.LocalDate.of(year, 1, 1);
         end = java.time.LocalDate.of(year, 12, 31);
@@ -2819,8 +3177,8 @@ public class EtlPipeline {
 
     } catch (Exception e) {
       // Never fail a batch due to period-bounds computation
-      LOGGER.debug("enrichWithPeriodBounds failed for {} / {}: {}",
-          backfillPeriod, variables, e.getMessage());
+      LOGGER.debug("enrichWithPeriodBoundsInternal failed for {} / {}: {}",
+          granularity, variables, e.getMessage());
       return variables;
     }
   }
