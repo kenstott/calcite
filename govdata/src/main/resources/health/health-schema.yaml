@@ -1424,8 +1424,8 @@ partitionedTables:
       months: [6, 7]        # CMS Open Payments (Sunshine Act) annual release June–July
     comment: >
       CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
-      to physicians. Fetches JSON from DKAN API. payment_type dimension selects
-      general vs research vs ownership payments.
+      to physicians. Bulk CSV downloads from download.cms.gov, one file per program year
+      (CY2018+) and payment_type (general/research/ownership), partitioned by both.
     columns:
       - name: program_year
         type: VARCHAR
@@ -1480,14 +1480,14 @@ partitionedTables:
     source:
       type: http
       # CMS bulk CSV downloads — direct from download.cms.gov, streamed in batches.
-      # TODO: Parameterize PGYR{year} and the publication-date path segments so the URL
-      # updates automatically when a new program year is released (typically June each year).
-      # The path format is: /openpayments/PGYR{year}_P{pubdate}_{reldate}/OP_DTL_{type}_PGYR{year}_P{pubdate}_{reldate}.csv
-      # Publication/release dates are not predictable in advance; consider a metadata lookup
-      # step or a urlRules mapping keyed on year dimension.
-      # For now, update PGYR manually each June when CMS releases the new program year.
-      # PGYR2023 is the most recent full year as of 2026. Update path when CMS releases PGYR2024.
-      url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_GNRL_PGYR2023_P01232026_01102026.csv"
+      # {effective_year} (= publish year - dataLag) is the program/data year — one file per
+      # year (PGYR2018..PGYR2024) so the year dimension drives the URL instead of being inert.
+      # The publication/reload segment (P{pubdate}_{reldate}) is assigned by CMS at release time,
+      # is NOT derivable from the year, and is SHARED across all program years (CMS republishes
+      # every year together). Refresh the literal below when CMS republishes (~annually) — the
+      # current segment is the distribution.downloadURL path from the catalog API:
+      #   https://openpaymentsdata.cms.gov/api/1/metastore/schemas/dataset/items
+      url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_GNRL_PGYR{effective_year}_P01232026_01102026.csv"
       method: GET
       response:
         format: csv
@@ -1496,10 +1496,10 @@ partitionedTables:
           type: CSV_STREAM
           pageSize: 5000
       urlRules:
-        - url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_RSRCH_PGYR2023_P01232026_01102026.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_RSRCH_PGYR{effective_year}_P01232026_01102026.csv"
           variableMatch:
             payment_type: research
-        - url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_OWNRSHP_PGYR2023_P01232026_01102026.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_OWNRSHP_PGYR{effective_year}_P01232026_01102026.csv"
           variableMatch:
             payment_type: ownership
       rateLimit:
@@ -1507,7 +1507,7 @@ partitionedTables:
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsOpenPaymentsResponseTransformer"
@@ -1519,18 +1519,23 @@ partitionedTables:
         - ownership
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        # Open Payments data begins program year (CY) 2018, published the following
+        # June/July (publish year = data year + 1). start/minYear are publish-year floors;
+        # {effective_year} (= year - dataLag) is the program year used in the URL and is
+        # mapped to the `year` partition by the Iceberg writer. releaseMonth 7: before July
+        # the latest available program year is currentYear-2 (CMS publishes ~late June/July).
+        start: "${GOVDATA_START_YEAR:2019}"
+        minYear: 2019
         dataLag: 1
-        releaseMonth: 6
+        releaseMonth: 7
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "payment_type=*/year=*/"
       partition:
-        columns: [payment_type]
+        columns: [payment_type, year]
       options:
         compression: snappy
       iceberg:
