@@ -108,8 +108,12 @@ public class OtxResponseTransformer implements ResponseTransformer {
         LOGGER.info("OTX: full load mode (CYBER_OTX_DELTA_DAYS not set)");
       }
 
-      // First page: use the response if provided; otherwise fetch the (possibly modified) base URL
-      String firstPage = (response != null && !response.trim().isEmpty())
+      // First page: reuse the source-provided response only in full-load mode. In delta
+      // mode the source already fetched the UNFILTERED first page (the source URL has no
+      // modified_since), so its `next` cursor walks the entire subscribed list. Re-fetch the
+      // modified_since baseUrl instead so pagination follows the bounded, filtered chain.
+      boolean deltaActive = baseUrl.contains("modified_since=");
+      String firstPage = (!deltaActive && response != null && !response.trim().isEmpty())
           ? response : fetchPage(baseUrl, apiKey);
 
       if (firstPage == null) {
