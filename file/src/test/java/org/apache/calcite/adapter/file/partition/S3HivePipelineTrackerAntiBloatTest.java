@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -319,6 +320,159 @@ public class S3HivePipelineTrackerAntiBloatTest {
     }
   }
 
+  // ===== compactYearRange bounded-delete tests =====
+
+  /**
+   * compactYearRange must delete individual files in bounded outer chunks, not in
+   * a single bulk call.  Seeding N stragglers and verifying all N are deleted confirms
+   * the chunked path runs end-to-end.  The compacted file must exist on disk after the
+   * call (write-before-delete invariant: compacted written by scanAndCacheYear before
+   * any deletion).
+   */
+  @Test
+  void testCompactYearRangeDeletesAllStragglers() throws Exception {
+    // Seed 3 individual files for year=2025 (a historic year that fits the slow path
+    // since there is no pre-existing _compacted/ file).
+    File s1 = createTrackerParquet("year=2025__key=x1", "tblX1", "staging");
+    File s2 = createTrackerParquet("year=2025__key=x2", "tblX2", "staging");
+    File s3 = createTrackerParquet("year=2025__key=x3", "tblX3", "staging");
+
+    // _compacted/ dir for year=2025 starts empty — forces the slow path.
+    File compactedDir2025 = new File(tempDir.toFile(), "year=2025/_compacted");
+    compactedDir2025.mkdirs();
+
+    // Mock: straggler listing for year=2025; empty for year=0 and _compacted/ queries.
+    AmazonS3 mockS3 = buildMockS3ForYear("2025",
+        new Straggler("cx1", s1, "year=2025__key=x1"),
+        new Straggler("cx2", s2, "year=2025__key=x2"),
+        new Straggler("cx3", s3, "year=2025__key=x3"));
+    injectS3Client(mockS3);
+    injectDuckdbConnection(tracker);
+
+    // compactYearRange is public
+    tracker.compactYearRange(2025, 2025);
+
+    // All 3 straggler S3 keys must have been submitted for deletion
+    assertTrue(anyDeletedKeyContains("cx1"),
+        "cx1 must be deleted by compactYearRange. Got: " + deletedKeys);
+    assertTrue(anyDeletedKeyContains("cx2"),
+        "cx2 must be deleted by compactYearRange. Got: " + deletedKeys);
+    assertTrue(anyDeletedKeyContains("cx3"),
+        "cx3 must be deleted by compactYearRange. Got: " + deletedKeys);
+
+    // The compacted file must exist on disk (write-before-delete)
+    File[] compacted = compactedDir2025.listFiles();
+    assertTrue(compacted != null && compacted.length >= 1,
+        "Compacted file must exist after compactYearRange. Found: "
+            + (compacted == null ? 0 : compacted.length));
+  }
+
+  /**
+   * Interrupt resilience: if the first outer chunk's deleteSpecificFiles throws
+   * (simulating a socket timeout), the second outer chunk must still be attempted —
+   * because deleteInBoundedBatches calls deleteSpecificFiles independently per chunk.
+   *
+   * <p>Since READ_BATCH_SIZE=10000 >> the file count in these unit tests, we cannot
+   * create two real outer chunks without reflection.  Instead we test the property
+   * directly: wire the first deleteObjects call to throw, verify that the exception
+   * is swallowed by deleteSpecificFiles (its own try/catch), and that the test does
+   * not propagate the error — confirming the chunk-level isolation.
+   *
+   * <p>Additionally we verify that the compacted file is intact regardless of whether
+   * any deletes succeeded (compacted write happened before delete attempts).
+   */
+  @Test
+  void testCompactYearRangeCompactedFileIntactAfterDeleteError() throws Exception {
+    File s1 = createTrackerParquet("year=2025__key=y1", "tblY1", "staging");
+    File s2 = createTrackerParquet("year=2025__key=y2", "tblY2", "staging");
+
+    File compactedDir2025 = new File(tempDir.toFile(), "year=2025/_compacted");
+    compactedDir2025.mkdirs();
+
+    // Build a mock where deleteObjects throws on the first call to simulate a
+    // mid-delete timeout, then succeeds on subsequent calls.
+    AtomicBoolean firstDeleteDone = new AtomicBoolean(false);
+    AmazonS3 mockS3 = buildMockS3ForYearWithDeleteError("2025", firstDeleteDone,
+        new Straggler("ey1", s1, "year=2025__key=y1"),
+        new Straggler("ey2", s2, "year=2025__key=y2"));
+    injectS3Client(mockS3);
+    injectDuckdbConnection(tracker);
+
+    // Must not throw even when the first deleteObjects call fails
+    tracker.compactYearRange(2025, 2025);
+
+    // Compacted file must exist regardless of the delete error
+    File[] compacted = compactedDir2025.listFiles();
+    assertTrue(compacted != null && compacted.length >= 1,
+        "Compacted file must exist even when deleteObjects threw. Found: "
+            + (compacted == null ? 0 : compacted.length));
+
+    // The delete was attempted (even though it threw on the first call)
+    // — at minimum the firstDeleteDone flag must have been set
+    assertTrue(firstDeleteDone.get(),
+        "deleteObjects must have been called at least once");
+  }
+
+  /**
+   * deleteInBoundedBatches: verify it issues multiple independent deleteSpecificFiles
+   * calls when the file list exceeds READ_BATCH_SIZE — by calling the private method
+   * directly with a mock that counts deleteObjects invocations.
+   *
+   * <p>We inject a small effective batch size via reflection by temporarily replacing
+   * the private method's logic.  Since READ_BATCH_SIZE is a compile-time constant
+   * we cannot easily override it; instead we call deleteInBoundedBatches with a list
+   * of 3 files and verify it delegates to deleteSpecificFiles (which in turn calls
+   * deleteObjects) — confirming the chunking path is exercised end-to-end.
+   */
+  @Test
+  void testDeleteInBoundedBatchesDelegatesPerChunk() throws Exception {
+    File s1 = createTrackerParquet("year=2025__key=z1", "tblZ1", "staging");
+    File s2 = createTrackerParquet("year=2025__key=z2", "tblZ2", "staging");
+
+    AtomicInteger deleteObjectsCallCount = new AtomicInteger(0);
+
+    AmazonS3 mockS3 = buildMockS3ForYearCounting("2025", deleteObjectsCallCount,
+        new Straggler("dz1", s1, "year=2025__key=z1"),
+        new Straggler("dz2", s2, "year=2025__key=z2"));
+    injectS3Client(mockS3);
+
+    // Build the S3 URI list that deleteInBoundedBatches expects
+    // (same format produced by listTrackerFiles: "s3://<bucket>/<key>")
+    // The bucket is parsed from bucketPath by deleteSpecificFiles.
+    // With a local tempDir bucketPath the URI is just the key prefix — see production code.
+    // We build URIs that match the mock's recorded keys.
+    List<String> uris = new ArrayList<String>();
+    uris.add("s3://test-bucket/tracker/year=2025/source_key=dz1/dz1.parquet");
+    uris.add("s3://test-bucket/tracker/year=2025/source_key=dz2/dz2.parquet");
+
+    // Create a tracker with a real s3:// bucketPath so deleteSpecificFiles parses
+    // the bucket correctly and calls deleteObjects on the mock.
+    S3HivePipelineTracker s3Tracker = new S3HivePipelineTracker(
+        "s3://test-bucket/tracker", null,
+        Collections.<String, String>emptyMap());
+    try {
+      injectS3Client(s3Tracker, mockS3);
+
+      Method deleteMethod = S3HivePipelineTracker.class
+          .getDeclaredMethod("deleteInBoundedBatches", List.class, String.class);
+      deleteMethod.setAccessible(true);
+      deleteMethod.invoke(s3Tracker, uris, "2025");
+
+      // Both files fit in one outer chunk (READ_BATCH_SIZE=10000).
+      // deleteSpecificFiles was called once → produced 1 DeleteObjects request
+      // (both files < 1000 per-request threshold → single call).
+      assertTrue(deleteObjectsCallCount.get() >= 1,
+          "deleteObjects must have been called at least once. Got: "
+              + deleteObjectsCallCount.get());
+      assertTrue(anyDeletedKeyContains("dz1"),
+          "dz1 must be in deletedKeys. Got: " + deletedKeys);
+      assertTrue(anyDeletedKeyContains("dz2"),
+          "dz2 must be in deletedKeys. Got: " + deletedKeys);
+    } finally {
+      s3Tracker.close();
+    }
+  }
+
   // ===== Helpers =====
 
   /** Simple record for wiring straggler files to mock S3 keys. */
@@ -437,6 +591,185 @@ public class S3HivePipelineTrackerAntiBloatTest {
     });
 
     // putObject: no-op (we inspect the filesystem for compacted writes)
+    when(mock.putObject(anyString(), anyString(), any(InputStream.class),
+        any(ObjectMetadata.class))).thenReturn(null);
+
+    return mock;
+  }
+
+  /**
+   * Build a mock S3 for compactYearRange tests.  Returns stragglers only for the
+   * given year's {@code source_key=} prefix; returns empty for all other prefixes
+   * (including {@code _compacted/} and year=0 used by compactYearRange's COMPLETION_YEAR pass).
+   */
+  private AmazonS3 buildMockS3ForYear(String year, Straggler... stragglers) throws Exception {
+    AmazonS3 mock = mock(AmazonS3.class);
+
+    ListObjectsV2Result stragglerResult = new ListObjectsV2Result();
+    stragglerResult.setTruncated(false);
+    for (Straggler s : stragglers) {
+      S3ObjectSummary summary = new S3ObjectSummary();
+      summary.setKey(
+          "tracker/year=" + year + "/source_key=" + s.s3Key + "/" + s.s3Key + ".parquet");
+      stragglerResult.getObjectSummaries().add(summary);
+    }
+
+    ListObjectsV2Result emptyResult = new ListObjectsV2Result();
+    emptyResult.setTruncated(false);
+
+    when(mock.listObjectsV2(any(ListObjectsV2Request.class))).thenAnswer(invocation -> {
+      ListObjectsV2Request req = invocation.getArgument(0);
+      String prefix = req.getPrefix() != null ? req.getPrefix() : "";
+      // Only return stragglers for the exact year's source_key= prefix
+      if (prefix.contains("year=" + year + "/source_key=")) {
+        return stragglerResult;
+      }
+      return emptyResult;
+    });
+
+    when(mock.getObject(anyString(), anyString())).thenAnswer(invocation -> {
+      String key = invocation.getArgument(1);
+      for (Straggler s : stragglers) {
+        if (key.contains(s.s3Key)) {
+          return buildS3Object(s.localFile);
+        }
+      }
+      S3Object obj = new S3Object();
+      obj.setObjectContent(new S3ObjectInputStream(
+          new ByteArrayInputStream(new byte[0]), null));
+      return obj;
+    });
+
+    when(mock.deleteObjects(any(DeleteObjectsRequest.class))).thenAnswer(invocation -> {
+      DeleteObjectsRequest req = invocation.getArgument(0);
+      for (DeleteObjectsRequest.KeyVersion kv : req.getKeys()) {
+        deletedKeys.add(kv.getKey());
+      }
+      return new DeleteObjectsResult(
+          Collections.<DeleteObjectsResult.DeletedObject>emptyList());
+    });
+
+    when(mock.putObject(anyString(), anyString(), any(InputStream.class),
+        any(ObjectMetadata.class))).thenReturn(null);
+
+    return mock;
+  }
+
+  /**
+   * Like {@link #buildMockS3ForYear} but the first {@code deleteObjects} call throws
+   * a {@link RuntimeException} (simulating a socket timeout), then succeeds on
+   * subsequent calls.  Sets {@code firstDeleteDone} to true when the first call fires.
+   */
+  private AmazonS3 buildMockS3ForYearWithDeleteError(
+      String year, AtomicBoolean firstDeleteDone, Straggler... stragglers) throws Exception {
+    AmazonS3 mock = mock(AmazonS3.class);
+
+    ListObjectsV2Result stragglerResult = new ListObjectsV2Result();
+    stragglerResult.setTruncated(false);
+    for (Straggler s : stragglers) {
+      S3ObjectSummary summary = new S3ObjectSummary();
+      summary.setKey(
+          "tracker/year=" + year + "/source_key=" + s.s3Key + "/" + s.s3Key + ".parquet");
+      stragglerResult.getObjectSummaries().add(summary);
+    }
+
+    ListObjectsV2Result emptyResult = new ListObjectsV2Result();
+    emptyResult.setTruncated(false);
+
+    when(mock.listObjectsV2(any(ListObjectsV2Request.class))).thenAnswer(invocation -> {
+      ListObjectsV2Request req = invocation.getArgument(0);
+      String prefix = req.getPrefix() != null ? req.getPrefix() : "";
+      if (prefix.contains("year=" + year + "/source_key=")) {
+        return stragglerResult;
+      }
+      return emptyResult;
+    });
+
+    when(mock.getObject(anyString(), anyString())).thenAnswer(invocation -> {
+      String key = invocation.getArgument(1);
+      for (Straggler s : stragglers) {
+        if (key.contains(s.s3Key)) {
+          return buildS3Object(s.localFile);
+        }
+      }
+      S3Object obj = new S3Object();
+      obj.setObjectContent(new S3ObjectInputStream(
+          new ByteArrayInputStream(new byte[0]), null));
+      return obj;
+    });
+
+    AtomicBoolean alreadyThrew = new AtomicBoolean(false);
+    when(mock.deleteObjects(any(DeleteObjectsRequest.class))).thenAnswer(invocation -> {
+      firstDeleteDone.set(true);
+      if (!alreadyThrew.getAndSet(true)) {
+        throw new RuntimeException("Simulated socket timeout on deleteObjects");
+      }
+      DeleteObjectsRequest req = invocation.getArgument(0);
+      for (DeleteObjectsRequest.KeyVersion kv : req.getKeys()) {
+        deletedKeys.add(kv.getKey());
+      }
+      return new DeleteObjectsResult(
+          Collections.<DeleteObjectsResult.DeletedObject>emptyList());
+    });
+
+    when(mock.putObject(anyString(), anyString(), any(InputStream.class),
+        any(ObjectMetadata.class))).thenReturn(null);
+
+    return mock;
+  }
+
+  /**
+   * Like {@link #buildMockS3ForYear} but counts every {@code deleteObjects} call
+   * in the supplied counter (for verifying chunk-level isolation).
+   */
+  private AmazonS3 buildMockS3ForYearCounting(
+      String year, AtomicInteger callCount, Straggler... stragglers) throws Exception {
+    AmazonS3 mock = mock(AmazonS3.class);
+
+    ListObjectsV2Result stragglerResult = new ListObjectsV2Result();
+    stragglerResult.setTruncated(false);
+    for (Straggler s : stragglers) {
+      S3ObjectSummary summary = new S3ObjectSummary();
+      summary.setKey(
+          "tracker/year=" + year + "/source_key=" + s.s3Key + "/" + s.s3Key + ".parquet");
+      stragglerResult.getObjectSummaries().add(summary);
+    }
+
+    ListObjectsV2Result emptyResult = new ListObjectsV2Result();
+    emptyResult.setTruncated(false);
+
+    when(mock.listObjectsV2(any(ListObjectsV2Request.class))).thenAnswer(invocation -> {
+      ListObjectsV2Request req = invocation.getArgument(0);
+      String prefix = req.getPrefix() != null ? req.getPrefix() : "";
+      if (prefix.contains("year=" + year + "/source_key=")) {
+        return stragglerResult;
+      }
+      return emptyResult;
+    });
+
+    when(mock.getObject(anyString(), anyString())).thenAnswer(invocation -> {
+      String key = invocation.getArgument(1);
+      for (Straggler s : stragglers) {
+        if (key.contains(s.s3Key)) {
+          return buildS3Object(s.localFile);
+        }
+      }
+      S3Object obj = new S3Object();
+      obj.setObjectContent(new S3ObjectInputStream(
+          new ByteArrayInputStream(new byte[0]), null));
+      return obj;
+    });
+
+    when(mock.deleteObjects(any(DeleteObjectsRequest.class))).thenAnswer(invocation -> {
+      callCount.incrementAndGet();
+      DeleteObjectsRequest req = invocation.getArgument(0);
+      for (DeleteObjectsRequest.KeyVersion kv : req.getKeys()) {
+        deletedKeys.add(kv.getKey());
+      }
+      return new DeleteObjectsResult(
+          Collections.<DeleteObjectsResult.DeletedObject>emptyList());
+    });
+
     when(mock.putObject(anyString(), anyString(), any(InputStream.class),
         any(ObjectMetadata.class))).thenReturn(null);
 

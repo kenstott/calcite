@@ -451,25 +451,63 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       deleteCompactedFiles(String.valueOf(year));
     }
 
-    // Compact table completion markers (year=0)
+    // Compact table completion markers (year=0).
     // scanAndCacheYear returns the list of individual files it read.
-    // After compaction succeeds, we delete exactly those files (not a fresh listing).
+    // The compacted file is written inside scanAndCacheYear (slow-path end) before
+    // returning, so write-before-delete is satisfied at the year level.
+    // Delete in bounded READ_BATCH_SIZE outer chunks so a socket timeout or SIGKILL
+    // after chunk N still leaves chunks 0..N-1 permanently cleaned; the next
+    // --compact-only run restarts from scratch (S3 quiet-delete of already-gone
+    // keys is a no-op) and the backlog decreases monotonically.
     List<String> scannedFiles = scanAndCacheYear(COMPLETION_YEAR);
     if (scannedFiles != null && !scannedFiles.isEmpty()) {
-      deleteSpecificFiles(scannedFiles, COMPLETION_YEAR);
+      deleteInBoundedBatches(scannedFiles, COMPLETION_YEAR);
     }
 
     // Compact each data year (all phases in one pass)
     for (int year = startYear; year <= endYear; year++) {
-      scannedFiles = scanAndCacheYear(String.valueOf(year));
+      String yearStr = String.valueOf(year);
+      scannedFiles = scanAndCacheYear(yearStr);
       if (scannedFiles != null && !scannedFiles.isEmpty()) {
-        deleteSpecificFiles(scannedFiles, String.valueOf(year));
+        deleteInBoundedBatches(scannedFiles, yearStr);
       }
     }
 
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("Tracker compaction complete: years {}-{} in {}ms",
         startYear, endYear, elapsed);
+  }
+
+  /**
+   * Delete a list of individual S3 tracker files in bounded outer chunks of
+   * {@link #READ_BATCH_SIZE}, calling {@link #deleteSpecificFiles} per chunk.
+   *
+   * <p>A single {@link #deleteSpecificFiles} call over hundreds of thousands of
+   * keys issues ~200 sequential {@code DeleteObjects} requests; a socket timeout
+   * on any one of them aborts all remaining deletions.  Chunking at the outer
+   * level means a timeout after chunk N still permanently removed chunks 0..N-1,
+   * so the next run finds a strictly smaller straggler set.  S3 quiet-delete of
+   * already-absent keys is a no-op, so re-processing earlier chunks is safe.
+   *
+   * <p>Callers must ensure the corresponding compacted file was already durably
+   * written before calling this method (write-before-delete invariant).
+   *
+   * @param files list of S3 URIs to delete (the exact set returned by a prior scan)
+   * @param year  year label for logging
+   */
+  private void deleteInBoundedBatches(List<String> files, String year) {
+    int total = files.size();
+    int chunks = (total + READ_BATCH_SIZE - 1) / READ_BATCH_SIZE;
+    LOGGER.info("Deleting {} individual tracker files for year={} in {} chunk(s) of up to {}",
+        total, year, chunks, READ_BATCH_SIZE);
+    for (int i = 0; i < total; i += READ_BATCH_SIZE) {
+      int end = Math.min(i + READ_BATCH_SIZE, total);
+      List<String> chunk = files.subList(i, end);
+      int chunkNum = (i / READ_BATCH_SIZE) + 1;
+      LOGGER.info("Deleting chunk {}/{} ({} files) for year={}",
+          chunkNum, chunks, chunk.size(), year);
+      deleteSpecificFiles(new ArrayList<String>(chunk), year);
+    }
   }
 
   /**
