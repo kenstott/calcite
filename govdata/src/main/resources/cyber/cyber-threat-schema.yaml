@@ -268,22 +268,18 @@ partitionedTables:
       - name: sha256
         type: string
         nullable: false
-        source: sha256_hash
-        comment: SHA-256 hash
+        comment: SHA-256 hash (transformer emits final column names; no source remap)
       - name: md5
         type: string
         nullable: true
-        source: md5_hash
         comment: MD5 hash
       - name: sha1
         type: string
         nullable: true
-        source: sha1_hash
         comment: SHA-1 hash
       - name: first_seen_utc
         type: string
         nullable: true
-        source: first_seen
         comment: First seen UTC timestamp
       - name: reporter
         type: string
@@ -296,7 +292,6 @@ partitionedTables:
       - name: file_type
         type: string
         nullable: true
-        source: file_type_guess
         comment: Detected file type
       - name: mime_type
         type: string
@@ -313,7 +308,6 @@ partitionedTables:
       - name: vt_percent
         type: double
         nullable: true
-        source: vtpercent
         comment: VirusTotal detection percentage (null when n/a)
       - name: imphash
         type: string
