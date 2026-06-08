@@ -95,8 +95,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vulnerabilities', 'row_count',
-  CASE WHEN n < 120000 THEN 'fail' ELSE 'pass' END,
-  n, 120000, 'representative ~121k NVD CVE records for the DQ window'
+  CASE WHEN n < 25000 THEN 'fail' ELSE 'pass' END,
+  n, 25000, 'DQ-level (GOVDATA_START_YEAR=2025 historical window ~31k NVD CVEs)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/cyber_vuln/vulnerabilities', allow_moved_paths := true));
 
 -- T3: sample
@@ -160,8 +160,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vulnerability_cwes', 'row_count',
-  CASE WHEN n < 100000 THEN 'fail' ELSE 'pass' END,
-  n, 100000, 'one row per (cve_id, cwe_id) pair from NVD'
+  CASE WHEN n < 28000 THEN 'fail' ELSE 'pass' END,
+  n, 28000, 'DQ-level (~35k UNNEST pairs from the 2025 NVD window)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/cyber_vuln/vulnerability_cwes', allow_moved_paths := true));
 
 -- T3: sample
@@ -359,8 +359,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'osv_vulnerabilities', 'row_count',
-  CASE WHEN n < 40000 THEN 'fail' ELSE 'pass' END,
-  n, 40000, 'OSV entries (representative ~40k for the DQ window)'
+  CASE WHEN n < 16000 THEN 'fail' ELSE 'pass' END,
+  n, 16000, 'DQ-level (OSV snapshot ~20k for the configured ecosystems)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/cyber_vuln/osv_vulnerabilities', allow_moved_paths := true));
 
 -- T3: sample
@@ -485,8 +485,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'advisories', 'row_count',
-  CASE WHEN n < 20 THEN 'fail' ELSE 'pass' END,
-  n, 20, 'CISA cybersecurity advisories (ICSA, AA series); RSS feed capped at ~30 items'
+  CASE WHEN n < 10 THEN 'fail' ELSE 'pass' END,
+  n, 10, 'DQ-level (CISA CSAF 2025 window ~20 advisories)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/cyber_vuln/advisories', allow_moved_paths := true));
 
 -- T3: sample
