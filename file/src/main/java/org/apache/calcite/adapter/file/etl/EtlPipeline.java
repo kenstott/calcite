@@ -548,6 +548,7 @@ public class EtlPipeline {
       // If freshness: is configured and the source hasn't changed since the last successful
       // commit, skip the fetch and the materialize — no new Iceberg snapshot is created.
       // hash-type is post-download and is handled after the fetch; deferred for now.
+      //
       FreshnessConfig freshnessConfig = config.getFreshness();
       if (freshnessConfig != null
           && freshnessConfig.getType() != FreshnessConfig.Type.HASH
@@ -559,7 +560,14 @@ public class EtlPipeline {
           String currentToken = FreshnessCheck.token(
               freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
           String previousToken = incrementalTracker.getFreshnessToken(pipelineName);
-          if (!FreshnessCheck.changed(previousToken, currentToken)) {
+          // Only skip when the source is unchanged AND there is a committed table to preserve.
+          // forceReprocessAll is set above when there's no Iceberg data (or the marker was
+          // cleared/stale): in that case we must re-fetch and re-materialize even if the token
+          // matches, otherwise a dq-rebuild that tears down the Iceberg metadata but leaves the
+          // freshness token would skip forever, leaving the table unscannable (DuckDB
+          // "Could not guess Iceberg table version"). We still probe so the token is captured
+          // and persisted after the commit, letting the NEXT run skip normally.
+          if (!forceReprocessAll && !FreshnessCheck.changed(previousToken, currentToken)) {
             long elapsed = System.currentTimeMillis() - startTime;
             LOGGER.info("Pipeline '{}': freshness check UNCHANGED (token={}) — skipping fetch "
                 + "and commit ({}ms)", pipelineName, currentToken, elapsed);
@@ -571,10 +579,16 @@ public class EtlPipeline {
                 .elapsedMs(elapsed)
                 .build();
           }
-          LOGGER.info("Pipeline '{}': freshness check CHANGED (prev={}, cur={}) — proceeding",
-              pipelineName,
-              previousToken == null ? "<none>" : previousToken,
-              currentToken == null ? "<null>" : currentToken);
+          if (forceReprocessAll && !FreshnessCheck.changed(previousToken, currentToken)) {
+            LOGGER.info("Pipeline '{}': freshness token unchanged but reprocessing (no committed "
+                + "data / cleared marker) — proceeding, will re-persist token={}",
+                pipelineName, currentToken);
+          } else {
+            LOGGER.info("Pipeline '{}': freshness check CHANGED (prev={}, cur={}) — proceeding",
+                pipelineName,
+                previousToken == null ? "<none>" : previousToken,
+                currentToken == null ? "<null>" : currentToken);
+          }
           // Capture so we can persist it after a successful commit
           probedFreshnessToken = currentToken;
         } catch (Exception e) {
