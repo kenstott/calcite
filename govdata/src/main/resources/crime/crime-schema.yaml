@@ -685,6 +685,734 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # CDE RETA - Return A agency monthly offense + clearance counts (bulk master file)
+  # ---------------------------------------------------------------------------
+  - name: cde_reta
+    pattern: "type=reta/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FBI Return A master file: agency-level monthly counts of Part I offenses
+      (reported/unfounded/actual/cleared/juvenile-cleared) plus officers killed and
+      assaulted, from the CDE bulk download (one national fixed-width file per year)
+      instead of per-ORI API calls. One row per agency (ORI7) per month, unpivoted from
+      the wide 12-month record. Cross-references cde_agencies via ori (ORI7 prefix).
+
+    dimensions:
+      type:
+        - reta
+      year: *crime_year_range
+
+    columns:
+      - name: identifier_code
+        type: string
+        nullable: true
+        comment: Return A header field identifier code
+      - name: state
+        type: string
+        nullable: true
+        comment: Return A header field state
+      - name: ori
+        type: string
+        nullable: false
+        comment: 7-character originating agency identifier (ORI7)
+      - name: population_group
+        type: string
+        nullable: true
+        comment: Return A header field population group
+      - name: country_division
+        type: string
+        nullable: true
+        comment: Return A header field country division
+      - name: year
+        type: integer
+        nullable: false
+        comment: Reporting year (4-digit, from the file batch)
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month 1-12 (unpivoted from the monthly record groups)
+      - name: sequence_number
+        type: string
+        nullable: true
+        comment: Return A header field sequence number
+      - name: juvenile_age
+        type: string
+        nullable: true
+        comment: Return A header field juvenile age
+      - name: core_city_indication
+        type: string
+        nullable: true
+        comment: Return A header field core city indication
+      - name: covered_by_ori
+        type: string
+        nullable: true
+        comment: Return A header field covered by ori
+      - name: covered_by_population_group
+        type: string
+        nullable: true
+        comment: Return A header field covered by population group
+      - name: last_update
+        type: string
+        nullable: true
+        comment: Return A header field last update
+      - name: fbi_field_office
+        type: string
+        nullable: true
+        comment: Return A header field fbi field office
+      - name: number_of_months_reported
+        type: integer
+        nullable: true
+        comment: Return A header field number of months reported
+      - name: agency_count
+        type: integer
+        nullable: true
+        comment: Return A header field agency count
+      - name: population_1
+        type: long
+        nullable: true
+        comment: Return A header field population 1
+      - name: population_1_county
+        type: long
+        nullable: true
+        comment: Return A header field population 1 county
+      - name: population_1_msa
+        type: long
+        nullable: true
+        comment: Return A header field population 1 msa
+      - name: population_2
+        type: long
+        nullable: true
+        comment: Return A header field population 2
+      - name: population_2_county
+        type: long
+        nullable: true
+        comment: Return A header field population 2 county
+      - name: population_2_msa
+        type: long
+        nullable: true
+        comment: Return A header field population 2 msa
+      - name: population_3
+        type: long
+        nullable: true
+        comment: Return A header field population 3
+      - name: population_3_county
+        type: long
+        nullable: true
+        comment: Return A header field population 3 county
+      - name: population_3_msa
+        type: long
+        nullable: true
+        comment: Return A header field population 3 msa
+      - name: last_population_1
+        type: long
+        nullable: true
+        comment: Return A header field last population 1
+      - name: last_population_2
+        type: long
+        nullable: true
+        comment: Return A header field last population 2
+      - name: last_population_3
+        type: long
+        nullable: true
+        comment: Return A header field last population 3
+      - name: population_source
+        type: string
+        nullable: true
+        comment: Return A header field population source
+      - name: followup_indication
+        type: string
+        nullable: true
+        comment: Return A header field followup indication
+      - name: special_mailing_group
+        type: string
+        nullable: true
+        comment: Return A header field special mailing group
+      - name: special_mailing_address
+        type: string
+        nullable: true
+        comment: Return A header field special mailing address
+      - name: agency_name
+        type: string
+        nullable: true
+        comment: Return A header field agency name
+      - name: agency_state_name
+        type: string
+        nullable: true
+        comment: Return A header field agency state name
+      - name: first_line_of_mailing_address
+        type: string
+        nullable: true
+        comment: Return A header field first line of mailing address
+      - name: second_line_of_mailing_address
+        type: string
+        nullable: true
+        comment: Return A header field second line of mailing address
+      - name: third_line_of_mailing_address
+        type: string
+        nullable: true
+        comment: Return A header field third line of mailing address
+      - name: fourth_line_of_mailing_address
+        type: string
+        nullable: true
+        comment: Return A header field fourth line of mailing address
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: Return A header field zip code
+      - name: population_group_in_previous_year
+        type: string
+        nullable: true
+        comment: Return A header field population group in previous year
+      - name: blank
+        type: string
+        nullable: true
+        comment: Unused filler field from the Return A record
+      - name: month_included_in
+        type: string
+        nullable: true
+        comment: Monthly card field month included in
+      - name: date_of_last_update
+        type: string
+        nullable: true
+        comment: Monthly card field date of last update
+      - name: card_unfounded_type
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card unfounded type
+      - name: card_actual_type
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card actual type
+      - name: card_total_cleared_type
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card total cleared type
+      - name: card_cleared_18_type
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card cleared 18 type
+      - name: card_officers_type
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card officers type
+      - name: card_unfounded_pt
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card unfounded pt
+      - name: card_actual_pt
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card actual pt
+      - name: card_total_cleared_pt
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card total cleared pt
+      - name: card_cleared_18_pt
+        type: string
+        nullable: true
+        comment: Monthly reporting card indicator card cleared 18 pt
+      - name: unfounded_murder
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded murder
+      - name: unfounded_manslaughter
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded manslaughter
+      - name: unfounded_rape_total
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded rape total
+      - name: unfounded_rape_by_force
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded rape by force
+      - name: unfounded_rape_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded rape attempted
+      - name: unfounded_robbery_total
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded robbery total
+      - name: unfounded_robbery_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded robbery with a gun
+      - name: unfounded_robbery_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded robbery with a knife
+      - name: unfounded_robbery_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded robbery other weapon
+      - name: unfounded_robbery_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded robbery unarmed
+      - name: unfounded_assault_total
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded assault total
+      - name: unfounded_assault_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded assault with a gun
+      - name: unfounded_assault_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded assault with a knife
+      - name: unfounded_assault_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded assault other weapon
+      - name: unfounded_assault_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded assault unarmed
+      - name: unfounded_assault_simple
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded assault simple
+      - name: unfounded_burglary_total
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded burglary total
+      - name: unfounded_burglary_force_entry
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded burglary force entry
+      - name: unfounded_burglary_nonforce_entry
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded burglary nonforce entry
+      - name: unfounded_burglary_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded burglary attempted
+      - name: unfounded_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded theft total
+      - name: unfounded_motor_vehicle_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded motor vehicle theft total
+      - name: unfounded_motor_vehicle_theft_car
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded motor vehicle theft car
+      - name: unfounded_motor_vehicle_theft_truck
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded motor vehicle theft truck
+      - name: unfounded_motor_vehicle_theft_other
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded motor vehicle theft other
+      - name: unfounded_all_crimes
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded all crimes
+      - name: unfounded_theft_under50_dollar
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded theft under50 dollar
+      - name: unfounded_blank
+        type: long
+        nullable: true
+        comment: Monthly count of unfounded blank
+      - name: actual_murder
+        type: long
+        nullable: true
+        comment: Monthly count of actual murder
+      - name: actual_manslaughter
+        type: long
+        nullable: true
+        comment: Monthly count of actual manslaughter
+      - name: actual_rape_total
+        type: long
+        nullable: true
+        comment: Monthly count of actual rape total
+      - name: actual_rape_by_force
+        type: long
+        nullable: true
+        comment: Monthly count of actual rape by force
+      - name: actual_rape_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of actual rape attempted
+      - name: actual_robbery_total
+        type: long
+        nullable: true
+        comment: Monthly count of actual robbery total
+      - name: actual_robbery_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of actual robbery with a gun
+      - name: actual_robbery_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of actual robbery with a knife
+      - name: actual_robbery_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of actual robbery other weapon
+      - name: actual_robbery_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of actual robbery unarmed
+      - name: actual_assault_total
+        type: long
+        nullable: true
+        comment: Monthly count of actual assault total
+      - name: actual_assault_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of actual assault with a gun
+      - name: actual_assault_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of actual assault with a knife
+      - name: actual_assault_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of actual assault other weapon
+      - name: actual_assault_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of actual assault unarmed
+      - name: actual_assault_simple
+        type: long
+        nullable: true
+        comment: Monthly count of actual assault simple
+      - name: actual_burglary_total
+        type: long
+        nullable: true
+        comment: Monthly count of actual burglary total
+      - name: actual_burglary_force_entry
+        type: long
+        nullable: true
+        comment: Monthly count of actual burglary force entry
+      - name: actual_burglary_nonforce_entry
+        type: long
+        nullable: true
+        comment: Monthly count of actual burglary nonforce entry
+      - name: actual_burglary_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of actual burglary attempted
+      - name: actual_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of actual theft total
+      - name: actual_motor_vehicle_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of actual motor vehicle theft total
+      - name: actual_motor_vehicle_theft_car
+        type: long
+        nullable: true
+        comment: Monthly count of actual motor vehicle theft car
+      - name: actual_motor_vehicle_theft_truck
+        type: long
+        nullable: true
+        comment: Monthly count of actual motor vehicle theft truck
+      - name: actual_motor_vehicle_theft_other
+        type: long
+        nullable: true
+        comment: Monthly count of actual motor vehicle theft other
+      - name: actual_all_crimes
+        type: long
+        nullable: true
+        comment: Monthly count of actual all crimes
+      - name: actual_theft_under50_dollar
+        type: long
+        nullable: true
+        comment: Monthly count of actual theft under50 dollar
+      - name: actual_blank
+        type: long
+        nullable: true
+        comment: Monthly count of actual blank
+      - name: total_cleared_murder
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared murder
+      - name: total_cleared_manslaughter
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared manslaughter
+      - name: total_cleared_rape_total
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared rape total
+      - name: total_cleared_rape_by_force
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared rape by force
+      - name: total_cleared_rape_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared rape attempted
+      - name: total_cleared_robbery_total
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared robbery total
+      - name: total_cleared_robbery_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared robbery with a gun
+      - name: total_cleared_robbery_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared robbery with a knife
+      - name: total_cleared_robbery_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared robbery other weapon
+      - name: total_cleared_robbery_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared robbery unarmed
+      - name: total_cleared_assault_total
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared assault total
+      - name: total_cleared_assault_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared assault with a gun
+      - name: total_cleared_assault_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared assault with a knife
+      - name: total_cleared_assault_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared assault other weapon
+      - name: total_cleared_assault_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared assault unarmed
+      - name: total_cleared_assault_simple
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared assault simple
+      - name: total_cleared_burglary_total
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared burglary total
+      - name: total_cleared_burglary_force_entry
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared burglary force entry
+      - name: total_cleared_burglary_nonforce_entry
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared burglary nonforce entry
+      - name: total_cleared_burglary_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared burglary attempted
+      - name: total_cleared_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared theft total
+      - name: total_cleared_motor_vehicle_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared motor vehicle theft total
+      - name: total_cleared_motor_vehicle_theft_car
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared motor vehicle theft car
+      - name: total_cleared_motor_vehicle_theft_truck
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared motor vehicle theft truck
+      - name: total_cleared_motor_vehicle_theft_other
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared motor vehicle theft other
+      - name: total_cleared_all_crimes
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared all crimes
+      - name: total_cleared_theft_under50_dollar
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared theft under50 dollar
+      - name: total_cleared_blank
+        type: long
+        nullable: true
+        comment: Monthly count of total cleared blank
+      - name: cleared_18_murder
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 murder
+      - name: cleared_18_manslaughter
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 manslaughter
+      - name: cleared_18_rape_total
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 rape total
+      - name: cleared_18_rape_by_force
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 rape by force
+      - name: cleared_18_rape_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 rape attempted
+      - name: cleared_18_robbery_total
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 robbery total
+      - name: cleared_18_robbery_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 robbery with a gun
+      - name: cleared_18_robbery_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 robbery with a knife
+      - name: cleared_18_robbery_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 robbery other weapon
+      - name: cleared_18_robbery_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 robbery unarmed
+      - name: cleared_18_assault_total
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 assault total
+      - name: cleared_18_assault_with_a_gun
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 assault with a gun
+      - name: cleared_18_assault_with_a_knife
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 assault with a knife
+      - name: cleared_18_assault_other_weapon
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 assault other weapon
+      - name: cleared_18_assault_unarmed
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 assault unarmed
+      - name: cleared_18_assault_simple
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 assault simple
+      - name: cleared_18_burglary_total
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 burglary total
+      - name: cleared_18_burglary_force_entry
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 burglary force entry
+      - name: cleared_18_burglary_nonforce_entry
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 burglary nonforce entry
+      - name: cleared_18_burglary_attempted
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 burglary attempted
+      - name: cleared_18_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 theft total
+      - name: cleared_18_motor_vehicle_theft_total
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 motor vehicle theft total
+      - name: cleared_18_motor_vehicle_theft_car
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 motor vehicle theft car
+      - name: cleared_18_motor_vehicle_theft_truck
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 motor vehicle theft truck
+      - name: cleared_18_motor_vehicle_theft_other
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 motor vehicle theft other
+      - name: cleared_18_all_crimes
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 all crimes
+      - name: cleared_18_theft_under50_dollar
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 theft under50 dollar
+      - name: cleared_18_blank
+        type: long
+        nullable: true
+        comment: Monthly count of cleared 18 blank
+      - name: officers_killed_by_felony
+        type: long
+        nullable: true
+        comment: Monthly count of officers killed by felony
+      - name: officers_killed_by_accident
+        type: long
+        nullable: true
+        comment: Monthly count of officers killed by accident
+      - name: officers_assaulted
+        type: long
+        nullable: true
+        comment: Monthly count of officers assaulted
+
+
+    source:
+      type: http
+      url: "https://cde.ucr.cjis.gov/LATEST/s3/signedurl?key=master_files/reta/reta-{year}.zip"
+      method: GET
+      urlResolver: {}
+      extractPattern: "*RETA*MASTER*.txt"
+      response:
+        format: fixed_width
+      fixedWidth:
+        encoding: ISO-8859-1
+        columnsResource: "crime/reta_layout.json"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.crime.RetaMonthUnpivotTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=reta/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: cde_reta
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
   # CDE ARRESTS - Arrest data by state, offense, age, sex, race
   # ---------------------------------------------------------------------------
   - name: cde_arrests
@@ -1587,6 +2315,11 @@ constraints:
       - columns: [ori]
         targetTable: cde_agencies
         targetColumns: [ori]
+
+  # No FK to cde_agencies: the Return A master file carries the 7-character ORI7,
+  # whereas cde_agencies.ori is the 9-character ORI9 — the mapping is resolved in views.
+  cde_reta:
+    primaryKey: [ori, year, month]
 
   cde_arrests:
     primaryKey: [state_abbr, year, section, category, label]
