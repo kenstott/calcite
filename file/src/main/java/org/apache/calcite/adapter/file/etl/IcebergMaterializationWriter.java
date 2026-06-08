@@ -706,25 +706,57 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // When effectiveYearField is declared, fan rows by their per-row effective year value.
     // A single API response may contain rows spanning multiple effective years.
+    // When effectiveMonthField is also declared, fan simultaneously by month→quarter so that
+    // schemas with [type, year, quarter] partitions route rows into the correct quarter bucket.
     if (effectiveYearField != null) {
-      Map<String, List<Map<String, Object>>> byYear =
+      // Key is "year" when effectiveMonthField is absent, or "year|quarter" when present.
+      Map<String, List<Map<String, Object>>> byPartition =
           new LinkedHashMap<String, List<Map<String, Object>>>();
       for (Map<String, Object> row : rows) {
-        Object val = getValueCaseInsensitive(row, effectiveYearField);
-        String rowYear = val != null ? String.valueOf(val) : resolvedVars.get("year");
+        Object yearVal = getValueCaseInsensitive(row, effectiveYearField);
+        String rowYear = yearVal != null ? String.valueOf(yearVal) : resolvedVars.get("year");
         if (rowYear == null) {
           rowYear = partitionVariables.get("year");
         }
-        List<Map<String, Object>> group = byYear.get(rowYear);
+
+        String partKey;
+        if (effectiveMonthField != null) {
+          Object monthVal = getValueCaseInsensitive(row, effectiveMonthField);
+          String rowQuarter = resolvedVars.get("quarter");
+          if (monthVal != null) {
+            try {
+              int month = Integer.parseInt(String.valueOf(monthVal).trim());
+              rowQuarter = String.valueOf(((month - 1) / 3) + 1);
+            } catch (NumberFormatException ignored) {
+              // keep rowQuarter from resolvedVars
+            }
+          }
+          if (rowQuarter == null) {
+            rowQuarter = partitionVariables.get("quarter");
+          }
+          partKey = rowYear + "|" + rowQuarter;
+        } else {
+          partKey = rowYear;
+        }
+
+        List<Map<String, Object>> group = byPartition.get(partKey);
         if (group == null) {
           group = new ArrayList<Map<String, Object>>();
-          byYear.put(rowYear, group);
+          byPartition.put(partKey, group);
         }
         group.add(row);
       }
-      for (Map.Entry<String, List<Map<String, Object>>> entry : byYear.entrySet()) {
+      for (Map.Entry<String, List<Map<String, Object>>> entry : byPartition.entrySet()) {
         Map<String, String> rowVars = new LinkedHashMap<String, String>(resolvedVars);
-        rowVars.put("year", entry.getKey());
+        if (effectiveMonthField != null) {
+          String[] parts = entry.getKey().split("\\|", 2);
+          rowVars.put("year", parts[0]);
+          if (parts.length > 1) {
+            rowVars.put("quarter", parts[1]);
+          }
+        } else {
+          rowVars.put("year", entry.getKey());
+        }
         processBatchPartition(entry.getValue(), rowVars);
       }
       return;

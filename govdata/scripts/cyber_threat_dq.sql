@@ -34,7 +34,7 @@ SELECT
   'cyber_threat', 'attack_techniques', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -42,10 +42,10 @@ SELECT
   'cyber_threat', 'attack_techniques', 'T2_row_count',
   CASE WHEN COUNT(*) >= 600 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 600, 'expected >= 600 ATT&CK techniques'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -56,23 +56,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type', 'data_sources', 'detection')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'attack_techniques', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'domain', 'data_sources', 'detection')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (technique_id NOT NULL)
@@ -82,7 +81,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'technique_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true)
 WHERE technique_id IS NULL;
 
 -- T7: expected_values — tactic_short_names must be non-null for non-subtechniques
@@ -94,7 +93,7 @@ SELECT
   'non-subtechnique rows with null tactic_short_names'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_techniques', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true)
   WHERE is_subtechnique = false
     AND tactic_short_names IS NULL
 ) t;
@@ -109,7 +108,7 @@ SELECT
   'cyber_threat', 'ioc_urls', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -117,10 +116,10 @@ SELECT
   'cyber_threat', 'ioc_urls', 'T2_row_count',
   CASE WHEN COUNT(*) >= 1000 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1000, 'expected >= 1000 URL IOCs'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -131,23 +130,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type', 'first_seen', 'url_id', 'date_added')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_urls', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen', 'url_id', 'date_added', 'threat', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (url NOT NULL)
@@ -157,7 +155,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'url IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true)
 WHERE url IS NULL;
 
 -- T7: expected_values — url must have a known malware-distribution scheme
@@ -169,7 +167,7 @@ SELECT
   'url scheme not in known set (http, https, ftp, ftps, tftp)'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_urls', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true)
   WHERE url IS NOT NULL
     AND url NOT LIKE 'http%'
     AND url NOT LIKE 'ftp%'
@@ -186,7 +184,7 @@ SELECT
   'cyber_threat', 'ioc_hashes', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'warn' END,
   COUNT(*), 1, 'MalwareBazaar feed can return empty on some cycles'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -194,10 +192,10 @@ SELECT
   'cyber_threat', 'ioc_hashes', 'T2_row_count',
   CASE WHEN COUNT(*) >= 500 THEN 'pass' ELSE 'warn' END,
   COUNT(*), 500, 'MalwareBazaar recent export ~600-700/cycle; accumulates over time'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -208,7 +206,7 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true))
   WHERE null_percentage = 100.0
     -- clamav/vt_percent/imphash/signature are optional MalwareBazaar enrichment fields that
     -- can be 100% n/a in a single recent batch; exclude from the all-null gate.
@@ -219,14 +217,14 @@ FROM (
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_hashes', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen', 'clamav', 'vt_percent', 'imphash', 'signature', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (sha256 NOT NULL)
@@ -236,7 +234,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'sha256 IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true)
 WHERE sha256 IS NULL;
 
 -- T7: expected_values — sha256 must be 64 hex chars
@@ -248,7 +246,7 @@ SELECT
   'sha256 not 64-char hex string'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_hashes', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true)
   WHERE sha256 IS NOT NULL
     AND LENGTH(sha256) != 64
 ) t;
@@ -263,7 +261,7 @@ SELECT
   'cyber_threat', 'ioc_ips', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true);
 
 -- T2: row_count (low threshold — source has ~5 entries)
 INSERT INTO dq_results
@@ -271,10 +269,10 @@ SELECT
   'cyber_threat', 'ioc_ips', 'T2_row_count',
   CASE WHEN COUNT(*) >= 1 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'expected >= 1 IP IOC'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -285,23 +283,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type', 'first_seen', 'malware_family')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_ips', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen', 'malware_family', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (ip_address NOT NULL)
@@ -311,7 +308,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'ip_address IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true)
 WHERE ip_address IS NULL;
 
 -- T7: expected_values — ip_address must contain a dot (IPv4/IPv6 coarse check)
@@ -323,7 +320,7 @@ SELECT
   'ip_address does not look like a valid IP'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_ips', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true)
   WHERE ip_address IS NOT NULL
     AND ip_address NOT LIKE '%.%'
     AND ip_address NOT LIKE '%:%'
@@ -340,7 +337,7 @@ SELECT
   'cyber_threat', 'ioc_mixed', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'requires CYBER_THREATFOX_API_KEY — missing key / empty table is a fail'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -348,10 +345,10 @@ SELECT
   'cyber_threat', 'ioc_mixed', 'T2_row_count',
   CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 100, 'requires CYBER_THREATFOX_API_KEY'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -362,23 +359,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type', 'first_seen', 'ioc_id', 'ioc_value', 'malware_key', 'malware_aliases', 'last_seen_utc', 'anonymous')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_mixed', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen', 'ioc_id', 'ioc_value', 'malware_key', 'malware_aliases', 'last_seen_utc', 'anonymous', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (reporter NOT NULL — ioc_value is sparse in ThreatFox source data)
@@ -388,7 +384,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
   COUNT(*), 0,
   'reporter IS NULL (ThreatFox attribution field)'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true)
 WHERE reporter IS NULL;
 
 -- T7: expected_values — ioc_type must be a known indicator type
@@ -400,7 +396,7 @@ SELECT
   'ioc_type outside expected set (url, hash, ip, ip:port, domain, md5_hash, sha256_hash, email)'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/ioc_mixed', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true)
   WHERE ioc_type IS NOT NULL
     AND ioc_type NOT IN ('url', 'hash', 'ip', 'ip:port', 'domain', 'md5_hash', 'sha256_hash', 'email')
 ) t;
@@ -415,7 +411,7 @@ SELECT
   'cyber_threat', 'nist_controls', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -423,10 +419,10 @@ SELECT
   'cyber_threat', 'nist_controls', 'T2_row_count',
   CASE WHEN COUNT(*) >= 800 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 800, 'expected >= 800 NIST SP 800-53 controls'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -437,23 +433,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'nist_controls', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'framework', 'version', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (control_id NOT NULL)
@@ -463,7 +458,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'control_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true)
 WHERE control_id IS NULL;
 
 -- T7: expected_values — control_id follows AC-1, SI-12, etc. pattern
@@ -475,7 +470,7 @@ SELECT
   'control_id does not match XX-N[N] pattern'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_controls', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true)
   WHERE control_id IS NOT NULL
     AND NOT REGEXP_MATCHES(control_id, '^[A-Z]{2}-[0-9]+')
 ) t;
@@ -490,7 +485,7 @@ SELECT
   'cyber_threat', 'nist_csf_functions', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -498,10 +493,10 @@ SELECT
   'cyber_threat', 'nist_csf_functions', 'T2_row_count',
   CASE WHEN COUNT(*) >= 80 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 80, 'expected >= 80 CSF subcategory rows'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -512,23 +507,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'nist_csf_functions', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'framework_version', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (function_id, subcategory_id NOT NULL)
@@ -538,7 +532,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'function_id IS NULL OR subcategory_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true)
 WHERE function_id IS NULL OR subcategory_id IS NULL;
 
 -- T7: expected_values — exactly 6 CSF function_id values (GV, ID, PR, DE, RS, RC)
@@ -548,7 +542,7 @@ SELECT
   CASE WHEN COUNT(DISTINCT function_id) = 6 THEN 'pass' ELSE 'fail' END,
   COUNT(DISTINCT function_id), 6,
   'expected 6 CSF functions: GV, ID, PR, DE, RS, RC'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/nist_csf_functions', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true);
 
 -- ============================================================
 -- cis_controls
@@ -560,7 +554,7 @@ SELECT
   'cyber_threat', 'cis_controls', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true);
 
 -- T2: row_count (CIS v8 has 153 safeguards)
 INSERT INTO dq_results
@@ -568,10 +562,10 @@ SELECT
   'cyber_threat', 'cis_controls', 'T2_row_count',
   CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 100, 'expected >= 100 CIS safeguard rows'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -582,23 +576,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'cis_controls', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'version', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (control_id, safeguard_id NOT NULL)
@@ -608,7 +601,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'control_id IS NULL OR safeguard_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true)
 WHERE control_id IS NULL OR safeguard_id IS NULL;
 
 -- T7: expected_values — 18 CIS Controls (control_id 1-18)
@@ -618,7 +611,7 @@ SELECT
   CASE WHEN COUNT(DISTINCT control_id) >= 18 THEN 'pass' ELSE 'fail' END,
   COUNT(DISTINCT control_id), 18,
   'expected 18 CIS Controls (v8)'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/cis_controls', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true);
 
 -- ============================================================
 -- owasp_top10
@@ -630,7 +623,7 @@ SELECT
   'cyber_threat', 'owasp_top10', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -638,10 +631,10 @@ SELECT
   'cyber_threat', 'owasp_top10', 'T2_row_count',
   CASE WHEN COUNT(*) >= 10 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 10, 'expected 10 OWASP Top 10 entries'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -652,23 +645,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'owasp_top10', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'year', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (entry_id NOT NULL)
@@ -678,7 +670,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'entry_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true)
 WHERE entry_id IS NULL;
 
 -- T7: expected_values — exactly 10 distinct entry_id values
@@ -688,7 +680,7 @@ SELECT
   CASE WHEN COUNT(DISTINCT entry_id) = 10 THEN 'pass' ELSE 'fail' END,
   COUNT(DISTINCT entry_id), 10,
   'expected exactly 10 distinct OWASP entry_id values'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/owasp_top10', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true);
 
 -- ============================================================
 -- attack_to_nist_mappings
@@ -700,7 +692,7 @@ SELECT
   'cyber_threat', 'attack_to_nist_mappings', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'row count'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -708,10 +700,10 @@ SELECT
   'cyber_threat', 'attack_to_nist_mappings', 'T2_row_count',
   CASE WHEN COUNT(*) >= 500 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 500, 'expected >= 500 ATT&CK-to-NIST mapping rows'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -722,23 +714,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'attack_to_nist_mappings', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'mapping_type', 'status', 'source_version', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (technique_id, nist_control_id NOT NULL)
@@ -748,7 +739,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'technique_id IS NULL OR nist_control_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true)
 WHERE technique_id IS NULL OR nist_control_id IS NULL;
 
 -- T7: expected_values — diversity of NIST controls referenced
@@ -758,7 +749,7 @@ SELECT
   CASE WHEN COUNT(DISTINCT nist_control_id) >= 50 THEN 'pass' ELSE 'warn' END,
   COUNT(DISTINCT nist_control_id), 50,
   'expected >= 50 distinct NIST controls referenced in mappings'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true);
 
 -- ============================================================
 -- threat_pulses  (optional — requires CYBER_OTX_API_KEY)
@@ -771,7 +762,7 @@ SELECT
   'cyber_threat', 'threat_pulses', 'T1_existence',
   CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 1, 'requires CYBER_OTX_API_KEY — missing key / empty table is a fail'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true);
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -779,10 +770,10 @@ SELECT
   'cyber_threat', 'threat_pulses', 'T2_row_count',
   CASE WHEN COUNT(*) >= 100 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 100, 'requires CYBER_OTX_API_KEY'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true);
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true);
 
 -- T3: sample
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true) LIMIT 3;
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true) LIMIT 3;
 
 -- T4: all_null_cols
 INSERT INTO dq_results
@@ -793,23 +784,22 @@ SELECT
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, null_percentage
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true))
   WHERE null_percentage = 100.0
-    AND column_name NOT IN ('type', 'first_seen', 'author', 'malware_families', 'attack_ids', 'ioc_count', 'targeted_countries')
 ) t;
 
 -- T5: all_same_value
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'threat_pulses', 'T5_all_same_value',
-  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   STRING_AGG(column_name, ', ')
 FROM (
   SELECT column_name, approx_unique
-  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true))
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'first_seen', 'author', 'malware_families', 'attack_ids', 'ioc_count', 'targeted_countries', 'tlp', 'source')
+    AND column_name NOT IN ('type')
 ) t;
 
 -- T6: pk_nulls (pulse_id NOT NULL)
@@ -819,7 +809,7 @@ SELECT
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
   COUNT(*), 0,
   'pulse_id IS NULL'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true)
 WHERE pulse_id IS NULL;
 
 -- T7: expected_values — pulse_id should be a non-empty string
@@ -831,7 +821,7 @@ SELECT
   'pulse_id is empty string'
 FROM (
   SELECT COUNT(*) AS bad
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cyber_threat/threat_pulses', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true)
   WHERE pulse_id IS NOT NULL AND TRIM(pulse_id) = ''
 ) t;
 
