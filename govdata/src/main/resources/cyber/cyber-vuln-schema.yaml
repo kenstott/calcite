@@ -13,7 +13,7 @@
 # ============================================================================
 
 schemaName: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
-materializeDirectory: "${CYBER_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/cyber_vuln}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Cybersecurity vulnerability data. Canonical vulnerability records from NVD,
