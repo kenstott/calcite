@@ -13,7 +13,7 @@
 # ============================================================================
 
 schemaName: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
-materializeDirectory: "${CYBER_PARQUET_DIR:${GOVDATA_PARQUET_DIR}/cyber_vuln}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
   Cybersecurity vulnerability data. Canonical vulnerability records from NVD,
@@ -128,8 +128,9 @@ partitionedTables:
   # ==========================================================================
   - name: vulnerabilities
     pattern: "type=vulnerabilities/year=*/quarter=*/*.parquet"
-    dataset_type: delta
-    backfill_period: quarterly        # NVD rejects >120-day windows → quarter is the fetch unit
+    # Windowing is driven by NvdPublishedWindowDimensionResolver (pubStartDate/pubEndDate
+    # dims): quarterly history + daily tip, GOVDATA_START_YEAR-bounded. Rows route to the
+    # correct [type,year,quarter] partition via the pub_year/pub_month computed columns.
     partitions:
       style: hive
       columnDefinitions:
@@ -138,7 +139,7 @@ partitionedTables:
         - name: year
           type: INTEGER
         - name: quarter
-          type: VARCHAR
+          type: INTEGER
 
     comment: >
       NVD CVE 2.0 canonical vulnerability records. One row per CVE. CVSS V31
@@ -198,14 +199,26 @@ partitionedTables:
         type: string
         nullable: true
         comment: Feed source (nvd)
+      # Computed partition-routing columns: extracted from published at ingest time.
+      # Used by effectiveYearField / effectiveMonthField to fan rows into year/quarter.
+      - name: pub_year
+        type: integer
+        nullable: true
+        expression: "CAST(EXTRACT(YEAR  FROM TRY_CAST(src.published AS TIMESTAMP)) AS INTEGER)"
+        comment: Publication year extracted from published (partition routing)
+      - name: pub_month
+        type: integer
+        nullable: true
+        expression: "CAST(EXTRACT(MONTH FROM TRY_CAST(src.published AS TIMESTAMP)) AS INTEGER)"
+        comment: Publication month 1-12 extracted from published (quarter routing)
 
     source:
       type: http
       url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
       method: GET
       parameters:
-        pubStartDate: "{period_start}T00:00:00.000"   # quarter bounds from backfill_period
-        pubEndDate: "{period_end}T23:59:59.999"
+        pubStartDate: "{pubStartDate}"
+        pubEndDate: "{pubEndDate}"
       headers:
         apiKey: "${CYBER_NVD_API_KEY:}"
       response:
@@ -223,17 +236,22 @@ partitionedTables:
         enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdPublishedWindowDimensionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdResponseTransformer"
 
     dimensions:
       type:
         - vulnerabilities
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        end: current
-      quarter:
-        type: quarter
+      pubStartDate:
+        type: custom
+        effectiveYearField: pub_year
+        effectiveMonthField: pub_month
+        properties:
+          startYear: "1999"          # NVD floor; GOVDATA_START_YEAR (dq-rebuild) overrides
+          tipDays: "90"              # rolling daily-window tip for freshness (≤120)
+          tipChunkDays: "1"
+      pubEndDate:
+        type: custom
 
     materialize:
       enabled: true
@@ -260,8 +278,8 @@ partitionedTables:
   # ==========================================================================
   - name: vulnerability_cwes
     pattern: "type=vulnerability_cwes/year=*/quarter=*/*.parquet"
-    dataset_type: delta
-    backfill_period: quarterly        # mirrors vulnerabilities (same NVD windowed fetch)
+    # Same NvdPublishedWindowDimensionResolver windowing as vulnerabilities; rows route to
+    # [type,year,quarter] via pub_year/pub_month (CWE rows lack published → year from cve_id).
     partitions:
       style: hive
       columnDefinitions:
@@ -270,7 +288,7 @@ partitionedTables:
         - name: year
           type: INTEGER
         - name: quarter
-          type: VARCHAR
+          type: INTEGER
 
     comment: >
       Junction table of CVE→CWE pairs, materialized from NVD at ingest time.
@@ -286,14 +304,26 @@ partitionedTables:
         type: string
         nullable: false
         comment: CWE identifier (e.g., CWE-79)
+      # Computed partition-routing columns extracted from cve_id year (CVE-YYYY-NNN).
+      # NVD CWE rows do not carry a published date; approximate year from CVE year segment.
+      - name: pub_year
+        type: integer
+        nullable: true
+        expression: "TRY_CAST(SPLIT_PART(src.cve_id, '-', 2) AS INTEGER)"
+        comment: Year extracted from CVE-YYYY-NNN (partition routing)
+      - name: pub_month
+        type: integer
+        nullable: true
+        expression: "1"
+        comment: Month placeholder (Q1) for CVE-year-only routing
 
     source:
       type: http
       url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
       method: GET
       parameters:
-        pubStartDate: "{period_start}T00:00:00.000"
-        pubEndDate: "{period_end}T23:59:59.999"
+        pubStartDate: "{pubStartDate}"
+        pubEndDate: "{pubEndDate}"
       headers:
         apiKey: "${CYBER_NVD_API_KEY:}"
       response:
@@ -311,17 +341,22 @@ partitionedTables:
         enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdPublishedWindowDimensionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.NvdVulnCwesResponseTransformer"
 
     dimensions:
       type:
         - vulnerability_cwes
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        end: current
-      quarter:
-        type: quarter
+      pubStartDate:
+        type: custom
+        effectiveYearField: pub_year
+        effectiveMonthField: pub_month
+        properties:
+          startYear: "1999"          # NVD floor; GOVDATA_START_YEAR (dq-rebuild) overrides
+          tipDays: "90"
+          tipChunkDays: "1"
+      pubEndDate:
+        type: custom
 
     materialize:
       enabled: true

@@ -41,8 +41,8 @@ import java.util.Set;
  *   "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
  *   "operand": {
  *     "dataSource": "cyber_vuln",
- *     "directory": "${CYBER_PARQUET_DIR}",
- *     "cacheDirectory": "${CYBER_CACHE_DIR}",
+ *     "directory": "${GOVDATA_PARQUET_DIR}",
+ *     "cacheDirectory": "${GOVDATA_CACHE_DIR}",
  *     "autoDownload": true
  *   }
  * }
