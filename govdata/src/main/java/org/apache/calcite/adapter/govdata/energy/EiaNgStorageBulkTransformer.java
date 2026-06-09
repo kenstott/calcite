@@ -171,6 +171,8 @@ public class EiaNgStorageBulkTransformer implements StreamingResponseTransformer
       }
       LocalDate date = LocalDate.parse(point.get(0).asText(), YMD);
       Map<String, Object> row = new LinkedHashMap<String, Object>();
+      // 'year' is the partition column (single cumulative fetch → partition by the data year).
+      row.put("year", date.getYear());
       row.put("series_id", seriesId);
       row.put("report_date", date.toString());
       row.put("storage_year", date.getYear());

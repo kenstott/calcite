@@ -1078,12 +1078,17 @@ partitionedTables:
       One row per region + storage type + report date. Useful for gas market signal
       analysis and year-over-year storage comparison.
 
+    # Single cumulative fetch: the bulk NG.zip carries the full weekly history; the
+    # transformer streams it once and partitions by the data year (no per-year dimension).
     dimensions:
       type:
         - eia_gas_storage
-      year: *eia_gas_storage_years
 
     columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of the report date (partition column)
       - name: report_date
         type: string
         nullable: false
@@ -1125,27 +1130,20 @@ partitionedTables:
         nullable: true
         comment: EIA time series identifier
 
+    # Bulk download: one cumulative NG.zip replaces the per-year paginated EIA API v2 fan-out.
+    # The streaming transformer downloads + unzips + explodes the storage series itself.
+    freshness:
+      type: last_modified
     source:
       type: http
-      url: "https://api.eia.gov/v2/natural-gas/stor/wkly/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      url: "https://www.eia.gov/opendata/bulk/NG.zip"
       method: GET
-      parameters:
-        api_key: "${ENERGY_EIA_API_KEY:}"
-        length: "5000"
       response:
         format: json
-        dataPath: "$.response.data"
-        pagination:
-          type: OFFSET
-          totalPath: "$.response.total"
-          pageSize: 5000
-          limitParam: "length"
-          offsetParam: "offset"
-      rateLimit: *eia_rate_limit
       rawCache: *raw_cache_enabled
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaStorageTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaNgStorageBulkTransformer"
 
     materialize:
       format: iceberg
