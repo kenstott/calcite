@@ -113,12 +113,15 @@ partitionedTables:
       method: GET
       response:
         format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
@@ -226,12 +229,15 @@ partitionedTables:
       method: GET
       response:
         format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
@@ -351,12 +357,15 @@ partitionedTables:
       method: GET
       response:
         format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
@@ -471,12 +480,15 @@ partitionedTables:
       method: GET
       response:
         format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
@@ -594,12 +606,15 @@ partitionedTables:
       method: GET
       response:
         format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
       dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
@@ -633,6 +648,10 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trials
     pattern: "type=clinical_trials"
+    # DQ sample cap (GOVDATA_DQ mode): ClinicalTrials.gov returns ~500k studies via CURSOR
+    # pagination; cap the DQ sample. Cache-safe — the paginated cache commits only on full drain,
+    # so a capped run leaves the existing cache untouched (or writes none on a cold miss).
+    dqRowLimit: 25000
     partitions:
       style: hive
       columnDefinitions:
@@ -754,6 +773,7 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trial_conditions
     pattern: "type=clinical_trial_conditions"
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (CURSOR cache commits on full drain only)
     partitions:
       style: hive
       columnDefinitions:
@@ -829,6 +849,7 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trial_interventions
     pattern: "type=clinical_trial_interventions"
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (CURSOR cache commits on full drain only)
     partitions:
       style: hive
       columnDefinitions:
@@ -1144,6 +1165,12 @@ partitionedTables:
   - name: medicaid_drug_utilization
     releaseWindow:
       months: [3, 6, 9, 12] # Quarterly data published ~3 months after quarter end
+    # DQ sample cap: the DKAN datastore returns the whole ~5.3M-row annual dataset; in DQ mode
+    # (GOVDATA_DQ=true) materialize at most this many rows, so DQ writes a bounded sample instead
+    # of 5.3M Iceberg rows. Cache-safe: the full ~2GB body is written to the raw cache during
+    # fetch (before the iterator) and stays complete for prod; the cap only bounds the read +
+    # materialize. Ignored outside DQ mode (prod loads everything).
+    dqRowLimit: 25000
     pattern: "type=medicaid_drug_utilization"
     partitions:
       style: hive
@@ -1345,6 +1372,7 @@ partitionedTables:
   - name: cdc_brfss
     releaseWindow:
       months: [5, 6, 7, 8]  # CDC publishes annual BRFSS survey data May–August
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (OFFSET cache commits on full drain only)
     comment: >
       CDC Behavioral Risk Factor Surveillance System prevalence data (Socrata dttw-5yxu).
       State-level health behavior estimates by year, question, and demographic breakout.
@@ -1440,6 +1468,11 @@ partitionedTables:
   - name: cms_open_payments
     releaseWindow:
       months: [6, 7]        # CMS Open Payments (Sunshine Act) annual release June–July
+    # DQ sample cap (per program year): in DQ mode (GOVDATA_DQ=true) materialize at most this
+    # many rows per fetch-unit, so DQ samples every year (2018+) — fast, but still crossing the
+    # old/new format seam — instead of streaming ~100M rows. Safe here: the source is CSV_STREAM
+    # (no raw cache to truncate). Ignored outside DQ mode (prod loads the full history).
+    dqRowLimit: 25000
     comment: >
       CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
       to physicians. Bulk CSV downloads from download.cms.gov, one file per program year
@@ -1538,12 +1571,13 @@ partitionedTables:
       year:
         type: yearRange
         # Open Payments data begins program year (CY) 2018, published the following
-        # June/July (publish year = data year + 1). start/minYear are publish-year floors;
+        # June/July (publish year = data year + 1). start is a FIXED publish-year floor,
+        # NOT tied to GOVDATA_START_YEAR: the latest available data is CY2024 (publish 2025),
+        # so a GOVDATA_START_YEAR >= 2025 would push the publish-year start past the ceiling
+        # and empty the range (-> {effective_year} unsubstituted -> URISyntaxException).
         # {effective_year} (= year - dataLag) is the program year used in the URL and is
-        # mapped to the `year` partition by the Iceberg writer. releaseMonth 7: before July
-        # the latest available program year is currentYear-2 (CMS publishes ~late June/July).
-        start: "${GOVDATA_START_YEAR:2019}"
-        minYear: 2019
+        # mapped to the `year` partition by the Iceberg writer.
+        start: 2019
         dataLag: 1
         releaseMonth: 7
 
