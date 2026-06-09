@@ -207,6 +207,10 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   - name: eia_electricity_generation
     pattern: "type=eia_elec_gen/year=*/month=*/*.parquet"
+    # DQ sample cap (GOVDATA_DQ mode): ~120k rows/year (state × source × sector × 12 months),
+    # fetched per-year (backfill_period: annual) via ~24 paginated EIA API pages. Cap each
+    # year's sample so DQ stops paginating early; prod loads everything.
+    dqRowLimit: 25000
     partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 electric power operational data. Monthly electricity generation
@@ -963,6 +967,9 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   - name: eia_state_energy_consumption
     pattern: "type=eia_seds/year=*/*.parquet"
+    # DQ sample cap (GOVDATA_DQ mode): ~40k rows/year (state × MSN series), fetched per-year
+    # via paginated EIA SEDS API. Cap each year's sample to stop paginating early; prod full.
+    dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
       EIA API v2 State Energy Data System (SEDS). Annual energy consumption, expenditure,

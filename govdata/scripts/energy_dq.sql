@@ -58,8 +58,9 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation',
 INSERT INTO dq_results
 SELECT
   'energy', 'eia_electricity_generation', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 100000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 100000, 'expected >= 100000 rows (state × source × sector × month)'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 20000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 20000,
+  'cap-aware: dqRowLimit=25000/year DQ sample (prod ~120k/year uncapped); >=20000/year floor'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation', allow_moved_paths := true);
 
 -- T3: sample
@@ -508,8 +509,9 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_state_energy_consumption
 INSERT INTO dq_results
 SELECT
   'energy', 'eia_state_energy_consumption', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 40000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 40000, 'expected >= 40000 rows (state × MSN × year, 1-yr smoke window)'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 20000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 20000,
+  'cap-aware: dqRowLimit=25000/year DQ sample (prod ~40k/year uncapped); >=20000/year floor'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_state_energy_consumption', allow_moved_paths := true);
 
 -- T3: sample
