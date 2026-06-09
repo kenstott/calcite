@@ -67,7 +67,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <pre>
  * HEALTH_INTEGRATION_TESTS=true \
  * HEALTH_FDA_API_KEY=your-key \
- * HEALTH_FAERS_START_DATE=20240101 \
+ * GOVDATA_START_YEAR=2024 \
  * ./gradlew :govdata:test -PincludeTags=integration --tests "*HealthAllTablesSmokeTest*"
  * </pre>
  */

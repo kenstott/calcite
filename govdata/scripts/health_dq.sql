@@ -428,9 +428,11 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/c
 
 -- T2: row_count (~500k studies total)
 INSERT INTO dq_results
+-- DQ-mode sample: clinical_trials has dqRowLimit=25000 (per fetch-unit), so DQ holds ~25k, not
+-- the prod ~500k. Cap-aware floor; do not raise to prod scale.
 SELECT 'health', 'clinical_trials', 'T2_row_count',
-  CASE WHEN n >= 400000 THEN 'pass' ELSE 'fail' END,
-  n, 400000, 'Expected at least 400000 clinical trial records'
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END,
+  n, 20000, 'Sampled via dqRowLimit=25000 (DQ mode); prod has ~500k studies'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/clinical_trials', allow_moved_paths := true));
 
 -- T3: sample
@@ -786,9 +788,11 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/m
 
 -- T2: row_count (~2.5M records/year; default is 2023 data)
 INSERT INTO dq_results
+-- DQ-mode sample: medicaid_drug_utilization has dqRowLimit=25000 per fetch-unit (per year), so
+-- DQ holds ~25k x year-combinations, NOT the prod ~5.3M. Cap-aware floor; do not raise to prod scale.
 SELECT 'health', 'medicaid_drug_utilization', 'T2_row_count',
-  CASE WHEN n >= 1000000 THEN 'pass' ELSE 'fail' END,
-  n, 1000000, 'Expected at least 1M Medicaid drug utilization records (2023 annual dataset has 5.3M)'
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END,
+  n, 20000, 'Sampled via dqRowLimit=25000/period (DQ mode); prod 2023 annual dataset has ~5.3M'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_drug_utilization', allow_moved_paths := true));
 
 -- T3: sample
@@ -928,9 +932,11 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/c
 
 -- T2: row_count
 INSERT INTO dq_results
+-- DQ-mode sample: cdc_brfss has dqRowLimit=25000 (per fetch-unit), so DQ holds ~25k, not the
+-- prod count. Cap-aware floor; do not raise to prod scale.
 SELECT 'health', 'cdc_brfss', 'T2_row_count',
-  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END,
-  n, 100000, 'Expected at least 100000 CDC BRFSS records'
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END,
+  n, 20000, 'Sampled via dqRowLimit=25000 (DQ mode); prod is the full BRFSS prevalence set'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_brfss', allow_moved_paths := true));
 
 -- T3: sample
@@ -992,10 +998,13 @@ SELECT 'health', 'cms_open_payments', 'T1_existence',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_open_payments', allow_moved_paths := true));
 
 -- T2: row_count
+-- DQ-mode sample: cms_open_payments has dqRowLimit=25000 per fetch-unit (per payment_type x
+-- program year), so DQ holds ~25k x the capped combinations (general alone ~ 7yr x 25k = 175k),
+-- NOT the prod ~100M. Threshold is a cap-aware floor; do NOT raise it to a prod-scale count.
 INSERT INTO dq_results
 SELECT 'health', 'cms_open_payments', 'T2_row_count',
-  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END,
-  n, 100000, 'Expected at least 100000 CMS Open Payments records'
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
+  n, 50000, 'Sampled via dqRowLimit=25000/period across program years (DQ mode); prod loads full ~100M'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_open_payments', allow_moved_paths := true));
 
 -- T3: sample

@@ -32,6 +32,13 @@ partitionedTables:
   # ==========================================================================
   - name: fda_ndc_products
     pattern: "type=fda_ndc_products"
+    # Freshness: skip fetch+commit when openFDA's published export_date for this
+    # endpoint is unchanged since the last successful run (replaces the monthly
+    # GOVDATA_CURRENT_MONTH cache-buster).
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.drug.ndc.export_date"
     partitions:
       style: hive
       columnDefinitions:
@@ -100,36 +107,34 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.fda.gov/drug/ndc.json"
+      # Bulk: partition ZIP(s) resolved from download.json by OpenFdaPartitionResolver
+      # (no API key, no pagination/sharding; path not hardcoded — adapts if the endpoint splits).
+      url: "{partition_file}"
       method: GET
-      parameters:
-        api_key: "${HEALTH_FDA_API_KEY:}"
-        limit: "1000"
-        search: "product_ndc:{ndc_prefix}*"
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          pageSize: 1000
-          limitParam: "limit"
-          offsetParam: "skip"
+        format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
-        requestsPerSecond: 0.5
-        maxRetries: 5
-        retryOn: [403, 429]
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaNdcResponseTransformer"
 
     dimensions:
-      # Shard on first 1-2 digits of product_ndc to stay under the openFDA 26k record cap.
-      # Digit 6 (32,543 records) is subdivided to 2-digit prefixes; all other digits fit in one shard.
-      ndc_prefix: ["0","1","2","3","4","5","60","61","62","63","64","65","66","67","68","69","7","8","9"]
       type:
         - fda_ndc_products
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.drug.ndc"
 
     materialize:
       enabled: true
@@ -150,6 +155,12 @@ partitionedTables:
   # ==========================================================================
   - name: fda_drug_approvals
     pattern: "type=fda_drug_approvals"
+    # Freshness: skip fetch+commit when openFDA's published export_date for this
+    # endpoint is unchanged since the last successful run.
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.drug.drugsfda.export_date"
     partitions:
       style: hive
       columnDefinitions:
@@ -212,32 +223,34 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.fda.gov/drug/drugsfda.json"
+      # Bulk: partition ZIP(s) resolved from download.json by OpenFdaPartitionResolver
+      # (no API key, no pagination; path not hardcoded — adapts if the endpoint splits).
+      url: "{partition_file}"
       method: GET
-      parameters:
-        api_key: "${HEALTH_FDA_API_KEY:}"
-        limit: "1000"
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          pageSize: 1000
-          limitParam: "limit"
-          offsetParam: "skip"
+        format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
-        requestsPerSecond: 0.5
-        maxRetries: 5
-        retryOn: [403, 429]
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugApprovalsResponseTransformer"
 
     dimensions:
       type:
         - fda_drug_approvals
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.drug.drugsfda"
 
     materialize:
       enabled: true
@@ -258,6 +271,12 @@ partitionedTables:
   # ==========================================================================
   - name: fda_drug_recalls
     pattern: "type=fda_drug_recalls"
+    # Freshness: skip fetch+commit when openFDA's published export_date for this
+    # endpoint is unchanged since the last successful run.
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.drug.enforcement.export_date"
     partitions:
       style: hive
       columnDefinitions:
@@ -332,32 +351,34 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.fda.gov/drug/enforcement.json"
+      # Bulk: partition ZIP(s) resolved from download.json by OpenFdaPartitionResolver
+      # (no API key, no pagination; path not hardcoded — adapts if the endpoint splits).
+      url: "{partition_file}"
       method: GET
-      parameters:
-        api_key: "${HEALTH_FDA_API_KEY:}"
-        limit: "1000"
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          pageSize: 1000
-          limitParam: "limit"
-          offsetParam: "skip"
+        format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
-        requestsPerSecond: 0.5
-        maxRetries: 5
-        retryOn: [403, 429]
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDrugRecallsResponseTransformer"
 
     dimensions:
       type:
         - fda_drug_recalls
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.drug.enforcement"
 
     materialize:
       enabled: true
@@ -374,8 +395,8 @@ partitionedTables:
         runCompaction: false
 
   # ==========================================================================
-  # FDA ADVERSE EVENTS — FAERS reports, windowed to recent years
-  # Default window: HEALTH_FAERS_START_DATE (default 2023-01-01) to present
+  # FDA ADVERSE EVENTS — FAERS reports, bulk partition ZIPs (download.open.fda.gov)
+  # Year filter: GOVDATA_START_YEAR (default 2010); partitions enumerated from download.json
   # ==========================================================================
   - name: fda_adverse_events
     pattern: "type=fda_adverse_events"
@@ -385,11 +406,18 @@ partitionedTables:
         - name: type
           type: VARCHAR
 
+    # Freshness: skip the whole pipeline when openFDA's drug.event export_date is unchanged.
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.drug.event.export_date"
+
     comment: >
       FDA Adverse Event Reporting System (FAERS). One row per report; reactions
-      are comma-joined from the MedDRA reaction list. Windowed by receivedate
-      to keep volume manageable (default: 2023-01-01 to present, ~20M total).
-      Joins to fda_ndc_products on primary_drug name (text).
+      are comma-joined from the MedDRA reaction list. Ingested from openFDA bulk
+      partition ZIPs on download.open.fda.gov (no API key, no pagination cap) — one
+      quarter-partition file per request, enumerated from download.json and filtered
+      by GOVDATA_START_YEAR. Joins to fda_ndc_products on primary_drug name (text).
 
     columns:
       - name: safety_report_id
@@ -443,40 +471,37 @@ partitionedTables:
 
     source:
       type: http
-      # TODO: Parameterize the TO date using {year}/{month} dimensions so the rawCache key
-      # is busted each month. The openFDA search param uses YYYYMMDD format; a correct
-      # parameterized form would be something like:
-      #   receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+{year}{month}01]
-      # Requires the ETL engine to zero-pad month and support date arithmetic in URL templates.
-      # For now the TO date is left as the env-var default (end of current year) and the
-      # year+month dimensions act as cache-busters only.
-      url: "https://api.fda.gov/drug/event.json?search=receivedate:[${HEALTH_FAERS_START_DATE:20230101}+TO+${HEALTH_FAERS_END_DATE:20991231}]"
+      # Bulk partition ZIPs from openFDA's unthrottled download host (no API key, no 26k skip
+      # cap). OpenFdaPartitionResolver enumerates drug/event partition files from download.json
+      # (filtered by GOVDATA_START_YEAR) into the partition_file dimension; the transformer
+      # downloads + unzips + streams each file's results[]. {partition_file} is the full URL,
+      # so the pipeline's own TEXT fetch is ignored (the transformer re-reads the bytes).
+      url: "{partition_file}"
       method: GET
-      parameters:
-        api_key: "${HEALTH_FDA_API_KEY:}"
-        limit: "1000"
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          pageSize: 1000
-          limitParam: "limit"
-          offsetParam: "skip"
+        format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
-        requestsPerSecond: 0.5
-        maxRetries: 5
-        retryOn: [403, 429]
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaAdverseEventsResponseTransformer"
 
     dimensions:
       type:
         - fda_adverse_events
-      year: *health_year_range
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.drug.event"
 
     materialize:
       enabled: true
@@ -497,6 +522,12 @@ partitionedTables:
   # ==========================================================================
   - name: fda_device_recalls
     pattern: "type=fda_device_recalls"
+    # Freshness: skip fetch+commit when openFDA's published export_date for this
+    # endpoint is unchanged since the last successful run.
+    freshness:
+      type: version
+      probe_url: "https://api.fda.gov/download.json"
+      version_field: "results.device.recall.export_date"
     partitions:
       style: hive
       columnDefinitions:
@@ -569,32 +600,34 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.fda.gov/device/recall.json"
+      # Bulk: partition ZIP(s) resolved from download.json by OpenFdaPartitionResolver
+      # (no API key, no pagination; path not hardcoded — adapts if the endpoint splits).
+      url: "{partition_file}"
       method: GET
-      parameters:
-        api_key: "${HEALTH_FDA_API_KEY:}"
-        limit: "1000"
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          pageSize: 1000
-          limitParam: "limit"
-          offsetParam: "skip"
+        format: TEXT
+      # The responseTransformer downloads + unzips the partition itself, so drain the
+      # pipeline's fetch (no in-memory buffer, no raw-cache write of a binary we never read).
+      skipResponseBody: true
       rateLimit:
-        requestsPerSecond: 0.5
-        maxRetries: 5
-        retryOn: [403, 429]
+        requestsPerSecond: 5.0
+        maxRetries: 3
+        retryOn: [429, 503]
       rawCache:
-        enabled: true
+        enabled: false
 
     hooks:
+      dimensionResolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
       responseTransformer: "org.apache.calcite.adapter.govdata.health.FdaDeviceRecallsResponseTransformer"
 
     dimensions:
       type:
         - fda_device_recalls
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      partition_file:
+        type: custom
+        resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
+        properties:
+          endpoint: "results.device.recall"
 
     materialize:
       enabled: true
@@ -615,6 +648,10 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trials
     pattern: "type=clinical_trials"
+    # DQ sample cap (GOVDATA_DQ mode): ClinicalTrials.gov returns ~500k studies via CURSOR
+    # pagination; cap the DQ sample. Cache-safe — the paginated cache commits only on full drain,
+    # so a capped run leaves the existing cache untouched (or writes none on a cold miss).
+    dqRowLimit: 25000
     partitions:
       style: hive
       columnDefinitions:
@@ -736,6 +773,7 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trial_conditions
     pattern: "type=clinical_trial_conditions"
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (CURSOR cache commits on full drain only)
     partitions:
       style: hive
       columnDefinitions:
@@ -811,6 +849,7 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trial_interventions
     pattern: "type=clinical_trial_interventions"
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (CURSOR cache commits on full drain only)
     partitions:
       style: hive
       columnDefinitions:
@@ -1126,6 +1165,12 @@ partitionedTables:
   - name: medicaid_drug_utilization
     releaseWindow:
       months: [3, 6, 9, 12] # Quarterly data published ~3 months after quarter end
+    # DQ sample cap: the DKAN datastore returns the whole ~5.3M-row annual dataset; in DQ mode
+    # (GOVDATA_DQ=true) materialize at most this many rows, so DQ writes a bounded sample instead
+    # of 5.3M Iceberg rows. Cache-safe: the full ~2GB body is written to the raw cache during
+    # fetch (before the iterator) and stays complete for prod; the cap only bounds the read +
+    # materialize. Ignored outside DQ mode (prod loads everything).
+    dqRowLimit: 25000
     pattern: "type=medicaid_drug_utilization"
     partitions:
       style: hive
@@ -1327,6 +1372,7 @@ partitionedTables:
   - name: cdc_brfss
     releaseWindow:
       months: [5, 6, 7, 8]  # CDC publishes annual BRFSS survey data May–August
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (OFFSET cache commits on full drain only)
     comment: >
       CDC Behavioral Risk Factor Surveillance System prevalence data (Socrata dttw-5yxu).
       State-level health behavior estimates by year, question, and demographic breakout.
@@ -1422,10 +1468,15 @@ partitionedTables:
   - name: cms_open_payments
     releaseWindow:
       months: [6, 7]        # CMS Open Payments (Sunshine Act) annual release June–July
+    # DQ sample cap (per program year): in DQ mode (GOVDATA_DQ=true) materialize at most this
+    # many rows per fetch-unit, so DQ samples every year (2018+) — fast, but still crossing the
+    # old/new format seam — instead of streaming ~100M rows. Safe here: the source is CSV_STREAM
+    # (no raw cache to truncate). Ignored outside DQ mode (prod loads the full history).
+    dqRowLimit: 25000
     comment: >
       CMS Open Payments (Sunshine Act) payments from pharmaceutical/device manufacturers
-      to physicians. Fetches JSON from DKAN API. payment_type dimension selects
-      general vs research vs ownership payments.
+      to physicians. Bulk CSV downloads from download.cms.gov, one file per program year
+      (CY2018+) and payment_type (general/research/ownership), partitioned by both.
     columns:
       - name: program_year
         type: VARCHAR
@@ -1480,14 +1531,14 @@ partitionedTables:
     source:
       type: http
       # CMS bulk CSV downloads — direct from download.cms.gov, streamed in batches.
-      # TODO: Parameterize PGYR{year} and the publication-date path segments so the URL
-      # updates automatically when a new program year is released (typically June each year).
-      # The path format is: /openpayments/PGYR{year}_P{pubdate}_{reldate}/OP_DTL_{type}_PGYR{year}_P{pubdate}_{reldate}.csv
-      # Publication/release dates are not predictable in advance; consider a metadata lookup
-      # step or a urlRules mapping keyed on year dimension.
-      # For now, update PGYR manually each June when CMS releases the new program year.
-      # PGYR2023 is the most recent full year as of 2026. Update path when CMS releases PGYR2024.
-      url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_GNRL_PGYR2023_P01232026_01102026.csv"
+      # {effective_year} (= publish year - dataLag) is the program/data year — one file per
+      # year (PGYR2018..PGYR2024) so the year dimension drives the URL instead of being inert.
+      # The publication/reload segment (P{pubdate}_{reldate}) is assigned by CMS at release time,
+      # is NOT derivable from the year, and is SHARED across all program years (CMS republishes
+      # every year together). Refresh the literal below when CMS republishes (~annually) — the
+      # current segment is the distribution.downloadURL path from the catalog API:
+      #   https://openpaymentsdata.cms.gov/api/1/metastore/schemas/dataset/items
+      url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_GNRL_PGYR{effective_year}_P01232026_01102026.csv"
       method: GET
       response:
         format: csv
@@ -1496,10 +1547,10 @@ partitionedTables:
           type: CSV_STREAM
           pageSize: 5000
       urlRules:
-        - url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_RSRCH_PGYR2023_P01232026_01102026.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_RSRCH_PGYR{effective_year}_P01232026_01102026.csv"
           variableMatch:
             payment_type: research
-        - url: "https://download.cms.gov/openpayments/PGYR2023_P01232026_01102026/OP_DTL_OWNRSHP_PGYR2023_P01232026_01102026.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_OWNRSHP_PGYR{effective_year}_P01232026_01102026.csv"
           variableMatch:
             payment_type: ownership
       rateLimit:
@@ -1507,7 +1558,7 @@ partitionedTables:
         maxRetries: 3
         retryOn: [429, 503]
       rawCache:
-        enabled: false
+        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsOpenPaymentsResponseTransformer"
@@ -1519,18 +1570,24 @@ partitionedTables:
         - ownership
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        # Open Payments data begins program year (CY) 2018, published the following
+        # June/July (publish year = data year + 1). start is a FIXED publish-year floor,
+        # NOT tied to GOVDATA_START_YEAR: the latest available data is CY2024 (publish 2025),
+        # so a GOVDATA_START_YEAR >= 2025 would push the publish-year start past the ceiling
+        # and empty the range (-> {effective_year} unsubstituted -> URISyntaxException).
+        # {effective_year} (= year - dataLag) is the program year used in the URL and is
+        # mapped to the `year` partition by the Iceberg writer.
+        start: 2019
         dataLag: 1
-        releaseMonth: 6
+        releaseMonth: 7
 
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: ""
+        pattern: "payment_type=*/year=*/"
       partition:
-        columns: [payment_type]
+        columns: [payment_type, year]
       options:
         compression: snappy
       iceberg:
@@ -1539,6 +1596,11 @@ partitionedTables:
         runCompaction: false
 
   - name: rxnorm_drugs
+    # Freshness: rxnav has no version endpoint; hash the downloaded body (single
+    # ~37k-concept page) and skip the Iceberg commit when byte-identical to the last
+    # successful run (replaces the monthly GOVDATA_CURRENT_MONTH cache-buster).
+    freshness:
+      type: hash
     comment: >
       RxNorm drug concepts from the NLM bulk allconcepts endpoint.
       Covers ingredient (IN), brand name (BN), and clinical drug (SCD) term types.
@@ -1578,7 +1640,6 @@ partitionedTables:
     dimensions:
       type:
         - rxnorm_drugs
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true

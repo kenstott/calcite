@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-06-05
+Last updated: 2026-06-09
 
 ## How to Read This
 
@@ -68,7 +68,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | fec          | 2026-06-06 | WARN    | 0     | 1     | Truncated 2-cycle DQ rebuild (2024+2026); worker.sh:184 fix landed in 7e9324ec0 (honor get_dq_start_year). 85/86 pass; lone warn: candidate_summaries.T7_total_receipts_nonneg (1 row negative — FEC amendment adjustment) |
 | fedregister  | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 9/9 pass, 65,167 docs (2024–2026 scope) |
 | lands        | 2026-06-03 | PASS    | 0     | 0     | Per-state FIA fan-out + Tier 1 fia_plots/fia_tree_grm/fia_seedlings; 72/72 pass first run |
-| health       | 2026-06-03 | WARN    | 0     | 8     | All 15 tables populated; one new warn vs 2026-05-15 (cdc_brfss year single-value) |
+| health       | 2026-06-09 | WARN    | 0     | 7     | openFDA 5 tables migrated to bulk download.open.fda.gov (NDC 26k→136k, FAERS →443k, device_recalls →58k); cms_open_payments parameterized ({effective_year}, format-seam start 2019); medicaid streaming transformer (no OOM); dqRowLimit DQ sampling on 6 heavy tables → DQ green in 13 min. 88 pass / 7 warn |
 | patents      | 2026-06-05 | PASS    | 0     | 0     | Faithful recreation (one table per raw dump, no ETL joins; grant_year only on dated sources) + trademark effective_year fix (14k→911k rows, coverage→2023) + period-keyed completion markers. 0 fails verified (38p/2w); 2 trademark checks recalibrated → 0 warn |
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
@@ -150,45 +150,70 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## Health (2026-06-03) — WARN
+## Health (2026-06-09) — WARN
 
-0 fails, 8 warns. All 15 tables populated in R2 Iceberg. Row counts (as of 2026-05-15 last full inventory):
+0 fails, 7 warns (88 pass). Run via `run-all-dq --schema health --etl-resume` in DQ
+sample mode (`GOVDATA_DQ=true`, `GOVDATA_START_YEAR=2025`): 13 min, 0 OOM, 0 failures.
 
-| Table | Rows |
-|-------|------|
-| fda_ndc_products | 26,000 |
-| fda_drug_approvals | 26,000 |
-| fda_drug_recalls | 17,643 |
-| fda_adverse_events | 26,000 |
-| fda_device_recalls | 26,000 |
-| clinical_trials | 584,989 |
-| clinical_trial_conditions | 1,045,013 |
-| clinical_trial_interventions | 989,020 |
-| cdc_covid_vaccinations | 29,886 |
-| cms_hospital_quality | 5,432 |
-| medicaid_drug_utilization | 3,904,000 |
-| cdc_mortality | 21,344 |
-| cdc_brfss | 1,986,000 |
-| cms_open_payments | 108,776 |
-| rxnorm_drugs | 37,280 |
+Row counts below are the **DQ-mode** inventory. Six rows-heavy tables carry a table-level
+`dqRowLimit: 25000` that caps each fetch-unit (period) at 25k rows **only when
+`GOVDATA_DQ=true`** — prod loads everything uncapped. The cap is cache-safe: it wraps the
+post-fetch source iterator, so the shared `govdata-raw-v1` cache is never truncated.
 
-### WARN
+| Table | DQ rows | Capped? | Notes |
+|-------|---------|---------|-------|
+| fda_ndc_products | 135,626 | full | **bulk** download.open.fda.gov (was 26k under the old api.fda.gov 26k skip cap) |
+| fda_drug_approvals | 29,133 | full | **bulk** |
+| fda_drug_recalls | 17,683 | full | **bulk** |
+| fda_adverse_events | 443,390 | full | **bulk** FAERS, 38 quarterly partitions |
+| fda_device_recalls | 58,374 | full | **bulk** |
+| clinical_trials | 25,000 | cap | prod is the full ClinicalTrials.gov study set |
+| clinical_trial_conditions | 25,000 | cap | |
+| clinical_trial_interventions | 25,000 | cap | |
+| cdc_covid_vaccinations | 29,886 | full | |
+| cms_hospital_quality | 16,296 | full | |
+| medicaid_drug_utilization | 50,000 | cap | 25k × 2 year-combos; prod 2023 annual set ~5.3M, streamed per-record |
+| cdc_mortality | 42,688 | full | |
+| cdc_brfss | 25,000 | cap | prod is the full BRFSS prevalence set |
+| cms_open_payments | 377,480 | cap | 25k × ~21 payment_type×year combos (2018–2024, format seam crossed) |
+| rxnorm_drugs | 149,252 | full | |
 
-| Table | Test | Detail |
-|-------|------|--------|
-| cdc_brfss | all_same_value | `year` constant — expected for single-year partition writes |
-| clinical_trials | funder_type | 3 rows with funder_type outside known set — source data variation |
-| cms_hospital_quality | all_null_cols | 6 columns fully null: mort/safety/readm_measures_better/worse — CMS does not populate these fields |
-| cms_hospital_quality | all_same_value | 7 single-value columns (same CMS fields + birthing_friendly) |
-| cms_open_payments | all_same_value | `program_year` constant=2023 — expected; single-year PGYR2023 fetch |
-| fda_device_recalls | pk_nulls | 7 rows with null cfres_id — source omits cfres_id for some entries |
-| fda_drug_recalls | pk_nulls | 1 row with null recall_number — source data gap |
-| medicaid_drug_utilization | all_same_value | `year` constant — expected for single-year partition writes |
+### WARN (all benign — 4 source characteristics, 3 cap-sample artifacts)
 
-### Notes
+| Table | Test | Detail | Class |
+|-------|------|--------|-------|
+| cdc_brfss | T5_all_same_value | `year` constant | cap (single-period sample) |
+| cdc_brfss | T7_state_coverage | 36 of 50 distinct states | cap (25k sample doesn't span all states) |
+| cms_hospital_quality | T4_all_null_cols | 6 cols null (mort/safety/readm measures_better/worse) — CMS doesn't populate | source |
+| cms_hospital_quality | T5_all_same_value | 7 single-value cols (same CMS fields + birthing_friendly) | source |
+| fda_device_recalls | T6_pk_nulls | 8 rows null cfres_id — source omits for some entries | source |
+| fda_drug_recalls | T6_pk_nulls | 1 row null recall_number — source data gap | source |
+| medicaid_drug_utilization | T5_all_same_value | `state`, `year` constant | cap (single-period sample) |
 
-- `cms_open_payments` source switched from DKAN OFFSET pagination (broken; 500-row API cap caused 0-row fetches) to direct CMS CSV bulk download (`download.cms.gov`), streamed via CSV_STREAM. 108,776 rows across general/research/ownership payment types for PGYR2023.
-- `clinical_trial_interventions T6_pk_nulls` relaxed to check only `nct_id IS NULL` (intervention_name is nullable source data — 177 rows in API have no intervention_name).
+The cap-sample warns (`cdc_brfss` year/state_coverage, `medicaid` state/year) are expected
+artifacts of `dqRowLimit` sampling a single period — they do not appear in an uncapped prod
+load. The 4 source-characteristic warns are unchanged from prior runs.
+
+### Notes — this run
+
+- **openFDA bulk migration**: `fda_ndc_products`, `fda_drug_approvals`, `fda_drug_recalls`,
+  `fda_device_recalls`, `fda_adverse_events` switched from the throttled/capped query API
+  (`api.fda.gov`, skip≤25000) to the unthrottled bulk host `download.open.fda.gov`.
+  `OpenFdaPartitionResolver` reads each endpoint's `download.json` (no hardcoded URLs) for the
+  per-quarter partition files and `export_date` (version/hash freshness); `transformBulkZip`
+  streams the ZIP'd `results[]` per-record. NDC 26k→136k, FAERS →443k, device_recalls →58k —
+  the bulk path delivers the full datasets the old skip cap truncated. In this run all five
+  were skip-if-materialized (already ingested) and re-validated green against existing Iceberg.
+- **cms_open_payments**: parameterized the frozen single-year URL to `{effective_year}`
+  (`dataLag: 1`, `releaseMonth: 7`), partition `[payment_type, year]`, literal `start: 2019`
+  so the DQ window crosses the old↔new payment-file format seam. CSV_STREAM + `dqRowLimit:
+  25000`/combo → 377k DQ-sample rows across 2018–2024 (was a frozen 108k PGYR2023 snapshot).
+- **medicaid_drug_utilization**: `MedicaidDrugUtilizationResponseTransformer` now implements
+  `PerRecordResponseTransformer` so HttpSource streams the ~2 GB JSON per-record from the raw
+  cache (peak ~587 MB) instead of tree-parsing it (was OOMing at 12g).
+- **dqRowLimit** feature (file engine): the six heavy tables get fast, every-period DQ samples;
+  `health_dq.sql` row-count thresholds revised to cap-aware floors. See the schema-authoring
+  and dq-patterns skills.
 
 ---
 
