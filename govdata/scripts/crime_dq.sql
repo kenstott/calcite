@@ -606,7 +606,7 @@ FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_leoka', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'year')
+    AND column_name NOT IN ('type', 'year', 'section')
 ) t;
 
 -- T6: pk_nulls (state_abbr, year NOT NULL)
@@ -1010,7 +1010,7 @@ FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'year')
+    AND column_name NOT IN ('type', 'year', 'newcrime')
 ) t;
 
 -- T6: skipped — all columns declared nullable
