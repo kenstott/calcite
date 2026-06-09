@@ -15,7 +15,9 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:crime}"
-dataLagYears: 1
+# 0: CDE/BJS are queried by the literal data year and CDE publishes current-year monthly data,
+# so the end year is the current year (no publish lag). Year ranges file under the data year.
+dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
@@ -191,11 +193,15 @@ dimension_values:
 
   # Year range for FBI CDE data. Start floor 2010; the factory-set GOVDATA_START_YEAR
   # system property overrides it for all schemas.
+  # dataLag MUST be 0: every crime URL templates the literal {year} (publish year), so the
+  # stored partition year must equal the fetched year. dataLag>0 stores effective_year=year-lag,
+  # which only makes sense when the URL uses {effective_year}. CDE/BJS data is fetchable by
+  # literal year (2026 monthly data exists), so no lag is warranted.
   crime_year_range: &crime_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: current
-    dataLag: 1
+    dataLag: 0
 
   # Month range is encoded differently for CDE API (MM-YYYY format)
   # We use year dimension only; the API returns all months for the year range
@@ -1778,7 +1784,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 2
+        dataLag: 0
 
     columns:
       - name: year
@@ -1901,7 +1907,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 2
+        dataLag: 0
 
     columns:
       - name: year
@@ -2011,7 +2017,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 2
+        dataLag: 0
 
     columns:
       - name: year
@@ -2109,7 +2115,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 2
+        dataLag: 0
 
     columns:
       - name: year
