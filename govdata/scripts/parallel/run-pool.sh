@@ -625,8 +625,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
-        # flock-guarded append: serializes with run-pool-persist.sh's --reset
-        # read-filter-rewrite so a completion is never lost during a concurrent reset.
+        # flock-guarded append: serializes concurrent appenders so a completion
+        # is never lost when multiple pools finish a slot at the same time.
         ( flock 9; echo "${active_slots[$i]}" >> "${HOME}/.run-pool-completed.state" ) \
           9>>"${HOME}/.run-pool-completed.state.lock"
       else

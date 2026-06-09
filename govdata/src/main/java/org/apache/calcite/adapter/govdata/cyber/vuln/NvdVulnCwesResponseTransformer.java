@@ -66,6 +66,18 @@ public class NvdVulnCwesResponseTransformer implements ResponseTransformer {
           ObjectNode row = MAPPER.createObjectNode();
           row.put("cve_id", cveId);
           row.put("cwe_id", cweId);
+          // Emit pub_year/pub_month as real row values for partition routing (the writer's
+          // fan-out reads them per-row before DuckDB evaluates any computed expression). CWE
+          // rows have no published date, so derive the year from CVE-YYYY-NNNN; quarter = Q1.
+          String[] cveParts = cveId.split("-");
+          if (cveParts.length >= 2) {
+            try {
+              row.put("pub_year", Integer.parseInt(cveParts[1]));
+            } catch (NumberFormatException ignored) {
+              // non-standard CVE id — leave pub_year unset
+            }
+          }
+          row.put("pub_month", 1);
           rows.add(row);
         }
       }

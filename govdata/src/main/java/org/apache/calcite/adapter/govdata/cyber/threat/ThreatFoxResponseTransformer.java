@@ -109,7 +109,7 @@ public class ThreatFoxResponseTransformer implements ResponseTransformer {
         row.put("ioc_value", iocValue);
         row.put("ioc_type", textOrNull(entry, "ioc_type"));
         row.put("threat_type", textOrNull(entry, "threat_type"));
-        row.put("malware_key", textOrNull(entry, "fk_malware"));
+        row.put("malware_key", textOrNull(entry, "malware"));
         row.put("malware_printable", textOrNull(entry, "malware_printable"));
         row.put("malware_aliases", commaToPipe(textOrNull(entry, "malware_alias")));
         row.put("first_seen_utc", firstSeenRaw);

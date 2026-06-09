@@ -52,9 +52,9 @@ import java.util.List;
  *       "author_name": "researcher",
  *       "tags": ["emotet", "malware"],
  *       "targeted_countries": ["US", "UK"],
- *       "malware_families": [{"id": "...", "display_name": "Emotet"}],
- *       "attack_ids": [{"id": "T1566", "display_name": "Phishing"}],
- *       "indicator_count": 42,
+ *       "malware_families": ["Emotet", "TrickBot"],
+ *       "attack_ids": ["T1566", "T1059"],
+ *       "indicators": [ ... ],
  *       "created": "2024-01-15T08:30:00Z",
  *       "modified": "2024-01-20T12:00:00Z",
  *       "tlp": "white"
@@ -89,9 +89,16 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
       int[] count = {0};
 
-      // Apply delta filter if CYBER_OTX_DELTA_DAYS is set (e.g., "1" for daily incremental)
+      // Apply delta filter if CYBER_OTX_DELTA_DAYS is set (e.g., "1" for daily incremental).
+      // DQ sample mode (GOVDATA_DQ=true) must full-load the subscribed population — capped by
+      // dqRowLimit — so it never also applies the production incremental window (which would
+      // collapse the sample to a handful of recently-modified pulses and fail row-count/variety).
       String baseUrl = context.getUrl();
-      String deltaDaysEnv = System.getenv("CYBER_OTX_DELTA_DAYS");
+      boolean dqMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_DQ"));
+      String deltaDaysEnv = dqMode ? null : System.getenv("CYBER_OTX_DELTA_DAYS");
+      if (dqMode) {
+        LOGGER.info("OTX: DQ sample mode — full load (ignoring CYBER_OTX_DELTA_DAYS)");
+      }
       if (deltaDaysEnv != null && !deltaDaysEnv.trim().isEmpty()) {
         try {
           int deltaDays = Integer.parseInt(deltaDaysEnv.trim());
@@ -176,9 +183,16 @@ public class OtxResponseTransformer implements ResponseTransformer {
       row.put("author", textOrNull(pulse, "author_name"));
       row.put("tags", joinStringArray(pulse.path("tags")));
       row.put("targeted_countries", joinStringArray(pulse.path("targeted_countries")));
-      row.put("malware_families", joinDisplayNames(pulse.path("malware_families")));
-      row.put("attack_ids", joinAttackIds(pulse.path("attack_ids")));
-      row.put("ioc_count", intOrNull(pulse, "indicator_count"));
+      // OTX v1 returns malware_families/attack_ids as plain string arrays (not {id,display_name}
+      // objects) and no indicator_count — the inline indicators array carries the count.
+      row.put("malware_families", joinStringArray(pulse.path("malware_families")));
+      row.put("attack_ids", joinStringArray(pulse.path("attack_ids")));
+      JsonNode indicatorsNode = pulse.path("indicators");
+      if (indicatorsNode.isArray()) {
+        row.put("ioc_count", indicatorsNode.size());
+      } else {
+        row.putNull("ioc_count");
+      }
       row.put("created", created);
       row.put("modified", textOrNull(pulse, "modified"));
       row.put("tlp", textOrNull(pulse, "tlp"));
@@ -206,36 +220,6 @@ public class OtxResponseTransformer implements ResponseTransformer {
       }
     }
     return joinList(items);
-  }
-
-  /** Joins {@code display_name} fields from an array of objects. */
-  private static String joinDisplayNames(JsonNode arr) {
-    if (!arr.isArray() || arr.size() == 0) {
-      return null;
-    }
-    List<String> names = new ArrayList<String>();
-    for (JsonNode item : arr) {
-      String name = textOrNull(item, "display_name");
-      if (name != null) {
-        names.add(name);
-      }
-    }
-    return joinList(names);
-  }
-
-  /** Joins ATT&CK technique IDs (the {@code id} field, e.g., "T1566") from array. */
-  private static String joinAttackIds(JsonNode arr) {
-    if (!arr.isArray() || arr.size() == 0) {
-      return null;
-    }
-    List<String> ids = new ArrayList<String>();
-    for (JsonNode item : arr) {
-      String id = textOrNull(item, "id");
-      if (id != null) {
-        ids.add(id);
-      }
-    }
-    return joinList(ids);
   }
 
   private static String joinList(List<String> items) {
@@ -309,14 +293,6 @@ public class OtxResponseTransformer implements ResponseTransformer {
     }
     String t = v.asText();
     return t.isEmpty() ? null : t;
-  }
-
-  private static Integer intOrNull(JsonNode node, String field) {
-    JsonNode v = node.get(field);
-    if (v == null || v.isNull() || v.isMissingNode()) {
-      return null;
-    }
-    return v.asInt();
   }
 
   private static void sleepQuietly(long ms) {

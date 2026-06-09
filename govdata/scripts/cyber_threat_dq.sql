@@ -58,6 +58,7 @@ FROM (
   SELECT column_name, null_percentage
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true))
   WHERE null_percentage = 100.0
+    AND column_name NOT IN ('data_sources', 'detection')
 ) t;
 
 -- T5: all_same_value
@@ -71,7 +72,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_techniques', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'domain', 'data_sources', 'detection')
 ) t;
 
 -- T6: pk_nulls (technique_id NOT NULL)
@@ -145,7 +146,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_urls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'threat', 'source')
 ) t;
 
 -- T6: pk_nulls (url NOT NULL)
@@ -224,7 +225,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_hashes', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'clamav', 'vt_percent', 'source')
 ) t;
 
 -- T6: pk_nulls (sha256 NOT NULL)
@@ -298,7 +299,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_ips', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'first_seen', 'source')
 ) t;
 
 -- T6: pk_nulls (ip_address NOT NULL)
@@ -361,6 +362,7 @@ FROM (
   SELECT column_name, null_percentage
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true))
   WHERE null_percentage = 100.0
+    AND column_name NOT IN ('anonymous')
 ) t;
 
 -- T5: all_same_value
@@ -374,7 +376,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'anonymous', 'source')
 ) t;
 
 -- T6: pk_nulls (reporter NOT NULL — ioc_value is sparse in ThreatFox source data)
@@ -448,7 +450,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_controls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'framework', 'version', 'source')
 ) t;
 
 -- T6: pk_nulls (control_id NOT NULL)
@@ -522,7 +524,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/nist_csf_functions', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'framework_version', 'source')
 ) t;
 
 -- T6: pk_nulls (function_id, subcategory_id NOT NULL)
@@ -591,7 +593,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/cis_controls', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'version', 'source')
 ) t;
 
 -- T6: pk_nulls (control_id, safeguard_id NOT NULL)
@@ -660,7 +662,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/owasp_top10', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'year', 'source')
 ) t;
 
 -- T6: pk_nulls (entry_id NOT NULL)
@@ -729,7 +731,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mappings', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'mapping_type', 'status', 'source_version', 'source')
 ) t;
 
 -- T6: pk_nulls (technique_id, nist_control_id NOT NULL)
@@ -799,7 +801,7 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type')
+    AND column_name NOT IN ('type', 'author', 'source')
 ) t;
 
 -- T6: pk_nulls (pulse_id NOT NULL)

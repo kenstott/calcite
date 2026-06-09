@@ -357,6 +357,7 @@ public class SchemaLifecycleProcessor {
           .freshness(tableConfig.getFreshness())
           .datasetType(tableConfig.getDatasetType())
           .backfillPeriod(tableConfig.getBackfillPeriod())
+          .dqRowLimit(tableConfig.getDqRowLimit())
           .build();
     }
 

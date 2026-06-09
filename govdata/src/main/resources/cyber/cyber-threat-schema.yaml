@@ -138,6 +138,10 @@ partitionedTables:
   - name: ioc_urls
     pattern: "type=ioc_urls/first_seen=${first_seen}.parquet"
     dataset_type: snapshot          # full URLhaus dump re-fetched; overwrite replaces each first_seen partition
+    # DQ sample cap (GOVDATA_DQ mode): the URLhaus full dump is hundreds of thousands of URLs;
+    # cap the DQ sample so materialization stays fast. Cache-safe — the zip body is cached in
+    # full during fetch (before the iterator), so the cap only trims rows written to Iceberg.
+    dqRowLimit: 5000
     freshness:
       type: etag                    # abuse.ch content ETag; skip when the dump is unchanged
     partitions:
@@ -157,7 +161,6 @@ partitionedTables:
       - name: url_id
         type: string
         nullable: true
-        source: id
         comment: URLhaus numeric ID
       - name: url
         type: string
@@ -170,7 +173,6 @@ partitionedTables:
       - name: date_added
         type: string
         nullable: true
-        source: dateadded
         comment: Date added to URLhaus
       - name: last_online
         type: string
@@ -199,7 +201,6 @@ partitionedTables:
       - name: first_seen
         type: string
         nullable: true
-        source: dateadded
         comment: Partition column (date of first observation, mapped from dateadded)
 
     source:
@@ -431,7 +432,6 @@ partitionedTables:
       - name: malware_family
         type: string
         nullable: true
-        source: malware
         comment: Associated malware family
       - name: source
         type: string
@@ -497,12 +497,10 @@ partitionedTables:
       - name: ioc_id
         type: string
         nullable: true
-        source: id
         comment: ThreatFox IOC ID
       - name: ioc_value
         type: string
         nullable: false
-        source: ioc
         comment: IOC value (IP:port, domain, URL, or hash)
       - name: ioc_type
         type: string
@@ -515,7 +513,6 @@ partitionedTables:
       - name: malware_key
         type: string
         nullable: true
-        source: fk_malware
         comment: Malware identifier key
       - name: malware_printable
         type: string
@@ -524,17 +521,14 @@ partitionedTables:
       - name: malware_aliases
         type: string
         nullable: true
-        source: malware_alias
         comment: Pipe-delimited malware aliases
       - name: first_seen_utc
         type: string
         nullable: true
-        source: first_seen
         comment: First seen UTC timestamp
       - name: last_seen_utc
         type: string
         nullable: true
-        source: last_seen
         comment: Last seen UTC timestamp
       - name: confidence_level
         type: integer
@@ -1072,6 +1066,10 @@ partitionedTables:
   - name: threat_pulses
     pattern: "type=threat_pulses/first_seen=${first_seen}.parquet"
     dataset_type: snapshot          # OTX cursor-paginated GET (no single-probe freshness); key-gated in CyberSchemaFactory
+    # DQ sample cap (GOVDATA_DQ mode): OTX cursor-pages through all subscribed pulses (~8.6k);
+    # the cap stops pagination early. Cache-safe — the paginated cache commits only on full
+    # drain, so a capped run leaves the existing cache untouched.
+    dqRowLimit: 2000
     partitions:
       style: hive
       columnDefinitions:
@@ -1098,7 +1096,6 @@ partitionedTables:
       - name: author
         type: string
         nullable: true
-        source: author_name
         comment: Author username
       - name: tags
         type: string
@@ -1119,7 +1116,6 @@ partitionedTables:
       - name: ioc_count
         type: integer
         nullable: true
-        source: indicator_count
         comment: Number of IOC indicators in this pulse
       - name: created
         type: string

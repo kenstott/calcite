@@ -523,10 +523,14 @@ public class EtlPipeline {
       }
 
       // Dataset-type gate (standard mode only, not partitioned):
-      // snapshot → reduce to the single most-recent combination and never skip via
+      // snapshot → reduce to the single most-recent PERIOD combination and never skip via
       //   period-complete (the open period always re-runs for a snapshot source).
+      // Only applies when the table HAS a period dimension — "most-recent" is meaningful only
+      // for a descending yearRange. A snapshot whose dimension is categorical (e.g. OSV's
+      // ecosystem fan-out) must process EVERY combination; reducing to combinations.get(0)
+      // would silently ingest just one category (e.g. only PyPI).
       String datasetType = config.getDatasetType(); // "delta" by default
-      if (!usePartitionedExpansion && "snapshot".equals(datasetType)
+      if (!usePartitionedExpansion && hasPeriod && "snapshot".equals(datasetType)
           && combinations != null && !combinations.isEmpty()) {
         // Keep only the first combo (most-recent — YEAR_RANGE emits descending)
         List<Map<String, String>> snapshotCombo =

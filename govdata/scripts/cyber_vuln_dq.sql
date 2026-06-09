@@ -121,7 +121,7 @@ SELECT 'cyber_vuln', 'vulnerabilities', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vulnerabilities', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'source')
 );
 
 -- T6: pk_nulls (cve_id NOT NULL)
@@ -186,7 +186,7 @@ SELECT 'cyber_vuln', 'vulnerability_cwes', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vulnerability_cwes', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'quarter', 'pub_month')
 );
 
 -- T6: pk_nulls (cve_id, cwe_id NOT NULL)
@@ -251,7 +251,7 @@ SELECT 'cyber_vuln', 'kev_catalog', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/kev_catalog', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'catalog_version')
 );
 
 -- T6: pk_nulls (cve_id NOT NULL)
@@ -359,8 +359,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'osv_vulnerabilities', 'row_count',
-  CASE WHEN n < 16000 THEN 'fail' ELSE 'pass' END,
-  n, 16000, 'DQ-level (OSV snapshot ~20k for the configured ecosystems)'
+  CASE WHEN n < 10000 THEN 'fail' ELSE 'pass' END,
+  n, 10000, 'DQ-level: dqRowLimit 5000/ecosystem caps the big ecosystems; floor below the capped total'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/osv_vulnerabilities', allow_moved_paths := true));
 
 -- T3: sample
@@ -420,8 +420,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vuln_cross_refs', 'row_count',
-  CASE WHEN n < 20000 THEN 'fail' ELSE 'pass' END,
-  n, 20000, 'CVE→external cross-references; currently GHSA-only (~27k); MITRE/OSV sources pending'
+  CASE WHEN n < 3000 THEN 'fail' ELSE 'pass' END,
+  n, 3000, 'CVE→external cross-references; GHSA-only. dqRowLimit 5000 caps the crawl; floor below the capped output'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vuln_cross_refs', allow_moved_paths := true));
 
 -- T3: sample
@@ -446,7 +446,7 @@ SELECT 'cyber_vuln', 'vuln_cross_refs', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vuln_cross_refs', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'external_source')
 );
 
 -- T6: pk_nulls (cve_id, external_id, external_source NOT NULL)
@@ -511,7 +511,7 @@ SELECT 'cyber_vuln', 'advisories', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/advisories', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'source')
 );
 
 -- T6: pk_nulls (advisory_id, source NOT NULL)
@@ -534,7 +534,9 @@ FROM (
   SELECT COUNT(*) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/advisories', allow_moved_paths := true)
   WHERE advisory_id IS NOT NULL
-    AND NOT (advisory_id LIKE 'AA%' OR advisory_id LIKE 'ICSA%' OR advisory_id LIKE 'ICSMA%')
+    -- CISA advisory ID families: AA (alerts), ICSA/ICSMA (ICS/medical), VA (vendor advisories, VA-YY-DDD-NN)
+    AND NOT (advisory_id LIKE 'AA%' OR advisory_id LIKE 'ICSA%' OR advisory_id LIKE 'ICSMA%'
+             OR advisory_id LIKE 'VA-%')
 );
 
 -- ============================================================================

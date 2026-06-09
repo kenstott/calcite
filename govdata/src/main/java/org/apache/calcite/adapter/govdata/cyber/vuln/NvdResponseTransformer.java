@@ -100,7 +100,20 @@ public class NvdResponseTransformer implements ResponseTransformer {
     ObjectNode row = MAPPER.createObjectNode();
 
     row.put("cve_id", textOrNull(cve, "id"));
-    row.put("published", textOrNull(cve, "published"));
+    String publishedDate = textOrNull(cve, "published");
+    row.put("published", publishedDate);
+    // Emit pub_year/pub_month as real row values so the Iceberg writer can route each row into
+    // its [type, year, quarter] partition. The writer's effectiveYearField/effectiveMonthField
+    // fan-out reads these per-row BEFORE DuckDB evaluates any computed-column expression, so the
+    // value must already be present on the row (an expression-only column is still null here).
+    if (publishedDate != null && publishedDate.length() >= 7) {
+      try {
+        row.put("pub_year", Integer.parseInt(publishedDate.substring(0, 4)));
+        row.put("pub_month", Integer.parseInt(publishedDate.substring(5, 7)));
+      } catch (NumberFormatException ignored) {
+        // unparseable published date — leave pub_year/pub_month unset
+      }
+    }
     row.put("last_modified", textOrNull(cve, "lastModified"));
     row.put("vuln_status", textOrNull(cve, "vulnStatus"));
     row.put("description_en", extractEnDescription(cve));
