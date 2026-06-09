@@ -63,7 +63,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | edu          | —          | PENDING | —     | —     | Schema changes pending re-run |
 | census       | 2026-05-30 | PASS    | 0     | 0     | economic_census fix deployed in 0.16.1 |
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
-| crime        | —          | PENDING | —     | —     | Schema changes pending re-run |
+| crime        | 2026-06-09 | PASS    | 0     | 0     | cde_reta bulk Return A table (signed-URL urlResolver + fixed-width columnsResource + month-unpivot RowTransformer) replaces the ~195k-call per-ORI cde_crime_agency (retired). Fixed systemic year mislabel: every crime URL templates the data-year {year}, so dataLag→0 (publish=effective=data year) — cde_offenses now lands 2026. NCVS data restored (0→real rows) via current-4 DQ start. 107/107 pass |
 | geo          | 2026-06-01 | PASS    | 0     | 0     | DataProvider cache infrastructure (StorageAwareDataProvider) + WBD GDB cache path fix |
 | fec          | 2026-06-06 | WARN    | 0     | 1     | Truncated 2-cycle DQ rebuild (2024+2026); worker.sh:184 fix landed in 7e9324ec0 (honor get_dq_start_year). 85/86 pass; lone warn: candidate_summaries.T7_total_receipts_nonneg (1 row negative — FEC amendment adjustment) |
 | fedregister  | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 9/9 pass, 65,167 docs (2024–2026 scope) |
