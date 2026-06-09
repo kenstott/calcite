@@ -676,7 +676,9 @@ FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_trends', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'year')
+    -- cde_trends is a single national snapshot: current_range and last_refresh_date are
+    -- one value by design, not a data defect.
+    AND column_name NOT IN ('type', 'year', 'current_range', 'last_refresh_date')
 ) t;
 
 -- T6: pk_nulls (offense_name NOT NULL)

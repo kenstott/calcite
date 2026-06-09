@@ -888,6 +888,7 @@ get_dq_start_year() {
     lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
     census)   echo $(( $(date +%Y) - 3 )) ;;  # ACS 5-year: dataLag=2 + releaseMonth=12 → effective end current−3 before December
     patents)  echo $(( $(date +%Y) - 4 )) ;;  # USPTO TRCFECO2 trademark snapshot {year+1} settles slowly; window must reach the last published filing year
+    crime)    echo $(( $(date +%Y) - 4 )) ;;  # BJS NCVS publication lag: $where year='{year}' returns 0 rows for current−2; need current−4 so bjs_ncvs_* land a published survey year
     *)        echo $(( $(date +%Y) - 2 )) ;;  # annual/sub-annual: N−2 safe default (covers dataLag≤2)
   esac
 }
