@@ -89,7 +89,7 @@ public class FeodoResponseTransformer implements ResponseTransformer {
         row.put("malware_family", textOrNull(entry, "malware"));
         row.put("source", "feodo");
 
-        String firstSeen = textOrNull(entry, "first_seen_online");
+        String firstSeen = textOrNull(entry, "first_seen");
         row.put("first_seen", extractDate(firstSeen));
 
         gen.writeTree(row);
