@@ -417,6 +417,14 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # Best-effort: a compaction failure (mktemp/model-gen/EtlRunner) never blocks the ETL/DQ
   # run. The model is built in daily mode, so compactYearRange targets year=0 (table-complete
   # markers) + the current year — the two bloat-prone partitions — keeping it fast.
+  # Escape hatch: a no-year schema (e.g. cyber) generates a full 2010-current compaction range
+  # and the per-year scan lists EVERY schema's markers in each year partition (the tracker is
+  # not namespaced by schema), so it chokes on another schema's bloated year (e.g. econ/edu's
+  # ~581k year=2024 markers) for zero benefit — cyber's own markers live at year=0. The in-ETL
+  # per-batch compaction still drains the active year, so skipping this bulk pass is safe.
+  if [ "${GOVDATA_DQ_SKIP_PRECOMPACT:-false}" = "true" ]; then
+    log_info "$WORKER_ID: pre-ETL tracker compaction skipped (GOVDATA_DQ_SKIP_PRECOMPACT=true)"
+  else
   _compact_model="$(mktemp "/tmp/dq-compact-${SCHEMA}-XXXXXX.json" 2>/dev/null)" || _compact_model=""
   if [ -n "$_compact_model" ] && generate_single_schema_model "$SCHEMA" "$_compact_model"; then
     _compact_jar="${GOVDATA_JAR:-$GOVDATA_ROOT/build/libs/sih-govdata.jar}"
@@ -432,6 +440,7 @@ fi  # end iceberg/data teardown (only when --rebuild)
     log_info "$WORKER_ID: tracker compaction skipped (mktemp/model generation failed)"
   fi
   rm -f "$_compact_model" 2>/dev/null || true
+  fi
 
   # One descending sequence from today: daily (current year) first, then historical (older
   # years, newest→oldest via the schema's year_range `descending: true`).

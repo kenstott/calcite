@@ -57,9 +57,6 @@ while [[ $# -gt 0 ]]; do
     --force)
       POOL_EXTRA_ARGS+=(--force)
       ;;
-    --reset)
-      POOL_EXTRA_ARGS+=(--reset)
-      ;;
     --local-jar)
       LOCAL_JAR=true
       ;;
@@ -80,7 +77,6 @@ while [[ $# -gt 0 ]]; do
       echo "  --poll-interval N    Seconds between release polls (default 300)"
       echo "  -j N                 Max concurrent workers (passed to run-pool)"
       echo "  --force              Bypass release-window checks (passed to run-pool)"
-      echo "  --reset              Clear completed-slots checkpoint, re-run all schemas"
       echo "  --local-jar          Use the jar already at build/libs/sih-govdata.jar without"
       echo "                       downloading or polling for new releases"
       echo "  --no-rebuild         Run DQ only against existing R2 data (no ETL teardown/re-ingest)"
