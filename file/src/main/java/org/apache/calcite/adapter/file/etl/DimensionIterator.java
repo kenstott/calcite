@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -359,21 +360,21 @@ public class DimensionIterator {
       String dimName = customDimNames.get(d);
       DimensionConfig dimConfig = customDimConfigs.get(d);
 
-      // Resolve this CUSTOM dimension with context from a representative combo.
-      // Use the first combo from current (which already includes prior custom dims).
-      Map<String, String> representativeContext = currentCombos.get(0);
-      List<String> customValues = resolveCustomWithContext(dimConfig, representativeContext);
-
-      if (customValues.isEmpty()) {
-        LOGGER.debug("CUSTOM dimension '{}' resolved to empty for {}={}, skipping partition",
-            dimName, plan.getContextKey(), contextValue);
-        return null;
-      }
-
-      // Cross-product current combos with this custom dimension's values
-      List<Map<String, String>> expanded =
-          new ArrayList<Map<String, String>>(currentCombos.size() * customValues.size());
+      // Resolve this CUSTOM dimension PER COMBO, using that combo's own context. A dependent
+      // custom dimension (e.g. a pubEndDate paired with a prior pubStartDate) returns a different
+      // value for each prior-dimension value, so resolving once from a single "representative"
+      // combo and cross-producting would wrongly stamp one value (the first combo's) onto every
+      // combination. Memoize by context so an independent resolver (same result for every combo,
+      // e.g. ORIs keyed only on the partition's state) still resolves at most once per context.
+      Map<Map<String, String>, List<String>> valuesByContext =
+          new HashMap<Map<String, String>, List<String>>();
+      List<Map<String, String>> expanded = new ArrayList<Map<String, String>>();
       for (Map<String, String> combo : currentCombos) {
+        List<String> customValues = valuesByContext.get(combo);
+        if (customValues == null) {
+          customValues = resolveCustomWithContext(dimConfig, combo);
+          valuesByContext.put(new LinkedHashMap<String, String>(combo), customValues);
+        }
         for (String customVal : customValues) {
           Map<String, String> full = new LinkedHashMap<String, String>(combo);
           full.put(dimName, customVal);
@@ -381,9 +382,15 @@ public class DimensionIterator {
         }
       }
 
-      LOGGER.debug("CUSTOM dimension '{}' for {}={}: {} values, {} -> {} combinations",
+      if (expanded.isEmpty()) {
+        LOGGER.debug("CUSTOM dimension '{}' resolved to empty for {}={}, skipping partition",
+            dimName, plan.getContextKey(), contextValue);
+        return null;
+      }
+
+      LOGGER.debug("CUSTOM dimension '{}' for {}={}: {} -> {} combinations (per-combo)",
           dimName, plan.getContextKey(), contextValue,
-          customValues.size(), currentCombos.size(), expanded.size());
+          currentCombos.size(), expanded.size());
 
       currentCombos = expanded;
     }
