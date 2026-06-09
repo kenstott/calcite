@@ -689,6 +689,11 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   - name: cde_reta
     pattern: "type=reta/year=*/*.parquet"
+    # DQ sample cap (GOVDATA_DQ mode): the national Return A file unpivots to ~313k rows/year
+    # (≈26k agencies × 12 months). Cap each year's sample; applied after the month-unpivot
+    # transformer so it bounds output rows. Cache-safe — the fixed-width raw cache is written in
+    # full during fetch before this iterator runs, so the cap never truncates it.
+    dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
       FBI Return A master file: agency-level monthly counts of Part I offenses

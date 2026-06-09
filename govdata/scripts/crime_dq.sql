@@ -440,6 +440,61 @@ SELECT 'crime', 'cde_crime_agency', 'T8_worker_coverage',
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_crime_agency', allow_moved_paths := true);
 
 -- ============================================================================
+-- cde_reta (Return A agency monthly counts; partitioned by type/year)
+-- Bulk-download replacement for cde_crime_agency's per-ORI fan-out.
+-- DQ sample mode caps each year at dqRowLimit=25000 rows — thresholds are cap-aware.
+-- ============================================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'crime', 'cde_reta', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true);
+
+-- T2: row_count (cap-aware floor; DQ samples dqRowLimit=25000/year, prod ~313k/year)
+INSERT INTO dq_results
+SELECT 'crime', 'cde_reta', 'T2_row_count',
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 10000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 10000,
+  '>=10000 rows/year — cap-aware floor well under the 25000/year DQ sample cap'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true) LIMIT 3;
+
+-- T4: month coverage — the month-unpivot transformer must emit all 12 months
+INSERT INTO dq_results
+SELECT 'crime', 'cde_reta', 'T4_month_coverage',
+  CASE WHEN COUNT(DISTINCT month) = 12 THEN 'pass' ELSE 'fail' END,
+  COUNT(DISTINCT month), 12, 'distinct month must be 1-12 (RetaMonthUnpivotTransformer)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true);
+
+-- T5: pk_nulls (ori, year, month NOT NULL)
+INSERT INTO dq_results
+SELECT 'crime', 'cde_reta', 'T5_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'ori IS NULL OR year IS NULL OR month IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true)
+WHERE ori IS NULL OR year IS NULL OR month IS NULL;
+
+-- T6: month range valid (1-12)
+INSERT INTO dq_results
+SELECT 'crime', 'cde_reta', 'T6_month_range',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'month outside 1-12'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true)
+WHERE CAST(month AS INT) < 1 OR CAST(month AS INT) > 12;
+
+-- T7: worker coverage — historical: MIN(year) <= 2025
+INSERT INTO dq_results
+SELECT 'crime', 'cde_reta', 'T7_worker_coverage',
+  CASE WHEN MIN(CAST(year AS INT)) <= 2025 THEN 'pass' ELSE 'warn' END,
+  MIN(CAST(year AS INT)), 2025,
+  'MIN=' || MIN(year) || ' MAX=' || MAX(year) || ' | historical: MIN<=2025'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/cde_reta', allow_moved_paths := true);
+
+-- ============================================================================
 -- cde_arrests (arrests by state/offense/demographics; partitioned by type/year)
 -- ============================================================================
 
