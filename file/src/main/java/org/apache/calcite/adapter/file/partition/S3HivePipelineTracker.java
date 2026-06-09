@@ -451,25 +451,63 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       deleteCompactedFiles(String.valueOf(year));
     }
 
-    // Compact table completion markers (year=0)
+    // Compact table completion markers (year=0).
     // scanAndCacheYear returns the list of individual files it read.
-    // After compaction succeeds, we delete exactly those files (not a fresh listing).
+    // The compacted file is written inside scanAndCacheYear (slow-path end) before
+    // returning, so write-before-delete is satisfied at the year level.
+    // Delete in bounded READ_BATCH_SIZE outer chunks so a socket timeout or SIGKILL
+    // after chunk N still leaves chunks 0..N-1 permanently cleaned; the next
+    // --compact-only run restarts from scratch (S3 quiet-delete of already-gone
+    // keys is a no-op) and the backlog decreases monotonically.
     List<String> scannedFiles = scanAndCacheYear(COMPLETION_YEAR);
     if (scannedFiles != null && !scannedFiles.isEmpty()) {
-      deleteSpecificFiles(scannedFiles, COMPLETION_YEAR);
+      deleteInBoundedBatches(scannedFiles, COMPLETION_YEAR);
     }
 
     // Compact each data year (all phases in one pass)
     for (int year = startYear; year <= endYear; year++) {
-      scannedFiles = scanAndCacheYear(String.valueOf(year));
+      String yearStr = String.valueOf(year);
+      scannedFiles = scanAndCacheYear(yearStr);
       if (scannedFiles != null && !scannedFiles.isEmpty()) {
-        deleteSpecificFiles(scannedFiles, String.valueOf(year));
+        deleteInBoundedBatches(scannedFiles, yearStr);
       }
     }
 
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("Tracker compaction complete: years {}-{} in {}ms",
         startYear, endYear, elapsed);
+  }
+
+  /**
+   * Delete a list of individual S3 tracker files in bounded outer chunks of
+   * {@link #READ_BATCH_SIZE}, calling {@link #deleteSpecificFiles} per chunk.
+   *
+   * <p>A single {@link #deleteSpecificFiles} call over hundreds of thousands of
+   * keys issues ~200 sequential {@code DeleteObjects} requests; a socket timeout
+   * on any one of them aborts all remaining deletions.  Chunking at the outer
+   * level means a timeout after chunk N still permanently removed chunks 0..N-1,
+   * so the next run finds a strictly smaller straggler set.  S3 quiet-delete of
+   * already-absent keys is a no-op, so re-processing earlier chunks is safe.
+   *
+   * <p>Callers must ensure the corresponding compacted file was already durably
+   * written before calling this method (write-before-delete invariant).
+   *
+   * @param files list of S3 URIs to delete (the exact set returned by a prior scan)
+   * @param year  year label for logging
+   */
+  private void deleteInBoundedBatches(List<String> files, String year) {
+    int total = files.size();
+    int chunks = (total + READ_BATCH_SIZE - 1) / READ_BATCH_SIZE;
+    LOGGER.info("Deleting {} individual tracker files for year={} in {} chunk(s) of up to {}",
+        total, year, chunks, READ_BATCH_SIZE);
+    for (int i = 0; i < total; i += READ_BATCH_SIZE) {
+      int end = Math.min(i + READ_BATCH_SIZE, total);
+      List<String> chunk = files.subList(i, end);
+      int chunkNum = (i / READ_BATCH_SIZE) + 1;
+      LOGGER.info("Deleting chunk {}/{} ({} files) for year={}",
+          chunkNum, chunks, chunk.size(), year);
+      deleteSpecificFiles(new ArrayList<String>(chunk), year);
+    }
   }
 
   /**
@@ -503,31 +541,63 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       // Merge any individual files written after compaction by other workers.
       // Without this, concurrent workers' tracker writes would be invisible.
       // Process in batches to avoid OOM when hundreds of thousands of files exist.
+      //
+      // ANTI-BLOAT: after each batch is durably folded into a NEW _compacted/ file,
+      // delete that batch's individual straggler files immediately.  This makes
+      // guaranteed, bounded, interrupt-safe forward progress every run: even a
+      // SIGKILL after batch N still leaves N batches' worth of stragglers deleted,
+      // so the backlog shrinks monotonically across runs.
       String prefix = "year=" + year + "/source_key=";
       List<String> stragglers = listTrackerFiles(prefix);
+      // Track which straggler files were already compacted+deleted in this loop so that
+      // the caller's deleteSpecificFiles (which receives the full straggler list) skips them.
+      List<String> alreadyCompacted = new ArrayList<String>();
       if (!stragglers.isEmpty()) {
         LOGGER.info("Found {} individual tracker files alongside compacted file for year={}, "
             + "merging in batches of {}", stragglers.size(), year, READ_BATCH_SIZE);
         int totalExtra = 0;
+        int batchNum = 0;
+        int totalBatches = (stragglers.size() + READ_BATCH_SIZE - 1) / READ_BATCH_SIZE;
         for (int i = 0; i < stragglers.size(); i += READ_BATCH_SIZE) {
+          batchNum++;
           int end = Math.min(i + READ_BATCH_SIZE, stragglers.size());
           List<String> batch = stragglers.subList(i, end);
-          java.io.File tempDir = null;
+          java.io.File batchTempDir = null;
+          boolean batchMergedOk = false;
           try {
-            tempDir = downloadTrackerFilesParallel(batch, year);
-            String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+            batchTempDir = downloadTrackerFilesParallel(batch, year);
+            String localGlob = batchTempDir.getAbsolutePath() + "/*.parquet";
             int[] extra = readTrackerGlobAllPhases(localGlob);
             if (extra != null) {
               totalExtra += extra[1];
+              batchMergedOk = true;
             }
           } catch (Exception e) {
             LOGGER.warn("Failed to merge straggler batch {}/{} for year={}: {}",
-                (i / READ_BATCH_SIZE) + 1,
-                (stragglers.size() + READ_BATCH_SIZE - 1) / READ_BATCH_SIZE,
-                year, e.getMessage());
+                batchNum, totalBatches, year, e.getMessage());
           } finally {
-            if (tempDir != null) {
-              deleteDir(tempDir);
+            if (batchTempDir != null) {
+              deleteDir(batchTempDir);
+            }
+          }
+
+          // Per-batch compaction: write current accumulated stageCache state to a new
+          // _compacted/ file then delete this batch's individual files.
+          // Invariant: write BEFORE delete — an interrupt between the two is safe because
+          // the marker is then present in both the new compacted file and the individual
+          // file; reads are idempotent (ROW_NUMBER + latest-wins dedup), so no duplicate
+          // harm results.
+          if (!noCompact && batchMergedOk) {
+            try {
+              compactFromCache(year);
+              deleteSpecificFiles(new ArrayList<String>(batch), year);
+              alreadyCompacted.addAll(batch);
+              LOGGER.info("Anti-bloat: compacted+deleted straggler batch {}/{} ({} files) "
+                  + "for year={}", batchNum, totalBatches, batch.size(), year);
+            } catch (Exception e) {
+              LOGGER.warn("Anti-bloat: failed to compact/delete straggler batch {}/{} "
+                  + "for year={}: {}", batchNum, totalBatches, year, e.getMessage());
+              // Do not add to alreadyCompacted — caller will retry deletion
             }
           }
         }
@@ -536,7 +606,20 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         }
       }
 
-      return stragglers; // return individual files so caller can delete them
+      // Return only the straggler files that were NOT already compacted+deleted in the
+      // per-batch loop above, so the caller's deleteSpecificFiles call is idempotent
+      // (S3 quiet delete of already-deleted keys is a no-op, but this avoids wasted work).
+      if (alreadyCompacted.isEmpty()) {
+        return stragglers; // fast common path: nothing was compacted per-batch
+      }
+      Set<String> alreadyCompactedSet = new HashSet<String>(alreadyCompacted);
+      List<String> remaining = new ArrayList<String>();
+      for (String s : stragglers) {
+        if (!alreadyCompactedSet.contains(s)) {
+          remaining.add(s);
+        }
+      }
+      return remaining;
     }
 
     // Slow path: list files via S3 API (paginated), then batch-read with DuckDB.

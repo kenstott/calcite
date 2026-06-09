@@ -273,9 +273,11 @@ partitionedTables:
         nullable: true
         comment: Ash content percentage of fuel
 
+    backfill_period: annual
+
     source:
       type: http
-      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={year}-{month}&end={year}-{month}&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content"
+      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={period_start}&end={period_end}&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -920,9 +922,11 @@ partitionedTables:
         nullable: true
         comment: Full series description
 
+    backfill_period: annual
+
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={year}-{month}&end={year}-{month}&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -1419,9 +1423,11 @@ partitionedTables:
         nullable: true
         comment: Metric value
 
+    backfill_period: annual
+
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={year}-{month}&end={year}-{month}&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"

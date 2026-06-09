@@ -407,6 +407,29 @@ fi  # end iceberg/data teardown (only when --rebuild)
     rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/etl-tracker/schema=$SCHEMA" 2>/dev/null || true
   fi
 
+  # ── pre-ETL tracker compaction ──────────────────────────────────────────────
+  # Guarantee every DQ run starts from a compacted tracker so the active-year partition
+  # cannot accumulate unbounded straggler markers. Belt-and-suspenders alongside the
+  # per-batch worker-path compaction in S3HivePipelineTracker (which drains incrementally).
+  # Best-effort: a compaction failure (mktemp/model-gen/EtlRunner) never blocks the ETL/DQ
+  # run. The model is built in daily mode, so compactYearRange targets year=0 (table-complete
+  # markers) + the current year — the two bloat-prone partitions — keeping it fast.
+  _compact_model="$(mktemp "/tmp/dq-compact-${SCHEMA}-XXXXXX.json" 2>/dev/null)" || _compact_model=""
+  if [ -n "$_compact_model" ] && generate_single_schema_model "$SCHEMA" "$_compact_model"; then
+    _compact_jar="${GOVDATA_JAR:-$GOVDATA_ROOT/build/libs/sih-govdata.jar}"
+    _compact_log="$SCRIPT_DIR/runs/compact-${SCHEMA}.log"
+    log_info "$WORKER_ID: compacting tracker for schema=$SCHEMA before ETL (log: $_compact_log)"
+    if java -cp "$_compact_jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
+         --compact-only --model "$_compact_model" > "$_compact_log" 2>&1; then
+      log_info "$WORKER_ID: tracker compaction complete"
+    else
+      log_info "$WORKER_ID: tracker compaction failed (non-fatal) — see $_compact_log"
+    fi
+  else
+    log_info "$WORKER_ID: tracker compaction skipped (mktemp/model generation failed)"
+  fi
+  rm -f "$_compact_model" 2>/dev/null || true
+
   # One descending sequence from today: daily (current year) first, then historical (older
   # years, newest→oldest via the schema's year_range `descending: true`).
   #
