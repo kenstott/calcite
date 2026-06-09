@@ -398,6 +398,9 @@ fi  # end iceberg/data teardown (only when --rebuild)
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
   export GOVDATA_INCREMENTAL_START_YEAR="$(date +%Y)"
+  # DQ sample mode: activates per-table dqRowLimit caps in EtlPipeline so huge tables
+  # (e.g. cms_open_payments) ingest a bounded per-period sample. Prod never sets this.
+  export GOVDATA_DQ=true
 
   # On a full rebuild, clear DQ results + the ETL tracker so the standard workers re-ingest
   # the (already torn-down) data fresh.

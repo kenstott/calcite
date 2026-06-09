@@ -23,7 +23,7 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <initial|daily|weekly|monthly> [--force]" >&2
+  echo "Usage: $0 <initial|historical|daily|weekly|monthly> [--force]" >&2
   exit 1
 fi
 
@@ -91,7 +91,9 @@ INCREMENTAL_DATE="${INCREMENTAL_YEAR}-01-01"
 
 case "$MODE" in
 
-  initial)
+  # historical = the DQ / full re-ingest mode (run as the standard ETL worker, parameterized
+  # by GOVDATA_START_YEAR). Same full-table fetch as initial.
+  initial|historical)
     export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
     export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
     # Full fetch of all 15 health tables — capped at GOVDATA_INCREMENTAL_START_YEAR - 1
@@ -156,7 +158,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: initial, daily, weekly, monthly" >&2
+    echo "Unknown mode: $MODE. Valid modes: initial, historical, daily, weekly, monthly" >&2
     exit 1
     ;;
 esac
