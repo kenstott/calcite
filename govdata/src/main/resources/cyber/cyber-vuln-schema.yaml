@@ -204,13 +204,11 @@ partitionedTables:
       - name: pub_year
         type: integer
         nullable: true
-        expression: "CAST(EXTRACT(YEAR  FROM TRY_CAST(src.published AS TIMESTAMP)) AS INTEGER)"
-        comment: Publication year extracted from published (partition routing)
+        comment: Publication year (emitted by transformer from published; drives year partition routing)
       - name: pub_month
         type: integer
         nullable: true
-        expression: "CAST(EXTRACT(MONTH FROM TRY_CAST(src.published AS TIMESTAMP)) AS INTEGER)"
-        comment: Publication month 1-12 extracted from published (quarter routing)
+        comment: Publication month 1-12 (emitted by transformer from published; drives quarter routing)
 
     source:
       type: http
@@ -309,13 +307,11 @@ partitionedTables:
       - name: pub_year
         type: integer
         nullable: true
-        expression: "TRY_CAST(SPLIT_PART(src.cve_id, '-', 2) AS INTEGER)"
-        comment: Year extracted from CVE-YYYY-NNN (partition routing)
+        comment: Year from CVE-YYYY-NNN (emitted by transformer; drives year partition routing)
       - name: pub_month
         type: integer
         nullable: true
-        expression: "1"
-        comment: Month placeholder (Q1) for CVE-year-only routing
+        comment: Month placeholder 1 (emitted by transformer; CVE-year-only routing → Q1)
 
     source:
       type: http
@@ -559,6 +555,10 @@ partitionedTables:
       dow: [0]              # Weekly refresh; OSV updates continuously but Sunday run is sufficient
     pattern: "type=osv_vulnerabilities/ecosystem=*/*.parquet"
     dataset_type: snapshot          # per-ecosystem full replace
+    # DQ sample cap (GOVDATA_DQ mode): each ecosystem's all.zip holds up to tens of thousands of
+    # entries; cap per-ecosystem so DQ still samples every ecosystem fast. Cache-safe — the zip
+    # body is cached in full during fetch (before the iterator), so the cap only trims materialization.
+    dqRowLimit: 5000
     partitions:
       style: hive
       columnDefinitions:
@@ -682,6 +682,10 @@ partitionedTables:
       dow: [0]              # Weekly refresh; cross-reference data changes infrequently
     pattern: "type=vuln_cross_refs.parquet"
     dataset_type: snapshot          # full GHSA rebuild each run (single-source; no period axis)
+    # DQ sample cap (GOVDATA_DQ mode): the GHSA GraphQL crawl pages through ~28k advisories
+    # (~280 pages); the cap stops pagination early (~50 pages). Cache-safe — the paginated cache
+    # commits only on full drain, so a capped run leaves the existing cache untouched.
+    dqRowLimit: 5000
     # GraphQL freshness probe: one cheap query reads the global max updatedAt across all
     # advisories (orderBy UPDATED_AT DESC, first:1). When that timestamp is unchanged since
     # the last successful commit, the whole 31k-advisory crawl is skipped — no re-fetch, no
