@@ -1392,6 +1392,45 @@ public class EtlPipeline {
     }
   }
 
+  /** True when DQ sample mode is active ({@code GOVDATA_DQ=true} as system property or env). */
+  private static boolean isDqSampleMode() {
+    String v = System.getProperty("GOVDATA_DQ");
+    if (v == null) {
+      v = System.getenv("GOVDATA_DQ");
+    }
+    return "true".equalsIgnoreCase(v);
+  }
+
+  /**
+   * Caps a per-combination source iterator at {@code config.getDqRowLimit()} rows when DQ
+   * sample mode is active. Off (returns {@code data} unchanged) when not in DQ mode or when
+   * no cap is configured. See {@link EtlPipelineConfig#getDqRowLimit()} for why this is
+   * cache-safe.
+   */
+  private Iterator<Map<String, Object>> applyDqRowLimit(
+      final Iterator<Map<String, Object>> data, String pipelineName) {
+    final int limit = config.getDqRowLimit();
+    if (limit <= 0 || !isDqSampleMode()) {
+      return data;
+    }
+    LOGGER.info("Pipeline '{}': DQ sample mode — capping at {} rows per fetch-unit", pipelineName, limit);
+    return new Iterator<Map<String, Object>>() {
+      private int yielded = 0;
+
+      @Override public boolean hasNext() {
+        return yielded < limit && data.hasNext();
+      }
+
+      @Override public Map<String, Object> next() {
+        if (yielded >= limit) {
+          throw new NoSuchElementException();
+        }
+        yielded++;
+        return data.next();
+      }
+    };
+  }
+
   /**
    * Writes data with response partitioning.
    *
@@ -1614,6 +1653,13 @@ public class EtlPipeline {
     if (data == null) {
       data = dataSource.fetch(variables);
     }
+
+    // DQ sample cap: in DQ sample mode (GOVDATA_DQ=true) a table may declare dqRowLimit to
+    // bound rows per fetch-unit (per period). This wraps the per-combination iterator so each
+    // period (e.g. each program year) yields at most N rows — fast, but still spanning every
+    // period so year-over-year/format changes are exercised. Cache-safe: caching sources have
+    // already written their full body before this iterator runs, and CSV_STREAM writes none.
+    data = applyDqRowLimit(data, pipelineName);
 
     // hash freshness gate (post-download): if freshness.type==HASH and the fetched content
     // is identical to the last run, skip the write and return 0 rows (no new snapshot).

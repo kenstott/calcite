@@ -89,6 +89,7 @@ public class EtlPipelineConfig {
   private final FreshnessConfig freshness;
   private final String datasetType;
   private final String backfillPeriod;
+  private final int dqRowLimit;
 
   private EtlPipelineConfig(Builder builder) {
     this.name = builder.name;
@@ -112,6 +113,7 @@ public class EtlPipelineConfig {
     this.freshness = builder.freshness;
     this.datasetType = builder.datasetType != null ? builder.datasetType : "delta";
     this.backfillPeriod = builder.backfillPeriod;
+    this.dqRowLimit = builder.dqRowLimit;
   }
 
   /**
@@ -203,6 +205,20 @@ public class EtlPipelineConfig {
   /** Delta backfill window granularity ({@code annual|quarterly|weekly|daily}), or null. */
   public String getBackfillPeriod() {
     return backfillPeriod;
+  }
+
+  /**
+   * DQ sample cap: maximum rows to materialise <b>per fetch-unit (per period)</b>, applied only
+   * when DQ sample mode is active ({@code GOVDATA_DQ=true}); {@code <= 0} means uncapped.
+   *
+   * <p>The cap wraps the per-combination source iterator, so each period (e.g. each program
+   * year) yields at most this many rows — a fast, bounded sample that still spans every period
+   * (so year-over-year/format changes are exercised). It never truncates the raw cache: caching
+   * sources write their full body during fetch before the iterator runs, and {@code CSV_STREAM}
+   * writes no cache (there the cap also stops the download, which is the main speed win).
+   */
+  public int getDqRowLimit() {
+    return dqRowLimit;
   }
 
   /**
@@ -319,6 +335,17 @@ public class EtlPipelineConfig {
     Object backfillObj = map.get("backfill_period");
     if (backfillObj instanceof String) {
       builder.backfillPeriod((String) backfillObj);
+    }
+
+    Object dqRowLimitObj = map.get("dqRowLimit");
+    if (dqRowLimitObj instanceof Number) {
+      builder.dqRowLimit(((Number) dqRowLimitObj).intValue());
+    } else if (dqRowLimitObj instanceof String) {
+      try {
+        builder.dqRowLimit(Integer.parseInt(((String) dqRowLimitObj).trim()));
+      } catch (NumberFormatException e) {
+        // ignore invalid value — leaves the default (uncapped)
+      }
     }
 
     return builder.build();
@@ -632,6 +659,7 @@ public class EtlPipelineConfig {
     private FreshnessConfig freshness;
     private String datasetType;
     private String backfillPeriod;
+    private int dqRowLimit;
 
     public Builder name(String name) {
       this.name = name;
@@ -695,6 +723,11 @@ public class EtlPipelineConfig {
 
     public Builder backfillPeriod(String backfillPeriod) {
       this.backfillPeriod = backfillPeriod;
+      return this;
+    }
+
+    public Builder dqRowLimit(int dqRowLimit) {
+      this.dqRowLimit = dqRowLimit;
       return this;
     }
 
