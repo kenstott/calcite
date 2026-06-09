@@ -18,7 +18,6 @@ org.apache.calcite.adapter.govdata.crime.CdeAgencyTransformer
 org.apache.calcite.adapter.govdata.crime.CdeCrimeRatesTransformer
 org.apache.calcite.adapter.govdata.crime.CdePoliceEmploymentTransformer
 org.apache.calcite.adapter.govdata.crime.CdeHateCrimeTransformer
-org.apache.calcite.adapter.govdata.crime.CdeAgencyOffenseTransformer
 org.apache.calcite.adapter.govdata.crime.CdeTrendsTransformer
 org.apache.calcite.adapter.govdata.crime.CdeSupplementalTransformer
 org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer

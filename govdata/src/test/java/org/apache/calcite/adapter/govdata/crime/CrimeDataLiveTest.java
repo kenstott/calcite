@@ -206,22 +206,6 @@ class CrimeDataLiveTest {
         new String[]{"state_abbr", "property_type"});
   }
 
-  @Test void testCdeCrimeAgency() throws Exception {
-    // Use a known ORI from Alabama
-    String url = "https://cde.ucr.cjis.gov/LATEST/summarized/agency/"
-        + "AL0010100/homicide?from=01-" + TEST_YEAR + "&to=12-" + TEST_YEAR;
-
-    Map<String, String> dims = new HashMap<>();
-    dims.put("ori", "AL0010100");
-    dims.put("state_abbr", TEST_STATE);
-    dims.put("offense", "homicide");
-    dims.put("year", TEST_YEAR);
-
-    verifyEndpoint("cde_crime_agency", url,
-        new CdeAgencyOffenseTransformer(), dims,
-        new String[]{"ori"});
-  }
-
   // =========================================================================
   // BJS ENDPOINTS (api.ojp.gov - no auth)
   // =========================================================================

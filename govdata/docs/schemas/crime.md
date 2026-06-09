@@ -22,7 +22,7 @@ The schema is served by `CrimeSchemaFactory` via `GovDataSchemaFactory` and is d
 | `cde_police_employment` | Annual sworn officer and civilian employee counts by state with officers-per-1,000 ratio | FBI CDE `/LATEST/pe` | Annual |
 | `cde_hate_crimes` | Annual hate crime counts by state, bias motivation, and offense type | FBI CDE `/LATEST/hate-crime/state/{state}` | Annual |
 | `cde_use_of_force` | Use-of-force incidents reported to FBI by agency, year, and outcome type | FBI CDE use-of-force endpoint | Annual |
-| `cde_crime_agency` | Agency-level annual offense counts (NIBRS-reporting agencies) | FBI CDE agency crime endpoint | Annual |
+| `cde_reta` | Agency-level monthly Part I offense + clearance counts (reported/unfounded/actual/cleared/juvenile-cleared) plus officers killed/assaulted; one row per agency (ORI7) per month | FBI Return A bulk master file (signed-URL download, fixed-width) | Annual (one national file/year) |
 | `cde_arrests` | Annual arrest counts by state, offense, and age/sex/race demographics | FBI CDE arrests endpoint | Annual |
 | `cde_shr` | Supplemental Homicide Reports: homicide circumstances, weapon, victim/offender relationship | FBI CDE SHR endpoint | Annual |
 | `cde_leoka` | Law Enforcement Officers Killed and Assaulted: annual fatalities and assaults by circumstance | FBI CDE LEOKA endpoint | Annual |

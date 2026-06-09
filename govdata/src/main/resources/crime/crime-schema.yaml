@@ -593,98 +593,6 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
-  # CDE CRIME AGENCY - Agency-level offense data
-  # ---------------------------------------------------------------------------
-  - name: cde_crime_agency
-    pattern: "type=agency_offense/year=*/*.parquet"
-    partitions: *standard_partitions
-    comment: >
-      FBI CDE agency-level offense data. One row per agency (ORI) + offense + month.
-      Uses OriDimensionResolver to iterate ORIs per state from cde_agencies table.
-      ~19,581 agencies x 10 core offenses. Cross-references cde_agencies via ori.
-
-    dimensions:
-      type:
-        - agency_offense
-      year: *crime_year_range
-      month: ["12"]
-      state_abbr: *all_state_abbrs
-      offense: *ucr_core_offenses
-      ori:
-        type: custom
-        properties:
-          contextKey: state_abbr
-          agenciesTablePath: "${GOVDATA_PARQUET_DIR}/crime/cde_agencies"
-
-    columns:
-      - name: ori
-        type: string
-        nullable: false
-        comment: ORI identifier (e.g., 'CA0150000')
-      - name: state_abbr
-        type: string
-        nullable: false
-        comment: 2-letter state abbreviation
-      - name: offense_code
-        type: string
-        nullable: false
-        comment: FBI offense code
-      - name: month
-        type: string
-        nullable: true
-        comment: MM-YYYY format
-      - name: actual
-        type: long
-        nullable: true
-        comment: Actual offense count
-      - name: cleared
-        type: long
-        nullable: true
-        comment: Cleared offense count
-      - name: actual_since_last_year
-        type: long
-        nullable: true
-        comment: Year-to-date actual count
-      - name: cleared_since_last_year
-        type: long
-        nullable: true
-        comment: Year-to-date cleared count
-
-    source:
-      type: http
-      url: "https://cde.ucr.cjis.gov/LATEST/summarized/agency/{ori}/{offense}?from=01-{year}&to={month}-{year}"
-      method: GET
-      parallel: 5
-      response:
-        format: json
-      rateLimit:
-        requestsPerSecond: 10.0
-        retryOn: [429, 503]
-        maxRetries: 3
-      rawCache:
-        enabled: true
-
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.crime.CdeAgencyOffenseTransformer"
-      dimensionResolver: "org.apache.calcite.adapter.govdata.crime.OriDimensionResolver"
-
-    materialize:
-      format: iceberg
-      output:
-        pattern: "type=agency_offense/year=*/"
-      partition:
-        columns: [type, year]
-      iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
-        tableName: cde_crime_agency
-        catalogType: hadoop
-        runCompaction: true
-        compactionTargetFileSizeBytes: 134217728
-        compactionMinFiles: 5
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-
-  # ---------------------------------------------------------------------------
   # CDE RETA - Return A agency monthly offense + clearance counts (bulk master file)
   # ---------------------------------------------------------------------------
   - name: cde_reta
@@ -2313,13 +2221,6 @@ constraints:
         targetSchema: geo
         targetTable: states
         targetColumns: [state_abbr]
-
-  cde_crime_agency:
-    primaryKey: [ori, offense_code, month]
-    foreignKeys:
-      - columns: [ori]
-        targetTable: cde_agencies
-        targetColumns: [ori]
 
   # No FK to cde_agencies: the Return A master file carries the 7-character ORI7,
   # whereas cde_agencies.ori is the 9-character ORI9 — the mapping is resolved in views.

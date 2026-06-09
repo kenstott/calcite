@@ -62,7 +62,7 @@ public class CrimeSchemaFactory implements GovDataSubSchemaFactory {
               "cde_police_employment",
               "cde_hate_crimes",
               "cde_use_of_force",
-              "cde_crime_agency",
+              "cde_reta",
               "cde_leoka",
               "cde_arrests",
               "cde_shr",
