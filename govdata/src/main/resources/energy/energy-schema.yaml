@@ -967,8 +967,8 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   - name: eia_state_energy_consumption
     pattern: "type=eia_seds/year=*/*.parquet"
-    # DQ sample cap (GOVDATA_DQ mode): ~40k rows/year (state × MSN series), fetched per-year
-    # via paginated EIA SEDS API. Cap each year's sample to stop paginating early; prod full.
+    # DQ sample cap (GOVDATA_DQ mode): the bulk SEDS.zip is one cumulative fetch of the full
+    # history (millions of state × MSN × year rows). Cap the stream so DQ samples fast; prod full.
     dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
@@ -979,12 +979,17 @@ partitionedTables:
       consumption_bbtu, expenditure_million, and price_per_mmbtu columns where applicable.
       One row per state + MSN + year. Cross-references geo.states via state_abbr.
 
+    # Single cumulative fetch: the bulk SEDS.zip carries the full annual history; the
+    # transformer streams it once and partitions by the data year (no per-year dimension).
     dimensions:
       type:
         - eia_seds
-      year: *eia_seds_years
 
     columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year (partition column)
       - name: consumption_year
         type: integer
         nullable: false
@@ -1031,27 +1036,19 @@ partitionedTables:
         nullable: true
         comment: Full human-readable description of the SEDS series
 
+    # Bulk download: one cumulative SEDS.zip replaces the per-year paginated EIA API v2 fan-out.
+    freshness:
+      type: last_modified
     source:
       type: http
-      url: "https://api.eia.gov/v2/seds/data?frequency=annual&start={year}&end={year}&data[]=value"
+      url: "https://www.eia.gov/opendata/bulk/SEDS.zip"
       method: GET
-      parameters:
-        api_key: "${ENERGY_EIA_API_KEY:}"
-        length: "5000"
       response:
         format: json
-        dataPath: "$.response.data"
-        pagination:
-          type: OFFSET
-          totalPath: "$.response.total"
-          pageSize: 5000
-          limitParam: "length"
-          offsetParam: "offset"
-      rateLimit: *eia_rate_limit
       rawCache: *raw_cache_enabled
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaSEDSTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaSedsBulkTransformer"
 
     materialize:
       format: iceberg

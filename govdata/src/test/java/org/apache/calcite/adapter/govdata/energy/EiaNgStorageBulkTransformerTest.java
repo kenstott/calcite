@@ -47,7 +47,7 @@ class EiaNgStorageBulkTransformerTest {
         + "\"data\":[[\"20260529\",250],[\"20260522\",240]]}";
 
     List<Map<String, Object>> rows =
-        EiaNgStorageBulkTransformer.rowsForSeries(M.readTree(storage));
+        EiaNgStorageBulkTransformer.rowsForSeriesStatic(M.readTree(storage));
 
     assertEquals(2, rows.size(), "one row per data point (explode)");
     Map<String, Object> r0 = rows.get(0);
@@ -66,7 +66,7 @@ class EiaNgStorageBulkTransformerTest {
   @Test @Tag("unit") void nonStorageSeriesIsFilteredOut() throws Exception {
     String prod = "{\"series_id\":\"NG.N9070US2.M\",\"name\":\"US NG Marketed Production\","
         + "\"data\":[[\"202604\",3000]]}";
-    assertTrue(EiaNgStorageBulkTransformer.rowsForSeries(M.readTree(prod)).isEmpty(),
+    assertTrue(EiaNgStorageBulkTransformer.rowsForSeriesStatic(M.readTree(prod)).isEmpty(),
         "only weekly storage-by-region series should produce rows");
   }
 

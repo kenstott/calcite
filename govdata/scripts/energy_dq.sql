@@ -509,9 +509,9 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_state_energy_consumption
 INSERT INTO dq_results
 SELECT
   'energy', 'eia_state_energy_consumption', 'T2_row_count',
-  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 20000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), COUNT(DISTINCT year) * 20000,
-  'cap-aware: dqRowLimit=25000/year DQ sample (prod ~40k/year uncapped); >=20000/year floor'
+  CASE WHEN COUNT(*) >= 20000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 20000,
+  'cap-aware: bulk SEDS.zip single fetch capped at dqRowLimit=25000 in DQ mode; prod full history'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_state_energy_consumption', allow_moved_paths := true);
 
 -- T3: sample
