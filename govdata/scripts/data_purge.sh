@@ -157,7 +157,7 @@ echo "  Env:       $ENV_NAME (rclone remote: ${RCLONE_REMOTE})"
 echo "  Schema:    $SCHEMA"
 echo "  Tables:    ${TABLES[*]}"
 echo "  Iceberg:   ${PARQUET_BUCKET}/${SCHEMA}/<table>"
-echo "  Tracker:   ${TRACKER_BUCKET}/year=*/source_key=<table>/*"
+echo "  Tracker:   ${TRACKER_BUCKET}/year=*/source_key=* where table_name=<table> (resolved via DuckDB)"
 $PURGE_RAW && echo "  Raw cache: ${RAW_BUCKET}/${SCHEMA}/<table>/  (+ local ${RAW_CACHE_DIR}/<table>/)"
 $DRY_RUN && echo "  *** DRY RUN — no changes will be made ***"
 echo ""
@@ -172,18 +172,38 @@ for TABLE in "${TABLES[@]}"; do
   echo "── Purging ${SCHEMA}/${TABLE} ──"
   ICEBERG_PATH="${RCLONE_PARQUET}${SCHEMA}/${TABLE}"
 
-  # Step 1: Drop Iceberg table directory
+  # Step 1: Drop Iceberg table directory.
+  # Removing the Iceberg data is the AUTHORITATIVE re-ingest trigger: with no committed
+  # data the pipeline logs "no Iceberg data — force-reprocessing all combinations" and
+  # rebuilds every period regardless of (stale) tracker markers. So this step must be
+  # reliable — distinguish a real `rclone ls` failure from a genuinely empty table rather
+  # than swallowing errors (a swallowed transient error silently skips the purge, leaving
+  # data in place so --etl-resume wrongly skips the table).
   echo "  [1/2] Iceberg: ${PARQUET_BUCKET}/${SCHEMA}/${TABLE}"
   if $DRY_RUN; then
     echo "        [DRY RUN] Would purge: $ICEBERG_PATH"
   else
-    rclone_ls_out=$(rclone ls "$ICEBERG_PATH" 2>/dev/null || true)
-    FILE_COUNT=$(echo -n "$rclone_ls_out" | wc -l | tr -d ' ')
-    if [[ -z "$rclone_ls_out" || "$FILE_COUNT" -eq 0 ]]; then
-      echo "        No files found — skipping"
+    rclone_ls_out=""; ls_ok=false
+    for attempt in 1 2 3; do
+      if rclone_ls_out=$(rclone ls "$ICEBERG_PATH" 2>/dev/null); then ls_ok=true; break; fi
+      sleep 2
+    done
+    if ! $ls_ok; then
+      echo "        ERROR: 'rclone ls $ICEBERG_PATH' failed after 3 attempts — NOT skipping (would leave data in place)"
+      ERRORS=$((ERRORS+1))
     else
-      if rclone purge "$ICEBERG_PATH" 2>/dev/null; then
-        echo "        Purged $FILE_COUNT files"
+      FILE_COUNT=$(echo -n "$rclone_ls_out" | grep -c . || true)
+      if [[ "$FILE_COUNT" -eq 0 ]]; then
+        echo "        No files found — already empty"
+      elif rclone purge "$ICEBERG_PATH" 2>/dev/null; then
+        # verify the purge actually emptied the directory
+        remain=$(rclone ls "$ICEBERG_PATH" 2>/dev/null | grep -c . || true)
+        if [[ "$remain" -eq 0 ]]; then
+          echo "        Purged $FILE_COUNT files"
+        else
+          echo "        ERROR: $remain files remain after purge of $ICEBERG_PATH"
+          ERRORS=$((ERRORS+1))
+        fi
       else
         echo "        ERROR: failed to purge $ICEBERG_PATH"
         ERRORS=$((ERRORS+1))
@@ -191,15 +211,51 @@ for TABLE in "${TABLES[@]}"; do
     fi
   fi
 
-  # Step 2: Delete tracker entries (per-year + completion marker)
-  echo "  [2/2] Tracker: ${TRACKER_BUCKET}/year=*/source_key=${TABLE}/*"
+  # Step 2: Delete tracker markers for this table.
+  # The tracker keys markers by the fetch-unit's dimension VALUES, not the table name —
+  # S3HivePipelineTracker.flattenKeyValues writes source_key=<single dim value> or, for
+  # multi-dim tables, a sorted "k1=v1__k2=v2__..." composite (e.g.
+  # source_key=effective_year=2024__state_fips=01__type=cdo_annual__year=2025). The table
+  # appears only as the type= dimension VALUE, which is not even the table name
+  # (type=cdo_annual ≠ table cdo_annual_summaries). So a path glob "source_key=<table>"
+  # matches nothing. The marker PARQUET content, however, carries the real table_name
+  # column — so we resolve the per-source_key marker dirs via DuckDB and delete those.
+  # (Compacted markers under year=*/_compacted/ are left in place: they are superseded by
+  # the newer markers written when the table re-ingests, and Step 1's Iceberg removal is
+  # what actually forces that re-ingest.)
+  echo "  [2/2] Tracker: marker dirs where table_name=${TABLE}"
   if $DRY_RUN; then
-    echo "        [DRY RUN] Would delete tracker entries matching source_key=${TABLE}"
+    echo "        [DRY RUN] Would resolve marker dirs via DuckDB and delete them"
   else
-    deleted=$(rclone delete "$RCLONE_TRACKER" \
-                --include "/year=*/source_key=${TABLE}/*" \
-                --stats-one-line --stats 0 2>&1 | tail -1 || true)
-    echo "        ${deleted:-done}"
+    # DuckDB 1.5.2+ ignores SET s3_* (auto-loads ~/.aws/credentials) — must use CREATE SECRET.
+    # ENDPOINT is host:port only (no scheme); detect SSL from the override prefix.
+    _ep="${AWS_ENDPOINT_OVERRIDE#http://}"; _ep="${_ep#https://}"
+    _ssl=true; _region=auto
+    [[ "$AWS_ENDPOINT_OVERRIDE" == http://* ]] && { _ssl=false; _region=us-east-1; }
+    mapfile -t _dirs < <(duckdb -noheader -list 2>/dev/null <<SQL || true
+INSTALL httpfs; LOAD httpfs;
+SET http_timeout = 60000;
+CREATE OR REPLACE SECRET data_purge_s3 (
+    TYPE s3,
+    KEY_ID '${AWS_ACCESS_KEY_ID}',
+    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    ENDPOINT '${_ep}',
+    REGION '${_region}',
+    URL_STYLE 'path',
+    USE_SSL ${_ssl}
+);
+SELECT DISTINCT regexp_replace(filename, '/[^/]*\$', '')
+FROM read_parquet('${TRACKER_BUCKET%/}/year=*/source_key=*/*.parquet', filename=true, union_by_name=true)
+WHERE table_name = '${TABLE}';
+SQL
+)
+    _n=0
+    for _d in "${_dirs[@]}"; do
+      [[ -z "$_d" || "$_d" != s3://* ]] && continue
+      _rd="${RCLONE_REMOTE}:${_d#s3://}"
+      if rclone purge "$_rd" 2>/dev/null; then _n=$((_n+1)); fi
+    done
+    echo "        Deleted $_n marker dir(s) for table_name=${TABLE}"
   fi
 
   # Step 3 (optional): Delete the raw HTTP cache — the object store (what prod/DQ
