@@ -16,10 +16,11 @@ STATE_FILE="${HOME}/.run-pool.state"
 COMPLETED_FILE="${HOME}/.run-pool-completed.state"
 
 # The completed-slots checkpoint (${COMPLETED_FILE}) is SHARED across concurrent
-# pools and is never wiped here — completions are append-only (run-pool.sh) and the
-# checkpoint persists across restarts so already-finished schemas are never re-run.
-# To force a single slot to re-run, purge that one table's data+tracker and use
-# --etl-resume; do not delete the shared checkpoint.
+# pools — completions are append-only (run-pool.sh) and persist across restarts, so an
+# unforced pool (e.g. the nightly multi-schema run) skips already-finished schemas on
+# boot-resume. A forced run (`run-pool.sh --force`, which run-all-dq always passes)
+# clears just its own queued slots' entries up front so the re-run isn't silently
+# skipped; it never wipes the whole shared file, so other schemas' entries survive.
 POOL_ARGS=("$@")
 
 # Save args one-per-line so args containing spaces survive.

@@ -249,6 +249,25 @@ fi
 
 # Filter out already-completed slots (checkpoint resume)
 COMPLETED_FILE="${HOME}/.run-pool-completed.state"
+# --force clears the checkpoint entries for the slots about to run, so a forced
+# re-run is not silently skipped (and no stale "completed" marker lingers). Only the
+# queued slots are removed; other schemas' shared entries are preserved.
+if [ "${FORCE:-false}" = true ] && [ -f "$COMPLETED_FILE" ] && [ "${#queue[@]}" -gt 0 ]; then
+  _kept=()
+  while IFS= read -r _line; do
+    _drop=false
+    for slot in "${queue[@]}"; do
+      if [ "$_line" = "$slot" ]; then _drop=true; break; fi
+    done
+    $_drop || _kept+=("$_line")
+  done < "$COMPLETED_FILE"
+  if [ "${#_kept[@]}" -gt 0 ]; then
+    printf '%s\n' "${_kept[@]}" > "$COMPLETED_FILE"
+  else
+    : > "$COMPLETED_FILE"
+  fi
+  log_info "Checkpoint: --force cleared ${#queue[@]} queued slot(s) from $COMPLETED_FILE (${queue[*]})"
+fi
 if [ -f "$COMPLETED_FILE" ]; then
   completed_slots=()
   while IFS= read -r _line; do completed_slots+=("$_line"); done < "$COMPLETED_FILE"

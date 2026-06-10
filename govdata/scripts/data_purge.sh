@@ -22,9 +22,13 @@
 #   1. The Iceberg table directory at <parquet bucket>/<schema>/<table>
 #   2. All tracker entries matching year=*/source_key=<table>/* (both per-year
 #      incremental markers and the _table_complete completion marker for that table)
-#   3. With --raw: the local HTTP raw cache at /tmp/etl-raw-cache/<table>/
-#      (use this when a prior run cached a corrupt/truncated upstream response
-#      and the HttpSource keeps re-using it instead of refetching).
+#   3. With --raw: the raw HTTP cache for the table — the object store at
+#      <raw bucket>/<schema>/<table> (govdata-raw-v1, what prod/DQ runs actually
+#      read/write) plus the local mirror at $ETL_RAW_CACHE_DIR/<table> if present.
+#      Use this when a prior run cached a corrupt/truncated/stale upstream response
+#      and HttpSource keeps re-using it instead of refetching. Note the raw cache is
+#      keyed by partition dims, not the URL, so a URL/transformer change does not
+#      invalidate it — purge raw explicitly after such a fix.
 #
 # It does NOT trigger ETL. The next run-pool invocation will re-ingest from
 # scratch.
@@ -72,9 +76,11 @@ Examples:
   data_purge.sh --schema fec     --tables committee_contributions --dry-run
 
 Flags:
-  --raw     Also delete the local HTTP raw cache at \$ETL_RAW_CACHE_DIR/<table>/
-            (default: /tmp/etl-raw-cache). Use when a cached response is
-            corrupt or stale and is being reused instead of refetching.
+  --raw     Also purge the raw HTTP cache for each table: the object store at
+            <raw bucket>/<schema>/<table> (GOVDATA_RAW_DIR, default
+            s3://govdata-raw-v1, via the env's rclone remote) plus the local
+            mirror at \$ETL_RAW_CACHE_DIR/<table> if present. Use when a cached
+            response is corrupt or stale and is being reused instead of refetching.
 EOF
   exit 1
 fi
@@ -137,6 +143,11 @@ s3_to_rclone() {
 }
 RCLONE_PARQUET="$(s3_to_rclone "$PARQUET_BUCKET")"
 RCLONE_TRACKER="$(s3_to_rclone "$TRACKER_BUCKET")"
+# Raw HTTP cache lives in the configured cache repository — the object store
+# (govdata-raw-v1, same bucket for prod and dq, reached via the env's remote) is
+# what prod/DQ runs read and write. GOVDATA_RAW_DIR overrides the bucket.
+RAW_BUCKET="${GOVDATA_RAW_DIR:-s3://govdata-raw-v1}"
+RCLONE_RAW="$(s3_to_rclone "$RAW_BUCKET")"
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 echo "=================================================="
@@ -147,7 +158,7 @@ echo "  Schema:    $SCHEMA"
 echo "  Tables:    ${TABLES[*]}"
 echo "  Iceberg:   ${PARQUET_BUCKET}/${SCHEMA}/<table>"
 echo "  Tracker:   ${TRACKER_BUCKET}/year=*/source_key=<table>/*"
-$PURGE_RAW && echo "  Raw cache: ${RAW_CACHE_DIR}/<table>/"
+$PURGE_RAW && echo "  Raw cache: ${RAW_BUCKET}/${SCHEMA}/<table>/  (+ local ${RAW_CACHE_DIR}/<table>/)"
 $DRY_RUN && echo "  *** DRY RUN — no changes will be made ***"
 echo ""
 
@@ -191,22 +202,37 @@ for TABLE in "${TABLES[@]}"; do
     echo "        ${deleted:-done}"
   fi
 
-  # Step 3 (optional): Delete local raw HTTP cache
+  # Step 3 (optional): Delete the raw HTTP cache — the object store (what prod/DQ
+  # runs actually read/write) and the local mirror if one is in use.
   if $PURGE_RAW; then
-    RAW_PATH="${RAW_CACHE_DIR}/${TABLE}"
-    echo "  [3/3] Raw cache: ${RAW_PATH}"
+    RAW_OBJ_PATH="${RCLONE_RAW}${SCHEMA}/${TABLE}"
+    RAW_LOCAL_PATH="${RAW_CACHE_DIR}/${TABLE}"
+    echo "  [3/3] Raw cache: ${RAW_BUCKET}/${SCHEMA}/${TABLE}  (+ local ${RAW_LOCAL_PATH})"
     if $DRY_RUN; then
-      echo "        [DRY RUN] Would delete ${RAW_PATH}"
-    elif [[ -d "$RAW_PATH" ]]; then
-      raw_size=$(du -sh "$RAW_PATH" 2>/dev/null | cut -f1)
-      if rm -rf "$RAW_PATH"; then
-        echo "        Removed ${raw_size:-?}"
+      echo "        [DRY RUN] Would purge $RAW_OBJ_PATH and remove $RAW_LOCAL_PATH"
+    else
+      # Object store (govdata-raw-v1) — the cache prod/DQ runs key by partition and reuse
+      raw_obj_ls=$(rclone ls "$RAW_OBJ_PATH" 2>/dev/null || true)
+      if [[ -z "$raw_obj_ls" ]]; then
+        echo "        Object store: no files found — skipping"
+      elif rclone purge "$RAW_OBJ_PATH" 2>/dev/null; then
+        echo "        Object store: purged"
       else
-        echo "        ERROR: failed to remove $RAW_PATH"
+        echo "        ERROR: failed to purge $RAW_OBJ_PATH"
         ERRORS=$((ERRORS+1))
       fi
-    else
-      echo "        No cache directory found — skipping"
+      # Local mirror, only if a local cache dir is in use
+      if [[ -d "$RAW_LOCAL_PATH" ]]; then
+        raw_size=$(du -sh "$RAW_LOCAL_PATH" 2>/dev/null | cut -f1)
+        if rm -rf "$RAW_LOCAL_PATH"; then
+          echo "        Local: removed ${raw_size:-?}"
+        else
+          echo "        ERROR: failed to remove $RAW_LOCAL_PATH"
+          ERRORS=$((ERRORS+1))
+        fi
+      else
+        echo "        Local: no cache directory — skipping"
+      fi
     fi
   fi
   echo ""
