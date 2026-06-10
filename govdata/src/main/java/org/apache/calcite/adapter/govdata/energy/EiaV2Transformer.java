@@ -30,6 +30,13 @@ public abstract class EiaV2Transformer {
         return data;
       }
     }
+    // Raw-cache hit: HttpSource rewrites paginated EIA v2 responses into a merged
+    // {"results":[...]} envelope, so the cached file no longer carries the original
+    // response.data wrapper. Read the merged records back from that envelope.
+    JsonNode results = root.get("results");
+    if (results != null && results.isArray()) {
+      return results;
+    }
     // Fall back to treating the entire input as an array
     if (root.isArray()) {
       return root;

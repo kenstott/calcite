@@ -1,6 +1,6 @@
 # GovData DQ Status
 
-Last updated: 2026-06-09
+Last updated: 2026-06-10
 
 ## How to Read This
 
@@ -72,7 +72,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | patents      | 2026-06-05 | PASS    | 0     | 0     | Faithful recreation (one table per raw dump, no ETL joins; grant_year only on dated sources) + trademark effective_year fix (14k→911k rows, coverage→2023) + period-keyed completion markers. 0 fails verified (38p/2w); 2 trademark checks recalibrated → 0 warn |
 | ref          | 2026-05-30 | PASS    | 0     | 0     | ref DQ rebuild completed |
 | sec          | —          | PENDING | —     | —     | Schema changes pending re-run |
-| energy       | —          | PENDING | —     | —     | Schema changes pending re-run |
+| energy       | 2026-06-10 | WARN    | 0     | 5     | dq-rebuild green (78 pass / 0 fail / 5 warn); all 12 tables produce data (was 6 stuck at 0 rows). Fixed systemic lagged-EIA bugs: 4 archive URLs templated the publish `{year}` (queried unpublished 2026 → 404 / 66888-byte HTML landing page, cached as poison) → now `{effective_year}`, with per-source `dataLag` corrected against actual file availability (power_plants & utility lag 3 = newest real archive is current-3; capacity lag 1; petroleum lag 0 weekly-current). 4 XLSX/CSV transformers (Eia860PowerPlants/Eia861Utility/Eia814CrudeImports/Eia860MCapacityChanges) read `dims.get("year")` (publish) → fixed to `effective_year`. `EiaV2Transformer.extractDataArray` now handles the merged-cache `{"results":[...]}` envelope — on a raw-cache HIT the original `response.data` wrapper is gone, so electricity_prices committed 0 rows despite a fresh fetch working. NG + SEDS already on bulk ZIPs (prior). Op gotcha: `--rebuild` does NOT purge raw cache → `rclone purge minio:govdata-raw-v1/energy/<table>` to bust poison. 5 benign warns: T5 `month` single-window ×3; SEDS `expenditure_million` null ×2 — `dqRowLimit:25000` cap on the single-fetch SEDS bulk grabs only the first ~12 consumption MSNs, never reaching the 6,451 expenditure series (populated uncapped in prod), so a cap-sample artifact not a source gap. Also fixed: crude `api_gravity` T7 bound widened 0-70→0-100 (EIA-814 ultra-light condensate, max 99.9); `EiaSedsBulkTransformer` was routing "Percent" share series into `price_per_mmbtu` (bare `per` substring matched "Percent") — now matches `dollars per` |
 | econ_reference | 2026-06-05 | PASS    | 0     | 0     | dq-rebuild via isolated jar; 7/7 tables pass; BLS download.bls.gov User-Agent 403 fix (#144) |
 | cyber_threat | 2026-06-09 | PASS    | 0     | 0     | dq-rebuild green (66/66). `dqRowLimit` DQ sampling on ioc_urls (5k) / threat_pulses (2k). Fixed transformer field/format drift surfaced by DQ: removed 12 stale `source:` field remaps (transformers emit final names); ThreatFox `malware_key` (fk_malware→malware); Feodo `first_seen` (first_seen_online→first_seen); OTX `malware_families`/`attack_ids` (object-shape → plain string arrays), `ioc_count` (no indicator_count → indicators array size), and full-load in DQ mode (CYBER_OTX_DELTA_DAYS ignored when GOVDATA_DQ=true). T4/T5 exclusions for genuinely constant/source-absent cols: `source` (one feed/table), `data_sources`/`detection` (deprecated in this ATT&CK STIX bundle), version/framework/year/domain/mapping_type/status, clamav/vt_percent, `author` (single AlienVault feed), `ioc_ips.first_seen`, `ioc_mixed.anonymous`. Engine: `dqRowLimit` was dropped in `SchemaLifecycleProcessor`'s dimension-resolved config copy (cap was a silent no-op for every dim-resolved table, all schemas) — fixed |
 | cyber_vuln   | 2026-06-09 | PASS    | 0     | 0     | dq-rebuild green (48/48). Three engine bugs surfaced by DQ + fixed: (1) `DimensionIterator.expandPartition` resolved dependent custom dims from a stale "representative" combo then cross-producted → NVD pubStart/pubEnd windows were start>end / >120-day garbage (cartesian); now resolves per-combo (memoized) → vulnerabilities 11,909→122,325, vulnerability_cwes →142,687. (2) snapshot "most-recent combination" reduced *categorical* fan-outs to `combinations.get(0)` → osv ingested only PyPI (5k); gated on `hasPeriod` → all 10 ecosystems (28,940). (3) year/quarter partition routing read `pub_year` from an expression-only column (null at fan-out) → all rows in `year=null`; NVD transformers now emit `pub_year`/`pub_month` as real row values, schema cols made plain. `dqRowLimit` on osv (5k/ecosystem) + vuln_cross_refs (5k). T5 exclusions: source/catalog_version/external_source, vulnerability_cwes quarter+pub_month (CVE-year-only → constant Q1); advisory_id pattern += `VA-` (CISA vendor advisories — legitimate, was warning) |
@@ -551,7 +551,77 @@ All 7 tables readable. 0 fails, 9 warns. All warns are T2c/T5 artifacts from sin
 
 ---
 
-## energy (2026-05-20) — PASS
+## energy (2026-06-10) — WARN
+
+0 fails, 5 warns, 78 passes. `run-all-dq --schema energy --local-jar --force` (DQ MinIO). All
+12 tables produce data — six tables that had regressed to 0 rows were repaired. Verdict went
+FAIL (3 fails, all `eia_electricity_prices`) → WARN.
+
+### Root causes fixed (2026-06-10) — lagged-EIA `{year}` vs `{effective_year}`
+
+`DimensionIterator` iterates the **publish** year (current) and injects
+`effective_year = year − dataLag`. Three layers all used the wrong year:
+
+1. **Schema URLs templated `{year}` (publish) instead of `{effective_year}` (data).** In 2026
+   they queried the unpublished current year → the EIA archive 301-redirects to a 66888-byte
+   HTML landing page, which got cached as poison and parsed to 0 rows. Fixed `{year}`→
+   `{effective_year}` on 4 sources and corrected each `dataLag` to the newest *available* file:
+   `eia_electricity_prices` (lag 2), `eia_power_plants` & `eia_utility_annual` (lag 3 — the
+   newest real `eia860{yr}.zip` / `f861{yr}.zip` archive is current-3; 2024+ are HTML),
+   `eia_capacity_changes` (lag 1 — `december_generator2025.xlsx` is newest). `eia_petroleum_stocks`
+   set to lag 0 (weekly stocks are current; `{year}` already correct).
+2. **Transformers read `dims.get("year")` (publish).** `Eia860PowerPlantsTransformer`,
+   `Eia861UtilityTransformer`, `Eia814CrudeImportsTransformer`, `Eia860MCapacityChangesTransformer`
+   re-download internally and built file paths / `>=2024 /archive→non-archive` rewrites off the
+   publish year, breaking the resolved path. All four now read `dims.get("effective_year")`.
+3. **Merged-cache `{"results":[...]}` envelope.** `HttpSource` rewrites paginated EIA v2
+   responses into `{"results":[...]}` when caching. On a raw-cache HIT the original
+   `response.data` wrapper is gone, so `EiaV2Transformer.extractDataArray` (knew only
+   `response.data` / bare array) returned empty → `eia_electricity_prices` committed 0 rows
+   (table had metadata but no data files) even though a *fresh* fetch produced 372 rows. Taught
+   `extractDataArray` to also read `root.get("results")` — fixes every EIA v2 table on cache-hit.
+
+Operational: `--rebuild` tears down Iceberg + tracker but **not** the raw cache — stale/empty/
+HTML/old-format cached responses survive and yield 0 rows. Had to
+`rclone purge minio:govdata-raw-v1/energy/<table>` to bust the poison.
+
+Also fixed (correctness, surfaced while investigating the SEDS warns): `EiaSedsBulkTransformer`
+classified series into the `consumption_bbtu` / `expenditure_million` / `price_per_mmbtu` metric
+columns by a fuzzy units match, and the price test was a bare `units.contains("per")` — which
+also matches `"Percent"`. All 884 SEDS percent-share series were being written into
+`price_per_mmbtu`. Now matches `"dollars per"` (the actual price unit "Dollars per million Btu");
+percent/physical-unit series carry only the raw `value`/`units`. Unit tests added.
+
+### The 5 warns (all benign — single-window sampling + source shape)
+
+| Table | Test | Detail | Class |
+|-------|------|--------|-------|
+| eia_electricity_generation | T5_all_same_value | `month` | DQ window collapses to one snapshot month |
+| eia_fossil_fuel_production | T5_all_same_value | `month` | same |
+| eia_refinery_operations | T5_all_same_value | `month` | same |
+| eia_state_energy_consumption | T4_all_null_cols | `expenditure_million` | cap-sample: DQ window excludes expenditure series |
+| eia_state_energy_consumption | T5_all_same_value | `expenditure_million` | same null column (cascades) |
+
+The `month` T5 warns are artifacts of the monthly tables resolving to a single snapshot month in
+the DQ window (they vary across months in a full prod load).
+
+The SEDS `expenditure_million` warns are a **`dqRowLimit` cap-sample artifact, not a source gap.**
+The full `SEDS.zip` has 48,046 annual series across ~20 unit types, including **6,451
+"Million dollars" expenditure series**. But `dqRowLimit: 25000` on a *single-fetch* bulk stream
+grabs the first ~12 MSNs off the file (all "Billion Btu" consumption) and never reaches the
+expenditure series — so `expenditure_million` reads null in the DQ sample only. A full prod load
+(uncapped) materializes all series and populates it. Same class as the health `cdc_brfss` /
+`medicaid` cap-sample warns. (Underlying limitation: for single-fetch bulk tables the first-N-rows
+cap is an unrepresentative sample; a stride / per-MSN sample would surface every metric — not yet
+changed.)
+
+A 6th warn (`eia_crude_oil_imports` T7 `api_gravity`) was **resolved** by widening the bound
+0-70 → 0-100 in `energy_dq.sql`: EIA-814 company-level "crude oil" imports include ultra-light
+condensate / natural gasoline whose gravity runs 75–99.9 (observed as distinct measurements,
+not a sentinel); ~100 is the practical ceiling for liquid petroleum. DQ-only re-run confirmed
+WARN (0 fails, 5 warns).
+
+### Prior run (2026-05-20) — PASS
 
 0 fails, 0 warns, 83 passes. All 12 tables populated in R2 Iceberg. Smoke test used `GOVDATA_START_YEAR=2022` (SEDS has 2-year data lag). Workers: 74 (historical), 75 (weekly), 76 (monthly), 77 (annual).
 

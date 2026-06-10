@@ -55,7 +55,9 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
   @Override
   protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
     Map<String, String> dims = context.getDimensionValues();
-    String yearStr = dims != null ? dims.get("year") : null;
+    // effective_year (not the publish/iteration year) is the snapshot's data year — it
+    // matches the december_generator{effective_year}.xlsx file the framework downloaded.
+    String yearStr = dims != null ? dims.get("effective_year") : null;
     String monthStr = dims != null ? dims.get("month") : null;
     Integer snapshotYear = parseIntOrNull(yearStr);
     Integer snapshotMonth = parseIntOrNull(monthStr);

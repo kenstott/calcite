@@ -36,7 +36,10 @@ public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
   @Override
   public String transform(String response, RequestContext context) {
     Map<String, String> dims = context.getDimensionValues();
-    String yearStr = dims != null ? dims.get("year") : null;
+    // Use the effective (data) year, not the publish/iteration year: dataLag maps the
+    // current iteration year to the latest fully-published EIA-814 year (e.g. 2024);
+    // building monthly URLs from the publish year (2026) 404s on unpublished months.
+    String yearStr = dims != null ? dims.get("effective_year") : null;
     if (yearStr == null || yearStr.isEmpty()) {
       LOGGER.warn("EIA-814: no year dimension; cannot build monthly URLs");
       return "[]";

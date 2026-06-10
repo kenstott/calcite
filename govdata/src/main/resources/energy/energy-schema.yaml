@@ -126,21 +126,30 @@ dimension_values:
     end: current
     dataLag: 2
 
-  # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs)
+  # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs).
+  # dataLag: 3 — the f861{effective_year}.zip archive only publishes through current-3
+  # (in 2026 the newest real archive is f8612023.zip; 2024+ 301-redirect to an HTML
+  # landing page). The URL templates {effective_year} to hit the available file.
   eia_utility_years: &eia_utility_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: current
-    dataLag: 1
+    dataLag: 3
 
-  # EIA-860 power plant annual year range
+  # EIA-860 power plant annual year range.
+  # dataLag: 3 — the eia860{effective_year}.zip archive only publishes through
+  # current-3 (e.g. in 2026 the newest real archive is eia8602023.zip; 2024+ 301-redirect
+  # to an HTML landing page). The URL templates {effective_year} to hit the available file.
   eia_plant_years: &eia_plant_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: current
-    dataLag: 1
+    dataLag: 3
 
-  # EIA-860M capacity changes year range (monthly snapshot files available from 2015)
+  # EIA-860M capacity changes year range (monthly snapshot files available from 2015).
+  # dataLag: 1 — the december_generator{effective_year}.xlsx snapshot publishes through
+  # current-1 (in 2026 the newest is december_generator2025.xlsx; 2026 still 301-redirects
+  # to an HTML landing page). The URL templates {effective_year} to hit the available file.
   eia_capacity_years: &eia_capacity_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -168,12 +177,14 @@ dimension_values:
     end: current
     dataLag: 1
 
-  # EIA petroleum stocks year range (weekly data)
+  # EIA petroleum stocks year range (weekly data).
+  # dataLag: 0 — weekly stocks are published continuously and are current, so the
+  # data year equals the iteration year (no publish lag); {year} == effective_year.
   eia_pet_stocks_years: &eia_pet_stocks_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     end: current
-    dataLag: 1
+    dataLag: 0
 
   # EIA crude oil imports year range (EIA-814 monthly XLSX)
   eia_crude_imp_years: &eia_crude_imp_years
@@ -368,7 +379,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=annual&start={year}&end={year}&data[]=price&data[]=revenue&data[]=sales&data[]=customers"
+      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=annual&start={effective_year}&end={effective_year}&data[]=price&data[]=revenue&data[]=sales&data[]=customers"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -536,7 +547,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{year}.zip"
+      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
       method: GET
       response:
         format: TEXT
@@ -718,7 +729,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.eia.gov/electricity/data/eia860/archive/xls/eia860{year}.zip"
+      url: "https://www.eia.gov/electricity/data/eia860/archive/xls/eia860{effective_year}.zip"
       method: GET
       response:
         format: TEXT
@@ -843,7 +854,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.eia.gov/electricity/data/eia860m/archive/xls/december_generator{year}.xlsx"
+      url: "https://www.eia.gov/electricity/data/eia860m/archive/xls/december_generator{effective_year}.xlsx"
       method: GET
       response:
         format: TEXT

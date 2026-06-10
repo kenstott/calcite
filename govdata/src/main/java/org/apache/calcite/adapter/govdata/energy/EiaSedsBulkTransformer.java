@@ -77,13 +77,17 @@ public class EiaSedsBulkTransformer extends EiaBulkSeriesTransformer {
       row.put("fuel_type", fuel);
       row.put("value", value);
       row.put("units", units);
-      // Classify into the metric column by units. Check "per" before "btu": the price unit
-      // "Dollars per Million Btu" contains both, but is a price.
+      // Classify into a metric column by units. Match the price unit specifically as
+      // "dollars per ..." — a bare "per" substring also matches "Percent" (share series) and
+      // "Million Btu per barrel" (conversion factors), which must NOT land in price_per_mmbtu.
+      // Consumption is Btu without "per"; expenditure is dollars without "per". Every other unit
+      // SEDS publishes (barrels, kWh, CO2 tons, percent, days, ...) carries only the raw
+      // value/units, with all three metric columns null.
       String u = units == null ? "" : units.toLowerCase();
-      row.put("consumption_bbtu", u.contains("per") ? null : (u.contains("btu") ? value : null));
+      row.put("consumption_bbtu", (u.contains("btu") && !u.contains("per")) ? value : null);
       row.put("expenditure_million",
-          !u.contains("per") && u.contains("dollar") ? value : null);
-      row.put("price_per_mmbtu", u.contains("per") ? value : null);
+          (!u.contains("per") && u.contains("dollar")) ? value : null);
+      row.put("price_per_mmbtu", u.contains("dollars per") ? value : null);
       row.put("series_description", name);
       rows.add(row);
     }

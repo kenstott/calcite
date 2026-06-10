@@ -70,6 +70,34 @@ class EiaSedsBulkTransformerTest {
     assertNull(r.get("expenditure_million"));
   }
 
+  @Test @Tag("unit") void expenditureUnitsRouteToExpenditureColumn() throws Exception {
+    String s = "{\"series_id\":\"SEDS.TETCD.CA.A\",\"name\":\"Total expenditures, California\","
+        + "\"units\":\"Million dollars\",\"f\":\"A\",\"data\":[[\"2023\",50000]]}";
+    Map<String, Object> r = EiaSedsBulkTransformer.rowsForSeriesStatic(M.readTree(s)).get(0);
+    assertEquals(50000.0, r.get("expenditure_million"));
+    assertNull(r.get("consumption_bbtu"));
+    assertNull(r.get("price_per_mmbtu"));
+  }
+
+  @Test @Tag("unit") void percentAndPhysicalUnitsRouteToNoMetricColumn() throws Exception {
+    // "Percent" contains the substring "per" but is a share series, not a price; physical units
+    // (barrels) are neither Btu nor dollars. None should populate a metric column — only value.
+    String pct = "{\"series_id\":\"SEDS.NUETD.US.A\",\"name\":\"Nuclear share, U.S.\","
+        + "\"units\":\"Percent\",\"f\":\"A\",\"data\":[[\"2023\",18.6]]}";
+    Map<String, Object> rp = EiaSedsBulkTransformer.rowsForSeriesStatic(M.readTree(pct)).get(0);
+    assertEquals(18.6, rp.get("value"));
+    assertNull(rp.get("price_per_mmbtu"));
+    assertNull(rp.get("consumption_bbtu"));
+    assertNull(rp.get("expenditure_million"));
+
+    String bbl = "{\"series_id\":\"SEDS.PASCB.TX.A\",\"name\":\"Petroleum, Texas\","
+        + "\"units\":\"Thousand barrels\",\"f\":\"A\",\"data\":[[\"2023\",1000]]}";
+    Map<String, Object> rb = EiaSedsBulkTransformer.rowsForSeriesStatic(M.readTree(bbl)).get(0);
+    assertNull(rb.get("consumption_bbtu"));
+    assertNull(rb.get("expenditure_million"));
+    assertNull(rb.get("price_per_mmbtu"));
+  }
+
   @Test @Tag("unit") void nonSedsSeriesFilteredOut() throws Exception {
     String s = "{\"series_id\":\"SEDS.TETCB.US.M\",\"data\":[[\"202401\",1]]}"; // monthly, not .A
     assertTrue(EiaSedsBulkTransformer.rowsForSeriesStatic(M.readTree(s)).isEmpty());

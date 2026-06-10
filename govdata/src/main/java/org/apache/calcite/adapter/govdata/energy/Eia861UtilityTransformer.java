@@ -36,7 +36,10 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
   public String transform(String response, RequestContext context) {
     String url = context.getUrl();
     Map<String, String> dims = context.getDimensionValues();
-    String yearStr = dims != null ? dims.get("year") : null;
+    // Use the effective (data) year, not the publish/iteration year: dataLag maps the
+    // current iteration year to the latest available EIA-861 archive (e.g. 2023). The
+    // schema URL is templated with {effective_year} to match.
+    String yearStr = dims != null ? dims.get("effective_year") : null;
     int year = 0;
     if (yearStr != null && !yearStr.isEmpty()) {
       try {

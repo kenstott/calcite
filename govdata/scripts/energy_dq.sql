@@ -778,18 +778,22 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_crude_oil_imports', allo
 WHERE rpt_period IS NULL OR import_year IS NULL OR import_month IS NULL
    OR importer_name IS NULL OR origin_country_code IS NULL OR refinery_site_id IS NULL;
 
--- T7: expected_values — api_gravity in physical range (0-70) where not null
+-- T7: expected_values — api_gravity in physical range (0-100) where not null.
+-- Upper bound is 100, not 70: EIA-814 company-level "crude oil" imports include ultra-light
+-- condensate / natural gasoline whose API gravity runs into the 75-100 band (observed 75, 82,
+-- 99.x as distinct measurements, not a sentinel). ~100 is the practical ceiling for liquid
+-- petroleum; anything beyond is genuinely non-physical and still flags.
 INSERT INTO dq_results
 SELECT
   'energy', 'eia_crude_oil_imports', 'T7_expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
   bad, 0,
-  'api_gravity outside 0-70 range'
+  'api_gravity outside 0-100 range'
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_crude_oil_imports', allow_moved_paths := true)
   WHERE api_gravity IS NOT NULL
-    AND (api_gravity < 0 OR api_gravity > 70)
+    AND (api_gravity < 0 OR api_gravity > 100)
 ) t;
 
 -- ============================================================
