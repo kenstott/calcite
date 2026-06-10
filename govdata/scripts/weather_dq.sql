@@ -55,6 +55,14 @@ FROM (
 -- T2: ROW COUNTS
 -- Thresholds set conservatively to catch zero/near-zero tables.
 -- nws_alerts threshold=0: snapshot data that may legitimately be empty (T1 catches it).
+-- Cap-aware floors: ghcnd_daily is DQ-sampled by station-stride inside GhcndBulkDataProvider
+-- (~150 stations/year spanning all networks), so it holds tens of thousands of rows per DQ
+-- year-unit, not the prod multi-million count — floor 20000 (one partial year, with margin).
+-- epa_daily_aqi (bulk daily_<param>_<year>.zip,
+-- cap 5000 per pollutant-year → 5 pollutants × years) and epa_annual_aqi (bulk
+-- annual_conc_by_monitor_<year>.zip, cap 25000 per year) are cap-aware too — annual floor raised
+-- to 15000 (one capped year). cdo_monthly_summaries / drought_monitor_weekly fan out across many
+-- year×state units, so cap × units stays well above their floors — unchanged.
 -- ============================================================
 SELECT '=== T2: ROW COUNTS ===' AS section;
 
@@ -68,10 +76,10 @@ FROM (
   UNION ALL SELECT 'cdo_stations',           COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true)
   UNION ALL SELECT 'cdo_monthly_summaries',  COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true)
   UNION ALL SELECT 'cdo_annual_summaries',   COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true)
-  UNION ALL SELECT 'epa_annual_aqi',         COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi',         allow_moved_paths=true)
+  UNION ALL SELECT 'epa_annual_aqi',         COUNT(*),      15000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi',         allow_moved_paths=true)
   UNION ALL SELECT 'epa_daily_aqi',          COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi',          allow_moved_paths=true)
   UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*),   5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true)
-  UNION ALL SELECT 'ghcnd_daily',            COUNT(*),     100000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true)
+  UNION ALL SELECT 'ghcnd_daily',            COUNT(*),      20000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true)
   UNION ALL SELECT 'drought_monitor_weekly', COUNT(*),      50000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true)
   UNION ALL SELECT 'hms_smoke_daily',        COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true)
   UNION ALL SELECT 'hms_smoke_polygons',     COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true)
@@ -141,7 +149,7 @@ SELECT 'weather', 'cdo_annual_summaries', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
+  AND column_name NOT IN ('type', 'attributes');  -- GSOY annual records carry no per-value quality flags (GSOM monthly does)
 
 INSERT INTO dq_results
 SELECT 'weather', 'epa_annual_aqi', 'all_null_cols',

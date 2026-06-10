@@ -562,6 +562,12 @@ partitionedTables:
       Cross-references geo.states via state_fips and cdo_stations via station_id.
       Requires NOAA_CDO_TOKEN environment variable.
 
+    # DQ sample cap (GOVDATA_DQ mode): CDO GSOM returns one row per station×month×datatype, paged
+    # 1000/request per year×state. Each combo is its own fetch-unit, so the cap samples every combo
+    # and stops pagination early. Cache-safe — paginated pages are cached on full drain, so a capped
+    # run leaves the prod cache untouched.
+    dqRowLimit: 5000
+
     dimensions:
       type:
         - cdo_monthly
@@ -727,18 +733,20 @@ partitionedTables:
     pattern: "type=epa_aqi/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EPA AQS annual air quality data by state and pollutant. Includes annual mean,
-      peak values, observation counts, and AQI for PM2.5, Ozone, SO2, NO2, and CO.
-      One row per county+parameter+year. Cross-references geo.states via state_fips
-      and geo.counties via county_fips. Requires EPA_AQS_EMAIL and EPA_AQS_KEY
-      environment variables.
+      EPA AirData annual-summary air quality by monitor and pollutant (annual mean, peak
+      values, observation/valid-day counts) for PM2.5, Ozone, SO2, NO2, and CO. Sourced from
+      the keyless national bulk file annual_conc_by_monitor_<year>.zip — no API key or rate
+      limit. Cross-references geo.states via state_fips and geo.counties via county_fips.
+
+    # DQ sample cap (GOVDATA_DQ mode): one national ZIP per year (all pollutants), filtered to
+    # the 5 AQI pollutants + 50 states/DC. Fans out per year, so the cap bounds each year's
+    # materialization. Cache-safe — the extracted CSV is cached in full before the iterator.
+    dqRowLimit: 25000
 
     dimensions:
       type:
         - epa_aqi
       year: *weather_year_range
-      state_fips: *all_state_fips
-      param: *aqi_pollutants
 
     columns:
       - <<: *state_fips_column
@@ -778,19 +786,22 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://aqs.epa.gov/data/api/annualData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={effective_year}0101&edate={effective_year}1231&state={state_fips}"
+      url: "https://aqs.epa.gov/aqsweb/airdata/annual_conc_by_monitor_{effective_year}.zip"
       method: GET
+      extractPattern: "*.csv"
       response:
-        format: json
+        format: csv
       rateLimit:
-        requestsPerSecond: 0.167  # 10 req/min
+        requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.weather.EpaAqsTransformer"
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.weather.EpaAirDataAnnualTransformer"
 
     materialize:
       format: iceberg
@@ -817,15 +828,21 @@ partitionedTables:
     pattern: "type=epa_daily_aqi/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EPA AQS daily air quality data by monitoring site. One row per site per day
-      per pollutant standard. Includes AQI where applicable (24-hour block averages).
-      Requires EPA_AQS_EMAIL and EPA_AQS_KEY environment variables.
+      EPA AirData daily-summary air quality by monitoring site. One row per site per day per
+      pollutant standard (mean, peak, AQI where applicable). Sourced from the keyless national
+      bulk files daily_<param>_<year>.zip — no API key or rate limit. Cross-references
+      geo.states via state_fips and geo.counties via county_fips.
+
+    # DQ sample cap (GOVDATA_DQ mode): each pollutant-year is its own national ZIP fetch-unit
+    # (~400k rows), so the cap samples every pollutant in every year while bounding the
+    # materialization. Cache-safe — the extracted CSV is cached in full before the iterator,
+    # so prod (no GOVDATA_DQ) loads everything.
+    dqRowLimit: 5000
 
     dimensions:
       type:
         - epa_daily_aqi
       year: *weather_year_range
-      state_fips: *all_state_fips
       param: *aqi_pollutants
 
     columns:
@@ -886,19 +903,22 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://aqs.epa.gov/data/api/dailyData/byState?email={env:EPA_AQS_EMAIL}&key={env:EPA_AQS_KEY}&param={param}&bdate={effective_year}0101&edate={effective_year}1231&state={state_fips}"
+      url: "https://aqs.epa.gov/aqsweb/airdata/daily_{param}_{effective_year}.zip"
       method: GET
+      extractPattern: "*.csv"
       response:
-        format: json
+        format: csv
       rateLimit:
-        requestsPerSecond: 0.167  # 10 req/min
+        requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.weather.EpaDailyAqiTransformer"
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.weather.EpaAirDataDailyTransformer"
 
     materialize:
       format: iceberg
@@ -975,6 +995,12 @@ partitionedTables:
         nullable: true
         comment: Distance used for nearest-county centroid assignment
 
+    # Steady-state skip-gate: NCEI serves ghcnd-stations.txt from a static file server with a
+    # Last-Modified header. Single non-templated file (dim=type only), so the per-table pre-download
+    # probe fits exactly — when the inventory is unchanged the daily run skips both the re-fetch and
+    # the nearest-county-centroid spatial recompute. A dq-rebuild (no committed table) still fetches.
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt"
@@ -1022,6 +1048,10 @@ partitionedTables:
       passed all NCEI quality checks are included). Cross-references
       ghcnd_stations_with_county via station_id for county_fips joins. No auth needed.
 
+    # DQ sampling for this table is done inside GhcndBulkDataProvider (station-stride, GOVDATA_DQ
+    # mode) rather than the engine's first-N dqRowLimit: the by_year file is sorted by station_id
+    # and the lowest US ids are the precipitation-only US1… CoCoRaHS network, so a first-N cap
+    # yields all-null temperature. Striding by station keeps every measured element populated.
     dimensions:
       type:
         - ghcnd_daily
@@ -1128,6 +1158,11 @@ partitionedTables:
       and Coverage Index (DSCI, range 0-500). week_date is the Tuesday release date.
       Cross-references geo.counties via county_fips and geo.states via state_abbr.
       No authentication required.
+
+    # DQ sample cap (GOVDATA_DQ mode): USDM returns weekly county rows per year×state. Each combo
+    # is its own fetch-unit, so the cap samples every combo while bounding materialization.
+    # Cache-safe — the JSON body is cached in full during fetch before the iterator.
+    dqRowLimit: 5000
 
     dimensions:
       type:

@@ -219,7 +219,69 @@ public class GhcndBulkDataProvider implements DataProvider {
         year, lines.size());
     Collections.sort(lines);
     LOGGER.info("GHCND Bulk year={}: sort complete", year);
+    if (isDqSampleMode()) {
+      lines = strideSampleByStation(lines, year);
+    }
     return lines;
+  }
+
+  /** True in DQ sample mode (GOVDATA_DQ=true as system property or env). */
+  private static boolean isDqSampleMode() {
+    String v = System.getProperty("GOVDATA_DQ");
+    if (v == null) {
+      v = System.getenv("GOVDATA_DQ");
+    }
+    return "true".equalsIgnoreCase(v);
+  }
+
+  /** Target number of stations to retain in a DQ sample (spread across the ID range). */
+  private static final int DQ_TARGET_STATIONS = 150;
+
+  /**
+   * Representative DQ down-sampling: keeps every Kth distinct station across the sorted
+   * station_id range, emitting all of that station's daily rows. A plain first-N row cap is
+   * unrepresentative here — the lowest US station_ids are the {@code US1…} CoCoRaHS network,
+   * which is precipitation-only, so first-N yields all-null temperature. Striding by station
+   * spans CoCoRaHS + COOP (USC, temperature) + SNOTEL (USS) + WBAN/ASOS (USW, temp+wind), so
+   * every measured element is populated in the sample. Lines stay sorted by station_id, so the
+   * per-station pivot in {@link BulkIterator} is unaffected.
+   */
+  private static List<String> strideSampleByStation(List<String> sortedLines, String year) {
+    int distinct = 0;
+    String prev = null;
+    for (String line : sortedLines) {
+      String station = stationOf(line);
+      if (!station.equals(prev)) {
+        distinct++;
+        prev = station;
+      }
+    }
+    if (distinct <= DQ_TARGET_STATIONS) {
+      return sortedLines;
+    }
+    int stride = distinct / DQ_TARGET_STATIONS;
+    List<String> out = new ArrayList<String>();
+    prev = null;
+    int stationIdx = -1;
+    for (String line : sortedLines) {
+      String station = stationOf(line);
+      if (!station.equals(prev)) {
+        stationIdx++;
+        prev = station;
+      }
+      if (stationIdx % stride == 0) {
+        out.add(line);
+      }
+    }
+    LOGGER.info("GHCND Bulk year={}: DQ sample — kept {} of {} lines ({} of {} stations, stride {})",
+        year, out.size(), sortedLines.size(), (distinct + stride - 1) / stride, distinct, stride);
+    return out;
+  }
+
+  /** Station id is the first comma-delimited field of a GHCND by_year line. */
+  private static String stationOf(String line) {
+    int comma = line.indexOf(',');
+    return comma < 0 ? line : line.substring(0, comma);
   }
 
   private static boolean isRelevantLine(String line) {
