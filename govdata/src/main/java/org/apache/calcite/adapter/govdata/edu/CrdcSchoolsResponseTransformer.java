@@ -32,9 +32,14 @@ public class CrdcSchoolsResponseTransformer extends AbstractUrbanInstituteRespon
     if (topic != null) {
       row.put("crdc_topic", topic);
     }
-    // crdc_id = ncessch for all records; chronic-absenteeism endpoint omits crdc_id
-    if (row.get("crdc_id") == null && row.get("ncessch") != null) {
-      row.put("crdc_id", row.get("ncessch"));
+    // crdc_id = ncessch for all records; chronic-absenteeism endpoint emits crdc_id
+    // as null OR an empty string "" for some disaggregated subgroup rows — treat
+    // both as missing and backfill from ncessch.
+    Object crdcId = row.get("crdc_id");
+    Object ncessch = row.get("ncessch");
+    if ((crdcId == null || crdcId.toString().trim().isEmpty())
+        && ncessch != null && !ncessch.toString().trim().isEmpty()) {
+      row.put("crdc_id", ncessch);
     }
   }
 
@@ -43,11 +48,14 @@ public class CrdcSchoolsResponseTransformer extends AbstractUrbanInstituteRespon
     if (topic != null) {
       row.put("crdc_topic", topic);
     }
-    // crdc_id = ncessch for all records; chronic-absenteeism endpoint omits crdc_id
-    if (!row.has("crdc_id") || row.get("crdc_id").isNull()) {
-      if (row.has("ncessch") && !row.get("ncessch").isNull()) {
-        row.put("crdc_id", row.get("ncessch").asText());
-      }
+    // crdc_id = ncessch for all records; chronic-absenteeism endpoint emits crdc_id
+    // as null OR an empty string "" for some disaggregated subgroup rows — treat
+    // both as missing and backfill from ncessch.
+    boolean crdcIdMissing = !row.has("crdc_id") || row.get("crdc_id").isNull()
+        || row.get("crdc_id").asText().trim().isEmpty();
+    if (crdcIdMissing && row.has("ncessch") && !row.get("ncessch").isNull()
+        && !row.get("ncessch").asText().trim().isEmpty()) {
+      row.put("crdc_id", row.get("ncessch").asText());
     }
   }
 }

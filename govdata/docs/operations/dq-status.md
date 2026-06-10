@@ -22,7 +22,7 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | Schema | Slots | Historical | Daily | Static/Replace tables | Incremental tables | Release gates |
 |--------|-------|-----------|-------|----------------------|-------------------|---------------|
 | weather | `weather:historical` / `weather:daily` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 13 tables | Current year only (`START_YEAR=INCREMENTAL_YEAR`); tracker skips already-complete year-partitions | `nws_stations`, `cdo_stations`, `ghcnd_stations_with_county`, `climate_normals_monthly` | `ghcnd_daily`, `cdo_monthly/annual`, `epa_*_aqi`, `drought_monitor_weekly`, `hms_smoke_*` | None |
-| edu | `edu:initial` / `edu:annual` / `edu:biennial` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; K-12 from 2010, IPEDS from 1986 | Annual sub-runs (Jul–Nov/Jan) and biennial sub-runs (NAEP odd-year Jan–Mar; CRDC even-year Oct–Dec); out-of-window sub-runs exit immediately with no I/O | None | All 10 tables (append-by-year) | Release gated by `dataLag` + `releaseMonth` on yearRange dimension |
+| edu | `edu:historical` / `edu:daily` | `historical` → full backfill (`get_dq_start_year(edu)`=current−5 .. `INCREMENTAL_YEAR-1`); runs all tables via the initial cadence | `daily` → current annual cadence + current biennial cadence; out-of-window sub-runs exit immediately with no I/O | None | All 11 tables (append-by-year) | Release gated by `maxYear`/`dataLag` on yearRange dimension |
 | lands | `lands:historical` / `lands:daily` | All years `START_YEAR`–`INCREMENTAL_YEAR-1`; all 8 tables | Current year only; static reference tables refresh annually; time-series append current year | `national_forests`, `nps_units`, `blm_field_offices` (full-replace annually) | `timber_sales`, `forest_inventory`, `forest_metrics`, `nps_visitation`, `onrr_revenues` | ONRR ~3 months in arrears; gated by `dataLag` + `releaseMonth` on yearRange |
 | health | `health:initial` / `health:daily` / `health:weekly` / `health:monthly` | All 15 tables, full fetch | Daily: clinical trials delta; Weekly: CDC vaccinations/mortality delta; Monthly: FDA catalogs + gated BRFSS/Medicaid/CMS tables | `rxnorm_drugs` (continuous reference refresh) | All other 14 tables (SINCE_DATE delta or append-by-year) | Monthly sub-runs gated by `releaseWindow` per table |
 | fec | `fec:historical` / `fec:daily` | Election cycles 2010–2026; all 12 tables | Current election cycle only (`INCREMENTAL_YEAR`); GOVDATA_CURRENT_YEAR dimension busts rawCache monthly so in-progress cycle data is re-fetched | None | All 12 tables (election-cycle partitioned, `overwritePartitions: true`) | None — cycle filtering via `minYear: "${GOVDATA_START_YEAR}"` in YAML |
@@ -60,7 +60,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 | Schema       | Last Run   | Result  | Fails | Warns | Notes |
 |--------------|------------|---------|-------|-------|-------|
 | weather      | —          | PENDING | —     | —     | Schema changes pending re-run |
-| edu          | —          | PENDING | —     | —     | Schema changes pending re-run |
+| edu          | 2026-06-10 | PASS    | 0     | 0     | 11/11 green (72 checks). Edu had **never** run through `run-all-dq`: `worker-edu.sh` only knew `initial/annual/biennial` — added `historical`/`daily` aliases (also `run-pool.sh`/`worker.sh`). DQ window `current−3`→`current−5` (reaches ipeds_tuition maxYear 2021 + crdc biennial 2022). `year_range`→`yearRange` typo on naep/crdc silently dropped minYear/maxYear → fetched non-existent future years → Urban/NAEP APIs *hung*; fixed + added `maxYear` (crdc 2022, naep 2024) + naep `skipOn:[400]`. `dqRowLimit` DQ sampling (ipeds_completions 5000, crdc 5000, college_scorecard_programs 3000) + cap-aware T2 floors. crdc_id backfill now treats empty-string `''` (chronic-absenteeism) as missing, not just null → 134→0 null crdc_id |
 | census       | 2026-05-30 | PASS    | 0     | 0     | economic_census fix deployed in 0.16.1 |
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
 | crime        | 2026-06-09 | PASS    | 0     | 0     | cde_reta bulk Return A table (signed-URL urlResolver + fixed-width columnsResource + month-unpivot RowTransformer) replaces the ~195k-call per-ORI cde_crime_agency (retired). Fixed systemic year mislabel: every crime URL templates the data-year {year}, so dataLag→0 (publish=effective=data year) — cde_offenses now lands 2026. NCVS data restored (0→real rows) via current-4 DQ start. 107/107 pass |
@@ -121,16 +121,55 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 ---
 
-## Edu (2026-05-13) — WARN
+## Edu (2026-06-10) — PASS
 
-0 fails, 2 warns. All NAEP tables rebuilt with full state-level data (52 jurisdictions per combination).
+0 fails, 0 warns, 72 checks across all 11 tables. Run via `run-all-dq --schema edu --etl-resume`
+in DQ sample mode (`GOVDATA_DQ=true`) against the MinIO DQ store. This is the first time edu has
+ever completed the DQ harness end-to-end.
 
-### WARN
+### Root causes fixed this run
 
-| Table | Test | Detail |
-|-------|------|--------|
-| crdc_schools | all_same_value | `teachers_first_year_fte`, `teachers_absent_fte`, `law_enforcement_ind` — sparse/constant CRDC fields; expected |
-| crdc_schools | pk_nulls | 66,320 rows with `crdc_id=null` (ncessch populated); chronic-absenteeism endpoint omits crdc_id; backfill needed |
+- **Harness never drove edu.** `run-all-dq`/`run-pool` speak the universal `historical`/`daily`
+  vocabulary, but `worker-edu.sh` only accepted `initial`/`annual`/`biennial` — every prior attempt
+  failed at dispatch (`Unknown mode: daily`). Added `historical` (→ full backfill) / `daily`
+  (→ current annual + biennial) aliases to `worker-edu.sh`; updated `run-pool.sh` queues and the
+  `worker.sh` doc to match. (Other schemas translate these in their workers; edu was the outlier.)
+- **DQ window too narrow.** `get_dq_start_year(edu)` was `current−3` (2023), which never reached
+  `ipeds_tuition` (Urban endpoint frozen at `maxYear: 2021`) or `crdc_schools` (biennial, latest
+  cycle 2022). Widened to `current−5`.
+- **`type: year_range` typo** on `naep_scores`/`naep_achievement_levels`/`crdc_schools` — the
+  dimension resolver only handles `"yearRange"` (camelCase), so `minYear`/`maxYear` were *silently
+  ignored* and the year range fell back to raw `startYear..endYear`, fetching non-existent future
+  years (2023–2026). The Urban/NAEP APIs *hang* (read-timeout ~6 min/combo) rather than fast-fail
+  on those, dominating runtime. Fixed to `yearRange` + added `maxYear` (crdc 2022, naep 2024) +
+  `naep_scores skipOn: [400]` (NAEP non-assessment years 400). (The unwired
+  `NaepYearsDimensionResolver` was unusable — `GetAdhocData.aspx` has no `type=Years` endpoint,
+  returns 400.)
+- **`dqRowLimit` DQ sampling** added to the large per-period tables: `ipeds_completions` 5000,
+  `crdc_schools` 5000, `college_scorecard_programs` 3000 (caps each fetch-unit only when
+  `GOVDATA_DQ=true`; cache-safe). `edu_dq.sql` T2 row-count floors revised to cap-aware values.
+- **crdc_id backfill empty-string gap** (the last warn → pass): chronic-absenteeism returns
+  `crdc_id = ''` (empty string) for some disaggregated subgroup rows, not `null`.
+  `CrdcSchoolsResponseTransformer` only backfilled `crdc_id ← ncessch` when crdc_id was `null`, so
+  empty strings slipped through and normalized to NULL → 134 null crdc_id. Now treats blank/empty
+  crdc_id as missing in both backfill paths. Verified at the data level: 25,000 rows, 0 null crdc_id
+  (was 134).
+
+### DQ-mode row inventory
+
+| Table | Rows | Notes |
+|-------|------|-------|
+| ccd_districts | (populated) | Urban CCD directory; transient 504s cleared on this run |
+| ccd_schools | 1,021,419 | bulk CSV (all years via responsePartitioning) |
+| naep_scores | 416 | assessment years 2022/2024 (odd years skipOn:400) |
+| naep_achievement_levels | 1,248 | 24 odd-year batches cleanly skipped (400) |
+| crdc_schools | 25,000 | dqRowLimit 5000/topic; years 2021–2022 |
+| ipeds_institutions | 66,957 | bulk CSV |
+| ipeds_completions | 20,000 | dqRowLimit 5000/year |
+| ipeds_financials | 17,534 | |
+| ipeds_tuition | 16,858 | year 2021 (Urban endpoint frozen, maxYear 2021) |
+| college_scorecard | 6,322 | api.data.gov (kept on API for recency — bulk undated URLs are frozen at 2024-08) |
+| college_scorecard_programs | 3,000 | dqRowLimit 3000; api.data.gov |
 
 ### Previously Fixed (2026-05-13)
 

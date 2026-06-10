@@ -884,7 +884,7 @@ get_dq_start_year() {
   local schema=$1
   case "$schema" in
     energy)   echo $(( $(date +%Y) - 4 )) ;;  # dataLag=2 tables map year=effective+dataLag, so a current-2 start emits only the current year. Need current-2-dataLag = current-4 to land historical generation years (T8 wants MIN<=current-2).
-    edu)      echo $(( $(date +%Y) - 3 )) ;;  # 3-year lookback: covers NAEP/CRDC biennial lag; crdc_schools 2021 data DQ-flags correctly via existence check
+    edu)      echo $(( $(date +%Y) - 5 )) ;;  # 5-yr lookback: edu tables peak at very different years — ipeds_tuition maxYear=2021 (Urban endpoint frozen), crdc_schools biennial last cycle 2022, ipeds_completions/financials ~2023, naep 2024. current-5 is the binding floor (ipeds_tuition 2021) so every table's latest published cycle falls inside the window; per-table maxYear/dataLag caps trim the rest. current-3 (old) reached none of crdc/tuition → both structurally empty.
     lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
     census)   echo $(( $(date +%Y) - 3 )) ;;  # ACS 5-year: dataLag=2 + releaseMonth=12 → effective end current−3 before December
     patents)  echo $(( $(date +%Y) - 4 )) ;;  # USPTO TRCFECO2 trademark snapshot {year+1} settles slowly; window must reach the last published filing year

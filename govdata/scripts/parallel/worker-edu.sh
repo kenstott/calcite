@@ -23,7 +23,7 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <initial|annual|biennial> [--force]" >&2
+  echo "Usage: $0 <historical|daily> [--force]" >&2
   exit 1
 fi
 
@@ -86,78 +86,95 @@ ENDJSON
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
-case "$MODE" in
+# Edu's only modes are the universal historical/daily that the pool and run-all-dq
+# drive every schema with. Edu has no true daily source, so it maps that vocabulary
+# onto its data cadences (full backfill / current annual / current biennial), each
+# factored into a function so 'daily' can compose the annual + biennial cadences.
 
-  initial)
-    START=${GOVDATA_START_YEAR:-2010}
-    END=$((INCREMENTAL_YEAR - 1))
-    # No release-window checks — initial always runs the full historical load.
+run_historical_cadence() {
+  local START END
+  START=${GOVDATA_START_YEAR:-2010}
+  END=$((INCREMENTAL_YEAR - 1))
+  # No release-window checks — initial always runs the full historical load.
 
-    run_edu_model "edu-initial-k12" \
-      '"ccd_districts", "ccd_schools"' "$START" "$END"
+  run_edu_model "edu-initial-k12" \
+    '"ccd_districts", "ccd_schools"' "$START" "$END"
 
-    run_edu_model "edu-initial-assessments" \
-      '"naep_scores", "naep_achievement_levels", "crdc_schools"' "$START" "$END"
+  run_edu_model "edu-initial-assessments" \
+    '"naep_scores", "naep_achievement_levels", "crdc_schools"' "$START" "$END"
 
-    run_edu_model "edu-initial-ipeds" \
-      '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
+  run_edu_model "edu-initial-ipeds" \
+    '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
 
+  if [ -n "${API_DATA_GOV:-}" ]; then
+    run_edu_model "edu-initial-scorecard" \
+      '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
+  else
+    log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
+  fi
+}
+
+run_annual_cadence() {
+  local START=$INCREMENTAL_YEAR
+  export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
+  # Each sub-run is gated independently — unrelated sources don't block each other.
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ccd_districts"; then
+    run_edu_model "edu-annual-k12" \
+      '"ccd_districts", "ccd_schools"' "$START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "college_scorecard"; then
     if [ -n "${API_DATA_GOV:-}" ]; then
-      run_edu_model "edu-initial-scorecard" \
-        '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
+      run_edu_model "edu-annual-scorecard" \
+        '"college_scorecard", "college_scorecard_programs"' "$START"
     else
       log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
     fi
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_institutions"; then
+    run_edu_model "edu-annual-ipeds-core" \
+      '"ipeds_institutions", "ipeds_completions", "ipeds_tuition"' "$START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_financials"; then
+    run_edu_model "edu-annual-ipeds-finance" \
+      '"ipeds_financials"' "$START"
+  fi
+}
+
+run_biennial_cadence() {
+  # naep_scores and crdc_schools both have dataLag:2 — effectiveEnd = N-2.
+  # START must be ≤ effectiveEnd or yearRange is empty and nothing is fetched.
+  local BIENNIAL_START=$(( INCREMENTAL_YEAR - 2 ))
+  export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
+    run_edu_model "edu-biennial-naep" \
+      '"naep_scores", "naep_achievement_levels"' "$BIENNIAL_START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then
+    run_edu_model "edu-biennial-crdc" \
+      '"crdc_schools"' "$BIENNIAL_START"
+  fi
+}
+
+case "$MODE" in
+
+  # historical → full backfill load over GOVDATA_START_YEAR..INCREMENTAL_YEAR-1 (all tables)
+  # daily      → current-year annual cadence + current-cycle biennial cadence
+  historical)
+    run_historical_cadence
     ;;
 
-  annual)
-    START=$INCREMENTAL_YEAR
-    export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
-    # Each sub-run is gated independently — unrelated sources don't block each other.
-
-    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ccd_districts"; then
-      run_edu_model "edu-annual-k12" \
-        '"ccd_districts", "ccd_schools"' "$START"
-    fi
-
-    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "college_scorecard"; then
-      if [ -n "${API_DATA_GOV:-}" ]; then
-        run_edu_model "edu-annual-scorecard" \
-          '"college_scorecard", "college_scorecard_programs"' "$START"
-      else
-        log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
-      fi
-    fi
-
-    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_institutions"; then
-      run_edu_model "edu-annual-ipeds-core" \
-        '"ipeds_institutions", "ipeds_completions", "ipeds_tuition"' "$START"
-    fi
-
-    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_financials"; then
-      run_edu_model "edu-annual-ipeds-finance" \
-        '"ipeds_financials"' "$START"
-    fi
-    ;;
-
-  biennial)
-    # naep_scores and crdc_schools both have dataLag:2 — effectiveEnd = N-2.
-    # START must be ≤ effectiveEnd or yearRange is empty and nothing is fetched.
-    BIENNIAL_START=$(( INCREMENTAL_YEAR - 2 ))
-    export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
-    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "naep_scores"; then
-      run_edu_model "edu-biennial-naep" \
-        '"naep_scores", "naep_achievement_levels"' "$BIENNIAL_START"
-    fi
-
-    if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then
-      run_edu_model "edu-biennial-crdc" \
-        '"crdc_schools"' "$BIENNIAL_START"
-    fi
+  daily)
+    run_annual_cadence
+    run_biennial_cadence
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: initial, annual, biennial" >&2
+    echo "Unknown mode: $MODE. Valid modes: historical, daily" >&2
     exit 1
     ;;
 esac

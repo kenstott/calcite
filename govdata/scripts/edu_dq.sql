@@ -57,6 +57,15 @@ SELECT '=== T2: ROW COUNTS ===' AS section;
 -- Tables with releaseWindow constraints are legitimately empty outside their ingest window.
 -- always_populated: ccd_schools, college_scorecard, college_scorecard_programs, ipeds_institutions → fail when empty
 -- release_window:   all others → warn when empty (expected during off-window periods)
+--
+-- Cap-aware thresholds: three tables declare a table-level dqRowLimit in edu-schema.yaml, so in
+-- DQ mode (GOVDATA_DQ=true) their row count is ~dqRowLimit × (#periods loaded), NOT the prod
+-- magnitude. Thresholds below are floors set well under one full capped period so they still
+-- catch under-population without false-failing when only one recent (lagged) period publishes:
+--   ipeds_completions          dqRowLimit=5000/year      → floor 1000
+--   crdc_schools               dqRowLimit=5000/yr×topic  → floor  500
+--   college_scorecard_programs dqRowLimit=3000/year      → floor  500
+-- Uncapped tables keep the original non-zero floor (100, or 10 for biennial state-level NAEP).
 INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
   CASE
@@ -69,13 +78,13 @@ FROM (
   SELECT 'ccd_districts'            AS tbl, COUNT(*) AS n, 100 AS thresh FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts',           allow_moved_paths=true)
   UNION ALL SELECT 'ccd_schools',                          COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools',            allow_moved_paths=true)
   UNION ALL SELECT 'naep_scores',                          COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_scores',            allow_moved_paths=true)
-  UNION ALL SELECT 'crdc_schools',                         COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools',           allow_moved_paths=true)
+  UNION ALL SELECT 'crdc_schools',                         COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools',           allow_moved_paths=true)  -- dqRowLimit=5000/yr×topic
   UNION ALL SELECT 'ipeds_institutions',                   COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions',     allow_moved_paths=true)
-  UNION ALL SELECT 'ipeds_completions',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions',      allow_moved_paths=true)
+  UNION ALL SELECT 'ipeds_completions',                    COUNT(*),  1000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions',      allow_moved_paths=true)  -- dqRowLimit=5000/year
   UNION ALL SELECT 'ipeds_tuition',                        COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition',          allow_moved_paths=true)
   UNION ALL SELECT 'ipeds_financials',                     COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true)
   UNION ALL SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true)
-  UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)
+  UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)  -- dqRowLimit=3000/year
   UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
 );
 

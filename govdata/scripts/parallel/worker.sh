@@ -37,7 +37,7 @@
 #   cyber_threat  <historical|daily>
 #   cyber_vuln    <historical|daily>
 #   health  <initial|daily|weekly|monthly>
-#   edu     <initial|annual|biennial>
+#   edu     <historical|daily>
 #   energy  <initial|weekly|monthly|annual>
 #   patents <historical|daily>
 #   lands   <historical|daily>

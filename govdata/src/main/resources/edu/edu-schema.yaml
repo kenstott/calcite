@@ -478,6 +478,7 @@ partitionedTables:
         requestsPerSecond: 1.0
         maxRetries: 3
         retryOn: [429, 500, 503]
+        skipOn: [400]          # non-assessment years (e.g. 2021, 2023 — no main NAEP) return 400; skip rather than fail the pipeline
       rawCache:
         enabled: true
       incremental:
@@ -490,10 +491,10 @@ partitionedTables:
 
     dimensions:
       year:
-        type: year_range
+        type: yearRange       # was 'year_range' (underscore) — UNHANDLED, so minYear/maxYear were silently ignored. NAEP non-assessment/odd/future years fast-fail HTTP 400 (handled by skipOn:[400]); only administered years (2022, 2024, …) return data.
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2013
-        dataLag: 2
+        maxYear: 2024         # latest administered NAEP assessment (2024); bump when a newer cycle publishes. (NaepYearsDimensionResolver was unusable: GetAdhocData.aspx has no type=Years endpoint — returns 400.)
       grade:
         - "4"
         - "8"
@@ -632,10 +633,10 @@ partitionedTables:
 
     dimensions:
       year:
-        type: year_range
+        type: yearRange       # was 'year_range' (underscore) — UNHANDLED, so minYear/maxYear were silently ignored. NAEP non-assessment/odd/future years fast-fail HTTP 400 (handled by skipOn:[400]); only administered years (2022, 2024, …) return data.
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2013
-        dataLag: 2
+        maxYear: 2024         # latest administered NAEP assessment (2024); bump when a newer cycle publishes. (NaepYearsDimensionResolver was unusable: GetAdhocData.aspx has no type=Years endpoint — returns 400.)
       grade:
         - "4"
         - "8"
@@ -679,6 +680,12 @@ partitionedTables:
           type: INTEGER
         - name: crdc_topic
           type: VARCHAR
+
+    # DQ sample cap (GOVDATA_DQ mode): ~100k schools per (year × crdc_topic). Each (year,topic)
+    # is a separate fetch-unit, so the cap samples every topic in every year — preserving the
+    # per-topic column coverage the all-null check depends on — while bounding materialization.
+    # Cache-safe — JSON pages are cached in full during fetch before the iterator caps rows.
+    dqRowLimit: 5000
 
     comment: >
       CRDC school-level equity data consolidated from four Urban Institute sub-endpoints.
@@ -853,9 +860,10 @@ partitionedTables:
 
     dimensions:
       year:
-        type: year_range
+        type: yearRange       # was 'year_range' (underscore) — UNHANDLED by the resolver, so minYear was silently ignored and the dim fell back to raw startYear..endYear, fetching non-existent future years
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2013
+        maxYear: 2022         # latest CRDC collection (2020-21 cycle, published as year 2022); bump when a newer cycle publishes. Without this the Urban API HANGS (Read timed out, ~6min/topic) on non-existent 2023-2026.
       crdc_topic:
         - directory
         - chronic-absenteeism
@@ -1084,6 +1092,12 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+
+    # DQ sample cap (GOVDATA_DQ mode): completions is ~4.2M rows/year fully disaggregated.
+    # Each year is a separate ZIP fetch-unit, so the cap samples every year while bounding
+    # the 4.2M → N Iceberg writes (the slow part). Cache-safe — the ZIP body is cached in
+    # full during fetch (before the iterator), so prod (no GOVDATA_DQ) still loads everything.
+    dqRowLimit: 5000
 
     comment: >
       NCES IPEDS Completions survey (C_A bulk CSV). One row per (unitid, year, cipcode,
@@ -1836,6 +1850,12 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+
+    # DQ sample cap (GOVDATA_DQ mode): ~150k program rows/year, paginated 100/page (~1,500
+    # API calls/year). Each year is a separate fetch-unit, so the cap samples every year and
+    # stops pagination after ~30 pages. Cache-safe — paginated cache commits only on full
+    # drain, so a capped run leaves the prod cache untouched.
+    dqRowLimit: 3000
 
     comment: >
       Dept of Ed College Scorecard program-level outcomes by CIP 4-digit code.
