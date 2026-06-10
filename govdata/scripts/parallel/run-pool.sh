@@ -146,7 +146,7 @@ for arg in "$@"; do
       _add_sec_secondary_years
       queue+=(sec_prices:historical ref:daily fec:historical fedregister:historical)
       queue+=(cyber_vuln:historical cyber_threat:historical cyber_vuln:daily cyber_threat:daily)
-      queue+=(health:initial health:daily health:weekly health:monthly)
+      queue+=(health:historical health:daily)
       queue+=(edu:historical edu:daily)
       queue+=(energy:historical energy:daily)
       queue+=(patents:historical patents:daily lands:historical lands:daily cftc:historical cftc:daily)
@@ -160,7 +160,7 @@ for arg in "$@"; do
       queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
       _add_sec_secondary_years
       queue+=(sec_prices:historical ref:historical fec:historical fedregister:historical)
-      queue+=(cyber_vuln:historical cyber_threat:historical health:initial edu:historical energy:historical)
+      queue+=(cyber_vuln:historical cyber_threat:historical health:historical edu:historical energy:historical)
       queue+=(patents:historical lands:historical cftc:historical)
       ;;
 
@@ -213,7 +213,7 @@ for arg in "$@"; do
         ref:daily
         fec:daily fedregister:daily
         cyber_vuln:daily cyber_threat:daily
-        health:daily health:weekly health:monthly
+        health:daily
         edu:daily
         energy:daily
         patents:daily lands:daily cftc:daily

@@ -36,9 +36,9 @@
 # Complex schemas (delegate to specialty worker scripts):
 #   cyber_threat  <historical|daily>
 #   cyber_vuln    <historical|daily>
-#   health  <initial|daily|weekly|monthly>
+#   health  <historical|daily>
 #   edu     <historical|daily>
-#   energy  <initial|weekly|monthly|annual>
+#   energy  <historical|daily>
 #   patents <historical|daily>
 #   lands   <historical|daily>
 #   cftc    <historical|daily>

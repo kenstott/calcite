@@ -23,7 +23,7 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <initial|historical|daily|weekly|monthly> [--force]" >&2
+  echo "Usage: $0 <daily|historical> [--force]" >&2
   exit 1
 fi
 
@@ -36,8 +36,6 @@ export FORCE
 WORKER_ID="worker-health-${MODE}"
 MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
-
-HEALTH_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/health/health-schema.yaml"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,80 +83,49 @@ ENDJSON
 }
 
 # ── modes ─────────────────────────────────────────────────────────────────────
+#
+# Only two modes, matching every other govdata worker: `historical` and `daily`.
+# They differ ONLY in the year demarcation they export — `historical` backfills up to
+# INCREMENTAL_YEAR-1, `daily` runs the current year onward. Per-table refresh cadence
+# (which monthly/weekly tables actually re-fetch on a given run) is NOT the worker's job:
+# it is handled entirely by each table's `freshness:` / `releaseWindow:` config in
+# health-schema.yaml, enforced by the engine. Both modes therefore run the full table set.
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
-INCREMENTAL_DATE="${INCREMENTAL_YEAR}-01-01"
+
+# Run all 15 health tables, grouped so a single model failure isolates to its group.
+run_all_health_tables() {
+  run_health_model "health-fda" \
+    '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
+
+  run_health_model "health-trials" \
+    '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
+
+  run_health_model "health-cdc" \
+    '"cdc_covid_vaccinations", "cdc_mortality", "cdc_brfss"'
+
+  run_health_model "health-cms-medicaid" \
+    '"cms_hospital_quality", "cms_open_payments", "medicaid_drug_utilization"'
+
+  run_health_model "health-rxnorm" \
+    '"rxnorm_drugs"'
+}
 
 case "$MODE" in
 
-  # historical = the DQ / full re-ingest mode (run as the standard ETL worker, parameterized
-  # by GOVDATA_START_YEAR). Same full-table fetch as initial.
-  initial|historical)
+  historical)
     export GOVDATA_UNTIL_DATE="$((INCREMENTAL_YEAR - 1))-12-31"
     export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
-    # Full fetch of all 15 health tables — capped at GOVDATA_INCREMENTAL_START_YEAR - 1
-    run_health_model "health-initial-fda" \
-      '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
-
-    run_health_model "health-initial-trials" \
-      '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
-
-    run_health_model "health-initial-cdc" \
-      '"cdc_covid_vaccinations", "cdc_mortality", "cdc_brfss"'
-
-    run_health_model "health-initial-cms-medicaid" \
-      '"cms_hospital_quality", "cms_open_payments", "medicaid_drug_utilization"'
-
-    run_health_model "health-initial-rxnorm" \
-      '"rxnorm_drugs"'
+    run_all_health_tables
     ;;
 
   daily)
-    export GOVDATA_SINCE_DATE="${INCREMENTAL_DATE}"
-    run_health_model "health-daily-trials" \
-      '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
-    ;;
-
-  weekly)
-    export GOVDATA_SINCE_DATE="${INCREMENTAL_DATE}"
-    if $FORCE || table_in_window "$HEALTH_SCHEMA_YAML" "cdc_covid_vaccinations"; then
-      run_health_model "health-weekly-cdc" \
-        '"cdc_covid_vaccinations", "cdc_mortality"'
-    fi
-    ;;
-
-  monthly)
     export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
-    # Each sub-run is gated to its source's known release window.
-    # FDA catalogs and RxNorm update continuously and always run.
-
-    # BRFSS — window read from cdc_brfss.releaseWindow
-    if table_in_window "$HEALTH_SCHEMA_YAML" "cdc_brfss"; then
-      run_health_model "health-monthly-brfss" '"cdc_brfss"'
-    fi
-
-    # Medicaid drug utilization — window read from medicaid_drug_utilization.releaseWindow
-    if table_in_window "$HEALTH_SCHEMA_YAML" "medicaid_drug_utilization"; then
-      run_health_model "health-monthly-medicaid" '"medicaid_drug_utilization"'
-    fi
-
-    # CMS open payments — window read from cms_open_payments.releaseWindow
-    if table_in_window "$HEALTH_SCHEMA_YAML" "cms_open_payments"; then
-      run_health_model "health-monthly-cms-payments" '"cms_open_payments"'
-    fi
-
-    # CMS hospital quality — window read from cms_hospital_quality.releaseWindow
-    if table_in_window "$HEALTH_SCHEMA_YAML" "cms_hospital_quality"; then
-      run_health_model "health-monthly-cms-quality" '"cms_hospital_quality"'
-    fi
-
-    # FDA catalogs + RxNorm — no releaseWindow in schema (continuous/monthly); always runs
-    run_health_model "health-monthly-fda-rxnorm" \
-      '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls", "rxnorm_drugs"'
+    run_all_health_tables
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: initial, historical, daily, weekly, monthly" >&2
+    echo "Unknown mode: $MODE. Valid modes: daily, historical" >&2
     exit 1
     ;;
 esac
