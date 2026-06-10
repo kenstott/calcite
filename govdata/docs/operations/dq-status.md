@@ -59,7 +59,7 @@ duckdb -c "SELECT table_name, test, status, value, detail \
 
 | Schema       | Last Run   | Result  | Fails | Warns | Notes |
 |--------------|------------|---------|-------|-------|-------|
-| weather      | —          | PENDING | —     | —     | Schema changes pending re-run |
+| weather      | 2026-06-10 | PASS    | 0     | 0     | 13/13 green (81 checks) — first-ever clean weather DQ run. **EPA bulk migration**: epa_daily_aqi/epa_annual_aqi switched from the rate-limited AQS `byState` API (51×5 calls/yr @ 10 req/min → 71 min) to keyless AirData bulk ZIPs (`daily_{param}_{year}.zip` / `annual_conc_by_monitor_{year}.zip`) via `extractPattern`+`format:csv`+`EpaAirData{Daily,Annual}Transformer` → ~25s, no key/throttle. **ghcnd_daily**: replaced the first-N `dqRowLimit` (which sampled only the precip-only `US1…` CoCoRaHS block → all-null temperature) with station-stride DQ sampling in `GhcndBulkDataProvider` (every Kth station across the id range → temperature populated, row count over floor). **cdo_annual_summaries**: `attributes` excluded from T4 (GSOY carries no per-value quality flags; GSOM does). `last_modified` freshness on ghcnd_stations_with_county; `dqRowLimit` caps on cdo_monthly/epa/drought. Tooling: `data_purge.sh` tracker glob was a no-op for multi-dim tables (composite source_key) — hardened Iceberg removal (the authoritative re-ingest trigger) + DuckDB `table_name` resolution; see [[data-purge-tracker-glob-broken]] |
 | edu          | 2026-06-10 | PASS    | 0     | 0     | 11/11 green (72 checks). Edu had **never** run through `run-all-dq`: `worker-edu.sh` only knew `initial/annual/biennial` — added `historical`/`daily` aliases (also `run-pool.sh`/`worker.sh`). DQ window `current−3`→`current−5` (reaches ipeds_tuition maxYear 2021 + crdc biennial 2022). `year_range`→`yearRange` typo on naep/crdc silently dropped minYear/maxYear → fetched non-existent future years → Urban/NAEP APIs *hung*; fixed + added `maxYear` (crdc 2022, naep 2024) + naep `skipOn:[400]`. `dqRowLimit` DQ sampling (ipeds_completions 5000, crdc 5000, college_scorecard_programs 3000) + cap-aware T2 floors. crdc_id backfill now treats empty-string `''` (chronic-absenteeism) as missing, not just null → 134→0 null crdc_id |
 | census       | 2026-05-30 | PASS    | 0     | 0     | economic_census fix deployed in 0.16.1 |
 | econ         | —          | PENDING | —     | —     | Schema changes pending re-run |
@@ -85,7 +85,7 @@ Time estimates assume a full historical re-run (all years) where applicable, fol
 
 | Schema | Re-ingest needed? | Est. ETL time | Est. DQ time | Total |
 |--------|------------------|---------------|--------------|-------|
-| weather | Yes (rawCache + dimension changes) | 2–3 h | 10 min | ~3 h |
+| weather | DQ re-run only (green 2026-06-10) | 0 | 10 min | 10 min |
 | edu | Yes (dimension changes) | 3–5 h | 15 min | ~5 h |
 | census | Yes (never run) | 4–8 h | 20 min | ~8 h |
 | econ | Yes (dimension changes) | 2–4 h | 10 min | ~4 h |
@@ -107,17 +107,46 @@ Time estimates assume a full historical re-run (all years) where applicable, fol
 
 ---
 
-## Weather (2026-05-11) — WARN
+## Weather (2026-06-10) — PASS
 
-All 13 tables readable and non-empty. Two warnings:
+0 fails, 0 warns, 81 checks across all 13 tables. Run via `run-all-dq --schema weather` (full
+dq-rebuild) in DQ sample mode (`GOVDATA_DQ=true`) against the MinIO DQ store. First time weather
+has ever finished the DQ flow clean.
 
-| Table | Test | Detail |
-|-------|------|--------|
-| ghcnd_daily | all_same_value | columns: `year`, `tmax_flag`, `tmin_flag` — expected for single-year partition writes |
-| hms_smoke_daily | all_same_value | column: `year` — expected for daily partition writes |
+### Root causes fixed this run
 
-These are structural artifacts of partitioned writes (each partition has one year value). Consider
-loosening `all_same_value` threshold for partition key columns, or exempting known partition columns.
+- **EPA AQS rate-limit bottleneck → AirData bulk ZIPs.** `epa_daily_aqi` and `epa_annual_aqi`
+  fetched per state×pollutant×year from the AQS `byState` API (255 calls/yr, throttled to 10
+  req/min ≈ 71 min). Repointed to the keyless pre-generated bulk files
+  `daily_{param}_{effective_year}.zip` (5 per year, one per pollutant — already param-scoped) and
+  `annual_conc_by_monitor_{effective_year}.zip` (one per year, all pollutants). Source switched to
+  `extractPattern: "*.csv"` + `format: csv`; new `EpaAirDataDailyTransformer` /
+  `EpaAirDataAnnualTransformer` (shared `EpaAirDataSupport`) map the 29/55 AirData columns to the
+  schema, build `county_fips = State Code‖County Code`, and drop non-50+DC rows. Result ~25s, no
+  key, no throttle. The annual file has no `AQI` column (concentration-by-monitor) — `aqi` is left
+  null, matching the prior API behavior where the annual `aqi` was already excluded from T4.
+- **ghcnd_daily all-null temperature (a self-inflicted cap artifact).** The first attempt added
+  `dqRowLimit: 25000`, but the by_year file is sorted by `station_id` and the lowest US ids are the
+  `US1…` CoCoRaHS network — precipitation-only — so the first-N sample had 100%-null
+  `tmax_c/tmin_c/tavg_c/awnd_ms` and only ~18k rows (one partial year). Replaced with **station-stride
+  DQ sampling** in `GhcndBulkDataProvider` (`GOVDATA_DQ=true`: keep every Kth of the sorted stations,
+  ~150 across the id range) so COOP (`USC`)/WBAN (`USW`) temperature stations are included; removed
+  the YAML `dqRowLimit` so the engine cap doesn't re-impose first-N.
+- **cdo_annual_summaries.attributes all-null.** GSOY (annual) records carry no per-value quality
+  flags (GSOM monthly does); excluded `attributes` from cdo_annual T4.
+
+### Tooling fix surfaced this run
+
+- **`data_purge.sh` could not purge multi-dim tables.** Its tracker glob `source_key=<table>` never
+  matches the tracker's encoding — `S3HivePipelineTracker.flattenKeyValues` keys markers by the
+  fetch-unit's dimension values (e.g.
+  `source_key=effective_year=2024__state_fips=01__type=cdo_annual__year=2025`), with the table only
+  as the `type=` value (and `type=cdo_annual` ≠ table `cdo_annual_summaries`). Its Iceberg step also
+  swallowed `rclone ls` errors (`2>/dev/null || true`), so a transient failure read as "no files →
+  skip" and left data in place. Both fixed: Iceberg removal now retries, fails loud, and verifies
+  empty (this is the authoritative re-ingest trigger — "no Iceberg data → force-reprocess all
+  combinations"); tracker deletion resolves marker dirs by the parquet `table_name` column via
+  DuckDB. See [[data-purge-tracker-glob-broken]].
 
 ---
 
@@ -125,11 +154,11 @@ loosening `all_same_value` threshold for partition key columns, or exempting kno
 
 0 fails, 0 warns, 72 checks across all 11 tables. Run via `run-all-dq --schema edu --etl-resume`
 in DQ sample mode (`GOVDATA_DQ=true`) against the MinIO DQ store. This is the first time edu has
-ever completed the DQ harness end-to-end.
+ever completed the run-all-dq pipeline end-to-end.
 
 ### Root causes fixed this run
 
-- **Harness never drove edu.** `run-all-dq`/`run-pool` speak the universal `historical`/`daily`
+- **The DQ runner never drove edu.** `run-all-dq`/`run-pool` speak the universal `historical`/`daily`
   vocabulary, but `worker-edu.sh` only accepted `initial`/`annual`/`biennial` — every prior attempt
   failed at dispatch (`Unknown mode: daily`). Added `historical` (→ full backfill) / `daily`
   (→ current annual + biennial) aliases to `worker-edu.sh`; updated `run-pool.sh` queues and the
