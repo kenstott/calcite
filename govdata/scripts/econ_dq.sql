@@ -103,7 +103,7 @@ FROM (
   UNION ALL SELECT 'metro_cpi',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',             allow_moved_paths := true)), 200
   UNION ALL SELECT 'state_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',        allow_moved_paths := true)), 20000
   UNION ALL SELECT 'state_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',           allow_moved_paths := true)), 200
-  UNION ALL SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 7000  -- BLS rejects nonexistent metro×industry series (HTTP 400); ~7456 valid rows is the real ceiling, not 10000
   UNION ALL SELECT 'metro_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',           allow_moved_paths := true)), 100
   UNION ALL SELECT 'county_qcew',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',           allow_moved_paths := true)), 10000
   UNION ALL SELECT 'county_wages',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',          allow_moved_paths := true)), 10000
@@ -463,8 +463,11 @@ SELECT 'econ', 'county_wages', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
+  -- state_fips: cap-sample artifact. dqRowLimit:25000 takes the first 25k rows of the
+  -- area_fips-sorted QCEW stream — all low-FIPS (one state) — so state_fips goes constant in
+  -- the DQ sample; the uncapped prod load spans all states. See [[dq-row-limit-sampling]].
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
-                          'industry_classification', 'src_line_nbr', 'unit_mult');
+                          'industry_classification', 'src_line_nbr', 'unit_mult', 'state_fips');
 
 -- jolts_regional
 INSERT INTO dq_results

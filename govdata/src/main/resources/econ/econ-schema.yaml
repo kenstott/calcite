@@ -16,6 +16,12 @@
 
 schemaName: "${SCHEMA_NAME:econ}"
 dataLagYears: 2
+
+# regional_income fans out over geo_fips_set (STATE/COUNTY/MSA/MIC/PORT/DIV/CSA — COUNTY
+# alone is ~3,000 geos) × ~63 BEA tables × line_code via the BEA API (~9 items/s). A full
+# DQ rebuild runs many hours, far past the 60-min default — the watchdog was recycling the
+# worker hourly. Give it ample headroom so a single worker session runs to completion.
+workerTimeoutMinutes: 1440
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
@@ -1467,6 +1473,11 @@ partitionedTables:
   # --- COUNTY QCEW ---
   - name: county_qcew
     pattern: "type=county_qcew/frequency=*/year=*/county_qcew.parquet"
+    # DQ sample cap (GOVDATA_DQ mode): the QCEW annual bulk ZIP is one fetch per year whose
+    # county-filtered CSV stream is all ~3,142 counties x NAICS industries x ownership types
+    # (millions of rows/year). Cap each year's stream so DQ stops early; prod loads everything.
+    # Cache-safe: wraps the post-fetch iterator, never truncates the shared raw cache.
+    dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
       County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties. Comprehensive data includes establishment counts, employment levels, total wages, and average weekly wages by industry (NAICS codes) and ownership type (private, federal, state, local government). Enables detailed county-level labor market analysis, industry concentration studies, and regional economic development research.
@@ -1567,6 +1578,10 @@ partitionedTables:
   # --- COUNTY WAGES ---
   - name: county_wages
     pattern: "type=county_wages/frequency=*/year=*/county_wages.parquet"
+    # DQ sample cap (GOVDATA_DQ mode): same QCEW annual bulk as county_qcew, county-filtered
+    # to all ~6,038 county area codes x industries (millions of rows/year). Cap the stream so
+    # DQ samples fast; prod full. Cache-safe (post-fetch iterator wrap).
+    dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
       Average weekly wages for all 6,038 U.S. counties from BLS QCEW (Quarterly Census of Employment and Wages). Most granular geographic wage data available, enabling county-level compensation analysis, local labor market studies, and rural-urban wage comparisons. Essential for detailed regional economic analysis.
@@ -1750,18 +1765,6 @@ partitionedTables:
         nullable: true
         comment: JOLTS metric value (levels in thousands, rates as percentage)
         source: value
-      - name: percent_change_month
-        type: double
-        nullable: true
-        comment: Month-over-month percentage change
-        # Not available in raw BLS data, set to NULL
-        expression: "NULL"
-      - name: percent_change_year
-        type: double
-        nullable: true
-        comment: Year-over-year percentage change
-        # Not available in raw BLS data, set to NULL
-        expression: "NULL"
 
     # Dimension definitions for iteration
     dimensions:
@@ -1863,8 +1866,8 @@ partitionedTables:
       - name: state_name
         type: string
         nullable: true
-        comment: State name (join with geo.states table)
-        # Will be null - can be joined with geo.states
+        comment: State name derived from the state FIPS encoded in series_id (positions 4-5)
+        expression: "CASE SUBSTRING(src.series_id, 4, 2) WHEN '00' THEN 'United States' WHEN '01' THEN 'Alabama' WHEN '02' THEN 'Alaska' WHEN '04' THEN 'Arizona' WHEN '05' THEN 'Arkansas' WHEN '06' THEN 'California' WHEN '08' THEN 'Colorado' WHEN '09' THEN 'Connecticut' WHEN '10' THEN 'Delaware' WHEN '11' THEN 'District of Columbia' WHEN '12' THEN 'Florida' WHEN '13' THEN 'Georgia' WHEN '15' THEN 'Hawaii' WHEN '16' THEN 'Idaho' WHEN '17' THEN 'Illinois' WHEN '18' THEN 'Indiana' WHEN '19' THEN 'Iowa' WHEN '20' THEN 'Kansas' WHEN '21' THEN 'Kentucky' WHEN '22' THEN 'Louisiana' WHEN '23' THEN 'Maine' WHEN '24' THEN 'Maryland' WHEN '25' THEN 'Massachusetts' WHEN '26' THEN 'Michigan' WHEN '27' THEN 'Minnesota' WHEN '28' THEN 'Mississippi' WHEN '29' THEN 'Missouri' WHEN '30' THEN 'Montana' WHEN '31' THEN 'Nebraska' WHEN '32' THEN 'Nevada' WHEN '33' THEN 'New Hampshire' WHEN '34' THEN 'New Jersey' WHEN '35' THEN 'New Mexico' WHEN '36' THEN 'New York' WHEN '37' THEN 'North Carolina' WHEN '38' THEN 'North Dakota' WHEN '39' THEN 'Ohio' WHEN '40' THEN 'Oklahoma' WHEN '41' THEN 'Oregon' WHEN '42' THEN 'Pennsylvania' WHEN '44' THEN 'Rhode Island' WHEN '45' THEN 'South Carolina' WHEN '46' THEN 'South Dakota' WHEN '47' THEN 'Tennessee' WHEN '48' THEN 'Texas' WHEN '49' THEN 'Utah' WHEN '50' THEN 'Vermont' WHEN '51' THEN 'Virginia' WHEN '53' THEN 'Washington' WHEN '54' THEN 'West Virginia' WHEN '55' THEN 'Wisconsin' WHEN '56' THEN 'Wyoming' WHEN '72' THEN 'Puerto Rico' ELSE 'Unknown' END"
       - name: year
         type: int
         nullable: true
@@ -2991,6 +2994,12 @@ partitionedTables:
     download:
       bulkDownload: bea_sainc_bulk
 
+    # Freshness: BEA republishes the static SAINC.zip on annual benchmark revisions.
+    # A single HEAD probe of Last-Modified re-triggers ingest when the vintage changes;
+    # without it, complete year-partitions stay frozen and miss BEA revisions.
+    freshness:
+      type: last_modified
+
     # HTTP Source configuration for bulk download
     source:
       type: http
@@ -3108,6 +3117,10 @@ partitionedTables:
     download:
       bulkDownload: bea_sagdp_bulk
 
+    # Freshness: re-ingest SAGDP.zip when BEA republishes a revised vintage (HEAD Last-Modified).
+    freshness:
+      type: last_modified
+
     source:
       type: http
       url: "https://apps.bea.gov/regional/zip/SAGDP.zip"
@@ -3221,6 +3234,10 @@ partitionedTables:
 
     download:
       bulkDownload: bea_sqinc_bulk
+
+    # Freshness: re-ingest SQINC.zip when BEA republishes a revised vintage (HEAD Last-Modified).
+    freshness:
+      type: last_modified
 
     source:
       type: http
@@ -3336,6 +3353,10 @@ partitionedTables:
     download:
       bulkDownload: bea_sqgdp_bulk
 
+    # Freshness: re-ingest SQGDP.zip when BEA republishes a revised vintage (HEAD Last-Modified).
+    freshness:
+      type: last_modified
+
     source:
       type: http
       url: "https://apps.bea.gov/regional/zip/SQGDP.zip"
@@ -3449,6 +3470,10 @@ partitionedTables:
 
     download:
       bulkDownload: bea_sapce_bulk
+
+    # Freshness: re-ingest SAPCE.zip when BEA republishes a revised vintage (HEAD Last-Modified).
+    freshness:
+      type: last_modified
 
     source:
       type: http
