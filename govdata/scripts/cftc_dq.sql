@@ -251,13 +251,13 @@ SELECT
   CASE WHEN n_bad = 0 THEN 'pass' ELSE 'warn' END AS status,
   CAST(n_bad AS VARCHAR) AS value,
   '0'                    AS threshold,
-  CASE WHEN n_bad = 0 THEN 'cleared values all within expected set {C, U, I, NULL}'
+  CASE WHEN n_bad = 0 THEN 'cleared values all within expected set {Y, N, I, NULL}'
        ELSE CONCAT(n_bad, ' rows with unexpected cleared value') END AS detail
 FROM (
   SELECT COUNT(*) AS n_bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cftc_trades', allow_moved_paths := true)
   WHERE cleared IS NOT NULL
-    AND cleared NOT IN ('C', 'U', 'I')
+    AND cleared NOT IN ('Y', 'N', 'I')
 ) t;
 
 -- T7d: IR/RATES partition must include SOFR underlier references

@@ -16,6 +16,11 @@
 #
 # ============================================================================
 
+# EQUITIES daily files uncompress to ~500 MB each; a full 2024+ ingest (one fetch per
+# asset_class/day) far exceeds the 60-min default worker cap. Read by the pool's
+# get_timeout_config (common.sh) from this source YAML; not consumed by the ETL.
+workerTimeoutMinutes: 240
+
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 schema:
@@ -32,7 +37,11 @@ columnTemplates:
     name: trade_date
     type: date
     nullable: false
-    comment: Calendar date of the trade (derived from event_timestamp)
+    source: "trade_date"
+    comment: >
+      Calendar date of the trade — the date portion of Event timestamp. Populated by
+      CftcTradeDateTransformer (the DATE writer can't parse the full timestamp string, so the
+      transformer emits a clean YYYY-MM-DD into the 'trade_date' field, which this column maps).
 
   year_column: &year_column
     name: year
@@ -50,12 +59,25 @@ columnTemplates:
     name: asset_class
     type: string
     nullable: false
-    comment: CFTC asset class — IR (rates), CR (credit), FX, EQ (equity), CO (commodity)
+    comment: >
+      DTCC asset-class partition, from the source file split — RATES, CREDITS, FOREX,
+      EQUITIES, COMMODITIES. Drives the download URL and the Iceberg partition (no source
+      mapping; populated from the partition dimension). See asset_class_code for the CFTC
+      short code (IR/CR/FX/EQ/CO) carried in the data rows.
 
 partitionedTables:
 
   - name: cftc_trades
     pattern: "type=cftc_trades/asset_class=*/year=*/month=*/cftc_trades.parquet"
+    # DQ sample cap (GOVDATA_DQ mode only; prod ignores it and loads everything).
+    # Fetch-unit here is one daily file per (asset_class, year, month, day) — e.g. a
+    # single RATES day is ~23.5k rows. The cap stops each daily fetch-unit at 2000 rows,
+    # so DQ still crosses every trading day and all 5 asset classes (broad period
+    # coverage) while cutting the Iceberg materialize volume ~10x on the dense classes.
+    # Cache-safe: the daily .zip is still cached in full during fetch; only the Iceberg
+    # write is truncated. Caveat: the cap is the first N rows of each day's file (a
+    # chronological intra-day slice), not a random sample.
+    dqRowLimit: 2000
     partitions:
       style: hive
       columnDefinitions:
@@ -70,8 +92,9 @@ partitionedTables:
     comment: >
       CFTC swap trade public dissemination records from DTCC GTR. Each row is one
       reported swap event (new trade, amendment, termination, correction). Covers all
-      five CFTC asset classes: IR (interest rate), CR (credit/CDS), FX, EQ (equity),
-      CO (commodity). Partitioned by asset_class/year/month. Daily EOD files from
+      five CFTC asset classes, one per partition: RATES, CREDITS, FOREX, EQUITIES,
+      COMMODITIES (the source short code IR/CR/FX/EQ/CO is preserved in asset_class_code).
+      Partitioned by asset_class/year/month. Daily EOD files from
       2024-01-01; weekends and holidays produce no file (skipped cleanly).
       For new trades only: WHERE action_type = 'NEWT'. For live trades: exclude
       action_type IN ('TERM','CORR','EROR'). Join on dissemination_id /
@@ -111,8 +134,14 @@ partitionedTables:
         comment: Indicates whether the record is an amendment to a prior submission
 
       # --- Product classification ---
-      - <<: *asset_class_column
+      - name: asset_class_code
+        type: string
+        nullable: true
         source: "Asset Class"
+        comment: >
+          CFTC standard asset-class code from the source file — IR (rates), CR (credit),
+          FX, EQ (equity), CO (commodity). Redundant with the asset_class partition (the
+          DTCC file is pre-split by class) but kept for analyst convenience and joins.
       - name: product_name
         type: string
         nullable: true
@@ -139,7 +168,7 @@ partitionedTables:
         type: string
         nullable: true
         source: "Cleared"
-        comment: "C=cleared, U=uncleared, I=not applicable"
+        comment: "Y=cleared, N=not cleared, I=not applicable (source 'Cleared' field; may be NULL)"
       - name: mandatory_clearing_indicator
         type: boolean
         nullable: true
@@ -659,6 +688,7 @@ partitionedTables:
         comment: Current index factor for ABS/MBS underliers
 
       # --- Partition columns (derived at ingest) ---
+      - <<: *asset_class_column
       - <<: *trade_date_column
       - <<: *year_column
       - <<: *month_column
@@ -735,12 +765,24 @@ partitionedTables:
       extractPattern: "*.csv"
       response:
         format: csv
+        # Stream the CSV directly out of the zip entry instead of extracting+caching the whole
+        # file. In DQ mode this lets dqRowLimit abort each download after the cap is reached —
+        # critical for the EQUITIES feed (~500MB/day uncompressed) where the full extract+cache
+        # write dominated runtime. No rawCache: CSV_STREAM streams from the live connection.
+        pagination:
+          type: CSV_STREAM
+          pageSize: 2000
       rateLimit:
         requestsPerSecond: 5.0
         maxRetries: 2
         skipOn: [403, 404]    # weekends, holidays, future dates, invalid day combos
-      rawCache:
-        enabled: true
+
+    hooks:
+      rowTransformers:
+        # Derives trade_date (date portion of Event timestamp) — the DATE writer can't parse
+        # the full timestamp string, so this emits a clean YYYY-MM-DD for the trade_date column.
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.cftc.CftcTradeDateTransformer"
 
     materialize:
       enabled: true
@@ -768,7 +810,7 @@ views:
 
   - name: rate_swaps
     type: view
-    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, cleared, mandatory_clearing_indicator, notional_amount_leg1, notional_currency_leg1, fixed_rate_leg1, fixed_rate_leg2, floating_rate_reset_freq_period_leg1, floating_rate_day_count_leg1, settlement_location, collateralisation_category, platform_identifier, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'IR'"
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, cleared, mandatory_clearing_indicator, notional_amount_leg1, notional_currency_leg1, fixed_rate_leg1, fixed_rate_leg2, floating_rate_reset_freq_period_leg1, floating_rate_day_count_leg1, settlement_location, collateralisation_category, platform_identifier, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'RATES'"
     comment: >
       Interest rate swaps filtered view. Covers vanilla IRS, OIS (SOFR, EFFR), basis swaps,
       cross-currency swaps, and swaptions in the RATES asset class. Key columns: fixed_rate_leg1/leg2
@@ -778,17 +820,17 @@ views:
 
   - name: credit_default_swaps
     type: view
-    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, cleared, mandatory_clearing_indicator, notional_amount_leg1, notional_currency_leg1, fixed_rate_leg1, spread_leg1, spread_notation_leg1, underlying_asset_name, underlier_id_leg1, underlier_id_source_leg1, underlying_asset_subtype_leg1, settlement_location, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'CR'"
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, cleared, mandatory_clearing_indicator, notional_amount_leg1, notional_currency_leg1, fixed_rate_leg1, spread_leg1, spread_notation_leg1, underlying_asset_name, underlier_id_leg1, underlier_id_source_leg1, underlying_asset_subtype_leg1, settlement_location, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'CREDITS'"
     comment: >
       Credit default swaps filtered view. Covers single-name CDS and CDS index products
       (CDX.NA.IG, CDX.NA.HY, iTraxx). Key columns: spread_leg1 (running spread in bps),
       fixed_rate_leg1 (standard coupon — typically 100bps IG or 500bps HY), underlying_asset_name
       (reference entity or index name), underlier_id_leg1 (ISIN or index identifier).
-      Filter action_type = 'NEWT' AND cleared = 'C' for cleared index CDS activity.
+      Filter action_type = 'NEWT' AND cleared = 'Y' for cleared index CDS activity.
 
   - name: fx_derivatives
     type: view
-    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, notional_amount_leg2, notional_currency_leg2, call_amount, call_currency, put_amount, put_currency, exchange_rate, exchange_rate_basis, option_type, option_style, strike_price, strike_price_currency, option_premium_amount, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'FX'"
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, notional_amount_leg2, notional_currency_leg2, call_amount, call_currency, put_amount, put_currency, exchange_rate, exchange_rate_basis, option_type, option_style, strike_price, strike_price_currency, option_premium_amount, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'FOREX'"
     comment: >
       FX derivatives filtered view. Covers FX swaps, cross-currency swaps, FX forwards,
       FX options, and NDFs. Key columns: notional_currency_leg1/leg2 (currency pair),
@@ -798,7 +840,7 @@ views:
 
   - name: equity_derivatives
     type: view
-    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, price, price_currency, strike_price, option_type, option_style, underlying_asset_name, underlier_id_leg1, underlying_asset_subtype_leg1, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'EQ'"
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, price, price_currency, strike_price, option_type, option_style, underlying_asset_name, underlier_id_leg1, underlying_asset_subtype_leg1, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'EQUITIES'"
     comment: >
       Equity derivatives filtered view. Covers total return swaps (TRS), equity options,
       variance swaps, and correlation swaps. Key columns: underlying_asset_name (single
@@ -807,7 +849,7 @@ views:
 
   - name: commodity_derivatives
     type: view
-    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, notional_quantity_leg1, quantity_unit_of_measure_leg1, price, price_currency, price_unit_of_measure, fixed_rate_leg1, spread_leg1, underlying_asset_name, underlier_id_leg1, physical_delivery_location_leg1, delivery_type, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'CO'"
+    sql: "SELECT dissemination_id, original_dissemination_id, action_type, event_type, trade_date, execution_timestamp, effective_date, expiration_date, notional_amount_leg1, notional_currency_leg1, notional_quantity_leg1, quantity_unit_of_measure_leg1, price, price_currency, price_unit_of_measure, fixed_rate_leg1, spread_leg1, underlying_asset_name, underlier_id_leg1, physical_delivery_location_leg1, delivery_type, collateralisation_category, upi_underlier_name, year, month FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE asset_class = 'COMMODITIES'"
     comment: >
       Commodity derivatives filtered view. Covers energy swaps (crude oil, nat gas, power),
       agricultural swaps, and metals swaps. Key columns: notional_quantity_leg1 (physical
@@ -817,18 +859,19 @@ views:
 
   - name: swap_activity
     type: view
-    sql: "SELECT trade_date, asset_class, action_type, cleared, COUNT(*) AS trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 WHEN notional_currency_leg2 = 'USD' THEN notional_amount_leg2 ELSE notional_amount_leg1 END) AS total_usd_notional, COUNT(CASE WHEN cleared = 'C' THEN 1 END) AS cleared_count, COUNT(CASE WHEN cleared != 'C' THEN 1 END) AS uncleared_count FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades GROUP BY trade_date, asset_class, action_type, cleared"
+    sql: "SELECT trade_date, asset_class, action_type, cleared, COUNT(*) AS trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 WHEN notional_currency_leg2 = 'USD' THEN notional_amount_leg2 ELSE notional_amount_leg1 END) AS total_usd_notional, COUNT(CASE WHEN cleared = 'Y' THEN 1 END) AS cleared_count, COUNT(CASE WHEN cleared = 'N' THEN 1 END) AS uncleared_count FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades GROUP BY trade_date, asset_class, action_type, cleared"
     comment: >
       Daily swap activity summary across all asset classes. Columns: trade_date, asset_class
-      (IR/CR/FX/EQ/CO), action_type (NEWT/AMND/TERM/CORR), cleared (C/U/I), trade_count
+      (RATES/CREDITS/FOREX/EQUITIES/COMMODITIES), action_type (NEWT/AMND/TERM/CORR), cleared (Y/N/I), trade_count
       (number of swap events), total_usd_notional (USD-equivalent notional — uses leg1 if
-      USD, leg2 if not; approximate for cross-currency), cleared_count / uncleared_count.
+      USD, leg2 if not; approximate for cross-currency), cleared_count (cleared='Y') /
+      uncleared_count (cleared='N').
       Primary dashboard for market activity monitoring, clearing adoption rates, and
       daily volume surveillance. Filter action_type = 'NEWT' for execution-only volumes.
 
   - name: clearing_activity
     type: view
-    sql: "SELECT trade_date, asset_class, settlement_location, COUNT(*) AS cleared_trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 ELSE notional_amount_leg1 END) AS total_notional FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE cleared = 'C' AND action_type = 'NEWT' GROUP BY trade_date, asset_class, settlement_location"
+    sql: "SELECT trade_date, asset_class, settlement_location, COUNT(*) AS cleared_trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 ELSE notional_amount_leg1 END) AS total_notional FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE cleared = 'Y' AND action_type = 'NEWT' GROUP BY trade_date, asset_class, settlement_location"
     comment: >
       Cleared swap activity by CCP. Columns: trade_date, asset_class, settlement_location
       (CCP name — LCH, CME, ICE), cleared_trade_count, total_notional. Enables CCP market
@@ -839,7 +882,9 @@ views:
 # ============================================================================
 # STATISTICS:
 #   - 1 partitioned table (cftc_trades)
-#   - 110 columns across all asset classes (uniform 17 CFR Part 43 schema)
+#   - 115 columns across all asset classes (uniform 17 CFR Part 43 schema);
+#     asset_class = DTCC partition (RATES/CREDITS/FOREX/EQUITIES/COMMODITIES),
+#     asset_class_code = CFTC short code (IR/CR/FX/EQ/CO) from the source file
 #   - 7 SQL views
 #
 # DATA NOTES:
@@ -848,6 +893,6 @@ views:
 #   - weekends/holidays: no file published; 403 skipped cleanly via skipOn
 #   - Notional amounts in source CSV have comma thousands separators —
 #     DuckDB auto_detect handles these correctly
-#   - Cleared field: C=cleared, U=uncleared, I=not applicable
+#   - Cleared field: Y=cleared, N=not cleared, I=not applicable (may be NULL)
 #   - action_type NEWT=new, AMND=amendment, TERM=termination,
 #     CORR=correction, EROR=error, NOVA=novation

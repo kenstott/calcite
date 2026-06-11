@@ -454,7 +454,7 @@ public class HttpSource implements DataSource {
     }
   }
 
-  private class PaginatedIterator implements Iterator<Map<String, Object>> {
+  private class PaginatedIterator implements Iterator<Map<String, Object>>, java.io.Closeable {
     private final String url;
     private final Map<String, String> baseParams;
     private final Map<String, String> variables;
@@ -475,6 +475,10 @@ public class HttpSource implements DataSource {
     // CSV_STREAM state
     private BufferedReader csvReader = null;
     private String csvHeaderLine = null;
+    // Live connection for a CSV_STREAM pull; disconnected on close() so an early stop
+    // (e.g. dqRowLimit) aborts the download instead of transferring the whole (often huge)
+    // body.
+    private HttpURLConnection csvConn = null;
 
     // Raw-cache accumulation: stream result records from each page to a temp file so
     // we never hold more than one page of Jackson nodes in heap at a time.
@@ -518,6 +522,24 @@ public class HttpSource implements DataSource {
       Map<String, Object> record = currentPageIterator.next();
       totalYielded++;
       return record;
+    }
+
+    @Override public void close() {
+      // Disconnect FIRST: killing the socket means a subsequent reader close can't drain or
+      // re-read the rest of the entry. This is what makes an early stop (dqRowLimit) actually
+      // abort the download rather than transfer the whole body.
+      if (csvConn != null) {
+        csvConn.disconnect();
+        csvConn = null;
+      }
+      if (csvReader != null) {
+        try {
+          csvReader.close();
+        } catch (IOException e) {
+          LOGGER.debug("Failed to close CSV_STREAM reader: {}", e.getMessage());
+        }
+        csvReader = null;
+      }
     }
 
     private boolean fetchNextPage() {
@@ -681,9 +703,35 @@ public class HttpSource implements DataSource {
             throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
           }
           InputStream is = conn.getInputStream();
-          if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
+          String extractPattern = config.getExtractPattern();
+          if (extractPattern != null && !extractPattern.isEmpty()) {
+            // Streaming zip entry: advance to the first entry matching the pattern and read
+            // CSV directly from it — no temp-file extraction and no raw-cache upload (which for
+            // a ~500MB entry is the dominant cost). Combined with an early-stop cap (dqRowLimit),
+            // close() → csvConn.disconnect() aborts the download before the whole entry transfers.
+            String resolvedPattern = substituteVariables(extractPattern, variables);
+            ZipInputStream zis = new ZipInputStream(is);
+            ZipEntry zipEntry;
+            boolean matched = false;
+            while ((zipEntry = zis.getNextEntry()) != null) {
+              if (!zipEntry.isDirectory() && zipEntryMatches(zipEntry.getName(), resolvedPattern)) {
+                LOGGER.info("CSV_STREAM zip entry: {}", zipEntry.getName());
+                matched = true;
+                break;
+              }
+              zis.closeEntry();
+            }
+            if (!matched) {
+              zis.close();
+              conn.disconnect();
+              hasMore = false;
+              return false;
+            }
+            is = zis;
+          } else if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
             is = new GZIPInputStream(is);
           }
+          csvConn = conn;
           csvReader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
           // Read the header as a complete record (in case header itself has quoted multi-line cell)
           csvHeaderLine = CsvRecordReader.readRecord(csvReader);
@@ -1475,18 +1523,22 @@ public class HttpSource implements DataSource {
     return cachePath;
   }
 
-  private String extractFromZip(InputStream input, String pattern, String cachePath)
-      throws IOException {
+  /** Glob-matches a zip entry name against a {@code *.csv}-style extract pattern. */
+  private static boolean zipEntryMatches(String name, String pattern) {
     String regex = pattern
         .replace(".", "\\.")
         .replace("*", ".*")
         .replace("?", ".");
+    return name.matches(regex) || name.endsWith(pattern.replace("*", ""));
+  }
 
+  private String extractFromZip(InputStream input, String pattern, String cachePath)
+      throws IOException {
     try (ZipInputStream zis = new ZipInputStream(input)) {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
         String name = entry.getName();
-        if (name.matches(regex) || name.endsWith(pattern.replace("*", ""))) {
+        if (zipEntryMatches(name, pattern)) {
           LOGGER.info("Extracting from ZIP: {}", name);
 
           // Extract to temp file (ZIP streaming requires it)
