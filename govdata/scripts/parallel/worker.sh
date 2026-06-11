@@ -125,7 +125,7 @@ case "$SCHEMA" in
     # DQ mode samples the same representative CIK group as the sec filings arm (see above);
     # prod fetches Stooq prices for the full EDGAR universe.
     if [ "${GOVDATA_DQ:-}" = "true" ]; then
-      SEC_PRICES_CIKS="${GOVDATA_DQ_CIKS:-MAGNIFICENT7}"
+      SEC_PRICES_CIKS="${GOVDATA_DQ_CIKS:-DQ_SAMPLE}"
     else
       SEC_PRICES_CIKS="_ALL_EDGAR_FILERS"
     fi
@@ -148,7 +148,7 @@ case "$SCHEMA" in
     # DEF 14A/3,4,5/13F/13D-G), so coverage is exercised in minutes, not the ~12h full run.
     # Override the DQ group via GOVDATA_DQ_CIKS (any CikRegistry group/ticker, e.g. FAANG).
     if [ "${GOVDATA_DQ:-}" = "true" ]; then
-      SEC_CIKS="${GOVDATA_DQ_CIKS:-MAGNIFICENT7}"
+      SEC_CIKS="${GOVDATA_DQ_CIKS:-DQ_SAMPLE}"
     else
       SEC_CIKS="_ALL_EDGAR_FILERS"
     fi
