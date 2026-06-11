@@ -416,8 +416,15 @@ public class DimensionIterator {
 
       List<String> values = resolveDimension(config);
       if (values.isEmpty()) {
-        LOGGER.warn("Dimension '{}' resolved to empty values, skipping", name);
-        continue;
+        // A defined dimension with no values zeroes the Cartesian product (X × ∅ = ∅).
+        // Dropping it (the old behavior) emitted combinations missing a required fetch
+        // variable — e.g. a {year}-templated bulk URL left unresolved when a lagged-annual
+        // yearRange inverts to [2026, 2025] in a daily pass — which then materialised a broken,
+        // empty Iceberg table. Return zero combinations so the table is cleanly skipped for this
+        // pass (mirrors expandWithContext's newResult-empty guard).
+        LOGGER.warn("Dimension '{}' resolved to empty values — yielding zero combinations "
+            + "(nothing to process this pass)", name);
+        return Collections.emptyList();
       }
 
       dimensionNames.add(name);
