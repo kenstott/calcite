@@ -122,9 +122,49 @@ case "$SCHEMA" in
   sec_prices)
     export GOVDATA_START_YEAR=2010
     export GOVDATA_END_YEAR=2026
+    # DQ mode samples the same representative CIK group as the sec filings arm (see above);
+    # prod fetches Stooq prices for the full EDGAR universe.
+    if [ "${GOVDATA_DQ:-}" = "true" ]; then
+      SEC_PRICES_CIKS="${GOVDATA_DQ_CIKS:-MAGNIFICENT7}"
+    else
+      SEC_PRICES_CIKS="_ALL_EDGAR_FILERS"
+    fi
     run_etl_inline "$(build_inline_model sec \
-      '"ciks":"_ALL_EDGAR_FILERS","fetchStockPrices":true,"stockPriceSource":"stooq","filingTypes":[]')" \
+      '"ciks":"'"$SEC_PRICES_CIKS"'","fetchStockPrices":true,"stockPriceSource":"stooq","filingTypes":[]')" \
       "$WORKER_ID"
+    ;;
+
+  # ── SEC (filings) — universal historical|daily entry point ────────────────
+  # Translates the pool/DQ-harness historical|daily vocabulary into SEC's per-year
+  # filing fetches, so `worker.sh sec historical|daily` (and run-all-dq --schema sec)
+  # works like every other schema. sec is one data source served by two filing-type
+  # passes (primary 10-K/10-Q, secondary 8-K/proxy/insider/13F/13D-G); sec_prices
+  # (Stooq) stays its own slot. The standalone sec_primary:<year> / sec_secondary:<year>
+  # slots remain for the pool's parallel prod backfill — this arm runs years
+  # sequentially, which is fine for the narrow DQ window (GOVDATA_START_YEAR carries it).
+  sec)
+    # CIK scope: DQ mode (GOVDATA_DQ=true) samples a small representative group instead of
+    # the full ~7,800-filer EDGAR universe — mega-caps file every form type (10-K/10-Q/8-K/
+    # DEF 14A/3,4,5/13F/13D-G), so coverage is exercised in minutes, not the ~12h full run.
+    # Override the DQ group via GOVDATA_DQ_CIKS (any CikRegistry group/ticker, e.g. FAANG).
+    if [ "${GOVDATA_DQ:-}" = "true" ]; then
+      SEC_CIKS="${GOVDATA_DQ_CIKS:-MAGNIFICENT7}"
+    else
+      SEC_CIKS="_ALL_EDGAR_FILERS"
+    fi
+    SEC_PRIMARY_FILINGS='"ciks":"'"$SEC_CIKS"'","filingTypes":["10-K","10-K/A","10-Q","10-Q/A"],"fetchStockPrices":false'
+    SEC_SECONDARY_FILINGS='"ciks":"'"$SEC_CIKS"'","filingTypes":["8-K","8-K/A","DEF 14A","3","4","5","13F-HR","13F-HR/A","SC 13D","SC 13D/A","SC 13G","SC 13G/A"],"fetchStockPrices":false'
+    case "$MODE" in
+      historical) SEC_START_YEAR="${GOVDATA_START_YEAR:-2010}"; SEC_END_YEAR=$((INCREMENTAL_YEAR - 1)) ;;
+      daily)      SEC_START_YEAR="$INCREMENTAL_YEAR";           SEC_END_YEAR="$INCREMENTAL_YEAR" ;;
+      *) echo "sec: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+    esac
+    for (( SEC_YEAR=SEC_END_YEAR; SEC_YEAR>=SEC_START_YEAR; SEC_YEAR-- )); do
+      export GOVDATA_START_YEAR="$SEC_YEAR"
+      export GOVDATA_END_YEAR="$SEC_YEAR"
+      run_etl_inline "$(build_inline_model sec "$SEC_PRIMARY_FILINGS")"   "worker-sec-${MODE}-primary-${SEC_YEAR}"
+      run_etl_inline "$(build_inline_model sec "$SEC_SECONDARY_FILINGS")" "worker-sec-${MODE}-secondary-${SEC_YEAR}"
+    done
     ;;
 
   # ── Simple year-range schemas ──────────────────────────────────────────────
@@ -270,7 +310,7 @@ case "$SCHEMA" in
 
   *)
     echo "Unknown schema: $SCHEMA" >&2
-    echo "Valid schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
+    echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc" >&2
     exit 1
