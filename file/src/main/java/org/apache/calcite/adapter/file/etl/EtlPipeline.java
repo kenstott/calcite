@@ -1407,6 +1407,31 @@ public class EtlPipeline {
   }
 
   /**
+   * A row iterator that may hold a closeable upstream (e.g. a stream-backed
+   * {@code LazyCSVIterator}). Lets a wrapper forward {@code close()} down the chain.
+   */
+  private interface CloseableRowIterator
+      extends Iterator<Map<String, Object>>, java.io.Closeable { }
+
+  /**
+   * Releases a (possibly stream-backed) row iterator. A downstream cap such as
+   * {@link #applyDqRowLimit} can stop iteration before the underlying
+   * {@code LazyCSVIterator} reaches EOF and self-closes; without this the source
+   * S3 {@code InputStream} leaks one connection per fetch-unit in DQ sample mode,
+   * eventually exhausting the S3A connection pool ("Timeout waiting for connection
+   * from pool"). A no-op for plain in-memory iterators. Idempotent.
+   */
+  private static void closeQuietly(Iterator<?> it) {
+    if (it instanceof java.io.Closeable) {
+      try {
+        ((java.io.Closeable) it).close();
+      } catch (IOException e) {
+        LOGGER.debug("Failed to close source iterator: {}", e.getMessage());
+      }
+    }
+  }
+
+  /**
    * Caps a per-combination source iterator at {@code config.getDqRowLimit()} rows when DQ
    * sample mode is active. Off (returns {@code data} unchanged) when not in DQ mode or when
    * no cap is configured. See {@link EtlPipelineConfig#getDqRowLimit()} for why this is
@@ -1419,7 +1444,7 @@ public class EtlPipeline {
       return data;
     }
     LOGGER.info("Pipeline '{}': DQ sample mode — capping at {} rows per fetch-unit", pipelineName, limit);
-    return new Iterator<Map<String, Object>>() {
+    return new CloseableRowIterator() {
       private int yielded = 0;
 
       @Override public boolean hasNext() {
@@ -1432,6 +1457,12 @@ public class EtlPipeline {
         }
         yielded++;
         return data.next();
+      }
+
+      // Forward close to the capped upstream — the cap stops iteration early, so the
+      // underlying stream never reaches EOF to self-close.
+      @Override public void close() {
+        closeQuietly(data);
       }
     };
   }
@@ -1675,6 +1706,11 @@ public class EtlPipeline {
     // the cap bounds the final (post-expansion) output. Cache-safe: caching sources have
     // already written their full body before this iterator runs, and CSV_STREAM writes none.
     data = applyDqRowLimit(data, pipelineName);
+    // Hold the source-chain head so its underlying stream is released after the write even when
+    // dqRowLimit stops iteration before EOF (otherwise the S3 InputStream leaks one connection per
+    // fetch-unit). The hash/computed_delta branches below fully drain it first (self-close); the
+    // finally-close is then an idempotent no-op.
+    final Iterator<Map<String, Object>> sourceChain = data;
 
     // hash freshness gate (post-download): if freshness.type==HASH and the fetched content
     // is identical to the last run, skip the write and return 0 rows (no new snapshot).
@@ -1758,45 +1794,49 @@ public class EtlPipeline {
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final String finalNewComputedDeltaHwm = newComputedDeltaHwm;
     final String finalHashFreshnessToken = hashFreshnessToken;
-    synchronized (writeLock) {
-      HttpSourceConfig sourceConfig = config.getSource();
-      boolean hasResponsePartitioning = sourceConfig != null
-          && sourceConfig.hasResponsePartitioning();
+    try {
+      synchronized (writeLock) {
+        HttpSourceConfig sourceConfig = config.getSource();
+        boolean hasResponsePartitioning = sourceConfig != null
+            && sourceConfig.hasResponsePartitioning();
 
-      long batchRows;
-      if (hasResponsePartitioning) {
-        batchRows =
-            writeWithResponsePartitioning(data, variables,
-            sourceConfig.getResponsePartitioning(),
-            writer, incrementalTracker, pipelineName);
-      } else {
-        if (dataWriter != null) {
-          batchRows = dataWriter.write(config, data, variables);
-          if (batchRows >= 0) {
-            LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+        long batchRows;
+        if (hasResponsePartitioning) {
+          batchRows =
+              writeWithResponsePartitioning(data, variables,
+              sourceConfig.getResponsePartitioning(),
+              writer, incrementalTracker, pipelineName);
+        } else {
+          if (dataWriter != null) {
+            batchRows = dataWriter.write(config, data, variables);
+            if (batchRows >= 0) {
+              LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
+            } else {
+              batchRows = writer.writeBatch(data, variables);
+            }
           } else {
             batchRows = writer.writeBatch(data, variables);
           }
-        } else {
-          batchRows = writer.writeBatch(data, variables);
+          markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
+          // Persist computed_delta HWM after a successful write
+          if (finalNewComputedDeltaHwm != null) {
+            incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
+            LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
+                finalNewComputedDeltaHwm, pipelineName);
+          }
+          // Persist hash freshness token after a successful write
+          if (finalHashFreshnessToken != null) {
+            incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
+            LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
+                finalHashFreshnessToken, pipelineName);
+          }
         }
-        markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
-        // Persist computed_delta HWM after a successful write
-        if (finalNewComputedDeltaHwm != null) {
-          incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
-          LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
-              finalNewComputedDeltaHwm, pipelineName);
-        }
-        // Persist hash freshness token after a successful write
-        if (finalHashFreshnessToken != null) {
-          incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
-          LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
-              finalHashFreshnessToken, pipelineName);
-        }
-      }
 
-      LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
-      return batchRows;
+        LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
+        return batchRows;
+      }
+    } finally {
+      closeQuietly(sourceChain);
     }
   }
 
@@ -1968,9 +2008,13 @@ public class EtlPipeline {
         config.getHooks() != null && config.getHooks().getErrorHandling() != null
             ? config.getHooks().getErrorHandling().getRowTransformerAction()
             : HooksConfig.HookErrorHandling.ErrorAction.FAIL;
-    return new Iterator<Map<String, Object>>() {
+    return new CloseableRowIterator() {
       private final ArrayDeque<Map<String, Object>> pending = new ArrayDeque<Map<String, Object>>();
       private long rowNumber;
+
+      @Override public void close() {
+        closeQuietly(source);
+      }
 
       private void fill() {
         while (pending.isEmpty() && source.hasNext()) {

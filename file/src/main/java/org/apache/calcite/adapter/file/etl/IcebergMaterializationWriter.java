@@ -335,6 +335,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     hadoopConfig.put("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
     hadoopConfig.put("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
 
+    // Connection pool sizing for concurrent ETL writers. The Hadoop default
+    // (fs.s3a.connection.maximum=96) is thin when many batch-writer threads — and a
+    // second concurrent schema run — share the JVM-cached S3A FileSystem. A bounded
+    // connection.timeout makes pool exhaustion surface as a fast deterministic error
+    // rather than a long hang.
+    hadoopConfig.put("fs.s3a.connection.maximum", "200");
+    hadoopConfig.put("fs.s3a.threads.max", "64");
+    hadoopConfig.put("fs.s3a.connection.timeout", "60000");
+
     // Credentials
     String accessKey = s3Config.get("accessKeyId");
     String secretKey = s3Config.get("secretAccessKey");

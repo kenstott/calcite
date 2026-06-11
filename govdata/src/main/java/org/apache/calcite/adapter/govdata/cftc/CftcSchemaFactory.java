@@ -30,7 +30,7 @@ import java.util.Map;
  * <p>Tables:
  * <ul>
  *   <li>{@code cftc_trades} — all swap dissemination events partitioned by
- *       asset_class/year/month; 110-column 17 CFR Part 43 schema</li>
+ *       asset_class/year/month; 115-column 17 CFR Part 43 schema</li>
  * </ul>
  *
  * <p>Data availability: 2024-01-01 onward (post Part 43/45 rewrite).
