@@ -444,12 +444,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     LOGGER.info("Compacting tracker years {}-{} (plus completion markers)...",
         startYear, endYear);
 
-    // Delete existing compacted files so the slow path runs and captures
-    // any new tracker entries written since the last compaction.
-    deleteCompactedFiles(COMPLETION_YEAR);
-    for (int year = startYear; year <= endYear; year++) {
-      deleteCompactedFiles(String.valueOf(year));
-    }
+    // NOTE: do NOT delete the existing _compacted/ files before scanning. scanAndCacheYear's
+    // fast path reads the existing compacted file and merges any newer straggler individuals
+    // into a fresh compacted file — this is lossless and idempotent. Pre-deleting forced the
+    // SLOW path, which reads ONLY individual files; for an already-compacted year whose
+    // individuals were already removed by a prior compaction, that scan finds nothing and the
+    // year's data is destroyed (observed: re-compacting year=2025 wiped its completions).
 
     // Compact table completion markers (year=0).
     // scanAndCacheYear returns the list of individual files it read.

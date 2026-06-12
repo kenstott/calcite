@@ -118,6 +118,16 @@ public final class PipelineTrackerFactory {
         }
       }
     }
+    // Namespace the tracker by schema so each schema's per-key markers live under their own
+    // prefix (<bucket>/<schema>/year=*/source_key=*). Without this, every schema shares the flat
+    // <bucket>/year=*/source_key=* space, so a high-fan-out schema (e.g. crime per-ORI) bloats
+    // the shared year partition for everyone — a single year=YYYY directory reached 160k+ marker
+    // files, making the read-time preload list and per-run compaction grind for minutes. With the
+    // schema prefix, each partition is bounded and compaction is scoped to one schema.
+    Object dataSource = operand.get("dataSource");
+    if (dataSource instanceof String && !((String) dataSource).isEmpty()) {
+      config.put("schema", (String) dataSource);
+    }
     return create(backend, baseDirectory, config);
   }
 
@@ -145,6 +155,12 @@ public final class PipelineTrackerFactory {
     if (bucket == null) {
       throw new IllegalArgumentException(
           "S3 tracker requires 'bucket' in trackerConfig or CALCITE_TRACKER_S3_BUCKET env var");
+    }
+    // Scope the tracker under the schema directory (set by createFromOperand from the operand's
+    // dataSource) so per-key markers never share a flat year partition across schemas.
+    String schema = config.get("schema");
+    if (schema != null && !schema.isEmpty()) {
+      bucket = bucket.endsWith("/") ? bucket + schema : bucket + "/" + schema;
     }
     String endpoint = config.get("endpoint");
     return new S3HivePipelineTracker(bucket, endpoint, config);
