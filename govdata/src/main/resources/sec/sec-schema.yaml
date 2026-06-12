@@ -1237,14 +1237,15 @@ partitionedTables:
 
   - name: stock_prices
     enabled: "${FETCH_STOCK_PRICES:false}"
-    pattern: "stock_prices/year=*/ticker=*/*.parquet"
+    # Raw is partitioned by YEAR only (ticker is a data column). The bulk pass ingests every
+    # ticker into year=<y>/*.parquet (one file set per year) to avoid ~100k ticker partitions;
+    # the iceberg table below still partitions by [year, ticker] from the ticker column.
+    pattern: "stock_prices/year=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INT
-        - name: ticker
-          type: VARCHAR
     hooks:
       enabled: false
 
@@ -1287,13 +1288,21 @@ partitionedTables:
         type: double
         nullable: true
         comment: Closing price adjusted for splits and dividends
+      - name: year
+        type: int
+        nullable: false
+        comment: Trading year (Iceberg partition column; present in the data and the year=*/ path)
 
     materialize:
       <<: *materialize_defaults
+      # Streaming file-passthrough: the bulk pass writes schema-matching parquet to a staging
+      # sibling dir, and the materializer moves those files into Iceberg + commits DataFile
+      # metadata WITHOUT reading any rows into heap (the full-market bulk is ~27M rows).
+      filePassthrough: true
       output:
-        pattern: "year=*/ticker=*/"
+        pattern: "year=*/"
       partition:
-        columns: [year, ticker]
+        columns: [year]
       iceberg:
         <<: *iceberg_defaults
         tableName: stock_prices

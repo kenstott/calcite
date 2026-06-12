@@ -141,7 +141,31 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * Helper to get parquet directory using stored operand.
    */
   public String getGovDataParquetDir() {
-    return GovDataUtils.getParquetDir(this.currentOperand);
+    return scopedParquetDir(this.currentOperand);
+  }
+
+  /**
+   * Resolves the parquet output directory scoped to this schema's subdir (e.g. ".../sec").
+   *
+   * <p>The model's {@code directory} operand is the shared parquet root (one bucket for all
+   * govdata schemas). The standard EtlPipeline path scopes per-schema in
+   * {@code SchemaLifecycleProcessor} ({@code materializeDirectory + "/" + schemaName}); the
+   * SEC document-ETL path bypasses that processor, so the same per-schema prefixing is applied
+   * here. Without it, SEC raw parquet and Iceberg tables land at the bucket root (polluting it
+   * alongside every other schema) and the source-file watermark recursively lists the entire
+   * bucket instead of just {@code sec/}.
+   */
+  private static String scopedParquetDir(Map<String, Object> operand) {
+    String base = GovDataUtils.getParquetDir(operand);
+    if (base == null) {
+      return null;
+    }
+    String dataSource = operand != null ? (String) operand.get("dataSource") : null;
+    if (dataSource == null || dataSource.isEmpty()) {
+      throw new IllegalStateException(
+          "dataSource missing from operand; cannot scope SEC parquet directory under its schema subdir");
+    }
+    return base.endsWith("/") ? base + dataSource : base + "/" + dataSource;
   }
 
   public static final SecSchemaFactory INSTANCE = new SecSchemaFactory();
@@ -746,10 +770,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       int endYear = getIntValue(operand, "endYear", Year.now().getValue());
       LOGGER.info("Year range: {} to {}", startYear, endYear);
 
-      String govdataParquetDir = GovDataUtils.getParquetDir(operand);
-      // govdataParquetDir already resolves to the sec-specific path (e.g. ".../sec")
-      // because sec-schema.yaml sets materializeDirectory to "${GOVDATA_PARQUET_DIR}/sec"
-      // which overrides the operand's "directory" key in FileSchemaBuilder.
+      // Scope under the schema subdir (e.g. ".../sec") so SEC raw parquet, Iceberg tables, and
+      // the source-file watermark stay within sec/ instead of the shared bucket root. See
+      // scopedParquetDir().
+      String govdataParquetDir = scopedParquetDir(operand);
       String secParquetDir = govdataParquetDir;
 
       DocumentETLProcessor.DocumentETLResult result;
@@ -821,13 +845,33 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             long preloadStart = System.currentTimeMillis();
             LOGGER.info("Building accession list from full-index for years {}-{}...",
                 startYear, endYear);
+            // Scope the tracker preload to the configured CIKs (when not _ALL_EDGAR_FILERS).
+            // Preloading the FULL year index (hundreds of thousands of accessions) is the bulk of
+            // per-run startup cost and stalls on slow object storage; the downstream CIK filter
+            // (below) discards the unscoped ones anyway, so preload only what will be processed.
+            Object preloadCikConfig = operand.get("ciks");
+            boolean preloadAllFilers = preloadCikConfig instanceof String
+                && (((String) preloadCikConfig).contains("_ALL_EDGAR_FILERS")
+                    || ((String) preloadCikConfig).contains("_ALL"));
+            Set<String> preloadCikSet = (!preloadAllFilers && !ciks.isEmpty())
+                ? new HashSet<String>(ciks) : null;
             List<String> allAccessions = new ArrayList<String>();
             for (int year = startYear; year <= endYear; year++) {
-              allAccessions.addAll(
-                  ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
+              if (preloadCikSet == null) {
+                allAccessions.addAll(
+                    ((EdgarFullIndexCache) indexCache).getAllAccessions(year, filingTypes));
+              } else {
+                for (EdgarFullIndexCache.IndexEntry ie
+                    : ((EdgarFullIndexCache) indexCache).getActiveAccessions(year, filingTypes, null)) {
+                  if (preloadCikSet.contains(ie.cik)) {
+                    allAccessions.add(ie.accession);
+                  }
+                }
+              }
             }
-            LOGGER.info("Collected {} accessions from full-index in {}ms, preloading tracker state...",
-                allAccessions.size(), System.currentTimeMillis() - preloadStart);
+            LOGGER.info("Collected {} accessions from full-index in {}ms ({}), preloading tracker state...",
+                allAccessions.size(), System.currentTimeMillis() - preloadStart,
+                preloadCikSet == null ? "all filers" : preloadCikSet.size() + " CIK scope");
             if (!allAccessions.isEmpty()) {
               cache.preload(allAccessions);
             }
@@ -1244,8 +1288,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     List<IcebergCatalogManager.ColumnDef> tableColumns = extractColumnsFromConfig(tableConfig);
     LOGGER.debug("Extracted {} table columns for '{}' from YAML config", tableColumns.size(), tableName);
 
-    // Build CIK filter to avoid materializing all companies when only a subset is requested
-    String rowFilter = buildCikFilter(operand);
+    // Build CIK filter to avoid materializing all companies when only a subset is requested.
+    // stock_prices is EXEMPT: the bulk pass ingests every US ticker (most have no SEC CIK, so
+    // cik=''), and a cik IN (...) filter would drop the entire market down to the configured
+    // filers. Prices are a full-market table, not cik-scoped.
+    String rowFilter = "stock_prices".equals(tableName) ? null : buildCikFilter(operand);
     if (rowFilter != null) {
       LOGGER.debug("Using CIK filter for '{}': {} CIKs", tableName,
           rowFilter.split(",").length);
@@ -1267,6 +1314,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .rowFilter(rowFilter)
         .icebergTableLocation(warehousePath + "/" + icebergTableName)
         .accessionColumn("accession_number")
+        .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .description(tableName)
         .build();
   }
@@ -3691,6 +3739,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               StooqBulkProxy bulkProxy = new StooqBulkProxy(bulkZipS3Path, cacheDir, storageProvider);
               downloader.setBulkProxy(bulkProxy);
               LOGGER.info("Bulk stock price proxy enabled: {} cache: {}", bulkZipS3Path, cacheDir);
+
+              // With a bulk snapshot, top up the gap (bulk max date -> today) for the SEC filers
+              // via Alpha Vantage JSON. The bulk pass provides the full history floor.
+              String avKey = getEnvOrOperand("ALPHA_VANTAGE_KEY", "alphaVantageKey");
+              if (avKey != null && !avKey.isEmpty()) {
+                downloader.setTopUpDownloader(new AlphaVantageDownloader(avKey, storageProvider));
+                LOGGER.info("Alpha Vantage current-price top-up enabled for {} filers",
+                    tickerCikPairs.size());
+              } else {
+                LOGGER.info("No ALPHA_VANTAGE_KEY set; bulk snapshot only, no current-price top-up");
+              }
             } catch (Exception e) {
               LOGGER.warn("Failed to initialize bulk proxy: {}", e.getMessage());
               // Continue without bulk proxy - will use HTTP API instead

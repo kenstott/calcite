@@ -58,6 +58,14 @@ public class CikRegistry {
   }
 
   /**
+   * Returns a copy of the ticker → CIK map (ticker keys UPPERCASE, no exchange suffix).
+   * Used by the bulk stock-price ingest to resolve a CIK for each ticker (empty when unknown).
+   */
+  public static java.util.Map<String, String> getTickerToCikMap() {
+    return new HashMap<>(TICKER_TO_CIK);
+  }
+
+  /**
    * Load registry from file or defaults.
    */
   private static synchronized void loadRegistry() {
