@@ -32,30 +32,34 @@ CREATE TEMP TABLE dq_results (
 );
 
 -- ============================================================
--- T1: EXISTENCE — COUNT of a LIMIT 1 subquery: 1 = readable, 0 = empty.
--- vectorized_chunks is existence-WARN-not-fail: it needs the Jina embedding pipeline
--- (SecTextVectorizer), which is environment-dependent and legitimately empty in a DQ run
--- without embedding credentials.
+-- T1: EXISTENCE — checks for the Iceberg table's metadata via glob(), which returns 0 (never
+-- throws) when a table directory is absent. This is RESILIENT: a missing table reports a row
+-- instead of aborting the whole run, unlike iceberg_scan() which raises "Could not guess
+-- version" and kills the enclosing statement. A present table → pass; a missing table → fail,
+-- EXCEPT vectorized_chunks (warn-only: it needs the Jina embedding pipeline, environment-
+-- dependent and legitimately absent in a DQ run without embedding credentials).
 -- ============================================================
 SELECT '=== T1: EXISTENCE ===' AS section;
 
 INSERT INTO dq_results
 SELECT 'sec', tbl, 'existence',
-  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
-  CAST(n AS VARCHAR), '1',
-  CASE WHEN n > 0 THEN 'readable and non-empty' ELSE 'accessible but empty' END
+  CASE WHEN nmeta > 0 THEN 'pass'
+       WHEN tbl = 'vectorized_chunks' THEN 'warn'
+       ELSE 'fail' END,
+  CAST(nmeta AS VARCHAR), '1',
+  CASE WHEN nmeta > 0 THEN 'iceberg table present' ELSE 'iceberg table missing' END
 FROM (
-  SELECT 'filing_metadata'       AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata',       allow_moved_paths=true) LIMIT 1) t) AS n
-  UNION ALL SELECT 'financial_line_items',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/financial_line_items',  allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'filing_contexts',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_contexts',       allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'mda_sections',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections',          allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'xbrl_relationships',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships',    allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'insider_transactions',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions',  allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'institutional_holdings',(SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings',allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'beneficial_ownership',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership',  allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'earnings_transcripts',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts',  allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'stock_prices',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices',          allow_moved_paths=true) LIMIT 1) t)
-  UNION ALL SELECT 'vectorized_chunks',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/vectorized_chunks',     allow_moved_paths=true) LIMIT 1) t)
+  SELECT 'filing_metadata'       AS tbl, (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata/metadata/*.json'))       AS nmeta
+  UNION ALL SELECT 'financial_line_items',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/financial_line_items/metadata/*.json'))
+  UNION ALL SELECT 'filing_contexts',       (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/filing_contexts/metadata/*.json'))
+  UNION ALL SELECT 'mda_sections',          (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections/metadata/*.json'))
+  UNION ALL SELECT 'xbrl_relationships',    (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships/metadata/*.json'))
+  UNION ALL SELECT 'insider_transactions',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions/metadata/*.json'))
+  UNION ALL SELECT 'institutional_holdings',(SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings/metadata/*.json'))
+  UNION ALL SELECT 'beneficial_ownership',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership/metadata/*.json'))
+  UNION ALL SELECT 'earnings_transcripts',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts/metadata/*.json'))
+  UNION ALL SELECT 'stock_prices',          (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices/metadata/*.json'))
+  UNION ALL SELECT 'vectorized_chunks',     (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/vectorized_chunks/metadata/*.json'))
 );
 
 -- ============================================================
@@ -67,25 +71,22 @@ FROM (
 -- vectorized_chunks is EXCLUDED from T2 (existence-warn only) — embedding-pipeline dependent.
 -- CALIBRATE these up to the real DQ_SAMPLE counts after the first run.
 -- ============================================================
+-- Each table is a SEPARATE INSERT so a missing table's iceberg_scan() error aborts only that
+-- one statement; the DuckDB CLI continues to the next (a missing table is already flagged FAIL
+-- by T1). A present-but-empty table reads 0 here and fails the floor. vectorized_chunks is
+-- EXCLUDED (existence-warn only — embedding-pipeline dependent).
 SELECT '=== T2: ROW COUNTS ===' AS section;
 
-INSERT INTO dq_results
-SELECT 'sec', tbl, 'row_count',
-  CASE WHEN n >= thresh THEN 'pass' ELSE 'fail' END,
-  CAST(n AS VARCHAR), CAST(thresh AS VARCHAR),
-  CASE WHEN n >= thresh THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or filer-type missing from DQ sample' END
-FROM (
-  SELECT 'filing_metadata'        AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata',        allow_moved_paths=true)) AS n, 200   AS thresh
-  UNION ALL SELECT 'financial_line_items',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/financial_line_items',   allow_moved_paths=true)), 2000
-  UNION ALL SELECT 'filing_contexts',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_contexts',        allow_moved_paths=true)), 1000
-  UNION ALL SELECT 'mda_sections',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections',           allow_moved_paths=true)), 20
-  UNION ALL SELECT 'xbrl_relationships',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships',     allow_moved_paths=true)), 1000
-  UNION ALL SELECT 'insider_transactions',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions',   allow_moved_paths=true)), 200
-  UNION ALL SELECT 'institutional_holdings', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true)), 50
-  UNION ALL SELECT 'beneficial_ownership',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership',   allow_moved_paths=true)), 5
-  UNION ALL SELECT 'earnings_transcripts',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts',   allow_moved_paths=true)), 10
-  UNION ALL SELECT 'stock_prices',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices',           allow_moved_paths=true)), 10000
-);
+INSERT INTO dq_results SELECT 'sec','filing_metadata','row_count', CASE WHEN n>=200 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'200', CASE WHEN n>=200 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','financial_line_items','row_count', CASE WHEN n>=2000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'2000', CASE WHEN n>=2000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/financial_line_items', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','filing_contexts','row_count', CASE WHEN n>=1000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1000', CASE WHEN n>=1000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_contexts', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','mda_sections','row_count', CASE WHEN n>=20 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'20', CASE WHEN n>=20 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','xbrl_relationships','row_count', CASE WHEN n>=1000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1000', CASE WHEN n>=1000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','insider_transactions','row_count', CASE WHEN n>=200 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'200', CASE WHEN n>=200 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','institutional_holdings','row_count', CASE WHEN n>=50 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'50', CASE WHEN n>=50 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','beneficial_ownership','row_count', CASE WHEN n>=5 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'5', CASE WHEN n>=5 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','earnings_transcripts','row_count', CASE WHEN n>=10 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10', CASE WHEN n>=10 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec','stock_prices','row_count', CASE WHEN n>=10000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10000', CASE WHEN n>=10000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices', allow_moved_paths=true)) t;
 
 -- ============================================================
 -- REPORT

@@ -402,6 +402,21 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # (e.g. cms_open_payments) ingest a bounded per-period sample. Prod never sets this.
   export GOVDATA_DQ=true
 
+  # SEC DQ scope: drive the schema off a reduced CIK sample (CikRegistry DQ_SAMPLE group =
+  # Magnificent 7 + Berkshire) across all filing types, so every SEC table gets real data
+  # without fetching the full EDGAR universe. Only the sec arm reads these knobs; other schemas
+  # ignore them. Caller-set values win (prod runs export GOVDATA_CIKS=_ALL_EDGAR_FILERS).
+  if [ "$SCHEMA" = "sec" ] || [ "$SCHEMA" = "sec_prices" ] || [ "$SCHEMA" = "sec_secondary" ]; then
+    # sec: scopes filings + the prices top-up. sec_prices: scopes only the top-up (the bulk pass
+    # ingests every ticker regardless). sec_secondary: scopes the secondary-form filings. The
+    # sec_secondary worker arm reads GOVDATA_CIKS in its daily|historical (DQ) branch.
+    # DQ_SAMPLE = Magnificent 7 + Berkshire.
+    export GOVDATA_CIKS="${GOVDATA_CIKS:-DQ_SAMPLE}"
+  fi
+  if [ "$SCHEMA" = "sec" ]; then
+    export GOVDATA_FILING_TYPES="${GOVDATA_FILING_TYPES:-10-K,10-K/A,10-Q,10-Q/A,8-K,8-K/A,DEF 14A,3,4,5,13F-HR,13F-HR/A,SC 13D,SC 13D/A,SC 13G,SC 13G/A}"
+  fi
+
   # On a full rebuild, clear DQ results + the ETL tracker so the standard workers re-ingest
   # the (already torn-down) data fresh.
   if $REBUILD; then
@@ -422,24 +437,33 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # not namespaced by schema), so it chokes on another schema's bloated year (e.g. econ/edu's
   # ~581k year=2024 markers) for zero benefit — cyber's own markers live at year=0. The in-ETL
   # per-batch compaction still drains the active year, so skipping this bulk pass is safe.
+  # Compact the schema's tracker partitions. Called at BOTH ETL start and end so the
+  # active-year partition is drained each run and never accumulates stragglers. Best-effort:
+  # any failure (mktemp/model-gen/EtlRunner) is non-fatal. $1 is a phase label for the log.
+  _compact_tracker() {
+    local _phase="$1"
+    local _compact_model
+    _compact_model="$(mktemp "/tmp/dq-compact-${SCHEMA}-XXXXXX.json" 2>/dev/null)" || _compact_model=""
+    if [ -n "$_compact_model" ] && generate_single_schema_model "$SCHEMA" "$_compact_model"; then
+      local _compact_jar="${GOVDATA_JAR:-$GOVDATA_ROOT/build/libs/sih-govdata.jar}"
+      local _compact_log="$SCRIPT_DIR/runs/compact-${SCHEMA}.log"
+      log_info "$WORKER_ID: compacting tracker for schema=$SCHEMA (${_phase}-ETL; log: $_compact_log)"
+      if java -cp "$_compact_jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
+           --compact-only --model "$_compact_model" > "$_compact_log" 2>&1; then
+        log_info "$WORKER_ID: tracker compaction complete (${_phase}-ETL)"
+      else
+        log_info "$WORKER_ID: tracker compaction failed (${_phase}-ETL, non-fatal) — see $_compact_log"
+      fi
+    else
+      log_info "$WORKER_ID: tracker compaction skipped (${_phase}-ETL; mktemp/model generation failed)"
+    fi
+    rm -f "$_compact_model" 2>/dev/null || true
+  }
+
   if [ "${GOVDATA_DQ_SKIP_PRECOMPACT:-false}" = "true" ]; then
     log_info "$WORKER_ID: pre-ETL tracker compaction skipped (GOVDATA_DQ_SKIP_PRECOMPACT=true)"
   else
-  _compact_model="$(mktemp "/tmp/dq-compact-${SCHEMA}-XXXXXX.json" 2>/dev/null)" || _compact_model=""
-  if [ -n "$_compact_model" ] && generate_single_schema_model "$SCHEMA" "$_compact_model"; then
-    _compact_jar="${GOVDATA_JAR:-$GOVDATA_ROOT/build/libs/sih-govdata.jar}"
-    _compact_log="$SCRIPT_DIR/runs/compact-${SCHEMA}.log"
-    log_info "$WORKER_ID: compacting tracker for schema=$SCHEMA before ETL (log: $_compact_log)"
-    if java -cp "$_compact_jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
-         --compact-only --model "$_compact_model" > "$_compact_log" 2>&1; then
-      log_info "$WORKER_ID: tracker compaction complete"
-    else
-      log_info "$WORKER_ID: tracker compaction failed (non-fatal) — see $_compact_log"
-    fi
-  else
-    log_info "$WORKER_ID: tracker compaction skipped (mktemp/model generation failed)"
-  fi
-  rm -f "$_compact_model" 2>/dev/null || true
+    _compact_tracker pre
   fi
 
   # One descending sequence from today: daily (current year) first, then historical (older
@@ -462,6 +486,12 @@ fi  # end iceberg/data teardown (only when --rebuild)
   log_info "$WORKER_ID: DQ ETL — standard HISTORICAL worker (years ${_dq_start_year}–$((GOVDATA_INCREMENTAL_START_YEAR - 1)), desc) for schema=$SCHEMA"
   GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR="$_dq_start_year" bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" historical --force
   ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-historical"
+
+  # Post-ETL compaction: drain the markers this run just wrote so the active-year partition
+  # is left compacted (one file) for the next run's preload. Mirrors the pre-ETL pass.
+  if [ "${GOVDATA_DQ_SKIP_PRECOMPACT:-false}" != "true" ]; then
+    _compact_tracker post
+  fi
 
   log_info "$WORKER_ID: DQ ETL complete (standard workers) — proceeding to DQ"
 fi
