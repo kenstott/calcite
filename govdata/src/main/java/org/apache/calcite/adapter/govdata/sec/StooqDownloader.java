@@ -111,6 +111,7 @@ public class StooqDownloader {
   private final List<String> failedTickers = new ArrayList<String>();
   private SecCacheManifest cacheManifest;  // Optional, for tracking unavailable tickers
   private StooqBulkProxy bulkProxy;  // Optional, for looking up tickers in bulk zip
+  private AlphaVantageDownloader topUpDownloader;  // Optional, current-price gap top-up after bulk
 
   /**
    * Creates a StooqDownloader with default rate limiting configuration.
@@ -191,6 +192,35 @@ public class StooqDownloader {
             + "(batch timeout: {} minutes)",
         tickerCikPairs.size(), startYear, endYear,
         TimeUnit.MILLISECONDS.toMinutes(batchTimeoutMs));
+
+    // When a bulk zip is configured, ingest EVERY ticker for all dates (not cik-scoped), then top
+    // up the gap (bulk max date -> today) for the configured SEC filers via Alpha Vantage JSON. The
+    // bulk path is authoritative; Stooq's per-ticker CSV endpoint is gated, so it is not used here.
+    if (bulkProxy != null) {
+      try {
+        String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
+        String bulkMaxDate = bulkProxy.ingestAllToStockPrices(
+            stockPricesDir, CikRegistry.getTickerToCikMap(), startYear);
+        LOGGER.info("Bulk ingest done (max date {})", bulkMaxDate);
+        if (topUpDownloader != null && bulkMaxDate != null && !bulkMaxDate.isEmpty()) {
+          try {
+            // Top-up rows land in a SIBLING __topup dir the bulk COPY never clears (so a
+            // rate-limited run keeps the prior current prices); the file-passthrough materializer
+            // stages both __staging (bulk) and __topup into the Iceberg table under one name-mapping.
+            String topupDir = stockPricesDir + "__topup";
+            int topped = topUpDownloader.topUpStockPrices(topupDir, tickerCikPairs, bulkMaxDate);
+            LOGGER.info("Alpha Vantage top-up wrote {} rows for {} SEC filers", topped,
+                tickerCikPairs.size());
+          } catch (Exception te) {
+            LOGGER.warn("Alpha Vantage top-up failed (bulk history retained): {}", te.getMessage());
+          }
+        }
+        return; // bulk path complete (history + top-up)
+      } catch (Exception e) {
+        LOGGER.warn("Bulk stock-price ingest failed, falling back to per-ticker downloads: {}",
+            e.getMessage());
+      }
+    }
 
     failedTickers.clear();
     final long batchDeadline = System.currentTimeMillis() + batchTimeoutMs;
@@ -812,6 +842,16 @@ public class StooqDownloader {
    */
   public void setBulkProxy(StooqBulkProxy bulkProxy) {
     this.bulkProxy = bulkProxy;
+  }
+
+  /**
+   * Sets the Alpha Vantage top-up downloader. When set alongside a bulk proxy, the gap between the
+   * bulk snapshot's max date and today is topped up per SEC filer via Alpha Vantage JSON.
+   *
+   * @param topUpDownloader The Alpha Vantage top-up downloader
+   */
+  public void setTopUpDownloader(AlphaVantageDownloader topUpDownloader) {
+    this.topUpDownloader = topUpDownloader;
   }
 
   /**

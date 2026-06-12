@@ -105,16 +105,32 @@ case "$SCHEMA" in
   # ── SEC secondary (8-K, proxy, insider, 13F, 13D/G) — one year ────────────
 
   sec_secondary)
+    # Secondary SEC forms → tables insider_transactions (3/4/5), institutional_holdings (13F),
+    # beneficial_ownership (13D/G), earnings_transcripts (8-K). Two vocabularies share this arm:
+    #   • daily|historical (DQ harness)         → DQ_SAMPLE scope (or caller GOVDATA_CIKS)
+    #   • <year>|current   (run-pool prod)      → _ALL_EDGAR_FILERS full universe
+    SEC2_FORMS='"8-K","8-K/A","DEF 14A","3","4","5","13F-HR","13F-HR/A","SC 13D","SC 13D/A","SC 13G","SC 13G/A"'
     case "$MODE" in
-      current)              YEAR=$(date +%Y) ;;
-      [0-9][0-9][0-9][0-9]) YEAR="$MODE" ;;
-      *) echo "sec_secondary: mode must be a 4-digit year or 'current'" >&2; exit 1 ;;
+      historical) SEC2_START="${GOVDATA_START_YEAR:-2010}"; SEC2_END=$((INCREMENTAL_YEAR - 1)); SEC2_DQ=1 ;;
+      daily)      SEC2_START="$INCREMENTAL_YEAR";           SEC2_END="$INCREMENTAL_YEAR";       SEC2_DQ=1 ;;
+      current)              SEC2_START=$(date +%Y); SEC2_END="$SEC2_START"; SEC2_DQ=0 ;;
+      [0-9][0-9][0-9][0-9]) SEC2_START="$MODE";     SEC2_END="$MODE";       SEC2_DQ=0 ;;
+      *) echo "sec_secondary: mode must be daily|historical (DQ) or a 4-digit year|current (prod)" >&2; exit 1 ;;
     esac
-    export GOVDATA_START_YEAR="$YEAR"
-    export GOVDATA_END_YEAR="$YEAR"
-    run_etl_inline "$(build_inline_model sec \
-      '"ciks":"_ALL_EDGAR_FILERS","filingTypes":["8-K","8-K/A","DEF 14A","3","4","5","13F-HR","13F-HR/A","SC 13D","SC 13D/A","SC 13G","SC 13G/A"],"fetchStockPrices":false')" \
-      "$WORKER_ID"
+    if [ "$SEC2_DQ" = "1" ]; then
+      SEC2_OPS="\"fetchStockPrices\":false,\"ciks\":\"${GOVDATA_CIKS:-DQ_SAMPLE}\",\"filingTypes\":[${SEC2_FORMS}]"
+      for (( SEC2_YEAR=SEC2_END; SEC2_YEAR>=SEC2_START; SEC2_YEAR-- )); do
+        export GOVDATA_START_YEAR="$SEC2_YEAR"
+        export GOVDATA_END_YEAR="$SEC2_YEAR"
+        run_etl_inline "$(build_inline_model sec "$SEC2_OPS")" "worker-sec_secondary-${MODE}-${SEC2_YEAR}"
+      done
+    else
+      export GOVDATA_START_YEAR="$SEC2_START"
+      export GOVDATA_END_YEAR="$SEC2_END"
+      run_etl_inline "$(build_inline_model sec \
+        "\"ciks\":\"_ALL_EDGAR_FILERS\",\"filingTypes\":[${SEC2_FORMS}],\"fetchStockPrices\":false")" \
+        "$WORKER_ID"
+    fi
     ;;
 
   # ── Stock prices (Stooq) — fixed year range regardless of mode ────────────
@@ -122,9 +138,52 @@ case "$SCHEMA" in
   sec_prices)
     export GOVDATA_START_YEAR=2010
     export GOVDATA_END_YEAR=2026
-    run_etl_inline "$(build_inline_model sec \
-      '"ciks":"_ALL_EDGAR_FILERS","fetchStockPrices":true,"stockPriceSource":"stooq","filingTypes":[]')" \
-      "$WORKER_ID"
+    # Enables the stock_prices table (its YAML `enabled` reads this env at load time).
+    export FETCH_STOCK_PRICES=true
+    # The BULK pass ingests EVERY ticker in the Stooq bulk zip for all dates (NOT cik-scoped).
+    # ciks scopes only the current-price TOP-UP (gap from bulk max date to today is fetched via
+    # the Alpha Vantage JSON API for the configured SEC filers; DQ harness sets DQ_SAMPLE).
+    PRICE_OPS='"fetchStockPrices":true,"stockPriceSource":"stooq","filingTypes":[]'
+    if [ -n "${GOVDATA_CIKS:-}" ]; then
+      PRICE_OPS="$PRICE_OPS,\"ciks\":\"${GOVDATA_CIKS}\""
+    fi
+    run_etl_inline "$(build_inline_model sec "$PRICE_OPS")" "$WORKER_ID"
+    ;;
+
+  # ── SEC (filings) — universal historical|daily entry point ────────────────
+  # Translates the pool/DQ-harness historical|daily vocabulary into SEC's per-year filing
+  # fetches, so `worker.sh sec historical|daily` (and run-all-dq --schema sec) works like every
+  # other schema. SCOPE — which CIKs, which form types — is NOT hardcoded here: it flows through
+  # the general GOVDATA_CIKS / GOVDATA_FILING_TYPES env->operand knobs (GovDataSchemaFactory) and
+  # the sec-schema.yaml defaults. Examples:
+  #   GOVDATA_CIKS=DQ_SAMPLE GOVDATA_FILING_TYPES=10-K,10-K/A,10-Q,10-Q/A  → DQ-sample, 10-K/10-Q only
+  #   GOVDATA_CIKS=_ALL_EDGAR_FILERS                                       → full-universe prod run
+  # fetchStockPrices:false keeps this the filings pass; sec_prices (Stooq) is the prices slot.
+  sec)
+    case "$MODE" in
+      historical) SEC_START_YEAR="${GOVDATA_START_YEAR:-2010}"; SEC_END_YEAR=$((INCREMENTAL_YEAR - 1)) ;;
+      daily)      SEC_START_YEAR="$INCREMENTAL_YEAR";           SEC_END_YEAR="$INCREMENTAL_YEAR" ;;
+      *) echo "sec: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+    esac
+    # ciks + filingTypes are the SEC schema's scope operands (what SecSchemaFactory's
+    # getCiksFromConfig / getFilingTypes read). The factory's GOVDATA_CIKS/GOVDATA_FILING_TYPES
+    # env-wiring is not on the SEC create path, so carry the knobs onto the operand here.
+    SEC_OPS='"fetchStockPrices":false'
+    if [ -n "${GOVDATA_CIKS:-}" ]; then
+      SEC_OPS="$SEC_OPS,\"ciks\":\"${GOVDATA_CIKS}\""
+    fi
+    if [ -n "${GOVDATA_FILING_TYPES:-}" ]; then
+      # Split on comma only (filing types like "DEF 14A" / "SC 13D" contain spaces).
+      IFS=',' read -ra _ft_arr <<< "$GOVDATA_FILING_TYPES"
+      _ft_json=""
+      for _ft in "${_ft_arr[@]}"; do _ft_json="$_ft_json\"$_ft\","; done
+      SEC_OPS="$SEC_OPS,\"filingTypes\":[${_ft_json%,}]"
+    fi
+    for (( SEC_YEAR=SEC_END_YEAR; SEC_YEAR>=SEC_START_YEAR; SEC_YEAR-- )); do
+      export GOVDATA_START_YEAR="$SEC_YEAR"
+      export GOVDATA_END_YEAR="$SEC_YEAR"
+      run_etl_inline "$(build_inline_model sec "$SEC_OPS")" "worker-sec-${MODE}-${SEC_YEAR}"
+    done
     ;;
 
   # ── Simple year-range schemas ──────────────────────────────────────────────
@@ -270,7 +329,7 @@ case "$SCHEMA" in
 
   *)
     echo "Unknown schema: $SCHEMA" >&2
-    echo "Valid schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
+    echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc" >&2
     exit 1

@@ -157,7 +157,7 @@ echo "  Env:       $ENV_NAME (rclone remote: ${RCLONE_REMOTE})"
 echo "  Schema:    $SCHEMA"
 echo "  Tables:    ${TABLES[*]}"
 echo "  Iceberg:   ${PARQUET_BUCKET}/${SCHEMA}/<table>"
-echo "  Tracker:   ${TRACKER_BUCKET}/year=*/source_key=* where table_name=<table> (resolved via DuckDB)"
+echo "  Tracker:   ${TRACKER_BUCKET}/${SCHEMA}/year=*/source_key=* where table_name=<table> (resolved via DuckDB)"
 $PURGE_RAW && echo "  Raw cache: ${RAW_BUCKET}/${SCHEMA}/<table>/  (+ local ${RAW_CACHE_DIR}/<table>/)"
 $DRY_RUN && echo "  *** DRY RUN — no changes will be made ***"
 echo ""
@@ -245,7 +245,7 @@ CREATE OR REPLACE SECRET data_purge_s3 (
     USE_SSL ${_ssl}
 );
 SELECT DISTINCT regexp_replace(filename, '/[^/]*\$', '')
-FROM read_parquet('${TRACKER_BUCKET%/}/year=*/source_key=*/*.parquet', filename=true, union_by_name=true)
+FROM read_parquet('${TRACKER_BUCKET%/}/${SCHEMA}/year=*/source_key=*/*.parquet', filename=true, union_by_name=true)
 WHERE table_name = '${TABLE}';
 SQL
 )

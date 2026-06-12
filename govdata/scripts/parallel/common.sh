@@ -575,6 +575,14 @@ generate_single_schema_model() {
       operand_body="\"dataSource\": \"cftc\",
       ${_YEAR_RANGE}"
       ;;
+    sec|sec_prices|sec_secondary)
+      # sec_prices (stock-price slot) and sec_secondary (8-K/proxy/insider/13F/13D-G slot) both
+      # write their tracker under the same "sec" dataSource path, so their compaction model is
+      # identical to sec — this lets the harness compact the sec/ tracker for those slots instead
+      # of skipping ("unknown schema 'sec_prices'" / "'sec_secondary'").
+      operand_body="\"dataSource\": \"sec\",
+      ${_YEAR_RANGE}"
+      ;;
     *)
       echo "ERROR: unknown schema '$schema_name'" >&2
       return 1
@@ -883,6 +891,7 @@ get_heap_config() {
 get_dq_start_year() {
   local schema=$1
   case "$schema" in
+    sec_secondary) echo $(( $(date +%Y) - 1 )) ;;  # DQ only needs to prove historical+daily modes function; one prior year (current-1) is enough — no multi-year backfill.
     energy)   echo $(( $(date +%Y) - 4 )) ;;  # dataLag=2 tables map year=effective+dataLag, so a current-2 start emits only the current year. Need current-2-dataLag = current-4 to land historical generation years (T8 wants MIN<=current-2).
     edu)      echo $(( $(date +%Y) - 5 )) ;;  # 5-yr lookback: edu tables peak at very different years — ipeds_tuition maxYear=2021 (Urban endpoint frozen), crdc_schools biennial last cycle 2022, ipeds_completions/financials ~2023, naep 2024. current-5 is the binding floor (ipeds_tuition 2021) so every table's latest published cycle falls inside the window; per-table maxYear/dataLag caps trim the rest. current-3 (old) reached none of crdc/tuition → both structurally empty.
     lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle

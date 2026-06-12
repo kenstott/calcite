@@ -205,6 +205,10 @@ public class IcebergMaterializer {
     private final String rowFilter;  // Optional WHERE clause filter (e.g., "cik IN ('0001', '0002')")
     private final String icebergTableLocation;  // Iceberg table location for accession-level dedup
     private final String accessionColumn;  // Column name for accession (default: "accession_number")
+    // When true, pre-built parquet (already matching the table schema) is committed to Iceberg by
+    // moving files + building DataFile metadata — no rows are read into memory. Streams huge,
+    // pre-transformed sources (e.g. the full-market stock_prices bulk).
+    private final boolean filePassthrough;
 
     private MaterializationConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -230,6 +234,11 @@ public class IcebergMaterializer {
       this.rowFilter = builder.rowFilter;
       this.icebergTableLocation = builder.icebergTableLocation;
       this.accessionColumn = builder.accessionColumn != null ? builder.accessionColumn : "accession_number";
+      this.filePassthrough = builder.filePassthrough;
+    }
+
+    public boolean isFilePassthrough() {
+      return filePassthrough;
     }
 
     public String getSourcePattern() {
@@ -374,9 +383,15 @@ public class IcebergMaterializer {
       private String rowFilter;
       private String icebergTableLocation;
       private String accessionColumn;
+      private boolean filePassthrough;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
+        return this;
+      }
+
+      public Builder filePassthrough(boolean filePassthrough) {
+        this.filePassthrough = filePassthrough;
         return this;
       }
 
@@ -638,6 +653,13 @@ public class IcebergMaterializer {
     }
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
+    // Streaming file-passthrough: the source parquet already matches the table schema, so move it
+    // into the table and commit DataFile metadata — no rows are read into memory. Used for the
+    // full-market stock_prices bulk (~27M rows) which cannot be row-materialized in heap.
+    if (config.isFilePassthrough()) {
+      return materializeViaFilePassthrough(config, table, writer, startTime);
+    }
+
     // Build batch combinations
     List<Map<String, String>> batches = buildBatchCombinations(config);
     if (batches.isEmpty()) {
@@ -714,6 +736,74 @@ public class IcebergMaterializer {
     }
 
     return result;
+  }
+
+  /**
+   * Streaming materialization for pre-built, schema-matching parquet. Moves the staged parquet
+   * files into the Iceberg table's data location and commits DataFile metadata (partition values
+   * read from the {@code year=} path, row counts estimated from file size). No rows are read into
+   * heap, so arbitrarily large sources (e.g. the full-market stock_prices bulk) stream through.
+   * The staging directory is {@code <source-base>__staging} (a sibling of the table location so a
+   * recursive walk never picks up the table's own metadata/data files).
+   */
+  private MaterializationResult materializeViaFilePassthrough(MaterializationConfig config,
+      Table table, IcebergTableWriter writer, long startTime) throws IOException {
+    String sourcePattern = config.getSourcePattern();
+    int yi = sourcePattern.indexOf("/year=");
+    String base = (yi > 0 ? sourcePattern.substring(0, yi) : sourcePattern);
+    String stagingDir = base + "__staging";
+    // Sibling dir holding current-price top-up rows the bulk COPY never clears (see
+    // AlphaVantageDownloader); staged alongside the bulk so both land in the same Iceberg commit.
+    String topupDir = base + "__topup";
+    LOGGER.info("File-passthrough materialization for '{}': staging parquet from {} (+{})",
+        config.getTargetTableId(), stagingDir, topupDir);
+
+    // The staged parquet (DuckDB-written) has no Iceberg field IDs, so set a default name mapping
+    // — readers (DuckDB iceberg_scan) then resolve columns by name.
+    try {
+      String mappingJson = org.apache.iceberg.mapping.NameMappingParser.toJson(
+          org.apache.iceberg.mapping.MappingUtil.create(table.schema()));
+      table.updateProperties()
+          .set(org.apache.iceberg.TableProperties.DEFAULT_NAME_MAPPING, mappingJson)
+          .commit();
+    } catch (Exception e) {
+      LOGGER.warn("Could not set name mapping for '{}': {}", config.getTargetTableId(), e.getMessage());
+    }
+
+    List<org.apache.iceberg.DataFile> dataFiles = writer.stageFiles(stagingDir);
+    // Stage the sibling top-up dir too, if it has files (it may be absent when no top-up ran).
+    // Use isDirectory (prefix listing) — exists()/doesObjectExist is false for an S3 "directory".
+    try {
+      if (storageProvider.isDirectory(topupDir)) {
+        List<org.apache.iceberg.DataFile> topupFiles = writer.stageFiles(topupDir);
+        if (!topupFiles.isEmpty()) {
+          LOGGER.info("File-passthrough '{}': staged {} bulk + {} top-up data files",
+              config.getTargetTableId(), dataFiles.size(), topupFiles.size());
+          dataFiles.addAll(topupFiles);
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("File-passthrough: could not stage top-up dir {} for '{}': {}",
+          topupDir, config.getTargetTableId(), e.getMessage());
+    }
+    long durationMs = System.currentTimeMillis() - startTime;
+    if (dataFiles.isEmpty()) {
+      LOGGER.warn("File-passthrough: no staged parquet at {} for '{}' — nothing committed",
+          stagingDir, config.getTargetTableId());
+      return new MaterializationResult(config.getTargetTableId(), 0, 1, 0, durationMs);
+    }
+    // Replace-partitions (not append): the file-passthrough source is a full snapshot that rewrites
+    // every partition each run (e.g. the bulk stock-price ingest writes all year=*/ partitions), so
+    // appending would duplicate the whole table on re-run. ReplacePartitions overwrites each touched
+    // partition wholesale, making re-materialization idempotent.
+    writer.replacePartitionsDataFiles(dataFiles);
+    totalRowsWritten += dataFiles.size();
+    incrementalTracker.markTableCompleteWithSourceWatermark(
+        config.getTargetTableId(), "auto", "", dataFiles.size(), 0);
+    LOGGER.info("File-passthrough materialization complete for '{}': committed {} data files in {}ms",
+        config.getTargetTableId(), dataFiles.size(), durationMs);
+    return new MaterializationResult(
+        config.getTargetTableId(), 1, 0, 0, durationMs, false, dataFiles.size());
   }
 
   /**
@@ -1317,10 +1407,15 @@ public class IcebergMaterializer {
   private String buildSelectSqlForFileList(MaterializationConfig config, List<String> filePaths) {
     StringBuilder sql = new StringBuilder();
     Map<String, String> computedCols = config.getComputedColumns();
+    // DISTINCT removes exact-duplicate rows that arise when staging writes the same filing more
+    // than once (fetch retried/regenerated). It does NOT collapse legitimately distinct rows of
+    // a multi-row-per-filing table (e.g. financial_line_items, filing_contexts), which a
+    // PARTITION BY accession dedup would. SEC filings are immutable, so a re-fetch yields
+    // identical rows — full-row dedup is exact.
     if (computedCols == null || computedCols.isEmpty()) {
-      sql.append("SELECT * FROM ");
+      sql.append("SELECT DISTINCT * FROM ");
     } else {
-      sql.append("SELECT *, ");
+      sql.append("SELECT DISTINCT *, ");
       boolean first = true;
       for (Map.Entry<String, String> entry : computedCols.entrySet()) {
         if (!first) {
@@ -1343,14 +1438,6 @@ public class IcebergMaterializer {
 
     if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
       sql.append(" WHERE ").append(config.getRowFilter());
-    }
-
-    // Deduplicate by accession within this chunk — staging files may contain duplicate
-    // copies of the same filing if the source fetch was retried or regenerated.
-    String accessionCol = config.getAccessionColumn();
-    if (accessionCol != null && !accessionCol.isEmpty()) {
-      sql.append(" QUALIFY ROW_NUMBER() OVER (PARTITION BY ")
-          .append(accessionCol).append(") = 1");
     }
 
     return sql.toString();
@@ -2760,32 +2847,42 @@ public class IcebergMaterializer {
       } catch (SQLException e) {
         LOGGER.debug("Parquet extension already loaded or built-in");
       }
+    }
 
-      // Load quackformers extension for embedding functions (embed_jina, etc.)
-      try {
-        stmt.execute("INSTALL quackformers FROM community");
-        stmt.execute("LOAD quackformers");
-        LOGGER.debug("Loaded quackformers extension for embedding functions");
-      } catch (SQLException e) {
-        LOGGER.debug("Quackformers extension not available: {}", e.getMessage());
-      }
+    // Each fallible extension/config below runs on its OWN statement. DuckDB JDBC closes a
+    // statement when one of its executes throws; reusing it would make every later execute
+    // fail with "Statement was closed" — which previously skipped S3 setup silently and dropped
+    // DuckDB back to the AWS default endpoint (HTTP 403 on every read).
 
-      // Load Iceberg extension for iceberg_scan() used in self-healing
-      try {
-        stmt.execute("INSTALL iceberg");
-        stmt.execute("LOAD iceberg");
-        // Enable version guessing for tables without version-hint file
-        stmt.execute("SET unsafe_enable_version_guessing = true");
-        LOGGER.debug("Loaded DuckDB Iceberg extension for self-healing queries");
-      } catch (SQLException e) {
-        LOGGER.debug("Iceberg extension not available: {}", e.getMessage());
-      }
+    // Load Iceberg extension for iceberg_scan() used in self-healing
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("INSTALL iceberg");
+      stmt.execute("LOAD iceberg");
+      // Enable version guessing for tables without version-hint file
+      stmt.execute("SET unsafe_enable_version_guessing = true");
+      LOGGER.debug("Loaded DuckDB Iceberg extension for self-healing queries");
+    } catch (SQLException e) {
+      LOGGER.debug("Iceberg extension not available: {}", e.getMessage());
+    }
 
-      // Configure S3 if available
-      Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
-      if (s3Config != null && !s3Config.isEmpty()) {
-        configureS3(stmt, s3Config);
+    // Configure S3 if available — on its own statement so an extension failure above can't
+    // silently skip it.
+    Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;
+    if (s3Config != null && !s3Config.isEmpty()) {
+      try (Statement s3Stmt = conn.createStatement()) {
+        configureS3(s3Stmt, s3Config);
       }
+    }
+
+    // Load quackformers (community) extension for embedding functions (embed_jina, etc.) LAST,
+    // since the community-registry fetch is the most likely to fail and must not poison the
+    // critical parquet/iceberg/S3 setup above.
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("INSTALL quackformers FROM community");
+      stmt.execute("LOAD quackformers");
+      LOGGER.debug("Loaded quackformers extension for embedding functions");
+    } catch (SQLException e) {
+      LOGGER.debug("Quackformers extension not available: {}", e.getMessage());
     }
 
     return conn;
@@ -2810,24 +2907,31 @@ public class IcebergMaterializer {
       String region = s3Config.getOrDefault("region", "auto");
 
       if (accessKey != null && secretKey != null) {
-        // Endpoint hostname only (no https:// prefix) as required by DuckDB CREATE SECRET
-        String endpointHost = endpoint != null ? endpoint.replaceFirst("^https?://", "") : null;
-
         StringBuilder secret =
             new StringBuilder("CREATE OR REPLACE SECRET calcite_s3 (TYPE S3");
         secret.append(", KEY_ID '").append(accessKey).append("'");
         secret.append(", SECRET '").append(secretKey).append("'");
-        if (endpointHost != null) {
+        // Apply a custom endpoint only when one is genuinely set. An empty string would emit
+        // ENDPOINT '' which DuckDB ignores, silently falling back to AWS s3.us-east-1 (HTTP 403
+        // against S3-compatible stores like MinIO/R2). Derive USE_SSL from the scheme: http
+        // endpoints (e.g. MinIO) must use plaintext, https (e.g. R2) must use TLS — mirroring
+        // S3HivePipelineTracker's proven config.
+        if (endpoint != null && !endpoint.isEmpty()) {
+          String endpointHost = endpoint.replaceFirst("^https?://", "");
           secret.append(", ENDPOINT '").append(endpointHost).append("'");
-          secret.append(", USE_SSL true");
           secret.append(", URL_STYLE 'path'");
+          secret.append(", USE_SSL ").append(endpoint.startsWith("http://") ? "false" : "true");
         }
         secret.append(", REGION '").append(region).append("'");
         secret.append(")");
         stmt.execute(secret.toString());
+        LOGGER.info("Configured DuckDB S3 secret (endpoint={}, region={})",
+            endpoint != null && !endpoint.isEmpty() ? endpoint : "<aws-default>", region);
       }
     } catch (SQLException e) {
-      LOGGER.debug("S3 configuration skipped: {}", e.getMessage());
+      // Do not swallow: a failed secret leaves DuckDB on the AWS default endpoint, which
+      // surfaces later as a confusing HTTP 403 on every read. Surface it here.
+      LOGGER.warn("DuckDB S3 secret configuration failed: {}", e.getMessage());
     }
   }
 }
