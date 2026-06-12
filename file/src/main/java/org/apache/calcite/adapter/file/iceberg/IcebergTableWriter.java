@@ -340,12 +340,32 @@ public class IcebergTableWriter {
       }
     }
 
+    // Read real Iceberg metrics (record count, null counts, bounds) from the parquet FOOTER —
+    // no rows are read. A NameMapping resolves the externally-written parquet's columns by name
+    // (DuckDB parquet has no Iceberg field IDs). Without proper metrics, DuckDB's iceberg_scan
+    // asserts ("GetValueInternal on a value that is NULL").
+    org.apache.iceberg.Metrics metrics = null;
+    try {
+      org.apache.iceberg.mapping.NameMapping nameMapping =
+          org.apache.iceberg.mapping.MappingUtil.create(table.schema());
+      org.apache.iceberg.io.InputFile inputFile = table.io().newInputFile(pathStr);
+      metrics = org.apache.iceberg.parquet.ParquetUtil.fileMetrics(
+          inputFile, org.apache.iceberg.MetricsConfig.forTable(table), nameMapping);
+    } catch (Exception e) {
+      LOGGER.warn("Could not read parquet footer metrics for {}: {} — falling back to size estimate",
+          pathStr, e.getMessage());
+    }
+
     // Build the DataFile
     DataFiles.Builder builder = DataFiles.builder(spec)
         .withPath(pathStr)
         .withFileSizeInBytes(fileSize)
-        .withFormat(FileFormat.PARQUET)
-        .withRecordCount(estimateRecordCount(fileSize));
+        .withFormat(FileFormat.PARQUET);
+    if (metrics != null) {
+      builder.withMetrics(metrics);
+    } else {
+      builder.withRecordCount(estimateRecordCount(fileSize));
+    }
 
     if (spec.fields().size() > 0) {
       builder.withPartition(partitionData);
