@@ -23,10 +23,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.util.zip.ZipEntry;
@@ -90,28 +94,34 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
    * materializing the (often large) raw JSON; only the flattened output is held.
    */
   private String transformBulkZip(String url) throws IOException {
-    byte[] zipBytes = downloadBytes(url);
-    ArrayNode out = MAPPER.createArrayNode();
-    ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
+    // Stream the (often large) partition ZIP to a temp file rather than buffering it in a byte[],
+    // then stream the single JSON entry's results[] through the parser. Only the flattened output
+    // is held in memory (bounded by the responseTransformer's String return contract).
+    File tempZip = File.createTempFile("openfda-", ".zip");
     try {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        if (!entry.getName().toLowerCase().endsWith(".json")) {
-          zis.closeEntry();
-          continue;
+      downloadToFile(url, tempZip);
+      ArrayNode out = MAPPER.createArrayNode();
+      try (InputStream fin = new BufferedInputStream(new FileInputStream(tempZip), 65536);
+           ZipInputStream zis = new ZipInputStream(fin)) {
+        ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+          if (!entry.getName().toLowerCase().endsWith(".json")) {
+            zis.closeEntry();
+            continue;
+          }
+          JsonParser parser = MAPPER.getFactory().createParser(zis);
+          try {
+            streamResultsArray(parser, out);
+          } finally {
+            parser.close();
+          }
+          return out.toString();
         }
-        JsonParser parser = MAPPER.getFactory().createParser(zis);
-        try {
-          streamResultsArray(parser, out);
-        } finally {
-          parser.close();
-        }
-        return out.toString();
       }
       LOGGER.warn("{} bulk: no .json entry in ZIP from {}", getClass().getSimpleName(), url);
       return "[]";
     } finally {
-      zis.close();
+      tempZip.delete();
     }
   }
 
@@ -148,7 +158,7 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     }
   }
 
-  private static byte[] downloadBytes(String url) throws IOException {
+  private static void downloadToFile(String url, File dest) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
@@ -157,18 +167,14 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);
     }
-    InputStream is = conn.getInputStream();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try {
+    try (InputStream is = conn.getInputStream();
+         OutputStream os = new BufferedOutputStream(new FileOutputStream(dest), 65536)) {
       byte[] buf = new byte[65536];
       int len;
       while ((len = is.read(buf)) > 0) {
-        baos.write(buf, 0, len);
+        os.write(buf, 0, len);
       }
-    } finally {
-      is.close();
     }
-    return baos.toByteArray();
   }
 
   /** Map one results[] entry into the flat output row. */

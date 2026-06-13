@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 import org.apache.calcite.adapter.govdata.ZipDownloadUtils;
 
 import org.slf4j.Logger;
@@ -25,17 +26,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.zip.GZIPInputStream;
 
 /**
  * DataProvider for NOAA GHCN-Daily bulk annual CSV files.
@@ -54,13 +55,22 @@ import java.util.zip.GZIPInputStream;
  * <p>Units: TMAX/TMIN/TAVG in tenths of °C, PRCP in tenths of mm,
  * AWND in tenths of m/s. SNOW/SNWD are in mm (no conversion needed).
  *
- * <p>The NCEI file is sorted by (date, station_id), not by station_id first.
- * To enable the single-pass station accumulator, all relevant filtered lines are
- * loaded into memory, sorted by station_id, then streamed into the iterator.
+ * <p>The NCEI file is sorted by (date, station_id), not by station_id first. The
+ * single-pass station accumulator ({@link BulkIterator}) needs each station's rows
+ * contiguous, so the file is regrouped by station_id. To keep heap bounded regardless of
+ * year size, that regroup is done by DuckDB (filter + ORDER BY station, plus DQ striding)
+ * with the sorted result written to a temp file that is then streamed line-by-line — no
+ * full-file buffer in the JVM.
  */
 public class GhcndBulkDataProvider implements DataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GhcndBulkDataProvider.class);
+
+  /**
+   * Serializes DuckDB connection creation + sort across parallel batch threads. Concurrent
+   * fresh-instance creation + extension loading crashes libduckdb_java in a single JVM.
+   */
+  private static final Object DUCKDB_SORT_LOCK = new Object();
 
   private volatile StorageProvider storageProvider;
 
@@ -129,8 +139,7 @@ public class GhcndBulkDataProvider implements DataProvider {
     String gzPath = cachePath("ghcnd_bulk_" + year + ".csv.gz");
     downloadIfAbsent(gzPath, BULK_URL_TEMPLATE.replace("{year}", year));
 
-    List<String> sortedLines = loadAndSortFilteredLines(gzPath, year);
-    return new BulkIterator(sortedLines, year);
+    return new BulkIterator(streamSortedFilteredLines(gzPath, year), year);
   }
 
   // ---------------------------------------------------------------------------
@@ -201,28 +210,129 @@ public class GhcndBulkDataProvider implements DataProvider {
   // Sort-before-stream
   // ---------------------------------------------------------------------------
 
-  private List<String> loadAndSortFilteredLines(String gzPath, String year) throws IOException {
-    List<String> lines = new ArrayList<String>();
-    try (InputStream raw = storageProvider().openInputStream(gzPath);
-         java.util.zip.GZIPInputStream gzis = new java.util.zip.GZIPInputStream(
-             new java.io.BufferedInputStream(raw, 65536));
-         BufferedReader reader = new BufferedReader(
-             new InputStreamReader(gzis, StandardCharsets.UTF_8), 65536)) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        if (isRelevantLine(line)) {
-          lines.add(line);
+  /**
+   * Filters + regroups the GHCND by-year file by station_id using DuckDB and streams the sorted
+   * result line-by-line from a temp file. DuckDB reads the gzip directly (decompress + filter +
+   * {@code ORDER BY station_id}, plus DQ striding), spilling the sort to disk as needed, so JVM
+   * heap stays flat regardless of year size. Each reconstructed line is
+   * {@code station,date,element,value,m_flag,} — the field layout {@link BulkIterator} expects.
+   */
+  private Iterator<String> streamSortedFilteredLines(String gzPath, String year) throws IOException {
+    File tempFile = File.createTempFile("ghcnd-sorted-" + year + "-", ".tsv");
+    String strideClause = "";
+    if (isDqSampleMode()) {
+      // Keep ~DQ_TARGET_STATIONS stations spread across the sorted station range: every Kth
+      // distinct station (srank is 1-based dense rank → srank-1 is the 0-based station index),
+      // K = distinct/target (>=1). Keep all when there are fewer than the target.
+      strideClause = " WHERE ndist <= " + DQ_TARGET_STATIONS
+          + " OR ((srank - 1) % GREATEST(CAST(ndist / " + DQ_TARGET_STATIONS + " AS BIGINT), 1)) = 0";
+    }
+    String sql = "COPY (WITH src AS ("
+        + "SELECT column0 AS station, column1 AS dt, column2 AS el, column3 AS val, "
+        + "COALESCE(column4, '') AS mf "
+        + "FROM read_csv('" + gzPath + "', header=false, all_varchar=true, ignore_errors=true) "
+        + "WHERE column0 LIKE 'US%' "
+        + "AND column2 IN ('TMAX','TMIN','TAVG','PRCP','SNOW','SNWD','AWND') "
+        + "AND COALESCE(column5, '') = '' "
+        + "AND column3 IS NOT NULL AND column3 <> '' AND column3 <> '-9999'"
+        + "), ranked AS ("
+        + "SELECT station, dt, el, val, mf, "
+        + "DENSE_RANK() OVER (ORDER BY station) AS srank, "
+        + "(SELECT COUNT(DISTINCT station) FROM src) AS ndist FROM src) "
+        + "SELECT concat_ws(',', station, dt, el, val, mf, '') AS line FROM ranked"
+        + strideClause
+        + " ORDER BY station) TO '" + tempFile.getAbsolutePath()
+        + "' (FORMAT CSV, DELIMITER E'\\t', HEADER false)";
+
+    long t0 = System.currentTimeMillis();
+    try {
+      // Serialize the DuckDB sort across this provider's parallel batch threads. Each call would
+      // otherwise create a fresh in-memory DuckDB instance and load extensions concurrently, which
+      // crashes libduckdb_java (SIGSEGV) when two batch threads (e.g. ghcnd year=2025 + year=2024)
+      // hit it at once. The sort is the heavy step; the subsequent temp-file streaming is
+      // independent and stays parallel.
+      synchronized (DUCKDB_SORT_LOCK) {
+        Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider());
+        try (Statement stmt = conn.createStatement()) {
+          stmt.execute("SET preserve_insertion_order=false");
+          stmt.execute("SET memory_limit='2GB'");
+          stmt.execute("SET temp_directory='" + System.getProperty("java.io.tmpdir") + "'");
+          stmt.execute(sql);
+        } finally {
+          conn.close();
         }
       }
+    } catch (SQLException e) {
+      tempFile.delete();
+      throw new IOException("GHCND DuckDB filter+sort failed for year=" + year + ": "
+          + e.getMessage(), e);
     }
-    LOGGER.info("GHCND Bulk year={}: loaded {} relevant lines, sorting by station_id...",
-        year, lines.size());
-    Collections.sort(lines);
-    LOGGER.info("GHCND Bulk year={}: sort complete", year);
-    if (isDqSampleMode()) {
-      lines = strideSampleByStation(lines, year);
+    LOGGER.info("GHCND Bulk year={}: DuckDB filter+sort{} complete in {}ms (streaming from {})",
+        year, isDqSampleMode() ? "+DQ-stride" : "", System.currentTimeMillis() - t0,
+        tempFile.getName());
+    return new TempFileLineIterator(tempFile, year);
+  }
+
+  /**
+   * Streams lines from a temp file, deleting it once exhausted (or on read failure). Keeps the
+   * GHCND pipeline heap-bounded: only one line is held in memory at a time.
+   */
+  private static final class TempFileLineIterator implements Iterator<String> {
+    private final File tempFile;
+    private final String year;
+    private final BufferedReader reader;
+    private String nextLine;
+    private boolean closed;
+
+    TempFileLineIterator(File tempFile, String year) throws IOException {
+      this.tempFile = tempFile;
+      this.year = year;
+      this.reader = new BufferedReader(new InputStreamReader(
+          new java.io.FileInputStream(tempFile), StandardCharsets.UTF_8), 65536);
+      advance();
     }
-    return lines;
+
+    private void advance() {
+      try {
+        String line = reader.readLine();
+        if (line == null) {
+          nextLine = null;
+          close();
+        } else {
+          nextLine = line;
+        }
+      } catch (IOException e) {
+        close();
+        throw new RuntimeException(
+            "GHCND: failed reading sorted temp file for year=" + year, e);
+      }
+    }
+
+    private void close() {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      try {
+        reader.close();
+      } catch (IOException ignore) {
+        // best-effort close
+      }
+      tempFile.delete();
+    }
+
+    @Override public boolean hasNext() {
+      return nextLine != null;
+    }
+
+    @Override public String next() {
+      if (nextLine == null) {
+        throw new java.util.NoSuchElementException();
+      }
+      String current = nextLine;
+      advance();
+      return current;
+    }
   }
 
   /** True in DQ sample mode (GOVDATA_DQ=true as system property or env). */
@@ -236,73 +346,6 @@ public class GhcndBulkDataProvider implements DataProvider {
 
   /** Target number of stations to retain in a DQ sample (spread across the ID range). */
   private static final int DQ_TARGET_STATIONS = 150;
-
-  /**
-   * Representative DQ down-sampling: keeps every Kth distinct station across the sorted
-   * station_id range, emitting all of that station's daily rows. A plain first-N row cap is
-   * unrepresentative here — the lowest US station_ids are the {@code US1…} CoCoRaHS network,
-   * which is precipitation-only, so first-N yields all-null temperature. Striding by station
-   * spans CoCoRaHS + COOP (USC, temperature) + SNOTEL (USS) + WBAN/ASOS (USW, temp+wind), so
-   * every measured element is populated in the sample. Lines stay sorted by station_id, so the
-   * per-station pivot in {@link BulkIterator} is unaffected.
-   */
-  private static List<String> strideSampleByStation(List<String> sortedLines, String year) {
-    int distinct = 0;
-    String prev = null;
-    for (String line : sortedLines) {
-      String station = stationOf(line);
-      if (!station.equals(prev)) {
-        distinct++;
-        prev = station;
-      }
-    }
-    if (distinct <= DQ_TARGET_STATIONS) {
-      return sortedLines;
-    }
-    int stride = distinct / DQ_TARGET_STATIONS;
-    List<String> out = new ArrayList<String>();
-    prev = null;
-    int stationIdx = -1;
-    for (String line : sortedLines) {
-      String station = stationOf(line);
-      if (!station.equals(prev)) {
-        stationIdx++;
-        prev = station;
-      }
-      if (stationIdx % stride == 0) {
-        out.add(line);
-      }
-    }
-    LOGGER.info("GHCND Bulk year={}: DQ sample — kept {} of {} lines ({} of {} stations, stride {})",
-        year, out.size(), sortedLines.size(), (distinct + stride - 1) / stride, distinct, stride);
-    return out;
-  }
-
-  /** Station id is the first comma-delimited field of a GHCND by_year line. */
-  private static String stationOf(String line) {
-    int comma = line.indexOf(',');
-    return comma < 0 ? line : line.substring(0, comma);
-  }
-
-  private static boolean isRelevantLine(String line) {
-    String[] f = line.split(",", 8);
-    if (f.length < 6) {
-      return false;
-    }
-    if (f[0].length() < 2 || !f[0].startsWith("US")) {
-      return false;
-    }
-    if (!BulkIterator.isRelevantElement(f[2])) {
-      return false;
-    }
-    if (!f[5].isEmpty()) {
-      return false; // non-empty q_flag = failed quality check
-    }
-    if (f[3].isEmpty() || "-9999".equals(f[3])) {
-      return false;
-    }
-    return true;
-  }
 
   // ---------------------------------------------------------------------------
   // Streaming iterator
@@ -322,9 +365,9 @@ public class GhcndBulkDataProvider implements DataProvider {
     private long linesRead = 0;
     private long rowsEmitted = 0;
 
-    BulkIterator(List<String> sortedLines, String year) {
+    BulkIterator(Iterator<String> lineIterator, String year) {
       this.year = year;
-      this.lineIterator = sortedLines.iterator();
+      this.lineIterator = lineIterator;
     }
 
     @Override public boolean hasNext() {

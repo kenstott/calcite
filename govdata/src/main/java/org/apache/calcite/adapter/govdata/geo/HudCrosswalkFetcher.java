@@ -237,9 +237,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     File tempFile = File.createTempFile("hud-zip-county-", ".csv");
     convertJsonToCsv(data, tempFile, "zip_county");
 
-    // Upload to cache
-    byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-    storageProvider.writeFile(cacheFilePath, csvData);
+    // Upload to cache (stream the temp file rather than buffering it in a byte[])
+    try (InputStream in = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+      storageProvider.writeFile(cacheFilePath, in);
+    }
     LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
     return tempFile;
@@ -288,9 +289,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     File tempFile = File.createTempFile("hud-zip-tract-", ".csv");
     convertJsonToCsv(data, tempFile, "zip_tract");
 
-    // Upload to cache
-    byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-    storageProvider.writeFile(cacheFilePath, csvData);
+    // Upload to cache (stream the temp file rather than buffering it in a byte[])
+    try (InputStream in = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+      storageProvider.writeFile(cacheFilePath, in);
+    }
     LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
     return tempFile;
@@ -323,9 +325,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     File tempFile = File.createTempFile("hud-zip-cbsa-", ".csv");
     convertJsonToCsv(data, tempFile, "zip_cbsa");
 
-    // Upload to cache
-    byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-    storageProvider.writeFile(cacheFilePath, csvData);
+    // Upload to cache (stream the temp file rather than buffering it in a byte[])
+    try (InputStream in = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+      storageProvider.writeFile(cacheFilePath, in);
+    }
     LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
     return tempFile;
@@ -398,9 +401,10 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
       File tempFile = File.createTempFile("hud-zip-cd-", ".csv");
       convertJsonToCsv(data, tempFile, "zip_cd");
 
-      // Upload to cache
-      byte[] csvData = java.nio.file.Files.readAllBytes(tempFile.toPath());
-      storageProvider.writeFile(cacheFilePath, csvData);
+      // Upload to cache (stream the temp file rather than buffering it in a byte[])
+      try (InputStream in = java.nio.file.Files.newInputStream(tempFile.toPath())) {
+        storageProvider.writeFile(cacheFilePath, in);
+      }
       LOGGER.info("Cached HUD crosswalk data to {}", cacheFilePath);
 
       return tempFile;
