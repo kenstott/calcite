@@ -104,6 +104,12 @@ case "$MODE" in
       '"nps_visitation"' "$START" "$END"
     run_lands_model "lands-historical-revenues" \
       '"onrr_revenues"' "$START" "$END"
+    # USDA FIA tables — per-state fan-out (non-period; inventory_year is a column, not a
+    # dimension). Required by lands_dq.sql. One model so each FIA table is ingested exactly once;
+    # without this (and with enabledTables now honored) they would not be produced at all.
+    run_lands_model "lands-historical-fia" \
+      '"fia_plots", "fia_seedlings", "fia_invasives", "fia_down_woody_debris", "fia_pop_evaluations", "fia_tree_grm"' \
+      "$START" "$END"
     ;;
 
   daily)
