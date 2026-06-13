@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -95,6 +96,30 @@ public class EtlPipeline {
 
   /** Lock serializing all writer and tracker operations when parallel threads are active. */
   private final Object writeLock = new Object();
+
+  /**
+   * True when per-period freshness gating is active for this run. Set in {@link #execute()} once
+   * the data source and freshness config are known. When true, {@link #processSingleBatch} probes
+   * each fetch unit's templated source and skips the fetch+write for units whose source is
+   * unchanged since the last clean commit — the per-period analogue of the pipeline-level
+   * freshness gate, which can only probe a single non-templated URL.
+   */
+  private boolean perUnitFreshnessEnabled;
+
+  /**
+   * True when a per-unit freshness match is allowed to actually SKIP (vs only probe+capture the
+   * token). Mirrors the pipeline-level gate: under forceReprocessAll (no committed data / cleared
+   * marker) we still probe and persist the token so the NEXT run can skip, but never skip THIS run.
+   */
+  private boolean perUnitFreshnessSkipAllowed;
+
+  /**
+   * Per-unit freshness tokens captured during this run, keyed by {@code pipeline::unitKey}.
+   * Persisted to the tracker only after a clean commit (no failed batches), mirroring the
+   * pipeline-level token persistence, so a partial run never caches a skip-forever token.
+   */
+  private final Map<String, String> pendingUnitFreshnessTokens =
+      new ConcurrentHashMap<String, String>();
 
   /**
    * Creates a new ETL pipeline.
@@ -602,6 +627,22 @@ public class EtlPipeline {
           // Probe failure = treat as changed; don't skip
         }
       }
+
+      // Per-period freshness gate enablement. The pipeline-level gate above probes a single
+      // non-templated URL with an empty variable map, so it is a no-op for period tables whose
+      // source URL is templated ({year}, {state_fips}, ...). For those, processSingleBatch probes
+      // each fetch unit's concrete (substituted) URL and skips the fetch+write when unchanged —
+      // this is the "freshness OR period-completion OR both" composition: period-completion drops
+      // already-complete combos upstream; this additionally skips the open period when its source
+      // has not changed. Disabled under forceReprocessAll (no committed data / cleared marker) so a
+      // dq-rebuild always re-materializes. Hash-type freshness is post-download (handled later).
+      perUnitFreshnessEnabled = hasPeriod
+          && freshnessConfig != null
+          && freshnessConfig.getType() != FreshnessConfig.Type.HASH
+          && dataSource instanceof HttpSource;
+      // Probe+capture always runs (to seed the token on a cold run); only the skip is gated on
+      // having committed data, exactly like the pipeline-level gate above.
+      perUnitFreshnessSkipAllowed = !forceReprocessAll;
 
       // Phase 4: Create and initialize materialization writer
       MaterializeConfig.Format format = materializeConfig != null
@@ -1322,6 +1363,15 @@ public class EtlPipeline {
           LOGGER.info("Pipeline '{}': persisted freshness token after clean commit: {}",
               pipelineName, probedFreshnessToken);
         }
+        // Persist per-period freshness tokens captured this run so the next run can skip
+        // unchanged periods. Same clean-commit guard as the pipeline-level token above.
+        if (!pendingUnitFreshnessTokens.isEmpty()) {
+          for (Map.Entry<String, String> entry : pendingUnitFreshnessTokens.entrySet()) {
+            incrementalTracker.putFreshnessToken(entry.getKey(), entry.getValue());
+          }
+          LOGGER.info("Pipeline '{}': persisted {} per-period freshness tokens after clean commit",
+              pipelineName, pendingUnitFreshnessTokens.size());
+        }
       }
       // Per-period markers: mark each period whose full combo set is now processed,
       // even if OTHER periods in this table failed — markCompletedPeriods self-guards
@@ -1662,6 +1712,37 @@ public class EtlPipeline {
     // For null backfill_period the FetchUnit holds the raw combo — enrichment is a no-op.
     Map<String, String> variables = fetchUnit.getFetchVariables();
 
+    // Per-period freshness gate: probe this unit's templated source and skip the fetch+write when
+    // it is unchanged since the last clean commit. Returning 0 leaves the unit's existing Iceberg
+    // partition untouched (replacePartitions only rewrites the partitions we actually fetch), so
+    // unchanged periods are preserved without re-download or re-materialization. Only fires when a
+    // previous token exists (a prior clean run committed this unit's data) and the source is
+    // unchanged; otherwise the new token is captured for persistence after a clean commit.
+    if (perUnitFreshnessEnabled && dataSource instanceof HttpSource) {
+      FreshnessConfig freshnessConfig = config.getFreshness();
+      String unitKey = pipelineName + "::" + freshnessUnitKey(variables);
+      try {
+        HttpSource.ProbeResult probeResult =
+            ((HttpSource) dataSource).probe(freshnessConfig, variables);
+        String currentToken = FreshnessCheck.token(
+            freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
+        String previousToken = incrementalTracker.getFreshnessToken(unitKey);
+        if (perUnitFreshnessSkipAllowed
+            && previousToken != null
+            && !FreshnessCheck.changed(previousToken, currentToken)) {
+          LOGGER.info("Pipeline '{}': per-period freshness UNCHANGED for unit {} (token={}) — "
+              + "skipping fetch and write", pipelineName, variables, currentToken);
+          return 0;
+        }
+        if (currentToken != null) {
+          pendingUnitFreshnessTokens.put(unitKey, currentToken);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Pipeline '{}': per-period freshness probe failed for unit {} ({}), "
+            + "proceeding with full fetch", pipelineName, variables, e.getMessage());
+      }
+    }
+
     // Document sources use dataWriter directly — serialize writes
     if (EtlPipelineConfig.SOURCE_TYPE_DOCUMENT.equals(config.getSourceType())) {
       LOGGER.info("Document source - using custom DataWriter for processing");
@@ -1857,6 +1938,31 @@ public class EtlPipeline {
    * @param pipelineName pipeline name
    * @param rowCount     row count to record (shared equally across combos in the unit)
    */
+  /**
+   * Builds a deterministic per-unit freshness key from a fetch unit's substitution variables.
+   * The variables (the templated-URL inputs: year, state_fips, ...) fully determine the unit's
+   * source, so a sorted {@code key=value} join is a stable identity for the unit's freshness
+   * token across runs.
+   *
+   * @param variables the fetch unit's substitution variables
+   * @return a stable string identity for the unit
+   */
+  private static String freshnessUnitKey(Map<String, String> variables) {
+    if (variables == null || variables.isEmpty()) {
+      return "_empty";
+    }
+    List<String> keys = new ArrayList<String>(variables.keySet());
+    Collections.sort(keys);
+    StringBuilder sb = new StringBuilder();
+    for (String key : keys) {
+      if (sb.length() > 0) {
+        sb.append('&');
+      }
+      sb.append(key).append('=').append(variables.get(key));
+    }
+    return sb.toString();
+  }
+
   private void markCombosProcessed(FetchUnit fetchUnit, EtlPipelineConfig config,
       String pipelineName, long rowCount) {
     String backfillPeriod = config.getBackfillPeriod();

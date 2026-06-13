@@ -911,6 +911,16 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String compactedPath = bucketPath + "/year=" + year
         + "/_compacted/" + UUID.randomUUID().toString() + ".parquet";
 
+    // Capture the pre-existing compacted files BEFORE writing the new one. Each compacted file is
+    // cumulative (written from the full stageCache, which already merged the prior compacted files
+    // plus stragglers), so the new file is a strict superset of these — they are safe to delete
+    // after the new file commits. Without this, _compacted/ accumulates one near-full copy per
+    // compaction, so the fast-path read scans N copies of the same rows (the dominant cost of the
+    // tracker preload). Write-before-delete keeps it crash-safe; a fresh UUID means this list never
+    // contains the file we are about to write.
+    List<String> staleCompacted =
+        listTrackerFilesIncludeCompacted("year=" + year + "/_compacted/");
+
     // Write directly from stageCache to DuckDB temp table, avoiding
     // an intermediate ArrayList that duplicates all the data in memory.
     String tableName = "_compact_" + year.replace("-", "_");
@@ -975,9 +985,15 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         stmt.execute("DROP TABLE " + tableName);
       }
 
+      // New compacted file is durable — delete the stale cumulative copies it supersedes so the
+      // next read scans a single file instead of an ever-growing set.
+      if (staleCompacted != null && !staleCompacted.isEmpty()) {
+        deleteSpecificFiles(staleCompacted, year);
+      }
+
       long elapsed = System.currentTimeMillis() - start;
-      LOGGER.info("Compacted tracker year={}: {} rows written to S3 in {}ms",
-          year, rowCount, elapsed);
+      LOGGER.info("Compacted tracker year={}: {} rows written to S3 in {}ms ({} stale copies removed)",
+          year, rowCount, elapsed, staleCompacted == null ? 0 : staleCompacted.size());
     } catch (SQLException e) {
       LOGGER.warn("Failed to compact tracker year={}: {}", year, e.getMessage());
       try (Statement stmt = getConnection().createStatement()) {

@@ -298,6 +298,42 @@ public class StooqBulkProxy {
     // Write to a staging sibling of the table location so the file-passthrough materializer can
     // move the parquet into Iceberg without a recursive walk hitting the table's own metadata.
     String stagingDir = stockPricesDir + "__staging";
+
+    // Freshness gate: the bulk zip is the same object every run unless a newer snapshot is staged.
+    // When its S3 size is unchanged since the last successful ingest AND the stock_prices table
+    // still holds data, skip the expensive DuckDB COPY (the ~23M-row extract+transform) and reuse
+    // the recorded max trading date. The data-existence check defeats the dq-rebuild skip-forever
+    // trap: a rebuild that clears the table directory forces a full re-ingest even if the marker
+    // survives. The marker is a sibling of the table location: "<remoteSize>|<maxDate>".
+    String markerPath = stockPricesDir + "__bulk.marker";
+    long remoteSize = -1L;
+    try {
+      remoteSize = storageProvider.getMetadata(bulkZipS3Path).getSize();
+    } catch (IOException e) {
+      LOGGER.warn("Could not read S3 metadata for {} to gate bulk ingest; proceeding with full "
+          + "ingest: {}", bulkZipS3Path, e.getMessage());
+    }
+    if (remoteSize > 0L) {
+      String marker = readMarker(markerPath);
+      if (marker != null) {
+        int sep = marker.indexOf('|');
+        if (sep > 0) {
+          long markedSize = -1L;
+          try {
+            markedSize = Long.parseLong(marker.substring(0, sep).trim());
+          } catch (NumberFormatException nfe) {
+            markedSize = -1L;  // unreadable marker → fall through to full ingest
+          }
+          String markedMaxDate = marker.substring(sep + 1);
+          if (markedSize == remoteSize && stockPricesHasData(stockPricesDir)) {
+            LOGGER.info("Bulk zip unchanged ({} bytes) and stock_prices already materialized — "
+                + "skipping bulk ingest; reusing max date {}", remoteSize, markedMaxDate);
+            return markedMaxDate;
+          }
+        }
+      }
+    }
+
     ensureLocalZip();
 
     // zipfs glob is unreliable across DuckDB builds; extract to local disk and read_csv real files.
@@ -363,7 +399,65 @@ public class StooqBulkProxy {
       deleteDir(extractDir);
     }
     LOGGER.info("Bulk stock-price ingest complete, max date = {}", maxDate);
+    // Record the ingested zip size + max date so an unchanged next run can skip the COPY.
+    if (remoteSize > 0L) {
+      writeMarker(markerPath, remoteSize + "|" + maxDate);
+    }
     return maxDate;
+  }
+
+  /** Reads the bulk-ingest marker, or null if absent/unreadable. */
+  private String readMarker(String markerPath) {
+    try {
+      if (!storageProvider.exists(markerPath)) {
+        return null;
+      }
+      try (InputStream in = storageProvider.openInputStream(markerPath)) {
+        byte[] bytes = readAllBytes(in);
+        return new String(bytes, StandardCharsets.UTF_8).trim();
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Could not read bulk-ingest marker {}: {}", markerPath, e.getMessage());
+      return null;
+    }
+  }
+
+  /** Writes the bulk-ingest marker. */
+  private void writeMarker(String markerPath, String value) {
+    try {
+      storageProvider.writeFile(markerPath, value.getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      LOGGER.warn("Could not write bulk-ingest marker {}: {}", markerPath, e.getMessage());
+    }
+  }
+
+  /** True when the stock_prices table directory exists and contains at least one parquet file. */
+  private boolean stockPricesHasData(String stockPricesDir) {
+    try {
+      if (!storageProvider.isDirectory(stockPricesDir)) {
+        return false;
+      }
+      for (StorageProvider.FileEntry entry : storageProvider.listFiles(stockPricesDir, true)) {
+        if (!entry.isDirectory() && entry.getPath().endsWith(".parquet")) {
+          return true;
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.warn("Could not list {} to confirm stock_prices data; treating as empty: {}",
+          stockPricesDir, e.getMessage());
+    }
+    return false;
+  }
+
+  /** Reads an input stream fully into a byte array (Java 8; no InputStream.readAllBytes). */
+  private static byte[] readAllBytes(InputStream in) throws IOException {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = in.read(buf)) != -1) {
+      out.write(buf, 0, n);
+    }
+    return out.toByteArray();
   }
 
   /** Extracts all entries of the local bulk zip under {@code targetDir}. */
