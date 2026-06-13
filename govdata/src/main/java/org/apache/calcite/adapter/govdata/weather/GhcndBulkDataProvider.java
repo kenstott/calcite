@@ -66,6 +66,12 @@ public class GhcndBulkDataProvider implements DataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GhcndBulkDataProvider.class);
 
+  /**
+   * Serializes DuckDB connection creation + sort across parallel batch threads. Concurrent
+   * fresh-instance creation + extension loading crashes libduckdb_java in a single JVM.
+   */
+  private static final Object DUCKDB_SORT_LOCK = new Object();
+
   private volatile StorageProvider storageProvider;
 
   private StorageProvider storageProvider() {
@@ -240,14 +246,21 @@ public class GhcndBulkDataProvider implements DataProvider {
 
     long t0 = System.currentTimeMillis();
     try {
-      Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider());
-      try (Statement stmt = conn.createStatement()) {
-        stmt.execute("SET preserve_insertion_order=false");
-        stmt.execute("SET memory_limit='2GB'");
-        stmt.execute("SET temp_directory='" + System.getProperty("java.io.tmpdir") + "'");
-        stmt.execute(sql);
-      } finally {
-        conn.close();
+      // Serialize the DuckDB sort across this provider's parallel batch threads. Each call would
+      // otherwise create a fresh in-memory DuckDB instance and load extensions concurrently, which
+      // crashes libduckdb_java (SIGSEGV) when two batch threads (e.g. ghcnd year=2025 + year=2024)
+      // hit it at once. The sort is the heavy step; the subsequent temp-file streaming is
+      // independent and stays parallel.
+      synchronized (DUCKDB_SORT_LOCK) {
+        Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider());
+        try (Statement stmt = conn.createStatement()) {
+          stmt.execute("SET preserve_insertion_order=false");
+          stmt.execute("SET memory_limit='2GB'");
+          stmt.execute("SET temp_directory='" + System.getProperty("java.io.tmpdir") + "'");
+          stmt.execute(sql);
+        } finally {
+          conn.close();
+        }
       }
     } catch (SQLException e) {
       tempFile.delete();
