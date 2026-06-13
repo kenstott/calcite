@@ -811,12 +811,42 @@ public class SchemaLifecycleProcessor {
    */
   private void downloadBulkFile(String url, String cachePath, StorageProvider storage)
       throws IOException {
+    final int maxAttempts = 4;
+    IOException last = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        downloadBulkFileOnce(url, cachePath, storage);
+        return;
+      } catch (IOException e) {
+        last = e;
+        if (attempt < maxAttempts) {
+          long backoffMs = 2000L * attempt;
+          LOGGER.warn("Bulk download attempt {}/{} failed for {} ({}); retrying in {}ms",
+              attempt, maxAttempts, url, e.getMessage(), backoffMs);
+          try {
+            Thread.sleep(backoffMs);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted during bulk download retry backoff for " + url, ie);
+          }
+        }
+      }
+    }
+    throw new IOException("Bulk download failed after " + maxAttempts + " attempts for " + url, last);
+  }
+
+  /** Single bulk-download attempt — see {@link #downloadBulkFile} for the retrying wrapper. */
+  private void downloadBulkFileOnce(String url, String cachePath, StorageProvider storage)
+      throws IOException {
     // Fetch the raw bytes from URL
     java.net.URL urlObj = java.net.URI.create(url).toURL();
     java.net.HttpURLConnection conn = (java.net.HttpURLConnection) urlObj.openConnection();
     conn.setRequestMethod("GET");
     conn.setConnectTimeout(30000);
-    conn.setReadTimeout(300000); // 5 min read timeout for large files
+    // Between-bytes read timeout: a healthy stream never idles this long, so 2 minutes of silence
+    // means the upstream stalled — fail fast and let the retry wrapper re-request rather than
+    // hanging for minutes (seen on FEC / FIA / TIGER / NOAA bulk downloads).
+    conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent",
         "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
 

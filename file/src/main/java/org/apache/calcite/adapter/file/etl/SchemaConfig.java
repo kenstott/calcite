@@ -12,9 +12,11 @@ package org.apache.calcite.adapter.file.etl;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Configuration for a complete schema with tables and lifecycle hooks.
@@ -276,6 +278,26 @@ public class SchemaConfig {
             tables.add(tableConfig);
           }
         }
+      }
+      // Honor enabledTables (typically set from the operand): when non-empty, process only the
+      // named ETL pipelines. Views and source-less/non-hooks tables were already excluded above,
+      // so this only narrows the ETL set — a worker that scopes each model to a subset (e.g. lands)
+      // no longer re-runs every table on every invocation. Empty/absent ⇒ all tables (no filter).
+      Object enabledTablesObj = map.get("enabledTables");
+      if (enabledTablesObj instanceof List && !((List<?>) enabledTablesObj).isEmpty()) {
+        Set<String> enabled = new HashSet<String>();
+        for (Object o : (List<?>) enabledTablesObj) {
+          if (o != null) {
+            enabled.add(String.valueOf(o));
+          }
+        }
+        List<EtlPipelineConfig> filtered = new ArrayList<EtlPipelineConfig>();
+        for (EtlPipelineConfig t : tables) {
+          if (enabled.contains(t.getName())) {
+            filtered.add(t);
+          }
+        }
+        tables = filtered;
       }
       builder.tables(tables);
     }

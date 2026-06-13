@@ -124,9 +124,43 @@ public final class ZipDownloadUtils {
    */
   public static void downloadToFile(String url, Map<String, String> headers, File dest)
       throws IOException {
+    final int maxAttempts = 4;
+    IOException last = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        downloadToFileOnce(url, headers, dest);
+        return;
+      } catch (IOException e) {
+        last = e;
+        // Remove any partial file so the retry starts clean.
+        if (dest.exists() && !dest.delete()) {
+          LOGGER.warn("Could not delete partial download {} before retry", dest);
+        }
+        if (attempt < maxAttempts) {
+          long backoffMs = 2000L * attempt;
+          LOGGER.warn("Download attempt {}/{} failed for {} ({}); retrying in {}ms",
+              attempt, maxAttempts, url, e.getMessage(), backoffMs);
+          try {
+            Thread.sleep(backoffMs);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted during download retry backoff for " + url, ie);
+          }
+        }
+      }
+    }
+    throw new IOException("Download failed after " + maxAttempts + " attempts for " + url, last);
+  }
+
+  /** Single download attempt — see {@link #downloadToFile} for the retrying wrapper. */
+  private static void downloadToFileOnce(String url, Map<String, String> headers, File dest)
+      throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(30000);
-    conn.setReadTimeout(600000);
+    // Between-bytes read timeout: a healthy stream delivers data continuously, so 2 minutes of
+    // silence means the upstream server has stalled (seen on FIA datamart / FEC / TIGER / NOAA).
+    // Fail fast here and let the retry wrapper re-request, instead of hanging up to 10 minutes.
+    conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
     if (headers != null) {
       for (Map.Entry<String, String> h : headers.entrySet()) {
