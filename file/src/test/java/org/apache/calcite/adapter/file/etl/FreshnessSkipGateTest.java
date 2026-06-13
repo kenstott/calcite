@@ -71,6 +71,16 @@ class FreshnessSkipGateTest {
       }
     }
 
+    /** Test accessor: snapshot of all currently-stored token keys. */
+    Set<String> tokenKeys() {
+      return new HashSet<String>(freshnessTokens.keySet());
+    }
+
+    /** Test accessor: remove a single token (used to isolate the per-unit gate). */
+    void removeToken(String key) {
+      freshnessTokens.remove(key);
+    }
+
     // --- Everything else is NOOP ---
 
     @Override public boolean isProcessed(String alternateName, String sourceTable,
@@ -183,6 +193,37 @@ class FreshnessSkipGateTest {
         .name("freshness_test_pipeline")
         .source(HttpSourceConfig.builder()
             .url("https://example.invalid/api")
+            .build())
+        .dimensions(dims)
+        .materialize(MaterializeConfig.builder()
+            .format(MaterializeConfig.Format.PARQUET)
+            .output(MaterializeOutputConfig.builder()
+                .location(tempDir.toString())
+                .build())
+            .build());
+    if (freshness != null) {
+      b.freshness(freshness);
+    }
+    return b.build();
+  }
+
+  /**
+   * Builds a config with a YEAR_RANGE period dimension (so {@code hasPeriodDimension} is true and
+   * the per-unit freshness gate is active) spanning {@code [startYear, endYear]}.
+   */
+  private EtlPipelineConfig buildPeriodConfig(FreshnessConfig freshness, int startYear, int endYear) {
+    Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
+    dims.put("year", DimensionConfig.builder()
+        .name("year")
+        .type(DimensionType.YEAR_RANGE)
+        .start(startYear)
+        .end(endYear)
+        .build());
+
+    EtlPipelineConfig.Builder b = EtlPipelineConfig.builder()
+        .name("freshness_test_pipeline")
+        .source(HttpSourceConfig.builder()
+            .url("https://example.invalid/api/{year}")
             .build())
         .dimensions(dims)
         .materialize(MaterializeConfig.builder()
@@ -410,6 +451,76 @@ class FreshnessSkipGateTest {
     // New token must be persisted after the run
     assertEquals("etag-new", tracker.getFreshnessToken("freshness_test_pipeline"),
         "New token must be persisted after a successful run");
+  }
+
+  /**
+   * Per-period freshness gate (the "freshness OR period-completion OR both" composition).
+   *
+   * <p>The pipeline-level gate probes a single non-templated URL with an empty variable map, so it
+   * is a no-op for period tables whose source URL is templated. The per-unit gate in
+   * processSingleBatch probes each fetch unit's substituted URL and skips that unit when unchanged.
+   *
+   * <p>This test isolates the per-unit gate from the pipeline-level gate: it runs a two-year
+   * pipeline once to seed per-unit tokens, then REMOVES the pipeline-level token (so the
+   * pipeline-level gate proceeds, prev=null) while keeping the per-unit tokens, and asserts the
+   * second run fetches nothing — proving the skip came from the per-unit gate, not the
+   * pipeline-level one.
+   */
+  @Test void testPerPeriodFreshnessSkipsUnchangedUnits() throws IOException {
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryFreshnessTracker tracker = new MemoryFreshnessTracker();
+
+    Map<String, String> probeHeaders = new HashMap<String, String>();
+    probeHeaders.put("ETag", "etag-stable");
+    HttpSource.ProbeResult probeResult = new HttpSource.ProbeResult(probeHeaders, null);
+
+    FreshnessConfig freshnessConfig = FreshnessConfig.fromMap(
+        Collections.<String, Object>singletonMap("type", "etag"));
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    CountingDataProvider provider = new CountingDataProvider(Collections.singletonList(row));
+    CountingDataWriter writer = new CountingDataWriter();
+
+    StubHttpSource stubSource = new StubHttpSource(
+        HttpSourceConfig.builder().url("https://example.invalid/api/{year}").build(),
+        probeResult);
+
+    // Two periods → two fetch units.
+    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024);
+
+    // --- First run: no tokens. Both periods fetch; per-unit tokens get persisted. ---
+    StubProbePipeline run1 = new StubProbePipeline(
+        config, sp, tempDir.toString(), tracker, provider, writer, stubSource);
+    run1.execute();
+    assertEquals(2, provider.fetchCount.get(),
+        "First run must fetch both periods (no tokens yet)");
+
+    Set<String> keys = tracker.tokenKeys();
+    List<String> perUnitKeys = new ArrayList<String>();
+    for (String k : keys) {
+      if (k.contains("::")) {
+        perUnitKeys.add(k);
+      }
+    }
+    assertEquals(2, perUnitKeys.size(),
+        "First run must persist a per-unit freshness token for each period (got " + keys + ")");
+
+    // --- Isolate the per-unit gate: drop the pipeline-level token, keep per-unit tokens. ---
+    tracker.removeToken(config.getName());
+    assertNull(tracker.getFreshnessToken(config.getName()),
+        "Pipeline-level token removed so the pipeline-level gate cannot be the cause of the skip");
+
+    // --- Second run: per-unit tokens unchanged → every unit skips via the per-unit gate. ---
+    provider.fetchCount.set(0);
+    writer.writeCount.set(0);
+    StubProbePipeline run2 = new StubProbePipeline(
+        config, sp, tempDir.toString(), tracker, provider, writer, stubSource);
+    run2.execute();
+    assertEquals(0, provider.fetchCount.get(),
+        "Second run must skip every period via the per-unit freshness gate (no fetch)");
+    assertEquals(0, writer.writeCount.get(),
+        "Second run must not write — every period skipped");
   }
 
   /**

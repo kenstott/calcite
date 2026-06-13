@@ -107,6 +107,13 @@ public class EtlPipeline {
   private boolean perUnitFreshnessEnabled;
 
   /**
+   * True when a per-unit freshness match is allowed to actually SKIP (vs only probe+capture the
+   * token). Mirrors the pipeline-level gate: under forceReprocessAll (no committed data / cleared
+   * marker) we still probe and persist the token so the NEXT run can skip, but never skip THIS run.
+   */
+  private boolean perUnitFreshnessSkipAllowed;
+
+  /**
    * Per-unit freshness tokens captured during this run, keyed by {@code pipeline::unitKey}.
    * Persisted to the tracker only after a clean commit (no failed batches), mirroring the
    * pipeline-level token persistence, so a partial run never caches a skip-forever token.
@@ -630,10 +637,12 @@ public class EtlPipeline {
       // has not changed. Disabled under forceReprocessAll (no committed data / cleared marker) so a
       // dq-rebuild always re-materializes. Hash-type freshness is post-download (handled later).
       perUnitFreshnessEnabled = hasPeriod
-          && !forceReprocessAll
           && freshnessConfig != null
           && freshnessConfig.getType() != FreshnessConfig.Type.HASH
           && dataSource instanceof HttpSource;
+      // Probe+capture always runs (to seed the token on a cold run); only the skip is gated on
+      // having committed data, exactly like the pipeline-level gate above.
+      perUnitFreshnessSkipAllowed = !forceReprocessAll;
 
       // Phase 4: Create and initialize materialization writer
       MaterializeConfig.Format format = materializeConfig != null
@@ -1718,7 +1727,9 @@ public class EtlPipeline {
         String currentToken = FreshnessCheck.token(
             freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
         String previousToken = incrementalTracker.getFreshnessToken(unitKey);
-        if (previousToken != null && !FreshnessCheck.changed(previousToken, currentToken)) {
+        if (perUnitFreshnessSkipAllowed
+            && previousToken != null
+            && !FreshnessCheck.changed(previousToken, currentToken)) {
           LOGGER.info("Pipeline '{}': per-period freshness UNCHANGED for unit {} (token={}) — "
               + "skipping fetch and write", pipelineName, variables, currentToken);
           return 0;
