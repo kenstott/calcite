@@ -69,7 +69,15 @@ FROM (
 --                           earnings_transcripts, stock_prices
 --   filer-type (Berkshire): institutional_holdings (13F), beneficial_ownership (13D/G)
 -- vectorized_chunks is EXCLUDED from T2 (existence-warn only) — embedding-pipeline dependent.
--- CALIBRATE these up to the real DQ_SAMPLE counts after the first run.
+-- CALIBRATE these to the real DQ_SAMPLE counts after the first clean run. DQ_SAMPLE is now
+-- FAANG + Berkshire (Meta, Apple, Amazon, Netflix, Alphabet, Berkshire) — re-derive ALL T2
+-- floors from that 6-CIK set, not the old 8-CIK Mag7+Berkshire. Two prerequisites before
+-- re-deriving: (1) a jar rebuild so the new CikRegistry/cik-registry.json take effect;
+-- (2) stock_prices/sec_prices depend on BULK_STOCK_PRICE_ZIP (d_us_txt.zip on the local MinIO)
+-- — without the bulk feed those stay 0 regardless of CIK set. xbrl_relationships/
+-- financial_line_items/mda_sections/filing_contexts come from the XBRL transformer over the
+-- sampled 10-K/10-Q filings; if still 0 after a clean FAANG run, that's a transformer/coverage
+-- issue, not a threshold one.
 -- ============================================================
 -- Each table is a SEPARATE INSERT so a missing table's iceberg_scan() error aborts only that
 -- one statement; the DuckDB CLI continues to the next (a missing table is already flagged FAIL
