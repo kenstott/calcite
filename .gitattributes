@@ -23,6 +23,11 @@ sqlline  text eol=lf executable
 #test files, use lf so that size is same on windows as well
 data/files/*.dat    text eol=lf
 
+# Shell-sourced env files must stay LF — CRLF breaks `source` in bash
+# ($'\r': command not found) and appends \r to every value (corrupts creds/endpoints).
+.env*               text eol=lf
+*.env               text eol=lf
+
 *.bat    text eol=crlf
 *.cmd    text eol=crlf
 *.csproj text merge=union eol=crlf
