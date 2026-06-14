@@ -21,6 +21,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 
+# ── ETL worker JVM memory bounding (config-only; override via env) ─────────────
+# Heap is set per-schema (-Xmx); these cap the *native* footprint the pool budget
+# can't see (NIO/S3A direct buffers, metaspace, thread stacks, glibc arenas).
+#   MaxDirectMemorySize  - else the direct-buffer ceiling defaults to ~Xmx (≈ doubles RSS)
+#   MaxMetaspaceSize/Xss - bound metaspace + per-thread stacks (many S3A threads)
+#   NativeMemoryTracking - lets `jcmd <pid> VM.native_memory summary` attribute RSS
+#   MALLOC_ARENA_MAX     - glibc spawns up to 8*nproc 64MB arenas under IO threads
+export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
+GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=1500m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary}"
+
 # Load base credentials from govdata/.env.prod, then parallel overrides.
 # Caller-exported variables take precedence: if GOVDATA_START_YEAR or
 # GOVDATA_CACHE_DIR are already set in the calling environment, .env.prod
@@ -43,7 +53,10 @@ load_env() {
 
     set -a
     # shellcheck disable=SC1090
-    source "$env_prod"
+    # CRLF-tolerant: these files are often edited on Windows; sourcing CRLF directly
+    # throws `$'\r': command not found` and appends \r to every value (corrupting
+    # endpoints/credentials). Strip CR on the way in.
+    source <(tr -d '\r' < "$env_prod")
     set +a
 
     # Restore caller-provided overrides. CALCITE_TRACKER_S3_BUCKET must be preserved alongside
@@ -63,7 +76,7 @@ load_env() {
   if [ -f "$env_dq" ]; then
     set -a
     # shellcheck disable=SC1090
-    source "$env_dq"
+    source <(tr -d '\r' < "$env_dq")   # CRLF-tolerant (see note above)
     set +a
   fi
 
@@ -1022,6 +1035,7 @@ run_etl() {
   trap 'kill 0' INT TERM
 
   java \
+    $GOVDATA_JAVA_OPTS \
     -Xms"${_HEAP_MIN}" \
     -Xmx"${_HEAP_MAX}" \
     -cp "$jar" \
@@ -1069,6 +1083,7 @@ run_etl_inline() {
   trap 'kill 0' INT TERM
 
   java \
+    $GOVDATA_JAVA_OPTS \
     -Xms"${_HEAP_MIN}" \
     -Xmx"${_HEAP_MAX}" \
     -cp "$jar" \
