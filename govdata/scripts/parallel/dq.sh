@@ -131,9 +131,36 @@ if $DRY_RUN; then
   exit 0
 fi
 
+# ── S3 endpoint config — DQ always targets the MinIO DQ instance, never R2 ─────
+# The endpoint must come from AWS_ENDPOINT_OVERRIDE (set in govdata/.env.dq).
+# Derive the scheme-stripped host and the SSL flag for DuckDB, then inject one
+# correct S3 config block while stripping each SQL file's own (R2-hardcoded)
+# SET s3_* lines — so the unchanged per-schema scripts run against MinIO.
+if [ -z "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
+  echo "ERROR: AWS_ENDPOINT_OVERRIDE is not set — DQ requires the MinIO endpoint (source govdata/.env.dq)" >&2
+  exit 1
+fi
+S3_ENDPOINT_HOST="${AWS_ENDPOINT_OVERRIDE#http://}"; S3_ENDPOINT_HOST="${S3_ENDPOINT_HOST#https://}"; S3_ENDPOINT_HOST="${S3_ENDPOINT_HOST%/}"
+case "$AWS_ENDPOINT_OVERRIDE" in https://*) S3_USE_SSL=true ;; *) S3_USE_SSL=false ;; esac
+S3_REGION="${AWS_REGION:-us-east-1}"
+
 {
+  cat <<S3CONF
+INSTALL httpfs; LOAD httpfs;
+INSTALL iceberg; LOAD iceberg;
+SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
+SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
+SET s3_region='${S3_REGION}';
+SET s3_endpoint='${S3_ENDPOINT_HOST}';
+SET s3_url_style='path';
+SET s3_use_ssl=${S3_USE_SSL};
+SET memory_limit='${DUCKDB_MEMORY_LIMIT:-2GB}';
+SET temp_directory='/tmp/duckdb-dq-${SCHEMA}';
+SET max_temp_directory_size='50GB';
+S3CONF
   envsubst '$AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY $AWS_ENDPOINT_OVERRIDE $DQ_YEAR_START $DQ_YEAR_END' \
-    < "$SQL_FILE"
+    < "$SQL_FILE" \
+    | grep -ivE '^[[:space:]]*SET[[:space:]]+s3_(access_key_id|secret_access_key|region|endpoint|url_style|use_ssl)[[:space:]]*='
   echo ""
   echo "$COPY_SQL"
 } | duckdb

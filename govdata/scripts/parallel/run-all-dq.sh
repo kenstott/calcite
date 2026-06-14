@@ -54,6 +54,10 @@ while [[ $# -gt 0 ]]; do
       shift
       POOL_EXTRA_ARGS+=(-j "${1:?-j requires an integer}")
       ;;
+    -r)
+      shift
+      POOL_EXTRA_ARGS+=(-r "${1:?-r requires an integer (OS reserve MB)}")
+      ;;
     --force)
       POOL_EXTRA_ARGS+=(--force)
       ;;
@@ -76,6 +80,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --max-restarts N     Max release-triggered restarts before giving up (default 5)"
       echo "  --poll-interval N    Seconds between release polls (default 300)"
       echo "  -j N                 Max concurrent workers (passed to run-pool)"
+      echo "  -r N                 OS/MinIO/Docker memory reserve in MB (passed to run-pool)"
       echo "  --force              Bypass release-window checks (passed to run-pool)"
       echo "  --local-jar          Use the jar already at build/libs/sih-govdata.jar without"
       echo "                       downloading or polling for new releases"
