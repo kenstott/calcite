@@ -335,15 +335,16 @@ public class CikRegistry {
         "0000320193", "0000789019", "0001652044", "0001018724",
         "0001326801", "0001318605", "0001045810"));
 
-    // DQ sample: the MAGNIFICENT7 mega-caps (rich 10-K/10-Q/8-K/DEF 14A/insider coverage)
-    // plus Berkshire Hathaway (0001067983) — which files Form 13F-HR and Schedule 13D/13G,
-    // so institutional_holdings and beneficial_ownership get real data instead of being empty.
-    // Used by worker.sh's sec / sec_prices DQ mode (GOVDATA_DQ_CIKS default) to validate every
-    // SEC table across all filer types in minutes instead of the ~12h full-universe run.
+    // DQ sample: FAANG — Meta (0001326801), Apple (0000320193), Amazon (0001018724),
+    // Netflix (0001065280), Alphabet (0001652044) — for rich 10-K/10-Q/8-K/DEF 14A/insider
+    // coverage, plus Berkshire Hathaway (0001067983), which files Form 13F-HR and Schedule
+    // 13D/13G so institutional_holdings and beneficial_ownership get real data instead of
+    // being empty. Used by worker.sh's sec / sec_prices DQ mode (GOVDATA_DQ_CIKS default) to
+    // validate every SEC table across all filer types in minutes instead of the ~12h run.
     GROUP_TO_CIKS.put(
         "DQ_SAMPLE", Arrays.asList(
-        "0000320193", "0000789019", "0001652044", "0001018724",
-        "0001326801", "0001318605", "0001045810", "0001067983"));
+        "0001326801", "0000320193", "0001018724", "0001065280",
+        "0001652044", "0001067983"));
   }
 
   /**

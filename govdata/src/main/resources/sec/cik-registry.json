@@ -954,15 +954,13 @@
       "_note": "US companies with market cap < $300 million"
     },
     "DQ_SAMPLE": {
-      "description": "DQ sample: MAGNIFICENT7 mega-caps + Berkshire Hathaway (13F-HR + 13D/G filer) for full SEC-table coverage in DQ runs",
+      "description": "DQ sample: FAANG (Meta, Apple, Amazon, Netflix, Alphabet) + Berkshire Hathaway (13F-HR + 13D/G filer) for full SEC-table coverage in DQ runs",
       "members": [
-        "0000320193",
-        "0000789019",
-        "0001652044",
-        "0001018724",
         "0001326801",
-        "0001318605",
-        "0001045810",
+        "0000320193",
+        "0001018724",
+        "0001065280",
+        "0001652044",
         "0001067983"
       ]
     }
