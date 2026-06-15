@@ -2384,7 +2384,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=00&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json

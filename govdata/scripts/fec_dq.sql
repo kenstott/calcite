@@ -111,7 +111,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/candidates', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -187,7 +187,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/committees', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -264,7 +264,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/candidate_committee_linkages', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -333,7 +333,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/individual_contributions', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -408,7 +408,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/committee_contributions', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year', 'memo_cd')
   )
 );
@@ -477,7 +477,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/intercommittee_transactions', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year', 'memo_cd')
   )
 );
@@ -545,7 +545,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/operating_expenditures', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year', 'schedule_type')
   )
 );
@@ -616,7 +616,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/independent_expenditures', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -679,7 +679,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/electioneering_communications', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -742,7 +742,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/communication_costs', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -805,7 +805,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/candidate_summaries', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN ('type', 'year')
   )
 );
@@ -890,7 +890,7 @@ FROM (
   FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/committee_summaries', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND null_percentage < 100.0
+    WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
       AND column_name NOT IN (
         'type', 'year',
         -- FEC summary optional fields: only populated for specific committee types

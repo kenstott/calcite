@@ -211,9 +211,12 @@ public class LocalStagingStorageProvider implements StorageProvider {
     // Sanitize groupKey for use as a path segment
     String safeDirName = groupKey.replaceAll("[^a-zA-Z0-9=_-]", "_");
     File groupDir = new File(stagingDir, safeDirName);
-    if (!groupDir.exists() && !groupDir.mkdirs()) {
-      throw new IOException("Failed to create staging directory: " + groupDir.getAbsolutePath());
-    }
+    // Idempotent + race-safe: createDirectories() makes parents and silently succeeds if the dir
+    // already exists (concurrent pool threads stage into the same group dir), throwing IOException
+    // only on a genuine failure. This avoids the check-then-create race in the old
+    // !exists() && !mkdirs() form, where a lost mkdirs() race returned false ambiguously and
+    // dropped insider forms — which emptied beneficial_ownership.
+    java.nio.file.Files.createDirectories(groupDir.toPath());
     File localFile = new File(groupDir, UUID.randomUUID().toString() + ".parquet");
 
     // Write parquet using Parquet/Avro writer

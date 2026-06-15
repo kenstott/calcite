@@ -381,7 +381,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'employment_statistics', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -390,7 +390,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'inflation_metrics', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -399,7 +399,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'regional_cpi', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -408,7 +408,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'metro_cpi', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -417,7 +417,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_industry', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -426,7 +426,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_wages', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -435,7 +435,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'metro_industry', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -444,7 +444,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'metro_wages', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -453,7 +453,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'county_qcew', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -462,7 +462,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'county_wages', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   -- state_fips: cap-sample artifact. dqRowLimit:25000 takes the first 25k rows of the
   -- area_fips-sorted QCEW stream — all low-FIPS (one state) — so state_fips goes constant in
   -- the DQ sample; the uncapped prod load spans all states. See [[dq-row-limit-sampling]].
@@ -474,7 +474,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'jolts_regional', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -483,7 +483,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'jolts_state', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -492,7 +492,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'wage_growth', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -501,7 +501,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'regional_employment', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -510,7 +510,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'treasury_yields', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -519,7 +519,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'federal_debt', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -528,7 +528,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'world_indicators', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -537,7 +537,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'fred_indicators', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -546,7 +546,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'national_accounts', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -555,7 +555,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_personal_income', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -564,7 +564,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_gdp', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_gdp', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -573,7 +573,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_quarterly_income', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_income', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -582,7 +582,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_quarterly_gdp', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_gdp', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -591,7 +591,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_consumption', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_consumption', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult',
                           'unit');
@@ -601,7 +601,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'regional_income', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_income', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult',
                           'geo_fips_set');
@@ -611,7 +611,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'ita_data', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult',
                           'area_or_country', 'cl_unit', 'note_ref');
@@ -621,7 +621,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'gdp_statistics', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
@@ -630,7 +630,7 @@ INSERT INTO dq_results
 SELECT 'econ', 'industry_gdp', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp', allow_moved_paths := true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 

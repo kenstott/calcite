@@ -1746,14 +1746,17 @@ partitionedTables:
         type: string
         nullable: true
         comment: Census region code (00=US, NE/MW/SO/WE for regions)
-        # Extract region from series_id positions 4-5 (after JTU prefix)
-        expression: "SUBSTRING(series_id, 4, 2)"
+        # Region is at series_id positions 10-11, e.g. JTS000000{NE}0000000HIR — NOT 4-5
+        # (positions 4-9 are the industry field, always 000000 here, which made every row '00').
+        expression: "SUBSTRING(series_id, 10, 2)"
       - name: region_name
         type: string
         nullable: true
         comment: Census region name
-        # Map region code to name
-        expression: "CASE SUBSTRING(series_id, 4, 2) WHEN '00' THEN 'United States' WHEN 'NE' THEN 'Northeast' WHEN 'MW' THEN 'Midwest' WHEN 'SO' THEN 'South' WHEN 'WE' THEN 'West' ELSE 'Unknown' END"
+        # Map region code (series_id positions 10-11) to name. No ELSE default: an unmapped
+        # code is a contract violation (wrong slice / unexpected series), so it becomes NULL
+        # and is surfaced by the null/all-same DQ checks rather than masked as 'Unknown'.
+        expression: "CASE SUBSTRING(series_id, 10, 2) WHEN '00' THEN 'United States' WHEN 'NE' THEN 'Northeast' WHEN 'MW' THEN 'Midwest' WHEN 'SO' THEN 'South' WHEN 'WE' THEN 'West' END"
       - name: metric_type
         type: string
         nullable: true

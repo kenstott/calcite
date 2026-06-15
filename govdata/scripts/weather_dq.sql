@@ -227,7 +227,7 @@ SELECT 'weather', 'nws_stations', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_stations', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -235,7 +235,7 @@ SELECT 'weather', 'nws_alerts', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_alerts', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -243,7 +243,7 @@ SELECT 'weather', 'cdo_stations', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -251,7 +251,7 @@ SELECT 'weather', 'cdo_monthly_summaries', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -259,7 +259,7 @@ SELECT 'weather', 'cdo_annual_summaries', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -267,7 +267,7 @@ SELECT 'weather', 'epa_annual_aqi', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -275,7 +275,7 @@ SELECT 'weather', 'epa_daily_aqi', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -283,7 +283,7 @@ SELECT 'weather', 'ghcnd_stations_with_county', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -299,7 +299,7 @@ SELECT 'weather', 'drought_monitor_weekly', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -307,7 +307,7 @@ SELECT 'weather', 'hms_smoke_daily', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
@@ -315,7 +315,7 @@ SELECT 'weather', 'hms_smoke_polygons', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'year');  -- year is single-valued for daily rebuild snapshot
 
 INSERT INTO dq_results
@@ -323,7 +323,7 @@ SELECT 'weather', 'climate_normals_monthly', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
 -- ============================================================
