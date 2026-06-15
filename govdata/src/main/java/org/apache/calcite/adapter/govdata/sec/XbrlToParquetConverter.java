@@ -9,6 +9,8 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.sec;
+// storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
+// storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
@@ -47,6 +49,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -995,7 +998,8 @@ public class XbrlToParquetConverter implements FileConverter {
         Map<String, Object> data = new HashMap<>();
         // Required data columns
         data.put("cik", cik);
-        data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+        data.put("accession_number", Objects.requireNonNull(accession,
+            "accession_number missing for CIK " + cik + " — refusing to synthesize a fabricated accession"));
         data.put("filing_date", filingDate);
 
         // Extract year for Iceberg partitioning
@@ -1046,16 +1050,33 @@ public class XbrlToParquetConverter implements FileConverter {
         String unitRefRaw = unitRef.isEmpty() ? null : unitRef;
         data.put("unit_ref", unitRefRaw);
         data.put("unit_ref_normalized", unitRefRaw != null ? normalizeUnitRef(unitRefRaw) : null);
-        String decimalsAttr = element.getAttribute("decimals");
+        // decimals (xbrli:decimalsType) is a union of xsd:integer and the token "INF".
+        // "INF" means infinite precision (an exact value) and legitimately has no integer
+        // form -> null. Any other non-integer value is corruption and must fail loudly.
+        String decimalsAttr = element.getAttribute("decimals").trim();
         Integer decimalsInt = null;
-        if (!decimalsAttr.isEmpty()) {
-          try { decimalsInt = Integer.parseInt(decimalsAttr); } catch (NumberFormatException ignored) { }
+        if (!decimalsAttr.isEmpty() && !"INF".equalsIgnoreCase(decimalsAttr)) {
+          try {
+            decimalsInt = Integer.parseInt(decimalsAttr);
+          } catch (NumberFormatException e) {
+            throw new IOException("Malformed XBRL 'decimals' attribute '" + decimalsAttr
+                + "' for concept " + concept + " (contextRef=" + contextRefVal
+                + ", accession=" + accession + ")", e);
+          }
         }
         data.put("decimals", decimalsInt);
-        String scaleAttr = element.getAttribute("scale");
+        // scale (iXBRL ix:nonFraction/@scale) is a plain xsd:integer with no "INF" form;
+        // a present-but-unparseable scale is corruption and must fail loudly.
+        String scaleAttr = element.getAttribute("scale").trim();
         Integer scaleInt = null;
         if (!scaleAttr.isEmpty()) {
-          try { scaleInt = Integer.parseInt(scaleAttr); } catch (NumberFormatException ignored) { }
+          try {
+            scaleInt = Integer.parseInt(scaleAttr);
+          } catch (NumberFormatException e) {
+            throw new IOException("Malformed XBRL 'scale' attribute '" + scaleAttr
+                + "' for concept " + concept + " (contextRef=" + contextRefVal
+                + ", accession=" + accession + ")", e);
+          }
         }
         // NULL scale for a numeric fact means factor=1 (same as scale=0)
         if (scaleInt == null && !unitRef.isEmpty()) scaleInt = 0;
@@ -1215,8 +1236,10 @@ public class XbrlToParquetConverter implements FileConverter {
       accessionNumber = extractAccessionNumber(filename);
     }
     if (accessionNumber == null || accessionNumber.isEmpty()) {
-      // Generate fallback accession number from cik and filing date
-      accessionNumber = cik + "-" + filingDate.replace("-", "").substring(2);
+      // No accession from the passed value or the filename: refuse to fabricate one.
+      // A synthesized cik+date "accession" is non-unique and pollutes the primary key.
+      throw new IllegalStateException("accession_number missing for CIK " + cik
+          + " (file " + filename + ") — could not resolve a real accession");
     }
     data.put("cik", cik);
     data.put("accession_number", accessionNumber);
@@ -1389,8 +1412,15 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   public static String normalizeDateToIso(String raw) {
-    if (raw == null || raw.trim().isEmpty()) return null;
-    String d = raw.trim().replaceAll("\\s+", " ").replaceAll("\\s+,", ",");
+    if (raw == null) return null;
+    // iXBRL stores display-formatted dates (the parser reads the human-visible text, not an
+    // ixt: transform), and filers frequently separate month and day with a Unicode space:
+    // non-breaking U+00A0, figure U+2007, or narrow no-break U+202F. Neither Java's \s nor
+    // String.trim() matches these, so e.g. "February 1, 2024" would fail every format
+    // below and fall through unparsed. Normalize them to an ASCII space first.
+    String d = raw.replace((char) 0xA0, ' ').replace((char) 0x2007, ' ').replace((char) 0x202F, ' ')
+        .trim().replaceAll("\\s+", " ").replaceAll("\\s+,", ",");
+    if (d.isEmpty()) return null;
     List<DateTimeFormatter> fmts = new ArrayList<>();
     fmts.add(new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
         .appendPattern("MMMM d, yyyy").toFormatter(Locale.ENGLISH));
@@ -1412,6 +1442,11 @@ public class XbrlToParquetConverter implements FileConverter {
         return YearMonth.parse(d).atDay(1).format(DateTimeFormatter.ISO_LOCAL_DATE);
       } catch (Exception ignored) { }
     }
+    // Every format failed even after Unicode/whitespace normalization. Do not pass the
+    // unparseable value downstream silently: surface it so genuine submitter non-compliance
+    // is diagnosable. Returns the raw value (forgiving — one malformed date must not abort
+    // the filing); this is distinct from a legitimately-absent date, which returns null above.
+    LOGGER.warn("Unparseable date value '{}' — leaving un-normalized", raw);
     return raw;
   }
 
@@ -1428,6 +1463,28 @@ public class XbrlToParquetConverter implements FileConverter {
     if (iso != null && iso.matches("\\d{4}-\\d{2}-\\d{2}")) {
       return "--" + iso.substring(5);
     }
+    // Fiscal-year-end values frequently arrive as month/day with NO year — e.g. "12/31",
+    // "12-31", "1/25", "September 28" — which normalizeDateToIso cannot resolve. Parse these
+    // as a MonthDay and emit the canonical --MM-DD form.
+    String md = s.replace((char) 0xA0, ' ').replace((char) 0x2007, ' ').replace((char) 0x202F, ' ')
+        .trim().replaceAll("\\s+", " ");
+    DateTimeFormatter[] mdFmts = new DateTimeFormatter[] {
+        DateTimeFormatter.ofPattern("MM/dd", Locale.ENGLISH),
+        DateTimeFormatter.ofPattern("M/d", Locale.ENGLISH),
+        DateTimeFormatter.ofPattern("MM-dd", Locale.ENGLISH),
+        DateTimeFormatter.ofPattern("M-d", Locale.ENGLISH),
+        new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
+            .appendPattern("MMMM d").toFormatter(Locale.ENGLISH),
+        new java.time.format.DateTimeFormatterBuilder().parseCaseInsensitive()
+            .appendPattern("MMM d").toFormatter(Locale.ENGLISH)
+    };
+    for (DateTimeFormatter fmt : mdFmts) {
+      try {
+        java.time.MonthDay parsed = java.time.MonthDay.parse(md, fmt);
+        return String.format(Locale.ROOT, "--%02d-%02d", parsed.getMonthValue(), parsed.getDayOfMonth());
+      } catch (Exception ignored) { }
+    }
+    LOGGER.warn("Unparseable fiscal-year-end value '{}' — leaving un-normalized", raw);
     return raw;
   }
 
@@ -1524,7 +1581,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Required data columns (cik and accession_number are in schema)
       data.put("cik", cik);
-      data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+      data.put("accession_number", Objects.requireNonNull(accession,
+          "accession_number missing for CIK " + cik + " — refusing to synthesize a fabricated accession"));
       data.put("filing_date", filingDate);
 
       // Extract year for Iceberg partitioning
@@ -2313,7 +2371,8 @@ public class XbrlToParquetConverter implements FileConverter {
       String cik, String filingType, String filingDate, String accession, String sourcePath) {
 
     List<Map<String, Object>> dataList = new ArrayList<>();
-    String accessionNumber = accession != null ? accession : cik + "-" + filingDate;
+    String accessionNumber = Objects.requireNonNull(accession,
+        "accession missing for CIK " + cik + " — refusing to synthesize a fabricated accession");
     SemanticTextChunker chunker = SemanticTextChunker.forMDA();
 
     // 1. Extract MD&A from HTML using semantic chunking
@@ -5717,7 +5776,8 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Required identifiers for Iceberg materialization
       data.put("cik", cik);
-      data.put("accession_number", accessionNumber != null ? accessionNumber : cik + "-" + filingDate);
+      data.put("accession_number", Objects.requireNonNull(accessionNumber,
+          "accession_number missing for CIK " + cik + " — refusing to synthesize a fabricated accession"));
       data.put("year", year);
 
       // Core identifiers — chunk_id is globally unique: accession + sequence + sha256[:16] of text
@@ -6240,7 +6300,8 @@ public class XbrlToParquetConverter implements FileConverter {
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
     data.put("cik", cik);
-    data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("accession_number", Objects.requireNonNull(accession,
+        "accession_number missing for CIK " + cik + " — refusing to synthesize a fabricated accession"));
     data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
     data.put("year", Integer.parseInt(partitionYear));
@@ -6290,7 +6351,8 @@ public class XbrlToParquetConverter implements FileConverter {
     List<Map<String, Object>> dataList = new ArrayList<>();
     Map<String, Object> data = new HashMap<>();
     data.put("cik", cik);
-    data.put("accession_number", accession != null ? accession : cik + "-" + filingDate);
+    data.put("accession_number", Objects.requireNonNull(accession,
+        "accession_number missing for CIK " + cik + " — refusing to synthesize a fabricated accession"));
     data.put("filing_type", normalizeFilingType(filingType));
     data.put("filing_date", filingDate);
     data.put("year", Integer.parseInt(partitionYear));

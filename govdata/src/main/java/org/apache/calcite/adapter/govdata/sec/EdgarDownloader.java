@@ -384,6 +384,25 @@ public class EdgarDownloader {
     String accessionNoDash = accessionNumber.replace("-", "");
     String cikNoLeadingZeros = cik.replaceFirst("^0+", "");
 
+    // 13F-HR filings carry no XBRL instance — the holdings live in an INFORMATION TABLE xml.
+    // The XBRL suffix patterns below never match, so without this the filing is silently
+    // skipped and institutional_holdings stays empty. Resolve the real document from the
+    // filing index.json instead, then let process13FForm parse the holdings.
+    if (formType != null && (formType.equals("13F-HR") || formType.startsWith("13F-HR/"))) {
+      String infoDoc = find13FInfoTableDoc(cikNoLeadingZeros, accessionNoDash);
+      if (infoDoc != null) {
+        byte[] content = fetchBytes(
+            String.format(Locale.ROOT, XBRL_URL, cikNoLeadingZeros, accessionNoDash, infoDoc));
+        if (content != null && content.length > 100) {
+          storageProvider.writeFile(filePath, content);
+          LOGGER.info("Downloaded 13F information table " + content.length + " bytes: " + filename);
+          return filePath;
+        }
+      }
+      LOGGER.debug("Could not find 13F information table for " + formType + " " + filingDate);
+      return null;
+    }
+
     for (String xbrlDoc : xbrlPatterns) {
       String url =
           String.format(Locale.ROOT, XBRL_URL, cikNoLeadingZeros, accessionNoDash, xbrlDoc);
@@ -439,5 +458,76 @@ public class EdgarDownloader {
 
     LOGGER.debug("Could not find XBRL document for " + formType + " " + filingDate);
     return null;
+  }
+
+  /**
+   * Resolves the INFORMATION TABLE document name for a 13F-HR filing from its index.json.
+   * 13F-HR has no XBRL instance; the holdings are an INFORMATION TABLE xml document, whose
+   * name is not derivable from the primary document, so we read the filing index to find it.
+   */
+  private String find13FInfoTableDoc(String cikNoZeros, String accessionNoDash) {
+    try {
+      byte[] body = fetchBytes(String.format(Locale.ROOT,
+          "https://www.sec.gov/Archives/edgar/data/%s/%s/index.json",
+          cikNoZeros, accessionNoDash));
+      if (body == null) {
+        return null;
+      }
+      JsonNode items = MAPPER.readTree(body).path("directory").path("item");
+      String fallbackXml = null;
+      for (JsonNode item : items) {
+        String name = item.path("name").asText("");
+        String type = item.path("type").asText("");
+        String lower = name.toLowerCase(Locale.ROOT);
+        if ("INFORMATION TABLE".equalsIgnoreCase(type)) {
+          return name;
+        }
+        if (lower.endsWith(".xml")
+            && (lower.contains("infotable") || lower.contains("informationtable")
+                || lower.contains("form13f"))) {
+          return name;
+        }
+        // Last resort: any data xml that is not the cover/primary doc.
+        if (lower.endsWith(".xml") && !lower.contains("primary_doc")
+            && !lower.contains("primarydoc")) {
+          fallbackXml = name;
+        }
+      }
+      return fallbackXml;
+    } catch (Exception e) {
+      LOGGER.debug("13F index lookup failed for " + accessionNoDash + ": " + e.getMessage());
+      return null;
+    }
+  }
+
+  /** Simple GET returning the response body bytes, or null on any non-200 / error. */
+  private byte[] fetchBytes(String url) {
+    try {
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setRequestMethod("GET");
+      conn.setRequestProperty("User-Agent", USER_AGENT);
+      conn.setConnectTimeout(30000);
+      conn.setReadTimeout(30000);
+      try {
+        Thread.sleep(100);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      if (conn.getResponseCode() != 200) {
+        return null;
+      }
+      try (InputStream in = conn.getInputStream();
+           ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+          out.write(buffer, 0, bytesRead);
+        }
+        return out.toByteArray();
+      }
+    } catch (Exception e) {
+      LOGGER.debug("fetchBytes failed for " + url + ": " + e.getMessage());
+      return null;
+    }
   }
 }
