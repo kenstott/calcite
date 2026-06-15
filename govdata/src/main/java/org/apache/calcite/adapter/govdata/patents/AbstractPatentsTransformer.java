@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.patents;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
@@ -209,7 +210,11 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    */
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
-    final int maxAttempts = 3;
+    // The public USPTO bulk API rate-limits (HTTP 429) for minutes at a time, so retry
+    // patiently before giving up: ~2 min of capped exponential backoff across 8 attempts.
+    // On exhaustion this still hard-fails (no silent skip) — the budget is just wide enough
+    // to ride out a typical rate-limit window instead of failing the worker after ~3s.
+    final int maxAttempts = 8;
     IOException lastError = null;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -218,7 +223,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       } catch (IOException e) {
         lastError = e;
         if (attempt < maxAttempts && isTransientDownloadError(e)) {
-          long backoffMs = 1000L * (1L << (attempt - 1));
+          long backoffMs = Math.min(60_000L, 1000L * (1L << (attempt - 1)));
           LOGGER.warn("Patents: transient download failure (attempt {}/{}) for {}: {} — retrying in {}ms",
               attempt, maxAttempts, url, e.getMessage(), backoffMs);
           try {

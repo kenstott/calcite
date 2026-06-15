@@ -13,7 +13,9 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:geo}"
-dataLagYears: 0
+# TIGER {Y} is released ~Sep {Y+1}, so the current year is never published mid-year.
+# Lag by 1 so we request through current_year-1 instead of 404-ing on the current year.
+dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"
 

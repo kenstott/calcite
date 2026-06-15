@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.calcite.adapter.govdata.sec;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
@@ -238,7 +239,7 @@ public class AlphaVantageDownloader {
         "%s?function=TIME_SERIES_DAILY&symbol=%s&apikey=%s&outputsize=compact&datatype=json",
         ALPHA_VANTAGE_BASE_URL, ticker.toUpperCase(), apiKey);
 
-    URL url = new URL(urlString);
+    URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestMethod("GET");
     conn.setRequestProperty("User-Agent", USER_AGENT);

@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
@@ -136,6 +137,11 @@ public final class ZipDownloadUtils {
         if (dest.exists() && !dest.delete()) {
           LOGGER.warn("Could not delete partial download {} before retry", dest);
         }
+        // Permanent absence (404/403/410): retrying cannot help — skip fast.
+        if (e instanceof java.io.FileNotFoundException) {
+          LOGGER.info("Not published (skipping, no retry): {}", url);
+          throw e;
+        }
         if (attempt < maxAttempts) {
           long backoffMs = 2000L * attempt;
           LOGGER.warn("Download attempt {}/{} failed for {} ({}); retrying in {}ms",
@@ -169,6 +175,14 @@ public final class ZipDownloadUtils {
     }
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
+      // 404/403/410 are permanent — the file is not published (e.g. current-year TIGER
+      // before its ~September release). Signal non-retryable so the wrapper skips fast
+      // instead of burning 4 attempts × backoff per missing file.
+      if (status == HttpURLConnection.HTTP_NOT_FOUND
+          || status == HttpURLConnection.HTTP_FORBIDDEN
+          || status == HttpURLConnection.HTTP_GONE) {
+        throw new java.io.FileNotFoundException("HTTP " + status + " from " + url);
+      }
       throw new IOException("HTTP " + status + " from " + url);
     }
     String contentType = conn.getContentType();

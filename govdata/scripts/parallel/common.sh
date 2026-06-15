@@ -958,6 +958,9 @@ get_timeout_config() {
     lands)        echo 240 ;;  # forest inventory biennial, large parcels
     census)       echo 240 ;;  # ACS 5-year span
     energy)       echo 180 ;;  # SEDS multi-year
+    patents)      echo 480 ;;  # full bulk dumps (g_patent.tsv, owner.csv ~700MB each) + summaries
+    sec_prices)   echo 240 ;;  # Stooq bulk: 508MB zip + ~22M-row materialize
+    cftc)         echo 240 ;;  # large derivatives history
     *)            echo 60  ;;  # default: 1 hour idle
   esac
 }
