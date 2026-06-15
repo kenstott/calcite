@@ -1151,19 +1151,22 @@ partitionedTables:
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.geo.TigerDataProvider"
-      # Field normalizer handles vintage-specific field names (2010 vs 2020 census):
-      # - GEOID10/GEOID20 -> puma_code
+      # Field normalizer handles vintage-specific field names (2010 vs 2020 census).
+      # NOTE: this block is documentation only — the authoritative mappings live in
+      # TigerFieldNormalizer.TABLE_CONFIGS; the YAML fieldNormalizer key is not read by code.
+      # Keep these in sync with that class.
+      # - PUMACE10/PUMACE20 -> puma_code
       # - STATEFP10/STATEFP20 -> state_fips
       # - NAMELSAD10/NAMELSAD20 -> puma_name
       fieldNormalizer:
         type: vintage
         table: pumas
         mappings:
-          puma_code: [GEOID20, GEOID10, GEOID]
+          puma_code: [PUMACE20, PUMACE10, PUMACE]
           state_fips: [STATEFP20, STATEFP10, STATEFP]
           puma_name: [NAMELSAD20, NAMELSAD10, NAMELSAD]
-          land_area: [ALAND20, ALAND]
-          water_area: [AWATER20, AWATER]
+          land_area: [ALAND20, ALAND10, ALAND]
+          water_area: [AWATER20, AWATER10, AWATER]
 
     materialize:
       format: iceberg
