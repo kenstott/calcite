@@ -1753,10 +1753,11 @@ partitionedTables:
         type: string
         nullable: true
         comment: Census region name
-        # Map region code (series_id positions 10-11) to name. No ELSE default: an unmapped
-        # code is a contract violation (wrong slice / unexpected series), so it becomes NULL
-        # and is surfaced by the null/all-same DQ checks rather than masked as 'Unknown'.
-        expression: "CASE SUBSTRING(series_id, 10, 2) WHEN '00' THEN 'United States' WHEN 'NE' THEN 'Northeast' WHEN 'MW' THEN 'Midwest' WHEN 'SO' THEN 'South' WHEN 'WE' THEN 'West' END"
+        # Friendly name for the known geographies; JOLTS also publishes state-level series, so
+        # for any other code at positions 10-11 (state FIPS like 01/02/...56) capture the raw
+        # code AS-IS — never NULL or a fabricated 'Unknown'. This retains every series and needs
+        # no exhaustive name list; region_code holds the raw value either way.
+        expression: "CASE SUBSTRING(series_id, 10, 2) WHEN '00' THEN 'United States' WHEN 'NE' THEN 'Northeast' WHEN 'MW' THEN 'Midwest' WHEN 'SO' THEN 'South' WHEN 'WE' THEN 'West' ELSE SUBSTRING(series_id, 10, 2) END"
       - name: metric_type
         type: string
         nullable: true
@@ -1801,11 +1802,13 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-      # Filter to regional data only (national aggregate 00 and Census regions NE, MW, SO, WE)
-      # Series ID format: JTS{region}{industry}{element} - region is positions 4-5
+      # Filter to regional data only: industry=000000 (positions 4-9) AND a region/national code
+      # at positions 10-11 (00=national, NE/MW/SO/WE=Census regions). Series ID layout:
+      # JTS{industry:4-9}{geo:10-11}{area:12-16}{sizeclass:17-18}{element+rate:19-21}.
+      # Excludes the state-FIPS rows (01-56) — those are captured by jolts_state.
       rowFilter:
         column: series_id
-        pattern: "^JTS(00|NE|MW|SO|WE).*$"
+        pattern: "^JTS000000(00|NE|MW|SO|WE).*$"
 
     # Materialization configuration
     materialize:
@@ -1813,6 +1816,130 @@ partitionedTables:
       format: iceberg
       output:
         pattern: "type=jolts_regional/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year, metric]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [year, metric]
+        incrementalKeys: [year, metric]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 1048576  # 1MB
+        targetFileSizeBytes: 134217728
+
+  # --- JOLTS INDUSTRY (national industry detail) ---
+  - name: jolts_industry
+    pattern: "type=jolts_industry/frequency=*/year=*/jolts_industry.parquet"
+    partitions: *standard_partitions
+    sourcePaths:
+      ftpFiles:
+        - cachePath: "type=jolts_ftp/jt.series"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.series"
+          comment: JOLTS series definitions
+        - cachePath: "type=jolts_ftp/jt.data.2.JobOpenings"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.data.2.JobOpenings"
+          comment: Job openings data
+        - cachePath: "type=jolts_ftp/jt.data.3.Hires"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.data.3.Hires"
+          comment: Hires data
+        - cachePath: "type=jolts_ftp/jt.data.4.TotalSeparations"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.data.4.TotalSeparations"
+          comment: Total separations data
+        - cachePath: "type=jolts_ftp/jt.data.5.Quits"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.data.5.Quits"
+          comment: Quits data
+        - cachePath: "type=jolts_ftp/jt.data.6.LayoffsDischarges"
+          url: "https://download.bls.gov/pub/time.series/jt/jt.data.6.LayoffsDischarges"
+          comment: Layoffs and discharges data
+    comment: >
+      Job Openings and Labor Turnover Survey (JOLTS) data by industry sector at the national
+      level. Tracks job openings, hires, total separations, quits, and layoffs/discharges
+      (rates and levels) per JOLTS industry. Series ID encodes the industry at positions 4-9
+      with national geography (state=00) at positions 10-11.
+    columns:
+      # Series ID: JTS{industry:4-9}{state:10-11}{area:12-16}{sizeclass:17-18}{element+rate:19-21}
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: JOLTS industry code at series_id positions 4-9 (000000 = total nonfarm, excluded here)
+        expression: "SUBSTRING(src.series_id, 4, 6)"
+      - name: year
+        type: int
+        nullable: true
+        comment: Year
+        source: year
+      - name: date
+        type: string
+        nullable: true
+        comment: Observation date - period field (M01, M02, etc.)
+        source: period
+      - name: series
+        type: string
+        nullable: true
+        comment: BLS series identifier
+        source: series_id
+      - name: metric_type
+        type: string
+        nullable: true
+        comment: "JOLTS metric code (last 3 chars - element + rate/level, e.g. JOR, HIR, HIL)"
+        expression: "RIGHT(src.series_id, 3)"
+      - name: value
+        type: double
+        nullable: true
+        comment: JOLTS metric value (levels in thousands, rates as percentage)
+        source: value
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - jolts_industry
+      frequency:
+        - monthly
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: current
+      metric:
+        - "2.JobOpenings"
+        - "3.Hires"
+        - "4.TotalSeparations"
+        - "5.Quits"
+        - "6.LayoffsDischarges"
+
+    # HTTP Source configuration for EtlPipeline (FTP files)
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/jt/jt.data.{metric}"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # Filter to national industry detail: industry != 000000 (positions 4-9; non-total codes
+      # start with a non-zero leading digit) AND national geography state=00 at positions 10-11.
+      rowFilter:
+        column: series_id
+        pattern: "^JTS[1-9][0-9]{5}00.*$"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=jolts_industry/frequency=*/year=*/"
       partition:
         columns: [type, frequency, year, metric]
       options:
@@ -1864,13 +1991,13 @@ partitionedTables:
       - name: state_fips
         type: string
         nullable: true
-        comment: State FIPS code (positions 4-5 of series_id, after JTS prefix)
-        expression: "SUBSTRING(src.series_id, 4, 2)"
+        comment: State FIPS code at series_id positions 10-11 (positions 4-9 are the industry field)
+        expression: "SUBSTRING(src.series_id, 10, 2)"
       - name: state_name
         type: string
         nullable: true
-        comment: State name derived from the state FIPS encoded in series_id (positions 4-5)
-        expression: "CASE SUBSTRING(src.series_id, 4, 2) WHEN '00' THEN 'United States' WHEN '01' THEN 'Alabama' WHEN '02' THEN 'Alaska' WHEN '04' THEN 'Arizona' WHEN '05' THEN 'Arkansas' WHEN '06' THEN 'California' WHEN '08' THEN 'Colorado' WHEN '09' THEN 'Connecticut' WHEN '10' THEN 'Delaware' WHEN '11' THEN 'District of Columbia' WHEN '12' THEN 'Florida' WHEN '13' THEN 'Georgia' WHEN '15' THEN 'Hawaii' WHEN '16' THEN 'Idaho' WHEN '17' THEN 'Illinois' WHEN '18' THEN 'Indiana' WHEN '19' THEN 'Iowa' WHEN '20' THEN 'Kansas' WHEN '21' THEN 'Kentucky' WHEN '22' THEN 'Louisiana' WHEN '23' THEN 'Maine' WHEN '24' THEN 'Maryland' WHEN '25' THEN 'Massachusetts' WHEN '26' THEN 'Michigan' WHEN '27' THEN 'Minnesota' WHEN '28' THEN 'Mississippi' WHEN '29' THEN 'Missouri' WHEN '30' THEN 'Montana' WHEN '31' THEN 'Nebraska' WHEN '32' THEN 'Nevada' WHEN '33' THEN 'New Hampshire' WHEN '34' THEN 'New Jersey' WHEN '35' THEN 'New Mexico' WHEN '36' THEN 'New York' WHEN '37' THEN 'North Carolina' WHEN '38' THEN 'North Dakota' WHEN '39' THEN 'Ohio' WHEN '40' THEN 'Oklahoma' WHEN '41' THEN 'Oregon' WHEN '42' THEN 'Pennsylvania' WHEN '44' THEN 'Rhode Island' WHEN '45' THEN 'South Carolina' WHEN '46' THEN 'South Dakota' WHEN '47' THEN 'Tennessee' WHEN '48' THEN 'Texas' WHEN '49' THEN 'Utah' WHEN '50' THEN 'Vermont' WHEN '51' THEN 'Virginia' WHEN '53' THEN 'Washington' WHEN '54' THEN 'West Virginia' WHEN '55' THEN 'Wisconsin' WHEN '56' THEN 'Wyoming' WHEN '72' THEN 'Puerto Rico' ELSE 'Unknown' END"
+        comment: State name from the state FIPS at series_id positions 10-11; unmapped codes captured as-is
+        expression: "CASE SUBSTRING(src.series_id, 10, 2) WHEN '00' THEN 'United States' WHEN '01' THEN 'Alabama' WHEN '02' THEN 'Alaska' WHEN '04' THEN 'Arizona' WHEN '05' THEN 'Arkansas' WHEN '06' THEN 'California' WHEN '08' THEN 'Colorado' WHEN '09' THEN 'Connecticut' WHEN '10' THEN 'Delaware' WHEN '11' THEN 'District of Columbia' WHEN '12' THEN 'Florida' WHEN '13' THEN 'Georgia' WHEN '15' THEN 'Hawaii' WHEN '16' THEN 'Idaho' WHEN '17' THEN 'Illinois' WHEN '18' THEN 'Indiana' WHEN '19' THEN 'Iowa' WHEN '20' THEN 'Kansas' WHEN '21' THEN 'Kentucky' WHEN '22' THEN 'Louisiana' WHEN '23' THEN 'Maine' WHEN '24' THEN 'Maryland' WHEN '25' THEN 'Massachusetts' WHEN '26' THEN 'Michigan' WHEN '27' THEN 'Minnesota' WHEN '28' THEN 'Mississippi' WHEN '29' THEN 'Missouri' WHEN '30' THEN 'Montana' WHEN '31' THEN 'Nebraska' WHEN '32' THEN 'Nevada' WHEN '33' THEN 'New Hampshire' WHEN '34' THEN 'New Jersey' WHEN '35' THEN 'New Mexico' WHEN '36' THEN 'New York' WHEN '37' THEN 'North Carolina' WHEN '38' THEN 'North Dakota' WHEN '39' THEN 'Ohio' WHEN '40' THEN 'Oklahoma' WHEN '41' THEN 'Oregon' WHEN '42' THEN 'Pennsylvania' WHEN '44' THEN 'Rhode Island' WHEN '45' THEN 'South Carolina' WHEN '46' THEN 'South Dakota' WHEN '47' THEN 'Tennessee' WHEN '48' THEN 'Texas' WHEN '49' THEN 'Utah' WHEN '50' THEN 'Vermont' WHEN '51' THEN 'Virginia' WHEN '53' THEN 'Washington' WHEN '54' THEN 'West Virginia' WHEN '55' THEN 'Wisconsin' WHEN '56' THEN 'Wyoming' WHEN '72' THEN 'Puerto Rico' ELSE SUBSTRING(src.series_id, 10, 2) END"
       - name: year
         type: int
         nullable: true
@@ -1929,12 +2056,11 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-      # Filter to state-level data only (exclude national aggregate where state FIPS = 00)
-      # Series ID format: JTS{state}{industry}{element} - state is positions 4-5
-      # Pattern matches JTS followed by 01-99 (any state except 00)
+      # Filter to state-level data only: industry=000000 (positions 4-9) AND a state FIPS code at
+      # positions 10-11 (01-99 — excludes national 00 and the alpha region codes NE/MW/SO/WE).
       rowFilter:
         column: series_id
-        pattern: "^JTS(?:0[1-9]|[1-9][0-9]).*$"
+        pattern: "^JTS000000(?:0[1-9]|[1-9][0-9]).*$"
 
     # No responseTransformer - using inline expressions instead
     # (responseTransformer only works for JSON responses, not CSV/TSV from FTP)
@@ -4477,6 +4603,12 @@ constraints:
         comment: Links county wage data to state-level geography for state-aggregated analysis
 
   jolts_regional:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
+  jolts_industry:
     primaryKey:
       - type
       - frequency
