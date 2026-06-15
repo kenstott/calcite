@@ -72,6 +72,10 @@ public class SparkConfig {
    * @param configMap configuration map with Spark settings
    */
   public SparkConfig(Map<String, Object> configMap) {
+    // Legitimate defaults: optional connection-tuning knobs with documented DEFAULT_*
+    // constants targeting a standard local Spark deployment. Omission is a supported,
+    // specified case, not a missing-required value. Credentials (user/password) and
+    // resource hints (icebergWarehouse/maxMemory) intentionally have no default and stay null.
     this.host = (String) configMap.getOrDefault("host", DEFAULT_HOST);
 
     Object portObj = configMap.get("port");

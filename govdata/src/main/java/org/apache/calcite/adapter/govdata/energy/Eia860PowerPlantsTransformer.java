@@ -20,8 +20,10 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -35,7 +37,8 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     // iterates the current year but dataLag maps it to the latest available EIA-860
     // archive (e.g. 2023). The schema URL is templated with {effective_year} to match.
     String yearStr = dims != null ? dims.get("effective_year") : null;
-    String year = yearStr != null ? yearStr : "";
+    String year = Objects.requireNonNull(yearStr,
+        "effective_year dimension missing — contract violation");
     int yearInt = 0;
     try { yearInt = Integer.parseInt(year); } catch (NumberFormatException e) { /* yearInt stays 0 */ }
 
@@ -43,12 +46,22 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     if (yearInt >= 2024) {
       url = url.replace("/archive/xls/", "/xls/");
     }
+    byte[] zipBytes;
     try {
-      byte[] zipBytes = downloadBytes(url);
+      zipBytes = downloadBytes(url);
+    } catch (IOException e) {
+      // Archive genuinely absent (e.g. a year EIA has not yet published): legitimate
+      // "no data" signal — emit an empty result rather than failing the run.
+      LOGGER.warn("EIA-860: archive not found at {} ({}); treating as no data", url, e.getMessage());
+      return "[]";
+    }
+    try {
       return parseEia860Zip(zipBytes, year);
     } catch (Exception e) {
-      LOGGER.error("Failed to parse EIA-860 ZIP from {}: {}", url, e.getMessage());
-      return "[]";
+      // The ZIP was downloaded but could not be parsed: that is corruption, not absence.
+      // Surface it as a hard failure instead of silently emitting an empty result.
+      throw new RuntimeException(
+          "EIA-860 archive present but unparseable from " + url + ": " + e.getMessage(), e);
     }
   }
 
@@ -74,12 +87,12 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     }
 
     if (plantBytes == null) {
-      LOGGER.warn("EIA-860: Plant file not found in ZIP for year {}", year);
-      return "[]";
+      throw new IOException("EIA-860 archive present but unparseable/missing expected entries: "
+          + "plant file (2___plant_y*.xlsx) not found in ZIP for year " + year);
     }
     if (generatorBytes == null) {
-      LOGGER.warn("EIA-860: Generator file not found in ZIP for year {}", year);
-      return "[]";
+      throw new IOException("EIA-860 archive present but unparseable/missing expected entries: "
+          + "generator file (3_1_generator_y*.xlsx) not found in ZIP for year " + year);
     }
 
     Map<String, Map<String, String>> plantData = parsePlantFile(plantBytes);

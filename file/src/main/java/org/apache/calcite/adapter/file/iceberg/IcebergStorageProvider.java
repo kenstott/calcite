@@ -45,6 +45,9 @@ public class IcebergStorageProvider implements StorageProvider {
 
     // Initialize catalog if needed
     if (catalog == null) {
+      // Legitimate default: catalogType is an optional Iceberg setting; "hadoop" (HadoopCatalog,
+      // filesystem-backed) is the documented default catalog for this provider, so omission is a
+      // supported case rather than a missing-required value.
       String catalogType = (String) config.getOrDefault("catalogType", "hadoop");
       catalog = IcebergCatalogManager.getCatalogForProvider(catalogType, config);
     }

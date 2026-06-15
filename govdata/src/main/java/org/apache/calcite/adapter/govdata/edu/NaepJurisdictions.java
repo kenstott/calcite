@@ -92,13 +92,21 @@ final class NaepJurisdictions {
    * Maps a NAEP jurisdiction code to an integer FIPS code.
    *
    * @param jurisdiction NAEP code: "NP" for national-public, 2-letter state abbreviation otherwise
-   * @return FIPS integer (0 for national-public or unknown), state FIPS for known state codes
+   * @return 0 for the national-public (NP) aggregate, the state FIPS integer for known state codes
+   * @throws IllegalArgumentException if the code has no FIPS mapping (unknown jurisdiction)
    */
   static int toFips(String jurisdiction) {
     if (jurisdiction == null || "NP".equals(jurisdiction)) {
+      // 0 is reserved for the national-public (NP) aggregate, not a sentinel for "unknown".
       return 0;
     }
     Integer fips = ABBR_TO_FIPS.get(jurisdiction.toUpperCase());
-    return fips != null ? fips : 0;
+    if (fips == null) {
+      // Do NOT fall back to 0 here: that would collide with the NP aggregate and corrupt
+      // the geo.states join. An unmapped code is a contract violation, not a data value.
+      throw new IllegalArgumentException(
+          "Unknown NAEP jurisdiction code (no FIPS mapping): " + jurisdiction);
+    }
+    return fips;
   }
 }

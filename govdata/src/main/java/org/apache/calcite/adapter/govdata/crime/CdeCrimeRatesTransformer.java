@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Transforms FBI CDE summarized offense rate responses into flat monthly rows.
@@ -76,7 +77,8 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
   }
 
   private String transformSectionedResponse(JsonNode root, RequestContext context) {
-    String stateAbbr = context.getDimensionValues().get("state_abbr");
+    String stateAbbr = Objects.requireNonNull(context.getDimensionValues().get("state_abbr"),
+        "state_abbr dimension missing — contract violation");
     String offenseCode = context.getDimensionValues().get("offense");
 
     ArrayNode result = MAPPER.createArrayNode();
@@ -126,7 +128,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
       String month = monthEntry.getKey();
 
       ObjectNode row = MAPPER.createObjectNode();
-      row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
+      row.put("state_abbr", stateAbbr);
       row.put("offense_code", offenseCode != null ? offenseCode : "");
       row.put("month", month);
       putDoubleFromMap(row, "offense_rate", stateOffenseRates, month);
@@ -185,13 +187,14 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
   }
 
   private String transformArrayResponse(JsonNode root, RequestContext context) {
-    String stateAbbr = context.getDimensionValues().get("state_abbr");
+    String stateAbbr = Objects.requireNonNull(context.getDimensionValues().get("state_abbr"),
+        "state_abbr dimension missing — contract violation");
     String offenseCode = context.getDimensionValues().get("offense");
 
     ArrayNode result = MAPPER.createArrayNode();
     for (JsonNode item : root) {
       ObjectNode row = MAPPER.createObjectNode();
-      row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
+      row.put("state_abbr", stateAbbr);
       row.put("offense_code", offenseCode != null ? offenseCode : "");
       Iterator<Map.Entry<String, JsonNode>> fields = item.fields();
       while (fields.hasNext()) {
@@ -204,7 +207,8 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
   }
 
   private String transformObjectResponse(JsonNode root, RequestContext context) {
-    String stateAbbr = context.getDimensionValues().get("state_abbr");
+    String stateAbbr = Objects.requireNonNull(context.getDimensionValues().get("state_abbr"),
+        "state_abbr dimension missing — contract violation");
     String offenseCode = context.getDimensionValues().get("offense");
 
     ArrayNode result = MAPPER.createArrayNode();
@@ -225,7 +229,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
         }
         if (value.isObject()) {
           ObjectNode row = MAPPER.createObjectNode();
-          row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
+          row.put("state_abbr", stateAbbr);
           row.put("offense_code", offenseCode != null ? offenseCode : "");
           row.put("month", key);
           copyNumericFields(row, value);
@@ -242,7 +246,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
 
   private ObjectNode buildRow(JsonNode item, String stateAbbr, String offenseCode) {
     ObjectNode row = MAPPER.createObjectNode();
-    row.put("state_abbr", stateAbbr != null ? stateAbbr : "");
+    row.put("state_abbr", stateAbbr);
     row.put("offense_code", offenseCode != null ? offenseCode : "");
     putStringField(row, "month", item, "date", "month");
     putDoubleField(row, "offense_rate", item, "rate", "offense_rate", "actual_rate");

@@ -113,14 +113,14 @@ class WeatherExtSmokeTest {
     assertEquals("2022-01-01", day1.get("date").asText());
     assertEquals("01", day1.get("state_fips").asText());
     assertEquals(2022, day1.get("year").intValue());
-    assertEquals(11.1, day1.get("tmax_c").doubleValue(), 0.01);
-    assertEquals(2.2, day1.get("tmin_c").doubleValue(), 0.01);
+    assertEquals(1.11, day1.get("tmax_c").doubleValue(), 0.01, "11.1 tenths °C -> 1.11°C");
+    assertEquals(0.22, day1.get("tmin_c").doubleValue(), 0.01, "2.2 tenths °C -> 0.22°C");
     assertEquals(0.0, day1.get("prcp_mm").doubleValue(), 0.001);
     assertEquals("T,,S,", day1.get("prcp_flag").asText());
 
     JsonNode day2 = rows.get(1);
     assertEquals("2022-01-02", day2.get("date").asText());
-    assertEquals(14.4, day2.get("tmax_c").doubleValue(), 0.01);
+    assertEquals(1.44, day2.get("tmax_c").doubleValue(), 0.01, "14.4 tenths °C -> 1.44°C");
     assertTrue(day2.get("tmin_c").isNull(), "tmin_c should be null for day2");
   }
 

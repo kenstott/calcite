@@ -512,9 +512,9 @@ public class DimensionIterator {
       List<String> values =
           dimensionResolver.resolve(config.getName(), config, context, storageProvider);
       if (values == null) {
-        LOGGER.warn("DimensionResolver returned null for '{}' with context {}, using empty list",
-            config.getName(), context);
-        return Collections.emptyList();
+        throw new IllegalStateException(
+            "DimensionResolver for dimension '" + config.getName()
+            + "' returned null; a resolver with no values must return an empty list, not null");
       }
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("Custom dimension '{}' resolved to {} values for context {}",
@@ -559,9 +559,8 @@ public class DimensionIterator {
         return CalendarPeriodProvider.values(config.getType(), config.getWeekYear(),
             Collections.<String, String>emptyMap(), todayUtc());
       default:
-        LOGGER.warn("Unknown dimension type '{}' for '{}', using empty list",
-            config.getType(), config.getName());
-        return Collections.emptyList();
+        throw new IllegalStateException("Unknown dimension type '" + config.getType()
+            + "' for dimension '" + config.getName() + "'");
     }
   }
 
@@ -836,8 +835,8 @@ public class DimensionIterator {
     String path = config.getPath();
 
     if (source == null || source.isEmpty()) {
-      LOGGER.warn("JSON catalog dimension '{}' has no source", config.getName());
-      return Collections.emptyList();
+      throw new IllegalStateException(
+          "JSON_CATALOG dimension '" + config.getName() + "' has no source configured");
     }
 
     try {

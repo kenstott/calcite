@@ -88,6 +88,8 @@ public class HttpConfig {
    */
   @SuppressWarnings("unchecked")
   public static HttpConfig fromMap(Map<String, Object> config) {
+    // Legitimate default: "method" is optional; GET is the conventional HTTP default verb,
+    // so an omitted key is a supported case rather than a missing-required value.
     String method = (String) config.getOrDefault("method", "GET");
     String body = (String) config.get("body");
     String mimeType = (String) config.get("mimeType");

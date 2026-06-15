@@ -73,6 +73,10 @@ public class ClickHouseConfig {
    * @param configMap configuration map with ClickHouse settings
    */
   public ClickHouseConfig(Map<String, Object> configMap) {
+    // Legitimate defaults: optional connection/resource knobs with documented DEFAULT_*
+    // constants targeting a standard local ClickHouse deployment. Omission is a supported,
+    // specified case, not a missing-required value. Path hints (localBinaryPath/dataDir)
+    // intentionally have no default and stay null when absent.
     this.mode = (String) configMap.getOrDefault("mode", DEFAULT_MODE);
     this.host = (String) configMap.getOrDefault("host", DEFAULT_HOST);
 

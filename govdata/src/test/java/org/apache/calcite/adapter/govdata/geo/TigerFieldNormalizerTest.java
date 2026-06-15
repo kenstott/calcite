@@ -74,11 +74,12 @@ class TigerFieldNormalizerTest {
   @Test
   void testGetConfiguredTables() {
     List<String> tables = TigerFieldNormalizer.getConfiguredTables();
-    assertEquals(4, tables.size());
+    assertEquals(5, tables.size());
     assertTrue(tables.contains("zctas"));
     assertTrue(tables.contains("urban_areas"));
     assertTrue(tables.contains("pumas"));
     assertTrue(tables.contains("voting_districts"));
+    assertTrue(tables.contains("tribal_areas"));
   }
 
   @Test
@@ -213,13 +214,13 @@ class TigerFieldNormalizerTest {
     TigerFieldNormalizer normalizer = TigerFieldNormalizer.forTable("pumas", 2022);
     
     TigerShapefileParser.ShapefileFeature feature = createFeature(
-        "GEOID20", "0600101",
+        "PUMACE20", "00101",
         "STATEFP20", "06",
         "NAMELSAD20", "San Francisco County (North)--Marina PUMA",
         "ALAND20", 123456789.0
     );
-    
-    assertEquals("0600101", normalizer.getStringField(feature, "puma_code"));
+
+    assertEquals("00101", normalizer.getStringField(feature, "puma_code"));
     assertEquals("06", normalizer.getStringField(feature, "state_fips"));
     assertEquals("San Francisco County (North)--Marina PUMA", 
         normalizer.getStringField(feature, "puma_name"));
@@ -231,12 +232,12 @@ class TigerFieldNormalizerTest {
     assertEquals(TigerFieldNormalizer.VINTAGE_2010, normalizer.getExpectedVintage());
     
     TigerShapefileParser.ShapefileFeature feature = createFeature(
-        "GEOID10", "0600101",
+        "PUMACE10", "00101",
         "STATEFP10", "06",
         "NAMELSAD10", "San Francisco County PUMA"
     );
-    
-    assertEquals("0600101", normalizer.getStringField(feature, "puma_code"));
+
+    assertEquals("00101", normalizer.getStringField(feature, "puma_code"));
     assertEquals("06", normalizer.getStringField(feature, "state_fips"));
   }
 
