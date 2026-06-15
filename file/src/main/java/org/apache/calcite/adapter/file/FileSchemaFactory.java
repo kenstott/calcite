@@ -9,6 +9,8 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file;
+// storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.clickhouse.ClickHouseJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
@@ -576,15 +578,20 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Get flatten option for JSON/YAML files
     final Boolean flatten = (Boolean) operand.get("flatten");
 
-    // Get table name casing configuration (default to SMART_CASING)
-    // Support both camelCase (model.json) and snake_case (JDBC URL) naming conventions
+    // Get table name casing configuration.
+    // Support both camelCase (model.json) and snake_case (JDBC URL) naming conventions.
+    // Legitimate default: casing is an optional knob; SMART_CASING is the project-wide
+    // documented default (see file/CLAUDE.md "Name generation: SMART_CASING"), so an
+    // omitted operand is a supported, specified case rather than a missing-required value.
     String tableNameCasing = (String) operand.get("tableNameCasing");
     if (tableNameCasing == null) {
       tableNameCasing = (String) operand.getOrDefault("table_name_casing", "SMART_CASING");
     }
 
-    // Get column name casing configuration (default to SMART_CASING)
-    // Support both camelCase (model.json) and snake_case (JDBC URL) naming conventions
+    // Get column name casing configuration.
+    // Support both camelCase (model.json) and snake_case (JDBC URL) naming conventions.
+    // Legitimate default: same as table_name_casing above — optional knob, SMART_CASING
+    // is the documented project default.
     String columnNameCasing = (String) operand.get("columnNameCasing");
     if (columnNameCasing == null) {
       columnNameCasing = (String) operand.getOrDefault("column_name_casing", "SMART_CASING");

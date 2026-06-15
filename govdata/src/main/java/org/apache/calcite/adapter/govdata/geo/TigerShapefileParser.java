@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.geo;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;

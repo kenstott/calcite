@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.sec;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
@@ -71,7 +72,11 @@ public class StooqBulkProxy {
   public StooqBulkProxy(String bulkZipS3Path, String localCacheDir,
                         StorageProvider storageProvider) {
     this.bulkZipS3Path = bulkZipS3Path;
-    this.localCacheDir = localCacheDir;
+    // The bulk zip is downloaded, unzipped and queried via DuckDB's zipfs extension, all of
+    // which require a real local file. When the configured cache dir is an object-store URI
+    // (e.g. s3://govdata-raw-v1/sec/sec/stock_price_seed) map it to a local temp path so the
+    // download does not create a literal "s3:/" directory under the working dir.
+    this.localCacheDir = org.apache.calcite.adapter.govdata.LocalCacheDirs.toLocal(localCacheDir);
     this.storageProvider = storageProvider;
     this.tickerIndex = null;  // Lazy initialization
   }

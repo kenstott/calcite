@@ -80,10 +80,14 @@ public class DuckDBCacheStore implements AutoCloseable {
    * @return DuckDBCacheStore instance
    */
   public static DuckDBCacheStore getInstance(String schemaName, String cacheDir) {
+    // A DuckDB database file must live on the local filesystem; when the govdata cache
+    // directory is an object-store URI (e.g. s3://govdata-raw-v1/sec) it is mapped to a
+    // local temp path so File/getAbsolutePath cannot create a literal "s3:/" directory.
+    String localCacheDir = LocalCacheDirs.toLocal(cacheDir);
     // Use schema-specific filename to match constructor
-    String key = new File(cacheDir, "cache_" + schemaName + ".duckdb").getAbsolutePath();
+    String key = new File(localCacheDir, "cache_" + schemaName + ".duckdb").getAbsolutePath();
     return OPEN_STORES.computeIfAbsent(key, k -> {
-      DuckDBCacheStore store = new DuckDBCacheStore(schemaName, cacheDir);
+      DuckDBCacheStore store = new DuckDBCacheStore(schemaName, localCacheDir);
       store.initialize();
       return store;
     });

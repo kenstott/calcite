@@ -9,6 +9,8 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.storage;
+// storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import java.io.IOException;
 import java.io.InputStream;

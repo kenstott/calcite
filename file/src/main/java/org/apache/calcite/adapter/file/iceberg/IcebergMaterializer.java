@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.iceberg;
+// storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
@@ -1944,13 +1945,13 @@ public class IcebergMaterializer {
     // Find the opening paren
     int openParen = rowFilter.indexOf('(', cikInIdx);
     if (openParen < 0) {
-      return Collections.emptySet();
+      throw new IllegalStateException("Malformed CIK filter in rowFilter: " + rowFilter);
     }
 
     // Find the closing paren
     int closeParen = rowFilter.indexOf(')', openParen);
     if (closeParen < 0) {
-      return Collections.emptySet();
+      throw new IllegalStateException("Malformed CIK filter in rowFilter: " + rowFilter);
     }
 
     // Parse the values between parens: '0000320193', '0000004962', ...

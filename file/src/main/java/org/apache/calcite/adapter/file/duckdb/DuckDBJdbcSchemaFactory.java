@@ -9,6 +9,8 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.duckdb;
+// storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
+// storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;

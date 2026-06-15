@@ -28,6 +28,10 @@ import java.util.List;
 
 /**
  * Storage provider implementation for local filesystem access.
+ *
+ * <p>storage-provider-guard:ignore-file — this IS the local-filesystem StorageProvider
+ * implementation; direct java.io.File / java.nio.file usage is its entire purpose, not a
+ * bypass of the abstraction.
  */
 public class LocalFileStorageProvider implements StorageProvider {
 

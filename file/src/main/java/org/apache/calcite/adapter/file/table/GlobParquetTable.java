@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.table;
+// storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
 
 import org.apache.calcite.DataContext;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;

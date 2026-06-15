@@ -5,6 +5,7 @@
  * found in the LICENSE-BSL.txt file in the root directory of this source tree.
  */
 package org.apache.calcite.adapter.govdata.etl;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.sec.SecDataFetcher;

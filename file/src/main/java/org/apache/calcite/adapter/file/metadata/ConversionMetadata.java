@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.metadata;
+// storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
 
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;

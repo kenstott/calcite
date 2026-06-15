@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.execution.trino;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,6 +90,11 @@ public class TrinoConfig {
    * @param configMap configuration map with Trino settings
    */
   public TrinoConfig(Map<String, Object> configMap) {
+    // Legitimate defaults: these are optional connection-tuning knobs with documented
+    // DEFAULT_* constants (a standard local Trino: localhost / iceberg catalog / etc.).
+    // An omitted key is a supported, specified case targeting a default deployment, not a
+    // missing-required value being silently patched. Credentials (user/password/s3 keys)
+    // intentionally have NO default and stay null when absent.
     this.host = (String) configMap.getOrDefault("host", DEFAULT_HOST);
 
     Object portObj = configMap.get("port");

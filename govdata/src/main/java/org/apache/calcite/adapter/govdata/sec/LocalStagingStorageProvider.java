@@ -56,6 +56,10 @@ import java.util.regex.Pattern;
  * <p>Controlled by environment variable {@code ETL_BATCH_FLUSH_SIZE} (default: 100).
  * Staging directory: {@code $ETL_LOCAL_RAW_CACHE/sec/staging}
  * (default: {@code /tmp/etl-sec-staging} when {@code ETL_LOCAL_RAW_CACHE} is unset).
+ *
+ * <p>storage-provider-guard:ignore-file — by design this wrapper stages writes on the
+ * local filesystem before merge-uploading through the delegate provider; local
+ * java.io.File / java.nio.file usage is its entire purpose.
  */
 public class LocalStagingStorageProvider implements StorageProvider {
 

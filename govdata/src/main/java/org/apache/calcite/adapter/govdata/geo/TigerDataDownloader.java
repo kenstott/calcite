@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.geo;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
@@ -1780,8 +1781,10 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     }
 
     if (storageProvider == null) {
-      LOGGER.error("StorageProvider is null, cannot convert to Parquet");
-      return;
+      // StorageProvider is a required invariant; fail fast rather than silently skipping
+      // the conversion (which would leave the TIGER table empty — a rule-6 fallback).
+      throw new IllegalStateException(
+          "StorageProvider is required to convert TIGER data to Parquet");
     }
 
     LOGGER.info("Converting TIGER data from {} to parquet: {}", sourceDir, targetFilePath);

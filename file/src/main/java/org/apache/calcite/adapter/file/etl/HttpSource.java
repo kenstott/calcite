@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.etl;
+// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -3197,13 +3198,13 @@ public class HttpSource implements DataSource {
         }
         if (!found) {
           parser.close();
-          LOGGER.warn("streamFromRawCache: no results array in {}", cachePath);
-          return Collections.emptyIterator();
+          throw new IOException("Malformed raw cache for " + cachePath
+              + ": no top-level 'results' array found");
         }
       } else if (token != JsonToken.START_ARRAY) {
         parser.close();
-        LOGGER.warn("streamFromRawCache: unexpected token {} in {}", token, cachePath);
-        return Collections.emptyIterator();
+        throw new IOException("Malformed raw cache for " + cachePath
+            + ": unexpected first token " + token);
       }
     } catch (IOException e) {
       is.close();

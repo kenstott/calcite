@@ -144,17 +144,21 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
     // If no directory specified, default to "sec-data/parquet" in working directory
     if (directory == null || directory.isEmpty()) {
       if (dataDirectory != null) {
-        directory = Paths.get(dataDirectory, "parquet").toString();
+        // dataDirectory may be an object-store URI (s3://...); Paths.get would collapse
+        // "s3://" to "s3:/". Join scheme-agnostically: trim trailing slash, then append.
+        directory = dataDirectory.replaceAll("/+$", "") + "/parquet";
       } else {
+        // Local default under the working directory.
         directory = Paths.get(System.getProperty("user.dir"), "sec-data", "parquet").toString();
       }
       config.put("directory", directory);
       LOGGER.info("Using default directory: " + directory);
     } else if (dataDirectory != null && !Paths.get(directory).isAbsolute()) {
-      // Combine dataDirectory with relative directory path
-      Path fullPath = Paths.get(dataDirectory, directory);
-      config.put("directory", fullPath.toAbsolutePath().toString());
-      LOGGER.info("Resolved directory path: " + fullPath.toAbsolutePath());
+      // Combine a relative directory under dataDirectory, scheme-agnostically (dataDirectory
+      // may be an object-store URI).
+      String combined = dataDirectory.replaceAll("/+$", "") + "/" + directory;
+      config.put("directory", combined);
+      LOGGER.info("Resolved directory path: " + combined);
     }
 
     // Log effective configuration
