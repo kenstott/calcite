@@ -851,8 +851,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Setting it as a system property keeps schema YAMLs free of direct env-var refs
     // (per CLAUDE.md rule #7) — the YAML reads ${HEALTH_FDA_API_KEY:} which resolves
     // against this property.
+    // Model operand only — if absent, the schema YAML's ${HEALTH_FDA_API_KEY:} still resolves
+    // from the environment via VariableResolver (the one sanctioned env reader).
     Object healthFdaApiKeyObj = operand.get("healthFdaApiKey");
-    String healthFdaApiKey = healthFdaApiKeyObj != null ? String.valueOf(healthFdaApiKeyObj) : System.getenv("HEALTH_FDA_API_KEY");
+    String healthFdaApiKey = healthFdaApiKeyObj != null ? String.valueOf(healthFdaApiKeyObj) : null;
     if (healthFdaApiKey != null && !healthFdaApiKey.isEmpty()) {
       System.setProperty("HEALTH_FDA_API_KEY", healthFdaApiKey);
       LOGGER.debug("Set HEALTH_FDA_API_KEY (length={})", healthFdaApiKey.length());
@@ -862,8 +864,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // account-level USPTO Open Data Portal key serves every ODP product (patents bulk
     // PVGPATDIS/PVGPATTXT and the trademark TRCFECO2 snapshot). Setting it as a system
     // property lets the patents transformers resolve it without a direct env-var ref.
+    // Model operand only — if absent, the schema YAML's ${USPTO_API_KEY:} still resolves from
+    // the environment via VariableResolver (the one sanctioned env reader).
     Object usptoApiKeyObj = operand.get("usptoApiKey");
-    String usptoApiKey = usptoApiKeyObj != null ? String.valueOf(usptoApiKeyObj) : System.getenv("USPTO_API_KEY");
+    String usptoApiKey = usptoApiKeyObj != null ? String.valueOf(usptoApiKeyObj) : null;
     if (usptoApiKey != null && !usptoApiKey.isEmpty()) {
       System.setProperty("USPTO_API_KEY", usptoApiKey);
       LOGGER.debug("Set USPTO_API_KEY (length={})", usptoApiKey.length());
