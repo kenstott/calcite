@@ -125,10 +125,10 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
           isTableEnabled(tableName, "hms", enabledSources));
     }
 
-    LOGGER.debug("Configured hooks for WEATHER schema: {} NWS, {} CDO (token={}), "
-            + "{} EPA (credentials={}), {} GHCND, {} drought, {} HMS",
-        NWS_TABLES.size(), CDO_TABLES.size(), hasCdoToken,
-        EPA_TABLES.size(), hasEpaCredentials,
+    LOGGER.debug("Configured hooks for WEATHER schema: {} NWS, {} CDO, "
+            + "{} EPA, {} GHCND, {} drought, {} HMS",
+        NWS_TABLES.size(), CDO_TABLES.size(),
+        EPA_TABLES.size(),
         GHCND_STATION_TABLES.size(), DROUGHT_TABLES.size(), HMS_TABLES.size());
   }
 
