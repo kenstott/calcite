@@ -332,13 +332,17 @@ FROM (
 -- T1/T2 use 'warn' because table may be legitimately empty
 -- ============================================================
 
--- T1: existence
+-- T1: existence — probe the Iceberg metadata via glob(), NOT iceberg_scan. When the key is
+-- unset the table is never created (no metadata at all), so iceberg_scan THROWS and the whole
+-- INSERT is silently dropped from the results — the schema then passes with the table simply
+-- absent. glob() returns 0 rows (not an error) for a missing path, so the intended FAIL fires.
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'ioc_mixed', 'T1_existence',
-  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 1, 'requires CYBER_THREATFOX_API_KEY — missing key / empty table is a fail'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed', allow_moved_paths := true);
+  CASE WHEN meta_files > 0 THEN 'pass' ELSE 'fail' END,
+  meta_files, 1, 'requires CYBER_THREATFOX_API_KEY — absent table (no Iceberg metadata) is a fail'
+FROM (SELECT count(*) AS meta_files
+      FROM glob('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/ioc_mixed/metadata/*.metadata.json'));
 
 -- T2: row_count
 INSERT INTO dq_results
@@ -758,13 +762,16 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/attack_to_nist_mapping
 -- T1/T2 use 'warn' because table may be legitimately empty
 -- ============================================================
 
--- T1: existence
+-- T1: existence — glob() the Iceberg metadata, NOT iceberg_scan: an absent table (key unset →
+-- never created) makes iceberg_scan throw, dropping the check silently. glob() returns 0 rows
+-- for a missing path, so the intended FAIL fires instead of vanishing.
 INSERT INTO dq_results
 SELECT
   'cyber_threat', 'threat_pulses', 'T1_existence',
-  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 1, 'requires CYBER_OTX_API_KEY — missing key / empty table is a fail'
-FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses', allow_moved_paths := true);
+  CASE WHEN meta_files > 0 THEN 'pass' ELSE 'fail' END,
+  meta_files, 1, 'requires CYBER_OTX_API_KEY — absent table (no Iceberg metadata) is a fail'
+FROM (SELECT count(*) AS meta_files
+      FROM glob('s3://${GOVDATA_DQ_BUCKET}/cyber_threat/threat_pulses/metadata/*.metadata.json'));
 
 -- T2: row_count
 INSERT INTO dq_results
