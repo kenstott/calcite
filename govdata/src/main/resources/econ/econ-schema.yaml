@@ -948,7 +948,7 @@ partitionedTables:
     pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
     partitions: *standard_partitions
     comment: >
-      Employment by industry sector for all 51 U.S. jurisdictions (50 states + DC) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons.
+      Employment by industry sector for all 53 U.S. jurisdictions (50 states + DC, plus Puerto Rico and the Virgin Islands) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons.
 
     # Dimension definitions for iteration
     dimensions:
@@ -960,84 +960,65 @@ partitionedTables:
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
 
-    # Columns match BLS API response fields (series > data array)
-    # The series ID encodes state and industry: SMS{stateCode}{industryCode}01
+    # BLS SM-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    # Series ID layout: SM + seasonal(1) + state(2) + area(5) + supersector(2) + industry(6) + datatype(2).
     columns:
       - name: series
         type: string
         nullable: true
-        comment: BLS series ID (e.g., SMS01000000000000001 encodes Alabama total employment)
+        comment: BLS series ID (e.g., SMU01000000000000001 = Alabama, statewide, total nonfarm, all employees)
+        source: series_id
       - name: year
         type: integer
         nullable: true
-        comment: Data year from BLS API
+        comment: Data year
+        source: year
       - name: period
         type: string
         nullable: true
-        comment: BLS period identifier (M01-M12 for monthly)
+        comment: BLS period identifier (M01-M12 monthly, M13 annual average)
+        source: period
       - name: periodName
         type: string
         nullable: true
-        comment: Human-readable period name (e.g., 'January')
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE period END"
       - name: value
         type: double
         nullable: true
         comment: Employment in thousands
-      - name: latest
-        type: boolean
-        nullable: true
-        comment: Whether this is the latest data point in the series
+        source: value
       - name: footnotes
         type: string
         nullable: true
-        comment: Any footnotes or qualifiers for the data point
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
 
-    # API Configuration
-    # Full series list (1,122 total: 51 states x 22 industries) available in /bls/state-industry-series.json
-    # BLS API limit: 50 series/request
-    download:
-      enabled: true
-      method: POST
-      baseUrl: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
-      authentication:
-        type: json_body
-        paramName: registrationkey
-        envVar: BLS_API_KEY  # Set BLS API key in environment
-
-    # HTTP Source configuration for EtlPipeline
-    # Uses batching to split 1,122 series into requests of 50 (BLS API limit)
+    # Bulk flat-file source — replaces api.bls.gov, which caps registered keys at ~500 requests/day.
+    # A full multi-year backfill (1,122 series / 50-per-batch x N years, across every BLS table) blows
+    # that cap; over-quota batches return REQUEST_NOT_PROCESSED, leaving older years truncated (they
+    # lose whole states in series-list order). The SM program publishes the entire series set as TSV
+    # with no key and no daily limit — the same mechanism the jolts_* tables use (jt program).
     source:
       type: http
-      enabled: true
-      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
-      method: POST
+      url: "https://download.bls.gov/pub/time.series/sm/sm.data.1.AllData"
+      method: GET
       headers:
-        Content-Type: "application/json"
-      body:
-        seriesid: []  # Placeholder - replaced by batching
-        startyear: "{year}"
-        endyear: "{year}"
-        registrationkey: "{env:BLS_API_KEY}"
-      batching:
-        field: seriesid
-        source: "/bls/state-industry-series.json"
-        path: "seriesIds"
-        size: 50  # BLS API limit
-        delayMs: 1100  # Rate limit between batches
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
       response:
-        format: json
-        # NOTE: dataPath removed - BlsResponseTransformer handles extraction and flattening
-        errorPath: "message"  # BLS API returns errors in message array
+        format: tsv
       rateLimit:
-        requestsPerSecond: 0.9
-        retryOn: [429, 503]
+        requestsPerSecond: 1.0
         maxRetries: 3
       rawCache:
         enabled: true
-
-    # Custom hooks for BLS response handling
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+      # Reproduce the prior selection exactly: SMU (seasonally unadjusted), area 00000 (statewide),
+      # industry 000000 (supersector totals), datatype 01 (all employees) = 51 states x 22 supersectors
+      # = 1,122 series. Drops metro-area rows (captured by metro_industry) and seasonally adjusted (SMS).
+      rowFilter:
+        column: series_id
+        pattern: '^SMU\d{2}00000\d{2}00000001.*$'
 
     # Materialization configuration
     materialize:
@@ -1193,143 +1174,64 @@ partitionedTables:
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
 
-    # Columns match BLS API response fields (series > data array)
-    # The series ID encodes metro area and industry: SMU{areaCode}{industryCode}01
+    # BLS SM-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    # Series ID layout: SM + seasonal(1) + state(2) + area(5) + supersector(2) + industry(6) + datatype(2).
     columns:
       - name: series
         type: string
         nullable: true
-        comment: BLS series ID (e.g., SMU36935610000000001 encodes NYC total employment)
+        comment: BLS series ID (e.g., SMU36935610000000001 = New York metro, total nonfarm, all employees)
+        source: series_id
       - name: year
         type: integer
         nullable: true
-        comment: Data year from BLS API
+        comment: Data year
+        source: year
       - name: period
         type: string
         nullable: true
-        comment: BLS period identifier (M01-M12 for monthly)
+        comment: BLS period identifier (M01-M12 monthly, M13 annual average)
+        source: period
       - name: periodName
         type: string
         nullable: true
-        comment: Human-readable period name (e.g., 'January')
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE period END"
       - name: value
         type: double
         nullable: true
         comment: Employment in thousands
-      - name: latest
-        type: boolean
-        nullable: true
-        comment: Whether this is the latest data point in the series
+        source: value
       - name: footnotes
         type: string
         nullable: true
-        comment: Any footnotes or qualifiers for the data point
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
 
-    # API Configuration
-    # Full series list (594 total) available in /bls/metro-industry-series.json
-    # BLS API limit: 50 series/request. This config uses Batch 1 (first 50 series).
-    download:
-      enabled: true
-      method: POST
-      baseUrl: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
-      authentication:
-        type: json_body
-        paramName: registrationkey
-        envVar: BLS_API_KEY  # Set API key in environment
-      # BLS metro industry series IDs: SMU{areaCode}{industryCode}01
-      # Batch 1: NYC (22) + LA (22) + Chicago (6) = 50 series
-      seriesList:
-        # NYC (3693561) - All industries
-        - "SMU36935610000000001"
-        - "SMU36935610500000001"
-        - "SMU36935610600000001"
-        - "SMU36935610700000001"
-        - "SMU36935610800000001"
-        - "SMU36935611000000001"
-        - "SMU36935612000000001"
-        - "SMU36935613000000001"
-        - "SMU36935613100000001"
-        - "SMU36935613200000001"
-        - "SMU36935614000000001"
-        - "SMU36935614100000001"
-        - "SMU36935614200000001"
-        - "SMU36935614300000001"
-        - "SMU36935614400000001"
-        - "SMU36935615000000001"
-        - "SMU36935615500000001"
-        - "SMU36935616000000001"
-        - "SMU36935616500000001"
-        - "SMU36935617000000001"
-        - "SMU36935618000000001"
-        - "SMU36935619000000001"
-        # LA (0631080) - All industries
-        - "SMU06310800000000001"
-        - "SMU06310800500000001"
-        - "SMU06310800600000001"
-        - "SMU06310800700000001"
-        - "SMU06310800800000001"
-        - "SMU06310801000000001"
-        - "SMU06310802000000001"
-        - "SMU06310803000000001"
-        - "SMU06310803100000001"
-        - "SMU06310803200000001"
-        - "SMU06310804000000001"
-        - "SMU06310804100000001"
-        - "SMU06310804200000001"
-        - "SMU06310804300000001"
-        - "SMU06310804400000001"
-        - "SMU06310805000000001"
-        - "SMU06310805500000001"
-        - "SMU06310806000000001"
-        - "SMU06310806500000001"
-        - "SMU06310807000000001"
-        - "SMU06310808000000001"
-        - "SMU06310809000000001"
-        # Chicago (1716980) - First 6 industries
-        - "SMU17169800000000001"
-        - "SMU17169800500000001"
-        - "SMU17169800600000001"
-        - "SMU17169800700000001"
-        - "SMU17169800800000001"
-        - "SMU17169801000000001"
-      rateLimit:
-        minIntervalMs: 1100
-        maxRetries: 3
-
-    # HTTP Source configuration for EtlPipeline
-    # Uses batching to split 594 series into requests of 50 (BLS API limit)
+    # Bulk flat-file source — replaces api.bls.gov (registered keys cap at ~500 requests/day; a full
+    # multi-year backfill of state_industry + metro_industry alone exceeds that and truncates older
+    # years). Same sm.data.1.AllData TSV as state_industry; this rowFilter selects the 27 published
+    # metropolitan areas instead of the statewide rollup. No key, no daily limit (as the jolts_* tables).
     source:
       type: http
-      enabled: true
-      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
-      method: POST
+      url: "https://download.bls.gov/pub/time.series/sm/sm.data.1.AllData"
+      method: GET
       headers:
-        Content-Type: "application/json"
-      body:
-        seriesid: []  # Placeholder - replaced by batching
-        startyear: "{year}"
-        endyear: "{year}"
-        registrationkey: "{env:BLS_API_KEY}"
-      batching:
-        field: seriesid
-        source: "/bls/metro-industry-series.json"
-        path: "seriesIds"
-        size: 50  # BLS API limit
-        delayMs: 1100  # Rate limit between batches
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
       response:
-        format: json
-        # NOTE: dataPath removed - BlsResponseTransformer handles extraction and flattening
-        errorPath: "message"  # BLS API returns errors in message array
+        format: tsv
       rateLimit:
-        requestsPerSecond: 0.9
-        retryOn: [429, 503]
+        requestsPerSecond: 1.0
         maxRetries: 3
       rawCache:
         enabled: true
-
-    # Custom hooks for BLS response transformation
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+      # 27 major metros x 22 supersectors: SMU (unadjusted), area at series_id positions 6-10 (the
+      # published metro set from metro-industry-series.json), industry 000000 (supersector totals),
+      # datatype 01 (all employees). Excludes statewide rows (00000) captured by state_industry.
+      rowFilter:
+        column: series_id
+        pattern: '^SMU\d{2}(11260|12060|12420|12580|14460|16980|17410|19100|19740|19820|26420|27260|31080|33100|33460|37980|38060|38900|40140|41180|41700|41740|41940|42660|45300|47900|93561)\d{2}00000001.*$'
 
     # Materialization configuration
     materialize:
