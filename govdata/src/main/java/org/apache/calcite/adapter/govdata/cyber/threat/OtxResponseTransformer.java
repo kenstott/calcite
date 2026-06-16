@@ -97,9 +97,8 @@ public class OtxResponseTransformer implements ResponseTransformer {
       // dqRowLimit — so it never also applies the production incremental window (which would
       // collapse the sample to a handful of recently-modified pulses and fail row-count/variety).
       String baseUrl = context.getUrl();
-      // DQ-sample mode is a run flag that comes from the model (the orchestration script sets it
-      // via dq: "${GOVDATA_DQ:false}") — read it from the model, not the environment.
-      boolean dqMode = ModelOperand.getBoolean("cyber_threat.dq", false);
+      // GOVDATA_DQ is an allowed global run-flag exception — set cross-schema by the run scripts.
+      boolean dqMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_DQ"));
       // Delta-days is value config — a model operand (like nvdDeltaDays), read by path.
       String deltaDaysEnv = dqMode ? null : ModelOperand.getString("cyber_threat.otxDeltaDays");
       if (dqMode) {
