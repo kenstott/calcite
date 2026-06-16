@@ -701,6 +701,18 @@ public class HttpSource implements DataSource {
           applyAuth(conn, variables);
           int status = conn.getResponseCode();
           if (status >= 400) {
+            // Honor skipOn for the streaming path. Date-partitioned S3 feeds (e.g. the CFTC EOD
+            // bucket) return 403/404 for weekends, holidays, future dates, and calendar-invalid
+            // day combos (Feb 30, Apr 31, ...). Those are expected gaps, not failures — the
+            // non-streaming path already drops them via shouldSkip(), but CSV_STREAM threw on
+            // every 4xx, turning each gap into a retried ERROR that floods the log and stalls
+            // the worker (idle-timeout kills). Skip the batch gracefully instead.
+            if (shouldSkip(status, config.getRateLimit())) {
+              LOGGER.debug("CSV_STREAM skip: HTTP {} for {} (skipOn match)", status, fullUrl);
+              conn.disconnect();
+              hasMore = false;
+              return false;
+            }
             throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
           }
           InputStream is = conn.getInputStream();
