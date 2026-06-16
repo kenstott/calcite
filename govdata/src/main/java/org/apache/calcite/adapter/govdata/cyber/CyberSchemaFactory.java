@@ -93,77 +93,24 @@ public class CyberSchemaFactory implements GovDataSubSchemaFactory {
   @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for {} schema", dataSource);
 
-    String nvdApiKey = System.getenv("CYBER_NVD_API_KEY");
-    String githubToken = System.getenv("CYBER_GITHUB_TOKEN");
-    String threatfoxKey = System.getenv("CYBER_THREATFOX_API_KEY");
-    String otxKey = System.getenv("CYBER_OTX_API_KEY");
-
-    // All cyber tables are produced by the generic ETL pipeline (HTTP source +
-    // response transformer + Iceberg materialization, defined in the schema YAML).
-    // There is no bespoke pre-download step: cwe_catalog and kev_catalog flow through
-    // the same pipeline as the rest, so their dataset_type / freshness /
-    // overwritePartitions config is honored.
-    if ("cyber_threat".equals(dataSource)) {
-      configureThreatHooks(builder, operand, threatfoxKey, otxKey);
-    } else {
-      configureVulnHooks(builder, operand, nvdApiKey, githubToken);
-    }
+    // All cyber tables flow through the generic ETL pipeline (HTTP source + response transformer
+    // + Iceberg, defined in the schema YAML). Tables are gated ONLY by enabledTables — credentials
+    // are never read here to silently disable a table. A table whose required credential is absent
+    // fails hard at fetch time (its transformer throws), per the no-silent-fallback rule.
+    List<String> tables = "cyber_threat".equals(dataSource) ? ALL_THREAT_TABLES : ALL_VULN_TABLES;
+    configureEnabledHooks(builder, operand, tables);
   }
 
-  @SuppressWarnings("UnusedVariable")
-  private void configureVulnHooks(FileSchemaBuilder builder, Map<String, Object> operand,
-      String nvdApiKey, String githubToken) {
+  private void configureEnabledHooks(FileSchemaBuilder builder, Map<String, Object> operand,
+      List<String> tables) {
     @SuppressWarnings("unchecked")
     List<String> enabledList = (List<String>) operand.get("enabledTables");
     final Set<String> enabled = (enabledList == null || enabledList.isEmpty())
         ? Collections.emptySet() : new HashSet<>(enabledList);
 
-    for (final String table : ALL_VULN_TABLES) {
-      if ("vuln_cross_refs".equals(table)) {
-        continue; // gated on the GitHub token below
-      }
+    for (final String table : tables) {
       builder.isEnabled(table, ctx -> enabled.isEmpty() || enabled.contains(table));
     }
-
-    // vuln_cross_refs fetches GitHub Security Advisories via the GraphQL API, which requires
-    // auth — disable it when CYBER_GITHUB_TOKEN is absent so it doesn't 401 the whole schema.
-    // (advisories now uses the PUBLIC cisagov/CSAF repo over raw.githubusercontent — no token —
-    // so it is enabled like any other table above, no longer gated on the GitHub token.)
-    builder.isEnabled("vuln_cross_refs", ctx -> {
-      if (!enabled.isEmpty() && !enabled.contains("vuln_cross_refs")) {
-        return false;
-      }
-      if (githubToken == null || githubToken.isEmpty()) {
-        LOGGER.info("vuln_cross_refs disabled: CYBER_GITHUB_TOKEN not set (GHSA GraphQL needs auth)");
-        return false;
-      }
-      return true;
-    });
-  }
-
-  private void configureThreatHooks(FileSchemaBuilder builder, Map<String, Object> operand,
-      String threatfoxKey, String otxKey) {
-    @SuppressWarnings("unchecked")
-    List<String> enabledList = (List<String>) operand.get("enabledTables");
-    final Set<String> enabled = (enabledList == null || enabledList.isEmpty())
-        ? Collections.emptySet() : new HashSet<>(enabledList);
-
-    for (final String table : ALL_THREAT_TABLES) {
-      if ("ioc_mixed".equals(table) || "threat_pulses".equals(table)) {
-        continue; // handled separately below with compound checks
-      }
-      builder.isEnabled(table, ctx -> enabled.isEmpty() || enabled.contains(table));
-    }
-
-    builder.isEnabled("ioc_mixed", ctx -> {
-      if (!enabled.isEmpty() && !enabled.contains("ioc_mixed")) return false;
-      return threatfoxKey != null && !threatfoxKey.isEmpty();
-    });
-
-    builder.isEnabled("threat_pulses", ctx -> {
-      if (!enabled.isEmpty() && !enabled.contains("threat_pulses")) return false;
-      return otxKey != null && !otxKey.isEmpty();
-    });
   }
 
 }

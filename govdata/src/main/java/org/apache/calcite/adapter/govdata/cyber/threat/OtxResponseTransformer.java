@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.threat;
 
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -76,10 +77,12 @@ public class OtxResponseTransformer implements ResponseTransformer {
   private static final long RATE_DELAY_MS = 500L;
 
   @Override public String transform(String response, RequestContext context) {
-    String apiKey = System.getenv("CYBER_OTX_API_KEY");
+    String apiKey = ModelOperand.getString(
+        "cyber_threat.partitionedTables.threat_pulses.source.headers.X-OTX-API-KEY");
     if (apiKey == null || apiKey.trim().isEmpty()) {
-      LOGGER.warn("OTX: CYBER_OTX_API_KEY not set; skipping OTX pulse fetch");
-      return "[]";
+      // A required credential being absent is a hard failure, never a silent skip.
+      throw new IllegalStateException("OTX: CYBER_OTX_API_KEY is required but missing "
+          + "(threat_pulses source X-OTX-API-KEY resolved empty).");
     }
 
     try {
@@ -94,8 +97,11 @@ public class OtxResponseTransformer implements ResponseTransformer {
       // dqRowLimit — so it never also applies the production incremental window (which would
       // collapse the sample to a handful of recently-modified pulses and fail row-count/variety).
       String baseUrl = context.getUrl();
-      boolean dqMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_DQ"));
-      String deltaDaysEnv = dqMode ? null : System.getenv("CYBER_OTX_DELTA_DAYS");
+      // DQ-sample mode is a run flag that comes from the model (the orchestration script sets it
+      // via dq: "${GOVDATA_DQ:false}") — read it from the model, not the environment.
+      boolean dqMode = ModelOperand.getBoolean("cyber_threat.dq", false);
+      // Delta-days is value config — a model operand (like nvdDeltaDays), read by path.
+      String deltaDaysEnv = dqMode ? null : ModelOperand.getString("cyber_threat.otxDeltaDays");
       if (dqMode) {
         LOGGER.info("OTX: DQ sample mode — full load (ignoring CYBER_OTX_DELTA_DAYS)");
       }

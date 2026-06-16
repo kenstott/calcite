@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.ref;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -91,7 +92,12 @@ public class FigiDataProvider implements DataProvider {
       return Collections.emptyIterator();
     }
 
-    String apiKey = System.getenv("OPENFIGI_API_KEY");
+    // OpenFIGI key is optional (the API works unauthenticated, just rate-limited). Read it from
+    // where it lives in the model — the source's X-OPENFIGI-APIKEY header — and pass it through;
+    // an absent key is a valid degraded (rate-limited) mode, not a failure.
+    java.util.Map<String, String> figiHeaders =
+        config.getSource() != null ? config.getSource().getHeaders() : null;
+    String apiKey = figiHeaders != null ? figiHeaders.get("X-OPENFIGI-APIKEY") : null;
     LOGGER.info("FigiDataProvider: fetching FIGI for {} tickers in batches of {} (api key: {})",
         tickers.size(), BATCH_SIZE, apiKey != null && !apiKey.isEmpty() ? "set" : "not set");
 
@@ -146,10 +152,11 @@ public class FigiDataProvider implements DataProvider {
   private Connection createDuckDBWithS3() throws java.sql.SQLException {
     Connection conn = AbstractGovDataDownloader.getDuckDBConnection(null);
 
-    String keyId = System.getenv("AWS_ACCESS_KEY_ID");
-    String secret = System.getenv("AWS_SECRET_ACCESS_KEY");
-    String endpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
-    String region = System.getenv("AWS_REGION");
+    // S3 credentials come from the model (the s3Config operand the factory builds), not env.
+    String keyId = ModelOperand.getString("ref.s3Config.accessKeyId");
+    String secret = ModelOperand.getString("ref.s3Config.secretAccessKey");
+    String endpoint = ModelOperand.getString("ref.s3Config.endpoint");
+    String region = ModelOperand.getString("ref.s3Config.region");
 
     if (keyId == null || keyId.isEmpty() || secret == null || secret.isEmpty()) {
       LOGGER.debug("FigiDataProvider: no AWS credentials in env, DuckDB will use default chain");

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.vuln;
 
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -66,10 +67,16 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
           + "references { url } } } }\" }";
 
   @Override public String transform(String response, RequestContext context) {
-    String token = System.getenv("CYBER_GITHUB_TOKEN");
-    if (token == null || token.trim().isEmpty()) {
-      LOGGER.warn("GithubSA: CYBER_GITHUB_TOKEN not set; skipping GitHub SA fetch");
-      return "[]";
+    // Read the token from where it lives in the model: the vuln_cross_refs source's Authorization
+    // header ("bearer ${CYBER_GITHUB_TOKEN:}", resolved at YAML load) — not System.getenv.
+    String auth = ModelOperand.getString(
+        "cyber_vuln.partitionedTables.vuln_cross_refs.source.headers.Authorization");
+    String token = auth != null && auth.regionMatches(true, 0, "bearer ", 0, 7)
+        ? auth.substring(7).trim() : (auth != null ? auth.trim() : null);
+    if (token == null || token.isEmpty()) {
+      // A required credential being absent is a hard failure, never a silent skip.
+      throw new IllegalStateException("GithubSA: GitHub token is required but missing — set "
+          + "CYBER_GITHUB_TOKEN (vuln_cross_refs source Authorization resolved empty).");
     }
 
     ArrayNode allRows = MAPPER.createArrayNode();

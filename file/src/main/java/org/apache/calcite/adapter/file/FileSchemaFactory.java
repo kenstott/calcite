@@ -274,6 +274,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // YAML files can use ${SCHEMA_NAME} to reference the actual schema name
     System.setProperty("SCHEMA_NAME", name);
 
+    // Capture this schema's fully-derived operand so any class can read a config value by its
+    // path in the model (ModelOperand.getString("<schema>.partitionedTables.<table>...."))
+    // instead of System.getenv. Keyed by schema name so dependency siblings keep separate trees.
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture(name, operand);
+
     // Check for autoDownload - triggers ETL pipeline before schema creation
     // Schema config can come from:
     //   1. "schemaResource": "/path/to/schema.yaml" (classpath resource)
