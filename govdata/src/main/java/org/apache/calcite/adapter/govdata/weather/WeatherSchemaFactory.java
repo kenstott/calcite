@@ -91,39 +91,20 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
 
     Set<String> enabledSources = parseEnabledSources(operand);
 
-    boolean hasCdoToken = System.getenv("NOAA_CDO_TOKEN") != null
-        && !System.getenv("NOAA_CDO_TOKEN").isEmpty();
-    boolean hasEpaCredentials = System.getenv("EPA_AQS_EMAIL") != null
-        && !System.getenv("EPA_AQS_EMAIL").isEmpty()
-        && System.getenv("EPA_AQS_KEY") != null
-        && !System.getenv("EPA_AQS_KEY").isEmpty();
-
-    if (!hasCdoToken) {
-      LOGGER.info("NOAA_CDO_TOKEN not set — CDO tables (cdo_stations, "
-          + "cdo_monthly_summaries, cdo_annual_summaries, "
-          + "climate_normals_monthly) will be disabled");
-    }
-    if (!hasEpaCredentials) {
-      LOGGER.info("EPA_AQS_EMAIL/EPA_AQS_KEY not set — EPA tables "
-          + "(epa_annual_aqi) will be disabled");
-    }
-
-    // NWS tables: always enabled (unless filtered by enabledSources)
+    // Tables are gated only by enabledSources — credentials are NOT read here to disable a table.
+    // CDO/EPA tables require NOAA_CDO_TOKEN / EPA_AQS_EMAIL+KEY (carried in their source config); a
+    // missing required credential fails hard at fetch, never silently disables the table.
     for (String tableName : NWS_TABLES) {
       builder.isEnabled(tableName, ctx ->
           isTableEnabled(tableName, "nws", enabledSources));
     }
-
-    // CDO tables: enabled only when NOAA_CDO_TOKEN is set
     for (String tableName : CDO_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          hasCdoToken && isTableEnabled(tableName, "cdo", enabledSources));
+          isTableEnabled(tableName, "cdo", enabledSources));
     }
-
-    // EPA tables: enabled only when both EPA_AQS_EMAIL and EPA_AQS_KEY are set
     for (String tableName : EPA_TABLES) {
       builder.isEnabled(tableName, ctx ->
-          hasEpaCredentials && isTableEnabled(tableName, "epa", enabledSources));
+          isTableEnabled(tableName, "epa", enabledSources));
     }
 
     // GHCND station inventory: always enabled (no auth required)
