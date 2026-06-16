@@ -85,10 +85,8 @@ public final class GovDataUtils {
         return (Integer) year;
       }
     }
+    // GOVDATA_START_YEAR is set as a system property from the model operand by the factory.
     String envYear = System.getProperty("GOVDATA_START_YEAR");
-    if (envYear == null) {
-      envYear = System.getenv("GOVDATA_START_YEAR");
-    }
     if (envYear != null) {
       try {
         return Integer.parseInt(envYear);
@@ -109,10 +107,8 @@ public final class GovDataUtils {
         return (Integer) year;
       }
     }
+    // GOVDATA_END_YEAR is set as a system property from the model operand by the factory.
     String envYear = System.getProperty("GOVDATA_END_YEAR");
-    if (envYear == null) {
-      envYear = System.getenv("GOVDATA_END_YEAR");
-    }
     if (envYear != null) {
       try {
         return Integer.parseInt(envYear);

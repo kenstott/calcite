@@ -335,11 +335,8 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
   private static int resolveStartYear(DimensionConfig config) {
     int yamlStart = parseIntProperty(config, "startYear", DEFAULT_START_YEAR);
 
-    // Read GOVDATA_START_YEAR from env then system property
-    String govdataStartYear = System.getenv("GOVDATA_START_YEAR");
-    if (govdataStartYear == null || govdataStartYear.isEmpty()) {
-      govdataStartYear = System.getProperty("GOVDATA_START_YEAR");
-    }
+    // GOVDATA_START_YEAR is set as a system property from the model operand by the factory.
+    String govdataStartYear = System.getProperty("GOVDATA_START_YEAR");
 
     if (govdataStartYear != null && !govdataStartYear.isEmpty()) {
       try {
