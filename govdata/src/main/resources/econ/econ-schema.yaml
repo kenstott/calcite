@@ -319,7 +319,7 @@ dimension_values:
     - 46   # Nonfarm Income
 
   # --- Year Range Dimensions ---
-  # Override: ECON_START_YEAR for ECON-only, GOVDATA_START_YEAR for all schemas
+  # Global-only: GOVDATA_START_YEAR / GOVDATA_END_YEAR (no per-schema year override)
   # Note: Per-table overrides exist for data availability (QCEW from 1990, JOLTS from 2001)
 
   year_range_default: &year_range_default

@@ -52,7 +52,7 @@ column_templates:
 dimension_values:
 
   # Year range for Federal Register data
-  # Override: FR_START_YEAR for FR-only, GOVDATA_START_YEAR for all schemas
+  # Global-only: GOVDATA_START_YEAR / GOVDATA_END_YEAR (no per-schema year override)
   fr_year_range: &fr_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"

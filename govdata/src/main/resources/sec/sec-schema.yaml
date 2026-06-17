@@ -236,9 +236,8 @@ dimension_values:
     - "SC 13G/A"
 
   # --- Year Range ---
-  # SEC defaults to 2010 (vs global 2000) due to XBRL adoption timeline
-  # Override: SEC_START_YEAR for SEC-only, GOVDATA_START_YEAR for all schemas
-  # Fallback chain: SEC_START_YEAR -> GOVDATA_START_YEAR -> 2010
+  # Global-only: GOVDATA_START_YEAR / GOVDATA_END_YEAR (no per-schema SEC year override).
+  # Default start 2010 (XBRL adoption timeline) when GOVDATA_START_YEAR is unset.
 
   year_range: &year_range
     type: yearRange

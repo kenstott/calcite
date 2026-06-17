@@ -161,8 +161,8 @@ case "$SCHEMA" in
   # fetchStockPrices:false keeps this the filings pass; sec_prices (Stooq) is the prices slot.
   sec)
     case "$MODE" in
-      historical) SEC_START_YEAR="${GOVDATA_START_YEAR:-2010}"; SEC_END_YEAR=$((INCREMENTAL_YEAR - 1)) ;;
-      daily)      SEC_START_YEAR="$INCREMENTAL_YEAR";           SEC_END_YEAR="$INCREMENTAL_YEAR" ;;
+      historical) _start="${GOVDATA_START_YEAR:-2010}"; _end=$((INCREMENTAL_YEAR - 1)) ;;
+      daily)      _start="$INCREMENTAL_YEAR";           _end="$INCREMENTAL_YEAR" ;;
       *) echo "sec: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
     esac
     # ciks + filingTypes are the SEC schema's scope operands (what SecSchemaFactory's
@@ -179,7 +179,7 @@ case "$SCHEMA" in
       for _ft in "${_ft_arr[@]}"; do _ft_json="$_ft_json\"$_ft\","; done
       SEC_OPS="$SEC_OPS,\"filingTypes\":[${_ft_json%,}]"
     fi
-    for (( SEC_YEAR=SEC_END_YEAR; SEC_YEAR>=SEC_START_YEAR; SEC_YEAR-- )); do
+    for (( SEC_YEAR=_end; SEC_YEAR>=_start; SEC_YEAR-- )); do
       export GOVDATA_START_YEAR="$SEC_YEAR"
       export GOVDATA_END_YEAR="$SEC_YEAR"
       run_etl_inline "$(build_inline_model sec "$SEC_OPS")" "worker-sec-${MODE}-${SEC_YEAR}"

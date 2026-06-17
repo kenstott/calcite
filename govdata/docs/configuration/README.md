@@ -132,12 +132,7 @@ export GOVDATA_PARQUET_DIR=/path/to/parquet  # Parquet storage
 # Date ranges (applies to all schemas)
 export GOVDATA_START_YEAR=2020
 export GOVDATA_END_YEAR=2024
-
-# Schema-specific overrides
-export SEC_START_YEAR=2018
-export SEC_END_YEAR=2024
-export ECON_START_YEAR=2015
-export ECON_END_YEAR=2024
+# Year range is global-only — no per-schema overrides.
 ```
 
 ### Storage Configuration

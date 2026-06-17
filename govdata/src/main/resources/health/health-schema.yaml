@@ -19,7 +19,7 @@ comment: >
 dimension_templates:
 
   # Year range for health data
-  # Override: HEALTH_START_YEAR for health-only, GOVDATA_START_YEAR for all schemas
+  # Global-only: GOVDATA_START_YEAR / GOVDATA_END_YEAR (no per-schema year override)
   health_year_range: &health_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"

@@ -149,8 +149,8 @@ Connection parameters can also be set via environment variables:
 |-------------|---------------------|-------------|
 | `ciks` | `EDGAR_CIKS` | Company identifiers |
 | `filingTypes` | `EDGAR_FILING_TYPES` | Filing types to download |
-| `startYear` | `EDGAR_START_YEAR` | Start year for data |
-| `endYear` | `EDGAR_END_YEAR` | End year for data |
+| `startYear` | `GOVDATA_START_YEAR` | Start year for data |
+| `endYear` | `GOVDATA_END_YEAR` | End year for data |
 | `dataDirectory` | `SEC_DATA_DIRECTORY` | Base data directory |
 | `fetchStockPrices` | `SEC_FETCH_STOCK_PRICES` | Enable stock prices |
 | `debug` | `SEC_DEBUG` | Enable debug logging |
@@ -229,8 +229,8 @@ for row in cursor.fetchall():
 ```bash
 # Set via environment variables
 export EDGAR_CIKS=AAPL,MSFT,GOOGL
-export EDGAR_START_YEAR=2020
-export EDGAR_END_YEAR=2023
+export GOVDATA_START_YEAR=2020
+export GOVDATA_END_YEAR=2023
 export SEC_DATA_DIRECTORY=/Volumes/T9/sec-data
 
 # Or use connection string in SQL client
@@ -249,7 +249,7 @@ When the same parameter is specified in multiple places, the following priority 
 Example:
 ```bash
 # Environment variable
-export EDGAR_START_YEAR=2015
+export GOVDATA_START_YEAR=2015
 
 # Model file has startYear: 2010
 

@@ -158,7 +158,7 @@ and interpreted in `govdata/scripts/parallel/common.sh`.
 
 | Variable | Production value | Purpose |
 |---|---|---|
-| `GOVDATA_START_YEAR` | `2010` (default; `.env.prod` may override) | Earliest year for historical ETL; overridden per-schema (e.g. `SEC_START_YEAR=2019`) |
+| `GOVDATA_START_YEAR` | `2010` (default; `.env.prod` may override) | Earliest year for historical ETL (global; no per-schema year overrides) |
 | `GOVDATA_INCREMENTAL_START_YEAR` | `2026` | First year owned by the daily worker; daily mode starts here, historical mode caps at this year − 1 |
 | `GOVDATA_RUN_MODE` | `historical` or `daily` | Controls which year slice a worker processes (see below) |
 

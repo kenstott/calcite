@@ -344,10 +344,7 @@ export BEA_API_KEY="your-bea-api-key-here"
 # Unified date range configuration (applies to all government data)
 export GOVDATA_START_YEAR=2020
 export GOVDATA_END_YEAR=2024
-
-# Optional: ECON-specific date range override
-# export ECON_START_YEAR=2015
-# export ECON_END_YEAR=2024
+# Year range is global-only — no per-schema (ECON_START_YEAR/etc.) overrides.
 
 # No keys needed for Treasury or World Bank
 ```
