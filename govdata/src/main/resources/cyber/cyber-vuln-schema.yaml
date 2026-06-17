@@ -681,19 +681,24 @@ partitionedTables:
     releaseWindow:
       dow: [0]              # Weekly refresh; cross-reference data changes infrequently
     pattern: "type=vuln_cross_refs.parquet"
-    dataset_type: snapshot          # full GHSA rebuild each run (single-source; no period axis)
+    dataset_type: snapshot          # single combo (no period axis); incremental delta-append in
+                                    # practice — freshness.watermark_var bounds the crawl and the
+                                    # iceberg write appends (see materialize.overwritePartitions: false)
     # DQ sample cap (GOVDATA_DQ mode): the GHSA GraphQL crawl pages through ~28k advisories
-    # (~280 pages); the cap stops pagination early (~50 pages). Cache-safe — the paginated cache
-    # commits only on full drain, so a capped run leaves the existing cache untouched.
+    # (~280 pages) via the file adapter's built-in CURSOR pagination (lazy PaginatedIterator), so
+    # once the writer stops pulling at the cap the crawl stops fetching further pages (~50 pages).
     dqRowLimit: 5000
     # GraphQL freshness probe: one cheap query reads the global max updatedAt across all
-    # advisories (orderBy UPDATED_AT DESC, first:1). When that timestamp is unchanged since
-    # the last successful commit, the whole 31k-advisory crawl is skipped — no re-fetch, no
-    # new Iceberg snapshot. Any add or edit to any advisory bumps the max updatedAt → re-crawl.
+    # advisories (orderBy UPDATED_AT DESC, first:1). When unchanged since the last successful
+    # commit, the whole crawl is skipped — no re-fetch, no new Iceberg snapshot. When changed,
+    # the prior committed value is fed back as the crawl's updatedSince lower bound (watermark_var)
+    # so only advisories updated since then are fetched, and those rows are APPENDED to the table
+    # (see materialize iceberg append). Any add/edit bumps the max updatedAt → incremental re-crawl.
     freshness:
       type: graphql
       query: "{ securityAdvisories(first:1, orderBy:{field:UPDATED_AT, direction:DESC}){ nodes{ updatedAt } } }"
       path: data.securityAdvisories.nodes[0].updatedAt
+      watermark_var: updatedSince   # recovered prior max updatedAt → injected as the delta bound
     partitions:
       style: hive
       columnDefinitions:
@@ -706,6 +711,9 @@ partitionedTables:
       (single source per the one-table = one-source rule; NVD/OSV cross-refs are
       derived as SQL views over their own tables). Dedup key is
       (cve_id, external_id, external_source); external_source is 'ghsa'.
+      APPEND LOG: the incremental delta crawl appends changed advisories each run, so this
+      base table may hold exact-duplicate rows across runs. Query the vuln_cross_refs_unique
+      view for one row per (cve_id, external_id, external_source).
 
     columns:
       - name: cve_id
@@ -732,13 +740,32 @@ partitionedTables:
       headers:
         Authorization: "bearer ${CYBER_GITHUB_TOKEN:}"
         Content-Type: "application/json"
+      # GraphQL request. The query uses $-style variables; the file adapter's CURSOR pagination
+      # injects `after` (page cursor), `first` (page size), and the `updatedSince` delta bound into
+      # the variables object as native typed JSON each page (after = null on the first page;
+      # updatedSince = null on a cold/full crawl, else the recovered watermark → incremental pull).
+      body:
+        query: "query($first: Int!, $after: String, $updatedSince: DateTime) { securityAdvisories(first: $first, after: $after, updatedSince: $updatedSince, orderBy: {field: UPDATED_AT, direction: ASC}) { pageInfo { hasNextPage endCursor } nodes { ghsaId publishedAt severity summary identifiers { type value } references { url } } } }"
+        variables:
+          after: null
+          updatedSince: null
       response:
         format: json
+        pagination:
+          type: CURSOR
+          cursorIn: body
+          cursorParam: after                 # GraphQL variable carrying the page cursor
+          cursorPath: data.securityAdvisories.pageInfo.endCursor
+          hasNextPath: data.securityAdvisories.pageInfo.hasNextPage
+          limitParam: first                  # GraphQL variable carrying the page size
+          pageSize: 100
+          boundParam: updatedSince           # delta lower bound, injected into the body variables
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
-      rawCache:
-        enabled: true
+      # No rawCache (matches the NVD paginated source): the framework's merged page cache stores
+      # raw records under `results`, which would not round-trip through this envelope-specific
+      # transformer. Re-fetch is avoided by the freshness probe (and, in Phase B, delta).
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.cyber.vuln.GithubSaResponseTransformer"
@@ -763,7 +790,9 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
-        overwritePartitions: true   # snapshot: replace the type=vuln_cross_refs partition each run
+        overwritePartitions: false  # delta-append: each run adds only advisories changed since the
+                                    # watermark (dedup by primary key on read). A full/cold crawl
+                                    # (no prior watermark) appends into the empty/rebuilt table.
 
   # ==========================================================================
   # ADVISORIES — CISA cybersecurity advisories
@@ -875,6 +904,21 @@ partitionedTables:
 # ============================================================================
 
 views:
+
+  - name: vuln_cross_refs_unique
+    comment: >
+      Deduplicated CVE↔external-advisory cross-references — the serving layer for
+      vuln_cross_refs. The base vuln_cross_refs table is an APPEND log: the incremental
+      GHSA delta crawl appends only advisories changed since the last watermark each run,
+      so an advisory updated across several runs (and the inclusive updatedSince boundary
+      advisory) contributes the same (cve_id, external_id) mapping more than once. GHSA→CVE
+      mappings are immutable, so those repeats are exact duplicates; this view collapses
+      them to one row per (cve_id, external_id, external_source). Query this view, not the
+      base table, for unique cross-references.
+    sql: >
+      SELECT cve_id, external_id, external_source, MIN(url) AS url
+      FROM vuln_cross_refs
+      GROUP BY cve_id, external_id, external_source
 
   - name: kev_enriched
     comment: >

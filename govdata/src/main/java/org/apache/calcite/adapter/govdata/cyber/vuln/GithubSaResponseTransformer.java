@@ -10,161 +10,104 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.vuln;
 
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * Transforms GitHub Security Advisories (GHSA) GraphQL cursor-paginated responses.
+ * Transforms one page of a GitHub Security Advisories (GHSA) GraphQL response into flat
+ * {@code vuln_cross_refs} rows — one row per GHSA-CVE pair. Only advisories carrying at least
+ * one CVE identifier produce rows.
  *
- * <p>Requires a GitHub token with {@code public_repo} scope set via the
- * {@code CYBER_GITHUB_TOKEN} environment variable. Without a token, the GitHub
- * GraphQL API will reject all requests.
+ * <p>Pagination is driven entirely by the file adapter's built-in CURSOR pagination configured
+ * in cyber-vuln-schema.yaml ({@code type: CURSOR, cursorIn: body, cursorParam: after,
+ * cursorPath: data.securityAdvisories.pageInfo.endCursor,
+ * hasNextPath: data.securityAdvisories.pageInfo.hasNextPage}). The framework templates the
+ * {@code after} cursor (and the {@code updatedSince} delta bound) into the GraphQL POST body,
+ * supplies the {@code Authorization} header, and reads the next cursor / has-next flag from the
+ * raw envelope. This transformer is called once per page and only reshapes that page's rows.
  *
- * <p>Produces rows for the {@code vuln_cross_refs} table: one row per GHSA-CVE pair.
- * Only advisories that have at least one associated CVE ID are emitted.
- *
- * <p>The first-page GraphQL response is passed as {@code response}; subsequent pages
- * are fetched directly via HTTP (cursor-based pagination).
- *
- * <p>GraphQL query targets {@code securityAdvisories} with fields:
- * {@code ghsaId}, {@code summary}, {@code publishedAt}, {@code severity},
- * {@code identifiers} (type+value), {@code references} (url).
+ * <p>The crawl is incremental: the schema injects the last committed {@code max(updatedAt)} as
+ * {@code updatedSince}, so each run fetches only advisories changed since the prior snapshot.
  */
 public class GithubSaResponseTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GithubSaResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private static final String GRAPHQL_URL = "https://api.github.com/graphql";
-  private static final int PAGE_SIZE = 100;
-  private static final int TIMEOUT_MS = 60_000;
-  private static final long RATE_DELAY_MS = 1000L;
-
-  @SuppressWarnings("InlineFormatString")
-  private static final String QUERY_TEMPLATE =
-      "{ \"query\": \"{ securityAdvisories(first: %d%s) { pageInfo { hasNextPage endCursor } "
-          + "nodes { ghsaId publishedAt severity summary "
-          + "identifiers { type value } "
-          + "references { url } } } }\" }";
-
   @Override public String transform(String response, RequestContext context) {
-    // Read the token from where it lives in the model: the vuln_cross_refs source's Authorization
-    // header ("bearer ${CYBER_GITHUB_TOKEN:}", resolved at YAML load) — not System.getenv.
-    String auth = ModelOperand.getString(
-        "cyber_vuln.partitionedTables.vuln_cross_refs.source.headers.Authorization");
-    String token = auth != null && auth.regionMatches(true, 0, "bearer ", 0, 7)
-        ? auth.substring(7).trim() : (auth != null ? auth.trim() : null);
-    if (token == null || token.isEmpty()) {
-      // A required credential being absent is a hard failure, never a silent skip.
-      throw new IllegalStateException("GithubSA: GitHub token is required but missing — set "
-          + "CYBER_GITHUB_TOKEN (vuln_cross_refs source Authorization resolved empty).");
+    if (response == null || response.isEmpty()) {
+      LOGGER.warn("GithubSA: empty response for {}", context.getUrl());
+      return "[]";
     }
 
-    ArrayNode allRows = MAPPER.createArrayNode();
-
     try {
-      // The HTTP source sends a POST with no body; GitHub rejects it. Ignore the initial
-      // response entirely and self-fetch all pages using the GraphQL cursor API.
-      String cursor = null;
-      do {
-        if (cursor != null) {
-          sleepQuietly(RATE_DELAY_MS);
-        }
-        String pageResponse = fetchPage(token, cursor);
-        if (pageResponse == null) {
-          break;
-        }
-        cursor = processPage(pageResponse, allRows);
-        if (allRows.size() % 1000 == 0 && allRows.size() > 0) {
-          LOGGER.info("GithubSA: accumulated {} cross-refs", allRows.size());
-        }
-      } while (cursor != null);
-    } catch (Exception e) {
-      LOGGER.error("GithubSA: failed: {}", e.getMessage());
-      throw new RuntimeException("Failed to process GitHub Security Advisories: " + e.getMessage(),
-          e);
-    }
+      JsonNode root = MAPPER.readTree(response);
 
-    LOGGER.info("GithubSA: returning {} vuln_cross_refs rows", allRows.size());
-    try {
-      return MAPPER.writeValueAsString(allRows);
+      JsonNode errors = root.path("errors");
+      if (errors.isArray() && errors.size() > 0) {
+        String msg = errors.get(0).path("message").asText("unknown error");
+        // Fail loudly — a GraphQL error mid-crawl must not be cached or treated as end-of-data.
+        throw new RuntimeException("GitHub GraphQL error: " + msg);
+      }
+
+      ByteArrayOutputStream baos = new ByteArrayOutputStream(256 * 1024);
+      JsonGenerator gen = MAPPER.getFactory().createGenerator(baos);
+      gen.writeStartArray();
+      int rows = writePage(root, gen);
+      gen.writeEndArray();
+      gen.close();
+
+      LOGGER.debug("GithubSA: {} cross-ref rows from page", rows);
+      return baos.toString(StandardCharsets.UTF_8.name());
+
+    } catch (RuntimeException e) {
+      throw e;
     } catch (Exception e) {
-      LOGGER.error("GithubSA: failed to serialize rows: {}", e.getMessage());
-      throw new RuntimeException("Failed to serialize GitHub SA rows", e);
+      LOGGER.error("GithubSA: failed to parse response: {}", e.getMessage());
+      throw new RuntimeException("Failed to parse GitHub SA response: " + e.getMessage(), e);
     }
   }
 
-  /**
-   * Processes one page of GraphQL response and returns next cursor, or null if no more pages.
-   */
-  @SuppressWarnings("UnusedVariable")
-  private String processPage(String pageResponse, ArrayNode accumulator) throws IOException {
-    JsonNode root = MAPPER.readTree(pageResponse);
-
-    // Check for GraphQL errors
-    JsonNode errors = root.path("errors");
-    if (errors.isArray() && errors.size() > 0) {
-      String msg = errors.get(0).path("message").asText("unknown error");
-      LOGGER.error("GithubSA: GraphQL error: {}", msg);
-      throw new RuntimeException("GitHub GraphQL error: " + msg);
+  private int writePage(JsonNode root, JsonGenerator gen) throws Exception {
+    JsonNode nodes = root.path("data").path("securityAdvisories").path("nodes");
+    if (!nodes.isArray()) {
+      return 0;
     }
+    int count = 0;
+    for (JsonNode node : nodes) {
+      String ghsaId = textOrNull(node, "ghsaId");
+      if (ghsaId == null) {
+        continue;
+      }
+      String referenceUrl = extractFirstUrl(node.path("references"));
 
-    JsonNode advisories = root.path("data").path("securityAdvisories");
-    JsonNode nodes = advisories.path("nodes");
-
-    if (nodes.isArray()) {
-      for (JsonNode node : nodes) {
-        String ghsaId = textOrNull(node, "ghsaId");
-        if (ghsaId == null) {
-          continue;
-        }
-
-        String publishedAt = textOrNull(node, "publishedAt");
-        String severity = textOrNull(node, "severity");
-        String referenceUrl = extractFirstUrl(node.path("references"));
-
-        // Emit one row per CVE identifier
-        for (JsonNode ident : node.path("identifiers")) {
-          String type = textOrNull(ident, "type");
-          String value = textOrNull(ident, "value");
-          if ("CVE".equals(type) && value != null && value.startsWith("CVE-")) {
-            ObjectNode row = MAPPER.createObjectNode();
-            row.put("cve_id", value);
-            row.put("external_id", ghsaId);
-            row.put("external_source", "ghsa");
-            row.put("url", referenceUrl);
-            accumulator.add(row);
-          }
+      // One row per CVE identifier on this advisory.
+      for (JsonNode ident : node.path("identifiers")) {
+        String type = textOrNull(ident, "type");
+        String value = textOrNull(ident, "value");
+        if ("CVE".equals(type) && value != null && value.startsWith("CVE-")) {
+          ObjectNode row = MAPPER.createObjectNode();
+          row.put("cve_id", value);
+          row.put("external_id", ghsaId);
+          row.put("external_source", "ghsa");
+          row.put("url", referenceUrl);
+          gen.writeTree(row);
+          count++;
         }
       }
     }
-
-    // Check for next page
-    JsonNode pageInfo = advisories.path("pageInfo");
-    boolean hasNextPage = pageInfo.path("hasNextPage").asBoolean(false);
-    if (hasNextPage) {
-      return textOrNull(pageInfo, "endCursor");
-    }
-    return null;
+    return count;
   }
 
   private String extractFirstUrl(JsonNode references) {
@@ -174,54 +117,6 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
     return textOrNull(references.get(0), "url");
   }
 
-  private String fetchPage(String token, String cursor) {
-    try {
-      String afterClause = cursor != null ? (", after: \\\"" + cursor + "\\\"") : "";
-      String body = String.format(QUERY_TEMPLATE, PAGE_SIZE, afterClause);
-
-      HttpURLConnection conn =
-          (HttpURLConnection) URI.create(GRAPHQL_URL).toURL().openConnection();
-      conn.setRequestMethod("POST");
-      conn.setConnectTimeout(TIMEOUT_MS);
-      conn.setReadTimeout(TIMEOUT_MS);
-      conn.setDoOutput(true);
-      conn.setRequestProperty("Content-Type", "application/json");
-      conn.setRequestProperty("Authorization", "bearer " + token);
-      conn.setRequestProperty("Accept", "application/json");
-
-      byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
-      conn.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
-      try (OutputStream os = conn.getOutputStream()) {
-        os.write(bodyBytes);
-      }
-
-      int status = conn.getResponseCode();
-      if (status == 401 || status == 403) {
-        LOGGER.error("GithubSA: auth failure HTTP {} — check CYBER_GITHUB_TOKEN", status);
-        return null;
-      }
-      if (status != 200) {
-        LOGGER.warn("GithubSA: HTTP {} fetching cursor={}", status, cursor);
-        return null;
-      }
-
-      BufferedReader reader = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line);
-      }
-      reader.close();
-      conn.disconnect();
-      return sb.toString();
-
-    } catch (Exception e) {
-      LOGGER.warn("GithubSA: error fetching cursor={}: {}", cursor, e.getMessage());
-      return null;
-    }
-  }
-
   private static String textOrNull(JsonNode node, String field) {
     JsonNode v = node.get(field);
     if (v == null || v.isNull() || v.isMissingNode()) {
@@ -229,13 +124,5 @@ public class GithubSaResponseTransformer implements ResponseTransformer {
     }
     String t = v.asText();
     return t.isEmpty() ? null : t;
-  }
-
-  private static void sleepQuietly(long ms) {
-    try {
-      Thread.sleep(ms);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
   }
 }

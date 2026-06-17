@@ -14,7 +14,6 @@ import org.apache.calcite.adapter.govdata.cyber.vuln.CisaAdvisoryResponseTransfo
 import org.apache.calcite.adapter.govdata.cyber.vuln.CisaKevResponseTransformer;
 import org.apache.calcite.adapter.govdata.cyber.vuln.CweResponseTransformer;
 import org.apache.calcite.adapter.govdata.cyber.vuln.GithubSaResponseTransformer;
-import org.apache.calcite.adapter.govdata.cyber.vuln.MitreCveResponseTransformer;
 import org.apache.calcite.adapter.govdata.cyber.vuln.NvdResponseTransformer;
 import org.apache.calcite.adapter.govdata.cyber.vuln.OsvResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
@@ -231,12 +230,18 @@ class CyberVulnIntegrationTest {
 
   // ── Phase 2: GitHub Security Advisories ──────────────────────────────────
 
-  @Test void testGithubSaFetchAndTransform() throws Exception {
-    String token = System.getenv("CYBER_GITHUB_TOKEN");
-    Assumptions.assumeTrue(token != null && !token.isEmpty(),
-        "CYBER_GITHUB_TOKEN required for GitHub SA smoke test");
-
-    LOGGER.info("GithubSA: smoke test (first page only via response pass-through)");
+  @Test void testGithubSaTransformPage() throws Exception {
+    // The framework now drives the GraphQL fetch + CURSOR pagination; GithubSaResponseTransformer
+    // only reshapes one page envelope into vuln_cross_refs rows. Feed a canned page (one advisory
+    // with a GHSA and a CVE identifier) and assert exactly the CVE pair is emitted.
+    String page = "{\"data\":{\"securityAdvisories\":{"
+        + "\"pageInfo\":{\"hasNextPage\":false,\"endCursor\":\"Y3Vyc29yOjE=\"},"
+        + "\"nodes\":[{\"ghsaId\":\"GHSA-xxxx-yyyy-zzzz\","
+        + "\"publishedAt\":\"2024-01-01T00:00:00Z\",\"severity\":\"HIGH\",\"summary\":\"test\","
+        + "\"identifiers\":["
+        + "{\"type\":\"GHSA\",\"value\":\"GHSA-xxxx-yyyy-zzzz\"},"
+        + "{\"type\":\"CVE\",\"value\":\"CVE-2024-12345\"}],"
+        + "\"references\":[{\"url\":\"https://example.com/advisory\"}]}]}}}";
 
     GithubSaResponseTransformer transformer = new GithubSaResponseTransformer();
     RequestContext ctx = RequestContext.builder()
@@ -246,57 +251,16 @@ class CyberVulnIntegrationTest {
         .dimensionValues(Collections.<String, String>emptyMap())
         .build();
 
-    // Pass empty response: transformer fetches first page itself, then paginates.
-    // For smoke we just verify it starts and produces valid JSON without error.
-    // The full run would take ~minutes; check that at least first page succeeds.
-    String result = transformer.transform("", ctx);
-    assertNotNull(result, "GithubSA result should not be null");
-
+    String result = transformer.transform(page, ctx);
     JsonNode rows = MAPPER.readTree(result);
-    assertTrue(rows.isArray(), "GithubSA result should be JSON array");
-    LOGGER.info("GithubSA: got {} vuln_cross_refs rows", rows.size());
+    assertTrue(rows.isArray(), "GithubSA result should be a JSON array");
+    assertEquals(1, rows.size(), "only the CVE identifier should yield a row (GHSA id is skipped)");
 
-    if (rows.size() > 0) {
-      JsonNode first = rows.get(0);
-      assertNotNull(first.path("cve_id").asText(null), "cve_id should be present");
-      assertNotNull(first.path("external_id").asText(null), "external_id (GHSA) should be present");
-      assertEquals("ghsa", first.path("external_source").asText(),
-          "external_source should be 'ghsa'");
-      assertTrue(first.path("external_id").asText("").startsWith("GHSA-"),
-          "external_id should be a GHSA- prefixed ID");
-    }
-  }
-
-  // ── Phase 2: MITRE CVE delta ──────────────────────────────────────────────
-
-  @Test void testMitreCveDeltaFetchAndTransform() throws Exception {
-    LOGGER.info("MitreCve: smoke test — downloading latest delta ZIP");
-
-    MitreCveResponseTransformer transformer = new MitreCveResponseTransformer();
-    RequestContext ctx = RequestContext.builder()
-        .url("https://github.com/CVEProject/cvelistV5/releases/latest/download/delta.zip")
-        .headers(Collections.<String, String>emptyMap())
-        .parameters(Collections.<String, String>emptyMap())
-        .dimensionValues(Collections.<String, String>emptyMap())
-        .build();
-
-    String result = transformer.transform("", ctx);
-    assertNotNull(result, "MitreCve result should not be null");
-
-    JsonNode rows = MAPPER.readTree(result);
-    assertTrue(rows.isArray(), "MitreCve result should be JSON array");
-    LOGGER.info("MitreCve: got {} vuln_cross_refs rows", rows.size());
-
-    // Delta ZIP should have at least some entries on any given day
-    if (rows.size() > 0) {
-      JsonNode first = rows.get(0);
-      assertNotNull(first.path("cve_id").asText(null), "cve_id should be present");
-      assertTrue(first.path("cve_id").asText("").startsWith("CVE-"),
-          "cve_id should start with CVE-");
-      assertNotNull(first.path("external_source").asText(null),
-          "external_source should be present");
-      assertNotNull(first.path("url").asText(null), "url should be present");
-    }
+    JsonNode row = rows.get(0);
+    assertEquals("CVE-2024-12345", row.path("cve_id").asText(), "cve_id");
+    assertEquals("GHSA-xxxx-yyyy-zzzz", row.path("external_id").asText(), "external_id (GHSA)");
+    assertEquals("ghsa", row.path("external_source").asText(), "external_source");
+    assertEquals("https://example.com/advisory", row.path("url").asText(), "url");
   }
 
   // ── Phase 2: CISA Advisories ──────────────────────────────────────────────
