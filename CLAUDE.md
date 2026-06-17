@@ -39,10 +39,10 @@ duckdb -c "DESCRIBE SELECT * FROM read_parquet('/path/file.parquet')" # check Du
 - [ ] Commit message reflects actual changes
 
 ## GovData Schema Rules
-7. **No Env Vars in Schema YAML** - Schema YAML files (`govdata/src/main/resources/**/*.yaml`) must never reference OS environment variables directly (e.g., `${GOVDATA_START_YEAR}`, `${GOVDATA_SINCE_YEAR}`, `${EDU_SCHEMA_NAME}`). Only two exceptions are allowed:
-   - `${GOVDATA_PARQUET_DIR}` — set by GovDataSchemaFactory from the model `directory` operand
-   - `${API_DATA_GOV}` — pending proper factory injection (tracked, do not add new ones of this type)
-   All runtime configuration must flow through model operands → GovDataSchemaFactory → system properties. Schema YAMLs consume factory-set properties only.
+7. **Env Vars Belong ONLY in the Schema YAML** - The schema YAML (`govdata/src/main/resources/**/*.yaml`) is the one and only place an environment variable may be referenced, as `${VAR:default}`. This declares every runtime dependency in a single, auditable location (the model). `${VAR}` is resolved at load by VariableResolver (env, then system property, then default).
+   - **Java code (govdata/ and file/) must NEVER call `System.getenv`.** Read the value from the model instead: `ModelOperand.getString/getInt/getLong/getBoolean("<schema>.<path>")` (the global accessor over the captured operand) or the factory's own `operand` map. The migration of all such reads is enforced by the local `model-operand-guard` hook.
+   - An orchestration model/script can always override any operand, so routing every input through the model costs nothing and keeps all dependencies visible from one place.
+   - The only `System.getenv` exceptions are run/infra flags owned by the launch scripts (e.g. `GOVDATA_DQ`, `AWS_*`, `ETL_*`) and `VariableResolver` itself — see the hook's `EXEMPT_NAMES`/`EXEMPT_PREFIX`.
 
 ## Legacy Commands
 - **Cleanup debug code**: Remove System.out/err, temp tests, dead code, temp markdown

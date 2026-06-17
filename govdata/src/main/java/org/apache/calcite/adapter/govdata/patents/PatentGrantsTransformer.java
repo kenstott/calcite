@@ -50,8 +50,9 @@ public class PatentGrantsTransformer extends AbstractPatentsTransformer {
     final String patentFile = downloadAndCacheTsv(
         ODP_PVGPATDIS_BASE + "g_patent.tsv.zip", cacheFile("g_patent_" + q + ".tsv"));
 
+    // From the model operand (patents schema YAML: ${PATENTS_INCLUDE_DESIGN:false}).
     final boolean includeDesign =
-        "true".equalsIgnoreCase(System.getenv("PATENTS_INCLUDE_DESIGN"));
+        org.apache.calcite.adapter.file.etl.ModelOperand.getBoolean("patents.includeDesignPatents", false);
 
     final BufferedReader reader = new BufferedReader(
         new InputStreamReader(storageProvider().openInputStream(patentFile),

@@ -25,6 +25,13 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:sec}"
+# Ingest config operands — declared here so the dependency lives in the model
+# (an orchestration model/script can override any of them). Read in code via the
+# operand / ModelOperand, never System.getenv.
+stockPriceSource: "${STOCK_PRICE_SOURCE:stooq}"
+submissionsTtlHours: "${SEC_SUBMISSIONS_TTL_HOURS:24}"
+alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
+cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"

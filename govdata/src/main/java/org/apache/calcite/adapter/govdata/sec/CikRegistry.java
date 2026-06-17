@@ -77,9 +77,10 @@ public class CikRegistry {
       loadRegistryFromResource();
       LOGGER.debug("Loaded default CIK registry from classpath");
 
-      // Then check for custom registry file to extend/override
-      String registryPath = System.getenv("XBRL_CIK_REGISTRY");
-      if (registryPath == null) {
+      // Then check for custom registry file to extend/override. Path from the model
+      // operand (sec schema YAML: ${XBRL_CIK_REGISTRY:}); then system-property fallbacks.
+      String registryPath = org.apache.calcite.adapter.file.etl.ModelOperand.getString("sec.cikRegistryPath");
+      if (registryPath == null || registryPath.isEmpty()) {
         registryPath = System.getProperty("sec.cikRegistry");
       }
       if (registryPath == null) {

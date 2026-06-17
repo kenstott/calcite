@@ -37,6 +37,8 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:patents}"
+# Ingest config operand — declared in the model, read in code via ModelOperand (never getenv).
+includeDesignPatents: "${PATENTS_INCLUDE_DESIGN:false}"
 # Full-dump TSVs are re-read once per year; a DQ rebuild spans several years back-to-back.
 workerTimeoutMinutes: 180
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"

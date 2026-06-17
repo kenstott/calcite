@@ -74,16 +74,9 @@ public class AlphaVantageDownloader {
   public AlphaVantageDownloader(String apiKey, StorageProvider storageProvider) {
     this.apiKey = apiKey;
     this.storageProvider = storageProvider;
-    long ms = 1500L;
-    String env = System.getenv("ALPHA_VANTAGE_RATE_LIMIT_MS");
-    if (env != null && !env.isEmpty()) {
-      try {
-        ms = Long.parseLong(env.trim());
-      } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid ALPHA_VANTAGE_RATE_LIMIT_MS={}, using {}", env, ms);
-      }
-    }
-    this.rateLimitMs = ms;
+    // Rate limit from the model operand (sec schema YAML: ${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}).
+    this.rateLimitMs = org.apache.calcite.adapter.file.etl.ModelOperand.getLong(
+        "sec.alphaVantageRateLimitMs", 1500L);
   }
 
   /**

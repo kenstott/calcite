@@ -111,15 +111,6 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
     Map<String, String> connectionParams = getConnectionParameters();
     applyConnectionParameters(config, connectionParams);
 
-    // Check for dataDirectory environment variable (if not set by connection params)
-    if (!config.containsKey("dataDirectory")) {
-      String envDataDir = System.getenv("XBRL_DATA_DIRECTORY");
-      if (envDataDir != null && !envDataDir.isEmpty()) {
-        LOGGER.info("Using XBRL_DATA_DIRECTORY from environment: " + envDataDir);
-        config.put("dataDirectory", envDataDir);
-      }
-    }
-
     // User config overrides defaults
     for (Map.Entry<String, Object> entry : operand.entrySet()) {
       String key = entry.getKey();

@@ -3701,13 +3701,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       LOGGER.info("Starting stock price download with basePath={}", basePath);
 
       if (!tickerCikPairs.isEmpty()) {
-        // Determine which stock price source to use
-        // Priority: 1) operand, 2) STOCK_PRICE_SOURCE env var, 3) default to "stooq"
+        // Stock price source from the model operand (stockPriceSource, declared in the
+        // schema YAML as ${STOCK_PRICE_SOURCE:stooq}); default Stooq.
         String stockPriceSource = currentOperand != null
             ? (String) currentOperand.get("stockPriceSource") : null;
-        if (stockPriceSource == null || stockPriceSource.isEmpty()) {
-          stockPriceSource = System.getenv("STOCK_PRICE_SOURCE");
-        }
         if (stockPriceSource == null || stockPriceSource.isEmpty()) {
           stockPriceSource = "stooq";  // Default to Stooq
         }
@@ -3946,15 +3943,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   /**
    * Gets the TTL for submissions.json files in hours.
-   * Default is 24 hours. Configure via SEC_SUBMISSIONS_TTL_HOURS environment variable.
+   * Default is 24 hours. Configure via the submissionsTtlHours model operand
+   * (schema YAML: ${SEC_SUBMISSIONS_TTL_HOURS:24}).
    */
   private int getSubmissionsTtlHours() {
-    String ttlStr = System.getenv("SEC_SUBMISSIONS_TTL_HOURS");
-    if (ttlStr != null) {
+    Object v = currentOperand != null ? currentOperand.get("submissionsTtlHours") : null;
+    if (v != null) {
       try {
-        return Integer.parseInt(ttlStr);
+        return Integer.parseInt(String.valueOf(v).trim());
       } catch (NumberFormatException e) {
-        LOGGER.warn("Invalid SEC_SUBMISSIONS_TTL_HOURS: {}, using default 24", ttlStr);
+        LOGGER.warn("Invalid submissionsTtlHours: {}, using default 24", v);
       }
     }
     return 24; // Default: 24 hours
