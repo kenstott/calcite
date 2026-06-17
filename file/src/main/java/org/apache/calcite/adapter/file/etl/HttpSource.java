@@ -548,6 +548,13 @@ public class HttpSource implements DataSource {
         return false;
       }
 
+      // Body-cursor (POST/GraphQL) pagination is driven separately: the cursor is templated
+      // into the request body, not the query string, and termination follows hasNextPath.
+      if (pagination.getType() == HttpSourceConfig.PaginationType.CURSOR
+          && pagination.isCursorInBody()) {
+        return fetchNextCursorBodyPage();
+      }
+
       try {
         Map<String, String> pageParams = new LinkedHashMap<String, String>(baseParams);
 
@@ -679,6 +686,101 @@ public class HttpSource implements DataSource {
       } catch (IOException e) {
         LOGGER.error("Error fetching paginated data: {}", e.getMessage());
         hasMore = false;
+        return false;
+      }
+    }
+
+    /**
+     * Fetches the next page of a body-cursor (POST/GraphQL) crawl. The cursor, page size, and
+     * incremental bound are injected as native typed values into the request body's GraphQL
+     * {@code variables} object (so the cursor is JSON null on the first page, a JSON string
+     * thereafter); the query string uses {@code $}-style GraphQL variables and is sent verbatim.
+     * Termination follows the configured {@code hasNextPath} boolean read from the raw envelope.
+     * A transformed page that is empty (the transform may legitimately drop all rows on a page)
+     * is skipped so the outer iterator never observes an empty page while more pages remain.
+     * Fetch failures propagate — a failed page fails the crawl rather than silently truncating it.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean fetchNextCursorBodyPage() {
+      while (true) {
+        // Build the per-page GraphQL variables with native types (a null cursor → JSON null).
+        Map<String, Object> body = config.getBody() != null
+            ? new LinkedHashMap<String, Object>(config.getBody())
+            : new LinkedHashMap<String, Object>();
+        Map<String, Object> gqlVars = new LinkedHashMap<String, Object>();
+        Object existing = body.get("variables");
+        if (existing instanceof Map) {
+          gqlVars.putAll((Map<String, Object>) existing);
+        }
+        gqlVars.put(pagination.getCursorParam(), cursor); // null on the first page
+        if (pagination.getLimitParam() != null) {
+          gqlVars.put(pagination.getLimitParam(), pageSize);
+        }
+        if (pagination.getBoundParam() != null) {
+          // Incremental lower bound (e.g. updatedSince) injected into the fetch variables
+          // upstream; null (→ full crawl) when no bound is set yet.
+          String bound = variables.get(pagination.getBoundParam());
+          gqlVars.put(pagination.getBoundParam(),
+              bound == null || bound.isEmpty() ? null : bound);
+        }
+        body.put("variables", gqlVars);
+
+        String rawResponse;
+        try {
+          rawResponse = executeRequest(url, baseParams, variables, null, body);
+        } catch (IOException e) {
+          throw new RuntimeException("Body-cursor pagination failed at cursor="
+              + cursor + ": " + e.getMessage(), e);
+        }
+
+        accumulateRawPage(rawResponse);
+        List<Map<String, Object>> pageData;
+        try {
+          String transformed = transformResponse(rawResponse, url, baseParams, variables);
+          pageData = parseResponse(transformed);
+        } catch (IOException e) {
+          throw new RuntimeException("Failed to transform/parse page: " + e.getMessage(), e);
+        }
+        pageData = normalizeRecords(pageData, variables);
+
+        // Termination and the next cursor come from the raw envelope, not the transformed rows.
+        boolean morePages;
+        String nextCursor = null;
+        try {
+          JsonNode root = OBJECT_MAPPER.readTree(rawResponse);
+          String hnp = pagination.getHasNextPath();
+          JsonNode hn = (hnp != null && !hnp.isEmpty()) ? navigateToPath(root, hnp) : null;
+          morePages = hn != null && hn.isBoolean() && hn.asBoolean();
+          String cp = pagination.getCursorPath();
+          if (cp != null && !cp.isEmpty()) {
+            JsonNode cn = navigateToPath(root, cp);
+            nextCursor = (cn != null && cn.isTextual()) ? cn.asText() : null;
+          }
+        } catch (IOException e) {
+          throw new RuntimeException("Failed to read pagination state: " + e.getMessage(), e);
+        }
+        boolean canAdvance = morePages && nextCursor != null && !nextCursor.isEmpty();
+
+        if (!pageData.isEmpty()) {
+          currentPageIterator = pageData.iterator();
+          if (canAdvance) {
+            cursor = nextCursor;
+          } else {
+            hasMore = false;
+            writeMergedCache();
+          }
+          LOGGER.debug("Body-cursor page: {} records (total yielded: {})",
+              pageData.size(), totalYielded);
+          return true;
+        }
+
+        // Transformed page is empty — keep paging if the source says there is more.
+        if (canAdvance) {
+          cursor = nextCursor;
+          continue;
+        }
+        hasMore = false;
+        writeMergedCache();
         return false;
       }
     }
@@ -1079,6 +1181,17 @@ public class HttpSource implements DataSource {
    */
   private String executeRequest(String baseUrl, Map<String, String> params,
       Map<String, String> variables, String rawCachePath) throws IOException {
+    return executeRequest(baseUrl, params, variables, rawCachePath, null);
+  }
+
+  /**
+   * @param bodyOverride per-request POST/PUT body to serialize instead of {@code config.getBody()}
+   *                     (used by body-cursor pagination to inject typed GraphQL variables); null
+   *                     to use the configured body.
+   */
+  private String executeRequest(String baseUrl, Map<String, String> params,
+      Map<String, String> variables, String rawCachePath,
+      Map<String, Object> bodyOverride) throws IOException {
 
     // Rate limiting
     enforceRateLimit();
@@ -1100,7 +1213,7 @@ public class HttpSource implements DataSource {
 
     while (retries <= rateLimit.getMaxRetries()) {
       try {
-        String response = doRequest(fullUrl, variables, rawCachePath);
+        String response = doRequest(fullUrl, variables, rawCachePath, bodyOverride);
         return response;
       } catch (IOException e) {
         lastException = e;
@@ -1209,6 +1322,11 @@ public class HttpSource implements DataSource {
    */
   private String doRequest(String urlString, Map<String, String> variables,
       String rawCachePath) throws IOException {
+    return doRequest(urlString, variables, rawCachePath, null);
+  }
+
+  private String doRequest(String urlString, Map<String, String> variables,
+      String rawCachePath, Map<String, Object> bodyOverride) throws IOException {
     URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -1233,8 +1351,9 @@ public class HttpSource implements DataSource {
       if (config.getMethod() == HttpSourceConfig.HttpMethod.POST
           || config.getMethod() == HttpSourceConfig.HttpMethod.PUT) {
         conn.setDoOutput(true);
-        if (config.hasBody()) {
-          String bodyContent = serializeBody(config.getBody(), config.getBodyFormat(), variables);
+        Map<String, Object> requestBody = bodyOverride != null ? bodyOverride : config.getBody();
+        if (requestBody != null && !requestBody.isEmpty()) {
+          String bodyContent = serializeBody(requestBody, config.getBodyFormat(), variables);
           // Set Content-Type if not already set
           String contentType = config.getBodyFormat() == HttpSourceConfig.BodyFormat.JSON
               ? "application/json"
@@ -2597,6 +2716,7 @@ public class HttpSource implements DataSource {
   private String substituteVariables(String template, Map<String, String> variables) {
     return VariableResolver.substitute(template, variables);
   }
+
 
   /**
    * Builds URL with query parameters.

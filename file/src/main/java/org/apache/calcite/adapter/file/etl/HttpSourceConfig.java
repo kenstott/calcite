@@ -1132,9 +1132,20 @@ public class HttpSourceConfig {
     private final String pageParam;
     private final int pageSize;
     private final String countPath;
+    /** Where a CURSOR is injected: {@code "query"} (default) or {@code "body"} (POST/GraphQL). */
+    private final String cursorIn;
+    /** Dotted JSON path to a boolean "more pages" flag (e.g. {@code pageInfo.hasNextPage}). */
+    private final String hasNextPath;
+    /**
+     * Name of an incremental lower-bound value (e.g. {@code updatedSince}) injected into the
+     * request body alongside the cursor, formatted as a GraphQL value (null when the bound is
+     * empty, quoted otherwise). The raw value is read from the fetch variable of the same name.
+     */
+    private final String boundParam;
 
     private PaginationConfig(PaginationType type, String limitParam, String offsetParam,
-        String cursorParam, String cursorPath, String pageParam, int pageSize, String countPath) {
+        String cursorParam, String cursorPath, String pageParam, int pageSize, String countPath,
+        String cursorIn, String hasNextPath, String boundParam) {
       this.type = type;
       this.limitParam = limitParam;
       this.offsetParam = offsetParam;
@@ -1143,20 +1154,24 @@ public class HttpSourceConfig {
       this.pageParam = pageParam;
       this.pageSize = pageSize;
       this.countPath = countPath;
+      this.cursorIn = cursorIn;
+      this.hasNextPath = hasNextPath;
+      this.boundParam = boundParam;
     }
 
     public static PaginationConfig none() {
-      return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0, null);
+      return new PaginationConfig(PaginationType.NONE, null, null, null, null, null, 0, null,
+          null, null, null);
     }
 
     public static PaginationConfig offset(String limitParam, String offsetParam, int pageSize) {
       return new PaginationConfig(PaginationType.OFFSET, limitParam, offsetParam,
-          null, null, null, pageSize, null);
+          null, null, null, pageSize, null, null, null, null);
     }
 
     public static PaginationConfig cursor(String cursorParam, String cursorPath, int pageSize) {
       return new PaginationConfig(PaginationType.CURSOR, null, null,
-          cursorParam, cursorPath, null, pageSize, null);
+          cursorParam, cursorPath, null, pageSize, null, null, null, null);
     }
 
     public PaginationType getType() {
@@ -1192,6 +1207,26 @@ public class HttpSourceConfig {
       return countPath;
     }
 
+    /** Where a CURSOR value is injected: {@code "query"} (default) or {@code "body"}. */
+    public String getCursorIn() {
+      return cursorIn;
+    }
+
+    /** True when the cursor is templated into the request body (POST/GraphQL) rather than a param. */
+    public boolean isCursorInBody() {
+      return "body".equalsIgnoreCase(cursorIn);
+    }
+
+    /** Dotted JSON path to the boolean "more pages" flag, or null to infer from cursor/empty page. */
+    public String getHasNextPath() {
+      return hasNextPath;
+    }
+
+    /** Name of the incremental lower-bound value injected into the body (e.g. {@code updatedSince}). */
+    public String getBoundParam() {
+      return boundParam;
+    }
+
     public static PaginationConfig fromMap(Map<String, Object> map) {
       if (map == null) {
         return none();
@@ -1216,7 +1251,10 @@ public class HttpSourceConfig {
           (String) map.get("cursorPath"),
           (String) map.get("pageParam"),
           pageSize,
-          (String) map.get("countPath"));
+          (String) map.get("countPath"),
+          (String) map.get("cursorIn"),
+          (String) map.get("hasNextPath"),
+          (String) map.get("boundParam"));
     }
   }
 

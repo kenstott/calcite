@@ -375,6 +375,34 @@ class HttpSourceConfigDeepTest {
     assertEquals(HttpSourceConfig.PaginationType.CURSOR, config.getType());
     assertEquals("next_cursor", config.getCursorParam());
     assertEquals(200, config.getPageSize());
+    // Defaults for the body-cursor fields when unspecified.
+    assertNull(config.getCursorIn());
+    assertFalse(config.isCursorInBody());
+    assertNull(config.getHasNextPath());
+    assertNull(config.getBoundParam());
+  }
+
+  @Test void testPaginationConfigFromMapBodyCursor() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "cursor");
+    map.put("cursorIn", "body");
+    map.put("cursorParam", "after");
+    map.put("cursorPath", "data.securityAdvisories.pageInfo.endCursor");
+    map.put("hasNextPath", "data.securityAdvisories.pageInfo.hasNextPage");
+    map.put("limitParam", "first");
+    map.put("boundParam", "updatedSince");
+    map.put("pageSize", 100);
+
+    HttpSourceConfig.PaginationConfig config = HttpSourceConfig.PaginationConfig.fromMap(map);
+    assertEquals(HttpSourceConfig.PaginationType.CURSOR, config.getType());
+    assertTrue(config.isCursorInBody());
+    assertEquals("body", config.getCursorIn());
+    assertEquals("after", config.getCursorParam());
+    assertEquals("data.securityAdvisories.pageInfo.endCursor", config.getCursorPath());
+    assertEquals("data.securityAdvisories.pageInfo.hasNextPage", config.getHasNextPath());
+    assertEquals("first", config.getLimitParam());
+    assertEquals("updatedSince", config.getBoundParam());
+    assertEquals(100, config.getPageSize());
   }
 
   @Test void testPaginationConfigFromMapPage() {
