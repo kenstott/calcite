@@ -101,10 +101,11 @@ final class FreshnessConfig {
   private final String query;
   private final String queryPath;
   private final String normalize;
+  private final String watermarkVar;
 
   private FreshnessConfig(Type type, String probeUrl, String versionField,
       String checksumUrl, boolean objectMetadata, String countUrl, String countPath,
-      String query, String queryPath, String normalize) {
+      String query, String queryPath, String normalize, String watermarkVar) {
     this.type = type;
     this.probeUrl = probeUrl;
     this.versionField = versionField;
@@ -115,6 +116,7 @@ final class FreshnessConfig {
     this.query = query;
     this.queryPath = queryPath;
     this.normalize = normalize;
+    this.watermarkVar = watermarkVar;
   }
 
   Type getType() {
@@ -167,6 +169,17 @@ final class FreshnessConfig {
   }
 
   /**
+   * Name of a fetch variable to populate with the recovered watermark (the last committed
+   * freshness token) before the pull, enabling an incremental/delta fetch. For a GRAPHQL
+   * source the token is the previous max {@code updatedAt}; injected as e.g. {@code updatedSince}
+   * so the crawl fetches only records changed since the prior snapshot. Null disables delta
+   * (full pull). Pairs with an Iceberg append write so the delta adds to, not replaces, the table.
+   */
+  String getWatermarkVar() {
+    return watermarkVar;
+  }
+
+  /**
    * Parses a {@code freshness:} map, or returns null if absent/invalid (freshness off).
    */
   @SuppressWarnings("unchecked")
@@ -194,8 +207,9 @@ final class FreshnessConfig {
     String query = asString(map.get("query"));
     String queryPath = asString(map.get("path"));
     String normalize = asString(map.get("normalize"));
+    String watermarkVar = asString(map.get("watermark_var"));
     return new FreshnessConfig(type, probeUrl, versionField, checksumUrl, objectMetadata,
-        countUrl, countPath, query, queryPath, normalize);
+        countUrl, countPath, query, queryPath, normalize, watermarkVar);
   }
 
   private static String asString(Object o) {

@@ -114,6 +114,16 @@ public class EtlPipeline {
   private boolean perUnitFreshnessSkipAllowed;
 
   /**
+   * Delta incremental bound for this run: the fetch variable name and the recovered watermark
+   * value (prior committed freshness token). Set from the freshness probe when the source declares
+   * {@code freshness.watermark_var}; consumed in {@link #processSingleBatch} to inject the bound
+   * into the fetch variables so the crawl pulls only records changed since the last commit. Null
+   * when no watermark var is configured, on a cold run (no prior token), or under forceReprocessAll.
+   */
+  private String deltaBoundVar;
+  private String deltaBoundValue;
+
+  /**
    * Per-unit freshness tokens captured during this run, keyed by {@code pipeline::unitKey}.
    * Persisted to the tracker only after a clean commit (no failed batches), mirroring the
    * pipeline-level token persistence, so a partial run never caches a skip-forever token.
@@ -621,6 +631,16 @@ public class EtlPipeline {
           }
           // Capture so we can persist it after a successful commit
           probedFreshnessToken = currentToken;
+          // Delta: when the source declares a watermark var, feed the recovered prior token
+          // (e.g. the previous max updatedAt) into the fetch as the incremental lower bound so
+          // the crawl pulls only records changed since the last commit. Skipped on a cold run
+          // (no prior token) and under forceReprocessAll (full rebuild), which both full-pull.
+          String wmVar = freshnessConfig.getWatermarkVar();
+          if (wmVar != null && !wmVar.isEmpty() && previousToken != null && !forceReprocessAll) {
+            deltaBoundVar = wmVar;
+            deltaBoundValue = previousToken;
+            LOGGER.info("Pipeline '{}': delta bound {}={}", pipelineName, wmVar, previousToken);
+          }
         } catch (Exception e) {
           LOGGER.warn("Pipeline '{}': freshness probe failed ({}), proceeding with full fetch",
               pipelineName, e.getMessage());
@@ -1768,6 +1788,12 @@ public class EtlPipeline {
       }
     }
     if (data == null) {
+      // Delta: inject the recovered watermark as the incremental lower bound (e.g. updatedSince)
+      // so the source pulls only records changed since the last commit. Paired with an Iceberg
+      // append write, the delta adds to — rather than replaces — the committed table.
+      if (deltaBoundVar != null && deltaBoundValue != null) {
+        variables.put(deltaBoundVar, deltaBoundValue);
+      }
       data = dataSource.fetch(variables);
     }
 
