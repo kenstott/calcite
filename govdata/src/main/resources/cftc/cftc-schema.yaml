@@ -725,38 +725,14 @@ partitionedTables:
         - "10"
         - "11"
         - "12"
+      # Calendar-correct day expansion (reads year+month from context): skips invalid dates
+      # (Feb 30, Apr 31), future dates (capped at today), and — via skipWeekends — Saturdays
+      # and Sundays. CFTC disseminates EOD files only on business days, so weekend/invalid/future
+      # URLs would just 404. (Holidays are still requested-then-skipped via skipOn: [403,404];
+      # weekends + invalid + future dates are eliminated up front, cutting the request count ~40%.)
       day:
-        - "01"
-        - "02"
-        - "03"
-        - "04"
-        - "05"
-        - "06"
-        - "07"
-        - "08"
-        - "09"
-        - "10"
-        - "11"
-        - "12"
-        - "13"
-        - "14"
-        - "15"
-        - "16"
-        - "17"
-        - "18"
-        - "19"
-        - "20"
-        - "21"
-        - "22"
-        - "23"
-        - "24"
-        - "25"
-        - "26"
-        - "27"
-        - "28"
-        - "29"
-        - "30"
-        - "31"
+        type: day
+        skipWeekends: true
 
     source:
       type: http

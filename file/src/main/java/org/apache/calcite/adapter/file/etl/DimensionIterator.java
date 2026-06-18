@@ -470,7 +470,7 @@ public class DimensionIterator {
           values = resolveCustomWithContext(config, existing);
         } else if (CalendarPeriodProvider.isPeriodUnit(config.getType())) {
           values = CalendarPeriodProvider.values(config.getType(), config.getWeekYear(),
-              existing, todayUtc());
+              existing, todayUtc(), config.isSkipWeekends());
         } else {
           values = resolveDimension(config);
         }
@@ -557,7 +557,7 @@ public class DimensionIterator {
         // Fallback when a period dimension is resolved without context (e.g. no
         // coarser year dimension). Context-aware expansion is the normal path.
         return CalendarPeriodProvider.values(config.getType(), config.getWeekYear(),
-            Collections.<String, String>emptyMap(), todayUtc());
+            Collections.<String, String>emptyMap(), todayUtc(), config.isSkipWeekends());
       default:
         throw new IllegalStateException("Unknown dimension type '" + config.getType()
             + "' for dimension '" + config.getName() + "'");

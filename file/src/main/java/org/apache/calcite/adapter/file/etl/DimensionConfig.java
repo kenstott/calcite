@@ -69,6 +69,8 @@ public class DimensionConfig {
   private final Integer dataLag;
   private final Integer releaseMonth;
   private final boolean monthlyYtd;
+  /** When true on a DAY dimension, Saturdays and Sundays are omitted (e.g. CFTC EOD feeds). */
+  private final boolean skipWeekends;
   private final List<String> values;
   private final String sql;
   private final String source;
@@ -94,6 +96,7 @@ public class DimensionConfig {
     this.dataLag = builder.dataLag != null ? builder.dataLag : 0;
     this.releaseMonth = builder.releaseMonth;
     this.monthlyYtd = builder.monthlyYtd;
+    this.skipWeekends = builder.skipWeekends;
     this.values = builder.values != null
         ? Collections.unmodifiableList(new ArrayList<String>(builder.values))
         : Collections.<String>emptyList();
@@ -195,6 +198,15 @@ public class DimensionConfig {
    */
   public boolean isMonthlyYtd() {
     return monthlyYtd;
+  }
+
+  /**
+   * Returns whether weekend days (Saturday/Sunday) are omitted for a DAY dimension.
+   *
+   * @return true if weekends are skipped during day expansion
+   */
+  public boolean isSkipWeekends() {
+    return skipWeekends;
   }
 
   /**
@@ -468,6 +480,15 @@ public class DimensionConfig {
       builder.monthlyYtd(Boolean.parseBoolean((String) monthlyYtdObj));
     }
 
+    // Parse skipWeekends: when true on a DAY dimension, omit Saturdays/Sundays — e.g. CFTC
+    // EOD feeds publish only on business days, so weekend dates are guaranteed 404s.
+    Object skipWeekendsObj = map.get("skipWeekends");
+    if (skipWeekendsObj instanceof Boolean) {
+      builder.skipWeekends(((Boolean) skipWeekendsObj).booleanValue());
+    } else if (skipWeekendsObj instanceof String) {
+      builder.skipWeekends(Boolean.parseBoolean((String) skipWeekendsObj));
+    }
+
     // Parse list values
     Object valuesObj = map.get("values");
     if (valuesObj instanceof List) {
@@ -682,6 +703,7 @@ public class DimensionConfig {
     private Integer dataLag;
     private Integer releaseMonth;
     private boolean monthlyYtd;
+    private boolean skipWeekends;
     private List<String> values;
     private String sql;
     private String source;
@@ -735,6 +757,11 @@ public class DimensionConfig {
 
     public Builder monthlyYtd(boolean monthlyYtd) {
       this.monthlyYtd = monthlyYtd;
+      return this;
+    }
+
+    public Builder skipWeekends(boolean skipWeekends) {
+      this.skipWeekends = skipWeekends;
       return this;
     }
 

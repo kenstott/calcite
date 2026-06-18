@@ -82,6 +82,24 @@ public class CalendarPeriodProviderTest {
         values(DimensionType.DAY, null, ctx("year", "2026", "month", "6")));
   }
 
+  @Test void daysSkipWeekends() {
+    // January 2024 starts on a Monday: Saturdays 06/13/20/27, Sundays 07/14/21/28 (8 weekend
+    // days) → 23 weekdays of 31. skipWeekends=true omits exactly those, still descending.
+    Map<String, String> jan2024 = ctx("year", "2024", "month", "1");
+    assertEquals(31,
+        CalendarPeriodProvider.values(DimensionType.DAY, null, jan2024, TODAY, false).size());
+    List<String> wd =
+        CalendarPeriodProvider.values(DimensionType.DAY, null, jan2024, TODAY, true);
+    assertEquals(23, wd.size());
+    assertEquals("31", wd.get(0));   // Wed — newest first
+    assertTrue(wd.contains("05"));   // Fri
+    assertTrue(wd.contains("08"));   // Mon
+    assertTrue(!wd.contains("06"));  // Sat
+    assertTrue(!wd.contains("07"));  // Sun
+    assertTrue(!wd.contains("13"));  // Sat
+    assertTrue(!wd.contains("14"));  // Sun
+  }
+
   @Test void noFuturePeriods() {
     assertTrue(values(DimensionType.MONTH, null, ctx("year", "2027")).isEmpty());
     assertTrue(values(DimensionType.QUARTER, null, ctx("year", "2027")).isEmpty());

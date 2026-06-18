@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.IsoFields;
@@ -62,6 +63,16 @@ final class CalendarPeriodProvider {
    */
   static List<String> values(DimensionType unit, String weekYear,
       Map<String, String> context, LocalDate today) {
+    return values(unit, weekYear, context, today, false);
+  }
+
+  /**
+   * As {@link #values(DimensionType, String, Map, LocalDate)}, but with {@code skipWeekends}:
+   * when true, a {@code DAY} expansion omits Saturdays and Sundays (e.g. CFTC EOD feeds that
+   * publish only on business days). Ignored for non-DAY units.
+   */
+  static List<String> values(DimensionType unit, String weekYear,
+      Map<String, String> context, LocalDate today, boolean skipWeekends) {
     switch (unit) {
     case QUARTER:
       return quarters(context, today);
@@ -70,7 +81,7 @@ final class CalendarPeriodProvider {
     case WEEK:
       return weeks(context, weekYear, today);
     case DAY:
-      return days(context, today);
+      return days(context, today, skipWeekends);
     case DAY_OF_WEEK:
       return daysOfWeek();
     default:
@@ -113,12 +124,14 @@ final class CalendarPeriodProvider {
     return seq(1, max, 2);
   }
 
-  private static List<String> days(Map<String, String> context, LocalDate today) {
+  private static List<String> days(Map<String, String> context, LocalDate today,
+      boolean skipWeekends) {
     Integer year = intOrNull(context.get("year"));
     Integer month = intOrNull(context.get("month"));
     if (month == null) {
       // day without a month dimension is a schema misconfiguration; fall back to
-      // the longest possible month rather than emitting nothing.
+      // the longest possible month rather than emitting nothing. Without a month we
+      // can't determine weekdays, so skipWeekends is not applied here.
       return seq(1, 31, 2);
     }
     int effYear = (year != null) ? year : today.getYear();
@@ -132,7 +145,19 @@ final class CalendarPeriodProvider {
         len = today.getDayOfMonth();
       }
     }
-    return seq(1, len, 2);
+    if (!skipWeekends) {
+      return seq(1, len, 2);
+    }
+    // Descending (newest-first, matching seq) with Saturdays/Sundays omitted.
+    List<String> out = new ArrayList<String>();
+    for (int d = len; d >= 1; d--) {
+      DayOfWeek dow = LocalDate.of(effYear, month, d).getDayOfWeek();
+      if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) {
+        continue;
+      }
+      out.add(pad(d, 2));
+    }
+    return out;
   }
 
   private static List<String> weeks(Map<String, String> context, String weekYear,
