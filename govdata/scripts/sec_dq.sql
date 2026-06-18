@@ -55,8 +55,8 @@ FROM (
   UNION ALL SELECT 'mda_sections',          (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections/metadata/*.json'))
   UNION ALL SELECT 'xbrl_relationships',    (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships/metadata/*.json'))
   UNION ALL SELECT 'insider_transactions',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions/metadata/*.json'))
-  UNION ALL SELECT 'institutional_holdings',(SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings/metadata/*.json'))
-  UNION ALL SELECT 'beneficial_ownership',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership/metadata/*.json'))
+  -- institutional_holdings (13F-HR) and beneficial_ownership (SC 13D/G) are owned by the
+  -- sec_secondary DQ (sec_secondary_dq.sql); not checked here.
   UNION ALL SELECT 'earnings_transcripts',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts/metadata/*.json'))
   UNION ALL SELECT 'stock_prices',          (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices/metadata/*.json'))
   UNION ALL SELECT 'vectorized_chunks',     (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/vectorized_chunks/metadata/*.json'))
@@ -67,7 +67,8 @@ FROM (
 --   rich (10-K/10-Q XBRL):  financial_line_items, filing_contexts, xbrl_relationships
 --   moderate:               filing_metadata, insider_transactions, mda_sections,
 --                           earnings_transcripts, stock_prices
---   filer-type (Berkshire): institutional_holdings (13F), beneficial_ownership (13D/G)
+-- (filer-type tables institutional_holdings (13F) / beneficial_ownership (13D/G) moved to
+--  sec_secondary_dq.sql — sec no longer checks them.)
 -- vectorized_chunks is EXCLUDED from T2 (existence-warn only) — embedding-pipeline dependent.
 -- CALIBRATE these to the real DQ_SAMPLE counts after the first clean run. DQ_SAMPLE is now
 -- FAANG + Berkshire (Meta, Apple, Amazon, Netflix, Alphabet, Berkshire) — re-derive ALL T2
@@ -91,10 +92,8 @@ INSERT INTO dq_results SELECT 'sec','filing_contexts','row_count', CASE WHEN n>=
 INSERT INTO dq_results SELECT 'sec','mda_sections','row_count', CASE WHEN n>=20 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'20', CASE WHEN n>=20 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections', allow_moved_paths=true)) t;
 INSERT INTO dq_results SELECT 'sec','xbrl_relationships','row_count', CASE WHEN n>=1000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1000', CASE WHEN n>=1000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships', allow_moved_paths=true)) t;
 INSERT INTO dq_results SELECT 'sec','insider_transactions','row_count', CASE WHEN n>=200 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'200', CASE WHEN n>=200 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions', allow_moved_paths=true)) t;
-INSERT INTO dq_results SELECT 'sec','institutional_holdings','row_count', CASE WHEN n>=50 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'50', CASE WHEN n>=50 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true)) t;
-INSERT INTO dq_results SELECT 'sec','beneficial_ownership','row_count', CASE WHEN n>=3 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'3', CASE WHEN n>=3 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership', allow_moved_paths=true)) t;
--- floor=3: SC 13D/13G are filed only ABOUT companies with a >5% holder; among FAANG+BRK only
--- Netflix qualifies (3 SC 13G/A in window). Mega-caps are too widely held to have any. Verified.
+-- institutional_holdings (13F-HR) and beneficial_ownership (SC 13D/G) are owned by the
+-- sec_secondary DQ (sec_secondary_dq.sql); their row-count floors live there, not here.
 INSERT INTO dq_results SELECT 'sec','earnings_transcripts','row_count', CASE WHEN n>=10 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10', CASE WHEN n>=10 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts', allow_moved_paths=true)) t;
 INSERT INTO dq_results SELECT 'sec','stock_prices','row_count', CASE WHEN n>=10000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10000', CASE WHEN n>=10000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices', allow_moved_paths=true)) t;
 
