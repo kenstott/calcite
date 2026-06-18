@@ -22,6 +22,13 @@
 #   1. The Iceberg table directory at <parquet bucket>/<schema>/<table>
 #   2. All tracker entries matching year=*/source_key=<table>/* (both per-year
 #      incremental markers and the _table_complete completion marker for that table)
+#   2b. For document-based schemas (sec / sec_secondary): the per-ACCESSION document
+#      completions (source_key=<accession>, table_name in metadata/facts/contexts/
+#      relationships/mda/chunks/_no_xbrl/_filing_meta/_error_count). These are keyed by
+#      accession + output-type suffix, not the schema table name, so step 2 never matches
+#      them; without clearing them SecFilingCache.filterAndSelfHeal treats accessions as
+#      complete and skips re-ingest, leaving the purged tables empty. Schema-level; forces
+#      a full document re-ingest on the next run.
 #   3. With --raw: the raw HTTP cache for the table — the object store at
 #      <raw bucket>/<schema>/<table> (govdata-raw-v1, what prod/DQ runs actually
 #      read/write) plus the local mirror at $ETL_RAW_CACHE_DIR/<table> if present.
@@ -159,6 +166,9 @@ echo "  Tables:    ${TABLES[*]}"
 echo "  Iceberg:   ${PARQUET_BUCKET}/${SCHEMA}/<table>"
 echo "  Tracker:   ${TRACKER_BUCKET}/${SCHEMA}/year=*/source_key=* where table_name=<table> (resolved via DuckDB)"
 $PURGE_RAW && echo "  Raw cache: ${RAW_BUCKET}/${SCHEMA}/<table>/  (+ local ${RAW_CACHE_DIR}/<table>/)"
+case "$SCHEMA" in sec|sec_secondary)
+  echo "  Documents: clearing per-accession completions (metadata/facts/contexts/relationships/mda/chunks/_no_xbrl/…) so the next run re-ingests filings" ;;
+esac
 $DRY_RUN && echo "  *** DRY RUN — no changes will be made ***"
 echo ""
 
@@ -293,6 +303,79 @@ SQL
   fi
   echo ""
 done
+
+# ── Per-accession document completions (document-based schemas: sec / sec_secondary) ──
+# SEC tables are populated per-DOCUMENT by DocumentETLProcessor; per-accession completion is
+# tracked as ROWS inside the marker parquets — source_key=accession_number=...__year=Y,
+# table_name=<output suffix> (metadata/facts/contexts/relationships/mda/insider/earnings/chunks)
+# — and the historical ones are COMPACTED into year=*/_compacted/*.parquet, one file mixing many
+# accessions and outputs. SecFilingCache.filterAndSelfHeal reads these and SKIPS any accession
+# whose outputs look complete, so a plain Iceberg/per-table purge leaves the derived tables empty
+# ("rebuild is a no-op"). Map each purged table to its completion suffix and REWRITE the marker
+# parquets to DROP only those rows — surgical, so completions for tables you did NOT purge
+# (e.g. stock_prices, filing_metadata) survive and don't needlessly re-ingest. Dropping any of an
+# accession's output rows makes filterAndSelfHeal re-process that whole accession next run.
+# (institutional_holdings / beneficial_ownership have no per-accession suffix — 13F/SC-13 forms;
+#  their re-ingest is governed by filing-type scope, not a completion clear.)
+case "$SCHEMA" in
+  sec|sec_secondary)
+    declare -A _suffix_of=(
+      [mda_sections]=mda [xbrl_relationships]=relationships [financial_line_items]=facts
+      [filing_contexts]=contexts [filing_metadata]=metadata [vectorized_chunks]=chunks
+      [insider_transactions]=insider [earnings_transcripts]=earnings )
+    _suffixes=()
+    for _t in "${TABLES[@]}"; do
+      _t="$(echo -n "$_t" | xargs)"
+      _s="${_suffix_of[$_t]:-}"
+      [[ -n "$_s" ]] && _suffixes+=("$_s")
+    done
+    if [[ ${#_suffixes[@]} -eq 0 ]]; then
+      echo "── ${SCHEMA}: no document-completion suffix maps to the purged tables — skipping ──"
+    else
+      # Both sec and sec_secondary are produced by one EDGAR document pass whose per-accession
+      # completions are tracked under the "sec" schema tracker — so clear there for either.
+      _doc_schema=sec
+      _inlist=""; for _s in "${_suffixes[@]}"; do _inlist="${_inlist:+$_inlist,}'$_s'"; done
+      echo "── Clearing ${_doc_schema} accession completions for ${SCHEMA}: table_name IN (${_inlist}) ──"
+      if $DRY_RUN; then
+        echo "        [DRY RUN] Would rewrite marker parquets dropping those rows"
+      else
+        _ep="${AWS_ENDPOINT_OVERRIDE#http://}"; _ep="${_ep#https://}"
+        _ssl=true; _region=auto
+        [[ "$AWS_ENDPOINT_OVERRIDE" == http://* ]] && { _ssl=false; _region=us-east-1; }
+        _sec="CREATE OR REPLACE SECRET dp_doc (TYPE s3, KEY_ID '${AWS_ACCESS_KEY_ID}', SECRET '${AWS_SECRET_ACCESS_KEY}', ENDPOINT '${_ep}', REGION '${_region}', URL_STYLE 'path', USE_SSL ${_ssl});"
+        _tmp="$(mktemp -d)"; _rw=0; _scanned=0
+        while IFS= read -r _rel; do
+          [[ -z "$_rel" ]] && continue
+          _scanned=$((_scanned+1))
+          _s3="${TRACKER_BUCKET%/}/${_doc_schema}/${_rel}"
+          _hit=$(duckdb -noheader -list 2>/dev/null <<SQL
+INSTALL httpfs; LOAD httpfs; SET http_timeout=60000; ${_sec}
+SELECT count(*) FROM read_parquet('${_s3}') WHERE table_name IN (${_inlist});
+SQL
+)
+          # CREATE SECRET prints "true" ahead of the count — keep only the trailing numeric line.
+          _hit=$(printf '%s\n' "$_hit" | grep -oE '^[0-9]+$' | tail -1)
+          [[ "$_hit" =~ ^[0-9]+$ ]] || _hit=0
+          [[ "$_hit" -eq 0 ]] && continue
+          duckdb -noheader -list >/dev/null 2>&1 <<SQL
+INSTALL httpfs; LOAD httpfs; SET http_timeout=60000; ${_sec}
+COPY (SELECT * FROM read_parquet('${_s3}') WHERE table_name NOT IN (${_inlist})) TO '${_tmp}/rw.parquet' (FORMAT PARQUET);
+SQL
+          if [[ -f "${_tmp}/rw.parquet" ]] && rclone copyto "${_tmp}/rw.parquet" "${RCLONE_TRACKER}${_doc_schema}/${_rel}" 2>/dev/null; then
+            _rw=$((_rw+1)); echo "        rewrote ${_rel} (dropped ${_hit} completion row(s))"
+            rm -f "${_tmp}/rw.parquet"
+          else
+            echo "        ERROR: failed to rewrite ${_rel}"; ERRORS=$((ERRORS+1))
+          fi
+        done < <(rclone lsf -R --include "*.parquet" "${RCLONE_TRACKER}${_doc_schema}/" 2>/dev/null)
+        rm -rf "$_tmp"
+        echo "        Scanned ${_scanned} marker file(s); rewrote ${_rw} to drop completions for (${_inlist})"
+      fi
+    fi
+    echo ""
+    ;;
+esac
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo "=================================================="
