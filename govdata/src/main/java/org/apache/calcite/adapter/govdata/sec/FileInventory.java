@@ -27,6 +27,8 @@ public class FileInventory {
   private final boolean hasInsider;
   private final boolean hasEarnings;
   private final boolean hasChunks;
+  private final boolean hasInstitutionalHoldings;
+  private final boolean hasBeneficialOwnership;
 
   private FileInventory(Builder builder) {
     this.hasNoXbrl = builder.hasNoXbrl;
@@ -38,6 +40,8 @@ public class FileInventory {
     this.hasInsider = builder.hasInsider;
     this.hasEarnings = builder.hasEarnings;
     this.hasChunks = builder.hasChunks;
+    this.hasInstitutionalHoldings = builder.hasInstitutionalHoldings;
+    this.hasBeneficialOwnership = builder.hasBeneficialOwnership;
   }
 
   public boolean hasNoXbrl() {
@@ -76,6 +80,14 @@ public class FileInventory {
     return hasChunks;
   }
 
+  public boolean hasInstitutionalHoldings() {
+    return hasInstitutionalHoldings;
+  }
+
+  public boolean hasBeneficialOwnership() {
+    return hasBeneficialOwnership;
+  }
+
   /**
    * Check if inventory is complete for the given form type.
    */
@@ -110,6 +122,10 @@ public class FileInventory {
       return hasEarnings;
     case CHUNKS:
       return hasChunks;
+    case INSTITUTIONAL_HOLDINGS:
+      return hasInstitutionalHoldings;
+    case BENEFICIAL_OWNERSHIP:
+      return hasBeneficialOwnership;
     default:
       return false;
     }
@@ -120,7 +136,8 @@ public class FileInventory {
    */
   public boolean hasAnyFiles() {
     return hasMetadata || hasFacts || hasContexts || hasRelationships
-        || hasMda || hasInsider || hasEarnings || hasChunks;
+        || hasMda || hasInsider || hasEarnings || hasChunks
+        || hasInstitutionalHoldings || hasBeneficialOwnership;
   }
 
   /**
@@ -183,6 +200,12 @@ public class FileInventory {
     if (hasChunks) {
       present.add("chunks");
     }
+    if (hasInstitutionalHoldings) {
+      present.add("13f");
+    }
+    if (hasBeneficialOwnership) {
+      present.add("13dg");
+    }
     sb.append(String.join(", ", present));
     sb.append("}");
     return sb.toString();
@@ -201,6 +224,8 @@ public class FileInventory {
     private boolean hasInsider;
     private boolean hasEarnings;
     private boolean hasChunks;
+    private boolean hasInstitutionalHoldings;
+    private boolean hasBeneficialOwnership;
 
     public Builder hasNoXbrl(boolean hasNoXbrl) {
       this.hasNoXbrl = hasNoXbrl;
@@ -244,6 +269,16 @@ public class FileInventory {
 
     public Builder hasChunks(boolean hasChunks) {
       this.hasChunks = hasChunks;
+      return this;
+    }
+
+    public Builder hasInstitutionalHoldings(boolean hasInstitutionalHoldings) {
+      this.hasInstitutionalHoldings = hasInstitutionalHoldings;
+      return this;
+    }
+
+    public Builder hasBeneficialOwnership(boolean hasBeneficialOwnership) {
+      this.hasBeneficialOwnership = hasBeneficialOwnership;
       return this;
     }
 

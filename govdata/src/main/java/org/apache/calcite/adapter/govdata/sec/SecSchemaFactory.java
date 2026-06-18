@@ -643,6 +643,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           builder.hasEarnings(true);
         } else if (fileName.endsWith("_chunks.parquet")) {
           builder.hasChunks(true);
+        } else if (fileName.endsWith("_13f.parquet")) {
+          builder.hasInstitutionalHoldings(true);
+        } else if (fileName.endsWith("_13dg.parquet")) {
+          builder.hasBeneficialOwnership(true);
         }
       }
     }

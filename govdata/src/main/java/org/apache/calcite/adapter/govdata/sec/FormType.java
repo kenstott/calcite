@@ -17,17 +17,25 @@ import java.util.Set;
  * SEC form types and their expected output files.
  */
 public enum FormType {
-  FORM_10K("10-K", true, true, true, true, true, false, false, true),
-  FORM_10K_A("10-K/A", true, true, true, true, true, false, false, true),
-  FORM_10Q("10-Q", true, true, true, true, true, false, false, true),
-  FORM_10Q_A("10-Q/A", true, true, true, true, true, false, false, true),
-  FORM_8K("8-K", true, false, false, false, false, false, true, true),
-  FORM_8K_A("8-K/A", true, false, false, false, false, false, true, true),
-  FORM_DEF14A("DEF 14A", true, true, true, false, false, false, false, false),
-  FORM_3("3", true, false, false, false, false, true, false, false),
-  FORM_4("4", true, false, false, false, false, true, false, false),
-  FORM_5("5", true, false, false, false, false, true, false, false),
-  FORM_OTHER("OTHER", true, false, false, false, false, false, false, false);
+  FORM_10K("10-K", true, true, true, true, true, false, false, true, false, false),
+  FORM_10K_A("10-K/A", true, true, true, true, true, false, false, true, false, false),
+  FORM_10Q("10-Q", true, true, true, true, true, false, false, true, false, false),
+  FORM_10Q_A("10-Q/A", true, true, true, true, true, false, false, true, false, false),
+  FORM_8K("8-K", true, false, false, false, false, false, true, true, false, false),
+  FORM_8K_A("8-K/A", true, false, false, false, false, false, true, true, false, false),
+  FORM_DEF14A("DEF 14A", true, true, true, false, false, false, false, false, false, false),
+  FORM_3("3", true, false, false, false, false, true, false, false, false, false),
+  FORM_4("4", true, false, false, false, false, true, false, false, false, false),
+  FORM_5("5", true, false, false, false, false, true, false, false, false, false),
+  // 13F-HR: holdings live in an INFORMATION TABLE xml (no XBRL) -> _13f.parquet (+ metadata).
+  FORM_13F_HR("13F-HR", true, false, false, false, false, false, false, false, true, false),
+  FORM_13F_HR_A("13F-HR/A", true, false, false, false, false, false, false, false, true, false),
+  // SC 13D/G: beneficial ownership HTML (no XBRL) -> _13dg.parquet (+ metadata).
+  FORM_SC_13D("SC 13D", true, false, false, false, false, false, false, false, false, true),
+  FORM_SC_13D_A("SC 13D/A", true, false, false, false, false, false, false, false, false, true),
+  FORM_SC_13G("SC 13G", true, false, false, false, false, false, false, false, false, true),
+  FORM_SC_13G_A("SC 13G/A", true, false, false, false, false, false, false, false, false, true),
+  FORM_OTHER("OTHER", true, false, false, false, false, false, false, false, false, false);
 
   private final String formName;
   private final boolean expectsMetadata;
@@ -38,10 +46,13 @@ public enum FormType {
   private final boolean expectsInsider;
   private final boolean expectsEarnings;
   private final boolean expectsChunks;
+  private final boolean expectsInstitutionalHoldings;
+  private final boolean expectsBeneficialOwnership;
 
   FormType(String formName, boolean expectsMetadata, boolean expectsFacts,
       boolean expectsContexts, boolean expectsRelationships, boolean expectsMda,
-      boolean expectsInsider, boolean expectsEarnings, boolean expectsChunks) {
+      boolean expectsInsider, boolean expectsEarnings, boolean expectsChunks,
+      boolean expectsInstitutionalHoldings, boolean expectsBeneficialOwnership) {
     this.formName = formName;
     this.expectsMetadata = expectsMetadata;
     this.expectsFacts = expectsFacts;
@@ -51,6 +62,8 @@ public enum FormType {
     this.expectsInsider = expectsInsider;
     this.expectsEarnings = expectsEarnings;
     this.expectsChunks = expectsChunks;
+    this.expectsInstitutionalHoldings = expectsInstitutionalHoldings;
+    this.expectsBeneficialOwnership = expectsBeneficialOwnership;
   }
 
   public String getFormName() {
@@ -89,6 +102,14 @@ public enum FormType {
     return expectsChunks;
   }
 
+  public boolean expectsInstitutionalHoldings() {
+    return expectsInstitutionalHoldings;
+  }
+
+  public boolean expectsBeneficialOwnership() {
+    return expectsBeneficialOwnership;
+  }
+
   /**
    * Get expected output types for this form.
    */
@@ -117,6 +138,12 @@ public enum FormType {
     }
     if (expectsChunks && vectorizationEnabled) {
       outputs.add(OutputType.CHUNKS);
+    }
+    if (expectsInstitutionalHoldings) {
+      outputs.add(OutputType.INSTITUTIONAL_HOLDINGS);
+    }
+    if (expectsBeneficialOwnership) {
+      outputs.add(OutputType.BENEFICIAL_OWNERSHIP);
     }
     return outputs;
   }
@@ -159,6 +186,24 @@ public enum FormType {
     if (normalized.equals("5")) {
       return FORM_5;
     }
+    if (normalized.equals("13F-HR")) {
+      return FORM_13F_HR;
+    }
+    if (normalized.equals("13F-HR/A")) {
+      return FORM_13F_HR_A;
+    }
+    if (normalized.equals("SC 13D")) {
+      return FORM_SC_13D;
+    }
+    if (normalized.equals("SC 13D/A")) {
+      return FORM_SC_13D_A;
+    }
+    if (normalized.equals("SC 13G")) {
+      return FORM_SC_13G;
+    }
+    if (normalized.equals("SC 13G/A")) {
+      return FORM_SC_13G_A;
+    }
     return FORM_OTHER;
   }
 
@@ -180,7 +225,9 @@ public enum FormType {
     MDA("mda"),
     INSIDER("insider"),
     EARNINGS("earnings"),
-    CHUNKS("chunks");
+    CHUNKS("chunks"),
+    INSTITUTIONAL_HOLDINGS("13f"),
+    BENEFICIAL_OWNERSHIP("13dg");
 
     private final String suffix;
 

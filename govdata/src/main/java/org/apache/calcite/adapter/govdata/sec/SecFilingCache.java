@@ -495,8 +495,15 @@ public class SecFilingCache implements AutoCloseable {
         // converter bug that downloaded the xslF345X HTML viewer instead of the XML.
         // Clear the stale marker and reprocess so they produce _insider.parquet output.
         FormType form = FormType.fromString(ie.formType);
-        if (form.expectsInsider()) {
-          LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}",
+        // Insider forms (3/4/5) were mis-classified as no_xbrl by an old converter bug.
+        // 13F-HR and SC 13D/G carry no XBRL instance at all, so before these form types were
+        // modeled in FormType they fell through to FORM_OTHER, got a no_xbrl marker, and were
+        // then skipped forever — leaving institutional_holdings/beneficial_ownership empty.
+        // Clear the stale marker and reprocess so the info-table/HTML extractor can run.
+        if (form.expectsInsider()
+            || form.expectsInstitutionalHoldings()
+            || form.expectsBeneficialOwnership()) {
+          LOGGER.info("Clearing stale no_xbrl for form {} accession {}",
               ie.formType, ie.accession);
           clearNoXbrl(ie.accession);
           toProcess.add(ie);
@@ -594,11 +601,15 @@ public class SecFilingCache implements AutoCloseable {
 
     FormType form = FormType.fromString(formType);
 
-    // Check for no_xbrl marker — but insider forms (3/4/5) should never be no_xbrl;
-    // if they have this marker it's a stale bug artifact, clear it and reprocess.
+    // Check for no_xbrl marker — but insider (3/4/5), 13F-HR and SC 13D/G forms should never
+    // legitimately be no_xbrl (13F holdings are an info-table xml; SC 13D/G are HTML). A no_xbrl
+    // marker on them is a stale bug artifact from before these forms were modeled — clear it and
+    // reprocess so the dedicated extractor runs.
     if (tracker.isComplete(accession, TABLE_NO_XBRL, PHASE_STAGING)) {
-      if (form.expectsInsider()) {
-        LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}", formType, accession);
+      if (form.expectsInsider()
+          || form.expectsInstitutionalHoldings()
+          || form.expectsBeneficialOwnership()) {
+        LOGGER.info("Clearing stale no_xbrl for form {} accession {}", formType, accession);
         clearNoXbrl(accession);
       } else {
         return ProcessingDecision.skip("No XBRL data available");
@@ -691,12 +702,18 @@ public class SecFilingCache implements AutoCloseable {
         return false; // No tracker data at all
       }
 
+      FormType form = FormType.fromString(formTypes.get(i));
       // Check for no_xbrl marker (stored as a "table" in the tracker)
       if (completedTables.contains(TABLE_NO_XBRL)) {
+        // 13F-HR / SC 13D-G legitimately have no XBRL; a no_xbrl marker on them is a stale
+        // artifact from before these forms were modeled. Don't treat the CIK as complete —
+        // force a per-CIK pass so filterAndSelfHeal/checkFiling can clear it and reprocess.
+        if (form.expectsInstitutionalHoldings() || form.expectsBeneficialOwnership()) {
+          return false;
+        }
         continue; // This accession is handled
       }
 
-      FormType form = FormType.fromString(formTypes.get(i));
       FileInventory inv = inventoryFromCompletedTables(completedTables);
       if (!inv.isComplete(form, vectorizationEnabled)) {
         return false;
@@ -733,6 +750,8 @@ public class SecFilingCache implements AutoCloseable {
     builder.hasInsider(fileExists(secDir, cik, accession, "insider", filingDate));
     builder.hasEarnings(fileExists(secDir, cik, accession, "earnings", filingDate));
     builder.hasChunks(fileExists(secDir, cik, accession, "chunks", filingDate));
+    builder.hasInstitutionalHoldings(fileExists(secDir, cik, accession, "13f", filingDate));
+    builder.hasBeneficialOwnership(fileExists(secDir, cik, accession, "13dg", filingDate));
 
     return builder.build();
   }
@@ -1104,6 +1123,12 @@ public class SecFilingCache implements AutoCloseable {
     if (inventory.hasChunks()) {
       tracker.markComplete(accession, "chunks", PHASE_STAGING, 1);
     }
+    if (inventory.hasInstitutionalHoldings()) {
+      tracker.markComplete(accession, "13f", PHASE_STAGING, 1);
+    }
+    if (inventory.hasBeneficialOwnership()) {
+      tracker.markComplete(accession, "13dg", PHASE_STAGING, 1);
+    }
   }
 
   /**
@@ -1119,6 +1144,8 @@ public class SecFilingCache implements AutoCloseable {
         .hasInsider(tables.contains("insider"))
         .hasEarnings(tables.contains("earnings"))
         .hasChunks(tables.contains("chunks"))
+        .hasInstitutionalHoldings(tables.contains("13f"))
+        .hasBeneficialOwnership(tables.contains("13dg"))
         .build();
   }
 
