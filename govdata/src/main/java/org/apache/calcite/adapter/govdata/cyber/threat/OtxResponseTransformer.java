@@ -77,8 +77,11 @@ public class OtxResponseTransformer implements ResponseTransformer {
   private static final long RATE_DELAY_MS = 500L;
 
   @Override public String transform(String response, RequestContext context) {
-    String apiKey = ModelOperand.getString(
-        "cyber_threat.partitionedTables.threat_pulses.source.headers.X-OTX-API-KEY");
+    // Read the key from the request context's headers — the framework resolves the source's
+    // ${CYBER_OTX_API_KEY:} header at load and passes it here. (Reading it back out of the model
+    // via ModelOperand's partitionedTables path returned empty in practice, so use the resolved
+    // header the transformer is already handed.)
+    String apiKey = context.getHeaders().get("X-OTX-API-KEY");
     if (apiKey == null || apiKey.trim().isEmpty()) {
       // A required credential being absent is a hard failure, never a silent skip.
       throw new IllegalStateException("OTX: CYBER_OTX_API_KEY is required but missing "
