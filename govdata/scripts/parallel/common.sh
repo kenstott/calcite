@@ -904,7 +904,7 @@ get_heap_config() {
 get_dq_start_year() {
   local schema=$1
   case "$schema" in
-    sec_secondary) echo $(( $(date +%Y) - 1 )) ;;  # DQ only needs to prove historical+daily modes function; one prior year (current-1) is enough — no multi-year backfill.
+    sec_secondary) echo $(( $(date +%Y) - 2 )) ;;  # current-2: 13F-HR extends to current year, but SC 13D/G (beneficial_ownership) collapsed after the SEC Schedule 13G rule change (eff. 2024-09-30) and now concentrate in <=2024. current-2 pulls 2024 into scope so BlackRock/Berkshire SC 13D/G filings land and beneficial_ownership is non-empty.
     energy)   echo $(( $(date +%Y) - 4 )) ;;  # dataLag=2 tables map year=effective+dataLag, so a current-2 start emits only the current year. Need current-2-dataLag = current-4 to land historical generation years (T8 wants MIN<=current-2).
     edu)      echo $(( $(date +%Y) - 5 )) ;;  # 5-yr lookback: edu tables peak at very different years — ipeds_tuition maxYear=2021 (Urban endpoint frozen), crdc_schools biennial last cycle 2022, ipeds_completions/financials ~2023, naep 2024. current-5 is the binding floor (ipeds_tuition 2021) so every table's latest published cycle falls inside the window; per-table maxYear/dataLag caps trim the rest. current-3 (old) reached none of crdc/tuition → both structurally empty.
     lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
@@ -961,6 +961,8 @@ get_timeout_config() {
     patents)      echo 480 ;;  # full bulk dumps (g_patent.tsv, owner.csv ~700MB each) + summaries
     sec_prices)   echo 240 ;;  # Stooq bulk: 508MB zip + ~22M-row materialize
     cftc)         echo 240 ;;  # large derivatives history
+    cyber_vuln)   echo 240 ;;  # full NVD ~350k CVEs at 0.167 req/s (no API key) — long quiet crawls
+    cyber_threat) echo 240 ;;  # OTX subscribed-pulse cursor pagination, rate-limited
     *)            echo 60  ;;  # default: 1 hour idle
   esac
 }

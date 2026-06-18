@@ -606,8 +606,12 @@ kill_and_requeue() {
   local id="${active_labels[$idx]}"
   local slot="${active_slots[$idx]}"
   local elapsed_mins=$(( ($(date +%s) - active_starts[$idx]) / 60 ))
+  # Report the worker's ACTUAL per-schema idle limit (active_timeout_secs), not the global
+  # default — otherwise every restart line reads "60m limit" even for 240/360m schemas,
+  # which masks whether a kill was a too-short timeout vs a genuine long idle/hang.
+  local timeout_mins=$(( ${active_timeout_secs[$idx]:-${TIMEOUT_SECS:-3600}} / 60 ))
 
-  log_info "$id inactive (${elapsed_mins}m > ${TIMEOUT_MINS}m limit) — killing session $pid and re-queuing"
+  log_info "$id idle ${elapsed_mins}m (limit ${timeout_mins}m) — killing session $pid and re-queuing"
   _kill_worker_session "$pid"
 
   remove_active "$idx"
