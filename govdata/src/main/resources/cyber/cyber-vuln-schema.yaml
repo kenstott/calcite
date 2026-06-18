@@ -131,6 +131,10 @@ partitionedTables:
     # Windowing is driven by NvdPublishedWindowDimensionResolver (pubStartDate/pubEndDate
     # dims): quarterly history + daily tip, GOVDATA_START_YEAR-bounded. Rows route to the
     # correct [type,year,quarter] partition via the pub_year/pub_month computed columns.
+    # DQ sample cap (GOVDATA_DQ mode): NVD holds ~347k CVEs; a full crawl at the rate limit
+    # takes hours and can't complete inside an idle window. The cap stops OFFSET pagination
+    # early so DQ samples a few pages instead of full-crawling. Cache-safe (lazy iterator).
+    dqRowLimit: 5000
     partitions:
       style: hive
       columnDefinitions:
@@ -228,7 +232,7 @@ partitionedTables:
           pageSize: 2000
           countPath: totalResults
       rateLimit:
-        requestsPerSecond: 0.167
+        requestsPerSecond: 1.5     # CYBER_NVD_API_KEY present → NVD allows 50 req/30s (~1.67/s); 1.5 leaves margin. Without a key NVD caps at 5/30s (0.167) and will 429 (retries/backoff absorb it).
         maxRetries: 3
       rawCache:
         enabled: false
@@ -278,6 +282,8 @@ partitionedTables:
     pattern: "type=vulnerability_cwes/year=*/quarter=*/*.parquet"
     # Same NvdPublishedWindowDimensionResolver windowing as vulnerabilities; rows route to
     # [type,year,quarter] via pub_year/pub_month (CWE rows lack published → year from cve_id).
+    # DQ sample cap (GOVDATA_DQ mode): same rationale as vulnerabilities — sample, don't full-crawl.
+    dqRowLimit: 5000
     partitions:
       style: hive
       columnDefinitions:
@@ -331,7 +337,7 @@ partitionedTables:
           pageSize: 2000
           countPath: totalResults
       rateLimit:
-        requestsPerSecond: 0.167
+        requestsPerSecond: 1.5     # CYBER_NVD_API_KEY present → NVD allows 50 req/30s (~1.67/s); 1.5 leaves margin. Without a key NVD caps at 5/30s (0.167) and will 429 (retries/backoff absorb it).
         maxRetries: 3
       rawCache:
         enabled: false
