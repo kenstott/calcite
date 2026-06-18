@@ -12,8 +12,8 @@ package org.apache.calcite.adapter.govdata.health;
 
 import org.apache.calcite.adapter.file.etl.DimensionConfig;
 import org.apache.calcite.adapter.file.etl.DimensionResolver;
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.govdata.GovDataUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -110,10 +110,14 @@ public class OpenFdaPartitionResolver implements DimensionResolver {
   }
 
   private static int startYear() {
-    // operand -> system property -> env -> (currentYear-5) fallback, matching the rest of
-    // govdata. The DQ harness exports GOVDATA_START_YEAR as an ENV var (not a -D system
-    // property), so reading only the system property would silently ignore the DQ bound.
-    return GovDataUtils.getStartYear(null);
+    // Bound strictly by the model's startYear operand (captured global ModelOperand). No env var,
+    // no system property, no computed fallback — a missing value is a model-config error, surfaced
+    // loudly rather than silently papered over with a guessed year.
+    if (!ModelOperand.has("health.startYear")) {
+      throw new IllegalStateException("health.startYear is missing from the model operand — "
+          + "OpenFDA partition resolution requires the configured start year");
+    }
+    return ModelOperand.getInt("health.startYear", -1);
   }
 
   private static byte[] downloadBytes(String url) throws IOException {
