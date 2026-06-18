@@ -58,9 +58,9 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation',
 INSERT INTO dq_results
 SELECT
   'energy', 'eia_electricity_generation', 'T2_row_count',
-  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 20000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), COUNT(DISTINCT year) * 20000,
-  'cap-aware: dqRowLimit=25000/year DQ sample (prod ~120k/year uncapped); >=20000/year floor'
+  CASE WHEN COUNT(*) >= COUNT(DISTINCT year) * 15000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), COUNT(DISTINCT year) * 15000,
+  'cap-aware: dqRowLimit=25000/year DQ sample (prod ~120k/year uncapped); >=15000/year floor tolerates the capped sample plus a thin boundary year (full-window 4yr x 25000 cap rarely all-full)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation', allow_moved_paths := true);
 
 -- T3: sample
