@@ -211,10 +211,11 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
     // The public USPTO bulk API rate-limits (HTTP 429) for minutes at a time, so retry
-    // patiently before giving up: ~2 min of capped exponential backoff across 8 attempts.
-    // On exhaustion this still hard-fails (no silent skip) — the budget is just wide enough
-    // to ride out a typical rate-limit window instead of failing the worker after ~3s.
-    final int maxAttempts = 8;
+    // patiently before giving up. HTTP 429 gets a LONGER backoff (capped at 5 min, ~13 min of
+    // total budget across 10 attempts) to ride out a multi-minute rate-limit window; other
+    // transient errors (truncated reads, resets, 5xx) keep the shorter 1-min cap. On exhaustion
+    // this still hard-fails (no silent skip).
+    final int maxAttempts = 10;
     IOException lastError = null;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -223,7 +224,8 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       } catch (IOException e) {
         lastError = e;
         if (attempt < maxAttempts && isTransientDownloadError(e)) {
-          long backoffMs = Math.min(60_000L, 1000L * (1L << (attempt - 1)));
+          long capMs = isRateLimited(e) ? 300_000L : 60_000L;
+          long backoffMs = Math.min(capMs, 1000L * (1L << (attempt - 1)));
           LOGGER.warn("Patents: transient download failure (attempt {}/{}) for {}: {} — retrying in {}ms",
               attempt, maxAttempts, url, e.getMessage(), backoffMs);
           try {
@@ -245,6 +247,17 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    * condition: truncated read, connection reset, or HTTP 5xx/429. These cases warrant
    * a retry of the entire download.
    */
+  /** True when {@code e} (or any cause) is specifically an HTTP 429 (rate limit). */
+  private static boolean isRateLimited(Throwable e) {
+    for (Throwable cur = e; cur != null; cur = cur.getCause()) {
+      String msg = cur.getMessage();
+      if (msg != null && msg.contains("HTTP 429")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static boolean isTransientDownloadError(Throwable e) {
     Throwable cur = e;
     while (cur != null) {
