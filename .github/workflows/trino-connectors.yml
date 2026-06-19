@@ -1,0 +1,116 @@
+name: Trino Connectors
+
+# Builds the Trino connector plugin packages (a directory-of-jars archive each) and attaches them
+# to a GitHub Release. Trino plugins are not Maven artifacts: you unzip the archive into the Trino
+# server's plugin/ directory. The connectors target the Trino SPI pinned by `trino.version` in
+# gradle.properties (built with a Java 25 toolchain; Gradle itself runs on Java 21).
+
+on:
+  push:
+    tags:
+      - 'trino-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build:
+    name: Build Trino connector packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 25 for the connector toolchain (Trino SPI) plus Java 21 to run Gradle 8.7.
+      # Last-listed version becomes the default JAVA_HOME (21), which runs Gradle.
+      - name: Set up JDKs
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: |
+            25
+            21
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/*.gradle', 'gradle.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Build plugin packages
+        run: |
+          ./gradlew \
+            :trino-calcite:trinoPlugin \
+            :trino-sharepoint:trinoPlugin \
+            :trino-splunk:trinoPlugin \
+            -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
+            --no-daemon
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#trino-v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Packaging version: $VERSION"
+
+      - name: Collect plugin archives
+        run: |
+          mkdir -p release-assets
+          for module in trino-calcite trino-sharepoint trino-splunk; do
+            src=$(ls ${module}/build/distributions/${module}-plugin-*.zip 2>/dev/null | head -1)
+            if [ -z "$src" ]; then
+              echo "ERROR: no plugin archive found for $module"
+              exit 1
+            fi
+            cp "$src" "release-assets/${module}-plugin-${{ steps.version.outputs.version }}.zip"
+            echo "$module: $(du -sh release-assets/${module}-plugin-${{ steps.version.outputs.version }}.zip | cut -f1)"
+          done
+          ls -lh release-assets/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trino-connector-packages
+          path: release-assets/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Trino Connectors ${{ github.ref_name }}
+          body: |
+            ## Trino Connectors ${{ steps.version.outputs.version }}
+
+            Trino connector plugin packages built against the Trino SPI version pinned in
+            `gradle.properties`. Each archive is a Trino **plugin directory** — unzip it into your
+            Trino server's `plugin/` directory and restart.
+
+            | Package | Connector name | Backing driver |
+            |---------|----------------|----------------|
+            | `trino-calcite-plugin-*.zip` | `calcite` | generic Calcite model (`jdbc:calcite:`) |
+            | `trino-sharepoint-plugin-*.zip` | `sharepoint` | SharePoint Lists (`jdbc:sharepoint:`) |
+            | `trino-splunk-plugin-*.zip` | `splunk` | Splunk (`jdbc:splunk:`) |
+
+            ### Install
+
+            ```bash
+            unzip trino-sharepoint-plugin-*.zip -d "$TRINO_HOME/plugin/"
+            # then add etc/catalog/<name>.properties with connector.name=<connector name>
+            ```
+          files: release-assets/*.zip
+          draft: false
+          prerelease: false
