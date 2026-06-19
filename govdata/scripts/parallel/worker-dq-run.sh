@@ -190,7 +190,7 @@ _file_script_error_issue() {
     --limit 200 \
     --json number,title \
     --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
-    2>&1 | head -1)
+    2>&1 | head -1 || true)
   if [ -n "$open_issue" ] && [[ "$open_issue" =~ ^[0-9]+$ ]]; then
     gh issue comment "$open_issue" \
       --repo kenstott/calcite \
@@ -687,6 +687,9 @@ if _gh_available; then
   gh label create "dq-fail" --color "#d93f0b" --description "DQ hard failure" --repo kenstott/calcite 2>/dev/null || true
 
   # Find existing open DQ issue for this schema
+  # `… | head -1` can return non-zero under `set -euo pipefail` (gh gets SIGPIPE when head closes
+  # the pipe early, or a transient gh API/rate-limit blip) — which under set -e would abort the
+  # script AFTER a clean DQ pass and trip the error-issue trap. Guard so a passing run stays passing.
   OPEN_ISSUE=$(gh issue list \
     --repo kenstott/calcite \
     --state open \
@@ -694,7 +697,7 @@ if _gh_available; then
     --limit 200 \
     --json number,title \
     --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
-    2>/dev/null | head -1)
+    2>/dev/null | head -1 || true)
 
   if [ "$VERDICT" = "PASS" ]; then
     if [ -n "$OPEN_ISSUE" ]; then
