@@ -741,10 +741,10 @@ partitionedTables:
       extractPattern: "*.csv"
       response:
         format: csv
-        # Stream the CSV directly out of the zip entry instead of extracting+caching the whole
-        # file. In DQ mode this lets dqRowLimit abort each download after the cap is reached —
-        # critical for the EQUITIES feed (~500MB/day uncompressed) where the full extract+cache
-        # write dominated runtime. No rawCache: CSV_STREAM streams from the live connection.
+        # CSV_STREAM two-step: the matched zip entry is streamed in full to the raw cache once
+        # (uncapped), then read from the cache to parquet with dqRowLimit applied on the read. One
+        # download per partition serves every later run (DQ or prod) as a cache hit; the cap no
+        # longer aborts — and so no longer re-triggers — the download on each run.
         pagination:
           type: CSV_STREAM
           pageSize: 2000
@@ -752,6 +752,8 @@ partitionedTables:
         requestsPerSecond: 5.0
         maxRetries: 2
         skipOn: [403, 404]    # weekends, holidays, future dates, invalid day combos
+      rawCache:
+        enabled: true
 
     hooks:
       rowTransformers:

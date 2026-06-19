@@ -355,6 +355,17 @@ public class HttpSource implements DataSource {
     String rawCacheFilePath = null;
     if (isRawCacheEnabled()) {
       rawCacheFilePath = buildRawCachePath(variables);
+      // CSV_STREAM: stage the FULL response into the raw cache first (uncapped) so the cache-read
+      // below — and every later run — is a hit; dqRowLimit then caps only the raw→parquet read, not
+      // the download. A skipped partition (4xx skipOn / no matching entry) caches nothing and
+      // yields no rows.
+      if (!hasValidRawCache(rawCacheFilePath)
+          && config.getResponse().getPagination().getType()
+              == HttpSourceConfig.PaginationType.CSV_STREAM) {
+        if (!fetchCsvStreamToRawCache(url, params, variables, rawCacheFilePath)) {
+          return java.util.Collections.<Map<String, Object>>emptyIterator();
+        }
+      }
       if (hasValidRawCache(rawCacheFilePath)) {
         HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
         if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
@@ -791,63 +802,15 @@ public class HttpSource implements DataSource {
           // Open the streaming connection on first call
           enforceRateLimit();
           String fullUrl = buildUrlWithParams(url, baseParams);
-          URL connUrl = java.net.URI.create(fullUrl).toURL();
-          HttpURLConnection conn = (HttpURLConnection) connUrl.openConnection();
-          conn.setRequestMethod("GET");
-          conn.setConnectTimeout(30000);
-          conn.setReadTimeout(300000); // 5 min for large CSV files
-          conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
-          for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-            conn.setRequestProperty(e.getKey(), e.getValue());
+          CsvStream cs = openCsvStream(fullUrl, variables);
+          if (cs == null) {
+            // Skipped (a 4xx matching skipOn) or no matching zip entry — an expected partition
+            // gap (weekends/holidays/future dates on date-partitioned feeds), not a failure.
+            hasMore = false;
+            return false;
           }
-          applyAuth(conn, variables);
-          int status = conn.getResponseCode();
-          if (status >= 400) {
-            // Honor skipOn for the streaming path. Date-partitioned S3 feeds (e.g. the CFTC EOD
-            // bucket) return 403/404 for weekends, holidays, future dates, and calendar-invalid
-            // day combos (Feb 30, Apr 31, ...). Those are expected gaps, not failures — the
-            // non-streaming path already drops them via shouldSkip(), but CSV_STREAM threw on
-            // every 4xx, turning each gap into a retried ERROR that floods the log and stalls
-            // the worker (idle-timeout kills). Skip the batch gracefully instead.
-            if (shouldSkip(status, config.getRateLimit())) {
-              LOGGER.debug("CSV_STREAM skip: HTTP {} for {} (skipOn match)", status, fullUrl);
-              conn.disconnect();
-              hasMore = false;
-              return false;
-            }
-            throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
-          }
-          InputStream is = conn.getInputStream();
-          String extractPattern = config.getExtractPattern();
-          if (extractPattern != null && !extractPattern.isEmpty()) {
-            // Streaming zip entry: advance to the first entry matching the pattern and read
-            // CSV directly from it — no temp-file extraction and no raw-cache upload (which for
-            // a ~500MB entry is the dominant cost). Combined with an early-stop cap (dqRowLimit),
-            // close() → csvConn.disconnect() aborts the download before the whole entry transfers.
-            String resolvedPattern = substituteVariables(extractPattern, variables);
-            ZipInputStream zis = new ZipInputStream(is);
-            ZipEntry zipEntry;
-            boolean matched = false;
-            while ((zipEntry = zis.getNextEntry()) != null) {
-              if (!zipEntry.isDirectory() && zipEntryMatches(zipEntry.getName(), resolvedPattern)) {
-                LOGGER.info("CSV_STREAM zip entry: {}", zipEntry.getName());
-                matched = true;
-                break;
-              }
-              zis.closeEntry();
-            }
-            if (!matched) {
-              zis.close();
-              conn.disconnect();
-              hasMore = false;
-              return false;
-            }
-            is = zis;
-          } else if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
-            is = new GZIPInputStream(is);
-          }
-          csvConn = conn;
-          csvReader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+          csvConn = cs.conn;
+          csvReader = new BufferedReader(new InputStreamReader(cs.stream, StandardCharsets.UTF_8));
           // Read the header as a complete record (in case header itself has quoted multi-line cell)
           csvHeaderLine = CsvRecordReader.readRecord(csvReader);
           if (csvHeaderLine == null) {
@@ -967,6 +930,113 @@ public class HttpSource implements DataSource {
         if (tempCacheFile != null && tempCacheFile.exists()) {
           tempCacheFile.delete();
         }
+      }
+    }
+  }
+
+  /** A live CSV stream opened from a CSV_STREAM source, with its owning connection. */
+  private static final class CsvStream {
+    final HttpURLConnection conn;
+    final InputStream stream;
+    CsvStream(HttpURLConnection conn, InputStream stream) {
+      this.conn = conn;
+      this.stream = stream;
+    }
+  }
+
+  /**
+   * Connects to a CSV_STREAM source and returns its raw CSV stream — the first zip entry matching
+   * {@code extractPattern}, or the (optionally gunzipped) body — with the connection so the caller
+   * can disconnect it. Returns {@code null} when the request should be skipped: a 4xx matching
+   * skipOn (an expected gap on date-partitioned feeds), or no zip entry matched the pattern.
+   */
+  private CsvStream openCsvStream(String fullUrl, Map<String, String> variables) throws IOException {
+    HttpURLConnection conn =
+        (HttpURLConnection) java.net.URI.create(fullUrl).toURL().openConnection();
+    conn.setRequestMethod("GET");
+    conn.setConnectTimeout(30000);
+    conn.setReadTimeout(300000); // 5 min for large CSV files
+    conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
+    for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
+      conn.setRequestProperty(e.getKey(), e.getValue());
+    }
+    applyAuth(conn, variables);
+    int status = conn.getResponseCode();
+    if (status >= 400) {
+      if (shouldSkip(status, config.getRateLimit())) {
+        LOGGER.debug("CSV_STREAM skip: HTTP {} for {} (skipOn match)", status, fullUrl);
+        conn.disconnect();
+        return null;
+      }
+      throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
+    }
+    InputStream is = conn.getInputStream();
+    String extractPattern = config.getExtractPattern();
+    if (extractPattern != null && !extractPattern.isEmpty()) {
+      String resolvedPattern = substituteVariables(extractPattern, variables);
+      ZipInputStream zis = new ZipInputStream(is);
+      ZipEntry zipEntry;
+      boolean matched = false;
+      while ((zipEntry = zis.getNextEntry()) != null) {
+        if (!zipEntry.isDirectory() && zipEntryMatches(zipEntry.getName(), resolvedPattern)) {
+          LOGGER.info("CSV_STREAM zip entry: {}", zipEntry.getName());
+          matched = true;
+          break;
+        }
+        zis.closeEntry();
+      }
+      if (!matched) {
+        zis.close();
+        conn.disconnect();
+        return null;
+      }
+      is = zis;
+    } else if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
+      is = new GZIPInputStream(is);
+    }
+    return new CsvStream(conn, is);
+  }
+
+  /**
+   * Stage 1 of the CSV_STREAM two-step (full-to-raw, then capped raw-to-parquet): stream the full
+   * matched entry from the remote into the raw cache, uncapped, so the cache-read that follows — and
+   * every later run — is a hit and {@code dqRowLimit} caps only the raw→parquet read, never the
+   * download. The temp is committed to {@code rawCacheFilePath} only after a complete copy; a
+   * dropped/aborted stream leaves it uncommitted, so a partial download never poisons the cache.
+   * Returns {@code false} when the request was skipped (4xx skipOn / no matching zip entry).
+   */
+  private boolean fetchCsvStreamToRawCache(String url, Map<String, String> params,
+      Map<String, String> variables, String rawCacheFilePath) throws IOException {
+    enforceRateLimit();
+    String fullUrl = buildUrlWithParams(url, params);
+    CsvStream cs = openCsvStream(fullUrl, variables);
+    if (cs == null) {
+      return false;
+    }
+    File tempFile = File.createTempFile("http-csv-cache-", ".csv");
+    tempFile.deleteOnExit();
+    try {
+      try (InputStream in = cs.stream; FileOutputStream out = new FileOutputStream(tempFile)) {
+        byte[] buf = new byte[1 << 16];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+          out.write(buf, 0, n);
+        }
+      } finally {
+        cs.conn.disconnect();
+      }
+      // Copy completed (no exception) → commit the temp to the raw cache.
+      String parentPath = rawCacheFilePath.substring(0, rawCacheFilePath.lastIndexOf('/'));
+      storageProvider.createDirectories(parentPath);
+      try (InputStream in = new FileInputStream(tempFile)) {
+        storageProvider.writeFile(rawCacheFilePath, in);
+      }
+      LOGGER.info("CSV_STREAM cached full response to raw: {} ({} bytes)",
+          rawCacheFilePath, tempFile.length());
+      return true;
+    } finally {
+      if (tempFile.exists()) {
+        tempFile.delete();
       }
     }
   }
