@@ -95,7 +95,8 @@ include(
     "driver-base",
     "govdata",
     "askamerica-engine",
-    "trino-calcite"
+    "trino-calcite",
+    "trino-sharepoint"
 )
 
 // See https://github.com/gradle/gradle/issues/1348#issuecomment-284758705 and
