@@ -166,17 +166,30 @@ public class CertificateAuth implements SharePointAuth {
         keyStore.getKey(keyStore.aliases().nextElement(),
         certificatePassword.toCharArray());
 
-    return Jwts.builder()
-        .setId(UUID.randomUUID().toString())
-        .setIssuer(clientId)
-        .setSubject(clientId)
-        .setAudience("https://login.microsoftonline.com/" + tenantId
-            + "/oauth2/v2.0/token")
-        .setIssuedAt(new java.util.Date(now * 1000))
-        .setNotBefore(new java.util.Date(now * 1000))
-        .setExpiration(new java.util.Date((now + 600) * 1000))
-        .claim("x5t", thumbprint)
-        .signWith(key, SignatureAlgorithm.RS256)
-        .compact();
+    // JJWT resolves its implementation (DefaultJwtBuilder) via the thread context classloader.
+    // Under an isolated plugin classloader (e.g. Trino's PluginClassLoader) that loads the impl
+    // from the wrong loader and fails with a ClassCastException, so pin the TCCL to this class's
+    // loader for the duration of the build.
+    Thread thread = Thread.currentThread();
+    ClassLoader originalLoader = thread.getContextClassLoader();
+    try {
+      thread.setContextClassLoader(CertificateAuth.class.getClassLoader());
+      return Jwts.builder()
+          // Azure AD requires the certificate SHA-1 thumbprint in the JWT *header* (x5t), not as a
+          // payload claim, otherwise it rejects the assertion with AADSTS5002723.
+          .setHeaderParam("x5t", thumbprint)
+          .setId(UUID.randomUUID().toString())
+          .setIssuer(clientId)
+          .setSubject(clientId)
+          .setAudience("https://login.microsoftonline.com/" + tenantId
+              + "/oauth2/v2.0/token")
+          .setIssuedAt(new java.util.Date(now * 1000))
+          .setNotBefore(new java.util.Date(now * 1000))
+          .setExpiration(new java.util.Date((now + 600) * 1000))
+          .signWith(key, SignatureAlgorithm.RS256)
+          .compact();
+    } finally {
+      thread.setContextClassLoader(originalLoader);
+    }
   }
 }
