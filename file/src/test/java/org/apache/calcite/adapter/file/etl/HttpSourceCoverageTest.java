@@ -2459,6 +2459,123 @@ public class HttpSourceCoverageTest {
   /**
    * Creates a basic HttpSource for testing.
    */
+  // ---------------------------------------------------------------
+  // 4b. buildRawCachePath keyVars — request-scoped cache key (cross-table sharing)
+  // ---------------------------------------------------------------
+
+  private HttpSource rawCacheSource(HttpSourceConfig.RawCacheConfig rawCache) throws Exception {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://example.com/{state}_CSV.zip")
+        .rawCache(rawCache)
+        .build();
+    HttpSource source = new HttpSource(config);
+    Field f = HttpSource.class.getDeclaredField("rawCachePath");
+    f.setAccessible(true);
+    f.set(source, "s3://bucket/.raw");
+    return source;
+  }
+
+  private String invokeBuildRawCachePath(HttpSource source, Map<String, String> vars)
+      throws Exception {
+    Method m = HttpSource.class.getDeclaredMethod("buildRawCachePath", Map.class);
+    m.setAccessible(true);
+    return (String) m.invoke(source, vars);
+  }
+
+  @Test void testBuildRawCachePathKeyVarsExcludesOtherVars() throws Exception {
+    Map<String, Object> rawCacheMap = new HashMap<String, Object>();
+    rawCacheMap.put("enabled", true);
+    rawCacheMap.put("keyVars", Arrays.asList("state"));
+    HttpSource source = rawCacheSource(HttpSourceConfig.RawCacheConfig.fromMap(rawCacheMap));
+
+    Map<String, String> vars = new LinkedHashMap<String, String>();
+    vars.put("type", "forest_metrics");
+    vars.put("state", "PR");
+    String path = invokeBuildRawCachePath(source, vars);
+
+    // Only the keyVar `state` forms the path; the output-only `type` is excluded, so tables
+    // differing only in `type` resolve to one shared cached file.
+    assertTrue(path.contains("state=PR"), path);
+    assertFalse(path.contains("type="), path);
+    assertTrue(path.endsWith("response.json"), path);
+    source.close();
+  }
+
+  @Test void testBuildRawCachePathKeyVarsSameAcrossDifferingType() throws Exception {
+    Map<String, Object> rawCacheMap = new HashMap<String, Object>();
+    rawCacheMap.put("enabled", true);
+    rawCacheMap.put("keyVars", Arrays.asList("state"));
+    HttpSource source = rawCacheSource(HttpSourceConfig.RawCacheConfig.fromMap(rawCacheMap));
+
+    Map<String, String> a = new LinkedHashMap<String, String>();
+    a.put("type", "forest_metrics");
+    a.put("state", "PR");
+    Map<String, String> b = new LinkedHashMap<String, String>();
+    b.put("type", "fia_plots");
+    b.put("state", "PR");
+
+    // Two tables, same state, different type → identical cache path (the basis for sharing).
+    assertEquals(invokeBuildRawCachePath(source, a), invokeBuildRawCachePath(source, b));
+    source.close();
+  }
+
+  @Test void testBuildRawCachePathNoKeyVarsUsesAllVars() throws Exception {
+    HttpSource source = rawCacheSource(HttpSourceConfig.RawCacheConfig.enabled());
+
+    Map<String, String> vars = new LinkedHashMap<String, String>();
+    vars.put("type", "forest_metrics");
+    vars.put("state", "PR");
+    String path = invokeBuildRawCachePath(source, vars);
+
+    // Default (no keyVars): every variable forms the path (original behavior is preserved).
+    assertTrue(path.contains("state=PR"), path);
+    assertTrue(path.contains("type=forest_metrics"), path);
+    source.close();
+  }
+
+  @Test void testRawCacheConfigParsesKeyVars() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("enabled", true);
+    map.put("sharedKey", "fia_state_csv");
+    map.put("keyVars", Arrays.asList("state"));
+    HttpSourceConfig.RawCacheConfig cfg = HttpSourceConfig.RawCacheConfig.fromMap(map);
+    assertTrue(cfg.isEnabled());
+    assertEquals("fia_state_csv", cfg.getSharedKey());
+    assertEquals(Arrays.asList("state"), cfg.getKeyVars());
+  }
+
+  @Test void testRawCacheConfigKeyVarsNullByDefault() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("enabled", true);
+    HttpSourceConfig.RawCacheConfig cfg = HttpSourceConfig.RawCacheConfig.fromMap(map);
+    assertNull(cfg.getKeyVars());
+  }
+
+  @Test void testBuildRawCachePathCapSegmentWhenCapped() throws Exception {
+    HttpSource source = rawCacheSource(HttpSourceConfig.RawCacheConfig.enabled());
+    source.setRawCacheRowCap(25000);
+
+    Map<String, String> vars = new LinkedHashMap<String, String>();
+    vars.put("month", "06");
+    String path = invokeBuildRawCachePath(source, vars);
+
+    // Capped (DQ) caches are isolated under cap=<N> so an uncapped prod run never reads them.
+    assertTrue(path.contains("cap=25000"), path);
+    assertTrue(path.contains("month=06"), path);
+    source.close();
+  }
+
+  @Test void testBuildRawCachePathNoCapSegmentWhenUncapped() throws Exception {
+    HttpSource source = rawCacheSource(HttpSourceConfig.RawCacheConfig.enabled());
+    // default rawCacheRowCap=0 (uncapped / prod)
+    Map<String, String> vars = new LinkedHashMap<String, String>();
+    vars.put("month", "06");
+    String path = invokeBuildRawCachePath(source, vars);
+
+    assertFalse(path.contains("cap="), path);
+    source.close();
+  }
+
   private HttpSource createBasicSource() {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")

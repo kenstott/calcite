@@ -748,6 +748,11 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
+        # keyVars:[month] keys the cache only on the monthly cache-buster (not the per-table
+        # `type`), so the 3 clinical_trials tables — which issue the identical filtered request —
+        # share one cached response per month. The two derived tables carry the same `month`
+        # dimension (below) so all three resolve to the same key.
+        keyVars: [month]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialsResponseTransformer"
@@ -778,7 +783,7 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trial_conditions
     pattern: "type=clinical_trial_conditions"
-    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (CURSOR cache commits on full drain only)
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     partitions:
       style: hive
       columnDefinitions:
@@ -827,6 +832,11 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
+        # keyVars:[month] keys the cache only on the monthly cache-buster (not the per-table
+        # `type`), so the 3 clinical_trials tables — which issue the identical filtered request —
+        # share one cached response per month. The two derived tables carry the same `month`
+        # dimension (below) so all three resolve to the same key.
+        keyVars: [month]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialConditionsResponseTransformer"
@@ -834,6 +844,9 @@ partitionedTables:
     dimensions:
       type:
         - clinical_trial_conditions
+      # Same monthly cache-buster as the parent so all 3 clinical_trials tables share one cached
+      # response per month (see rawCache.keyVars).
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -854,7 +867,7 @@ partitionedTables:
   # ==========================================================================
   - name: clinical_trial_interventions
     pattern: "type=clinical_trial_interventions"
-    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (CURSOR cache commits on full drain only)
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     partitions:
       style: hive
       columnDefinitions:
@@ -911,6 +924,11 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
+        # keyVars:[month] keys the cache only on the monthly cache-buster (not the per-table
+        # `type`), so the 3 clinical_trials tables — which issue the identical filtered request —
+        # share one cached response per month. The two derived tables carry the same `month`
+        # dimension (below) so all three resolve to the same key.
+        keyVars: [month]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialInterventionsResponseTransformer"
@@ -918,6 +936,9 @@ partitionedTables:
     dimensions:
       type:
         - clinical_trial_interventions
+      # Same monthly cache-buster as the parent so all 3 clinical_trials tables share one cached
+      # response per month (see rawCache.keyVars).
+      month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
       enabled: true
@@ -1377,7 +1398,7 @@ partitionedTables:
   - name: cdc_brfss
     releaseWindow:
       months: [5, 6, 7, 8]  # CDC publishes annual BRFSS survey data May–August
-    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (OFFSET cache commits on full drain only)
+    dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     comment: >
       CDC Behavioral Risk Factor Surveillance System prevalence data (Socrata dttw-5yxu).
       State-level health behavior estimates by year, question, and demographic breakout.

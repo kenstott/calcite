@@ -2077,8 +2077,16 @@ public class EtlPipeline {
       LOGGER.info("Creating HttpSource for type: {}", sourceType);
     }
     // Use sourceStorageProvider for raw cache (not the materialized storage provider)
-    return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
-        operatingDirectory);
+    HttpSource httpSource = new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider,
+        rawCachePath, operatingDirectory);
+    // DQ sample mode: let a cursor source commit its capped sample under a cap-scoped key so it is
+    // reused instead of re-downloaded every DQ run. A row cap stops a cursor before EOF, so the
+    // cache would otherwise never commit. Capped mode only — prod (uncapped) keeps committing the
+    // full body on EOF as before.
+    if (rawCacheConfig.isEnabled() && isDqSampleMode() && config.getDqRowLimit() > 0) {
+      httpSource.setRawCacheRowCap(config.getDqRowLimit());
+    }
+    return httpSource;
   }
 
   /**

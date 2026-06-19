@@ -108,6 +108,17 @@ public class HttpSource implements DataSource {
   private final AtomicLong nextAllowedNanos = new AtomicLong();
 
   /**
+   * DQ sample row cap (0 = uncapped). When &gt; 0 the source runs in capped mode: the raw-cache
+   * key gets a {@code cap=<N>} segment (isolating the DQ sample from the full prod cache), and a
+   * paginated iterator commits its accumulated cache on {@code close()}. A row cap stops a cursor
+   * before its natural EOF, so without this the cache is never committed and the source
+   * re-downloads on every DQ run. Set by EtlPipeline in DQ sample mode; left 0 in prod so the
+   * full cache (committed only on EOF) is unaffected. Volatile: set once before the parallel
+   * fetch loop, read by fetch threads.
+   */
+  private volatile int rawCacheRowCap = 0;
+
+  /**
    * Creates a new HttpSource with the given configuration.
    *
    * @param config HTTP source configuration
@@ -179,6 +190,14 @@ public class HttpSource implements DataSource {
     this.storageProvider = null;
     this.rawCachePath = null;
     this.operatingDirectory = null;
+  }
+
+  /**
+   * Sets the DQ sample row cap. See {@link #rawCacheRowCap}. A non-positive value leaves the
+   * source uncapped (the default).
+   */
+  public void setRawCacheRowCap(int cap) {
+    this.rawCacheRowCap = Math.max(0, cap);
   }
 
   /**
@@ -537,6 +556,18 @@ public class HttpSource implements DataSource {
     }
 
     @Override public void close() {
+      // Capped (DQ) mode: a row cap stops the cursor before its natural EOF, so none of the EOF
+      // commit points were reached and the accumulated pages would be discarded — the reason a
+      // capped cursor table re-downloads every DQ run. Commit now under the cap-scoped key. This is
+      // idempotent and narrowly scoped: writeMergedCache guards on mergedCacheWritten (EOF/error
+      // paths already committed → no-op) and on a null generator (CSV_STREAM, which caches via a
+      // different path, and uncapped reads → no-op). Capped mode only, so an uncapped prod run that
+      // closes early never persists a partial full-cache. The accumulated cache holds whole fetched
+      // pages, so a later DQ run re-reads, re-transforms (incl. fan-out) and re-caps to the same
+      // deterministic sample.
+      if (rawCacheRowCap > 0) {
+        writeMergedCache();
+      }
       // Disconnect FIRST: killing the socket means a subsequent reader close can't drain or
       // re-read the rest of the entry. This is what makes an early stop (dqRowLimit) actually
       // abort the download rather than transfer the whole body.
@@ -3321,14 +3352,27 @@ public class HttpSource implements DataSource {
       path.append("/");
     }
 
-    // Build partition key from sorted variables
-    List<String> sortedKeys = new ArrayList<String>(variables.keySet());
+    // Build partition key from sorted variables. When rawCache.keyVars is configured, restrict
+    // the key to ONLY those variables (the ones that actually determine the downloaded bytes) so
+    // tables issuing the identical request but differing in output-only dimensions (e.g. a
+    // partition `type` discriminator) resolve to the SAME cached file — enabling cross-table
+    // sharing with sharedKey. When keyVars is null the full variable set is used (original
+    // behavior), leaving non-configured tables unaffected.
+    List<String> keyVars = config.getRawCache().getKeyVars();
+    List<String> sortedKeys = new ArrayList<String>(
+        keyVars != null ? keyVars : variables.keySet());
     Collections.sort(sortedKeys);
     for (String key : sortedKeys) {
       String value = variables.get(key);
       if (value != null && !value.isEmpty()) {
         path.append(key).append("=").append(sanitizePathComponent(value)).append("/");
       }
+    }
+
+    // Capped (DQ sample) caches are keyed separately under cap=<N> so an uncapped prod run never
+    // reads a partial sample, and repeat DQ runs reuse the capped sample instead of re-downloading.
+    if (rawCacheRowCap > 0) {
+      path.append("cap=").append(rawCacheRowCap).append("/");
     }
 
     // Use a distinct filename for gzip sources so old undecompressed caches are never reused

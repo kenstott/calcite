@@ -1557,18 +1557,20 @@ public class HttpSourceConfig {
   public static class RawCacheConfig {
     private final boolean enabled;
     private final String sharedKey;
+    private final List<String> keyVars;
 
-    private RawCacheConfig(boolean enabled, String sharedKey) {
+    private RawCacheConfig(boolean enabled, String sharedKey, List<String> keyVars) {
       this.enabled = enabled;
       this.sharedKey = sharedKey;
+      this.keyVars = keyVars;
     }
 
     public static RawCacheConfig defaults() {
-      return new RawCacheConfig(false, null);
+      return new RawCacheConfig(false, null, null);
     }
 
     public static RawCacheConfig enabled() {
-      return new RawCacheConfig(true, null);
+      return new RawCacheConfig(true, null, null);
     }
 
     public boolean isEnabled() {
@@ -1582,6 +1584,20 @@ public class HttpSourceConfig {
      */
     public String getSharedKey() {
       return sharedKey;
+    }
+
+    /**
+     * Optional whitelist of dimension/variable names that form the raw-cache key. When set, the
+     * cache path is built from ONLY these variables (sorted), instead of every fetch variable.
+     * This lets several tables that issue the identical HTTP request but differ in output-only
+     * dimensions (e.g. a partition {@code type} discriminator) resolve to the SAME cached file —
+     * the basis for true cross-table sharing with {@link #getSharedKey()}. The names listed must
+     * be exactly the variables that determine the downloaded bytes (URL-template vars, query
+     * params, and any deliberate cache-buster such as {@code month}). When null, every fetch
+     * variable is used (the original behavior), so non-configured tables are unaffected.
+     */
+    public List<String> getKeyVars() {
+      return keyVars;
     }
 
     @SuppressWarnings("unchecked")
@@ -1604,7 +1620,19 @@ public class HttpSourceConfig {
         sharedKey = (String) sharedKeyObj;
       }
 
-      return new RawCacheConfig(enabled, sharedKey);
+      List<String> keyVars = null;
+      Object keyVarsObj = map.get("keyVars");
+      if (keyVarsObj instanceof List) {
+        List<String> parsed = new ArrayList<String>();
+        for (Object item : (List<Object>) keyVarsObj) {
+          if (item != null) {
+            parsed.add(String.valueOf(item));
+          }
+        }
+        keyVars = parsed;
+      }
+
+      return new RawCacheConfig(enabled, sharedKey, keyVars);
     }
   }
 
