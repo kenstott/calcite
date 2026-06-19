@@ -103,6 +103,7 @@ public class SharePointClientModule
         addParam(params, "certificatePassword", config.getCertificatePassword());
         addParam(params, "thumbprint", config.getThumbprint());
         addParam(params, "schema", config.getSchema());
+        addParam(params, "metadataCacheTtl", config.getMetadataCacheTtl());
         return "jdbc:sharepoint:" + String.join(";", params);
     }
 

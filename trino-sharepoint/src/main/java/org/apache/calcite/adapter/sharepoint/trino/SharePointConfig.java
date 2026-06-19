@@ -40,6 +40,7 @@ public class SharePointConfig
     private String certificatePassword;
     private String thumbprint;
     private String schema;
+    private String metadataCacheTtl;
 
     @NotNull
     public String getSiteUrl()
@@ -186,6 +187,19 @@ public class SharePointConfig
     public SharePointConfig setSchema(String schema)
     {
         this.schema = schema;
+        return this;
+    }
+
+    public String getMetadataCacheTtl()
+    {
+        return metadataCacheTtl;
+    }
+
+    @Config("metadata-cache-ttl")
+    @ConfigDescription("List-discovery cache TTL in seconds (default 300; -1 = never expire, 0 = disabled)")
+    public SharePointConfig setMetadataCacheTtl(String metadataCacheTtl)
+    {
+        this.metadataCacheTtl = metadataCacheTtl;
         return this;
     }
 }
