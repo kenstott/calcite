@@ -53,6 +53,60 @@ jobs:
           path: govdata/build/libs/sih-govdata.jar
           retention-days: 30
 
+  # ── Trino connector plugins (calcite, sharepoint, splunk) ──────────────────
+  trino-plugins:
+    name: Build Trino connector plugins
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 25 for the connector toolchain (Trino SPI) + Java 21 to run Gradle.
+      # Last-listed becomes the default JAVA_HOME (21), which runs Gradle.
+      - name: Set up JDKs
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: |
+            25
+            21
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Build plugin packages
+        run: |
+          ./gradlew \
+            :trino-calcite:trinoPlugin \
+            :trino-sharepoint:trinoPlugin \
+            :trino-splunk:trinoPlugin \
+            -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
+            --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Collect plugin archives (stable names)
+        run: |
+          mkdir -p trino-assets
+          for m in trino-calcite trino-sharepoint trino-splunk; do
+            src=$(ls ${m}/build/distributions/${m}-plugin-*.zip | head -1)
+            cp "$src" "trino-assets/${m}-plugin.zip"
+          done
+          ls -lh trino-assets/
+
+      - name: Upload Trino plugin artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trino-plugins
+          path: trino-assets/*.zip
+          retention-days: 30
+
   # ── JAR build (ubuntu only — same JAR works on all platforms via JPype) ────
   jar:
     name: Build shadow JAR
@@ -549,7 +603,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [jar, govdata-jar, installer, publish, publish-python]
+    needs: [jar, govdata-jar, trino-plugins, installer, publish, publish-python]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -574,6 +628,12 @@ jobs:
           pattern: askamerica-engine-*-latest
           path: release-assets/
           merge-multiple: true
+
+      - name: Download Trino connector plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: trino-plugins
+          path: release-assets/
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -623,6 +683,16 @@ jobs:
             **macOS:** Double-click the `.dmg`, drag AskAmerica MCP to Applications, then open it to enter your API key.
             **Linux:** `sudo dpkg -i askamerica-mcp_*.deb`, then run `askamerica-mcp` to configure.
             **Windows:** Double-click the `.msi`, then open AskAmerica MCP from the Start Menu to configure.
+
+            ### Trino connectors
+
+            Plugin-directory archives — unzip into your Trino server's `plugin/` directory.
+
+            | File | Connector | JDBC source |
+            |------|-----------|-------------|
+            | `trino-calcite-plugin.zip` | `calcite` | any Calcite model (`jdbc:calcite:`) |
+            | `trino-sharepoint-plugin.zip` | `sharepoint` | SharePoint Lists (`jdbc:sharepoint:`) |
+            | `trino-splunk-plugin.zip` | `splunk` | Splunk (`jdbc:splunk:`) |
           files: release-assets/**/*
           draft: false
           prerelease: false
