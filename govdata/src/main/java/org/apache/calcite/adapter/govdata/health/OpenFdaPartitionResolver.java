@@ -12,7 +12,6 @@ package org.apache.calcite.adapter.govdata.health;
 
 import org.apache.calcite.adapter.file.etl.DimensionConfig;
 import org.apache.calcite.adapter.file.etl.DimensionResolver;
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -58,7 +57,7 @@ public class OpenFdaPartitionResolver implements DimensionResolver {
   public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
     String endpoint = endpointFor(config);
-    int startYear = startYear();
+    int startYear = startYear(config);
     try {
       JsonNode node = MAPPER.readTree(downloadBytes(DOWNLOAD_JSON));
       for (String segment : endpoint.split("\\.")) {
@@ -109,15 +108,19 @@ public class OpenFdaPartitionResolver implements DimensionResolver {
     return "results.drug.event";
   }
 
-  private static int startYear() {
-    // Bound strictly by the model's startYear operand (captured global ModelOperand). No env var,
-    // no system property, no computed fallback — a missing value is a model-config error, surfaced
-    // loudly rather than silently papered over with a guessed year.
-    if (!ModelOperand.has("health.startYear")) {
-      throw new IllegalStateException("health.startYear is missing from the model operand — "
-          + "OpenFDA partition resolution requires the configured start year");
+  private static int startYear(DimensionConfig config) {
+    // Bound strictly by the dimension's startYear property, which the model sets to
+    // ${GOVDATA_START_YEAR:2010} and VariableResolver resolves at load (the one sanctioned place
+    // that reads the environment). No env var, no system property, no computed fallback in code —
+    // a missing value is a model-config error, surfaced loudly.
+    if (config != null && config.getProperties() != null) {
+      Object v = config.getProperties().get("startYear");
+      if (v != null && !v.toString().trim().isEmpty()) {
+        return Integer.parseInt(v.toString().trim());
+      }
     }
-    return ModelOperand.getInt("health.startYear", -1);
+    throw new IllegalStateException("OpenFDA partition dimension is missing the startYear property "
+        + "(expected ${GOVDATA_START_YEAR:2010} in the model)");
   }
 
   private static byte[] downloadBytes(String url) throws IOException {

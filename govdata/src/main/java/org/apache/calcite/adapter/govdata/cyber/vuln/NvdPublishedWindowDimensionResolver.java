@@ -12,7 +12,6 @@ package org.apache.calcite.adapter.govdata.cyber.vuln;
 
 import org.apache.calcite.adapter.file.etl.DimensionConfig;
 import org.apache.calcite.adapter.file.etl.DimensionResolver;
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.slf4j.Logger;
@@ -334,22 +333,13 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
    * {@code startYear: 2002} produces 2002 (the tighter data floor wins).
    */
   private static int resolveStartYear(DimensionConfig config) {
-    // NVD data floor (1999) — the dimension's own startYear property; requesting earlier is
-    // pointless. This is a domain constraint from the model dimension config, not a guessed value.
-    int nvdFloor = parseIntProperty(config, "startYear", DEFAULT_START_YEAR);
-
-    // The run window comes from the model's startYear operand (captured global ModelOperand) —
-    // never an env var or system property. A missing operand window is a model-config error,
-    // surfaced loudly rather than silently defaulting to the full-history floor.
-    if (!ModelOperand.has("cyber_vuln.startYear")) {
-      throw new IllegalStateException("cyber_vuln.startYear is missing from the model operand — "
-          + "NVD published-window resolution requires the configured run window");
-    }
-    int operandStart = ModelOperand.getInt("cyber_vuln.startYear", nvdFloor);
-    // Tighter bound wins: never go before the NVD data floor.
-    int effective = Math.max(operandStart, nvdFloor);
-    LOGGER.info("NvdPublishedWindow: startYear={} (operand cyber_vuln.startYear={}, nvdFloor={})",
-        effective, operandStart, nvdFloor);
+    // Resolved from the dimension's startYear property, which the model sets to
+    // ${GOVDATA_START_YEAR:1999} and VariableResolver resolves at load (the one sanctioned place
+    // that reads the environment). Never go before the NVD data floor (1999); no env/sysprop/guess.
+    int start = parseIntProperty(config, "startYear", DEFAULT_START_YEAR);
+    int effective = Math.max(start, DEFAULT_START_YEAR);
+    LOGGER.info("NvdPublishedWindow: startYear={} (dimension startYear={}, nvdFloor={})",
+        effective, start, DEFAULT_START_YEAR);
     return effective;
   }
 

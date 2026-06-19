@@ -135,6 +135,7 @@ partitionedTables:
         resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
         properties:
           endpoint: "results.drug.ndc"
+          startYear: "${GOVDATA_START_YEAR:2010}"
 
     materialize:
       enabled: true
@@ -251,6 +252,7 @@ partitionedTables:
         resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
         properties:
           endpoint: "results.drug.drugsfda"
+          startYear: "${GOVDATA_START_YEAR:2010}"
 
     materialize:
       enabled: true
@@ -379,6 +381,7 @@ partitionedTables:
         resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
         properties:
           endpoint: "results.drug.enforcement"
+          startYear: "${GOVDATA_START_YEAR:2010}"
 
     materialize:
       enabled: true
@@ -502,6 +505,7 @@ partitionedTables:
         resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
         properties:
           endpoint: "results.drug.event"
+          startYear: "${GOVDATA_START_YEAR:2010}"
 
     materialize:
       enabled: true
@@ -628,6 +632,7 @@ partitionedTables:
         resolver: "org.apache.calcite.adapter.govdata.health.OpenFdaPartitionResolver"
         properties:
           endpoint: "results.device.recall"
+          startYear: "${GOVDATA_START_YEAR:2010}"
 
     materialize:
       enabled: true

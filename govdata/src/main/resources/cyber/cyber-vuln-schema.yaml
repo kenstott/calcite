@@ -249,7 +249,7 @@ partitionedTables:
         effectiveYearField: pub_year
         effectiveMonthField: pub_month
         properties:
-          startYear: "1999"          # NVD floor; GOVDATA_START_YEAR (dq-rebuild) overrides
+          startYear: "${GOVDATA_START_YEAR:1999}"   # resolved at load by VariableResolver; NVD data floor 1999
           tipDays: "90"              # rolling daily-window tip for freshness (≤120)
           tipChunkDays: "1"
       pubEndDate:
@@ -354,7 +354,7 @@ partitionedTables:
         effectiveYearField: pub_year
         effectiveMonthField: pub_month
         properties:
-          startYear: "1999"          # NVD floor; GOVDATA_START_YEAR (dq-rebuild) overrides
+          startYear: "${GOVDATA_START_YEAR:1999}"   # resolved at load by VariableResolver; NVD data floor 1999
           tipDays: "90"
           tipChunkDays: "1"
       pubEndDate:
