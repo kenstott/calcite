@@ -113,6 +113,7 @@ public class SharePointListTable extends AbstractQueryableTable
   }
 
   @Override public @Nullable Collection getModifiableCollection() {
+    checkWritable();
     return new SharePointModifiableCollection();
   }
 
@@ -120,8 +121,21 @@ public class SharePointListTable extends AbstractQueryableTable
       RelOptTable table, Prepare.CatalogReader catalogReader, RelNode child,
       TableModify.Operation operation, @Nullable List<String> updateColumnList,
       @Nullable List<RexNode> sourceExpressionList, boolean flattened) {
+    checkWritable();
     return LogicalTableModify.create(table, catalogReader, child, operation,
         updateColumnList, sourceExpressionList, flattened);
+  }
+
+  /**
+   * Rejects writes to list types whose rows are not plain list items (document/picture libraries,
+   * surveys, discussion boards). Generic lists, task lists and calendars remain writable.
+   */
+  private void checkWritable() {
+    if (!metadata.isWritable()) {
+      throw new UnsupportedOperationException(
+          "SharePoint list '" + metadata.getDisplayName() + "' (template "
+              + metadata.getTemplate() + ") is read-only");
+    }
   }
 
   /**

@@ -48,7 +48,11 @@ public class SharePointListDriver extends org.apache.calcite.jdbc.Driver {
         Properties params = new Properties(info);
         parseParams(remainder, params);
         String model = buildModel(params);
-        return super.connect("jdbc:calcite:model=inline:" + model, params);
+        // Delegate to a plain Calcite driver. We cannot use super.connect here: the inherited
+        // UnregisteredDriver.connect gates on acceptsURL(), which uses our overridden prefix
+        // ("jdbc:sharepoint:") and would reject the "jdbc:calcite:" URL, returning null.
+        return new org.apache.calcite.jdbc.Driver()
+            .connect("jdbc:calcite:model=inline:" + model, params);
     }
 
     private void parseParams(String paramStr, Properties props) {
@@ -80,8 +84,13 @@ public class SharePointListDriver extends org.apache.calcite.jdbc.Driver {
                 operand.put(key, props.getProperty(key));
             }
 
+            // Schema name is configurable via the "schema" (or "currentSchema") parameter,
+            // defaulting to "sharepoint".
+            String schemaName = props.getProperty("schema",
+                props.getProperty("currentSchema", "sharepoint"));
+
             Map<String, Object> schema = new HashMap<String, Object>();
-            schema.put("name", "sharepoint");
+            schema.put("name", schemaName);
             schema.put("type", "custom");
             schema.put("factory", "org.apache.calcite.adapter.sharepoint.SharePointListSchemaFactory");
             schema.put("operand", operand);
@@ -91,7 +100,7 @@ public class SharePointListDriver extends org.apache.calcite.jdbc.Driver {
 
             Map<String, Object> model = new HashMap<String, Object>();
             model.put("version", "1.0");
-            model.put("defaultSchema", "sharepoint");
+            model.put("defaultSchema", schemaName);
             model.put("schemas", schemas);
 
             return new ObjectMapper().writeValueAsString(model);
