@@ -11,11 +11,28 @@ friendly catalog properties so you never write a raw JDBC URL.
 A Trino plugin must be built against the exact SPI version of the target server — the version pinned
 by `trino.version` in the repo's `gradle.properties` (currently **481**, which requires **Java 25**).
 
-## Build & install
+## Download
+
+Prebuilt plugin archives are attached to each `trino-v*` GitHub release. Grab
+`trino-sharepoint-plugin-<version>.zip` from the
+[Releases page](https://github.com/kenstott/calcite/releases), or with the GitHub CLI:
 
 ```bash
+gh release download <trino-vX.Y.Z> --repo kenstott/calcite --pattern 'trino-sharepoint-plugin-*.zip'
+```
+
+The `Trino Connectors` workflow also publishes the archives as a `trino-connector-packages`
+build artifact on each run.
+
+## Build & install
+
+Install the downloaded archive (or build from source) into the Trino server's `plugin/` directory,
+then restart Trino:
+
+```bash
+# build from source (optional)
 ./gradlew :trino-sharepoint:trinoPlugin
-# Output: trino-sharepoint/build/distributions/trino-sharepoint-plugin-*.zip
+# install
 unzip trino-sharepoint/build/distributions/trino-sharepoint-plugin-*.zip -d "$TRINO_HOME/plugin/"
 # yields $TRINO_HOME/plugin/trino-sharepoint/<jars>; restart Trino
 ```
