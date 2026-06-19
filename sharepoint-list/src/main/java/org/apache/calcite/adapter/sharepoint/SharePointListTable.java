@@ -248,7 +248,7 @@ public class SharePointListTable extends AbstractQueryableTable
         Object value = row[i + 1]; // +1 to skip ID column
 
         if (value != null) {
-          fields.put(column.getInternalName(), value);
+          fields.put(column.getInternalName(), formatForWrite(column, value));
         }
       }
 
@@ -270,10 +270,27 @@ public class SharePointListTable extends AbstractQueryableTable
         Object value = row[i + 1]; // +1 to skip ID column
 
         // For updates, include all fields (even nulls might be intentional)
-        fields.put(column.getInternalName(), value);
+        fields.put(column.getInternalName(), formatForWrite(column, value));
       }
 
       return fields;
+    }
+
+    /**
+     * Converts a column value into the form SharePoint expects on write. Calcite passes a TIMESTAMP
+     * as epoch milliseconds, but the Graph/REST API expects an ISO-8601 string, so format datetime
+     * columns accordingly. Other types pass through unchanged.
+     */
+    private Object formatForWrite(SharePointColumn column, Object value) {
+      if (value != null && "datetime".equalsIgnoreCase(column.getType())) {
+        if (value instanceof Number) {
+          return java.time.Instant.ofEpochMilli(((Number) value).longValue()).toString();
+        }
+        if (value instanceof java.sql.Timestamp) {
+          return ((java.sql.Timestamp) value).toInstant().toString();
+        }
+      }
+      return value;
     }
   }
 

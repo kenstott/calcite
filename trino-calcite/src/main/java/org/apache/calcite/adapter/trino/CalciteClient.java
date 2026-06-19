@@ -191,10 +191,13 @@ public class CalciteClient
             // millisecond precision, so this is always a short timestamp.)
             int precision = min(typeHandle.decimalDigits().orElse(3), 6);
             TimestampType timestampType = createTimestampType(precision);
+            // Read: Calcite exposes TIMESTAMP as epoch millis via a number accessor; scale to the
+            // microseconds a short Trino timestamp uses. Write: Trino's default timestamp write
+            // binds a LocalDateTime, but Calcite's INSERT expects a Long (millis), so bind that.
             return Optional.of(ColumnMapping.longMapping(
                     timestampType,
                     (resultSet, columnIndex) -> resultSet.getLong(columnIndex) * 1000L,
-                    timestampWriteFunction(timestampType)));
+                    (statement, index, value) -> statement.setObject(index, value / 1000L)));
         }
         default:
             // Unknown remote type: skip the column. Set unsupported-type-handling to
