@@ -1277,6 +1277,15 @@ public class HttpSource implements DataSource {
       fullUrl = buildUrlWithParams(baseUrl, params);
     }
 
+    // Circuit breaker: if this origin has returned >= threshold consecutive 503s, treat it as down
+    // and fast-skip (no request, no retries) until a success resets it. EtlPipeline catches
+    // SkippedBatchException and skips the batch gracefully.
+    java.util.concurrent.atomic.AtomicInteger open = CONSECUTIVE_503.get(baseUri(fullUrl));
+    if (open != null && open.get() >= CIRCUIT_503_THRESHOLD) {
+      throw new SkippedBatchException("Circuit open — origin returned >= " + CIRCUIT_503_THRESHOLD
+          + " consecutive 503s, fast-skipping: " + baseUri(fullUrl));
+    }
+
     HttpSourceConfig.RateLimitConfig rateLimit = config.getRateLimit();
     int retries = 0;
     IOException lastException = null;
@@ -1292,7 +1301,14 @@ public class HttpSource implements DataSource {
         if (shouldRetry(e, rateLimit)) {
           retries++;
           if (retries <= rateLimit.getMaxRetries()) {
-            long backoff = rateLimit.getRetryBackoffMs() * (1L << (retries - 1));
+            long backoff;
+            if (e instanceof RetryableHttpException
+                && ((RetryableHttpException) e).retryAfterMs >= 0L) {
+              // Server told us exactly how long to wait (503/429 Retry-After) — honor it (capped).
+              backoff = ((RetryableHttpException) e).retryAfterMs;
+            } else {
+              backoff = rateLimit.getRetryBackoffMs() * (1L << (retries - 1));
+            }
             LOGGER.warn("Request failed, retrying in {}ms (attempt {}/{}): {}",
                 backoff, retries, rateLimit.getMaxRetries(), e.getMessage());
             try {
@@ -1309,6 +1325,53 @@ public class HttpSource implements DataSource {
     }
 
     throw lastException != null ? lastException : new IOException("Request failed after retries");
+  }
+
+  // ── 503 circuit breaker + Retry-After ──────────────────────────────────────────────────────
+  /** Consecutive HTTP-503 responses per base URI (scheme+host+path, no query). When a base URI
+   *  reaches {@link #CIRCUIT_503_THRESHOLD} its origin is treated as down: further requests to it
+   *  fast-skip (the batch is skipped) instead of retrying, until any 2xx resets the count. A 503
+   *  means the request never reached the origin's app layer, so retrying it endlessly only wastes
+   *  the worker — once it's clearly persistent we stop calling that URI. */
+  private static final java.util.concurrent.ConcurrentMap<String, java.util.concurrent.atomic.AtomicInteger>
+      CONSECUTIVE_503 =
+          new java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>();
+  private static final int CIRCUIT_503_THRESHOLD = 5;
+  /** Cap on how long we honor a server-provided Retry-After — a maintenance window can be hours,
+   *  and we must not block a worker indefinitely. */
+  private static final long RETRY_AFTER_CAP_MS = 300_000L;
+
+  /** A retryable HTTP error carrying the server's Retry-After delay in ms (-1 if not provided). */
+  private static final class RetryableHttpException extends IOException {
+    private final long retryAfterMs;
+    RetryableHttpException(String message, long retryAfterMs) {
+      super(message);
+      this.retryAfterMs = retryAfterMs;
+    }
+  }
+
+  /** The circuit-breaker key for a request: the URL with the query string stripped. */
+  private static String baseUri(String fullUrl) {
+    int q = fullUrl.indexOf('?');
+    return q >= 0 ? fullUrl.substring(0, q) : fullUrl;
+  }
+
+  /** Parses a Retry-After header (delta-seconds or HTTP-date) to ms, capped; -1 if absent. */
+  private static long parseRetryAfter(HttpURLConnection conn) {
+    String ra = conn.getHeaderField("Retry-After");
+    if (ra == null || ra.trim().isEmpty()) {
+      return -1L;
+    }
+    try {
+      return Math.min(RETRY_AFTER_CAP_MS, Long.parseLong(ra.trim()) * 1000L);
+    } catch (NumberFormatException notSeconds) {
+      long when = conn.getHeaderFieldDate("Retry-After", -1L);
+      if (when > 0L) {
+        long delta = when - System.currentTimeMillis();
+        return delta <= 0L ? 0L : Math.min(RETRY_AFTER_CAP_MS, delta);
+      }
+      return -1L;
+    }
   }
 
   /**
@@ -1443,6 +1506,11 @@ public class HttpSource implements DataSource {
       LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
+        // Success — clear the circuit-breaker 503 count for this origin.
+        java.util.concurrent.atomic.AtomicInteger ok = CONSECUTIVE_503.get(baseUri(urlString));
+        if (ok != null) {
+          ok.set(0);
+        }
         // Check if we need to extract from ZIP
         String extractPattern = config.getExtractPattern();
         if (extractPattern != null && !extractPattern.isEmpty()) {
@@ -1498,6 +1566,22 @@ public class HttpSource implements DataSource {
         if (shouldSkip(responseCode, config.getRateLimit())) {
           LOGGER.debug("HTTP {} from {} — skipping batch (skipOn match)", responseCode, urlString);
           throw new SkippedBatchException("HTTP " + responseCode + " (skipped): " + urlString);
+        }
+        // 503/429: capture any Retry-After so the retry honors it. Count consecutive 503s per base
+        // URI so a persistently-down origin trips the circuit breaker (subsequent calls fast-skip).
+        if (responseCode == 503 || responseCode == 429) {
+          long retryAfterMs = parseRetryAfter(conn);
+          if (responseCode == 503) {
+            int n = CONSECUTIVE_503
+                .computeIfAbsent(baseUri(urlString),
+                    k -> new java.util.concurrent.atomic.AtomicInteger())
+                .incrementAndGet();
+            if (n == CIRCUIT_503_THRESHOLD) {
+              LOGGER.warn("Circuit OPEN: {} consecutive 503s for {} — origin down, "
+                  + "fast-skipping further calls until a success", n, baseUri(urlString));
+            }
+          }
+          throw new RetryableHttpException("HTTP " + responseCode + ": " + errorBody, retryAfterMs);
         }
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
       }
