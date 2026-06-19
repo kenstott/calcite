@@ -14,6 +14,13 @@
 schemaName: "${CYBER_THREAT_SCHEMA_NAME:cyber_threat}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
+# OTX incremental window (days). When set to a positive integer, OtxResponseTransformer
+# appends modified_since=now-N days to the subscribed-pulses URL and walks only the bounded,
+# filtered chain (production daily/incremental). Empty default = full load of all subscribed
+# pulses (initial/historical). Read via ModelOperand path cyber_threat.otxDeltaDays; DQ-sample
+# mode (GOVDATA_DQ) ignores it and always full-loads (capped by dqRowLimit).
+otxDeltaDays: "${CYBER_OTX_DELTA_DAYS:}"
+
 comment: >
   Cyber threat intelligence, exploit data, IOC feeds, MITRE ATT&CK taxonomy,
   and standards/compliance mappings. Part of the govdata cyber sub-domain.
