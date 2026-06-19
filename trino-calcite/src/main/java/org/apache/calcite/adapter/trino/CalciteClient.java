@@ -183,9 +183,19 @@ public class CalciteClient
         case Types.TIME:
             return Optional.of(io.trino.plugin.jdbc.StandardColumnMappings.timeColumnMapping(
                     createTimeType(min(typeHandle.decimalDigits().orElse(3), TimeType.MAX_PRECISION))));
-        case Types.TIMESTAMP:
-            return Optional.of(timestampColumnMapping(
-                    createTimestampType(min(typeHandle.decimalDigits().orElse(3), TimestampType.MAX_PRECISION))));
+        case Types.TIMESTAMP: {
+            // Calcite/Avatica exposes TIMESTAMP via a number-based cursor accessor, which does not
+            // support Trino's default read (getObject(LocalDateTime.class)) and fails with
+            // "cannot convert to Object". Read the raw epoch milliseconds via getLong instead and
+            // scale to the microseconds a short Trino timestamp expects. (Calcite timestamps are
+            // millisecond precision, so this is always a short timestamp.)
+            int precision = min(typeHandle.decimalDigits().orElse(3), 6);
+            TimestampType timestampType = createTimestampType(precision);
+            return Optional.of(ColumnMapping.longMapping(
+                    timestampType,
+                    (resultSet, columnIndex) -> resultSet.getLong(columnIndex) * 1000L,
+                    timestampWriteFunction(timestampType)));
+        }
         default:
             // Unknown remote type: skip the column. Set unsupported-type-handling to
             // CONVERT_TO_VARCHAR on the catalog to surface it as varchar instead.

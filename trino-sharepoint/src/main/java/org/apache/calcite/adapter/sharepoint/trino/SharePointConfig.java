@@ -36,6 +36,10 @@ public class SharePointConfig
     private String tenantId;
     private String user;
     private String password;
+    private String certificatePath;
+    private String certificatePassword;
+    private String thumbprint;
+    private String schema;
 
     @NotNull
     public String getSiteUrl()
@@ -129,6 +133,59 @@ public class SharePointConfig
     public SharePointConfig setPassword(String password)
     {
         this.password = password;
+        return this;
+    }
+
+    public String getCertificatePath()
+    {
+        return certificatePath;
+    }
+
+    @Config("certificate-path")
+    @ConfigDescription("Path to the PKCS#12 (.pfx) certificate file (CERTIFICATE auth)")
+    public SharePointConfig setCertificatePath(String certificatePath)
+    {
+        this.certificatePath = certificatePath;
+        return this;
+    }
+
+    public String getCertificatePassword()
+    {
+        return certificatePassword;
+    }
+
+    @Config("certificate-password")
+    @ConfigSecuritySensitive
+    @ConfigDescription("Password for the PKCS#12 certificate (CERTIFICATE auth)")
+    public SharePointConfig setCertificatePassword(String certificatePassword)
+    {
+        this.certificatePassword = certificatePassword;
+        return this;
+    }
+
+    public String getThumbprint()
+    {
+        return thumbprint;
+    }
+
+    @Config("thumbprint")
+    @ConfigDescription("Optional certificate SHA-1 thumbprint; omit to auto-compute from the .pfx")
+    public SharePointConfig setThumbprint(String thumbprint)
+    {
+        this.thumbprint = thumbprint;
+        return this;
+    }
+
+    public String getSchema()
+    {
+        return schema;
+    }
+
+    @Config("schema")
+    @ConfigDescription("Schema name exposed for the SharePoint lists (default: sharepoint)")
+    public SharePointConfig setSchema(String schema)
+    {
+        this.schema = schema;
         return this;
     }
 }

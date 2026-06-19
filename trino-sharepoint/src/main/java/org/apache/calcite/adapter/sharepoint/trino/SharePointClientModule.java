@@ -97,6 +97,10 @@ public class SharePointClientModule
         addParam(params, "tenantId", config.getTenantId());
         addParam(params, "user", config.getUser());
         addParam(params, "password", config.getPassword());
+        addParam(params, "certificatePath", config.getCertificatePath());
+        addParam(params, "certificatePassword", config.getCertificatePassword());
+        addParam(params, "thumbprint", config.getThumbprint());
+        addParam(params, "schema", config.getSchema());
         return "jdbc:sharepoint:" + String.join(";", params);
     }
 
