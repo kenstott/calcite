@@ -54,12 +54,21 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
     try {
       // Build column definitions from the CREATE TABLE statement
       List<SharePointColumn> columns = new ArrayList<>();
+      // List type/template. Specify a non-generic list (calendar, tasks, ...) with a sentinel
+      // column:  CREATE TABLE x ("__template" VARCHAR DEFAULT 'calendar', ...). The sentinel is
+      // read for the template and not created as a field.
+      String template = "genericList";
 
       if (create.columnList != null) {
         for (SqlNode node : create.columnList) {
           if (node instanceof SqlColumnDeclaration) {
             SqlColumnDeclaration col = (SqlColumnDeclaration) node;
             String columnName = col.name.getSimple();
+
+            if ("__template".equalsIgnoreCase(columnName)) {
+              template = normalizeTemplate(extractDefaultString(col.expression));
+              continue;
+            }
 
             // For now, use a simple type mapping
             // In a full implementation, we'd derive the type from col.dataType
@@ -83,7 +92,7 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
       }
 
       // Create the SharePoint list
-      createSharePointList(spSchema, listName, columns);
+      createSharePointList(spSchema, listName, columns, template);
 
       // Refresh the schema to include the new list
       spSchema.refresh();
@@ -131,19 +140,71 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
   }
 
   private void createSharePointList(SharePointListSchema schema, String listName,
-      List<SharePointColumn> columns) throws IOException, InterruptedException {
+      List<SharePointColumn> columns, String template) throws IOException, InterruptedException {
 
     if (schema.useRestApi()) {
       // Use SharePoint REST API
-      createSharePointListRest(schema, listName, columns);
+      createSharePointListRest(schema, listName, columns, template);
     } else {
       // Use Microsoft Graph API
-      createSharePointListGraph(schema, listName, columns);
+      createSharePointListGraph(schema, listName, columns, template);
     }
   }
 
+  /**
+   * Normalizes a user-supplied template name to a Microsoft Graph list template. Accepts friendly
+   * aliases (calendar, task) and the Graph names directly; defaults to genericList.
+   */
+  private static String normalizeTemplate(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return "genericList";
+    }
+    switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+    case "calendar":
+    case "events":
+      return "events";
+    case "task":
+    case "tasks":
+      return "tasks";
+    case "announcements":
+      return "announcements";
+    case "contacts":
+      return "contacts";
+    case "links":
+      return "links";
+    default:
+      return "genericList";
+    }
+  }
+
+  /** SharePoint REST BaseTemplate code for a Graph template name. */
+  private static int restBaseTemplate(String template) {
+    switch (template) {
+    case "events":
+      return 106;
+    case "tasks":
+      return 171;
+    case "announcements":
+      return 104;
+    case "contacts":
+      return 105;
+    case "links":
+      return 103;
+    default:
+      return 100; // genericList
+    }
+  }
+
+  /** Extracts the string value of a column DEFAULT expression (a char literal), or null. */
+  private static String extractDefaultString(SqlNode expression) {
+    if (expression instanceof org.apache.calcite.sql.SqlLiteral) {
+      return ((org.apache.calcite.sql.SqlLiteral) expression).toValue();
+    }
+    return null;
+  }
+
   private void createSharePointListGraph(SharePointListSchema schema, String listName,
-      List<SharePointColumn> columns) throws IOException, InterruptedException {
+      List<SharePointColumn> columns, String template) throws IOException, InterruptedException {
 
     MicrosoftGraphListClient client = schema.getClient();
 
@@ -152,9 +213,9 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
     requestBody.put("displayName", listName);
     requestBody.put("description", "Created by Apache Calcite SharePoint Adapter");
 
-    // Create list with basic template (Generic List = 100)
+    // Create list with the requested template (genericList, events, tasks, ...)
     ObjectNode list = MAPPER.createObjectNode();
-    list.put("template", "genericList");
+    list.put("template", template);
     requestBody.set("list", list);
 
     // Create the list first
@@ -171,7 +232,7 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
   }
 
   private void createSharePointListRest(SharePointListSchema schema, String listName,
-      List<SharePointColumn> columns) throws IOException, InterruptedException {
+      List<SharePointColumn> columns, String template) throws IOException, InterruptedException {
 
     SharePointRestListClient restClient = schema.getRestClient();
     String siteUrl = restClient.getSiteUrl();
@@ -183,7 +244,7 @@ public class SharePointDdlExecutor extends DdlExecutorImpl {
     requestBody.set("__metadata", metadata);
     requestBody.put("Title", listName);
     requestBody.put("Description", "Created by Apache Calcite SharePoint Adapter");
-    requestBody.put("BaseTemplate", 100); // Generic List template
+    requestBody.put("BaseTemplate", restBaseTemplate(template));
     requestBody.put("EnableAttachments", true);
 
     // Create the list using REST API
