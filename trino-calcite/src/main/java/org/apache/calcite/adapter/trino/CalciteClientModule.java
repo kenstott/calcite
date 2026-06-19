@@ -64,11 +64,12 @@ public class CalciteClientModule
             CredentialProvider credentialProvider,
             OpenTelemetry openTelemetry)
     {
-        return DriverConnectionFactory.builder(
+        return new AutoCommitConnectionFactory(
+                DriverConnectionFactory.builder(
                         new org.apache.calcite.jdbc.Driver(),
                         config.getConnectionUrl(),
                         credentialProvider)
                 .setOpenTelemetry(openTelemetry)
-                .build();
+                .build());
     }
 }

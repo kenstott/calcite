@@ -31,6 +31,7 @@ import io.trino.plugin.jdbc.JdbcClient;
 import io.trino.plugin.jdbc.credential.CredentialProvider;
 
 import org.apache.calcite.adapter.sharepoint.SharePointListDriver;
+import org.apache.calcite.adapter.trino.AutoCommitConnectionFactory;
 import org.apache.calcite.adapter.trino.CalciteClient;
 
 import java.net.URLEncoder;
@@ -75,12 +76,13 @@ public class SharePointClientModule
             CredentialProvider credentialProvider,
             OpenTelemetry openTelemetry)
     {
-        return DriverConnectionFactory.builder(
+        return new AutoCommitConnectionFactory(
+                DriverConnectionFactory.builder(
                         new SharePointListDriver(),
                         config.getConnectionUrl(),
                         credentialProvider)
                 .setOpenTelemetry(openTelemetry)
-                .build();
+                .build());
     }
 
     /**
