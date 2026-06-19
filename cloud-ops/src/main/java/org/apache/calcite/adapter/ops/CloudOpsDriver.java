@@ -50,7 +50,11 @@ public class CloudOpsDriver extends org.apache.calcite.jdbc.Driver {
         Properties params = new Properties(info);
         parseParams(remainder, params);
         String model = buildModel(params);
-        return super.connect("jdbc:calcite:model=inline:" + model, params);
+        // Delegate to a plain Calcite driver. We cannot use super.connect here: the inherited
+        // UnregisteredDriver.connect gates on acceptsURL(), which uses our overridden prefix
+        // ("jdbc:cloudops:") and would reject the "jdbc:calcite:" URL, returning null.
+        return new org.apache.calcite.jdbc.Driver()
+            .connect("jdbc:calcite:model=inline:" + model, params);
     }
 
     private void parseParams(String paramStr, Properties props) {

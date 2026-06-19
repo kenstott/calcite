@@ -1,0 +1,123 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Generic Trino connector over the Calcite JDBC driver (jdbc:calcite:).
+//
+// IMPORTANT: Trino's SPI requires a modern JDK, so this module overrides the repo-wide Java 8
+// convention with its own toolchain. The Calcite driver jars it wraps are Java 8 bytecode and
+// run unchanged on the Trino JVM. A Trino plugin must be built against the exact SPI version of
+// the server it deploys into; the version is pinned by `trino.version` in gradle.properties.
+
+val trinoVersion = providers.gradleProperty("trino.version").get()
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+    }
+}
+
+// `--release 25` makes javac ignore the inherited source/target 1.8 set by the root convention.
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(25)
+}
+
+// Opt out of the legacy code-quality gates the root build applies to every Java module. Their
+// bytecode tooling (forbiddenapis/jandex use an older ASM) cannot parse Java 25 class files, and
+// the autostyle ruleset targets the Calcite source conventions, not Trino-style code.
+tasks.matching {
+    val n = it.name.lowercase()
+    n.contains("forbidden") || n.contains("jandex") || n.contains("autostyle")
+}.configureEach { enabled = false }
+
+// Jetty 12.1.x offers a Brotli compression provider that requires a platform-native library not
+// present in this test environment; drop it so the in-process HTTP server falls back to gzip.
+configurations.testRuntimeClasspath {
+    exclude(group = "org.eclipse.jetty.compression", module = "jetty-compression-brotli")
+}
+
+// The in-process Trino server (trino-testing) needs the same JVM flags as a real Trino launch:
+// the incubating Vector API, several add-opens, native access and unsafe memory access on JDK 25.
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "2g"
+    jvmArgs(
+        "--add-modules=jdk.incubator.vector",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.nio=ALL-UNNAMED",
+        "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "--sun-misc-unsafe-memory-access=allow",
+        "-Djdk.attach.allowAttachSelf=true"
+    )
+}
+
+dependencies {
+    // trino-base-jdbc pulls io.airlift:http-client -> Jetty 12.1.8 onto the compile classpath,
+    // but the in-process Trino server (test runtime) is compiled against Jetty 12.1.9. Because the
+    // root build pins runtime versions to the compile classpath, bump the compile-side Jetty so the
+    // pin lands on 12.1.9 (otherwise the server hits a jetty-http ComplianceUtils NoSuchMethodError).
+    constraints {
+        listOf(
+            "org.eclipse.jetty:jetty-http",
+            "org.eclipse.jetty:jetty-client",
+            "org.eclipse.jetty:jetty-io",
+            "org.eclipse.jetty:jetty-util",
+            "org.eclipse.jetty.http2:jetty-http2-common",
+            "org.eclipse.jetty.http2:jetty-http2-hpack",
+            "org.eclipse.jetty.http2:jetty-http2-client",
+            "org.eclipse.jetty.http2:jetty-http2-client-transport",
+            "org.eclipse.jetty.compression:jetty-compression-common",
+            "org.eclipse.jetty.compression:jetty-compression-gzip"
+        ).forEach { api(it) { version { require("12.1.9") } } }
+    }
+
+    // Provided by the Trino server at runtime via the plugin's parent classloader - must NOT be bundled.
+    compileOnly("io.trino:trino-spi:$trinoVersion")
+
+    // The JDBC connector framework. Bundled into the plugin directory. Brings Guice, Airlift
+    // configuration, OpenTelemetry and Jackson onto the compile classpath transitively.
+    api("io.trino:trino-base-jdbc:$trinoVersion")
+
+    // The backing driver: org.apache.calcite.jdbc.Driver (jdbc:calcite:model=...). Bundled.
+    implementation(project(":core"))
+
+    testImplementation("io.trino:trino-spi:$trinoVersion")
+    testImplementation("io.trino:trino-testing:$trinoVersion")
+    testImplementation("io.trino:trino-main:$trinoVersion")
+    // trino-testing pulls JUnit Platform 6.x; supply a matching launcher so Gradle 8.7 uses it
+    // instead of its older bundled launcher (otherwise TagFilter hits a NoSuchMethodError).
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+// Assemble a Trino plugin directory (directory-of-jars, not a fat jar). Trino loads plugins from
+// `<trino>/plugin/<name>/`; unzip the archive there. trino-spi is compileOnly so it is already
+// absent from runtimeClasspath; the names below are the other artifacts Trino exposes to plugins
+// parent-first and which therefore must NOT be bundled. NOTE: verify the provided set against a
+// real Trino server for the pinned version before shipping.
+val trinoProvidedPrefixes = listOf("slice-", "jackson-annotations-", "opentelemetry-api-",
+        "opentelemetry-context-", "jol-core-")
+
+tasks.register<Zip>("trinoPlugin") {
+    group = "distribution"
+    description = "Builds the Trino plugin directory archive for the calcite connector."
+    archiveBaseName.set("trino-calcite-plugin")
+    into("trino-calcite") {
+        from(tasks.named("jar"))
+        from(configurations["runtimeClasspath"].filter { file ->
+            trinoProvidedPrefixes.none { file.name.startsWith(it) }
+        })
+    }
+}

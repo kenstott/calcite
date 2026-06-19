@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.sharepoint;
 
 import org.apache.calcite.linq4j.Enumerator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -75,6 +77,8 @@ public class SharePointListEnumerator implements Enumerator<Object[]> {
     return row;
   }
 
+  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
   private Object convertValue(Object value, String type) {
     if (value == null) {
       return null;
@@ -92,15 +96,18 @@ public class SharePointListEnumerator implements Enumerator<Object[]> {
     case "boolean":
       return value instanceof Boolean ? value : Boolean.parseBoolean(value.toString());
     case "datetime":
-      // SharePoint returns dates as ISO 8601 strings
-      return java.sql.Timestamp.valueOf(value.toString().replace("T", " ").replace("Z", ""));
+      // Calcite represents TIMESTAMP as epoch milliseconds (a number); returning a
+      // java.sql.Timestamp object breaks the Avatica/JDBC cursor accessor. SharePoint returns
+      // ISO-8601 UTC strings.
+      return toEpochMillis(value.toString());
     case "lookup":
     case "user":
-      // These are complex objects in SharePoint, extract display value
+      // These are complex objects in SharePoint, extract the display value when present.
       if (value instanceof Map) {
         Map<String, Object> lookupValue = (Map<String, Object>) value;
-        return lookupValue.get("Title") != null
+        Object title = lookupValue.get("Title") != null
             ? lookupValue.get("Title") : lookupValue.get("LookupValue");
+        return title != null ? title.toString() : toJson(value);
       }
       return value.toString();
     case "multichoice":
@@ -110,6 +117,31 @@ public class SharePointListEnumerator implements Enumerator<Object[]> {
       }
       return value.toString();
     default:
+      // Coerce any remaining complex (object/array) value to JSON so it fits the VARCHAR column;
+      // scalars fall through to their string form.
+      if (value instanceof Map || value instanceof List) {
+        return toJson(value);
+      }
+      return value.toString();
+    }
+  }
+
+  /** Parses a SharePoint ISO-8601 datetime into epoch milliseconds. */
+  private static Long toEpochMillis(String value) {
+    try {
+      return java.time.Instant.parse(value).toEpochMilli();
+    } catch (RuntimeException e) {
+      // Fall back for values without an explicit zone/offset.
+      return java.sql.Timestamp.valueOf(
+          value.replace("T", " ").replace("Z", "")).getTime();
+    }
+  }
+
+  /** Serializes a complex SharePoint value to a JSON string. */
+  private static String toJson(Object value) {
+    try {
+      return JSON_MAPPER.writeValueAsString(value);
+    } catch (Exception e) {
       return value.toString();
     }
   }

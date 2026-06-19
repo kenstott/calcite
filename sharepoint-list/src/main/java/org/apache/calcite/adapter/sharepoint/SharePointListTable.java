@@ -113,6 +113,7 @@ public class SharePointListTable extends AbstractQueryableTable
   }
 
   @Override public @Nullable Collection getModifiableCollection() {
+    checkWritable();
     return new SharePointModifiableCollection();
   }
 
@@ -120,8 +121,21 @@ public class SharePointListTable extends AbstractQueryableTable
       RelOptTable table, Prepare.CatalogReader catalogReader, RelNode child,
       TableModify.Operation operation, @Nullable List<String> updateColumnList,
       @Nullable List<RexNode> sourceExpressionList, boolean flattened) {
+    checkWritable();
     return LogicalTableModify.create(table, catalogReader, child, operation,
         updateColumnList, sourceExpressionList, flattened);
+  }
+
+  /**
+   * Rejects writes to list types whose rows are not plain list items (document/picture libraries,
+   * surveys, discussion boards). Generic lists, task lists and calendars remain writable.
+   */
+  private void checkWritable() {
+    if (!metadata.isWritable()) {
+      throw new UnsupportedOperationException(
+          "SharePoint list '" + metadata.getDisplayName() + "' (template "
+              + metadata.getTemplate() + ") is read-only");
+    }
   }
 
   /**
@@ -234,7 +248,7 @@ public class SharePointListTable extends AbstractQueryableTable
         Object value = row[i + 1]; // +1 to skip ID column
 
         if (value != null) {
-          fields.put(column.getInternalName(), value);
+          fields.put(column.getInternalName(), formatForWrite(column, value));
         }
       }
 
@@ -256,10 +270,27 @@ public class SharePointListTable extends AbstractQueryableTable
         Object value = row[i + 1]; // +1 to skip ID column
 
         // For updates, include all fields (even nulls might be intentional)
-        fields.put(column.getInternalName(), value);
+        fields.put(column.getInternalName(), formatForWrite(column, value));
       }
 
       return fields;
+    }
+
+    /**
+     * Converts a column value into the form SharePoint expects on write. Calcite passes a TIMESTAMP
+     * as epoch milliseconds, but the Graph/REST API expects an ISO-8601 string, so format datetime
+     * columns accordingly. Other types pass through unchanged.
+     */
+    private Object formatForWrite(SharePointColumn column, Object value) {
+      if (value != null && "datetime".equalsIgnoreCase(column.getType())) {
+        if (value instanceof Number) {
+          return java.time.Instant.ofEpochMilli(((Number) value).longValue()).toString();
+        }
+        if (value instanceof java.sql.Timestamp) {
+          return ((java.sql.Timestamp) value).toInstant().toString();
+        }
+      }
+      return value;
     }
   }
 

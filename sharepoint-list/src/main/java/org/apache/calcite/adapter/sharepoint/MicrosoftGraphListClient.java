@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Microsoft Graph API client for SharePoint Lists operations.
@@ -37,16 +38,56 @@ import java.util.Map;
 public class MicrosoftGraphListClient {
   private static final String GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
   private static final int MAX_BATCH_SIZE = 20; // Graph API batch limit
+  private static final long DEFAULT_CACHE_TTL_MILLIS = 300_000L; // 5 minutes
+
+  /**
+   * Process-wide cache of discovered lists (with their columns), keyed by site URL, shared across
+   * client instances. Without it, every new JDBC connection re-crawls the whole site (a GET /lists
+   * plus one column fetch per list) just to rebuild the schema — which is both slow and a Microsoft
+   * Graph throttling (HTTP 429) risk under engines like Trino that open a connection per query.
+   */
+  private static final Map<String, CachedLists> LIST_CACHE = new ConcurrentHashMap<>();
 
   private final String siteUrl;
   private final SharePointAuth authenticator;
   private final ObjectMapper objectMapper;
+  // -1 = never expires, 0 = caching disabled, > 0 = time-to-live in milliseconds.
+  private final long cacheTtlMillis;
   private String siteId;
 
   public MicrosoftGraphListClient(String siteUrl, SharePointAuth authenticator) {
+    this(siteUrl, authenticator, DEFAULT_CACHE_TTL_MILLIS);
+  }
+
+  public MicrosoftGraphListClient(String siteUrl, SharePointAuth authenticator,
+      long cacheTtlMillis) {
     this.siteUrl = siteUrl.endsWith("/") ? siteUrl.substring(0, siteUrl.length() - 1) : siteUrl;
     this.authenticator = authenticator;
     this.objectMapper = new ObjectMapper();
+    this.cacheTtlMillis = cacheTtlMillis;
+  }
+
+  /** Cached discovery result with an absolute expiry (or -1 for no expiry). */
+  private static final class CachedLists {
+    private final Map<String, SharePointListMetadata> lists;
+    private final long expiryMillis;
+
+    CachedLists(Map<String, SharePointListMetadata> lists, long expiryMillis) {
+      this.lists = lists;
+      this.expiryMillis = expiryMillis;
+    }
+
+    boolean isFresh() {
+      return expiryMillis < 0 || System.currentTimeMillis() < expiryMillis;
+    }
+  }
+
+  /**
+   * Drops this site's cached list metadata so the next discovery re-crawls. Call after a list is
+   * created or dropped so the change is visible immediately rather than after the TTL.
+   */
+  public void invalidateListCache() {
+    LIST_CACHE.remove(siteUrl);
   }
 
   /**
@@ -82,6 +123,13 @@ public class MicrosoftGraphListClient {
    */
   public Map<String, SharePointListMetadata> getAvailableLists()
       throws IOException, InterruptedException {
+    if (cacheTtlMillis != 0) {
+      CachedLists cached = LIST_CACHE.get(siteUrl);
+      if (cached != null && cached.isFresh()) {
+        return cached.lists;
+      }
+    }
+
     ensureInitialized();
 
     // First get the lists
@@ -107,9 +155,16 @@ public class MicrosoftGraphListClient {
           String displayName = list.get("displayName").asText();
           String entityTypeName = list.get("name").asText();
 
+          // Capture the list template (genericList, documentLibrary, events, tasks, ...) so the
+          // table can gate writes by list type.
+          String template = null;
+          if (list.has("list") && list.get("list").has("template")) {
+            template = list.get("list").get("template").asText();
+          }
+
           // Get columns separately
           List<SharePointColumn> columns = getListColumns(listId);
-          SharePointListMetadata metadata = new SharePointListMetadata(listId, displayName, entityTypeName, columns);
+          SharePointListMetadata metadata = new SharePointListMetadata(listId, displayName, entityTypeName, columns, template);
           // Use SQL-friendly name as the key
           lists.put(metadata.getListName(), metadata);
         }
@@ -117,6 +172,11 @@ public class MicrosoftGraphListClient {
 
       // Check for next page
       nextLink = response.has("@odata.nextLink") ? response.get("@odata.nextLink").asText() : null;
+    }
+
+    if (cacheTtlMillis != 0) {
+      long expiry = cacheTtlMillis < 0 ? -1 : System.currentTimeMillis() + cacheTtlMillis;
+      LIST_CACHE.put(siteUrl, new CachedLists(lists, expiry));
     }
 
     return lists;

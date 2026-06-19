@@ -94,7 +94,10 @@ include(
     "ubenchmark",
     "driver-base",
     "govdata",
-    "askamerica-engine"
+    "askamerica-engine",
+    "trino-calcite",
+    "trino-sharepoint",
+    "trino-splunk"
 )
 
 // See https://github.com/gradle/gradle/issues/1348#issuecomment-284758705 and

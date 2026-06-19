@@ -56,8 +56,12 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
 
         String remainder = url.substring(getConnectStringPrefix().length());
 
+        // Delegate to a plain Calcite driver throughout: super.connect would route through the
+        // inherited UnregisteredDriver.connect, whose acceptsURL() uses our overridden prefix
+        // ("jdbc:aperio:") and rejects the "jdbc:calcite:" URL, returning null.
         if (remainder.startsWith("model=")) {
-            return super.connect("jdbc:calcite:model=" + remainder.substring(6), info);
+            return new org.apache.calcite.jdbc.Driver()
+                .connect("jdbc:calcite:model=" + remainder.substring(6), info);
         }
 
         String path;
@@ -72,7 +76,8 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
         }
 
         String model = buildModel(path, params);
-        return super.connect("jdbc:calcite:model=inline:" + model, params);
+        return new org.apache.calcite.jdbc.Driver()
+            .connect("jdbc:calcite:model=inline:" + model, params);
     }
 
     private void parseQueryParams(String queryString, Properties props) {

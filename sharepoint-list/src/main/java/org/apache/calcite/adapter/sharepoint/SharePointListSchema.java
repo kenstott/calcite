@@ -48,10 +48,29 @@ public class SharePointListSchema extends AbstractSchema {
     // Check if REST API should be used (default to Graph API)
     this.useRestApi = "rest".equalsIgnoreCase((String) authConfig.get("apiType"));
 
-    this.client = new MicrosoftGraphListClient(siteUrl, authenticator);
+    this.client = new MicrosoftGraphListClient(siteUrl, authenticator,
+        parseCacheTtlMillis(authConfig.get("metadataCacheTtl")));
     this.restClient = new SharePointRestListClient(siteUrl, authenticator);
     this.tableMap = new ConcurrentHashMap<>(createTableMap());
     this.metadataSchema = new SharePointMetadataSchema(this, "sharepoint", "public");
+  }
+
+  /**
+   * Parses the {@code metadataCacheTtl} operand (in seconds) into milliseconds for the list
+   * discovery cache. Defaults to 5 minutes; a negative value means "never expire" and {@code 0}
+   * disables caching.
+   */
+  private static long parseCacheTtlMillis(Object value) {
+    if (value == null) {
+      return 300_000L;
+    }
+    long seconds;
+    try {
+      seconds = Long.parseLong(value.toString().trim());
+    } catch (NumberFormatException e) {
+      return 300_000L;
+    }
+    return seconds < 0 ? -1L : seconds * 1000L;
   }
 
   /**
@@ -179,6 +198,8 @@ public class SharePointListSchema extends AbstractSchema {
    * Refreshes the schema to pick up newly created or deleted lists.
    */
   public void refresh() {
+    // Drop the cached discovery so newly created/dropped lists are picked up immediately.
+    client.invalidateListCache();
     // Clear and rebuild the table map
     tableMap.clear();
     tableMap.putAll(createTableMap());
