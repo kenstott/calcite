@@ -12,7 +12,22 @@ This module targets the version pinned by `trino.version` in the repo's `gradle.
 (currently **481**, which requires **Java 25**). The module builds with its own Java 25 toolchain;
 the Calcite driver it bundles is Java 8 bytecode and runs unchanged on the Trino JVM.
 
+## Download
+
+Prebuilt plugin archives are attached to each `trino-v*` GitHub release. Grab
+`trino-calcite-plugin-<version>.zip` from the
+[Releases page](https://github.com/kenstott/calcite/releases), or with the GitHub CLI:
+
+```bash
+gh release download <trino-vX.Y.Z> --repo kenstott/calcite --pattern 'trino-calcite-plugin-*.zip'
+```
+
+The `Trino Connectors` workflow also publishes the archives as a `trino-connector-packages`
+build artifact on each run.
+
 ## Build
+
+Or build the archive from source:
 
 ```bash
 ./gradlew :trino-calcite:trinoPlugin
