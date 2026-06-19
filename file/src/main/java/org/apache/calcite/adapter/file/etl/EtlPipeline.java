@@ -2327,15 +2327,15 @@ public class EtlPipeline {
       return unprocessed;
     }
 
-    // Verify existing partitions are not stale - they should be a subset of expected combinations
-    // Convert combinations to a set for efficient lookup
-    Set<Map<String, String>> expectedSet =
-        new HashSet<Map<String, String>>(combinations);
-    Set<Map<String, String>> stalePartitions =
+    // Project each existing Iceberg partition down to just the partition columns. Match is done
+    // on partition-column PROJECTIONS of BOTH sides: a combination may carry extra non-partition
+    // dimensions (e.g. a derived 'effective_year' used only in the URL template) that are NOT
+    // partition columns, so comparing a full combo against a partition-only map would never match
+    // — flagging every existing partition "stale" and rebuilding 0, the bug that made acs* and any
+    // table with a derived dimension reprocess in full on every resume.
+    Set<Map<String, String>> existingPartitionKeys =
         new HashSet<Map<String, String>>();
-
     for (Map<String, String> existing : existingPartitions) {
-      // Extract only the partition columns we care about for comparison
       Map<String, String> partitionOnly = new LinkedHashMap<String, String>();
       for (String col : partitionColumns) {
         String val = existing.get(col);
@@ -2343,24 +2343,41 @@ public class EtlPipeline {
           partitionOnly.put(col, val);
         }
       }
-      if (!expectedSet.contains(partitionOnly)) {
-        stalePartitions.add(partitionOnly);
+      existingPartitionKeys.add(partitionOnly);
+    }
+
+    // For each combination, project it to the partition columns. If that projection exists in the
+    // Iceberg table, the combination is already materialized — record the FULL combo for marking
+    // (the per-combo tracker keys on the full combo incl. non-partition dims, so we must mark the
+    // full combo, not the projection, or the re-filter below would still treat it as unprocessed).
+    Set<Map<String, String>> matchedExisting =
+        new HashSet<Map<String, String>>();
+    List<Map<String, String>> rebuildableCombos =
+        new ArrayList<Map<String, String>>();
+    Set<Integer> rebuiltIndices = new HashSet<Integer>();
+    for (int i = 0; i < combinations.size(); i++) {
+      Map<String, String> combo = combinations.get(i);
+      Map<String, String> comboKey = new LinkedHashMap<String, String>();
+      for (String col : partitionColumns) {
+        String val = combo.get(col);
+        if (val != null) {
+          comboKey.put(col, val);
+        }
+      }
+      if (existingPartitionKeys.contains(comboKey)) {
+        rebuildableCombos.add(combo);
+        rebuiltIndices.add(i);
+        matchedExisting.add(comboKey);
       }
     }
 
-    // Find partitions that ARE in expected set (can be rebuilt)
-    Set<Map<String, String>> rebuildable =
+    // Existing partitions matching NO current combination are genuinely stale (e.g. a year no
+    // longer in the configured range) — left alone, not rebuilt.
+    Set<Map<String, String>> stalePartitions =
         new HashSet<Map<String, String>>();
-    for (Map<String, String> existing : existingPartitions) {
-      Map<String, String> partitionOnly = new LinkedHashMap<String, String>();
-      for (String col : partitionColumns) {
-        String val = existing.get(col);
-        if (val != null) {
-          partitionOnly.put(col, val);
-        }
-      }
-      if (expectedSet.contains(partitionOnly)) {
-        rebuildable.add(partitionOnly);
+    for (Map<String, String> key : existingPartitionKeys) {
+      if (!matchedExisting.contains(key)) {
+        stalePartitions.add(key);
       }
     }
 
@@ -2368,10 +2385,10 @@ public class EtlPipeline {
       LOGGER.info("Found {} stale partitions in Iceberg table '{}' not in current dimensions "
           + "(Example: {}). These will be ignored - only {} current partitions will be rebuilt.",
           stalePartitions.size(), targetTableId,
-          stalePartitions.iterator().next(), rebuildable.size());
+          stalePartitions.iterator().next(), matchedExisting.size());
     }
 
-    if (rebuildable.isEmpty()) {
+    if (rebuildableCombos.isEmpty()) {
       LOGGER.debug("No rebuildable partitions found for table '{}', skipping cache rebuild",
           targetTableId);
       return unprocessed;
@@ -2379,21 +2396,28 @@ public class EtlPipeline {
 
     // Rebuild cache from existing partitions that match current dimensions
     LOGGER.info("Self-healing: Rebuilding cache from {} existing Iceberg partitions for table '{}'",
-        rebuildable.size(), targetTableId);
+        matchedExisting.size(), targetTableId);
 
     int rebuilt = 0;
-    for (Map<String, String> partition : rebuildable) {
-      // Mark with -1 (unknown row count but has data) to indicate non-empty
+    for (Map<String, String> combo : rebuildableCombos) {
+      // Mark the FULL combo with -1 (unknown row count but has data) to indicate non-empty
       incrementalTracker.markProcessedWithRowCount(
-          pipelineName, pipelineName, partition, null, -1);
+          pipelineName, pipelineName, combo, null, -1);
       rebuilt++;
     }
 
     LOGGER.info("Self-healing complete: Rebuilt cache with {} partition entries from Iceberg metadata",
         rebuilt);
 
-    // Re-filter after rebuild so Phase 2 can reuse the result
-    return incrementalTracker.filterUnprocessed(pipelineName, pipelineName, combinations);
+    // Do NOT re-read the tracker here. filterUnprocessed caches a table's processed-key set on its
+    // FIRST call (the one above, when the tracker was still empty), and markProcessedWithRowCount
+    // buffers to pendingStates without updating that in-memory cache — so a re-filter would return
+    // the stale pre-mark result and reprocess everything anyway (the bug where self-heal matched
+    // partitions yet still logged "Processing N unprocessed batches"). Instead subtract the indices
+    // we just rebuilt from the initial unprocessed set. The buffered marks are persisted later by
+    // markCompletedPeriods (which flushes before its isProcessed reads) and by pipeline close.
+    unprocessed.removeAll(rebuiltIndices);
+    return unprocessed;
   }
 
   /**
