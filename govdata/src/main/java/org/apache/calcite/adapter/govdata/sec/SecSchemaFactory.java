@@ -1936,7 +1936,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private boolean isTableRelevantForFilingTypes(Map<String, Object> tableConfig,
       List<String> jobFilingTypes) {
     if (jobFilingTypes == null || jobFilingTypes.isEmpty()) {
-      return true; // No filter specified, process all tables
+      // Empty filing types = the stock-prices-only slot (sec_prices). Materialize only tables that
+      // are NOT filing-derived (no filing_type dimension — i.e. stock_prices). The filing tables
+      // belong to the sec/sec_secondary slots; re-scanning them here drags every SEC table across
+      // the sec_prices 2010 full-history floor for nothing (hundreds of empty year batches).
+      Map<String, Object> dims = (Map<String, Object>) tableConfig.get("dimensions");
+      return dims == null || dims.get("filing_type") == null;
     }
 
     Map<String, Object> dimensions = (Map<String, Object>) tableConfig.get("dimensions");
