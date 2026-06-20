@@ -172,6 +172,54 @@ public interface PipelineTracker extends IncrementalTracker {
     return result;
   }
 
+  /** Default retry window for an upstream-404 "unavailable" marker: 14 days. */
+  long DEFAULT_UNAVAILABLE_RETRY_MILLIS = 14L * 24 * 60 * 60 * 1000;
+
+  /**
+   * Mark a combination unavailable (upstream 404 — resource not yet published)
+   * so it is not re-requested until the retry window elapses.
+   *
+   * <p>Default no-op fallback delegates to {@link #markProcessedWithError}.
+   */
+  default void markUnavailable(String alternateName, String sourceTable,
+      Map<String, String> keyValues, String reason) {
+    markProcessedWithError(alternateName, sourceTable, keyValues, null, reason);
+  }
+
+  /**
+   * Returns true if the combination was marked unavailable and the retry window
+   * ({@code ttlMillis}) has not yet elapsed.
+   *
+   * <p>Default always returns false (no backing store).
+   */
+  default boolean isUnavailable(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long ttlMillis) {
+    return false;
+  }
+
+  /**
+   * Returns all combinations currently marked unavailable (within their retry window),
+   * for visibility / reporting. Default returns an empty list.
+   */
+  default java.util.List<UnavailableEntry> listUnavailable() {
+    return java.util.Collections.emptyList();
+  }
+
+  /** A currently-unavailable combination (upstream 404, within retry window). */
+  final class UnavailableEntry {
+    public final String sourceKey;
+    public final String tableName;
+    public final long asOf;
+    public final String reason;
+
+    public UnavailableEntry(String sourceKey, String tableName, long asOf, String reason) {
+      this.sourceKey = sourceKey;
+      this.tableName = tableName;
+      this.asOf = asOf;
+      this.reason = reason;
+    }
+  }
+
   /**
    * A no-op PipelineTracker that always returns false (forces full rebuild).
    */

@@ -1384,6 +1384,74 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         null, null, errorMessage);
   }
 
+  @Override public void markUnavailable(String alternateName, String sourceTable,
+      Map<String, String> keyValues, String reason) {
+    String sourceKey = flattenKeyValues(keyValues);
+    writeState(sourceKey, alternateName, "incremental", "unavailable", 0,
+        null, null, reason);
+  }
+
+  @Override public boolean isUnavailable(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long ttlMillis) {
+    String sourceKey = flattenKeyValues(keyValues);
+    String year = extractYear(sourceKey, System.currentTimeMillis());
+    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
+        + "/*.parquet";
+    String sql = "SELECT state, as_of FROM read_parquet('" + glob + "', "
+        + "hive_partitioning=true, union_by_name=true) "
+        + "WHERE source_key = ? AND table_name = ? AND phase = 'incremental' "
+        + "ORDER BY as_of DESC LIMIT 1";
+
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, sourceKey);
+      stmt.setString(2, alternateName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          String state = rs.getString("state");
+          long asOf = rs.getLong("as_of");
+          return "unavailable".equals(state)
+              && (System.currentTimeMillis() - asOf) < ttlMillis;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("isUnavailable check failed for {}/{}: {}", alternateName, sourceKey,
+          e.getMessage());
+    }
+    return false;
+  }
+
+  @Override public java.util.List<PipelineTracker.UnavailableEntry> listUnavailable() {
+    java.util.List<PipelineTracker.UnavailableEntry> result =
+        new ArrayList<PipelineTracker.UnavailableEntry>();
+    long now = System.currentTimeMillis();
+    // Scan all years' incremental markers; use ROW_NUMBER to get latest per (source_key, table_name)
+    String glob = bucketPath + "/year=*/source_key=*/*.parquet";
+    String sql = "SELECT source_key, table_name, as_of, error_message FROM ("
+        + "  SELECT source_key, table_name, state, as_of, error_message,"
+        + "    ROW_NUMBER() OVER (PARTITION BY source_key, table_name"
+        + "      ORDER BY as_of DESC) AS rn"
+        + "  FROM read_parquet('" + glob + "',"
+        + "    hive_partitioning=false, union_by_name=true)"
+        + "  WHERE phase = 'incremental'"
+        + ") WHERE rn = 1 AND state = 'unavailable'";
+    try (Statement stmt = getConnection().createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        long asOf = rs.getLong("as_of");
+        if ((now - asOf) < DEFAULT_UNAVAILABLE_RETRY_MILLIS) {
+          result.add(new PipelineTracker.UnavailableEntry(
+              rs.getString("source_key"),
+              rs.getString("table_name"),
+              asOf,
+              rs.getString("error_message")));
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("listUnavailable failed (returning partial results): {}", e.getMessage());
+    }
+    return result;
+  }
+
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
     return getProcessedKeyValues(alternateName, null);
   }
