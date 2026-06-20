@@ -982,6 +982,7 @@ public class HttpSource implements DataSource {
    * skipOn (an expected gap on date-partitioned feeds), or no zip entry matched the pattern.
    */
   private CsvStream openCsvStream(String fullUrl, Map<String, String> variables) throws IOException {
+    failFastIfKnown404(fullUrl);
     HttpURLConnection conn =
         (HttpURLConnection) java.net.URI.create(fullUrl).toURL().openConnection();
     conn.setRequestMethod("GET");
@@ -999,6 +1000,7 @@ public class HttpSource implements DataSource {
         conn.disconnect();
         return null;
       }
+      rememberIf404(fullUrl, status);
       throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
     }
     InputStream is = conn.getInputStream();
@@ -1226,10 +1228,34 @@ public class HttpSource implements DataSource {
   }
 
   /**
+   * URLs that returned HTTP 404 during this JVM (worker) run. A 404 means the resource is not
+   * published yet; re-requesting the same URL within the run is wasted work — and a 404 URL shared
+   * across several tables would otherwise re-fire once per table (observed on edu IPEDS / census
+   * ACS). Process-wide + in-memory; dedupes within the run, complementing the cross-run tracker
+   * "unavailable" backoff. Only genuine throw-404s are recorded (not declared skipOn gaps or
+   * skipResponseBody triggers), so the short-circuit reproduces the same throw without the network.
+   */
+  private static final java.util.Set<String> KNOWN_404_URLS =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  private static void failFastIfKnown404(String urlString) throws IOException {
+    if (KNOWN_404_URLS.contains(urlString)) {
+      throw new IOException("HTTP 404 (known unavailable this run, request skipped): " + urlString);
+    }
+  }
+
+  private static void rememberIf404(String urlString, int status) {
+    if (status == 404) {
+      KNOWN_404_URLS.add(urlString);
+    }
+  }
+
+  /**
    * Performs the actual HTTP request with a specific body.
    */
   private String doRequestWithBody(String urlString, Map<String, String> variables,
       Map<String, Object> body) throws IOException {
+    failFastIfKnown404(urlString);
     java.net.URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -1265,6 +1291,7 @@ public class HttpSource implements DataSource {
         return readResponse(conn.getInputStream());
       } else {
         String errorBody = readResponse(conn.getErrorStream());
+        rememberIf404(urlString, responseCode);
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
       }
     } finally {
@@ -1491,6 +1518,7 @@ public class HttpSource implements DataSource {
 
   private String doRequest(String urlString, Map<String, String> variables,
       String rawCachePath, Map<String, Object> bodyOverride) throws IOException {
+    failFastIfKnown404(urlString);
     URL url = java.net.URI.create(urlString).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -1614,6 +1642,7 @@ public class HttpSource implements DataSource {
           }
           throw new RetryableHttpException("HTTP " + responseCode + ": " + errorBody, retryAfterMs);
         }
+        rememberIf404(urlString, responseCode);
         throw new IOException("HTTP " + responseCode + ": " + errorBody);
       }
     } finally {
