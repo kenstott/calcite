@@ -497,18 +497,21 @@ public class EtlPipeline {
         // even if a per-combo TTL would otherwise re-queue it.
         removePeriodCompleteIndices(pipelineName, combinations, standardUnprocessedIndices);
 
-        // Unavailable skip: drop any combo whose latest marker is state="unavailable" and
-        // the retry window has not elapsed (14 days by default). These are upstream 404s —
-        // the resource was not yet published; there is no point re-requesting them every run.
+        // Unavailable skip: drop any combo whose latest marker is state="unavailable" and the
+        // retry window has not elapsed (per-schema errorHandling.notFoundRetryDays, default 7).
+        // These are upstream 404s — the resource was not yet published; there is no point
+        // re-requesting them every run.
         if (incrementalTracker instanceof PipelineTracker) {
           PipelineTracker pipelineTracker = (PipelineTracker) incrementalTracker;
+          long notFoundRetryMillis =
+              config.getErrorHandling().getNotFoundRetryDays() * 86400000L;
           int unavailableSkipped = 0;
           Iterator<Integer> unavailIter = standardUnprocessedIndices.iterator();
           while (unavailIter.hasNext()) {
             int idx = unavailIter.next();
             Map<String, String> combo = combinations.get(idx);
             if (pipelineTracker.isUnavailable(pipelineName, pipelineName, combo,
-                PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS)) {
+                notFoundRetryMillis)) {
               unavailIter.remove();
               unavailableSkipped++;
             }
@@ -976,7 +979,7 @@ public class EtlPipeline {
                             LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for "
                                 + "{} days: {}",
                                 currentBatch,
-                                PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                                cfgFinal.getErrorHandling().getNotFoundRetryDays(),
                                 e.getMessage());
                             ((PipelineTracker) incrementalTracker).markUnavailable(
                                 pipelineNameFinal, pipelineNameFinal, variables, e.getMessage());
@@ -992,7 +995,7 @@ public class EtlPipeline {
                             LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for "
                                 + "{} days: {}",
                                 currentBatch,
-                                PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                                cfgFinal.getErrorHandling().getNotFoundRetryDays(),
                                 e.getMessage());
                             ((PipelineTracker) incrementalTracker).markUnavailable(
                                 pipelineNameFinal, pipelineNameFinal, variables, e.getMessage());
@@ -1117,7 +1120,7 @@ public class EtlPipeline {
                     if (is404 && incrementalTracker instanceof PipelineTracker) {
                       LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for {} days: {}",
                           processedCount,
-                          PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                          config.getErrorHandling().getNotFoundRetryDays(),
                           e.getMessage());
                       ((PipelineTracker) incrementalTracker).markUnavailable(
                           pipelineName, pipelineName, variables, e.getMessage());
@@ -1133,7 +1136,7 @@ public class EtlPipeline {
                     if (is404 && incrementalTracker instanceof PipelineTracker) {
                       LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for {} days: {}",
                           processedCount,
-                          PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                          config.getErrorHandling().getNotFoundRetryDays(),
                           e.getMessage());
                       ((PipelineTracker) incrementalTracker).markUnavailable(
                           pipelineName, pipelineName, variables, e.getMessage());
@@ -1149,7 +1152,7 @@ public class EtlPipeline {
                     if (is404 && incrementalTracker instanceof PipelineTracker) {
                       LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for {} days: {}",
                           processedCount,
-                          PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                          config.getErrorHandling().getNotFoundRetryDays(),
                           e.getMessage());
                       ((PipelineTracker) incrementalTracker).markUnavailable(
                           pipelineName, pipelineName, variables, e.getMessage());
@@ -1249,7 +1252,7 @@ public class EtlPipeline {
                             LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for "
                                 + "{} days: {}",
                                 currentBatch,
-                                PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                                cfgFinal.getErrorHandling().getNotFoundRetryDays(),
                                 errMsg);
                             ((PipelineTracker) incrementalTracker).markUnavailable(
                                 pipelineNameFinal, pipelineNameFinal, markKey, errMsg);
@@ -1269,7 +1272,7 @@ public class EtlPipeline {
                             LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for "
                                 + "{} days: {}",
                                 currentBatch,
-                                PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                                cfgFinal.getErrorHandling().getNotFoundRetryDays(),
                                 errMsg);
                             ((PipelineTracker) incrementalTracker).markUnavailable(
                                 pipelineNameFinal, pipelineNameFinal, markKey, errMsg);
@@ -1440,7 +1443,7 @@ public class EtlPipeline {
                     if (is404Seq && incrementalTracker instanceof PipelineTracker) {
                       LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for {} days: {}",
                           processedCount,
-                          PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                          config.getErrorHandling().getNotFoundRetryDays(),
                           e.getMessage());
                       ((PipelineTracker) incrementalTracker).markUnavailable(
                           pipelineName, pipelineName, markKey, e.getMessage());
@@ -1460,7 +1463,7 @@ public class EtlPipeline {
                     if (is404Seq && incrementalTracker instanceof PipelineTracker) {
                       LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for {} days: {}",
                           processedCount,
-                          PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                          config.getErrorHandling().getNotFoundRetryDays(),
                           e.getMessage());
                       ((PipelineTracker) incrementalTracker).markUnavailable(
                           pipelineName, pipelineName, markKey, e.getMessage());
@@ -1480,7 +1483,7 @@ public class EtlPipeline {
                     if (is404Seq && incrementalTracker instanceof PipelineTracker) {
                       LOGGER.warn("Batch {} HTTP 404 — marking combo unavailable for {} days: {}",
                           processedCount,
-                          PipelineTracker.DEFAULT_UNAVAILABLE_RETRY_MILLIS / 86400000L,
+                          config.getErrorHandling().getNotFoundRetryDays(),
                           e.getMessage());
                       ((PipelineTracker) incrementalTracker).markUnavailable(
                           pipelineName, pipelineName, markKey, e.getMessage());
