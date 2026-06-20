@@ -125,3 +125,7 @@ govdata/scripts/parallel/runs
 .claude/
 .codex/
 runs/
+*.pem
+*.pfx
+*.pyc
+*.out

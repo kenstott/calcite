@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.ops;
 
 import org.apache.calcite.adapter.ops.provider.AWSProvider;
+import org.apache.calcite.adapter.ops.provider.AzureProvider;
 import org.apache.calcite.adapter.ops.util.CloudOpsFilterHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsPaginationHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsProjectionHandler;
@@ -113,8 +114,22 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                                 CloudOpsSortHandler sortHandler,
                                                 CloudOpsPaginationHandler paginationHandler,
                                                 CloudOpsFilterHandler filterHandler) {
-    // Phase 2: map Azure NIC -> Network Security Group associations here.
-    return new ArrayList<>();
+    List<Object[]> results = new ArrayList<>();
+    try {
+      AzureProvider azureProvider = new AzureProvider(config.azure);
+      for (Map<String, Object> row : azureProvider.queryComputeSecurityGroups(subscriptionIds)) {
+        results.add(new Object[]{
+            "azure",
+            row.get("SubscriptionId"),
+            row.get("InstanceId"),
+            row.get("ComputeResourceId"),
+            row.get("SecurityGroupId")
+        });
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Error querying Azure compute security-group associations: {}", e.getMessage());
+    }
+    return results;
   }
 
   @Override protected List<Object[]> queryGCP(List<String> projectIds,

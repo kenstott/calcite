@@ -164,9 +164,9 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             null, // virtualization type not in query
             null, // public IP would need additional query
             null, // private IP would need additional query
-            null, // VPC not applicable to Azure
-            null, // subnet would need additional query
-            null, // IAM role not applicable
+            vm.get("VNetId"),   // vpc_id: VNet ARM id (matches network_resources.native_id)
+            vm.get("SubnetId"), // subnet_id: subnet ARM id
+            vm.get("AttachedIdentity"), // iam_role: attached managed-identity ARM id
             null, // security groups would need additional query
             "Enabled".equals(vm.get("DiskEncryption")),
             vm.get("BootDiagnostics"),

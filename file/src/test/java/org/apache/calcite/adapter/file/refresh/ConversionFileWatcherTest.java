@@ -90,6 +90,34 @@ class ConversionFileWatcherTest {
     watcher.watchFile("test_schema", xmlFile, Duration.ofMinutes(1));
   }
 
+  @Test void testWatchMarkdownFile() throws IOException {
+    ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
+    File mdFile = new File(tempDir, "test.md");
+    Files.write(mdFile.toPath(), "| a | b |\n|---|---|\n| 1 | 2 |".getBytes());
+    watcher.watchFile("test_schema", mdFile, Duration.ofMinutes(1));
+  }
+
+  @Test void testWatchMarkdownExtensionFile() throws IOException {
+    ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
+    File mdFile = new File(tempDir, "test.markdown");
+    Files.write(mdFile.toPath(), "| a | b |\n|---|---|\n| 1 | 2 |".getBytes());
+    watcher.watchFile("test_schema", mdFile, Duration.ofMinutes(1));
+  }
+
+  @Test void testWatchDocxFile() throws IOException {
+    ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
+    File docxFile = new File(tempDir, "test.docx");
+    Files.write(docxFile.toPath(), new byte[]{0x50, 0x4B}); // Minimal bytes
+    watcher.watchFile("test_schema", docxFile, Duration.ofMinutes(1));
+  }
+
+  @Test void testWatchPptxFile() throws IOException {
+    ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
+    File pptxFile = new File(tempDir, "test.pptx");
+    Files.write(pptxFile.toPath(), new byte[]{0x50, 0x4B}); // Minimal bytes
+    watcher.watchFile("test_schema", pptxFile, Duration.ofMinutes(1));
+  }
+
   @Test void testWatchUnsupportedFileType() throws IOException {
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
     File csvFile = new File(tempDir, "test.csv");

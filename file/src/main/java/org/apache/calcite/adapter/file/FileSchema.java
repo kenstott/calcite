@@ -23,6 +23,7 @@ import org.apache.calcite.adapter.file.materialized.MaterializedViewTable;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+import org.apache.calcite.adapter.file.refresh.ConversionFileWatcher;
 import org.apache.calcite.adapter.file.refresh.RefreshInterval;
 import org.apache.calcite.adapter.file.refresh.RefreshableCsvTable;
 import org.apache.calcite.adapter.file.refresh.RefreshableJsonTable;
@@ -1235,6 +1236,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
     }
 
+    // When a refresh interval is configured, register this schema's conversion output directory
+    // with the ConversionFileWatcher so changed multi-table source files (Excel, HTML, XML,
+    // Markdown, DOCX, PPTX) are re-converted in the background at that interval.
+    final java.time.Duration conversionWatchInterval =
+        refreshInterval != null ? RefreshInterval.parse(refreshInterval) : null;
+    if (conversionWatchInterval != null) {
+      ConversionFileWatcher.getInstance().registerSchemaBaseDirectory(name, operatingCacheDirectory);
+    }
+
     // Get list of source files that have already been processed via tableDef
     Set<String> alreadyProcessedFiles = new HashSet<>();
     if (conversionMetadata != null) {
@@ -1300,6 +1310,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 operatingCacheDirectory, relativePath);
         if (converted) {
           LOGGER.debug("Converted file: {} to directory: {}", file.getName(), outputDir.getAbsolutePath());
+        }
+        // Watch multi-table source files so changes are re-converted at the refresh interval.
+        // watchFile() ignores file types it does not handle, so it is safe to call for every file.
+        if (conversionWatchInterval != null) {
+          ConversionFileWatcher.getInstance().watchFile(name, file, conversionWatchInterval);
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to convert file {}: {}", file.getName(), e.getMessage());

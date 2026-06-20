@@ -567,6 +567,30 @@ public class AzureProvider implements CloudProvider {
   +
         "| extend AvailabilityZone = tostring(properties.zones[0])\n"
   +
+        // Attached identity (user-assigned managed identity ARM id) -> iam_resources.resource_id.
+        "| extend AttachedIdentity = tostring(bag_keys(identity.userAssignedIdentities)[0])\n"
+  +
+        // Resolve the VM's primary NIC to find its subnet (and derive the VNet) ARM ids.
+        "| extend PrimaryNicId = tostring(properties.networkProfile.networkInterfaces[0].id)\n"
+  +
+        "| join kind=leftouter (\n"
+  +
+        "    Resources\n"
+  +
+        "    | where type == 'microsoft.network/networkinterfaces'\n"
+  +
+        "    | extend NicSubnetId = tostring(properties.ipConfigurations[0].properties.subnet.id)\n"
+  +
+        "    | project PrimaryNicId = id, NicSubnetId\n"
+  +
+        ") on PrimaryNicId\n"
+  +
+        "| extend SubnetId = NicSubnetId\n"
+  +
+        // VNet ARM id = the subnet id without the trailing /subnets/<name> (first 9 path segments).
+        "| extend VNetId = iff(isnotempty(NicSubnetId),"
+  + " strcat_array(array_slice(split(NicSubnetId, '/'), 0, 8), '/'), '')\n"
+  +
         "| project\n"
   +
         "    SubscriptionId = subscriptionId,\n"
@@ -595,9 +619,40 @@ public class AzureProvider implements CloudProvider {
   +
         "    AvailabilitySet,\n"
   +
-        "    AvailabilityZone\n"
+        "    AvailabilityZone,\n"
+  +
+        "    SubnetId,\n"
+  +
+        "    VNetId,\n"
+  +
+        "    AttachedIdentity\n"
   +
         "| order by Application, VMName";
+
+    return executeKqlQuery(kql, subscriptionIds);
+  }
+
+  /**
+   * Emits one row per (VM, Network Security Group) association, resolved through the VM's network
+   * interface. Feeds the compute_security_groups junction. {@code ComputeResourceId} is the VM ARM id
+   * (-> compute_resources.resource_id); {@code SecurityGroupId} is the NSG ARM id
+   * (-> network_resources.native_id).
+   */
+  public List<Map<String, Object>> queryComputeSecurityGroups(List<String> subscriptionIds) {
+    String kql = "Resources\n"
+  +
+        "| where type == 'microsoft.network/networkinterfaces'\n"
+  +
+        "| where isnotempty(properties.virtualMachine.id)"
+  + " and isnotempty(properties.networkSecurityGroup.id)\n"
+  +
+        "| project\n"
+  +
+        "    SubscriptionId = subscriptionId,\n"
+  +
+        "    ComputeResourceId = tostring(properties.virtualMachine.id),\n"
+  +
+        "    SecurityGroupId = tostring(properties.networkSecurityGroup.id)";
 
     return executeKqlQuery(kql, subscriptionIds);
   }
@@ -691,6 +746,8 @@ public class AzureProvider implements CloudProvider {
   +
         "    NetworkResource = name,\n"
   +
+        "    NativeId = id,\n"
+  +
         "    NetworkResourceType,\n"
   +
         "    ResourceGroup = resourceGroup,\n"
@@ -704,6 +761,40 @@ public class AzureProvider implements CloudProvider {
         "    Configuration,\n"
   +
         "    SecurityFindings\n"
+  +
+        // Expand VNet subnets into their own rows so compute_resources.subnet_id can reference them
+        // (native_id = the subnet ARM id).
+        "| union (\n"
+  +
+        "    Resources\n"
+  +
+        "    | where type == 'microsoft.network/virtualnetworks'\n"
+  +
+        "    | mv-expand subnet = properties.subnets\n"
+  +
+        "    | project\n"
+  +
+        "        SubscriptionId = subscriptionId,\n"
+  +
+        "        NetworkResource = tostring(subnet.name),\n"
+  +
+        "        NativeId = tostring(subnet.id),\n"
+  +
+        "        NetworkResourceType = 'Subnet',\n"
+  +
+        "        ResourceGroup = resourceGroup,\n"
+  +
+        "        Location = location,\n"
+  +
+        "        ResourceId = tostring(subnet.id),\n"
+  +
+        "        Application = 'Untagged/Orphaned',\n"
+  +
+        "        Configuration = strcat('CIDR: ', tostring(subnet.properties.addressPrefix)),\n"
+  +
+        "        SecurityFindings = ''\n"
+  +
+        ")\n"
   +
         "| order by Application, NetworkResourceType, NetworkResource";
 

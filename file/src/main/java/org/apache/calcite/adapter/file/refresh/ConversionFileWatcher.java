@@ -11,7 +11,10 @@
 package org.apache.calcite.adapter.file.refresh;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.converters.DocxTableScanner;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
+import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
+import org.apache.calcite.adapter.file.converters.PptxTableScanner;
 import org.apache.calcite.adapter.file.converters.SafeExcelToJsonConverter;
 import org.apache.calcite.adapter.file.converters.XmlToJsonConverter;
 
@@ -27,10 +30,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Watches source files that need conversion (Excel, HTML, XML) and
- * re-runs conversion when they change. This ensures that the generated
- * JSON files stay up-to-date, which then triggers the normal refresh
- * mechanism for tables based on those JSON files.
+ * Watches source files that need conversion (Excel, HTML, XML, Markdown,
+ * DOCX, PPTX) and re-runs conversion when they change. These are the
+ * "complex" source types: a single file can yield many tables. This
+ * ensures that the generated JSON files stay up-to-date, which then
+ * triggers the normal refresh mechanism for tables based on those JSON
+ * files.
  */
 public class ConversionFileWatcher {
   private static final Logger LOGGER = LoggerFactory.getLogger(ConversionFileWatcher.class);
@@ -57,7 +62,7 @@ public class ConversionFileWatcher {
   }
 
   private enum FileType {
-    EXCEL, HTML, XML
+    EXCEL, HTML, XML, MARKDOWN, DOCX, PPTX
   }
 
   private ConversionFileWatcher() {
@@ -123,6 +128,12 @@ public class ConversionFileWatcher {
       type = FileType.HTML;
     } else if (name.endsWith(".xml")) {
       type = FileType.XML;
+    } else if (name.endsWith(".md") || name.endsWith(".markdown")) {
+      type = FileType.MARKDOWN;
+    } else if (name.endsWith(".docx")) {
+      type = FileType.DOCX;
+    } else if (name.endsWith(".pptx")) {
+      type = FileType.PPTX;
     }
 
     if (type != null) {
@@ -169,6 +180,29 @@ public class ConversionFileWatcher {
     if (watchedFiles != null) {
       watchedFiles.remove(file);
     }
+  }
+
+  /**
+   * Resolves the directory that converted JSON output should be written to for
+   * a watched file. Uses the schema's registered base directory's
+   * {@code conversions/} subdirectory when available, otherwise falls back to
+   * the source file's parent directory.
+   *
+   * @param schemaName The schema the file belongs to
+   * @param sourceFile The source file being converted
+   * @return The output directory for converted JSON
+   */
+  private File resolveConversionsDir(String schemaName, File sourceFile) {
+    File baseDir = schemaBaseDirectories.get(schemaName);
+    if (baseDir != null) {
+      File outputDir = new File(baseDir, "conversions");
+      if (!outputDir.exists()) {
+        outputDir.mkdirs();
+      }
+      return outputDir;
+    }
+    LOGGER.warn("No base directory registered for schema '{}', using source directory", schemaName);
+    return sourceFile.getParentFile();
   }
 
   /**
@@ -261,6 +295,21 @@ public class ConversionFileWatcher {
           } catch (Exception e) {
             LOGGER.error("Failed to re-convert XML file: {}", file.getName(), e);
           }
+          break;
+
+        case MARKDOWN:
+          MarkdownTableScanner.scanAndConvertTables(file, resolveConversionsDir(schemaName, file));
+          LOGGER.info("Re-converted Markdown file to JSON: {}", file.getName());
+          break;
+
+        case DOCX:
+          DocxTableScanner.scanAndConvertTables(file, resolveConversionsDir(schemaName, file));
+          LOGGER.info("Re-converted DOCX file to JSON: {}", file.getName());
+          break;
+
+        case PPTX:
+          PptxTableScanner.scanAndConvertTables(file, resolveConversionsDir(schemaName, file));
+          LOGGER.info("Re-converted PPTX file to JSON: {}", file.getName());
           break;
         }
 
