@@ -182,4 +182,27 @@ class MaterializePartitionConfigTest {
     assertNotNull(config);
     assertTrue(config.getColumnDefinitions().isEmpty());
   }
+
+  @Test void testFromMapParsesValueSource() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("columns", Arrays.asList("type", "year", "state_fips"));
+    Map<String, Object> vs = new HashMap<String, Object>();
+    vs.put("year", "effective_year");
+    map.put("valueSource", vs);
+
+    MaterializePartitionConfig config = MaterializePartitionConfig.fromMap(map);
+    assertNotNull(config);
+    // The `year` partition column is sourced from the `effective_year` combo variable.
+    assertEquals("effective_year", config.getValueSource().get("year"));
+  }
+
+  @Test void testValueSourceEmptyByDefault() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("columns", Arrays.asList("type", "year"));
+
+    MaterializePartitionConfig config = MaterializePartitionConfig.fromMap(map);
+    assertNotNull(config);
+    // No valueSource declared = identity projection (each partition column sources from itself).
+    assertTrue(config.getValueSource().isEmpty());
+  }
 }

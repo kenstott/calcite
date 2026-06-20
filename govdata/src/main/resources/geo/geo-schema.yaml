@@ -265,6 +265,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: states
@@ -323,6 +325,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: counties
@@ -383,6 +387,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/state_fips=*/"
       partition:
         columns: [type, year, state_fips]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: places
@@ -455,6 +461,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zctas
@@ -514,6 +522,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: census_tracts
@@ -573,6 +583,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: block_groups
@@ -633,6 +645,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: cbsa
@@ -758,6 +772,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: school_districts
@@ -818,6 +834,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/state_fips=*/"
       partition:
         columns: [type, year, state_fips]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_legislative_lower
@@ -875,6 +893,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/state_fips=*/"
       partition:
         columns: [type, year, state_fips]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_legislative_upper
@@ -938,6 +958,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/state_fips=*/"
       partition:
         columns: [type, year, state_fips]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: county_subdivisions
@@ -1001,6 +1023,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: tribal_areas
@@ -1088,6 +1112,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: urban_areas
@@ -1174,6 +1200,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: pumas
@@ -1257,6 +1285,8 @@ partitionedTables:
         pattern: "type=boundary/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: voting_districts
@@ -1991,6 +2021,8 @@ partitionedTables:
         pattern: "type=gazetteer/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_counties
@@ -2072,6 +2104,8 @@ partitionedTables:
         pattern: "type=gazetteer/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_places
@@ -2144,6 +2178,8 @@ partitionedTables:
         pattern: "type=gazetteer/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_zctas
@@ -2206,6 +2242,8 @@ partitionedTables:
         pattern: "type=watershed/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc2
@@ -2269,6 +2307,8 @@ partitionedTables:
         pattern: "type=watershed/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc4
@@ -2332,6 +2372,8 @@ partitionedTables:
         pattern: "type=watershed/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc8
@@ -2395,6 +2437,8 @@ partitionedTables:
         pattern: "type=watershed/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc12

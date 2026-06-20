@@ -751,12 +751,16 @@ public class EtlPipeline {
         Set<Map<String, String>> existingIcebergPartitions =
             java.util.Collections.emptySet();
         List<String> icebergPartitionColumns = Collections.emptyList();
+        Map<String, String> icebergValueSource = Collections.<String, String>emptyMap();
         if (!forceReprocessAll && materializeConfig != null
             && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
             && materializeConfig.isEnabled()) {
           MaterializePartitionConfig partConfig = materializeConfig.getPartition();
           icebergPartitionColumns = partConfig != null
               ? partConfig.getColumns() : Collections.<String>emptyList();
+          if (partConfig != null) {
+            icebergValueSource = partConfig.getValueSource();
+          }
           if (!icebergPartitionColumns.isEmpty()) {
             Map<String, Object> catalogConfig = buildIcebergCatalogConfig(materializeConfig);
             String targetTableId = materializeConfig.getTargetTableId();
@@ -841,7 +845,10 @@ public class EtlPipeline {
             Map<String, String> sampleCombo = partCombos.get(unprocessedIndices.iterator().next());
             Map<String, String> icebergKey = new LinkedHashMap<String, String>();
             for (String col : icebergPartitionColumns) {
-              String val = sampleCombo.get(col);
+              // Honor partition.valueSource: a partition column may source from a different combo
+              // variable than its own name (e.g. geo `year` <- `effective_year`).
+              String srcVar = icebergValueSource.containsKey(col) ? icebergValueSource.get(col) : col;
+              String val = sampleCombo.get(srcVar);
               if (val != null) {
                 icebergKey.put(col, val);
               }
@@ -2077,16 +2084,8 @@ public class EtlPipeline {
       LOGGER.info("Creating HttpSource for type: {}", sourceType);
     }
     // Use sourceStorageProvider for raw cache (not the materialized storage provider)
-    HttpSource httpSource = new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider,
-        rawCachePath, operatingDirectory);
-    // DQ sample mode: let a cursor source commit its capped sample under a cap-scoped key so it is
-    // reused instead of re-downloaded every DQ run. A row cap stops a cursor before EOF, so the
-    // cache would otherwise never commit. Capped mode only — prod (uncapped) keeps committing the
-    // full body on EOF as before.
-    if (rawCacheConfig.isEnabled() && isDqSampleMode() && config.getDqRowLimit() > 0) {
-      httpSource.setRawCacheRowCap(config.getDqRowLimit());
-    }
-    return httpSource;
+    return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
+        operatingDirectory);
   }
 
   /**
@@ -2358,6 +2357,12 @@ public class EtlPipeline {
     // Iceberg table, the combination is already materialized — record the FULL combo for marking
     // (the per-combo tracker keys on the full combo incl. non-partition dims, so we must mark the
     // full combo, not the projection, or the re-filter below would still treat it as unprocessed).
+    // A partition column's value may come from a different combo variable than its own name — e.g.
+    // geo TIGER writes the `year` partition from `effective_year` (a requested year falls back to
+    // the latest published year). partition.valueSource declares that per table so the combo is
+    // projected to the partition it will ACTUALLY produce; without it the self-heal compares the
+    // wrong value and reprocesses already-materialized partitions.
+    Map<String, String> valueSource = partitionConfig.getValueSource();
     Set<Map<String, String>> matchedExisting =
         new HashSet<Map<String, String>>();
     List<Map<String, String>> rebuildableCombos =
@@ -2367,7 +2372,8 @@ public class EtlPipeline {
       Map<String, String> combo = combinations.get(i);
       Map<String, String> comboKey = new LinkedHashMap<String, String>();
       for (String col : partitionColumns) {
-        String val = combo.get(col);
+        String srcVar = valueSource.containsKey(col) ? valueSource.get(col) : col;
+        String val = combo.get(srcVar);
         if (val != null) {
           comboKey.put(col, val);
         }

@@ -41,6 +41,7 @@ public class MaterializePartitionConfig {
   private final List<String> columns;
   private final List<String> batchBy;
   private final List<ColumnDefinition> columnDefinitions;
+  private final Map<String, String> valueSource;
 
   private MaterializePartitionConfig(Builder builder) {
     this.columns = builder.columns != null
@@ -52,6 +53,9 @@ public class MaterializePartitionConfig {
     this.columnDefinitions = builder.columnDefinitions != null
         ? Collections.unmodifiableList(new ArrayList<ColumnDefinition>(builder.columnDefinitions))
         : Collections.<ColumnDefinition>emptyList();
+    this.valueSource = builder.valueSource != null
+        ? Collections.unmodifiableMap(new java.util.LinkedHashMap<String, String>(builder.valueSource))
+        : Collections.<String, String>emptyMap();
   }
 
   /**
@@ -105,6 +109,18 @@ public class MaterializePartitionConfig {
    */
   public List<ColumnDefinition> getColumnDefinitions() {
     return columnDefinitions;
+  }
+
+  /**
+   * Optional mapping of partition column -&gt; the combo/fetch variable its value is sourced from,
+   * when that differs from the column name. E.g. {@code {year: effective_year}} means the
+   * {@code year} partition directory is written from the combo's {@code effective_year} value
+   * (geo TIGER: a requested year falls back to the latest published effective_year). Used by the
+   * self-heal / skip-if-materialized projection so a combo is matched to the partition it will
+   * actually produce. Empty = identity (each partition column sources from the same-named variable).
+   */
+  public Map<String, String> getValueSource() {
+    return valueSource;
   }
 
   /**
@@ -166,6 +182,17 @@ public class MaterializePartitionConfig {
       builder.columnDefinitions(columnDefs);
     }
 
+    Object valueSourceObj = map.get("valueSource");
+    if (valueSourceObj instanceof Map) {
+      Map<String, String> vs = new java.util.LinkedHashMap<String, String>();
+      for (Map.Entry<String, Object> e : ((Map<String, Object>) valueSourceObj).entrySet()) {
+        if (e.getValue() != null) {
+          vs.put(e.getKey(), String.valueOf(e.getValue()));
+        }
+      }
+      builder.valueSource(vs);
+    }
+
     return builder.build();
   }
 
@@ -176,9 +203,15 @@ public class MaterializePartitionConfig {
     private List<String> columns;
     private List<String> batchBy;
     private List<ColumnDefinition> columnDefinitions;
+    private Map<String, String> valueSource;
 
     public Builder columns(List<String> columns) {
       this.columns = columns;
+      return this;
+    }
+
+    public Builder valueSource(Map<String, String> valueSource) {
+      this.valueSource = valueSource;
       return this;
     }
 
