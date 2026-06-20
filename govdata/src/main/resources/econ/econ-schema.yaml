@@ -1142,6 +1142,8 @@ partitionedTables:
         pattern: "type=state_wages/frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -1357,6 +1359,8 @@ partitionedTables:
         pattern: "type=metro_wages/frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -1462,6 +1466,8 @@ partitionedTables:
         pattern: "type=county_qcew/frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -1578,6 +1584,8 @@ partitionedTables:
         pattern: "type=county_wages/frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -2942,6 +2950,8 @@ partitionedTables:
         pattern: "type=national_accounts/frequency=*/year=*/tablename=*/"
       partition:
         columns: [type, frequency, year, tablename]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -3804,6 +3814,8 @@ partitionedTables:
         pattern: "type=regional_income/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -4062,6 +4074,8 @@ partitionedTables:
         pattern: "type=ita_data/frequency=*/year=*/indicator=*/"
       partition:
         columns: [type, frequency, year, indicator]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -4159,6 +4173,8 @@ partitionedTables:
         pattern: "type=gdp_statistics/frequency=*/year=*/"
       partition:
         columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000

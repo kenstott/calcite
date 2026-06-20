@@ -1614,6 +1614,8 @@ partitionedTables:
         pattern: "payment_type=*/year=*/"
       partition:
         columns: [payment_type, year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
       iceberg:

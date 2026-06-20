@@ -318,6 +318,8 @@ partitionedTables:
         pattern: "type=eia_elec_gen/year=*/month=*/"
       partition:
         columns: [type, year, month]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_electricity_generation
@@ -405,6 +407,8 @@ partitionedTables:
         pattern: "type=eia_elec_price/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_electricity_prices
@@ -562,6 +566,8 @@ partitionedTables:
         pattern: "type=eia_utility/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_utility_annual
@@ -744,6 +750,8 @@ partitionedTables:
         pattern: "type=eia_plant/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_power_plants
@@ -869,6 +877,8 @@ partitionedTables:
         pattern: "type=eia_capacity/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_capacity_changes
@@ -967,6 +977,8 @@ partitionedTables:
         pattern: "type=eia_fossil/year=*/month=*/"
       partition:
         columns: [type, year, month]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_fossil_fuel_production
@@ -1372,6 +1384,8 @@ partitionedTables:
         pattern: "type=eia_crude_imp/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_crude_oil_imports
@@ -1466,6 +1480,8 @@ partitionedTables:
         pattern: "type=eia_refinery/year=*/month=*/"
       partition:
         columns: [type, year, month]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_refinery_operations
@@ -1585,6 +1601,8 @@ partitionedTables:
         pattern: "type=msha_coal/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *iceberg_common
         tableName: eia_coal_mines

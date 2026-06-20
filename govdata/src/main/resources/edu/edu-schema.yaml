@@ -198,6 +198,8 @@ partitionedTables:
         pattern: ""
       partition:
         columns: [year]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
       iceberg:

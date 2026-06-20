@@ -633,6 +633,8 @@ partitionedTables:
         pattern: "type=cdo_monthly/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_monthly_summaries
@@ -716,6 +718,8 @@ partitionedTables:
         pattern: "type=cdo_annual/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_annual_summaries
@@ -811,6 +815,8 @@ partitionedTables:
         pattern: "type=epa_aqi/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: epa_annual_aqi
@@ -928,6 +934,8 @@ partitionedTables:
         pattern: "type=epa_daily_aqi/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: epa_daily_aqi

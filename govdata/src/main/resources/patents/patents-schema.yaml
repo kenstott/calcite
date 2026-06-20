@@ -236,6 +236,8 @@ partitionedTables:
         pattern: "type=patent_grants/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *patents_iceberg_common
         tableName: patent_grants
@@ -718,6 +720,8 @@ partitionedTables:
         pattern: "type=patent_claims/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *patents_iceberg_common
         tableName: patent_claims
@@ -769,6 +773,8 @@ partitionedTables:
         pattern: "type=patent_summaries/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *patents_iceberg_common
         tableName: patent_summaries
@@ -892,6 +898,8 @@ partitionedTables:
         pattern: "type=trademark_apps/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         <<: *patents_iceberg_common
         tableName: trademark_applications
