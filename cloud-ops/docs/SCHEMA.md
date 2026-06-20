@@ -144,16 +144,25 @@ key below.
 table; `CLOUD_ACCOUNT` in the ERD is a *logical hub* representing the subscription (Azure) / account
 (AWS) / project (GCP) that all resources belong to.
 
-**Foreign keys.** Only one is declarable today because it equi-matches a declared key; the other three
-hold cloud-native IDs that don't currently line up with a target key column, so they remain
-*documented-only* (not in `getReferentialConstraints()`).
+**Foreign keys (declared).** All are provider-neutral — declared on the shared tables, so they apply
+to every cloud's rows uniformly and only bite where the source column is populated.
 
-| From → To | Column mapping | Status | Why |
-|-----------|----------------|--------|-----|
-| `compute_resources` → `network_resources` | `(cloud_provider, vpc_id)` → `(cloud_provider, network_resource)` | **declared** | `vpc_id` (bare `vpc-…`) equi-matches the `network_resource` key; null for Azure/GCP |
-| `compute_resources` → `network_resources` | `subnet_id` → … | documented only | the AWS network query emits no Subnet rows (only VPC, Security Group, Elastic IP) |
-| `compute_resources` → `network_resources` | `security_groups` → … | documented only | source is a JSON array — needs UNNEST/junction, not a scalar FK |
-| `compute_resources` → `iam_resources` | `iam_role` → … | documented only | `iam_role` holds the instance-profile; `iam_resources` stores role *names* — different object/format |
+| From → To | Column mapping | Notes |
+|-----------|----------------|-------|
+| `compute_resources` → `network_resources` | `(cloud_provider, vpc_id)` → `(cloud_provider, network_resource)` | `vpc_id` (bare `vpc-…` / VNet / VPC-network) equi-matches `network_resource`; null where not extracted |
+| `compute_resources` → `network_resources` | `(cloud_provider, subnet_id)` → `(cloud_provider, network_resource)` | subnet rows now emitted (`network_resource_type = 'Subnet'`) |
+| `compute_resources` → `iam_resources` | `iam_role` → `resource_id` | `iam_role` holds the attached identity's full ID (AWS instance-profile ARN / Azure managed identity / GCP service account) |
+| `compute_security_groups` → `compute_resources` | `compute_resource_id` → `resource_id` | junction side: the instance ARN |
+| `compute_security_groups` → `network_resources` | `(cloud_provider, security_group_id)` → `(cloud_provider, network_resource)` | junction side: the security-group native ID |
+
+The many-to-many compute↔security-group relationship is modeled by the **`compute_security_groups`
+junction table** (the `compute_resources.security_groups` JSON array remains for convenience but is not
+a foreign key — an array can't be a scalar FK).
+
+**Provider data coverage.** The model is single and provider-neutral, but population is uneven: **AWS**
+fills all of the above; **Azure** and **GCP** map into the identical columns but do not yet extract VM
+subnet / attached identity / security-group associations (GCP's provider queries are still stubbed), so
+those FKs are effectively AWS-only until Phases 2–3 land. See §7.
 
 **Nullability:** columns are declared through the Calcite type builder; in practice any column other
 than `cloud_provider` may be `NULL` when a provider does not supply that fact (see the per-provider
@@ -190,7 +199,7 @@ erDiagram
         varchar vpc_id FK
         varchar subnet_id FK
         varchar iam_role FK
-        varchar security_groups FK
+        varchar security_groups
         boolean disk_encryption_enabled
         boolean monitoring_enabled
         timestamp launch_time
@@ -339,6 +348,14 @@ erDiagram
         timestamp create_time
     }
 
+    COMPUTE_SECURITY_GROUPS {
+        varchar cloud_provider FK
+        varchar account_id
+        varchar instance_id
+        varchar compute_resource_id FK
+        varchar security_group_id FK
+    }
+
     CLOUD_ACCOUNT ||--o{ COMPUTE_RESOURCES : "owns"
     CLOUD_ACCOUNT ||--o{ STORAGE_RESOURCES : "owns"
     CLOUD_ACCOUNT ||--o{ KUBERNETES_CLUSTERS : "owns"
@@ -349,13 +366,14 @@ erDiagram
 
     NETWORK_RESOURCES ||--o{ COMPUTE_RESOURCES : "vpc_id"
     NETWORK_RESOURCES ||--o{ COMPUTE_RESOURCES : "subnet_id"
-    NETWORK_RESOURCES ||--o{ COMPUTE_RESOURCES : "security_groups"
     IAM_RESOURCES ||--o{ COMPUTE_RESOURCES : "iam_role"
+    COMPUTE_RESOURCES ||--o{ COMPUTE_SECURITY_GROUPS : "compute_resource_id"
+    NETWORK_RESOURCES ||--o{ COMPUTE_SECURITY_GROUPS : "security_group_id"
 ```
 
-> `CLOUD_ACCOUNT` is a logical hub (no physical table). The `vpc_id` edge is the one **declared**
-> foreign key (`getReferentialConstraints()`); the `subnet_id`, `security_groups` and `iam_role` edges
-> are documented-only (see §3). All edges are unenforced.
+> `CLOUD_ACCOUNT` is a logical hub (no physical table). All other edges are **declared** foreign keys
+> (`getReferentialConstraints()`), unenforced. The compute↔security-group many-to-many is resolved
+> through the `COMPUTE_SECURITY_GROUPS` junction.
 
 ---
 
@@ -564,6 +582,21 @@ Managed databases (RDS, Azure SQL/Cosmos, Cloud SQL, …). The kind is in `datab
 | `backup_retention_days` | INTEGER | | Automated-backup retention |
 | `backup_window` | VARCHAR | | Backup window |
 | `create_time` | TIMESTAMP | | Creation time |
+
+### 5.8 `compute_security_groups`
+
+Junction table resolving the many-to-many between compute instances and their security groups (AWS
+Security Group / Azure NSG / GCP firewall). One row per (instance, security-group).
+
+| Column | Type | Key | Description |
+|--------|------|:---:|-------------|
+| `cloud_provider` | VARCHAR | 🔗 | `azure` / `aws` / `gcp` |
+| `account_id` | VARCHAR | | Subscription / account / project ID |
+| `instance_id` | VARCHAR | | Compute instance native ID |
+| `compute_resource_id` | VARCHAR | 🔗 | Instance ARN → `compute_resources.resource_id` |
+| `security_group_id` | VARCHAR | 🔗 | Security-group native ID → `network_resources.network_resource` |
+
+Logical unique key: `(compute_resource_id, security_group_id)`.
 
 ---
 

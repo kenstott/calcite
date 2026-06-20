@@ -689,9 +689,11 @@ public class AWSProvider implements CloudProvider {
             vmData.put("VpcId", instance.vpcId());
             vmData.put("SubnetId", instance.subnetId());
 
-            // Security facts
+            // Security facts. Store the instance-profile ARN (not the SDK object) so it equi-matches
+            // iam_resources.resource_id for the compute_resources.iam_role foreign key.
             vmData.put("SecurityGroups", instance.securityGroups());
-            vmData.put("IamInstanceProfile", instance.iamInstanceProfile());
+            vmData.put("IamInstanceProfile",
+                instance.iamInstanceProfile() != null ? instance.iamInstanceProfile().arn() : null);
 
             // EBS encryption
             boolean allEbsEncrypted = instance.blockDeviceMappings().stream()
@@ -720,6 +722,57 @@ public class AWSProvider implements CloudProvider {
                      accountId, errorMessage);
         } else {
           LOGGER.debug("Error querying EC2 instances in account {}: {}",
+                      accountId, e.getMessage());
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Emits one row per (instance, security-group) association — the normalized form of the
+   * compute_resources.security_groups array. Feeds the compute_security_groups junction table whose
+   * foreign keys point at compute_resources and network_resources.
+   */
+  public List<Map<String, Object>> queryComputeSecurityGroups(List<String> accountIds) {
+    List<Map<String, Object>> results = new ArrayList<>();
+
+    for (String accountId : accountIds) {
+      AwsCredentials credentials = accountCredentials.get(accountId);
+      if (credentials == null) continue;
+
+      try {
+        Ec2Client ec2Client = Ec2Client.builder()
+            .region(region)
+            .credentialsProvider(StaticCredentialsProvider.create(credentials))
+            .build();
+
+        for (Reservation reservation : ec2Client.describeInstances().reservations()) {
+          for (Instance instance : reservation.instances()) {
+            String computeResourceId =
+                String.format(Locale.ROOT, "arn:aws:ec2:%s:%s:instance/%s",
+                    region, accountId, instance.instanceId());
+            for (GroupIdentifier group : instance.securityGroups()) {
+              Map<String, Object> row = new HashMap<>();
+              row.put("AccountId", accountId);
+              row.put("InstanceId", instance.instanceId());
+              row.put("ComputeResourceId", computeResourceId);
+              row.put("SecurityGroupId", group.groupId());
+              results.add(row);
+            }
+          }
+        }
+      } catch (Exception e) {
+        String errorMessage = e.getMessage();
+        if (errorMessage != null && (errorMessage.contains("not authorized") ||
+                                     errorMessage.contains("AccessDenied") ||
+                                     errorMessage.contains("UnauthorizedOperation") ||
+                                     errorMessage.contains("Forbidden"))) {
+          LOGGER.warn("Authorization denied for EC2 instances in account {} - results may be incomplete: {}",
+                     accountId, errorMessage);
+        } else {
+          LOGGER.debug("Error querying EC2 security-group associations in account {}: {}",
                       accountId, e.getMessage());
         }
       }
@@ -828,6 +881,35 @@ public class AWSProvider implements CloudProvider {
           networkData.put("InstanceId", address.instanceId());
           networkData.put("NetworkInterfaceId", address.networkInterfaceId());
           networkData.put("IsAssociated", address.associationId() != null);
+
+          results.add(networkData);
+        }
+
+        // Query Subnets. Emitting these as rows lets compute_resources.subnet_id reference a
+        // network_resources row by its bare native ID (subnet-...), the same pattern as VPCs.
+        for (software.amazon.awssdk.services.ec2.model.Subnet subnet
+            : ec2Client.describeSubnets().subnets()) {
+          Map<String, Object> networkData = new HashMap<>();
+
+          networkData.put("AccountId", accountId);
+          networkData.put("NetworkResource", subnet.subnetId());
+          networkData.put("NetworkResourceType", "Subnet");
+          networkData.put("Region", region.toString());
+          networkData.put("ResourceId",
+              String.format(Locale.ROOT, "arn:aws:ec2:%s:%s:subnet/%s", region, accountId, subnet.subnetId()));
+
+          // Tags
+          Map<String, String> tags = new HashMap<>();
+          subnet.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
+          String application =
+              tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned"));
+          networkData.put("Application", application);
+
+          // Subnet Configuration
+          networkData.put("CidrBlock", subnet.cidrBlock());
+          networkData.put("State", subnet.stateAsString());
+          networkData.put("VpcId", subnet.vpcId());
+          networkData.put("IsDefault", subnet.defaultForAz());
 
           results.add(networkData);
         }
@@ -979,6 +1061,23 @@ public class AWSProvider implements CloudProvider {
           iamData.put("DefaultVersionId", policy.defaultVersionId());
           iamData.put("IsAttachable", policy.isAttachable());
           iamData.put("Description", policy.description());
+
+          results.add(iamData);
+        }
+
+        // Query Instance Profiles. These are the identity actually attached to EC2 instances, so
+        // emitting them lets compute_resources.iam_role reference iam_resources by the profile ARN.
+        for (InstanceProfile instanceProfile : iamClient.listInstanceProfiles().instanceProfiles()) {
+          Map<String, Object> iamData = new HashMap<>();
+
+          iamData.put("AccountId", accountId);
+          iamData.put("IAMResource", instanceProfile.instanceProfileName());
+          iamData.put("IAMResourceType", "Instance Profile");
+          iamData.put("Region", "global");
+          iamData.put("ResourceId", instanceProfile.arn());
+          iamData.put("Application", "Untagged/Orphaned");
+          iamData.put("CreateDate", instanceProfile.createDate());
+          iamData.put("Path", instanceProfile.path());
 
           results.add(iamData);
         }

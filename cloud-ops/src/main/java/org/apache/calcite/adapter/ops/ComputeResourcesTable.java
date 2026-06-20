@@ -45,30 +45,56 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
   }
 
   /**
-   * Logical foreign key {@code (cloud_provider, vpc_id) -> network_resources(cloud_provider,
-   * network_resource)}. Compute stores the bare {@code vpc-...} ID, which equi-matches the
-   * {@code network_resource} column of a VPC row (not the ARN in {@code resource_id}). Scoping by
-   * {@code cloud_provider} keeps the match within a single provider. {@code vpc_id} is null for
-   * Azure/GCP, so the constraint only bites on AWS rows.
+   * Logical foreign keys, declared provider-neutrally on the shared tables:
+   * <ul>
+   *   <li>{@code (cloud_provider, vpc_id) -> network_resources(cloud_provider, network_resource)}
+   *   <li>{@code (cloud_provider, subnet_id) -> network_resources(cloud_provider, network_resource)}
+   *   <li>{@code iam_role -> iam_resources(resource_id)} (the attached identity's globally-unique ID)
+   * </ul>
+   * The {@code vpc_id}/{@code subnet_id} columns store the bare native ID (e.g. {@code vpc-...},
+   * {@code subnet-...}), which equi-matches {@code network_resource} (not the ARN in
+   * {@code resource_id}); {@code cloud_provider} scopes the match per provider. {@code iam_role}
+   * holds the attached-identity ARN, matching the {@code resource_id} primary key. These columns are
+   * null for providers that have not extracted them, so the constraints only bite on populated rows.
    */
   @Override protected List<RelReferentialConstraint> referentialConstraints(List<String> columnNames) {
-    final List<String> targetColumns =
+    final List<String> networkColumns =
         new NetworkResourcesTable(config).getRowType(METADATA_TYPE_FACTORY).getFieldNames();
+    final List<String> iamColumns =
+        new IAMResourcesTable(config).getRowType(METADATA_TYPE_FACTORY).getFieldNames();
+
     final int srcProvider = columnNames.indexOf("cloud_provider");
-    final int srcVpc = columnNames.indexOf("vpc_id");
-    final int tgtProvider = targetColumns.indexOf("cloud_provider");
-    final int tgtNetworkResource = targetColumns.indexOf("network_resource");
-    if (srcProvider < 0 || srcVpc < 0 || tgtProvider < 0 || tgtNetworkResource < 0) {
-      return Collections.emptyList();
+    final int tgtProvider = networkColumns.indexOf("cloud_provider");
+    final int tgtNetworkResource = networkColumns.indexOf("network_resource");
+
+    final List<RelReferentialConstraint> fks = new ArrayList<>();
+
+    addNetworkFk(fks, columnNames.indexOf("vpc_id"), srcProvider, tgtProvider, tgtNetworkResource);
+    addNetworkFk(fks, columnNames.indexOf("subnet_id"), srcProvider, tgtProvider, tgtNetworkResource);
+
+    final int srcIamRole = columnNames.indexOf("iam_role");
+    final int tgtIamResourceId = iamColumns.indexOf("resource_id");
+    if (srcIamRole >= 0 && tgtIamResourceId >= 0) {
+      fks.add(RelReferentialConstraintImpl.of(
+          Arrays.asList("cloud", "compute_resources"),
+          Arrays.asList("cloud", "iam_resources"),
+          Collections.singletonList(IntPair.of(srcIamRole, tgtIamResourceId))));
     }
-    final List<IntPair> columnPairs = Arrays.asList(
-        IntPair.of(srcProvider, tgtProvider),
-        IntPair.of(srcVpc, tgtNetworkResource));
-    final RelReferentialConstraint fk = RelReferentialConstraintImpl.of(
+
+    return fks;
+  }
+
+  private void addNetworkFk(List<RelReferentialConstraint> fks, int srcNativeId,
+      int srcProvider, int tgtProvider, int tgtNetworkResource) {
+    if (srcNativeId < 0 || srcProvider < 0 || tgtProvider < 0 || tgtNetworkResource < 0) {
+      return;
+    }
+    fks.add(RelReferentialConstraintImpl.of(
         Arrays.asList("cloud", "compute_resources"),
         Arrays.asList("cloud", "network_resources"),
-        columnPairs);
-    return Collections.singletonList(fk);
+        Arrays.asList(
+            IntPair.of(srcProvider, tgtProvider),
+            IntPair.of(srcNativeId, tgtNetworkResource))));
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {

@@ -47,6 +47,10 @@ public class CloudOpsSchema extends AbstractSchema {
     builder.put("iam_resources", new IAMResourcesTable(config));
     builder.put("database_resources", new DatabaseResourcesTable(config));
 
+    // Junction table: normalizes compute -> security-group associations (FK to compute_resources
+    // and network_resources).
+    builder.put("compute_security_groups", new ComputeSecurityGroupsTable(config));
+
     return builder.build();
   }
 

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -88,24 +89,71 @@ public class CloudOpsConstraintMetadataTest {
     assertTrue(stat.isKey(nativeKey));
   }
 
-  @Test void testComputeToNetworkForeignKey() {
+  @Test void testComputeForeignKeys() {
     CloudOpsConfig config = config();
     ComputeResourcesTable compute = new ComputeResourcesTable(config);
     List<String> srcCols = columns(compute);
-    List<String> tgtCols = columns(new NetworkResourcesTable(config));
+    List<String> netCols = columns(new NetworkResourcesTable(config));
+    List<String> iamCols = columns(new IAMResourcesTable(config));
 
     List<RelReferentialConstraint> fks = compute.getStatistic().getReferentialConstraints();
     assertNotNull(fks);
-    assertEquals(1, fks.size(), "exactly one FK: vpc_id -> network_resources");
+    assertEquals(3, fks.size(), "vpc_id, subnet_id -> network_resources; iam_role -> iam_resources");
 
-    RelReferentialConstraint fk = fks.get(0);
-    assertEquals(Arrays.asList("cloud", "compute_resources"), fk.getSourceQualifiedName());
-    assertEquals(Arrays.asList("cloud", "network_resources"), fk.getTargetQualifiedName());
+    // vpc_id -> network_resources(cloud_provider, network_resource)
+    assertTrue(fks.stream().anyMatch(fk ->
+        fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "network_resources"))
+            && fk.getColumnPairs().equals(Arrays.asList(
+                IntPair.of(srcCols.indexOf("cloud_provider"), netCols.indexOf("cloud_provider")),
+                IntPair.of(srcCols.indexOf("vpc_id"), netCols.indexOf("network_resource"))))),
+        "vpc_id FK");
 
-    List<IntPair> expected = Arrays.asList(
-        IntPair.of(srcCols.indexOf("cloud_provider"), tgtCols.indexOf("cloud_provider")),
-        IntPair.of(srcCols.indexOf("vpc_id"), tgtCols.indexOf("network_resource")));
-    assertEquals(expected, fk.getColumnPairs());
+    // subnet_id -> network_resources(cloud_provider, network_resource)
+    assertTrue(fks.stream().anyMatch(fk ->
+        fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "network_resources"))
+            && fk.getColumnPairs().equals(Arrays.asList(
+                IntPair.of(srcCols.indexOf("cloud_provider"), netCols.indexOf("cloud_provider")),
+                IntPair.of(srcCols.indexOf("subnet_id"), netCols.indexOf("network_resource"))))),
+        "subnet_id FK");
+
+    // iam_role -> iam_resources(resource_id)
+    assertTrue(fks.stream().anyMatch(fk ->
+        fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "iam_resources"))
+            && fk.getColumnPairs().equals(Collections.singletonList(
+                IntPair.of(srcCols.indexOf("iam_role"), iamCols.indexOf("resource_id"))))),
+        "iam_role FK");
+  }
+
+  @Test void testComputeSecurityGroupsJunction() {
+    CloudOpsConfig config = config();
+    ComputeSecurityGroupsTable junction = new ComputeSecurityGroupsTable(config);
+    List<String> cols = columns(junction);
+    List<String> computeCols = columns(new ComputeResourcesTable(config));
+    List<String> netCols = columns(new NetworkResourcesTable(config));
+    Statistic stat = junction.getStatistic();
+
+    // No resource_id column -> no auto primary key; the unique key is the (compute, sg) pair.
+    ImmutableBitSet pairKey =
+        ImmutableBitSet.of(cols.indexOf("compute_resource_id"), cols.indexOf("security_group_id"));
+    assertTrue(stat.getKeys().contains(pairKey), "junction unique key");
+
+    List<RelReferentialConstraint> fks = stat.getReferentialConstraints();
+    assertEquals(2, fks.size(), "FK to compute_resources and to network_resources");
+
+    // compute_resource_id -> compute_resources(resource_id)
+    assertTrue(fks.stream().anyMatch(fk ->
+        fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "compute_resources"))
+            && fk.getColumnPairs().equals(Collections.singletonList(
+                IntPair.of(cols.indexOf("compute_resource_id"), computeCols.indexOf("resource_id"))))),
+        "compute_resource_id FK");
+
+    // (cloud_provider, security_group_id) -> network_resources(cloud_provider, network_resource)
+    assertTrue(fks.stream().anyMatch(fk ->
+        fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "network_resources"))
+            && fk.getColumnPairs().equals(Arrays.asList(
+                IntPair.of(cols.indexOf("cloud_provider"), netCols.indexOf("cloud_provider")),
+                IntPair.of(cols.indexOf("security_group_id"), netCols.indexOf("network_resource"))))),
+        "security_group_id FK");
   }
 
   @Test void testTablesWithoutForeignKeysDeclareNone() {
