@@ -247,53 +247,10 @@ if [ -n "$SCHEMA_FILTER" ]; then
   queue=("${filtered[@]+"${filtered[@]}"}")
 fi
 
-# Filter out already-completed slots (checkpoint resume)
-COMPLETED_FILE="${HOME}/.run-pool-completed.state"
-# --force clears the checkpoint entries for the slots about to run, so a forced
-# re-run is not silently skipped (and no stale "completed" marker lingers). Only the
-# queued slots are removed; other schemas' shared entries are preserved.
-if [ "${FORCE:-false}" = true ] && [ -f "$COMPLETED_FILE" ] && [ "${#queue[@]}" -gt 0 ]; then
-  _kept=()
-  while IFS= read -r _line; do
-    _drop=false
-    for slot in "${queue[@]}"; do
-      if [ "$_line" = "$slot" ]; then _drop=true; break; fi
-    done
-    $_drop || _kept+=("$_line")
-  done < "$COMPLETED_FILE"
-  if [ "${#_kept[@]}" -gt 0 ]; then
-    printf '%s\n' "${_kept[@]}" > "$COMPLETED_FILE"
-  else
-    : > "$COMPLETED_FILE"
-  fi
-  log_info "Checkpoint: --force cleared ${#queue[@]} queued slot(s) from $COMPLETED_FILE (${queue[*]})"
-fi
-if [ -f "$COMPLETED_FILE" ]; then
-  completed_slots=()
-  while IFS= read -r _line; do completed_slots+=("$_line"); done < "$COMPLETED_FILE"
-  if [ "${#completed_slots[@]}" -gt 0 ]; then
-    remaining=()
-    skipped=()
-    for slot in "${queue[@]}"; do
-      already=false
-      for done_slot in "${completed_slots[@]}"; do
-        if [ "$slot" = "$done_slot" ]; then
-          already=true
-          break
-        fi
-      done
-      if $already; then
-        skipped+=("$slot")
-      else
-        remaining+=("$slot")
-      fi
-    done
-    if [ "${#skipped[@]}" -gt 0 ]; then
-      log_info "Checkpoint: skipping ${#skipped[@]} completed slots (${skipped[*]})"
-    fi
-    queue=("${remaining[@]+"${remaining[@]}"}")
-  fi
-fi
+# No pool-level "completed" checkpoint. The pool always runs every queued slot; --etl-resume
+# (the ETL tracker + Iceberg self-heal) decides what to skip WITHIN each schema. A separate
+# session-completion list duplicated that and silently skipped whole schemas on re-invocation
+# (the same broken "force"-style state, requiring --force to undo) — removed.
 
 # Verify shadow JAR before launching
 resolve_classpath > /dev/null
@@ -648,10 +605,6 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
-        # flock-guarded append: serializes concurrent appenders so a completion
-        # is never lost when multiple pools finish a slot at the same time.
-        ( flock 9; echo "${active_slots[$i]}" >> "${HOME}/.run-pool-completed.state" ) \
-          9>>"${HOME}/.run-pool-completed.state.lock"
       else
         ((failed_count++)) || true
         failed_list+=("$id")
