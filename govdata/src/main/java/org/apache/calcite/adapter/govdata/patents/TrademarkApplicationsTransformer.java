@@ -86,6 +86,16 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
       return Collections.emptyIterator();
     }
     final String tmBase = TM_API_BASE + snapshotYear + "/";
+    // Catalog gate: only attempt snapshots USPTO has actually published. The ODP product catalog
+    // lists each available file's download URI; if this snapshot year is not in it (e.g. /2024/,
+    // /2025/ which do not yet exist), skip with no download — no 404, no wasted request against the
+    // 20/file/year cap. When USPTO publishes a newer snapshot it appears in the catalog and is
+    // picked up automatically — no schema/dataLag change needed.
+    if (!isPublished(tmBase + "case_file.csv.zip")) {
+      LOGGER.info("TrademarkApplications: snapshot {} is not in the ODP catalog yet — skipping with "
+          + "no download (will be ingested automatically once USPTO publishes it).", snapshotYear);
+      return Collections.emptyIterator();
+    }
     final String caseFile;
     final String ownerFile;
     final String intlClassFile;
@@ -239,10 +249,20 @@ public class TrademarkApplicationsTransformer extends AbstractPatentsTransformer
       LOGGER.debug("Trademark cache hit: {}", cacheFileName);
       return dest;
     }
-    LOGGER.info("Trademark downloading: {}", url);
+    // Release-freshness gate: reuse a prior copy when the upstream snapshot has not changed, so an
+    // immutable annual trademark release is never re-downloaded (it is what tripped the 429 cap).
+    String token = currentReleaseToken(url);
+    String reuse = cachedCopyForToken(url, token);
+    if (reuse != null) {
+      LOGGER.info("Trademark freshness: {} unchanged (release {}) — reusing cache, no download",
+          url, token);
+      return reuse;
+    }
+    LOGGER.info("Trademark downloading: {} (release {})", url, token == null ? "unknown" : token);
     Map<String, String> headers = new LinkedHashMap<>();
     headers.put("X-Api-Key", apiKey);
     extractZipEntryToFile(url, headers, dest, ".csv");
+    recordRelease(url, token, dest);
     return dest;
   }
 

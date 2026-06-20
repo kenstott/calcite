@@ -48,15 +48,12 @@ public class PatentClaimsTransformer extends AbstractPatentsTransformer {
 
     String url = context.getUrl();
     String dest = cacheFile("g_claims_" + yearStr + "_" + quarterToken(context) + ".tsv");
-    if (!isCacheValid(dest)) {
-      LOGGER.info("PatentClaims downloading year {}: {}", yearStr, url);
-      downloadAndCacheTsv(url, dest);
-    } else {
-      LOGGER.debug("PatentClaims cache hit for year {}", yearStr);
-    }
+    // downloadAndCacheTsv applies the release-freshness gate and may return a prior cached copy —
+    // always read from the path it returns, not the quarter-stamped dest.
+    final String actual = downloadAndCacheTsv(url, dest);
 
     final BufferedReader reader = new BufferedReader(
-        new InputStreamReader(storageProvider().openInputStream(dest), StandardCharsets.UTF_8));
+        new InputStreamReader(storageProvider().openInputStream(actual), StandardCharsets.UTF_8));
     String headerLine = CsvRecordReader.readRecord(reader);
     if (headerLine == null) {
       reader.close();

@@ -154,18 +154,273 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     return storageProvider().resolvePath(cacheDir(), filename);
   }
 
-  /** Returns true if the cache path exists and is within TTL. */
-  protected boolean isCacheValid(String path) {
+  /** Returns true if the cache path exists and was modified within {@code ttlMs}. */
+  protected boolean isFresh(String path, long ttlMs) {
     try {
       if (!storageProvider().exists(path)) {
         return false;
       }
       StorageProvider.FileMetadata meta = storageProvider().getMetadata(path);
       return meta != null
-          && (System.currentTimeMillis() - meta.getLastModified()) < CACHE_TTL_MS;
+          && (System.currentTimeMillis() - meta.getLastModified()) < ttlMs;
     } catch (IOException e) {
       return false;
     }
+  }
+
+  /** Returns true if the cache path exists and is within the quarterly TTL. */
+  protected boolean isCacheValid(String path) {
+    return isFresh(path, CACHE_TTL_MS);
+  }
+
+  // ── Release-freshness gate ─────────────────────────────────────────────────
+  // ODP bulk files are IMMUTABLE per release: g_patent.tsv covers 1976→latest and is re-cut only
+  // when USPTO publishes a new release (≈annually); each release URI is unchanging once posted.
+  // Re-downloading an unchanged release is pure waste — and worse, the file endpoint enforces an
+  // ANNUAL per-(key, URI) request cap (HTTP 429: "you have submitted N requests … in 31536000
+  // sec"), so a quarter-stamped cache path or an expired TTL that forces a re-pull silently spends
+  // that yearly budget. The gate below keys reuse on the upstream RELEASE DATE (from the product
+  // METADATA endpoint, a different URI than the capped file) so we fetch each release exactly once.
+
+  /** ODP product-metadata base — distinct from the per-file download URI, so probing it does not
+   * consume the file's annual per-URI quota. */
+  private static final String ODP_PRODUCTS_BASE =
+      "https://api.uspto.gov/api/v1/datasets/products/";
+
+  /** Re-probe a product's metadata at most this often, to bound metadata-endpoint requests well
+   * under any per-URI annual cap (≈365/yr/product at this TTL) while still catching a new release
+   * within a day — ample for ~annual bulk releases. */
+  private static final long METADATA_TTL_MS = 24L * 60 * 60 * 1000;
+
+  private static final com.fasterxml.jackson.databind.ObjectMapper METADATA_MAPPER =
+      new com.fasterxml.jackson.databind.ObjectMapper();
+
+  /** Per-JVM memo so a single worker run probes each product's metadata at most once. */
+  private static final Map<String, com.fasterxml.jackson.databind.JsonNode> METADATA_MEMO =
+      new java.util.concurrent.ConcurrentHashMap<String, com.fasterxml.jackson.databind.JsonNode>();
+
+  /** Splits a {@code .../products/files/<PRODUCT>/<…>/<fileName>} URL into [product, fileName],
+   * or null if it is not an ODP bulk-file URL. */
+  private static String[] productAndFile(String url) {
+    int i = url.indexOf("/products/files/");
+    if (i < 0) {
+      return null;
+    }
+    String rest = url.substring(i + "/products/files/".length());
+    int slash = rest.indexOf('/');
+    if (slash <= 0) {
+      return null;
+    }
+    return new String[] {rest.substring(0, slash), rest.substring(rest.lastIndexOf('/') + 1)};
+  }
+
+  /** Fetches (and JVM-memoizes + disk-caches with a short TTL) the ODP metadata for a product.
+   * Returns null on any failure — the caller then falls back to time-based caching, never blocking
+   * a download. */
+  private com.fasterxml.jackson.databind.JsonNode productMetadata(String productId) {
+    com.fasterxml.jackson.databind.JsonNode memo = METADATA_MEMO.get(productId);
+    if (memo != null) {
+      return memo;
+    }
+    String diskPath = cacheFile(".freshness/metadata_" + productId + ".json");
+    try {
+      if (isFresh(diskPath, METADATA_TTL_MS)) {
+        java.io.InputStream in = storageProvider().openInputStream(diskPath);
+        try {
+          com.fasterxml.jackson.databind.JsonNode disk = METADATA_MAPPER.readTree(in);
+          METADATA_MEMO.put(productId, disk);
+          return disk;
+        } finally {
+          in.close();
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Patents freshness: disk metadata read failed for {}: {}", productId, e.getMessage());
+    }
+    try {
+      HttpURLConnection conn = (HttpURLConnection)
+          URI.create(ODP_PRODUCTS_BASE + productId).toURL().openConnection();
+      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(30_000);
+      conn.setRequestProperty("User-Agent", "GovData/1.0");
+      conn.setRequestProperty("X-Api-Key", usptoApiKey());
+      if (conn.getResponseCode() != 200) {
+        LOGGER.debug("Patents freshness: metadata HTTP {} for product {}",
+            conn.getResponseCode(), productId);
+        return null;
+      }
+      byte[] body = readAllBytes(conn.getInputStream());
+      try {
+        storageProvider().writeFile(diskPath, body);
+      } catch (IOException ignore) {
+        LOGGER.debug("Patents freshness: could not cache metadata for {}", productId);
+      }
+      com.fasterxml.jackson.databind.JsonNode root = METADATA_MAPPER.readTree(body);
+      METADATA_MEMO.put(productId, root);
+      return root;
+    } catch (Exception e) {
+      LOGGER.debug("Patents freshness: metadata probe failed for {}: {}", productId, e.getMessage());
+      return null;
+    }
+  }
+
+  /** The upstream release token for the file behind {@code url} — its {@code fileReleaseDate}
+   * (falling back to {@code fileDataToDate}, then the product-level last-modified) — or null when
+   * it cannot be determined. A null token disables freshness reuse for this call (the caller falls
+   * back to TTL-based caching). */
+  protected String currentReleaseToken(String url) {
+    String[] pf = productAndFile(url);
+    if (pf == null) {
+      return null;
+    }
+    com.fasterxml.jackson.databind.JsonNode root = productMetadata(pf[0]);
+    if (root == null) {
+      return null;
+    }
+    String perFile = findFileReleaseDate(root, pf[1]);
+    if (perFile != null) {
+      return perFile;
+    }
+    com.fasterxml.jackson.databind.JsonNode lm = root.findValue("lastModifiedDateTime");
+    if (lm == null) {
+      lm = root.findValue("productToDate");
+    }
+    return lm != null ? lm.asText() : null;
+  }
+
+  /** Depth-first search for the file entry whose {@code fileName} matches, returning its release
+   * date ({@code fileReleaseDate}, else {@code fileDataToDate}). */
+  private static String findFileReleaseDate(
+      com.fasterxml.jackson.databind.JsonNode node, String fileName) {
+    if (node == null) {
+      return null;
+    }
+    if (node.isObject()) {
+      com.fasterxml.jackson.databind.JsonNode fn = node.get("fileName");
+      if (fn != null && fileName.equals(fn.asText())) {
+        com.fasterxml.jackson.databind.JsonNode rel = node.get("fileReleaseDate");
+        if (rel == null) {
+          rel = node.get("fileDataToDate");
+        }
+        return rel != null ? rel.asText() : null;
+      }
+      for (com.fasterxml.jackson.databind.JsonNode child : node) {
+        String r = findFileReleaseDate(child, fileName);
+        if (r != null) {
+          return r;
+        }
+      }
+    } else if (node.isArray()) {
+      for (com.fasterxml.jackson.databind.JsonNode child : node) {
+        String r = findFileReleaseDate(child, fileName);
+        if (r != null) {
+          return r;
+        }
+      }
+    }
+    return null;
+  }
+
+  /** True if {@code url} is listed as a downloadable file in the product CATALOG (the ODP metadata
+   * {@code fileDownloadURI} set), i.e. that exact snapshot actually exists. Lets a caller skip a
+   * not-yet-published snapshot without attempting a download (which would 404 and spend a request).
+   * Fails OPEN — returns true when the catalog cannot be read — so a metadata outage never silently
+   * suppresses a legitimate download. */
+  protected boolean isPublished(String url) {
+    String[] pf = productAndFile(url);
+    if (pf == null) {
+      return true;
+    }
+    com.fasterxml.jackson.databind.JsonNode root = productMetadata(pf[0]);
+    if (root == null) {
+      return true;
+    }
+    return catalogHasDownloadUri(root, url);
+  }
+
+  private static boolean catalogHasDownloadUri(
+      com.fasterxml.jackson.databind.JsonNode node, String url) {
+    if (node == null) {
+      return false;
+    }
+    if (node.isObject()) {
+      com.fasterxml.jackson.databind.JsonNode uri = node.get("fileDownloadURI");
+      if (uri != null && url.equals(uri.asText())) {
+        return true;
+      }
+      for (com.fasterxml.jackson.databind.JsonNode child : node) {
+        if (catalogHasDownloadUri(child, url)) {
+          return true;
+        }
+      }
+    } else if (node.isArray()) {
+      for (com.fasterxml.jackson.databind.JsonNode child : node) {
+        if (catalogHasDownloadUri(child, url)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private String freshnessMarkerPath(String url) {
+    return cacheFile(".freshness/" + url.replaceAll("[^A-Za-z0-9._-]", "_") + ".marker");
+  }
+
+  /** Returns the previously-cached file path to reuse when the upstream release behind {@code url}
+   * has not advanced past what we last fetched, else null (a fresh download is required). */
+  protected String cachedCopyForToken(String url, String token) {
+    if (token == null) {
+      return null;
+    }
+    try {
+      String path = freshnessMarkerPath(url);
+      if (!storageProvider().exists(path)) {
+        return null;
+      }
+      java.io.InputStream in = storageProvider().openInputStream(path);
+      String s;
+      try {
+        s = new String(readAllBytes(in), StandardCharsets.UTF_8);
+      } finally {
+        in.close();
+      }
+      int tab = s.indexOf('\t');
+      if (tab < 0) {
+        return null;
+      }
+      String lastToken = s.substring(0, tab);
+      String cachedPath = s.substring(tab + 1).trim();
+      if (token.equals(lastToken) && storageProvider().exists(cachedPath)) {
+        return cachedPath;
+      }
+    } catch (IOException e) {
+      LOGGER.debug("Patents freshness: marker check failed for {}: {}", url, e.getMessage());
+    }
+    return null;
+  }
+
+  /** Records that {@code cachedPath} holds the data for the current release of {@code url}. */
+  protected void recordRelease(String url, String token, String cachedPath) {
+    if (token == null) {
+      return;
+    }
+    try {
+      storageProvider().writeFile(freshnessMarkerPath(url),
+          (token + "\t" + cachedPath).getBytes(StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      LOGGER.debug("Patents freshness: could not write marker for {}: {}", url, e.getMessage());
+    }
+  }
+
+  private static byte[] readAllBytes(java.io.InputStream in) throws IOException {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = in.read(buf)) >= 0) {
+      out.write(buf, 0, n);
+    }
+    return out.toByteArray();
   }
 
   // ── Download and cache ─────────────────────────────────────────────────────
@@ -184,8 +439,18 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       LOGGER.debug("Patents cache hit: {}", destPath);
       return destPath;
     }
-    LOGGER.info("Patents downloading: {}", url);
+    // Freshness gate: reuse a prior cached copy when the upstream release has not advanced, so an
+    // unchanged immutable snapshot is never re-downloaded (and the annual per-URI quota untouched).
+    String token = currentReleaseToken(url);
+    String reuse = cachedCopyForToken(url, token);
+    if (reuse != null) {
+      LOGGER.info("Patents freshness: {} unchanged (release {}) — reusing cache, no download",
+          url, token);
+      return reuse;
+    }
+    LOGGER.info("Patents downloading: {} (release {})", url, token == null ? "unknown" : token);
     extractZipEntryToFile(url, odpRequestHeaders(), destPath, ".tsv", ".txt");
+    recordRelease(url, token, destPath);
     LOGGER.info("Patents cached to {}", destPath);
     return destPath;
   }
@@ -210,11 +475,10 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    */
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
-    // The public USPTO bulk API rate-limits (HTTP 429) for minutes at a time, so retry
-    // patiently before giving up. HTTP 429 gets a LONGER backoff (capped at 5 min, ~13 min of
-    // total budget across 10 attempts) to ride out a multi-minute rate-limit window; other
-    // transient errors (truncated reads, resets, 5xx) keep the shorter 1-min cap. On exhaustion
-    // this still hard-fails (no silent skip).
+    // Retry only genuinely-transient network faults (truncated reads, resets, 5xx) with a 1-min
+    // backoff cap. HTTP 429 is NOT retried here: on this API it is an annual per-(key, URI) cap, so
+    // retrying only spends more of the yearly budget (see the 429 short-circuit in the catch). On
+    // exhaustion this still hard-fails (no silent skip).
     final int maxAttempts = 10;
     IOException lastError = null;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -223,9 +487,16 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         return;
       } catch (IOException e) {
         lastError = e;
+        if (isRateLimited(e)) {
+          // HTTP 429 here is the ANNUAL per-(key, URI) download cap. Retrying cannot clear it within
+          // a run, and every attempt spends another count against the yearly budget — so fail fast.
+          LOGGER.warn("Patents: HTTP 429 (annual per-URI quota) for {} — not retrying; each attempt "
+              + "would burn more of the yearly budget. Resolve with a new API key or wait for the "
+              + "365-day window to age off.", url);
+          throw e;
+        }
         if (attempt < maxAttempts && isTransientDownloadError(e)) {
-          long capMs = isRateLimited(e) ? 300_000L : 60_000L;
-          long backoffMs = Math.min(capMs, 1000L * (1L << (attempt - 1)));
+          long backoffMs = Math.min(60_000L, 1000L * (1L << (attempt - 1)));
           LOGGER.warn("Patents: transient download failure (attempt {}/{}) for {}: {} — retrying in {}ms",
               attempt, maxAttempts, url, e.getMessage(), backoffMs);
           try {
@@ -265,7 +536,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       if (msg != null) {
         if (msg.contains("Premature end") || msg.contains("Premature EOF")
             || msg.contains("Connection reset") || msg.contains("Connection closed")
-            || msg.contains("HTTP 429") || msg.contains("HTTP 500") || msg.contains("HTTP 502")
+            || msg.contains("HTTP 500") || msg.contains("HTTP 502")
             || msg.contains("HTTP 503") || msg.contains("HTTP 504")
             || msg.contains("Truncated")) {
           return true;
