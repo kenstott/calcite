@@ -2265,11 +2265,11 @@ partitionedTables:
       type:
         - pep
       year:
-        - '2019'
-        - '2020'
-        - '2021'
-        - '2022'
-        - '2023'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 1
+        descending: true
       geography: *all_geographies
       # Dynamic dimensions resolved based on year - uses hooks.dimensionResolver
       endpoint:
@@ -2346,9 +2346,11 @@ partitionedTables:
       type:
         - cbp
       year:
-        - '2020'
-        - '2021'
-        - '2022'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 2
+        descending: true
       geography: *all_geographies
 
     columns:
@@ -2573,9 +2575,15 @@ partitionedTables:
     dimensions:
       type:
         - ecn
+      # QUINQUENNIAL stepped cadence (like decennial_years step:10): emits only
+      # 2017, 2022, 2027, ... — no off-census-year 404s.
       year:
-        - '2017'
-        - '2022'
+        type: yearRange
+        start: 2017
+        step: 5
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 3
+        descending: true
       geography: *all_geographies
       # Dynamic NAICS variable resolved based on year - uses hooks.dimensionResolver
       naics_var:
@@ -2661,10 +2669,11 @@ partitionedTables:
       type:
         - saipe
       year:
-        - '2020'
-        - '2021'
-        - '2022'
-        - '2023'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 1
+        descending: true
       geography: *all_geographies
 
     columns:
@@ -2746,9 +2755,11 @@ partitionedTables:
       type:
         - sahie
       year:
-        - '2020'
-        - '2021'
-        - '2022'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 2
+        descending: true
       geography: *all_geographies
 
     columns:
@@ -2825,10 +2836,11 @@ partitionedTables:
       type:
         - bds
       year:
-        - '2020'
-        - '2021'
-        - '2022'
-        - '2023'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 2
+        descending: true
       geography:
         - state
 
@@ -2914,8 +2926,11 @@ partitionedTables:
       type:
         - abs
       year:
-        - '2021'
-        - '2022'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 2
+        descending: true
       geography:
         - state
 
@@ -2998,9 +3013,11 @@ partitionedTables:
       type:
         - nonemp
       year:
-        - '2019'
-        - '2020'
-        - '2021'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 2
+        descending: true
       geography: *all_geographies
 
     columns:
@@ -3300,8 +3317,11 @@ partitionedTables:
       type:
         - lodes
       year:
-        - '2021'
-        - '2022'
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:current}"
+        dataLag: 3
+        descending: true
       state:
         - 'al'
         - 'ak'
