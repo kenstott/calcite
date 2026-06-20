@@ -38,6 +38,7 @@ dependencies {
     // GCP SDK
     implementation 'com.google.cloud:google-cloud-storage:2.29.0'
     implementation 'com.google.cloud:google-cloud-container:2.48.0'
+    implementation 'com.google.cloud:google-cloud-compute:1.44.0'
     
     // AWS SDK
     implementation platform('software.amazon.awssdk:bom:2.21.0')

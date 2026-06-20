@@ -167,7 +167,11 @@ a foreign key — an array can't be a scalar FK).
 - **AWS** — fully populated and verified by unit tests.
 - **Azure** — Resource Graph queries extract VM subnet/VNet, attached managed identity, NSG
   associations, and emit subnet rows. **`wip`: the KQL has not been run against a live tenant.**
-- **GCP** — `wip`: provider implemented but unverified (requires GCP credentials).
+- **GCP** — `wip`: compute + network queries implemented (google-cloud-compute), populating
+  `vpc_id`/`subnet_id` (network/subnetwork self-links) and `native_id`. Type-correct (compiles) but
+  **not run against a live project** (the queries were previously stubbed for "API compatibility").
+  `iam_role` (service-account rows) and the firewall-based SG junction are left as follow-ups, so
+  those columns stay null for GCP — FK-safe.
 
 Because the FK columns are null where a provider hasn't populated them, the constraints simply don't
 bite on those rows — the model stays single regardless of coverage.

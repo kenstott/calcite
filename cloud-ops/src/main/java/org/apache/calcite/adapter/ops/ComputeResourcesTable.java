@@ -209,9 +209,9 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             null, // virtualization type not exposed
             vm.get("HasExternalIP") != null && (Boolean) vm.get("HasExternalIP") ? "assigned" : null,
             null, // private IP would need additional query
-            null, // VPC would need additional query
-            null, // subnet would need additional query
-            null, // IAM role would need additional query
+            vm.get("NetworkId"), // vpc_id: VPC network self-link (matches network_resources.native_id)
+            vm.get("SubnetId"),  // subnet_id: subnetwork self-link
+            null, // iam_role: GCP service-account row emission is a follow-up (left null, FK-safe)
             null, // security groups as JSON
             "Enabled".equals(vm.get("DiskEncryption")),
             false, // monitoring not in basic query

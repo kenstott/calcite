@@ -17,7 +17,20 @@ import org.apache.calcite.adapter.ops.util.CloudOpsPaginationHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsProjectionHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
 
+import com.google.api.gax.core.FixedCredentialsProvider;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.compute.v1.Instance;
+import com.google.cloud.compute.v1.InstancesClient;
+import com.google.cloud.compute.v1.InstancesScopedList;
+import com.google.cloud.compute.v1.InstancesSettings;
+import com.google.cloud.compute.v1.Network;
+import com.google.cloud.compute.v1.NetworkInterface;
+import com.google.cloud.compute.v1.NetworksClient;
+import com.google.cloud.compute.v1.NetworksSettings;
+import com.google.cloud.compute.v1.Subnetwork;
+import com.google.cloud.compute.v1.SubnetworksClient;
+import com.google.cloud.compute.v1.SubnetworksScopedList;
+import com.google.cloud.compute.v1.SubnetworksSettings;
 import com.google.cloud.container.v1.ClusterManagerClient;
 import com.google.cloud.container.v1.ClusterManagerSettings;
 import com.google.cloud.storage.Bucket;
@@ -344,15 +357,119 @@ public class GCPProvider implements CloudProvider {
     return results;
   }
 
+  /** Last path segment of a GCP resource URL (e.g. zone/machineType/region URLs). */
+  private static String lastSegment(String url) {
+    if (url == null || url.isEmpty()) {
+      return url;
+    }
+    int slash = url.lastIndexOf('/');
+    return slash >= 0 ? url.substring(slash + 1) : url;
+  }
+
   @Override public List<Map<String, Object>> queryComputeInstances(List<String> projectIds) {
     List<Map<String, Object>> results = new ArrayList<>();
-    // TODO: Implement compute instances query once API compatibility is resolved
+    for (String projectId : projectIds) {
+      try {
+        InstancesSettings settings = InstancesSettings.newBuilder()
+            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+            .build();
+        try (InstancesClient client = InstancesClient.create(settings)) {
+          for (Map.Entry<String, InstancesScopedList> entry
+              : client.aggregatedList(projectId).iterateAll()) {
+            for (Instance instance : entry.getValue().getInstancesList()) {
+              Map<String, Object> vm = new HashMap<>();
+              vm.put("ProjectId", projectId);
+              vm.put("VMName", instance.getName());
+              vm.put("Zone", lastSegment(instance.getZone()));
+              vm.put("ResourceId", instance.getSelfLink());
+              vm.put("MachineType", lastSegment(instance.getMachineType()));
+              vm.put("Status", instance.getStatus());
+              vm.put("CpuPlatform", instance.getCpuPlatform());
+              vm.put("CreationTimestamp", instance.getCreationTimestamp());
+
+              Map<String, String> labels = instance.getLabelsMap();
+              vm.put("Application", labels.getOrDefault("application",
+                  labels.getOrDefault("app", "Untagged/Orphaned")));
+
+              boolean hasExternalIp = false;
+              if (!instance.getNetworkInterfacesList().isEmpty()) {
+                NetworkInterface nic = instance.getNetworkInterfaces(0);
+                // network / subnetwork URLs equal the Network/Subnetwork selfLinks (native_id).
+                vm.put("NetworkId", nic.getNetwork());
+                vm.put("SubnetId", nic.getSubnetwork());
+                hasExternalIp = !nic.getAccessConfigsList().isEmpty();
+              }
+              vm.put("HasExternalIP", hasExternalIp);
+
+              boolean diskEncryption = instance.getDisksList().stream()
+                  .anyMatch(disk -> disk.hasDiskEncryptionKey());
+              vm.put("DiskEncryption", diskEncryption ? "Enabled" : "Disabled");
+
+              results.add(vm);
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Error querying GCP compute instances in project {}: {}",
+            projectId, e.getMessage());
+      }
+    }
     return results;
   }
 
   @Override public List<Map<String, Object>> queryNetworkResources(List<String> projectIds) {
     List<Map<String, Object>> results = new ArrayList<>();
-    // TODO: Implement network resources query once API compatibility is resolved
+    for (String projectId : projectIds) {
+      // VPC networks
+      try {
+        NetworksSettings settings = NetworksSettings.newBuilder()
+            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+            .build();
+        try (NetworksClient client = NetworksClient.create(settings)) {
+          for (Network network : client.list(projectId).iterateAll()) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("ProjectId", projectId);
+            row.put("NetworkResource", network.getName());
+            row.put("NativeId", network.getSelfLink());
+            row.put("NetworkResourceType", "VPC Network");
+            row.put("ResourceId", network.getSelfLink());
+            row.put("Application", "Untagged/Orphaned");
+            row.put("Configuration",
+                network.getAutoCreateSubnetworks() ? "Auto subnets" : "Custom subnets");
+            results.add(row);
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Error querying GCP networks in project {}: {}", projectId, e.getMessage());
+      }
+
+      // Subnetworks (across all regions)
+      try {
+        SubnetworksSettings settings = SubnetworksSettings.newBuilder()
+            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+            .build();
+        try (SubnetworksClient client = SubnetworksClient.create(settings)) {
+          for (Map.Entry<String, SubnetworksScopedList> entry
+              : client.aggregatedList(projectId).iterateAll()) {
+            for (Subnetwork subnet : entry.getValue().getSubnetworksList()) {
+              Map<String, Object> row = new HashMap<>();
+              row.put("ProjectId", projectId);
+              row.put("NetworkResource", subnet.getName());
+              row.put("NativeId", subnet.getSelfLink());
+              row.put("NetworkResourceType", "Subnet");
+              row.put("ResourceId", subnet.getSelfLink());
+              row.put("Location", lastSegment(subnet.getRegion()));
+              row.put("Application", "Untagged/Orphaned");
+              row.put("SourceRanges", subnet.getIpCidrRange());
+              results.add(row);
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Error querying GCP subnetworks in project {}: {}",
+            projectId, e.getMessage());
+      }
+    }
     return results;
   }
 
