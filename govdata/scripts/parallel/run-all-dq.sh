@@ -58,9 +58,6 @@ while [[ $# -gt 0 ]]; do
       shift
       POOL_EXTRA_ARGS+=(-r "${1:?-r requires an integer (OS reserve MB)}")
       ;;
-    --force)
-      POOL_EXTRA_ARGS+=(--force)
-      ;;
     --local-jar)
       LOCAL_JAR=true
       ;;
@@ -71,7 +68,7 @@ while [[ $# -gt 0 ]]; do
       SLOT_MODE="dq-etl-resume"
       ;;
     --help|-h)
-      echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--force] [--local-jar] [--no-rebuild|--etl-resume]"
+      echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--local-jar] [--no-rebuild|--etl-resume]"
       echo ""
       echo "  Starts run-pool dq-rebuild and monitors for new engine releases."
       echo "  On a new release: kills the pool, downloads the new jar, restarts."
@@ -81,7 +78,6 @@ while [[ $# -gt 0 ]]; do
       echo "  --poll-interval N    Seconds between release polls (default 300)"
       echo "  -j N                 Max concurrent workers (passed to run-pool)"
       echo "  -r N                 OS/MinIO/Docker memory reserve in MB (passed to run-pool)"
-      echo "  --force              Bypass release-window checks (passed to run-pool)"
       echo "  --local-jar          Use the jar already at build/libs/sih-govdata.jar without"
       echo "                       downloading or polling for new releases"
       echo "  --no-rebuild         Run DQ only against existing R2 data (no ETL teardown/re-ingest)"
@@ -133,7 +129,7 @@ POOL_PID=""
 _STOPPING=false
 
 _start_pool() {
-  local cmd=("$SCRIPT_DIR/run-pool-persist.sh" --force)
+  local cmd=("$SCRIPT_DIR/run-pool-persist.sh")
   [ -n "$SCHEMA_FILTER" ] && cmd+=(--schema "$SCHEMA_FILTER")
   [ "${#POOL_EXTRA_ARGS[@]}" -gt 0 ] && cmd+=("${POOL_EXTRA_ARGS[@]}")
   cmd+=("$SLOT_MODE")
