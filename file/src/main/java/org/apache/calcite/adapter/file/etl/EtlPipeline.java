@@ -2396,13 +2396,30 @@ public class EtlPipeline {
     if (config.getDimensions() == null) {
       return false;
     }
-    for (DimensionConfig dim : config.getDimensions().values()) {
-      DimensionType t = dim.getType();
+    for (Map.Entry<String, DimensionConfig> e : config.getDimensions().entrySet()) {
+      DimensionType t = e.getValue().getType();
       if (t == DimensionType.YEAR_RANGE || CalendarPeriodProvider.isPeriodUnit(t)) {
+        return true;
+      }
+      // A dimension declared as a literal LIST/RANGE but NAMED for a calendar period is still a
+      // period dimension. The census economic tables (cbp, saipe, sahie, abs, …) hardcode
+      // `year: ['2020','2021','2022']` instead of a yearRange (the published-year set is fixed, not
+      // a range to "current"). The per-period completion key and the Iceberg self-heal both extract
+      // year/quarter/month by NAME from each combo, so these tables are fully period-capable — but
+      // a type-only check misclassifies them as non-period, which forces a full reprocess every
+      // resume (no completion markers, no self-heal). Match by name so they resume correctly.
+      if (isPeriodDimensionName(e.getKey())) {
         return true;
       }
     }
     return false;
+  }
+
+  /** True if {@code name} is a calendar-period dimension name (year/quarter/month/week/day) — the
+   * names the per-period completion key and backfill-window logic extract from each combo. */
+  private static boolean isPeriodDimensionName(String name) {
+    return "year".equals(name) || "quarter".equals(name) || "month".equals(name)
+        || "week".equals(name) || "day".equals(name);
   }
 
   /**
