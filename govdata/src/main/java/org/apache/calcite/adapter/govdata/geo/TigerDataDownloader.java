@@ -67,6 +67,9 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   /** Days before re-attempting a URL that previously returned HTTP 404. */
   private static final int TIGER_UNAVAILABLE_RETRY_DAYS = 14;
 
+  /** Latest TIGER vintage Census has published, read from the catalog listing; 0 until probed. */
+  private static volatile int cachedLatestVintage = 0;
+
   /** TIGER dataset types for download/conversion. */
   private static final String[] TIGER_TABLES = {
       "states", "counties", "places", "zctas", "census_tracts",
@@ -86,6 +89,91 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    */
   private String getTigerYearPath(int year) {
     return "TIGER" + year;
+  }
+
+  /**
+   * Returns the newest TIGER vintage Census has actually published, read from the directory
+   * listing at {@link #TIGER_BASE_URL} (the listing IS the catalog — there is no JSON API).
+   *
+   * <p>Requesting a vintage directory that does not yet exist (e.g. {@code TIGER2026} before its
+   * autumn release) does not 404 cleanly: the census host accepts the connection and then stalls,
+   * so every missing-file GET burns the full read-timeout × retry budget (observed as ~12-minute
+   * geo workers). Capping the requested year at the latest published vintage avoids issuing those
+   * doomed requests at all.
+   *
+   * <p>Memoized for the JVM. Throws if the listing cannot be read — without the catalog we do not
+   * know the latest vintage, and guessing would reintroduce the stall this method exists to prevent.
+   */
+  static int latestPublishedVintage() throws IOException {
+    int cached = cachedLatestVintage;
+    if (cached != 0) {
+      return cached;
+    }
+    synchronized (TigerDataDownloader.class) {
+      if (cachedLatestVintage != 0) {
+        return cachedLatestVintage;
+      }
+      String listingUrl = TIGER_BASE_URL + "/";
+      HttpURLConnection conn = (HttpURLConnection) URI.create(listingUrl).toURL().openConnection();
+      conn.setConnectTimeout(15000);
+      conn.setReadTimeout(15000);
+      conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+      int status = conn.getResponseCode();
+      if (status != HttpURLConnection.HTTP_OK) {
+        conn.disconnect();
+        throw new IOException("HTTP " + status + " reading TIGER catalog listing " + listingUrl);
+      }
+      int max = 0;
+      java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("TIGER(\\d{4})");
+      try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream())) {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[65536];
+        int len;
+        while ((len = in.read(buf)) != -1) {
+          bos.write(buf, 0, len);
+        }
+        java.util.regex.Matcher matcher = pattern.matcher(bos.toString("UTF-8"));
+        while (matcher.find()) {
+          int yr = Integer.parseInt(matcher.group(1));
+          if (yr > max) {
+            max = yr;
+          }
+        }
+      } finally {
+        conn.disconnect();
+      }
+      if (max == 0) {
+        throw new IOException("No TIGER<year> entries found in catalog listing " + listingUrl);
+      }
+      LOGGER.info("TIGER catalog: latest published vintage is TIGER{}", max);
+      cachedLatestVintage = max;
+      return max;
+    }
+  }
+
+  /** Extracts the TIGER vintage year embedded in a download URL ({@code TIGER<year>}); 0 if none. */
+  private static int parseTigerVintage(String url) {
+    if (url == null) {
+      return 0;
+    }
+    java.util.regex.Matcher matcher =
+        java.util.regex.Pattern.compile("TIGER(\\d{4})").matcher(url);
+    return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+  }
+
+  /**
+   * Caps {@code endYear} at the latest published TIGER vintage so we never issue requests for an
+   * unpublished vintage directory (which stalls rather than 404s — see
+   * {@link #latestPublishedVintage}).
+   */
+  private int capEndYearToCatalog(int endYear) throws IOException {
+    int latest = latestPublishedVintage();
+    if (endYear > latest) {
+      LOGGER.info("TIGER catalog gate: capping requested endYear {} -> {} (latest published "
+          + "vintage); skipping unpublished vintages {}-{}", endYear, latest, latest + 1, endYear);
+      return latest;
+    }
+    return endYear;
   }
 
   /**
@@ -366,6 +454,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @throws IOException If download or file I/O fails
    */
   @Override public void downloadAll(int startYear, int endYear) throws IOException {
+    endYear = capEndYearToCatalog(endYear);
     // Download all datasets year by year to match expected directory structure
     for (int year = startYear; year <= endYear; year++) {
       // Download states
@@ -419,6 +508,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * @throws IOException If conversion or file I/O fails
    */
   @Override public void convertAll(int startYear, int endYear) throws IOException {
+    endYear = capEndYearToCatalog(endYear);
     LOGGER.info("TIGER conversion phase: {} years ({}-{}), {} tables",
         endYear - startYear + 1, startYear, endYear, TIGER_TABLES.length);
 
@@ -530,6 +620,13 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * non-404 IOException.
    */
   private File downloadTigerZip(CacheKey cacheKey, String url, String tempPrefix) throws IOException {
+    int urlVintage = parseTigerVintage(url);
+    if (urlVintage > 0 && urlVintage > latestPublishedVintage()) {
+      LOGGER.info("TIGER catalog gate: skipping {} — vintage {} exceeds latest published vintage {} "
+          + "(an unpublished vintage directory stalls rather than 404s): {}",
+          cacheKey != null ? cacheKey.asString() : "(no key)", urlVintage, cachedLatestVintage, url);
+      return null;
+    }
     if (cacheKey != null && getGeoManifest() != null && getGeoManifest().isUnavailable(cacheKey)) {
       LOGGER.info("Skipping TIGER download — {} marked unavailable (404) within {}-day retry window: {}",
           cacheKey.asString(), TIGER_UNAVAILABLE_RETRY_DAYS, url);
