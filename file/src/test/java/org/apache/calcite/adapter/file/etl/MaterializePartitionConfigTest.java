@@ -205,4 +205,23 @@ class MaterializePartitionConfigTest {
     // No valueSource declared = identity projection (each partition column sources from itself).
     assertTrue(config.getValueSource().isEmpty());
   }
+
+  // canonicalPartitionValue: the self-heal match normalizer that fixes the cftc month=1 vs month=01
+  // reprocessing bug (Iceberg integer toString "1" must match the zero-padded combo dimension "01").
+  @Test void testCanonicalStripsLeadingZerosOnNumericValues() {
+    assertEquals("1", EtlPipeline.canonicalPartitionValue("01"));
+    assertEquals("1", EtlPipeline.canonicalPartitionValue("1"));
+    assertEquals("7", EtlPipeline.canonicalPartitionValue("007"));
+    assertEquals("12", EtlPipeline.canonicalPartitionValue("12"));
+    assertEquals("2026", EtlPipeline.canonicalPartitionValue("2026"));
+  }
+
+  @Test void testCanonicalKeepsZeroAndNonNumericVerbatim() {
+    assertEquals("0", EtlPipeline.canonicalPartitionValue("0"));
+    assertEquals("0", EtlPipeline.canonicalPartitionValue("00"));
+    assertEquals("RATES", EtlPipeline.canonicalPartitionValue("RATES"));
+    assertEquals("2024-01", EtlPipeline.canonicalPartitionValue("2024-01"));
+    assertEquals("", EtlPipeline.canonicalPartitionValue(""));
+    assertNull(EtlPipeline.canonicalPartitionValue(null));
+  }
 }

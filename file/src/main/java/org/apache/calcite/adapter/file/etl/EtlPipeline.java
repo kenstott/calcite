@@ -773,8 +773,25 @@ public class EtlPipeline {
             LOGGER.info("Skip-if-materialized: querying Iceberg table '{}' for existing partitions",
                 targetTableId);
             try {
-              existingIcebergPartitions =
+              Set<Map<String, String>> rawExisting =
                   IcebergMaterializationWriter.getExistingPartitions(catalogConfig, targetTableId, icebergPartitionColumns);
+              // Project each existing partition to the partition columns with canonicalized values
+              // so the contains() check below is robust to int-vs-zero-padded-string formatting.
+              Set<Map<String, String>> canonicalExisting =
+                  new java.util.LinkedHashSet<Map<String, String>>();
+              for (Map<String, String> p : rawExisting) {
+                Map<String, String> key = new LinkedHashMap<String, String>();
+                for (String col : icebergPartitionColumns) {
+                  String val = p.get(col);
+                  if (val != null) {
+                    key.put(col, canonicalPartitionValue(val));
+                  }
+                }
+                if (!key.isEmpty()) {
+                  canonicalExisting.add(key);
+                }
+              }
+              existingIcebergPartitions = canonicalExisting;
             } catch (Exception e) {
               LOGGER.warn("Skip-if-materialized: failed to query Iceberg partitions for '{}': {}",
                   targetTableId, e.getMessage());
@@ -850,7 +867,7 @@ public class EtlPipeline {
               String srcVar = icebergValueSource.containsKey(col) ? icebergValueSource.get(col) : col;
               String val = sampleCombo.get(srcVar);
               if (val != null) {
-                icebergKey.put(col, val);
+                icebergKey.put(col, canonicalPartitionValue(val));
               }
             }
             if (existingIcebergPartitions.contains(icebergKey)) {
@@ -2283,6 +2300,31 @@ public class EtlPipeline {
    * @return The filterUnprocessed result from the quick check (for reuse by Phase 2),
    *         or null if the method returned early without filtering
    */
+  /**
+   * Canonicalize a partition value so the self-heal match is robust to the formatting gap between a
+   * combo dimension (a zero-padded string like month {@code "01"}) and the Iceberg manifest value
+   * (an integer whose {@code toString()} drops the zero, {@code "1"}). A purely-numeric value is
+   * compared by magnitude (leading zeros stripped); every other value is compared verbatim. Without
+   * this, every table with an integer month/day partition column flags all partitions "stale" and
+   * reprocesses in full on every resume (the cftc {@code month=1} vs {@code month=01} bug).
+   */
+  static String canonicalPartitionValue(String v) {
+    if (v == null || v.isEmpty()) {
+      return v;
+    }
+    for (int i = 0; i < v.length(); i++) {
+      char c = v.charAt(i);
+      if (c < '0' || c > '9') {
+        return v;
+      }
+    }
+    int start = 0;
+    while (start < v.length() - 1 && v.charAt(start) == '0') {
+      start++;
+    }
+    return v.substring(start);
+  }
+
   private Set<Integer> rebuildCacheFromIceberg(String pipelineName, EtlPipelineConfig config,
       List<Map<String, String>> combinations) {
 
@@ -2347,7 +2389,7 @@ public class EtlPipeline {
       for (String col : partitionColumns) {
         String val = existing.get(col);
         if (val != null) {
-          partitionOnly.put(col, val);
+          partitionOnly.put(col, canonicalPartitionValue(val));
         }
       }
       existingPartitionKeys.add(partitionOnly);
@@ -2375,7 +2417,7 @@ public class EtlPipeline {
         String srcVar = valueSource.containsKey(col) ? valueSource.get(col) : col;
         String val = combo.get(srcVar);
         if (val != null) {
-          comboKey.put(col, val);
+          comboKey.put(col, canonicalPartitionValue(val));
         }
       }
       if (existingPartitionKeys.contains(comboKey)) {
