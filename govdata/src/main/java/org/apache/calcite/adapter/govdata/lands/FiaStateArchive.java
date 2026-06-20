@@ -59,6 +59,15 @@ final class FiaStateArchive {
   private static final int READ_TIMEOUT_MS = 1_800_000; // 30 min ceiling per state archive
 
   /**
+   * Reuse a cached archive without any network round-trip if it is younger than this. The FIA
+   * datamart server ignores {@code If-Modified-Since} (it always answers 200), so the conditional
+   * GET below would otherwise re-download every state on every run (~100 MB each). FIA datamarts
+   * refresh only ~annually, so a short client-side TTL skips the redundant pulls while still
+   * re-checking periodically.
+   */
+  private static final long CACHE_TTL_MS = 7L * 24 * 60 * 60 * 1000;
+
+  /**
    * Per-state download locks. Distinct states download concurrently; concurrent
    * transformers requesting the same state share a single download.
    */
@@ -95,6 +104,11 @@ final class FiaStateArchive {
       long cachedMtime = -1L;
       if (sp.exists(target)) {
         cachedMtime = sp.getMetadata(target).getLastModified();
+        if (System.currentTimeMillis() - cachedMtime < CACHE_TTL_MS) {
+          LOGGER.info("FIA {} archive cache fresh (within {}-day TTL), reusing without refetch: {}",
+              st, CACHE_TTL_MS / 86_400_000L, target);
+          return target;
+        }
       }
       HttpURLConnection conn =
           (HttpURLConnection) URI.create(url).toURL().openConnection();

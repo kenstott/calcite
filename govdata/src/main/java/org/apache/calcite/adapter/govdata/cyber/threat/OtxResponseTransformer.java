@@ -13,6 +13,8 @@ package org.apache.calcite.adapter.govdata.cyber.threat;
 import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
+import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +26,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -75,6 +79,7 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
   private static final int TIMEOUT_MS = 60_000;
   private static final long RATE_DELAY_MS = 500L;
+  private static final long OTX_CACHE_TTL_MS = 7L * 24 * 60 * 60 * 1000;
 
   @Override public String transform(String response, RequestContext context) {
     // Read the key from the request context's headers — the framework resolves the source's
@@ -86,6 +91,39 @@ public class OtxResponseTransformer implements ResponseTransformer {
       // A required credential being absent is a hard failure, never a silent skip.
       throw new IllegalStateException("OTX: CYBER_OTX_API_KEY is required but missing "
           + "(threat_pulses source X-OTX-API-KEY resolved empty).");
+    }
+
+    // GOVDATA_DQ is an allowed global run-flag exception — set cross-schema by the run scripts.
+    boolean dqMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_DQ"));
+    String cacheMode = dqMode ? "dq" : "full";
+
+    // Freshness-cache: reuse the assembled pulse population within the TTL to avoid
+    // re-paginating the full OTX subscribed API (~31 min) on every run.
+    StorageProvider sp = StorageProviderFactory.createForGovDataCache();
+    String cachePath = sp.resolvePath(
+        sp.resolvePath(StorageProviderFactory.getGovDataCacheDir(), "cyber_threat"),
+        "otx_pulses_" + cacheMode + ".json");
+
+    try {
+      if (sp.exists(cachePath)) {
+        long age = System.currentTimeMillis() - sp.getMetadata(cachePath).getLastModified();
+        if (age < OTX_CACHE_TTL_MS) {
+          try (InputStream cacheIn = sp.openInputStream(cachePath)) {
+            ByteArrayOutputStream cacheBaos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = cacheIn.read(buf)) != -1) {
+              cacheBaos.write(buf, 0, n);
+            }
+            byte[] cached = cacheBaos.toByteArray();
+            LOGGER.info("OTX: reusing cached pulse population within {}-day TTL ({} bytes): {}",
+                OTX_CACHE_TTL_MS / 86400000L, cached.length, cachePath);
+            return new String(cached, StandardCharsets.UTF_8);
+          }
+        }
+      }
+    } catch (IOException e) {
+      LOGGER.debug("OTX: cache read failed ({}), falling through to live pull", e.getMessage());
     }
 
     try {
@@ -100,8 +138,6 @@ public class OtxResponseTransformer implements ResponseTransformer {
       // dqRowLimit — so it never also applies the production incremental window (which would
       // collapse the sample to a handful of recently-modified pulses and fail row-count/variety).
       String baseUrl = context.getUrl();
-      // GOVDATA_DQ is an allowed global run-flag exception — set cross-schema by the run scripts.
-      boolean dqMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_DQ"));
       // Delta-days is value config — a model operand (like nvdDeltaDays), read by path.
       String deltaDaysEnv = dqMode ? null : ModelOperand.getString("cyber_threat.otxDeltaDays");
       if (dqMode) {
@@ -134,7 +170,9 @@ public class OtxResponseTransformer implements ResponseTransformer {
       if (firstPage == null) {
         gen.writeEndArray();
         gen.close();
-        return baos.toString("UTF-8");
+        String emptyResult = baos.toString("UTF-8");
+        writeCacheQuietly(sp, cachePath, emptyResult);
+        return emptyResult;
       }
 
       String nextUrl = processPage(firstPage, gen, count);
@@ -157,11 +195,22 @@ public class OtxResponseTransformer implements ResponseTransformer {
       gen.close();
 
       LOGGER.info("OTX: returning {} threat_pulses rows", count[0]);
-      return baos.toString("UTF-8");
+      String assembled = baos.toString("UTF-8");
+      writeCacheQuietly(sp, cachePath, assembled);
+      return assembled;
 
     } catch (Exception e) {
       LOGGER.error("OTX: failed: {}", e.getMessage());
       throw new RuntimeException("Failed to process OTX pulses: " + e.getMessage(), e);
+    }
+  }
+
+  /** Writes the assembled result to the cache, logging debug on any failure (never throws). */
+  private static void writeCacheQuietly(StorageProvider sp, String cachePath, String assembled) {
+    try {
+      sp.writeFile(cachePath, assembled.getBytes(StandardCharsets.UTF_8));
+    } catch (Exception e) {
+      LOGGER.debug("OTX: cache write failed ({}), continuing", e.getMessage());
     }
   }
 
