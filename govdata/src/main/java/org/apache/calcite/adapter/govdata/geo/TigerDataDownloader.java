@@ -64,6 +64,9 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   /** Cached schema configuration for download URLs. */
   private static JsonNode geoSchemaConfig = null;
 
+  /** Days before re-attempting a URL that previously returned HTTP 404. */
+  private static final int TIGER_UNAVAILABLE_RETRY_DAYS = 14;
+
   /** TIGER dataset types for download/conversion. */
   private static final String[] TIGER_TABLES = {
       "states", "counties", "places", "zctas", "census_tracts",
@@ -520,6 +523,36 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   }
 
   /**
+   * Downloads a TIGER zip via {@link #downloadZipToTempDir}, gated by the geo manifest's negative
+   * cache: a file that previously returned HTTP 404 (not yet published) is not re-requested until
+   * TIGER_UNAVAILABLE_RETRY_DAYS have elapsed, and a fresh 404 is recorded rather than silently
+   * retried every run. Returns null when unavailable/404 (caller should skip); rethrows any
+   * non-404 IOException.
+   */
+  private File downloadTigerZip(CacheKey cacheKey, String url, String tempPrefix) throws IOException {
+    if (cacheKey != null && getGeoManifest() != null && getGeoManifest().isUnavailable(cacheKey)) {
+      LOGGER.info("Skipping TIGER download — {} marked unavailable (404) within {}-day retry window: {}",
+          cacheKey.asString(), TIGER_UNAVAILABLE_RETRY_DAYS, url);
+      return null;
+    }
+    try {
+      return downloadZipToTempDir(url, null, tempPrefix);
+    } catch (IOException e) {
+      if (e.getMessage() != null && e.getMessage().contains("404")) {
+        if (cacheKey != null && getGeoManifest() != null) {
+          getGeoManifest().markUnavailable(cacheKey, TIGER_UNAVAILABLE_RETRY_DAYS,
+              "HTTP 404 - not published: " + url);
+          cacheManifest.save(this.operatingDirectory);
+        }
+        LOGGER.warn("TIGER data not available (404) — backing off {} days: {}",
+            TIGER_UNAVAILABLE_RETRY_DAYS, url);
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  /**
    * Download state boundary shapefiles for all configured years.
    */
   public void downloadStates() throws IOException {
@@ -600,7 +633,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     LOGGER.info("Downloading states shapefile for year {} from: {}", year, url);
 
     try {
-      File tempDir = downloadZipToTempDir(url, null, "tiger-states-" + year);
+      java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+      negCacheParams.put("year", String.valueOf(year));
+      CacheKey negCacheKey = new CacheKey("states", negCacheParams);
+      File tempDir = downloadTigerZip(negCacheKey, url, "tiger-states-" + year);
+      if (tempDir == null) return null;
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -714,7 +751,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     try {
       // Download and extract to temp directory
-      File tempDir = downloadZipToTempDir(url, null, "tiger-counties-" + year);
+      java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+      negCacheParams.put("year", String.valueOf(year));
+      CacheKey negCacheKey = new CacheKey("counties", negCacheParams);
+      File tempDir = downloadTigerZip(negCacheKey, url, "tiger-counties-" + year);
+      if (tempDir == null) return null;
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -822,7 +863,12 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     LOGGER.info("Downloading places shapefile for state {} from: {}", stateFips, url);
 
-    File tempDir = downloadZipToTempDir(url, null, "tiger-places-" + stateFips + "-" + year);
+    java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+    negCacheParams.put("state", stateFips);
+    negCacheParams.put("year", String.valueOf(year));
+    CacheKey negCacheKey = new CacheKey("places", negCacheParams);
+    File tempDir = downloadTigerZip(negCacheKey, url, "tiger-places-" + stateFips + "-" + year);
+    if (tempDir == null) return null;
 
     // Upload extracted files to cache storage
     uploadDirectoryToStorage(tempDir, cachePath);
@@ -944,7 +990,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     try {
       // Download and extract to temp directory
-      File tempDir = downloadZipToTempDir(url, null, "tiger-zctas-" + year);
+      java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+      negCacheParams.put("year", String.valueOf(year));
+      CacheKey negCacheKey = new CacheKey("zctas", negCacheParams);
+      File tempDir = downloadTigerZip(negCacheKey, url, "tiger-zctas-" + year);
+      if (tempDir == null) return null;
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -1057,7 +1107,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     try {
       LOGGER.info("Downloading CD shapefile for year {} (Congress {})", year, congressNum);
 
-      File tempDir = downloadZipToTempDir(url, null, "tiger-cd-" + year);
+      java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+      negCacheParams.put("year", String.valueOf(year));
+      CacheKey negCacheKey = new CacheKey("congressional_districts", negCacheParams);
+      File tempDir = downloadTigerZip(negCacheKey, url, "tiger-cd-" + year);
+      if (tempDir == null) return null;
 
       // Upload extracted files to cache storage
       uploadDirectoryToStorage(tempDir, cachePath);
@@ -1270,7 +1324,12 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       LOGGER.info("Downloading census tracts shapefile for state {} year {} from: {}", fips, year, url);
 
       try {
-        File stateDir = downloadZipToTempDir(url, null, "tiger-census_tracts-" + fips + "-" + year);
+        java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+        negCacheParams.put("state", fips);
+        negCacheParams.put("year", String.valueOf(year));
+        CacheKey negCacheKey = new CacheKey("census_tracts", negCacheParams);
+        File stateDir = downloadTigerZip(negCacheKey, url, "tiger-census_tracts-" + fips + "-" + year);
+        if (stateDir == null) continue;
         hasAnyDownloads = true;
 
         // Upload extracted files to cache storage for this state
@@ -1413,7 +1472,12 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       LOGGER.info("Downloading block groups shapefile for state {} year {} from: {}", fips, year, url);
 
       try {
-        File stateDir = downloadZipToTempDir(url, null, "tiger-block_groups-" + fips + "-" + year);
+        java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+        negCacheParams.put("state", fips);
+        negCacheParams.put("year", String.valueOf(year));
+        CacheKey negCacheKey = new CacheKey("block_groups", negCacheParams);
+        File stateDir = downloadTigerZip(negCacheKey, url, "tiger-block_groups-" + fips + "-" + year);
+        if (stateDir == null) continue;
         hasAnyDownloads = true;
 
         // Upload extracted files to cache storage for this state
@@ -1522,7 +1586,11 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
     LOGGER.info("Downloading CBSA shapefile for year {} from: {}", year, url);
 
-    File tempDir = downloadZipToTempDir(url, null, "tiger-cbsa-" + year);
+    java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+    negCacheParams.put("year", String.valueOf(year));
+    CacheKey negCacheKey = new CacheKey("cbsa", negCacheParams);
+    File tempDir = downloadTigerZip(negCacheKey, url, "tiger-cbsa-" + year);
+    if (tempDir == null) return null;
 
     // Upload extracted files to cache storage
     uploadDirectoryToStorage(tempDir, cachePath);
@@ -1685,7 +1753,13 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
         LOGGER.info("Downloading school district shapefile for state {} type {} year {} from: {}", fips, type, year, url);
 
         try {
-          File stateDir = downloadZipToTempDir(url, null, "tiger-school_districts-" + fips + "-" + type + "-" + year);
+          java.util.Map<String, String> negCacheParams = new java.util.HashMap<>();
+          negCacheParams.put("state", fips);
+          negCacheParams.put("year", String.valueOf(year));
+          negCacheParams.put("type", type);
+          CacheKey negCacheKey = new CacheKey("school_districts", negCacheParams);
+          File stateDir = downloadTigerZip(negCacheKey, url, "tiger-school_districts-" + fips + "-" + type + "-" + year);
+          if (stateDir == null) continue;
           stateHasDownloads = true;
           hasAnyDownloads = true;
           // Upload to cache for this state
