@@ -97,6 +97,7 @@ include(
     "askamerica-engine",
     "trino-calcite-base",
     "trino-calcite",
+    "trino-cloudops",
     "trino-file",
     "trino-sharepoint",
     "trino-splunk"
