@@ -800,6 +800,7 @@ public class AWSProvider implements CloudProvider {
 
           networkData.put("AccountId", accountId);
           networkData.put("NetworkResource", vpc.vpcId());
+          networkData.put("NativeId", vpc.vpcId());
           networkData.put("NetworkResourceType", "VPC");
           networkData.put("Region", region.toString());
           networkData.put("ResourceId",
@@ -829,6 +830,7 @@ public class AWSProvider implements CloudProvider {
 
           networkData.put("AccountId", accountId);
           networkData.put("NetworkResource", sg.groupId());
+          networkData.put("NativeId", sg.groupId());
           networkData.put("NetworkResourceType", "Security Group");
           networkData.put("Region", region.toString());
           networkData.put("ResourceId",
@@ -863,6 +865,7 @@ public class AWSProvider implements CloudProvider {
 
           networkData.put("AccountId", accountId);
           networkData.put("NetworkResource", address.allocationId());
+          networkData.put("NativeId", address.allocationId());
           networkData.put("NetworkResourceType", "Elastic IP");
           networkData.put("Region", region.toString());
           networkData.put("ResourceId", address.allocationId());
@@ -893,6 +896,7 @@ public class AWSProvider implements CloudProvider {
 
           networkData.put("AccountId", accountId);
           networkData.put("NetworkResource", subnet.subnetId());
+          networkData.put("NativeId", subnet.subnetId());
           networkData.put("NetworkResourceType", "Subnet");
           networkData.put("Region", region.toString());
           networkData.put("ResourceId",

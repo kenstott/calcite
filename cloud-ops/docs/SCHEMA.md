@@ -136,9 +136,12 @@ It carries the cloud-native globally-unique identifier: an AWS ARN (`arn:aws:ec2
 an Azure Resource ID, or a GCP resource ID/self-link. `(cloud_provider, account_id, <name column>)` is
 an equivalent natural key (not separately declared).
 
-**Additional declared key:** `network_resources` also declares `(cloud_provider, network_resource)` —
-the bare native ID (e.g. `vpc-…`, `sg-…`) scoped by provider. This is the target of the one foreign
-key below.
+**The cross-cloud join key — `native_id`.** `network_resources` carries a `native_id` column holding
+each provider's stable unique identifier (AWS bare id `vpc-…`/`sg-…`/`subnet-…`; Azure ARM resource
+ID; GCP self-link/ID), distinct from the human-friendly `network_resource` (display name). It declares
+`(cloud_provider, native_id)` as a unique key — the consistent target that the compute foreign keys
+reference in every cloud. (`network_resource` is a name and isn't unique across providers/resource
+groups, so it can't be the join key.)
 
 **Common dimension:** every row carries `(cloud_provider, account_id)`. There is no physical accounts
 table; `CLOUD_ACCOUNT` in the ERD is a *logical hub* representing the subscription (Azure) / account
@@ -149,11 +152,11 @@ to every cloud's rows uniformly and only bite where the source column is populat
 
 | From → To | Column mapping | Notes |
 |-----------|----------------|-------|
-| `compute_resources` → `network_resources` | `(cloud_provider, vpc_id)` → `(cloud_provider, network_resource)` | `vpc_id` (bare `vpc-…` / VNet / VPC-network) equi-matches `network_resource`; null where not extracted |
-| `compute_resources` → `network_resources` | `(cloud_provider, subnet_id)` → `(cloud_provider, network_resource)` | subnet rows now emitted (`network_resource_type = 'Subnet'`) |
+| `compute_resources` → `network_resources` | `(cloud_provider, vpc_id)` → `(cloud_provider, native_id)` | `vpc_id` holds the VPC/VNet native id; null where not extracted |
+| `compute_resources` → `network_resources` | `(cloud_provider, subnet_id)` → `(cloud_provider, native_id)` | subnet rows now emitted (`network_resource_type = 'Subnet'`) |
 | `compute_resources` → `iam_resources` | `iam_role` → `resource_id` | `iam_role` holds the attached identity's full ID (AWS instance-profile ARN / Azure managed identity / GCP service account) |
 | `compute_security_groups` → `compute_resources` | `compute_resource_id` → `resource_id` | junction side: the instance ARN |
-| `compute_security_groups` → `network_resources` | `(cloud_provider, security_group_id)` → `(cloud_provider, network_resource)` | junction side: the security-group native ID |
+| `compute_security_groups` → `network_resources` | `(cloud_provider, security_group_id)` → `(cloud_provider, native_id)` | junction side: the security-group native id |
 
 The many-to-many compute↔security-group relationship is modeled by the **`compute_security_groups`
 junction table** (the `compute_resources.security_groups` JSON array remains for convenience but is not
@@ -288,6 +291,7 @@ erDiagram
         varchar resource_id PK
         varchar cloud_provider FK
         varchar account_id FK
+        varchar native_id
         varchar network_resource
         varchar network_resource_type
         varchar application
@@ -511,7 +515,8 @@ Networking objects — VNets/VPCs, subnets, security groups/NSGs, etc. The kind 
 |--------|------|:---:|-------------|
 | `cloud_provider` | VARCHAR | | `azure` / `aws` / `gcp` |
 | `account_id` | VARCHAR | | Subscription / account / project ID |
-| `network_resource` | VARCHAR | | Resource name |
+| `network_resource` | VARCHAR | | Resource display name |
+| `native_id` | VARCHAR | 🔑 | Provider-native stable id (AWS `vpc-…`/`sg-…`/`subnet-…`, Azure ARM id, GCP self-link); cross-cloud join key, part of `(cloud_provider, native_id)` |
 | `network_resource_type` | VARCHAR | | Kind: VPC/VNet, Subnet, SecurityGroup/NSG, … |
 | `application` | VARCHAR | | `Application` tag/label |
 | `region` | VARCHAR | | Region / location |

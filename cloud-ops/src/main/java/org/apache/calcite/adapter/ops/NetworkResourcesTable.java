@@ -41,16 +41,15 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
   }
 
   /**
-   * The native resource identifier is unique per provider, so {@code (cloud_provider,
-   * network_resource)} is a logical unique key. It is the target of the
-   * {@code compute_resources.vpc_id} foreign key (compute stores the bare {@code vpc-...} ID, which
-   * matches {@code network_resource}, not the ARN in {@code resource_id}).
+   * The provider-native identifier is unique per provider, so {@code (cloud_provider, native_id)} is
+   * a logical unique key. It is the consistent cross-cloud target of the compute foreign keys (which
+   * store the same native identifier — AWS bare id, Azure ARM id, GCP self-link/id).
    */
   @Override protected List<ImmutableBitSet> additionalKeys(List<String> columnNames) {
     final int cloudProvider = columnNames.indexOf("cloud_provider");
-    final int networkResource = columnNames.indexOf("network_resource");
-    if (cloudProvider >= 0 && networkResource >= 0) {
-      return Collections.singletonList(ImmutableBitSet.of(cloudProvider, networkResource));
+    final int nativeId = columnNames.indexOf("native_id");
+    if (cloudProvider >= 0 && nativeId >= 0) {
+      return Collections.singletonList(ImmutableBitSet.of(cloudProvider, nativeId));
     }
     return Collections.emptyList();
   }
@@ -66,6 +65,9 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
         .add("region", SqlTypeName.VARCHAR)
         .add("resource_group", SqlTypeName.VARCHAR)
         .add("resource_id", SqlTypeName.VARCHAR)
+        // Provider-native stable identifier (AWS bare id, Azure ARM id, GCP self-link/id). The
+        // consistent cross-cloud join key referenced by compute_resources / compute_security_groups.
+        .add("native_id", SqlTypeName.VARCHAR)
 
         // Configuration facts
         .add("configuration", SqlTypeName.VARCHAR)
@@ -105,6 +107,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("Location"),
             network.get("ResourceGroup"),
             network.get("ResourceId"),
+            network.get("NativeId"),
             network.get("Configuration"),
             null, // CIDR block would need parsing from configuration
             null, // state not in query
@@ -143,6 +146,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("Location"),
             null, // resource group not applicable
             network.get("ResourceId"),
+            network.get("NativeId"),
             network.get("Configuration"),
             network.get("SourceRanges"), // for firewall rules
             null, // state not applicable
@@ -181,6 +185,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("Region"),
             null, // resource group not applicable
             network.get("ResourceId"),
+            network.get("NativeId"),
             network.get("GroupName") != null ?
                 "Name: " + network.get("GroupName") + ", Description: " + network.get("Description") :
                 network.get("Configuration"),

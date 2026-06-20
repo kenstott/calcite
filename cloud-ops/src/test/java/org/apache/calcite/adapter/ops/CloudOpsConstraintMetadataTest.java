@@ -83,9 +83,9 @@ public class CloudOpsConstraintMetadataTest {
     List<String> cols = columns(table);
     Statistic stat = table.getStatistic();
     ImmutableBitSet nativeKey =
-        ImmutableBitSet.of(cols.indexOf("cloud_provider"), cols.indexOf("network_resource"));
+        ImmutableBitSet.of(cols.indexOf("cloud_provider"), cols.indexOf("native_id"));
     assertTrue(stat.getKeys().contains(nativeKey),
-        "network_resources should declare (cloud_provider, network_resource) as a unique key");
+        "network_resources should declare (cloud_provider, native_id) as a unique key");
     assertTrue(stat.isKey(nativeKey));
   }
 
@@ -105,7 +105,7 @@ public class CloudOpsConstraintMetadataTest {
         fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "network_resources"))
             && fk.getColumnPairs().equals(Arrays.asList(
                 IntPair.of(srcCols.indexOf("cloud_provider"), netCols.indexOf("cloud_provider")),
-                IntPair.of(srcCols.indexOf("vpc_id"), netCols.indexOf("network_resource"))))),
+                IntPair.of(srcCols.indexOf("vpc_id"), netCols.indexOf("native_id"))))),
         "vpc_id FK");
 
     // subnet_id -> network_resources(cloud_provider, network_resource)
@@ -113,7 +113,7 @@ public class CloudOpsConstraintMetadataTest {
         fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "network_resources"))
             && fk.getColumnPairs().equals(Arrays.asList(
                 IntPair.of(srcCols.indexOf("cloud_provider"), netCols.indexOf("cloud_provider")),
-                IntPair.of(srcCols.indexOf("subnet_id"), netCols.indexOf("network_resource"))))),
+                IntPair.of(srcCols.indexOf("subnet_id"), netCols.indexOf("native_id"))))),
         "subnet_id FK");
 
     // iam_role -> iam_resources(resource_id)
@@ -152,7 +152,7 @@ public class CloudOpsConstraintMetadataTest {
         fk.getTargetQualifiedName().equals(Arrays.asList("cloud", "network_resources"))
             && fk.getColumnPairs().equals(Arrays.asList(
                 IntPair.of(cols.indexOf("cloud_provider"), netCols.indexOf("cloud_provider")),
-                IntPair.of(cols.indexOf("security_group_id"), netCols.indexOf("network_resource"))))),
+                IntPair.of(cols.indexOf("security_group_id"), netCols.indexOf("native_id"))))),
         "security_group_id FK");
   }
 

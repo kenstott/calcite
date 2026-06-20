@@ -65,12 +65,12 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
 
     final int srcProvider = columnNames.indexOf("cloud_provider");
     final int tgtProvider = networkColumns.indexOf("cloud_provider");
-    final int tgtNetworkResource = networkColumns.indexOf("network_resource");
+    final int tgtNativeId = networkColumns.indexOf("native_id");
 
     final List<RelReferentialConstraint> fks = new ArrayList<>();
 
-    addNetworkFk(fks, columnNames.indexOf("vpc_id"), srcProvider, tgtProvider, tgtNetworkResource);
-    addNetworkFk(fks, columnNames.indexOf("subnet_id"), srcProvider, tgtProvider, tgtNetworkResource);
+    addNetworkFk(fks, columnNames.indexOf("vpc_id"), srcProvider, tgtProvider, tgtNativeId);
+    addNetworkFk(fks, columnNames.indexOf("subnet_id"), srcProvider, tgtProvider, tgtNativeId);
 
     final int srcIamRole = columnNames.indexOf("iam_role");
     final int tgtIamResourceId = iamColumns.indexOf("resource_id");
@@ -85,8 +85,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
   }
 
   private void addNetworkFk(List<RelReferentialConstraint> fks, int srcNativeId,
-      int srcProvider, int tgtProvider, int tgtNetworkResource) {
-    if (srcNativeId < 0 || srcProvider < 0 || tgtProvider < 0 || tgtNetworkResource < 0) {
+      int srcProvider, int tgtProvider, int tgtNativeId) {
+    if (srcNativeId < 0 || srcProvider < 0 || tgtProvider < 0 || tgtNativeId < 0) {
       return;
     }
     fks.add(RelReferentialConstraintImpl.of(
@@ -94,7 +94,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
         Arrays.asList("cloud", "network_resources"),
         Arrays.asList(
             IntPair.of(srcProvider, tgtProvider),
-            IntPair.of(srcNativeId, tgtNetworkResource))));
+            IntPair.of(srcNativeId, tgtNativeId))));
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {

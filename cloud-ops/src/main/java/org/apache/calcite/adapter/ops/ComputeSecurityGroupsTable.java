@@ -95,14 +95,14 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
     final int srcProvider = columnNames.indexOf("cloud_provider");
     final int srcSecurityGroupId = columnNames.indexOf("security_group_id");
     final int tgtProvider = networkColumns.indexOf("cloud_provider");
-    final int tgtNetworkResource = networkColumns.indexOf("network_resource");
-    if (srcProvider >= 0 && srcSecurityGroupId >= 0 && tgtProvider >= 0 && tgtNetworkResource >= 0) {
+    final int tgtNativeId = networkColumns.indexOf("native_id");
+    if (srcProvider >= 0 && srcSecurityGroupId >= 0 && tgtProvider >= 0 && tgtNativeId >= 0) {
       fks.add(RelReferentialConstraintImpl.of(
           Arrays.asList("cloud", "compute_security_groups"),
           Arrays.asList("cloud", "network_resources"),
           Arrays.asList(
               IntPair.of(srcProvider, tgtProvider),
-              IntPair.of(srcSecurityGroupId, tgtNetworkResource))));
+              IntPair.of(srcSecurityGroupId, tgtNativeId))));
     }
 
     return fks;
