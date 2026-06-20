@@ -97,6 +97,16 @@ public class S3StorageProvider implements StorageProvider {
       clientConfig.setConnectionTimeout(60 * 1000);     // 60 seconds for TCP handshake
       clientConfig.setConnectionMaxIdleMillis(60_000);  // Close idle connections after 1 minute
       clientConfig.setMaxConnections(200);              // Support heavy ETL workloads
+      // Retry transient failures — 5xx, throttling, AND connection-level errors such as
+      // "Connection reset" — with the SDK's exponential backoff. Works for any S3 server
+      // (MinIO, R2, AWS). The default of 3 is too few under heavy concurrent ETL load.
+      clientConfig.setMaxErrorRetry(8);
+      // Re-validate a pooled connection that has been idle >2s before reusing it. Under heavy
+      // concurrent load the server (e.g. MinIO) silently drops idle keep-alive sockets; reusing a
+      // stale one throws "Connection reset" — the root cause seen on cftc. Validation refreshes the
+      // socket instead of failing the request (and is what makes the retries above effective rather
+      // than immediately re-resetting on the same dead connection).
+      clientConfig.setValidateAfterInactivityMillis(2000);
 
       AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
           .withClientConfiguration(clientConfig);
@@ -437,8 +447,12 @@ public class S3StorageProvider implements StorageProvider {
       LOGGER.debug("S3 exists check: {} -> {}", path, exists);
       return exists;
     } catch (Exception e) {
-      LOGGER.warn("S3 exists check failed for {}: {} - assuming does not exist", path, e.getMessage());
-      return false;
+      // Do NOT silently assume the object is absent. A transient/connection error (e.g. a
+      // "Connection reset" that survived the SDK retries) would otherwise be read as "not cached" —
+      // causing a needless re-download of an already-cached file and polluting the pipeline's error
+      // list (which then blocks the table-completion marker, the cftc reprocess-forever trap).
+      // Surface it so the caller retries/fails instead of bypassing the cache.
+      throw new IOException("S3 exists check failed for " + path, e);
     }
   }
 
