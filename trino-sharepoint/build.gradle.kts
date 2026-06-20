@@ -40,8 +40,10 @@ tasks.matching {
 dependencies {
     compileOnly("io.trino:trino-spi:$trinoVersion")
 
-    // Generic Calcite connector (CalciteClient) + the JDBC framework (transitively, via its api dep).
-    implementation(project(":trino-calcite"))
+    // Shared connector library (CalciteClient/AutoCommitConnectionFactory) + the JDBC framework
+    // (transitively, via its api dep). NOT the trino-calcite plugin: depending on the SPI-less base
+    // keeps the `calcite` connector out of this plugin's zip so only `sharepoint` is registered.
+    implementation(project(":trino-calcite-base"))
 
     // The backing driver: org.apache.calcite.adapter.sharepoint.SharePointListDriver. Bundled.
     implementation(project(":sharepoint-list"))

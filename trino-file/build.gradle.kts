@@ -15,9 +15,10 @@
  * limitations under the License.
  */
 
-// Trino connector for Splunk. A thin wrapper over the generic trino-calcite connector: it reuses
-// CalciteClient for type mapping and only swaps in the Splunk JDBC driver plus friendly catalog
-// properties (url, token, user/password, app, ...). See trino-calcite for the toolchain rationale.
+// Trino connector for the Calcite file adapter. A thin wrapper over the generic trino-calcite
+// connector: it reuses CalciteClient for type mapping and builds an inline Calcite model that
+// instantiates one FileSchemaFactory schema over a single local directory or s3:// glob. See
+// trino-calcite for the toolchain rationale.
 
 val trinoVersion = providers.gradleProperty("trino.version").get()
 
@@ -36,16 +37,30 @@ tasks.matching {
     n.contains("forbidden") || n.contains("jandex") || n.contains("autostyle")
 }.configureEach { enabled = false }
 
+tasks.withType<Test>().configureEach {
+    // Trino's block-encoding SIMD support requires the incubator vector module at launch
+    // (io.trino.block.BlockEncodingSimdSupport -> jdk.incubator.vector). The in-process
+    // TestingTrinoServer used by the E2E test fails to bootstrap without it.
+    jvmArgs("--add-modules=jdk.incubator.vector")
+}
+
 dependencies {
     compileOnly("io.trino:trino-spi:$trinoVersion")
 
     // Shared connector library (CalciteClient/AutoCommitConnectionFactory) + the JDBC framework
     // (transitively, via its api dep). NOT the trino-calcite plugin: depending on the SPI-less base
-    // keeps the `calcite` connector out of this plugin's zip so only `splunk` is registered.
+    // keeps the `calcite` connector out of this plugin's zip so only `file` is registered.
     implementation(project(":trino-calcite-base"))
 
-    // The backing driver: org.apache.calcite.adapter.splunk.SplunkDriver. Bundled.
-    implementation(project(":splunk"))
+    // The file adapter (FileSchemaFactory, S3StorageProvider) + the Calcite JDBC driver. Bundled.
+    implementation(project(":file"))
+    implementation(project(":core"))
+
+    // DuckDB JDBC driver — the connector's default execution engine. The :file module declares it
+    // compileOnly, so the plugin must bundle it at runtime (DuckDBJdbcSchemaFactory loads
+    // org.duckdb.DuckDBDriver by name). DuckDB reads CSV/Parquet natively, avoiding the Hadoop
+    // dependency that breaks the PARQUET engine on JDK 25.
+    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
 
     testImplementation("io.trino:trino-spi:$trinoVersion")
     testImplementation("io.trino:trino-testing:$trinoVersion")
@@ -60,9 +75,9 @@ val trinoProvidedPrefixes = listOf("slice-", "jackson-annotations-", "openteleme
 
 tasks.register<Zip>("trinoPlugin") {
     group = "distribution"
-    description = "Builds the Trino plugin directory archive for the splunk connector."
-    archiveBaseName.set("trino-splunk-plugin")
-    into("trino-splunk") {
+    description = "Builds the Trino plugin directory archive for the file connector."
+    archiveBaseName.set("trino-file-plugin")
+    into("trino-file") {
         from(tasks.named("jar"))
         from(configurations["runtimeClasspath"].filter { file ->
             trinoProvidedPrefixes.none { file.name.startsWith(it) }

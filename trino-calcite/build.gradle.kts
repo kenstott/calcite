@@ -65,34 +65,13 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
-    // trino-base-jdbc pulls io.airlift:http-client -> Jetty 12.1.8 onto the compile classpath,
-    // but the in-process Trino server (test runtime) is compiled against Jetty 12.1.9. Because the
-    // root build pins runtime versions to the compile classpath, bump the compile-side Jetty so the
-    // pin lands on 12.1.9 (otherwise the server hits a jetty-http ComplianceUtils NoSuchMethodError).
-    constraints {
-        listOf(
-            "org.eclipse.jetty:jetty-http",
-            "org.eclipse.jetty:jetty-client",
-            "org.eclipse.jetty:jetty-io",
-            "org.eclipse.jetty:jetty-util",
-            "org.eclipse.jetty.http2:jetty-http2-common",
-            "org.eclipse.jetty.http2:jetty-http2-hpack",
-            "org.eclipse.jetty.http2:jetty-http2-client",
-            "org.eclipse.jetty.http2:jetty-http2-client-transport",
-            "org.eclipse.jetty.compression:jetty-compression-common",
-            "org.eclipse.jetty.compression:jetty-compression-gzip"
-        ).forEach { api(it) { version { require("12.1.9") } } }
-    }
-
     // Provided by the Trino server at runtime via the plugin's parent classloader - must NOT be bundled.
     compileOnly("io.trino:trino-spi:$trinoVersion")
 
-    // The JDBC connector framework. Bundled into the plugin directory. Brings Guice, Airlift
-    // configuration, OpenTelemetry and Jackson onto the compile classpath transitively.
-    api("io.trino:trino-base-jdbc:$trinoVersion")
-
-    // The backing driver: org.apache.calcite.jdbc.Driver (jdbc:calcite:model=...). Bundled.
-    implementation(project(":core"))
+    // Shared connector library: CalciteClient/CalciteClientModule/AutoCommitConnectionFactory, plus
+    // (transitively) trino-base-jdbc, the Calcite core driver and the Jetty version pin. `api` so the
+    // bundled-runtime classpath (and therefore the plugin zip) picks up the driver and framework.
+    api(project(":trino-calcite-base"))
 
     testImplementation("io.trino:trino-spi:$trinoVersion")
     testImplementation("io.trino:trino-testing:$trinoVersion")

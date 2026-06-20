@@ -95,7 +95,9 @@ include(
     "driver-base",
     "govdata",
     "askamerica-engine",
+    "trino-calcite-base",
     "trino-calcite",
+    "trino-file",
     "trino-sharepoint",
     "trino-splunk"
 )
