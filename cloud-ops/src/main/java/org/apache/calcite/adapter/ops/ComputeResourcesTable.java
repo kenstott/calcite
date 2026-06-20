@@ -18,14 +18,19 @@ import org.apache.calcite.adapter.ops.util.CloudOpsFilterHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsPaginationHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsProjectionHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
+import org.apache.calcite.rel.RelReferentialConstraint;
+import org.apache.calcite.rel.RelReferentialConstraintImpl;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.mapping.IntPair;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +42,33 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
 
   public ComputeResourcesTable(CloudOpsConfig config) {
     super(config);
+  }
+
+  /**
+   * Logical foreign key {@code (cloud_provider, vpc_id) -> network_resources(cloud_provider,
+   * network_resource)}. Compute stores the bare {@code vpc-...} ID, which equi-matches the
+   * {@code network_resource} column of a VPC row (not the ARN in {@code resource_id}). Scoping by
+   * {@code cloud_provider} keeps the match within a single provider. {@code vpc_id} is null for
+   * Azure/GCP, so the constraint only bites on AWS rows.
+   */
+  @Override protected List<RelReferentialConstraint> referentialConstraints(List<String> columnNames) {
+    final List<String> targetColumns =
+        new NetworkResourcesTable(config).getRowType(METADATA_TYPE_FACTORY).getFieldNames();
+    final int srcProvider = columnNames.indexOf("cloud_provider");
+    final int srcVpc = columnNames.indexOf("vpc_id");
+    final int tgtProvider = targetColumns.indexOf("cloud_provider");
+    final int tgtNetworkResource = targetColumns.indexOf("network_resource");
+    if (srcProvider < 0 || srcVpc < 0 || tgtProvider < 0 || tgtNetworkResource < 0) {
+      return Collections.emptyList();
+    }
+    final List<IntPair> columnPairs = Arrays.asList(
+        IntPair.of(srcProvider, tgtProvider),
+        IntPair.of(srcVpc, tgtNetworkResource));
+    final RelReferentialConstraint fk = RelReferentialConstraintImpl.of(
+        Arrays.asList("cloud", "compute_resources"),
+        Arrays.asList("cloud", "network_resources"),
+        columnPairs);
+    return Collections.singletonList(fk);
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {

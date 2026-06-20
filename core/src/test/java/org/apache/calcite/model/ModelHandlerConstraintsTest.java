@@ -246,7 +246,8 @@ public class ModelHandlerConstraintsTest {
   /**
    * Test table factory for creating test tables.
    */
-  public static class TestTableFactory implements org.apache.calcite.schema.TableFactory {
+  public static class TestTableFactory
+      implements org.apache.calcite.schema.TableFactory<org.apache.calcite.schema.Table> {
     @Override public org.apache.calcite.schema.Table create(
         org.apache.calcite.schema.SchemaPlus schema,
         String name,

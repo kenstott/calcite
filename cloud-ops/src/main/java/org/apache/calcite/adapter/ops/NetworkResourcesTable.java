@@ -21,11 +21,13 @@ import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.ImmutableBitSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +38,21 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(NetworkResourcesTable.class);
   public NetworkResourcesTable(CloudOpsConfig config) {
     super(config);
+  }
+
+  /**
+   * The native resource identifier is unique per provider, so {@code (cloud_provider,
+   * network_resource)} is a logical unique key. It is the target of the
+   * {@code compute_resources.vpc_id} foreign key (compute stores the bare {@code vpc-...} ID, which
+   * matches {@code network_resource}, not the ARN in {@code resource_id}).
+   */
+  @Override protected List<ImmutableBitSet> additionalKeys(List<String> columnNames) {
+    final int cloudProvider = columnNames.indexOf("cloud_provider");
+    final int networkResource = columnNames.indexOf("network_resource");
+    if (cloudProvider >= 0 && networkResource >= 0) {
+      return Collections.singletonList(ImmutableBitSet.of(cloudProvider, networkResource));
+    }
+    return Collections.emptyList();
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {

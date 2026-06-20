@@ -18,9 +18,16 @@ import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.rel.RelCollation;
+import org.apache.calcite.rel.RelReferentialConstraint;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ProjectableFilterableTable;
+import org.apache.calcite.schema.Statistic;
+import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.impl.AbstractTable;
+import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
+import org.apache.calcite.util.ImmutableBitSet;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -28,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -46,6 +54,50 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
 
   protected AbstractCloudOpsTable(CloudOpsConfig config) {
     this.config = config;
+  }
+
+  /**
+   * Lightweight type factory used only to resolve column ordinals by name for the logical
+   * key/foreign-key metadata. Column names are independent of the type system, so the default
+   * system is sufficient.
+   */
+  protected static final RelDataTypeFactory METADATA_TYPE_FACTORY =
+      new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
+
+  /**
+   * Declares logical key and foreign-key metadata for the table. These are unenforced hints for the
+   * planner (and catalog introspection) describing the cloud resource data model; the adapter does
+   * not validate them. Every table's logical primary key is {@code resource_id} (the globally-unique
+   * ARN / Resource ID). Subclasses contribute additional unique keys via {@link #additionalKeys} and
+   * referential constraints via {@link #referentialConstraints}.
+   */
+  @Override public Statistic getStatistic() {
+    final List<String> columnNames = getRowType(METADATA_TYPE_FACTORY).getFieldNames();
+    final List<ImmutableBitSet> keys = new ArrayList<>();
+    final int pkIndex = columnNames.indexOf("resource_id");
+    if (pkIndex >= 0) {
+      keys.add(ImmutableBitSet.of(pkIndex));
+    }
+    keys.addAll(additionalKeys(columnNames));
+    return Statistics.of(null, keys, referentialConstraints(columnNames), null);
+  }
+
+  /**
+   * Additional logical unique keys beyond the {@code resource_id} primary key. Default: none.
+   *
+   * @param columnNames ordered column names of this table
+   */
+  protected List<ImmutableBitSet> additionalKeys(List<String> columnNames) {
+    return Collections.emptyList();
+  }
+
+  /**
+   * Logical foreign keys from this table to other tables in the {@code cloud} schema. Default: none.
+   *
+   * @param columnNames ordered column names of this table
+   */
+  protected List<RelReferentialConstraint> referentialConstraints(List<String> columnNames) {
+    return Collections.emptyList();
   }
 
   @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters,
