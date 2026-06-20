@@ -162,10 +162,15 @@ The many-to-many compute↔security-group relationship is modeled by the **`comp
 junction table** (the `compute_resources.security_groups` JSON array remains for convenience but is not
 a foreign key — an array can't be a scalar FK).
 
-**Provider data coverage.** The model is single and provider-neutral, but population is uneven: **AWS**
-fills all of the above; **Azure** and **GCP** map into the identical columns but do not yet extract VM
-subnet / attached identity / security-group associations (GCP's provider queries are still stubbed), so
-those FKs are effectively AWS-only until Phases 2–3 land. See §7.
+**Provider data coverage.** The model is single and provider-neutral; population maturity differs:
+
+- **AWS** — fully populated and verified by unit tests.
+- **Azure** — Resource Graph queries extract VM subnet/VNet, attached managed identity, NSG
+  associations, and emit subnet rows. **`wip`: the KQL has not been run against a live tenant.**
+- **GCP** — `wip`: provider implemented but unverified (requires GCP credentials).
+
+Because the FK columns are null where a provider hasn't populated them, the constraints simply don't
+bite on those rows — the model stays single regardless of coverage.
 
 **Nullability:** columns are declared through the Calcite type builder; in practice any column other
 than `cloud_provider` may be `NULL` when a provider does not supply that fact (see the per-provider
