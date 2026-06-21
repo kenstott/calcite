@@ -141,6 +141,11 @@ partitionedTables:
         nullable: true
         comment: Total unit area in acres (GIS measurement)
 
+    # USFS forest boundaries change rarely. The ArcGIS query returns a stable ETag for unchanged
+    # data, so an ETag probe skips re-ingest when the boundary set is unchanged instead of
+    # reprocessing this (non-period) table every resume run.
+    freshness:
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_ForestSystemBoundaries_01/MapServer/0/query?where=1%3D1&outFields=forestnumber%2Cforestname%2Cregion%2Cgis_acres&f=json&resultRecordCount=500"
@@ -339,6 +344,12 @@ partitionedTables:
         nullable: true
         comment: CONDPROP_UNADJ-weighted average of BALIVE (sq ft per acre)
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -417,6 +428,12 @@ partitionedTables:
         nullable: true
         comment: CONDPROP-weighted average above-ground carbon stock, tons per acre (CARBON_AG × TPA_UNADJ / 2000)
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -509,6 +526,12 @@ partitionedTables:
         nullable: true
         comment: Year the plot was actually measured (MEASYEAR)
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -589,6 +612,12 @@ partitionedTables:
         nullable: true
         comment: Number of tree records contributing to this aggregate
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -659,6 +688,12 @@ partitionedTables:
         nullable: true
         comment: Number of SEEDLING rows contributing to this aggregate
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -726,6 +761,12 @@ partitionedTables:
         nullable: true
         comment: Number of COND_DWM_CALC rows contributing to this aggregate
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -792,6 +833,12 @@ partitionedTables:
         nullable: true
         comment: Number of subplots reporting this species
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -867,6 +914,12 @@ partitionedTables:
         nullable: true
         comment: Evaluation type from POP_EVAL_TYP.EVAL_TYP (EXPVOL, EXPCURR, ...)
 
+    # FIA regenerates each state's CSV archive only ~annually. A per-state HEAD probe of
+    # Last-Modified skips re-ingesting states whose archive is unchanged since the last commit,
+    # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
+    # though it ignores If-Modified-Since.)
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -934,6 +987,10 @@ partitionedTables:
         nullable: true
         comment: Approximate unit area in acres (derived from GIS shape area)
 
+    # NPS unit boundaries change rarely; the service returns a stable Last-Modified, so probe it
+    # and skip re-ingest of this (non-period) table when the boundary set is unchanged.
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2/query?where=1%3D1&outFields=UNIT_CODE%2CUNIT_NAME%2CUNIT_TYPE%2CSTATE%2CREGION%2CShape__Area&f=json&resultRecordCount=1000"
@@ -1178,6 +1235,10 @@ partitionedTables:
         nullable: true
         comment: Revenue collected (USD)
 
+    # ONRR republishes the full fiscal-year revenue CSV on data updates. Probe Last-Modified and
+    # skip re-ingest of this (non-period) table when the file is unchanged since the last commit.
+    freshness:
+      type: last_modified
     source:
       type: http
       url: "https://revenuedata.onrr.gov/downloads/fiscal_year_revenue.csv"
