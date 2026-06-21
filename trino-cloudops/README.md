@@ -19,6 +19,7 @@ configured provider **fails fast at startup** with a list of the missing propert
 
 ```properties
 connector.name=cloudops
+case-insensitive-name-matching=true
 
 # AWS
 aws.access-key-id=AKIA...
@@ -33,8 +34,15 @@ azure.client-secret=...
 azure.subscription-ids=sub-1,sub-2
 ```
 
+> **`case-insensitive-name-matching=true` is required.** CloudOps table/column names are generated
+> lower-case, but Calcite's Avatica metadata reports `storesUpperCaseIdentifiers()=true`; without
+> this flag Trino upper-cases names and resolves no tables (`DESCRIBE`/`SELECT` fail with
+> `TABLE_NOT_FOUND` and `information_schema.columns` is empty). The connector **fails fast at
+> startup** if it is not set.
+
 | Property | Required | Description |
 |----------|----------|-------------|
+| `case-insensitive-name-matching` | yes | Must be `true` — see note above |
 | `providers` | no | Comma-separated subset to query, e.g. `azure,aws` (default: all configured) |
 | `azure.tenant-id` | enables Azure | Azure AD tenant ID |
 | `azure.client-id` | with Azure | App registration client ID |

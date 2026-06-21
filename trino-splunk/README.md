@@ -52,13 +52,15 @@ token=eyJhbGciOiJIUzI1NiI...
 # Optional: app context + data-model discovery filter
 app=Splunk_SA_CIM
 datamodel-filter=Authentication
-# Splunk schemas/tables are matched case-sensitively by Calcite; keep this on.
+# Required: Splunk names are generated lower-case but Calcite reports upper-case storage;
+# the connector fails fast at startup without this. Keep it on.
 case-insensitive-name-matching=true
 ```
 
 | Property | Description | Required |
 |----------|-------------|----------|
 | `url` | Splunk management URL, e.g. `https://localhost:8089` | Yes |
+| `case-insensitive-name-matching` | Must be `true` — see note above | Yes |
 | `token` | Splunk auth token (preferred) | Conditional |
 | `user` / `password` | Username + password (when not using a token) | Conditional |
 | `app` | App context for data-model discovery (e.g. `Splunk_SA_CIM`) | No |
