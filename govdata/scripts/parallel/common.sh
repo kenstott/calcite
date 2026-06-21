@@ -637,8 +637,25 @@ discover_gleif_url() {
     return
   fi
   log_info "Discovering latest GLEIF golden copy CSV URL..."
-  GLEIF_CSV_URL=$(curl -sf "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/latest" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['lei2']['full_file']['csv']['url'])")
+  # GLEIF regenerates the golden copy daily at 00:00 UTC. For a short window around the publish
+  # the API can return an empty/partial body, which json.load reads as
+  # "Expecting value: line 1 column 1 (char 0)" — a transient that previously failed the whole
+  # ref pipeline (observed at 00:00:49). Retry a few times with backoff before giving up.
+  local _attempt _url
+  for _attempt in 1 2 3 4 5; do
+    _url=$(curl -sf --max-time 60 "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/latest" \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['lei2']['full_file']['csv']['url'])" 2>/dev/null) || true
+    if [ -n "$_url" ] && [ "${_url#http}" != "$_url" ]; then
+      GLEIF_CSV_URL="$_url"
+      break
+    fi
+    log_info "GLEIF URL discovery attempt ${_attempt}/5 returned no URL (API may be mid-publish); retrying in $((_attempt * 10))s..."
+    sleep $((_attempt * 10))
+  done
+  if [ -z "${GLEIF_CSV_URL:-}" ]; then
+    echo "ERROR: GLEIF golden copy URL discovery failed after 5 attempts" >&2
+    return 1
+  fi
   export GLEIF_CSV_URL
   log_info "GLEIF CSV URL: $GLEIF_CSV_URL"
 }
