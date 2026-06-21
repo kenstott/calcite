@@ -306,8 +306,7 @@ public class ConversionExtensionsTest {
       String[][] extensions = {
           {"spatial", ""},
           {"h3", "FROM community"},
-          {"fts", ""},
-          {"quackformers", "FROM community"}
+          {"fts", ""}
       };
 
       int loadedCount = 0;

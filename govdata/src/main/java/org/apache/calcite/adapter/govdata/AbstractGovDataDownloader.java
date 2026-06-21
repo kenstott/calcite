@@ -2635,12 +2635,14 @@ public abstract class AbstractGovDataDownloader {
    *
    * <p>Extensions loaded:
    * <ul>
-   *   <li><b>quackformers</b> - Embedding generation via embed() function</li>
    *   <li><b>spatial</b> - GIS operations (ST_Read, ST_Area, etc.)</li>
    *   <li><b>h3</b> - Geospatial hexagonal indexing</li>
    *   <li><b>excel</b> - Excel file reading support</li>
    *   <li><b>fts</b> - Full-text search indexing</li>
    * </ul>
+   *
+   * <p>Embeddings for semantic search are generated locally by {@code scripts/embed.py}
+   * (fastembed / snowflake-arctic-embed-xs), not by a DuckDB extension.
    *
    * <p>Failures are logged as warnings and do not prevent conversion. This allows
    * the system to work with basic functionality even if some extensions are missing.</p>
@@ -2648,7 +2650,7 @@ public abstract class AbstractGovDataDownloader {
    * @param conn DuckDB connection to load extensions into
    */
   private static void loadConversionExtensions(Connection conn) {
-    String[] extensions = {"spatial", "h3", "excel", "fts", "zipfs", "quackformers"};
+    String[] extensions = {"spatial", "h3", "excel", "fts", "zipfs"};
 
     for (String ext : extensions) {
       try {
@@ -2656,105 +2658,11 @@ public abstract class AbstractGovDataDownloader {
         String extPath = DuckDbExtensionInstaller.getLocalExtensionPath(ext);
         conn.createStatement().execute("LOAD '" + extPath + "'");
       } catch (java.sql.SQLException e) {
-        // Special fallback for quackformers: try loading from GitHub (community extension)
-        if ("quackformers".equals(ext)) {
-          try {
-            LOGGER.info("Retrying quackformers from GitHub repository...");
-            // Try simple GitHub URL first (DuckDB auto-discovers platform/version)
-            conn.createStatement().execute("LOAD quackformers FROM 'https://github.com/martin-conur/quackformers'");
-            LOGGER.info("Successfully loaded quackformers from GitHub");
-            continue;
-          } catch (java.sql.SQLException e2) {
-            // If that fails, try platform-specific URL as fallback
-            try {
-              String githubUrl = buildQuackformersGitHubUrl(conn);
-              LOGGER.info("Retrying with platform-specific URL: {}", githubUrl);
-              conn.createStatement().execute("LOAD quackformers FROM '" + githubUrl + "'");
-              LOGGER.info("Successfully loaded quackformers from platform-specific GitHub URL");
-              continue;
-            } catch (java.sql.SQLException e3) {
-              LOGGER.warn("Failed to load quackformers from GitHub: {}", e3.getMessage());
-            }
-          }
-        }
         LOGGER.warn("Failed to load extension '{}' (continuing): {}", ext, e.getMessage());
       }
     }
   }
 
-  /**
-   * Builds the GitHub URL for the quackformers extension binary.
-   *
-   * <p>Constructs a platform-specific URL like:
-   * <a href="https://github.com/martin-conur/quackformers/raw/main/builds/v1.4.1/osx_arm64/quackformers.duckdb_extension">...</a>
-   *
-   * @param conn DuckDB connection to detect version
-   * @return Full GitHub URL to the quackformers binary
-   */
-  private static String buildQuackformersGitHubUrl(Connection conn) throws java.sql.SQLException {
-    // Detect DuckDB version
-    String duckdbVersion = detectDuckDBVersion(conn);
-
-    // Detect platform
-    String platform = detectPlatform();
-
-    // Build URL
-    return "https://github.com/martin-conur/quackformers/raw/main/builds/v"
-        + duckdbVersion + "/" + platform + "/quackformers.duckdb_extension";
-  }
-
-  /**
-   * Detects the DuckDB version from the connection.
-   *
-   * @param conn DuckDB connection
-   * @return Version string (e.g., "1.4.1")
-   */
-  private static String detectDuckDBVersion(Connection conn) throws java.sql.SQLException {
-    try (java.sql.ResultSet rs = conn.createStatement().executeQuery("SELECT library_version FROM pragma_version()")) {
-      if (rs.next()) {
-        String fullVersion = rs.getString(1);
-        // Extract major.minor.patch (e.g., "1.4.1" from "v1.4.1")
-        if (fullVersion.startsWith("v")) {
-          fullVersion = fullVersion.substring(1);
-        }
-        return fullVersion;
-      }
-    }
-    // Fallback to metadata
-    return conn.getMetaData().getDatabaseProductVersion();
-  }
-
-  /**
-   * Detects the current platform (OS + architecture).
-   *
-   * @return Platform string (e.g., "osx_arm64", "linux_amd64", "windows_amd64")
-   */
-  private static String detectPlatform() {
-    String osName = System.getProperty("os.name").toLowerCase();
-    String osArch = System.getProperty("os.arch").toLowerCase();
-
-    String os;
-    if (osName.contains("mac") || osName.contains("darwin")) {
-      os = "osx";
-    } else if (osName.contains("linux")) {
-      os = "linux";
-    } else if (osName.contains("windows")) {
-      os = "windows";
-    } else {
-      os = "unknown";
-    }
-
-    String arch;
-    if (osArch.equals("aarch64") || osArch.equals("arm64")) {
-      arch = "arm64";
-    } else if (osArch.contains("amd64") || osArch.contains("x86_64")) {
-      arch = "amd64";
-    } else {
-      arch = "unknown";
-    }
-
-    return os + "_" + arch;
-  }
 
   /**
    * Converts in-memory records directly to Parquet using DuckDB without temporary files.

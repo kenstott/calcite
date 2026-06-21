@@ -49,7 +49,7 @@ public class DuckDbExtensionInstaller {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDbExtensionInstaller.class);
 
   private static final String[] BUNDLED_EXTENSIONS = {
-      "spatial", "httpfs", "iceberg", "h3", "excel", "fts", "zipfs", "quackformers", "parquet"
+      "spatial", "httpfs", "iceberg", "h3", "excel", "fts", "zipfs", "parquet"
   };
 
   /**
