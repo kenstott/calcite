@@ -95,6 +95,19 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
+    // Catalog gate: never request a TIGER vintage Census has not published yet. An unpublished
+    // vintage directory (e.g. TIGER2026 before its autumn release) does not 404 cleanly — the host
+    // accepts the connection and then stalls, so each doomed GET burns the full read-timeout × retry
+    // budget (observed as multi-hour geo workers). The directory listing IS the catalog.
+    int requestedVintage = Integer.parseInt(year);
+    int latestVintage = TigerDataDownloader.latestPublishedVintage();
+    if (requestedVintage > latestVintage) {
+      LOGGER.info("TIGER catalog gate: skipping {} year={} — exceeds latest published vintage {} "
+          + "(an unpublished vintage directory stalls rather than 404s)",
+          tableName, year, latestVintage);
+      return new ArrayList<Map<String, Object>>().iterator();
+    }
+
     File tempDir = null;
     try {
       Runtime runtime = Runtime.getRuntime();
