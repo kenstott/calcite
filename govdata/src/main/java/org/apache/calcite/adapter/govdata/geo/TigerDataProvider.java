@@ -26,6 +26,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -34,6 +36,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Custom DataProvider for TIGER shapefile data.
@@ -246,7 +250,63 @@ public class TigerDataProvider implements StorageAwareDataProvider {
     }
   }
 
-  private String buildDownloadUrl(String tableName, String year, String stateFips) {
+  /** Per-CD-directory memo of the congressional-district file suffix (e.g. "cd119") actually
+   *  published, discovered from the directory listing. */
+  private static final ConcurrentMap<String, String> CD_SUFFIX_BY_DIR =
+      new ConcurrentHashMap<String, String>();
+
+  /**
+   * Discovers the congressional-district file suffix actually published under {@code cdDirUrl} by
+   * reading the directory listing (the listing IS the catalog — there is no JSON API). Census labels
+   * each TIGER vintage's CD files by the Congress number it ships (TIGER2024 ships {@code cd119},
+   * not the in-session {@code cd118}), so deriving the number from the year is wrong and 404s on
+   * every state. Returns e.g. {@code "cd119"} (the highest Congress present); memoized per directory.
+   * Throws if the listing cannot be read or contains no {@code cd<N>.zip} entry.
+   */
+  private static String discoverCdSuffix(String cdDirUrl) throws IOException {
+    String cached = CD_SUFFIX_BY_DIR.get(cdDirUrl);
+    if (cached != null) {
+      return cached;
+    }
+    HttpURLConnection conn = (HttpURLConnection) URI.create(cdDirUrl).toURL().openConnection();
+    conn.setConnectTimeout(15000);
+    conn.setReadTimeout(15000);
+    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+    int status = conn.getResponseCode();
+    if (status != HttpURLConnection.HTTP_OK) {
+      conn.disconnect();
+      throw new IOException("HTTP " + status + " reading CD catalog listing " + cdDirUrl);
+    }
+    int maxCongress = -1;
+    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("cd(\\d+)\\.zip");
+    try (InputStream in = conn.getInputStream()) {
+      java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+      byte[] buf = new byte[65536];
+      int len;
+      while ((len = in.read(buf)) != -1) {
+        bos.write(buf, 0, len);
+      }
+      java.util.regex.Matcher matcher = pattern.matcher(bos.toString("UTF-8"));
+      while (matcher.find()) {
+        int n = Integer.parseInt(matcher.group(1));
+        if (n > maxCongress) {
+          maxCongress = n;
+        }
+      }
+    } finally {
+      conn.disconnect();
+    }
+    if (maxCongress < 0) {
+      throw new IOException("No cd<N>.zip entries found in CD catalog listing " + cdDirUrl);
+    }
+    String suffix = "cd" + maxCongress;
+    CD_SUFFIX_BY_DIR.put(cdDirUrl, suffix);
+    LOGGER.info("TIGER CD catalog: {} publishes {}", cdDirUrl, suffix);
+    return suffix;
+  }
+
+  private String buildDownloadUrl(String tableName, String year, String stateFips)
+      throws IOException {
     int yearInt = Integer.parseInt(year);
 
     // TIGER 2000-2001 files don't exist on Census Bureau servers
@@ -312,11 +372,14 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       if (stateFips == null) {
         return null;
       }
-      // Congressional district files are per-state
-      // 118th Congress (2023-2024), 119th Congress (2025-2026)
-      int congressNum = ((yearInt - 1789) / 2) + 1;
-      return String.format("%s/%s/CD%s/tl_%s_%s_cd%d.zip",
-          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, congressNum);
+      // Census labels each TIGER vintage's CD files by the Congress number it actually ships, which
+      // is NOT the in-session congress for that calendar year (TIGER2024 ships cd119, not cd118).
+      // Computing the number from the year produced 404s on every state; discover the real suffix
+      // from the CD directory listing (the listing IS the catalog).
+      String cdDirUrl = String.format("%s/%s/CD%s/", TIGER_BASE_URL, tigerPath, subdir2010);
+      String cdSuffix = discoverCdSuffix(cdDirUrl);
+      return String.format("%s/%s/CD%s/tl_%s_%s_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, cdSuffix);
 
     case "school_districts":
       if (stateFips == null) {
