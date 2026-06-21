@@ -92,23 +92,26 @@ public class TigerDataProvider implements StorageAwareDataProvider {
     LOGGER.info("TigerDataProvider: Fetching {} for year={}, state={}",
         tableName, year, stateFips);
 
-    // Build download URL based on table type
-    String url = buildDownloadUrl(tableName, year, stateFips);
-    if (url == null) {
-      LOGGER.warn("Could not build download URL for table {} year={}", tableName, year);
-      return new ArrayList<Map<String, Object>>().iterator();
-    }
-
-    // Catalog gate: never request a TIGER vintage Census has not published yet. An unpublished
+    // Catalog gate FIRST: never request a TIGER vintage Census has not published yet. An unpublished
     // vintage directory (e.g. TIGER2026 before its autumn release) does not 404 cleanly — the host
     // accepts the connection and then stalls, so each doomed GET burns the full read-timeout × retry
-    // budget (observed as multi-hour geo workers). The directory listing IS the catalog.
+    // budget (observed as multi-hour geo workers). The directory listing IS the catalog. This must
+    // run BEFORE buildDownloadUrl: that method may itself probe a per-vintage catalog directory (e.g.
+    // congressional districts read TIGER<year>/CD/ to discover the cd<N> suffix), which 404s and fails
+    // the batch for an unpublished vintage if the gate ran afterward.
     int requestedVintage = Integer.parseInt(year);
     int latestVintage = TigerDataDownloader.latestPublishedVintage();
     if (requestedVintage > latestVintage) {
       LOGGER.info("TIGER catalog gate: skipping {} year={} — exceeds latest published vintage {} "
           + "(an unpublished vintage directory stalls rather than 404s)",
           tableName, year, latestVintage);
+      return new ArrayList<Map<String, Object>>().iterator();
+    }
+
+    // Build download URL based on table type
+    String url = buildDownloadUrl(tableName, year, stateFips);
+    if (url == null) {
+      LOGGER.warn("Could not build download URL for table {} year={}", tableName, year);
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
