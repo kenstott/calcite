@@ -15,11 +15,19 @@ are assembled into an inline Calcite model (`jdbc:calcite:model=inline:{…}`) t
 
 ```properties
 connector.name=file
+case-insensitive-name-matching=true
 glob=s3://my-bucket/data/**/*.parquet
 ```
 
+> **`case-insensitive-name-matching=true` is required.** File table/column names are generated
+> lower-case, but Calcite's Avatica metadata reports `storesUpperCaseIdentifiers()=true`; without
+> this flag Trino upper-cases names and resolves no tables (`DESCRIBE`/`SELECT` fail with
+> `TABLE_NOT_FOUND` and `information_schema.columns` is empty). The connector **fails fast at
+> startup** if it is not set.
+
 | Property | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `case-insensitive-name-matching` | yes | — | Must be `true` — see note above |
 | `glob` | yes | — | A local path or a remote URI glob (see Storage backends) |
 | `schema-name` | no | `files` | Trino schema name exposed |
 | `execution-engine` | no | `DUCKDB` | File-adapter engine: `DUCKDB`, `PARQUET`, `LINQ4J`, `ARROW`. DuckDB reads CSV/Parquet natively without Hadoop; PARQUET converts via Hadoop (incompatible with JDK 25 — see below) |

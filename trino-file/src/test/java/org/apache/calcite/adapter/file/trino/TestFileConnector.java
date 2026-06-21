@@ -16,6 +16,7 @@
  */
 package org.apache.calcite.adapter.file.trino;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 
 import io.trino.Session;
@@ -31,6 +32,7 @@ import java.nio.file.Paths;
 
 import static io.trino.testing.TestingSession.testSessionBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -72,6 +74,25 @@ class TestFileConnector
         MaterializedResult tables = computeActual("SHOW TABLES FROM file.files");
         assertTrue(tables.getOnlyColumnAsSet().contains("events"),
                 "expected 'events' table, got: " + tables.getOnlyColumnAsSet());
+    }
+
+    @Test
+    void testMissingCaseInsensitiveNameMatchingFailsFast()
+            throws Exception
+    {
+        // Without case-insensitive-name-matching the adapter's lower-case tables are unresolvable
+        // (issues #221/#222). The connector must fail fast at catalog creation with an actionable
+        // message rather than silently serving an empty catalog.
+        String dir = Paths.get(getClass().getResource("/files").toURI()).toString();
+        try (QueryRunner runner = DistributedQueryRunner.builder(
+                testSessionBuilder().setCatalog("file_no_flag").setSchema("files").build()).build()) {
+            runner.installPlugin(new FilePlugin());
+            RuntimeException thrown = assertThrows(RuntimeException.class, () ->
+                    runner.createCatalog("file_no_flag", "file", ImmutableMap.of("glob", dir)));
+            assertTrue(
+                    Throwables.getStackTraceAsString(thrown).contains("case-insensitive-name-matching"),
+                    "expected an actionable case-insensitive-name-matching error, got: " + thrown);
+        }
     }
 
     @Test

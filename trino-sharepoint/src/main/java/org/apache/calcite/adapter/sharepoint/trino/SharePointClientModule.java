@@ -23,6 +23,7 @@ import com.google.inject.Singleton;
 
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.opentelemetry.api.OpenTelemetry;
+import io.trino.plugin.base.mapping.MappingConfig;
 import io.trino.plugin.jdbc.BaseJdbcConfig;
 import io.trino.plugin.jdbc.ConnectionFactory;
 import io.trino.plugin.jdbc.DriverConnectionFactory;
@@ -33,6 +34,7 @@ import io.trino.plugin.jdbc.credential.CredentialProvider;
 import org.apache.calcite.adapter.sharepoint.SharePointListDriver;
 import org.apache.calcite.adapter.trino.AutoCommitConnectionFactory;
 import org.apache.calcite.adapter.trino.CalciteClient;
+import org.apache.calcite.adapter.trino.CalciteConnectorConfig;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +59,10 @@ public class SharePointClientModule
     protected void setup(Binder binder)
     {
         SharePointConfig config = buildConfigObject(SharePointConfig.class);
+        // SharePoint list/column names are generated lower-case, so case-insensitive name matching is
+        // mandatory; fail fast with an actionable message otherwise (see CalciteConnectorConfig).
+        CalciteConnectorConfig.requireCaseInsensitiveNameMatching(
+                buildConfigObject(MappingConfig.class).isCaseInsensitiveNameMatching(), "SharePoint");
         String connectionUrl = buildConnectionUrl(config);
         // Satisfy BaseJdbcConfig's mandatory connection-url (bound by the framework's JdbcModule)
         // from the friendly SharePoint properties.
