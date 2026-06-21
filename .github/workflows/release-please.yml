@@ -42,6 +42,18 @@ jobs:
             echo "${ENGINE_TAG} already exists"
           fi
 
+      # release-please creates a redundant v<version> release + tag. The canonical, consistent
+      # release is engine-v<version> (alias above, assets attached by AskAmerica Engine). Remove the
+      # v<version> duplicate so only the engine-v<version> tag/release remains.
+      - name: Remove redundant v<version> release/tag
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.release.outputs.tag_name }}"
+          gh release delete "${VERSION}" --repo "${{ github.repository }}" --cleanup-tag --yes \
+            || echo "No ${VERSION} release/tag to remove"
+
       # Tags created via the API by GITHUB_TOKEN do not trigger push events in other
       # workflows. Dispatch the release CI explicitly so the jar is always built.
       - name: Dispatch release workflows
