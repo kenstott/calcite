@@ -474,7 +474,14 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      # B15003 (educational attainment) was added to ACS5 in 2012; earlier years return
+      # 400 "unknown variable 'B15003_001E'" (fatal — no skipOn here). Floor at 2012 rather
+      # than the shared acs_year_range (2009). Same dataLag/releaseMonth as the anchor.
+      year:
+        type: yearRange
+        start: 2012
+        dataLag: 2
+        releaseMonth: 12
       geography: *all_geographies
 
     columns:

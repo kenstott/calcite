@@ -2593,16 +2593,14 @@ partitionedTables:
         - "UNRATE"       # Unemployment rate
         - "U6RATE"       # Broad unemployment (U-6: underemployed + marginally attached)
         - "PAYEMS"       # Nonfarm payrolls
-        - "CES0000000001" # Total nonfarm employees
-        - "LNS14000000"  # Unemployment level
-        - "LNS11300000"  # Labor force participation rate
+        - "CIVPART"      # Labor force participation rate (FRED id; was BLS LNS11300000 — invalid in FRED)
         - "ICSA"         # Initial jobless claims (weekly)
         - "CCSA"         # Continuing jobless claims
         - "AWHMAN"       # Average weekly hours: manufacturing
         # Inflation
-        - "CPIAUCSL"     # CPI all items
-        - "CUUR0000SA0"  # CPI urban consumers
-        - "CUUR0000SA0L1E" # CPI ex-food-and-energy
+        - "CPIAUCSL"     # CPI all items (seasonally adjusted)
+        - "CPIAUCNS"     # CPI all items, not seasonally adjusted (FRED id; was BLS CUUR0000SA0 — invalid in FRED)
+        - "CPILFESL"     # Core CPI ex food & energy, SA (FRED id; was BLS CUUR0000SA0L1E — invalid in FRED)
         - "WPUFD49207"   # PPI finished goods
         - "PCEPI"        # PCE price index (headline)
         - "PCEPILFE"     # Core PCE price index (Fed primary target)
