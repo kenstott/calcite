@@ -86,6 +86,8 @@ jobs:
             :trino-calcite:trinoPlugin \
             :trino-sharepoint:trinoPlugin \
             :trino-splunk:trinoPlugin \
+            :trino-file:trinoPlugin \
+            :trino-cloudops:trinoPlugin \
             -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
             --no-daemon
         env:
@@ -94,7 +96,7 @@ jobs:
       - name: Collect plugin archives (stable names)
         run: |
           mkdir -p trino-assets
-          for m in trino-calcite trino-sharepoint trino-splunk; do
+          for m in trino-calcite trino-sharepoint trino-splunk trino-file trino-cloudops; do
             src=$(ls ${m}/build/distributions/${m}-plugin-*.zip | head -1)
             cp "$src" "trino-assets/${m}-plugin.zip"
           done
@@ -581,8 +583,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pyproject.toml askamerica/__init__.py askamerica/engine.py
-          git commit -m "chore(release): bump to ${VERSION} — tracks engine-v${VERSION}"
-          git push
+          # Idempotent: a re-run of an already-released version has nothing to bump.
+          if git diff --cached --quiet; then
+            echo "Version already at ${VERSION}; nothing to commit."
+          else
+            git commit -m "chore(release): bump to ${VERSION} — tracks engine-v${VERSION}"
+            git push
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -693,6 +700,8 @@ jobs:
             | `trino-calcite-plugin.zip` | `calcite` | any Calcite model (`jdbc:calcite:`) |
             | `trino-sharepoint-plugin.zip` | `sharepoint` | SharePoint Lists (`jdbc:sharepoint:`) |
             | `trino-splunk-plugin.zip` | `splunk` | Splunk (`jdbc:splunk:`) |
+            | `trino-file-plugin.zip` | `file` | files / S3 globs (file adapter) |
+            | `trino-cloudops-plugin.zip` | `cloudops` | Azure/AWS/GCP inventory (`jdbc:cloudops:`) |
           files: release-assets/**/*
           draft: false
           prerelease: false
