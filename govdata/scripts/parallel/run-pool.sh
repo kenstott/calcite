@@ -590,7 +590,13 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     id="${active_labels[$i]}"
     start="${active_starts[$i]}"
 
-    if ! kill -0 "$pid" 2>/dev/null; then
+    # A worker is finished once its wrapper writes the .exit file (its last action) — that is
+    # authoritative. Do NOT rely on `kill -0 $pid` alone: the tracked pid is the wrapper's $$,
+    # which dies immediately after writing .exit, and on a busy host that pid is quickly reused by
+    # another process. A reused pid keeps `kill -0` succeeding, so the pool would show a long-since
+    # finished worker as "running" forever (and never terminate after all schemas complete). The
+    # .exit file is removed before each launch, so its presence always reflects the current run.
+    if [ -f "$PID_DIR/${id}.exit" ] || ! kill -0 "$pid" 2>/dev/null; then
       now=$(date +%s)
       elapsed=$(( now - start ))
       mins=$((elapsed / 60))

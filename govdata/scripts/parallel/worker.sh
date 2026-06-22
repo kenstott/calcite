@@ -17,7 +17,7 @@
 #
 # Consolidated ETL worker.  Replaces all numbered worker-NN.sh shims.
 #
-# Usage: worker.sh <schema> <mode> [--force]
+# Usage: worker.sh <schema> <mode>
 #
 # Simple schemas (inline model, single ETL run):
 #   sec_primary   <year|current>   — SEC 10-K/10-Q filings for one year
@@ -52,18 +52,12 @@ SCHEMA="${1:-}"
 MODE="${2:-}"
 
 if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
-  echo "Usage: $0 <schema> <mode> [--force]" >&2
+  echo "Usage: $0 <schema> <mode>" >&2
   echo "  Schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
   echo "           weather, ref, fec, fedregister, econ_reference," >&2
   echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands" >&2
   exit 1
 fi
-
-FORCE=${FORCE:-false}
-for arg in "${@:3}"; do
-  [ "$arg" = "--force" ] && FORCE=true
-done
-export FORCE
 
 # DQ modes — schema-agnostic; delegate directly to worker-dq-run.sh
 case "$MODE" in

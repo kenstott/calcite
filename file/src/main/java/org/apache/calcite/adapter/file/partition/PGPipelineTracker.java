@@ -280,35 +280,6 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         "error", 0, null, null, errorMessage);
   }
 
-  @Override public boolean isProcessedWithEmptyTtl(String alternateName, String sourceTable,
-      Map<String, String> keyValues, long emptyResultTtlMillis) {
-    String sourceKey = flattenKeyValues(keyValues);
-    String sql = "SELECT as_of, row_count, state FROM pipeline_tracker "
-        + "WHERE source_key = ? AND table_name = ? AND phase = 'incremental'";
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, sourceKey);
-      stmt.setString(2, alternateName);
-      try (ResultSet rs = stmt.executeQuery()) {
-        if (rs.next()) {
-          String state = rs.getString("state");
-          if (!"complete".equals(state)) {
-            return false;
-          }
-          long rowCount = rs.getLong("row_count");
-          if (rowCount > 0) {
-            return true; // Has data, permanently processed
-          }
-          // Empty result, check TTL
-          long processedAt = rs.getLong("as_of");
-          return (System.currentTimeMillis() - processedAt) < emptyResultTtlMillis;
-        }
-      }
-    } catch (SQLException e) {
-      LOGGER.debug("Error checking empty TTL for {}: {}", alternateName, e.getMessage());
-    }
-    return false;
-  }
-
   @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName) {
     Set<Map<String, String>> result = new HashSet<>();
     String sql = "SELECT source_key FROM pipeline_tracker "

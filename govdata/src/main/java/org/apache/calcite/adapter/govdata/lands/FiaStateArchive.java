@@ -16,10 +16,12 @@ import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -36,8 +38,9 @@ import java.util.zip.ZipInputStream;
  * persist in MinIO/R2 so every DQ worker in the pool reads them at LAN speed instead of
  * re-downloading from upstream (which throttles individual connections to ~800 KB/s).
  *
- * <p>Refresh per state is gated by HTTP {@code If-Modified-Since} against the cached
- * object's mtime — USDA regenerates the archives near-daily but rarely changes content.
+ * <p>Refresh per state is gated by the upstream {@code Last-Modified} header (the FIA datamart
+ * ignores {@code If-Modified-Since} but does send {@code Last-Modified}): a HEAD compares it to the
+ * value recorded for the cached bytes and re-downloads only when it changes — never on a timer.
  *
  * <p>Download synchronization is per-state ({@link #STATE_LOCKS}) so concurrent
  * transformers iterating different states share none of their critical sections —
@@ -58,14 +61,8 @@ final class FiaStateArchive {
   private static final int CONNECT_TIMEOUT_MS = 60_000;
   private static final int READ_TIMEOUT_MS = 1_800_000; // 30 min ceiling per state archive
 
-  /**
-   * Reuse a cached archive without any network round-trip if it is younger than this. The FIA
-   * datamart server ignores {@code If-Modified-Since} (it always answers 200), so the conditional
-   * GET below would otherwise re-download every state on every run (~100 MB each). FIA datamarts
-   * refresh only ~annually, so a short client-side TTL skips the redundant pulls while still
-   * re-checking periodically.
-   */
-  private static final long CACHE_TTL_MS = 7L * 24 * 60 * 60 * 1000;
+  /** Sidecar that records the upstream {@code Last-Modified} we cached the archive at. */
+  private static final String LASTMOD_SIDECAR_SUFFIX = ".lastmodified";
 
   /**
    * Per-state download locks. Distinct states download concurrently; concurrent
@@ -101,23 +98,23 @@ final class FiaStateArchive {
     Object lock = STATE_LOCKS.computeIfAbsent(st, k -> new Object());
     synchronized (lock) {
       StorageProvider sp = StorageProviderFactory.createForGovDataCache();
-      long cachedMtime = -1L;
-      if (sp.exists(target)) {
-        cachedMtime = sp.getMetadata(target).getLastModified();
-        if (System.currentTimeMillis() - cachedMtime < CACHE_TTL_MS) {
-          LOGGER.info("FIA {} archive cache fresh (within {}-day TTL), reusing without refetch: {}",
-              st, CACHE_TTL_MS / 86_400_000L, target);
-          return target;
-        }
+      String sidecar = target + LASTMOD_SIDECAR_SUFFIX;
+      // Freshness is determined by the upstream Last-Modified, never a timer. The FIA datamart
+      // ignores If-Modified-Since (it always answers 200) but DOES send Last-Modified, so we HEAD
+      // the archive and reuse the cached copy only when its Last-Modified matches what we recorded
+      // for the cached bytes. A changed (or first-seen) Last-Modified triggers a full re-download.
+      String upstreamLastModified = headLastModified(url);
+      if (sp.exists(target) && upstreamLastModified != null
+          && upstreamLastModified.equals(readSidecar(sp, sidecar))) {
+        LOGGER.info("FIA {} archive unchanged (Last-Modified {}), reusing: {}",
+            st, upstreamLastModified, target);
+        return target;
       }
       HttpURLConnection conn =
           (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
       conn.setReadTimeout(READ_TIMEOUT_MS);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
-      if (cachedMtime > 0) {
-        conn.setIfModifiedSince(cachedMtime);
-      }
       int status;
       try {
         status = conn.getResponseCode();
@@ -125,14 +122,15 @@ final class FiaStateArchive {
         conn.disconnect();
         throw e;
       }
-      if (status == HttpURLConnection.HTTP_NOT_MODIFIED) {
-        conn.disconnect();
-        LOGGER.info("FIA {} archive cache fresh: {}", st, target);
-        return target;
-      }
       if (status != HttpURLConnection.HTTP_OK) {
         conn.disconnect();
         throw new IOException("HTTP " + status + " from " + url);
+      }
+      // Prefer the GET response's Last-Modified (authoritative for the bytes we are about to write)
+      // and fall back to the HEAD value.
+      String downloadedLastModified = conn.getHeaderField("Last-Modified");
+      if (downloadedLastModified == null) {
+        downloadedLastModified = upstreamLastModified;
       }
       long expectedLength = conn.getContentLengthLong();
       LOGGER.info("FIA {} archive downloading: {} bytes -> {}", st, expectedLength, target);
@@ -146,8 +144,69 @@ final class FiaStateArchive {
         throw new IOException("FIA " + st + " archive incomplete: expected "
             + expectedLength + " bytes, got " + writtenLength + " in " + target);
       }
-      LOGGER.info("FIA {} archive downloaded: {} ({} bytes)", st, target, writtenLength);
+      // Record the upstream Last-Modified so the next run can reuse these bytes when unchanged.
+      if (downloadedLastModified != null) {
+        writeSidecar(sp, sidecar, downloadedLastModified);
+      }
+      LOGGER.info("FIA {} archive downloaded: {} ({} bytes, Last-Modified {})",
+          st, target, writtenLength, downloadedLastModified);
       return target;
+    }
+  }
+
+  /** Issues a HEAD and returns the upstream {@code Last-Modified} header, or null if unavailable. */
+  private static String headLastModified(String url) {
+    HttpURLConnection conn = null;
+    try {
+      conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setRequestMethod("HEAD");
+      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(CONNECT_TIMEOUT_MS);
+      conn.setRequestProperty("User-Agent", "GovData/1.0");
+      if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+        return conn.getHeaderField("Last-Modified");
+      }
+      return null;
+    } catch (IOException e) {
+      // No freshness signal available — caller re-downloads (cannot prove the cache is current).
+      LOGGER.warn("FIA HEAD probe failed for {}: {}", url, e.getMessage());
+      return null;
+    } finally {
+      if (conn != null) {
+        conn.disconnect();
+      }
+    }
+  }
+
+  /** Reads the cached upstream Last-Modified sidecar, or null if absent. */
+  private static String readSidecar(StorageProvider sp, String sidecar) {
+    try {
+      if (!sp.exists(sidecar)) {
+        return null;
+      }
+      try (InputStream in = sp.openInputStream(sidecar)) {
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[256];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+          bos.write(buf, 0, n);
+        }
+        String value = new String(bos.toByteArray(), StandardCharsets.UTF_8).trim();
+        return value.isEmpty() ? null : value;
+      }
+    } catch (IOException e) {
+      LOGGER.warn("FIA Last-Modified sidecar read failed for {}: {}", sidecar, e.getMessage());
+      return null;
+    }
+  }
+
+  /** Writes the upstream Last-Modified sidecar next to the cached archive. */
+  private static void writeSidecar(StorageProvider sp, String sidecar, String value) {
+    try {
+      sp.writeFile(sidecar,
+          new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8)));
+    } catch (IOException e) {
+      LOGGER.warn("FIA Last-Modified sidecar write failed for {}: {}", sidecar, e.getMessage());
     }
   }
 

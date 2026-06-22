@@ -311,23 +311,12 @@ public class EtlPipeline {
           incrementalTracker.invalidateTableCompletion(pipelineName);
           forceReprocessAll = true;
         } else {
-          // Data exists — check if the zero-row empty-result TTL has expired.
-          // If it has, invalidate so the pipeline re-runs the empty batches.
-          long emptyTtlMillisForCacheCheck = materializeConfig != null
-              && materializeConfig.getOptions() != null
-              ? materializeConfig.getOptions().getEmptyResultTtlMillis()
-              : 0;
-          if (cached.isEmptyResultTtlExpired(emptyTtlMillisForCacheCheck)) {
-            LOGGER.info("Pipeline '{}': empty-result TTL expired — invalidating for re-run",
-                pipelineName);
-            incrementalTracker.invalidateTableCompletion(pipelineName);
-            forceReprocessAll = true;
-          } else {
-            // Data exists and TTL not expired — fall through to dimension expansion and the
-            // period-aware filter, which processes only periods whose marker isn't 'complete'.
-            LOGGER.debug("Pipeline '{}' has a table-level marker and data — expanding for "
-                + "per-period filter", pipelineName);
-          }
+          // Data exists — fall through to dimension expansion and the period-aware filter,
+          // which processes only periods whose marker isn't 'complete'. A zero-row result is a
+          // completed result: it is re-processed only when source freshness changes, never on a
+          // timer.
+          LOGGER.debug("Pipeline '{}' has a table-level marker and data — expanding for "
+              + "per-period filter", pipelineName);
         }
       } else if (hasPeriod && materializeConfig != null
           && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG) {
@@ -435,9 +424,6 @@ public class EtlPipeline {
         progressListener.onPhaseComplete("dimension_expansion", totalBatches);
       }
 
-      long emptyResultTtlMillis = materializeConfig != null && materializeConfig.getOptions() != null
-          ? materializeConfig.getOptions().getEmptyResultTtlMillis()
-          : MaterializeOptionsConfig.defaults().getEmptyResultTtlMillis();
       int neededCount;
       // Standard mode stores filtered indices here; partitioned mode filters per-partition in Phase 5
       Set<Integer> standardUnprocessedIndices = null;
@@ -487,8 +473,7 @@ public class EtlPipeline {
         } else {
           LOGGER.info("Phase 2: Bulk filtering {} combinations", totalBatches);
           standardUnprocessedIndices =
-              incrementalTracker.filterUnprocessedWithEmptyTtl(
-                  pipelineName, pipelineName, combinations, emptyResultTtlMillis);
+              incrementalTracker.filterUnprocessed(pipelineName, pipelineName, combinations);
         }
         long filterElapsedMs = System.currentTimeMillis() - filterStartMs;
 
@@ -682,7 +667,15 @@ public class EtlPipeline {
       // already-complete combos upstream; this additionally skips the open period when its source
       // has not changed. Disabled under forceReprocessAll (no committed data / cleared marker) so a
       // dq-rebuild always re-materializes. Hash-type freshness is post-download (handled later).
-      perUnitFreshnessEnabled = hasPeriod
+      // Per-unit freshness applies to any templated multi-unit fetch — period dimensions
+      // ({year}/{month}) AND non-period fetch dimensions ({state}, ...). Gating only on hasPeriod
+      // silently disabled the gate for state-only tables (e.g. FIA fia_plots), which declare
+      // freshness:last_modified to skip unchanged states but instead re-fetched and
+      // re-materialized every state on every resume run. freshnessUnitKey already distinguishes
+      // units by their full fetch-variable set, so per-state tokens are tracked independently.
+      boolean templatedMultiUnitFetch =
+          config.getDimensions() != null && !config.getDimensions().isEmpty();
+      perUnitFreshnessEnabled = (hasPeriod || templatedMultiUnitFetch)
           && freshnessConfig != null
           && freshnessConfig.getType() != FreshnessConfig.Type.HASH
           && dataSource instanceof HttpSource;
@@ -864,8 +857,7 @@ public class EtlPipeline {
             unprocessedIndices = allIndicesSet(partCombos.size());
           } else {
             unprocessedIndices =
-                incrementalTracker.filterUnprocessedWithEmptyTtl(
-                    pipelineName, pipelineName, partCombos, emptyResultTtlMillis);
+                incrementalTracker.filterUnprocessed(pipelineName, pipelineName, partCombos);
             // NOTE: no per-period skip here. Partitioned mode does not write per-period
             // markers (a period spans partitions, so completeness can't be decided from
             // one partition's combos), and the per-combo incremental filter above is the

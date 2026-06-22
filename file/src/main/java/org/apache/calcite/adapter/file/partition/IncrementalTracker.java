@@ -86,24 +86,6 @@ public interface IncrementalTracker {
   }
 
   /**
-   * Checks if a combination needs reprocessing due to empty result TTL expiry.
-   *
-   * <p>This is specifically for empty results (row_count=0) that should be
-   * requeried after a configured interval to check if data became available.
-   *
-   * @param alternateName The alternate partition name
-   * @param sourceTable The source table name
-   * @param keyValues Map of incremental key names to values
-   * @param emptyResultTtlMillis TTL for empty results in milliseconds
-   * @return true if the combination was processed with data OR empty result is within TTL
-   */
-  default boolean isProcessedWithEmptyTtl(String alternateName, String sourceTable,
-      Map<String, String> keyValues, long emptyResultTtlMillis) {
-    // Default: fall back to simple isProcessed check
-    return isProcessed(alternateName, sourceTable, keyValues);
-  }
-
-  /**
    * Gets all processed key value combinations for an alternate partition.
    *
    * @param alternateName The alternate partition name
@@ -164,27 +146,6 @@ public interface IncrementalTracker {
   Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
       List<Map<String, String>> allCombinations);
 
-  /**
-   * Filters combinations considering empty result TTL.
-   *
-   * <p>A combination is considered "needing processing" if:
-   * <ul>
-   *   <li>It was never processed, OR</li>
-   *   <li>It was processed but returned 0 rows AND the TTL has expired</li>
-   * </ul>
-   *
-   * @param alternateName The alternate partition name
-   * @param sourceTable The source table name
-   * @param allCombinations All dimension combinations to check
-   * @param emptyResultTtlMillis TTL for empty results - requery after this interval
-   * @return Set of combination indices that need processing
-   */
-  default Set<Integer> filterUnprocessedWithEmptyTtl(String alternateName, String sourceTable,
-      List<Map<String, String>> allCombinations, long emptyResultTtlMillis) {
-    // Default: fall back to regular filterUnprocessed (ignores TTL)
-    return filterUnprocessed(alternateName, sourceTable, allCombinations);
-  }
-
   // ===== Error Tracking Methods =====
 
   /**
@@ -203,29 +164,6 @@ public interface IncrementalTracker {
       Map<String, String> keyValues, String targetPattern, String errorMessage) {
     // Default implementation treats errors same as empty results
     markProcessedWithRowCount(alternateName, sourceTable, keyValues, targetPattern, 0);
-  }
-
-  /**
-   * Filters combinations considering both empty result TTL and error TTL.
-   *
-   * <p>A combination is considered "needing processing" if:
-   * <ul>
-   *   <li>It was never processed, OR</li>
-   *   <li>It was processed with an error AND the error TTL has expired, OR</li>
-   *   <li>It was processed with 0 rows AND the empty result TTL has expired</li>
-   * </ul>
-   *
-   * @param alternateName The alternate partition name
-   * @param sourceTable The source table name
-   * @param allCombinations All dimension combinations to check
-   * @param emptyResultTtlMillis TTL for empty results - requery after this interval
-   * @param errorTtlMillis TTL for errors - retry after this interval (typically shorter)
-   * @return Set of combination indices that need processing
-   */
-  default Set<Integer> filterUnprocessedWithTtl(String alternateName, String sourceTable,
-      List<Map<String, String>> allCombinations, long emptyResultTtlMillis, long errorTtlMillis) {
-    // Default: fall back to empty TTL filter (ignores error TTL)
-    return filterUnprocessedWithEmptyTtl(alternateName, sourceTable, allCombinations, emptyResultTtlMillis);
   }
 
   /**
@@ -375,18 +313,6 @@ public interface IncrementalTracker {
       this.rowCount = rowCount;
       this.completedAt = completedAt;
       this.sourceFileWatermark = sourceFileWatermark;
-    }
-
-    /**
-     * Check if the empty result TTL has expired.
-     * @param emptyResultTtlMillis The TTL in milliseconds
-     * @return true if TTL has expired and retry is needed
-     */
-    public boolean isEmptyResultTtlExpired(long emptyResultTtlMillis) {
-      if (rowCount > 0 || emptyResultTtlMillis <= 0) {
-        return false; // Not empty or no TTL configured
-      }
-      return System.currentTimeMillis() > completedAt + emptyResultTtlMillis;
     }
 
     /**

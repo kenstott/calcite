@@ -2418,7 +2418,16 @@ public class IcebergMaterializer {
         Set<String> icebergAccessions =
             getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
         // Sync tracker from Iceberg so retries use the cheap path without a second S3 scan.
+        // Only mark accessions the tracker does not already have: re-marking entries that are
+        // already complete rewrites one tracker file per accession on every --etl-resume run
+        // (the write storm + compaction overhead). getTrackedAccessions reads both the bare and
+        // composite key formats, so the delta is correct regardless of how entries were stored.
+        Set<String> alreadyTracked = getTrackedAccessions(config.getTargetTableId(), yearValue);
+        int newlyMarked = 0;
         for (String accession : icebergAccessions) {
+          if (alreadyTracked.contains(accession)) {
+            continue;
+          }
           Map<String, String> accessionKey = new LinkedHashMap<String, String>();
           if (yearValue != null) {
             accessionKey.put("year", yearValue);
@@ -2426,9 +2435,10 @@ public class IcebergMaterializer {
           accessionKey.put(accessionCol, accession);
           incrementalTracker.markProcessed(config.getTargetTableId(),
               config.getSourceTableName(), accessionKey, config.getTargetTableId());
+          newlyMarked++;
         }
-        LOGGER.info("Iceberg scan: {} committed accessions for {}/year={}",
-            icebergAccessions.size(), config.getTargetTableId(), yearValue);
+        LOGGER.info("Iceberg scan: {} committed accessions for {}/year={} ({} newly tracked)",
+            icebergAccessions.size(), config.getTargetTableId(), yearValue, newlyMarked);
         return icebergAccessions;
       } catch (Exception e) {
         // Iceberg unreachable — fall back to tracker to avoid re-processing known-committed data.

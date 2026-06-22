@@ -139,7 +139,7 @@ public class SecFilingCache implements AutoCloseable {
     for (int offset = 0; offset < accessionList.size(); offset += chunkSize) {
       int end = Math.min(offset + chunkSize, accessionList.size());
       List<String> chunk = accessionList.subList(offset, end);
-      tracker.bulkGetCompletedTables(chunk, PHASE_STAGING);
+      tracker.bulkGetCompletedTables(filingKeys(chunk), PHASE_STAGING);
       loaded += chunk.size();
     }
     long elapsed = System.currentTimeMillis() - start;
@@ -169,12 +169,12 @@ public class SecFilingCache implements AutoCloseable {
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
       accessions.add(ie.accession);
     }
-    Map<String, Set<String>> bulk = tracker.bulkGetCompletedTables(accessions, PHASE_STAGING);
+    Map<String, Set<String>> bulk = tracker.bulkGetCompletedTables(filingKeys(accessions), PHASE_STAGING);
     int written = 0;
     int alreadyExists = 0;
     int notNoXbrl = 0;
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
-      Set<String> tables = bulk.get(ie.accession);
+      Set<String> tables = bulk.get(filingKey(ie.accession));
       if (tables == null || !tables.contains(TABLE_NO_XBRL)) {
         notNoXbrl++;
         continue;
@@ -490,7 +490,7 @@ public class SecFilingCache implements AutoCloseable {
         // Reprocess-only mode: skip all candidates not explicitly listed.
         continue;
       }
-      if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+      if (tracker.isComplete(filingKey(ie.accession), TABLE_NO_XBRL, PHASE_STAGING)) {
         // Insider forms (3/4/5) were previously mis-classified as no_xbrl due to a
         // converter bug that downloaded the xslF345X HTML viewer instead of the XML.
         // Clear the stale marker and reprocess so they produce _insider.parquet output.
@@ -511,7 +511,7 @@ public class SecFilingCache implements AutoCloseable {
         cntNoXbrl++;
         continue;
       }
-      Set<String> completed = tracker.getCompletedTables(ie.accession, PHASE_STAGING);
+      Set<String> completed = tracker.getCompletedTables(filingKey(ie.accession), PHASE_STAGING);
       if (!completed.isEmpty()) {
         FormType form = FormType.fromString(ie.formType);
         FileInventory inv = inventoryFromCompletedTables(completed);
@@ -605,7 +605,7 @@ public class SecFilingCache implements AutoCloseable {
     // legitimately be no_xbrl (13F holdings are an info-table xml; SC 13D/G are HTML). A no_xbrl
     // marker on them is a stale bug artifact from before these forms were modeled — clear it and
     // reprocess so the dedicated extractor runs.
-    if (tracker.isComplete(accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+    if (tracker.isComplete(filingKey(accession), TABLE_NO_XBRL, PHASE_STAGING)) {
       if (form.expectsInsider()
           || form.expectsInstitutionalHoldings()
           || form.expectsBeneficialOwnership()) {
@@ -626,7 +626,7 @@ public class SecFilingCache implements AutoCloseable {
     }
 
     // Get completed tables from tracker
-    Set<String> completedTables = tracker.getCompletedTables(accession, PHASE_STAGING);
+    Set<String> completedTables = tracker.getCompletedTables(filingKey(accession), PHASE_STAGING);
 
     if (completedTables.isEmpty()) {
       // Not in tracker - check if files exist (self-healing)
@@ -692,11 +692,11 @@ public class SecFilingCache implements AutoCloseable {
   public boolean areAllFilingsComplete(List<String> accessions, List<String> formTypes,
       boolean vectorizationEnabled) {
     Map<String, Set<String>> bulkState =
-        tracker.bulkGetCompletedTables(accessions, PHASE_STAGING);
+        tracker.bulkGetCompletedTables(filingKeys(accessions), PHASE_STAGING);
 
     for (int i = 0; i < accessions.size(); i++) {
       String accession = accessions.get(i);
-      Set<String> completedTables = bulkState.get(accession);
+      Set<String> completedTables = bulkState.get(filingKey(accession));
 
       if (completedTables == null || completedTables.isEmpty()) {
         return false; // No tracker data at all
@@ -796,6 +796,37 @@ public class SecFilingCache implements AutoCloseable {
       // fall through
     }
     return null;
+  }
+
+  /**
+   * Canonical tracker source-key for a filing: {@code accession_number=<ACC>__year=<YYYY>}.
+   *
+   * <p>This is byte-identical to the flattened key the Iceberg materializer writes for its
+   * {@code {accession_number, year}} key map (see {@code S3HivePipelineTracker.flattenKeyValues}:
+   * a sorted, {@code __}-joined {@code name=value} encoding). Keying every staging marker through
+   * this method means staging and materialize markers share a single source_key format instead of
+   * the previous split between composite (materialize) and bare-accession (staging) keys.
+   *
+   * <p>The year is derived from the accession itself (the {@code -YY-} segment), so every read and
+   * write for a given accession produces the same key, and the tracker's {@code year=} path
+   * partition (which {@code extractYear} computes from the same segment) is unchanged.
+   */
+  private static String filingKey(String accession) {
+    String year = yearFromAccession(accession);
+    if (year == null) {
+      throw new IllegalStateException(
+          "Cannot derive year from accession '" + accession + "' for tracker source-key");
+    }
+    return "accession_number=" + accession + "__year=" + year;
+  }
+
+  /** Maps a collection of accessions to their canonical {@link #filingKey} source-keys. */
+  private static List<String> filingKeys(Collection<String> accessions) {
+    List<String> keys = new ArrayList<String>(accessions.size());
+    for (String accession : accessions) {
+      keys.add(filingKey(accession));
+    }
+    return keys;
   }
 
   private boolean fileExists(String secDir, String cik, String accession, String suffix,
@@ -923,7 +954,7 @@ public class SecFilingCache implements AutoCloseable {
       boolean vectorizationEnabled, FileInventory inventory) {
     recordInventory(accession, inventory);
     // Store filing metadata
-    tracker.markComplete(accession, TABLE_FILING_META, PHASE_STAGING, 1);
+    tracker.markComplete(filingKey(accession), TABLE_FILING_META, PHASE_STAGING, 1);
     // Clear any previous error state
     clearError(accession);
     LOGGER.debug("Marked complete: {}:{}", cik, accession);
@@ -936,7 +967,7 @@ public class SecFilingCache implements AutoCloseable {
    * so that the self-heal path can detect and skip this filing even without a tracker.
    */
   public void markNoXbrl(String cik, String accession, String formType, String filingDate) {
-    tracker.markComplete(accession, TABLE_NO_XBRL, PHASE_STAGING, 0);
+    tracker.markComplete(filingKey(accession), TABLE_NO_XBRL, PHASE_STAGING, 0);
     writeNoXbrlSentinel(cik, accession, filingDate);
     LOGGER.debug("Marked no_xbrl: {}:{}", cik, accession);
   }
@@ -986,7 +1017,7 @@ public class SecFilingCache implements AutoCloseable {
    * Used to fix accessions incorrectly marked no_xbrl due to converter bugs.
    */
   public void clearNoXbrl(String accession) {
-    tracker.markCleared(accession, TABLE_NO_XBRL, PHASE_STAGING);
+    tracker.markCleared(filingKey(accession), TABLE_NO_XBRL, PHASE_STAGING);
     LOGGER.debug("Cleared no_xbrl marker for accession: {}", accession);
   }
 
@@ -1003,7 +1034,7 @@ public class SecFilingCache implements AutoCloseable {
   public int clearStaleInsiderNoXbrl(List<EdgarFullIndexCache.IndexEntry> candidates) {
     int cleared = 0;
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
-      if (tracker.isComplete(ie.accession, TABLE_NO_XBRL, PHASE_STAGING)) {
+      if (tracker.isComplete(filingKey(ie.accession), TABLE_NO_XBRL, PHASE_STAGING)) {
         FormType form = FormType.fromString(ie.formType);
         if (form.expectsInsider()) {
           LOGGER.info("Clearing stale no_xbrl for insider form {} accession {}",
@@ -1025,12 +1056,12 @@ public class SecFilingCache implements AutoCloseable {
   public void markFailed(String cik, String accession, String formType, String filingDate,
       String errorMessage) {
     int errorCount = getErrorCount(accession) + 1;
-    tracker.markError(accession, TABLE_ERROR_COUNT, PHASE_STAGING,
+    tracker.markError(filingKey(accession), TABLE_ERROR_COUNT, PHASE_STAGING,
         errorMessage != null
             ? errorMessage.substring(0, Math.min(500, errorMessage.length()))
             : null);
     // Store error count in row_count field
-    tracker.markComplete(accession, TABLE_ERROR_COUNT, PHASE_STAGING, errorCount);
+    tracker.markComplete(filingKey(accession), TABLE_ERROR_COUNT, PHASE_STAGING, errorCount);
     LOGGER.debug("Marked failed: {}:{} (attempt {})", cik, accession, errorCount);
   }
 
@@ -1099,35 +1130,36 @@ public class SecFilingCache implements AutoCloseable {
    * Record a FileInventory as individual tracker entries.
    */
   private void recordInventory(String accession, FileInventory inventory) {
+    String key = filingKey(accession);
     if (inventory.hasMetadata()) {
-      tracker.markComplete(accession, "metadata", PHASE_STAGING, 1);
+      tracker.markComplete(key, "metadata", PHASE_STAGING, 1);
     }
     if (inventory.hasFacts()) {
-      tracker.markComplete(accession, "facts", PHASE_STAGING, 1);
+      tracker.markComplete(key, "facts", PHASE_STAGING, 1);
     }
     if (inventory.hasContexts()) {
-      tracker.markComplete(accession, "contexts", PHASE_STAGING, 1);
+      tracker.markComplete(key, "contexts", PHASE_STAGING, 1);
     }
     if (inventory.hasRelationships()) {
-      tracker.markComplete(accession, "relationships", PHASE_STAGING, 1);
+      tracker.markComplete(key, "relationships", PHASE_STAGING, 1);
     }
     if (inventory.hasMda()) {
-      tracker.markComplete(accession, "mda", PHASE_STAGING, 1);
+      tracker.markComplete(key, "mda", PHASE_STAGING, 1);
     }
     if (inventory.hasInsider()) {
-      tracker.markComplete(accession, "insider", PHASE_STAGING, 1);
+      tracker.markComplete(key, "insider", PHASE_STAGING, 1);
     }
     if (inventory.hasEarnings()) {
-      tracker.markComplete(accession, "earnings", PHASE_STAGING, 1);
+      tracker.markComplete(key, "earnings", PHASE_STAGING, 1);
     }
     if (inventory.hasChunks()) {
-      tracker.markComplete(accession, "chunks", PHASE_STAGING, 1);
+      tracker.markComplete(key, "chunks", PHASE_STAGING, 1);
     }
     if (inventory.hasInstitutionalHoldings()) {
-      tracker.markComplete(accession, "13f", PHASE_STAGING, 1);
+      tracker.markComplete(key, "13f", PHASE_STAGING, 1);
     }
     if (inventory.hasBeneficialOwnership()) {
-      tracker.markComplete(accession, "13dg", PHASE_STAGING, 1);
+      tracker.markComplete(key, "13dg", PHASE_STAGING, 1);
     }
   }
 
@@ -1158,7 +1190,7 @@ public class SecFilingCache implements AutoCloseable {
     // after markError), that means we recorded the count.
     // We check if there's no successful _filing_meta entry (meaning no markComplete was called).
     // If _filing_meta is complete, the filing succeeded regardless of past errors.
-    if (tracker.isComplete(accession, TABLE_FILING_META, PHASE_STAGING)) {
+    if (tracker.isComplete(filingKey(accession), TABLE_FILING_META, PHASE_STAGING)) {
       return false; // Filing completed successfully
     }
     // Check if error count > 0
@@ -1175,10 +1207,10 @@ public class SecFilingCache implements AutoCloseable {
     // For the generic case, if _error_count is "complete" in tracker, we read count.
     // Since PipelineTracker doesn't expose row_count directly in isComplete,
     // we rely on the tracker's getCompletedTables to check existence.
-    Set<String> completed = tracker.getCompletedTables(accession, PHASE_STAGING);
+    Set<String> completed = tracker.getCompletedTables(filingKey(accession), PHASE_STAGING);
     if (!completed.contains(TABLE_ERROR_COUNT.substring(1))) {
       // Not using substring - check the actual name
-      if (!tracker.isComplete(accession, TABLE_ERROR_COUNT, PHASE_STAGING)) {
+      if (!tracker.isComplete(filingKey(accession), TABLE_ERROR_COUNT, PHASE_STAGING)) {
         return 0;
       }
     }
@@ -1192,7 +1224,7 @@ public class SecFilingCache implements AutoCloseable {
    * Clear error state for an accession.
    */
   private void clearError(String accession) {
-    tracker.markCleared(accession, TABLE_ERROR_COUNT, PHASE_STAGING);
+    tracker.markCleared(filingKey(accession), TABLE_ERROR_COUNT, PHASE_STAGING);
   }
 
   @Override

@@ -392,9 +392,9 @@ fi  # end iceberg/data teardown (only when --rebuild)
   #   object storage          → AWS_ENDPOINT_OVERRIDE (from .env.dq)
   #   bucket names            → GOVDATA_PARQUET_DIR + CALCITE_TRACKER_S3_BUCKET (DQ buckets)
   #   truncated year range    → GOVDATA_START_YEAR (get_dq_start_year) .. current year
-  # No DQ-specific ETL path, no FORCE_FRESH — the exact prod code path runs, so DQ validates
-  # what prod produces. load_env preserves the caller-exported GOVDATA_PARQUET_DIR.
-  export FORCE=true
+  # No DQ-specific ETL path — the exact prod code path runs, so DQ validates what prod
+  # produces. Resumption is governed by the tracker + source freshness only (no force/fresh).
+  # load_env preserves the caller-exported GOVDATA_PARQUET_DIR.
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
   export GOVDATA_INCREMENTAL_START_YEAR="$(date +%Y)"
@@ -468,23 +468,15 @@ fi  # end iceberg/data teardown (only when --rebuild)
 
   # One descending sequence from today: daily (current year) first, then historical (older
   # years, newest→oldest via the schema's year_range `descending: true`).
-  #
-  # --rebuild only: set GOVDATA_FRESH_START=true on the DAILY (first) worker so it writes
-  # a schema-scoped "_period_cleared" sentinel before marking any new completions. This
-  # makes isPeriodComplete ignore all prior-run period markers (compaction-safe, latest-wins).
-  # The HISTORICAL worker deliberately does NOT get GOVDATA_FRESH_START so it does NOT
-  # re-clear and does not erase the daily worker's freshly-written period completes.
+  # Resumption is governed purely by the tracker (already-done units) and source freshness
+  # (last_modified/etag) — there is no force/fresh-start override.
   log_info "$WORKER_ID: DQ ETL — standard DAILY worker (current year) for schema=$SCHEMA"
-  if $REBUILD; then
-    GOVDATA_FRESH_START=true GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily --force
-  else
-    GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily --force
-  fi
+  GOVDATA_RUN_MODE=daily bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" daily
   ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-daily"
 
   _dq_start_year="${REBUILD_START_YEAR:-$(get_dq_start_year "$SCHEMA")}"
   log_info "$WORKER_ID: DQ ETL — standard HISTORICAL worker (years ${_dq_start_year}–$((GOVDATA_INCREMENTAL_START_YEAR - 1)), desc) for schema=$SCHEMA"
-  GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR="$_dq_start_year" bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" historical --force
+  GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR="$_dq_start_year" bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" historical
   ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-historical"
 
   # Post-ETL compaction: drain the markers this run just wrote so the active-year partition

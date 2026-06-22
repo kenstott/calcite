@@ -755,8 +755,6 @@ ENDJSON
 # have no new data today. A skipped sub-run emits one log line and returns
 # immediately — no network I/O, no model file written, no pool slot held.
 #
-# Set FORCE=true in the calling script (or pass --force) to bypass all checks.
-#
 # Usage:
 #   within_release_window <label> <months> [<year_parity>]
 #     months       Comma-separated month numbers (1=Jan … 12=Dec)
@@ -769,11 +767,6 @@ ENDJSON
 
 within_release_window() {
   local label=$1 months=$2 year_parity="${3:-any}"
-
-  if [ "${FORCE:-false}" = true ]; then
-    log_info "$(basename "$0"): --force — bypassing release window for $label"
-    return 0
-  fi
 
   local current_month current_year
   current_month=$(date +%-m)
@@ -802,11 +795,6 @@ within_release_window() {
 within_release_dow() {
   local label=$1 days=$2
 
-  if [ "${FORCE:-false}" = true ]; then
-    log_info "$(basename "$0"): --force — bypassing day-of-week check for $label"
-    return 0
-  fi
-
   local current_dow
   current_dow=$(date +%w)   # 0=Sunday … 6=Saturday
 
@@ -834,7 +822,7 @@ table_in_window() {
     return 0
   fi
 
-  if python3 "$checker" "$schema_yaml" "$table_name" ${FORCE:+--force}; then
+  if python3 "$checker" "$schema_yaml" "$table_name"; then
     return 0
   else
     return 1
@@ -1013,11 +1001,6 @@ build_inline_model() {
   local extra_json=""
   if [ -n "$extra_operand" ]; then
     extra_json=",${extra_operand}"
-  fi
-
-  # data-fix.sh sets FORCE_FRESH=true to trigger freshStart (calls clearAllCompletions on the tracker)
-  if [ "${FORCE_FRESH:-false}" = true ]; then
-    extra_json="${extra_json},\"freshStart\":true"
   fi
 
   printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s","trackerBackend":"s3","trackerConfig":{"bucket":"${CALCITE_TRACKER_S3_BUCKET}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"},"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \

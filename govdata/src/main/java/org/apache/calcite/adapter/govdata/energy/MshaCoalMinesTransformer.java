@@ -46,7 +46,8 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
       "https://arlweb.msha.gov/OpenGovernmentData/DataSets/Mines.zip";
   private static final String MINES_CACHE_FILE =
       System.getProperty("java.io.tmpdir") + File.separator + "msha_mines_latest.csv";
-  private static final long CACHE_TTL_MS = 24L * 60 * 60 * 1000; // 24 hours
+  /** Sidecar recording the upstream {@code Last-Modified} the cached CSV was downloaded at. */
+  private static final String MINES_LASTMOD_SIDECAR = MINES_CACHE_FILE + ".lastmodified";
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -199,8 +200,12 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
 
   private Map<String, Map<String, String>> loadMinesReference() {
     File cacheFile = new File(MINES_CACHE_FILE);
-    boolean needDownload = !cacheFile.exists()
-        || (System.currentTimeMillis() - cacheFile.lastModified()) > CACHE_TTL_MS;
+    // Freshness by upstream Last-Modified, never a timer: reuse the cached CSV only when the MSHA
+    // archive's Last-Modified matches what we recorded for it; a change (or first run) re-downloads.
+    String upstreamLastModified = headLastModified(MINES_ZIP_URL);
+    boolean fresh = cacheFile.exists() && upstreamLastModified != null
+        && upstreamLastModified.equals(readLastModifiedSidecar());
+    boolean needDownload = !fresh;
 
     if (needDownload) {
       try {
@@ -215,6 +220,9 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
             fos.write(csvContent.getBytes("UTF-8"));
           } finally {
             fos.close();
+          }
+          if (upstreamLastModified != null) {
+            writeLastModifiedSidecar(upstreamLastModified);
           }
         } else {
           LOGGER.warn("MSHA Mines: could not find Mines.txt or Mines.csv in ZIP");
@@ -348,6 +356,69 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
       is.close();
     }
     return baos.toByteArray();
+  }
+
+  /** Issues a HEAD and returns the upstream {@code Last-Modified} header, or null if unavailable. */
+  private String headLastModified(String url) {
+    HttpURLConnection conn = null;
+    try {
+      conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setRequestMethod("HEAD");
+      conn.setConnectTimeout(30000);
+      conn.setReadTimeout(30000);
+      conn.setRequestProperty("User-Agent", "GovData/1.0");
+      if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
+        return conn.getHeaderField("Last-Modified");
+      }
+      return null;
+    } catch (IOException e) {
+      LOGGER.warn("MSHA Mines: HEAD probe failed for {}: {}", url, e.getMessage());
+      return null;
+    } finally {
+      if (conn != null) {
+        conn.disconnect();
+      }
+    }
+  }
+
+  /** Reads the cached upstream Last-Modified sidecar, or null if absent. */
+  private String readLastModifiedSidecar() {
+    File sidecar = new File(MINES_LASTMOD_SIDECAR);
+    if (!sidecar.exists()) {
+      return null;
+    }
+    try {
+      FileInputStream in = new FileInputStream(sidecar);
+      try {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[256];
+        int n;
+        while ((n = in.read(buf)) > 0) {
+          baos.write(buf, 0, n);
+        }
+        String value = new String(baos.toByteArray(), "UTF-8").trim();
+        return value.isEmpty() ? null : value;
+      } finally {
+        in.close();
+      }
+    } catch (IOException e) {
+      LOGGER.warn("MSHA Mines: Last-Modified sidecar read failed: {}", e.getMessage());
+      return null;
+    }
+  }
+
+  /** Writes the upstream Last-Modified sidecar next to the cached CSV. */
+  private void writeLastModifiedSidecar(String value) {
+    try {
+      FileOutputStream out = new FileOutputStream(MINES_LASTMOD_SIDECAR);
+      try {
+        out.write(value.getBytes("UTF-8"));
+      } finally {
+        out.close();
+      }
+    } catch (IOException e) {
+      LOGGER.warn("MSHA Mines: Last-Modified sidecar write failed: {}", e.getMessage());
+    }
   }
 
   private void putStringVal(ObjectNode out, String key, String val) {

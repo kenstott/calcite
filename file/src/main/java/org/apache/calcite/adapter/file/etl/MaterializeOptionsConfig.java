@@ -49,7 +49,6 @@ public class MaterializeOptionsConfig {
   private static final int DEFAULT_BATCH_SIZE = 10000;
   private static final StagingMode DEFAULT_STAGING_MODE = StagingMode.REMOTE;
   private static final boolean DEFAULT_PRESERVE_INSERTION_ORDER = false;
-  private static final int DEFAULT_EMPTY_RESULT_TTL_DAYS = 7;
 
   /**
    * Staging mode for intermediate files during transformation.
@@ -66,7 +65,6 @@ public class MaterializeOptionsConfig {
   private final int batchSize;
   private final StagingMode stagingMode;
   private final boolean preserveInsertionOrder;
-  private final int emptyResultTtlDays;
 
   private MaterializeOptionsConfig(Builder builder) {
     this.threads = builder.threads > 0 ? builder.threads : DEFAULT_THREADS;
@@ -75,8 +73,6 @@ public class MaterializeOptionsConfig {
     this.stagingMode = builder.stagingMode != null ? builder.stagingMode : DEFAULT_STAGING_MODE;
     this.preserveInsertionOrder = builder.preserveInsertionOrder != null
         ? builder.preserveInsertionOrder : DEFAULT_PRESERVE_INSERTION_ORDER;
-    this.emptyResultTtlDays = builder.emptyResultTtlDays > 0
-        ? builder.emptyResultTtlDays : DEFAULT_EMPTY_RESULT_TTL_DAYS;
   }
 
   /**
@@ -117,22 +113,6 @@ public class MaterializeOptionsConfig {
    */
   public boolean isPreserveInsertionOrder() {
     return preserveInsertionOrder;
-  }
-
-  /**
-   * Returns the TTL in days for empty results.
-   * Empty results (0 rows returned from API) will be requeried after this many days.
-   * This handles cases where data may not be available initially but becomes available later.
-   */
-  public int getEmptyResultTtlDays() {
-    return emptyResultTtlDays;
-  }
-
-  /**
-   * Returns the TTL in milliseconds for empty results.
-   */
-  public long getEmptyResultTtlMillis() {
-    return emptyResultTtlDays * 24L * 60L * 60L * 1000L;
   }
 
   /**
@@ -193,11 +173,6 @@ public class MaterializeOptionsConfig {
       builder.preserveInsertionOrder((Boolean) preserveOrderObj);
     }
 
-    Object emptyResultTtlObj = map.get("emptyResultTtlDays");
-    if (emptyResultTtlObj instanceof Number) {
-      builder.emptyResultTtlDays(((Number) emptyResultTtlObj).intValue());
-    }
-
     return builder.build();
   }
 
@@ -210,7 +185,6 @@ public class MaterializeOptionsConfig {
     private int batchSize;
     private StagingMode stagingMode;
     private Boolean preserveInsertionOrder;
-    private int emptyResultTtlDays;
 
     public Builder threads(int threads) {
       this.threads = threads;
@@ -234,11 +208,6 @@ public class MaterializeOptionsConfig {
 
     public Builder preserveInsertionOrder(boolean preserveInsertionOrder) {
       this.preserveInsertionOrder = preserveInsertionOrder;
-      return this;
-    }
-
-    public Builder emptyResultTtlDays(int emptyResultTtlDays) {
-      this.emptyResultTtlDays = emptyResultTtlDays;
       return this;
     }
 
