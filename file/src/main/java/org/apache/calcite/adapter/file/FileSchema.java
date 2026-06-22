@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
+import org.apache.calcite.adapter.file.format.json.JsonConversionUtil;
 import org.apache.calcite.adapter.file.format.json.JsonMultiTableFactory;
 import org.apache.calcite.adapter.file.format.json.JsonSearchConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
@@ -222,6 +223,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   // Track refreshable tables for periodic refresh (needed for DUCKDB)
   private final List<RefreshableParquetCacheTable> refreshableTables = new ArrayList<>();
   private ScheduledExecutorService refreshScheduler;
+
+  // When true (set by FileSchemaFactory for the DuckDB engine), CSV/TSV/JSON files are read
+  // directly by DuckDB via read_csv_auto()/read_json_auto() and are NOT converted to Parquet.
+  // This avoids the Hadoop-based ParquetWriter, which cannot run on the JDK 25 that Trino requires.
+  private boolean duckdbNativeFormats;
 
   // Listeners for table refresh events (used by DUCKDB to recreate views)
   private final List<org.apache.calcite.adapter.file.refresh.TableRefreshListener> refreshListeners =
@@ -2524,6 +2530,18 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Common source processing - remove compression extension
     final Source sourceSansGz = source.trim(".gz");
+
+    // DuckDB reads CSV/TSV/JSON natively; YAML, flattening and JSONPath extraction are materialized
+    // to a JSON file. Either way the Hadoop ParquetWriter — which cannot run on the JDK 25 that Trino
+    // requires — is never invoked, which is why querying a CSV directory previously failed with
+    // "No files found that match …customers.parquet". Gated entirely on duckdbNativeFormats (set only
+    // by the Trino file connector), so default behaviour is unchanged. See registerDuckDBNativeTable().
+    if (duckdbNativeFormats) {
+      Boolean handled = registerDuckDBNativeTable(builder, source, tableName, tableDef, path, sourceSansGz);
+      if (handled != null) {
+        return handled;
+      }
+    }
 
     // Handle refreshable CSV/JSON files with Parquet caching
     LOGGER.info("Refresh check: hasRefresh={}, isCSVorJSON={}, engineType={}, baseDirectory!=null={}",
@@ -5904,6 +5922,123 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Tables will use this metadata when getStatistic() is called
     // This enables query optimization and JDBC metadata support
+  }
+
+  /**
+   * Enables native DuckDB reading of CSV/TSV/JSON files. When set, these formats are registered
+   * for direct reading via {@code read_csv_auto()}/{@code read_json_auto()} instead of being
+   * converted to Parquet through the Hadoop ParquetWriter (which cannot run on JDK 25). Set by
+   * {@link FileSchemaFactory} on the internal conversion FileSchema when the DuckDB engine is used.
+   */
+  public void setDuckdbNativeFormats(boolean duckdbNativeFormats) {
+    this.duckdbNativeFormats = duckdbNativeFormats;
+  }
+
+  /**
+   * Registers a CSV/TSV/JSON/YAML source for the DuckDB engine without any Hadoop Parquet conversion,
+   * returning {@code true} when it handled the source, or {@code null} to fall through to the normal
+   * path (non-native format, or an explicit {@code format} override). Plain CSV/TSV/JSON are read
+   * directly by DuckDB ({@code read_csv_auto}/{@code read_json_auto}); YAML, {@code flatten} and
+   * JSONPath ({@code jsonSearchPaths}) are materialized to a JSON file via {@link JsonConversionUtil}
+   * — serializing the very rows the in-scan transform produces, so the columns match exactly — and
+   * that JSON file is recorded as the table's source so DuckDB reads it. Only called when
+   * {@code duckdbNativeFormats} is set (by the Trino file connector).
+   */
+  private Boolean registerDuckDBNativeTable(ImmutableMap.Builder<String, Table> builder,
+      Source source, @Nullable String tableName, @Nullable Map<String, Object> tableDef,
+      String lowerPath, Source sourceSansGz) {
+    // Explicit format overrides keep the normal path.
+    if (tableDef != null && tableDef.get("format") != null) {
+      return null;
+    }
+    boolean isCsvTsv = lowerPath.endsWith(".csv") || lowerPath.endsWith(".csv.gz")
+        || lowerPath.endsWith(".tsv") || lowerPath.endsWith(".tsv.gz");
+    boolean isJson = lowerPath.endsWith(".json") || lowerPath.endsWith(".json.gz");
+    boolean isYaml = lowerPath.endsWith(".yaml") || lowerPath.endsWith(".yaml.gz")
+        || lowerPath.endsWith(".yml") || lowerPath.endsWith(".yml.gz");
+    if (!isCsvTsv && !isJson && !isYaml) {
+      return null;
+    }
+
+    String nativeName = applyCasing(Util.first(tableName, sourceSansGz.path()), tableNameCasing);
+    boolean flattenRequested = (this.flatten != null && this.flatten)
+        || (tableDef != null && Boolean.TRUE.equals(tableDef.get("flatten")));
+    boolean jsonPath = (isJson || isYaml)
+        && tableDef != null && tableDef.containsKey("jsonSearchPaths");
+
+    try {
+      // JSONPath extraction yields one or more derived tables — materialize each to NDJSON.
+      if (jsonPath) {
+        JsonSearchConfig config = JsonSearchConfig.fromTableDefinition(tableDef);
+        Map<String, Table> jsonTables = JsonMultiTableFactory.createTables(source, config);
+        for (Map.Entry<String, Table> entry : jsonTables.entrySet()) {
+          registerMaterializedJson(builder, entry.getKey(), entry.getValue(), null);
+        }
+        return true;
+      }
+
+      // CSV/TSV (no flattening): DuckDB reads the source directly via read_csv_auto.
+      if (isCsvTsv && !flattenRequested) {
+        Table csv = new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
+        builder.put(nativeName, csv);
+        recordTableMetadata(nativeName, csv, source, tableDef);
+        LOGGER.info("DuckDB native read: '{}' from '{}' (read_csv_auto)", nativeName, source.path());
+        return true;
+      }
+
+      // Plain JSON (no flattening): DuckDB reads the source directly via read_json_auto.
+      if (isJson && !flattenRequested) {
+        Table json = new JsonScannableTable(source, null, columnNameCasing);
+        builder.put(nativeName, json);
+        recordTableMetadata(nativeName, json, source, tableDef);
+        LOGGER.info("DuckDB native read: '{}' from '{}' (read_json_auto)", nativeName, source.path());
+        return true;
+      }
+
+      // YAML (DuckDB can't parse YAML) or a flatten request: build the same Calcite table the normal
+      // path would and materialize its rows to NDJSON so DuckDB reads the transformed result.
+      Map<String, Object> options = null;
+      if (flattenRequested) {
+        options = new HashMap<>();
+        options.put("flatten", true);
+        options.put("flattenSeparator",
+            tableDef != null && tableDef.get("flattenSeparator") != null
+                ? tableDef.get("flattenSeparator") : "_");
+      }
+      Table built = new JsonScannableTable(source, options, columnNameCasing);
+      registerMaterializedJson(builder, nativeName, built, tableDef);
+      return true;
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Failed to register DuckDB-native table '" + nativeName + "' from " + source.path(), e);
+    }
+  }
+
+  /**
+   * Materializes {@code table}'s rows to a JSON file under {@code .duckdb_native/} and records it as
+   * a native JSON source so {@code DuckDBJdbcSchemaFactory} builds a {@code read_json_auto()} view.
+   * The directory is outside {@code conversions/} so the converted-file scan does not double-register
+   * it.
+   */
+  private void registerMaterializedJson(ImmutableMap.Builder<String, Table> builder,
+      String tableName, Table table, @Nullable Map<String, Object> tableDef) throws Exception {
+    String finalName = applyCasing(tableName, tableNameCasing);
+    File nativeDir = new File(operatingCacheDirectory, ".duckdb_native");
+    if (!nativeDir.exists()) {
+      nativeDir.mkdirs();
+    }
+    File jsonFile = new File(nativeDir,
+        org.apache.calcite.adapter.file.converters.ConverterUtils.sanitizeIdentifier(finalName) + ".json");
+    if (!JsonConversionUtil.writeTableAsJson(table, jsonFile)) {
+      throw new RuntimeException("DuckDB-native materialization requires a scannable table for '"
+          + finalName + "' (got " + table.getClass().getSimpleName() + ")");
+    }
+    Source jsonSource = Sources.of(jsonFile);
+    Table jsonTable = new JsonScannableTable(jsonSource, null, columnNameCasing);
+    builder.put(finalName, jsonTable);
+    recordTableMetadata(finalName, jsonTable, jsonSource, tableDef);
+    LOGGER.info("DuckDB native read: '{}' materialized to '{}' (read_json_auto)",
+        finalName, jsonFile.getAbsolutePath());
   }
 
   /**

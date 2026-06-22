@@ -725,6 +725,16 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
+      // Let DuckDB read CSV/TSV/JSON directly (read_csv_auto/read_json_auto) instead of converting
+      // them to Parquet via Hadoop, which cannot run on the JDK 25 that Trino requires. Opt-in via
+      // the "duckdbNativeFormats" operand (set by the Trino file connector); off by default so
+      // existing models keep their Parquet-cache behaviour.
+      Boolean duckdbNativeFormats = parseBooleanValue(operand.get("duckdbNativeFormats"));
+      if (Boolean.TRUE.equals(duckdbNativeFormats)) {
+        fileSchema.setDuckdbNativeFormats(true);
+        LOGGER.info("DuckDB native CSV/TSV/JSON reading enabled for schema '{}'", name);
+      }
+
       // Set constraint metadata on FileSchema if available
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for DuckDB", constraintsToPass.size());

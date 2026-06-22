@@ -569,6 +569,27 @@ public class DuckDBJdbcSchemaFactory {
   }
 
   /**
+   * Returns the DuckDB table function that reads {@code sourceFile} directly, or {@code null} if the
+   * file is not a natively-readable text format. CSV/TSV map to {@code read_csv_auto} (it sniffs the
+   * delimiter, including tab) and JSON maps to {@code read_json_auto}; both handle gzip transparently.
+   * Used for the DuckDB engine so CSV/TSV/JSON never require a Hadoop-based Parquet conversion.
+   */
+  private static String duckdbNativeReader(String sourceFile) {
+    if (sourceFile == null) {
+      return null;
+    }
+    String lower = sourceFile.toLowerCase(java.util.Locale.ROOT);
+    if (lower.endsWith(".json") || lower.endsWith(".json.gz")) {
+      return "read_json_auto";
+    }
+    if (lower.endsWith(".csv") || lower.endsWith(".csv.gz")
+        || lower.endsWith(".tsv") || lower.endsWith(".tsv.gz")) {
+      return "read_csv_auto";
+    }
+    return null;
+  }
+
+  /**
    * Creates a DuckDB dialect with custom lex configuration.
    * This provides scaffolding to handle any lex issues we encounter.
    */
@@ -1348,6 +1369,35 @@ public class DuckDBJdbcSchemaFactory {
                 e.printStackTrace();
               }
               }
+            }
+          }
+        } else if (duckdbNativeReader(record.getSourceFile()) != null) {
+          // CSV/TSV/JSON read directly from the recorded source file — no Parquet conversion.
+          // DuckDB's read_csv_auto()/read_json_auto() infer schema and handle gzip natively, so the
+          // Hadoop ParquetWriter (incompatible with the JDK 25 Trino requires) is never invoked.
+          // Multi-table sources (Excel/HTML) are NOT read here: each is exploded into per-table JSON
+          // files that are scanned and recorded as their own tables, so they arrive with a JSON
+          // sourceFile of their own; the original Excel/HTML record has a non-native sourceFile and
+          // is correctly skipped.
+          String sourcePath = record.getSourceFile();
+          String readFn = duckdbNativeReader(sourcePath);
+          if (viewExists(conn, duckdbSchema, tableName)) {
+            LOGGER.debug("⚡ Native view exists, skipped: {}.{}", duckdbSchema, tableName);
+          } else {
+            String sql =
+                String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM %s('%s')",
+                    duckdbSchema, tableName, readFn, sourcePath);
+            LOGGER.info("Creating DuckDB native view: \"{}.{}\" -> {}('{}')",
+                duckdbSchema, tableName, readFn, sourcePath);
+            try {
+              conn.createStatement().execute(sql);
+              viewCount++;
+              LOGGER.info("✅ Created DuckDB native view: {}.{}", duckdbSchema, tableName);
+            } catch (SQLException e) {
+              LOGGER.error("Failed to create native view for '{}' from '{}': {}",
+                  tableName, sourcePath, e.getMessage());
+              throw new RuntimeException("Failed to create DuckDB view for '" + tableName
+                  + "' from source '" + sourcePath + "'", e);
             }
           }
         } else {

@@ -131,6 +131,9 @@ public class FileClientModule
         }
         operand.put("recursive", config.isRecursive());
         operand.put("executionEngine", config.getExecutionEngine());
+        // The DuckDB engine reads CSV/TSV/JSON natively (read_csv_auto/read_json_auto) rather than
+        // converting them to Parquet through Hadoop, which cannot run on the JDK 25 Trino requires.
+        operand.put("duckdbNativeFormats", true);
         if (config.getRefreshInterval() != null) {
             operand.put("refreshInterval", config.getRefreshInterval());
         }
