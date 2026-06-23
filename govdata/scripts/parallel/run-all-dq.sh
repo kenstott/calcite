@@ -67,6 +67,9 @@ while [[ $# -gt 0 ]]; do
     --etl-resume)
       SLOT_MODE="dq-etl-resume"
       ;;
+    --compact-first|--no-compact-first)
+      POOL_EXTRA_ARGS+=("$1")
+      ;;
     --help|-h)
       echo "Usage: $(basename "$0") [--schema name] [--max-restarts N] [--poll-interval secs] [-j N] [--local-jar] [--no-rebuild|--etl-resume]"
       echo ""
@@ -83,6 +86,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --no-rebuild         Run DQ only against existing R2 data (no ETL teardown/re-ingest)"
       echo "  --etl-resume         Run ETL (tracker-aware; resumes unfinished partitions) then DQ;"
       echo "                       no teardown of Iceberg metadata or trackers"
+      echo "  --no-compact-first   Skip the serial pre-pool tracker compaction sweep (on by default;"
+      echo "                       the sweep merges SIGKILL/OOM-stranded straggler markers serially)"
       exit 0
       ;;
     *)
