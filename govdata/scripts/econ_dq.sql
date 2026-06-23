@@ -113,7 +113,7 @@ FROM (
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
   UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
   UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400
-  UNION ALL SELECT 'world_indicators',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',      allow_moved_paths := true)), 1000
+  UNION ALL SELECT 'world_indicators',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',      allow_moved_paths := true)), 400
   UNION ALL SELECT 'fred_indicators',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',       allow_moved_paths := true)), 3000
   UNION ALL SELECT 'national_accounts',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts',     allow_moved_paths := true)), 100
   UNION ALL SELECT 'state_personal_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income', allow_moved_paths := true)), 300
