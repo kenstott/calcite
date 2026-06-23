@@ -99,15 +99,16 @@ final class FiaStateArchive {
     synchronized (lock) {
       StorageProvider sp = StorageProviderFactory.createForGovDataCache();
       String sidecar = target + LASTMOD_SIDECAR_SUFFIX;
-      // Freshness is determined by the upstream Last-Modified, never a timer. The FIA datamart
-      // ignores If-Modified-Since (it always answers 200) but DOES send Last-Modified, so we HEAD
-      // the archive and reuse the cached copy only when its Last-Modified matches what we recorded
-      // for the cached bytes. A changed (or first-seen) Last-Modified triggers a full re-download.
-      String upstreamLastModified = headLastModified(url);
-      if (sp.exists(target) && upstreamLastModified != null
-          && upstreamLastModified.equals(readSidecar(sp, sidecar))) {
-        LOGGER.info("FIA {} archive unchanged (Last-Modified {}), reusing: {}",
-            st, upstreamLastModified, target);
+      // Freshness is determined by an upstream validator, never a timer. We prefer the content-based
+      // ETag (robust to a server re-stamping Last-Modified without a content change) and fall back to
+      // Last-Modified when no ETag is sent. A HEAD reads the current validator; we reuse the cached
+      // copy only when it matches what we recorded for the cached bytes. A changed (or first-seen)
+      // validator triggers a full re-download.
+      String upstreamValidator = headValidator(url);
+      if (sp.exists(target) && upstreamValidator != null
+          && upstreamValidator.equals(readSidecar(sp, sidecar))) {
+        LOGGER.info("FIA {} archive unchanged (validator {}), reusing: {}",
+            st, upstreamValidator, target);
         return target;
       }
       HttpURLConnection conn =
@@ -126,11 +127,11 @@ final class FiaStateArchive {
         conn.disconnect();
         throw new IOException("HTTP " + status + " from " + url);
       }
-      // Prefer the GET response's Last-Modified (authoritative for the bytes we are about to write)
+      // Prefer the GET response's validator (authoritative for the bytes we are about to write)
       // and fall back to the HEAD value.
-      String downloadedLastModified = conn.getHeaderField("Last-Modified");
-      if (downloadedLastModified == null) {
-        downloadedLastModified = upstreamLastModified;
+      String downloadedValidator = validatorOf(conn);
+      if (downloadedValidator == null) {
+        downloadedValidator = upstreamValidator;
       }
       long expectedLength = conn.getContentLengthLong();
       LOGGER.info("FIA {} archive downloading: {} bytes -> {}", st, expectedLength, target);
@@ -144,18 +145,36 @@ final class FiaStateArchive {
         throw new IOException("FIA " + st + " archive incomplete: expected "
             + expectedLength + " bytes, got " + writtenLength + " in " + target);
       }
-      // Record the upstream Last-Modified so the next run can reuse these bytes when unchanged.
-      if (downloadedLastModified != null) {
-        writeSidecar(sp, sidecar, downloadedLastModified);
+      // Record the validator so the next run can reuse these bytes when unchanged.
+      if (downloadedValidator != null) {
+        writeSidecar(sp, sidecar, downloadedValidator);
       }
-      LOGGER.info("FIA {} archive downloaded: {} ({} bytes, Last-Modified {})",
-          st, target, writtenLength, downloadedLastModified);
+      LOGGER.info("FIA {} archive downloaded: {} ({} bytes, validator {})",
+          st, target, writtenLength, downloadedValidator);
       return target;
     }
   }
 
-  /** Issues a HEAD and returns the upstream {@code Last-Modified} header, or null if unavailable. */
-  private static String headLastModified(String url) {
+  /**
+   * Extracts a cache validator from a response: prefers the content-based {@code ETag}, falls back
+   * to {@code Last-Modified}. The two are prefixed ({@code etag:}/{@code lm:}) so they can never be
+   * confused, and so an older Last-Modified-only sidecar safely fails to match (one re-download on
+   * upgrade, then stable). Returns null if the server sends neither.
+   */
+  private static String validatorOf(HttpURLConnection conn) {
+    String etag = conn.getHeaderField("ETag");
+    if (etag != null && !etag.trim().isEmpty()) {
+      return "etag:" + etag.trim();
+    }
+    String lm = conn.getHeaderField("Last-Modified");
+    if (lm != null && !lm.trim().isEmpty()) {
+      return "lm:" + lm.trim();
+    }
+    return null;
+  }
+
+  /** Issues a HEAD and returns the upstream cache validator (ETag preferred), or null if unavailable. */
+  private static String headValidator(String url) {
     HttpURLConnection conn = null;
     try {
       conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
@@ -164,7 +183,7 @@ final class FiaStateArchive {
       conn.setReadTimeout(CONNECT_TIMEOUT_MS);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
       if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
-        return conn.getHeaderField("Last-Modified");
+        return validatorOf(conn);
       }
       return null;
     } catch (IOException e) {

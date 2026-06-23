@@ -125,6 +125,12 @@ public class IcebergMaterializer {
   private final Map<String, Map<String, String>> sourcePathsCache =
       new HashMap<String, Map<String, String>>();
 
+  /** Cache of the S3 source-file watermark per (basePath, ext). The non-wildcard base of a
+   *  {@code year=*} source pattern collapses to the whole schema prefix (e.g. {@code sec/}), so
+   *  every table in a materialize pass would otherwise do an identical full-bucket recursive LIST.
+   *  Key: "basePath:ext", Value: max lastModified. Stable within a run (source files are pre-staged). */
+  private final Map<String, Long> s3WatermarkCache = new HashMap<String, Long>();
+
   /**
    * Creates a materializer with default retry settings.
    *
@@ -2602,6 +2608,14 @@ public class IcebergMaterializer {
         basePath = basePath.substring(0, lastSlash + 1);
       }
     }
+    // The recursive LIST below walks the whole basePath subtree (for a year=* pattern that is the
+    // entire schema prefix, e.g. sec/). The result is identical for every table sharing that
+    // basePath, so cache it per (basePath, ext) to collapse N per-table full-bucket walks into one.
+    String wmKey = basePath + ":" + ext;
+    Long cachedWm = s3WatermarkCache.get(wmKey);
+    if (cachedWm != null) {
+      return cachedWm;
+    }
     LOGGER.debug("Computing S3 source file watermark for base path: {}", basePath);
     long maxLastModified = 0;
     try {
@@ -2614,6 +2628,7 @@ public class IcebergMaterializer {
           }
         }
       }
+      s3WatermarkCache.put(wmKey, maxLastModified);
       LOGGER.debug("S3 source file watermark: {} ({} objects scanned, base: {})",
           maxLastModified, files.size(), basePath);
     } catch (IOException e) {

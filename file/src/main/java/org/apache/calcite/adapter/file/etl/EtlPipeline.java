@@ -1906,50 +1906,21 @@ public class EtlPipeline {
       }
     }
 
-    // Fetch data — this is the expensive network I/O that benefits from parallelism.
-    // Multiple threads can fetch concurrently; writes are serialized below.
-    Iterator<Map<String, Object>> data = null;
-    if (dataProvider != null) {
-      data = dataProvider.fetch(config, variables);
-      if (data != null) {
-        LOGGER.debug("Using custom DataProvider for batch {}", processedCount);
-      }
-    }
-    if (data == null) {
-      // Delta: inject the recovered watermark as the incremental lower bound (e.g. updatedSince)
-      // so the source pulls only records changed since the last commit. Paired with an Iceberg
-      // append write, the delta adds to — rather than replaces — the committed table.
-      if (deltaBoundVar != null && deltaBoundValue != null) {
-        variables.put(deltaBoundVar, deltaBoundValue);
-      }
-      data = dataSource.fetch(variables);
-    }
-
-    // Apply configured row transformers as a streaming one-to-many flat-map. Wrapping the
-    // source here means every downstream stage (freshness hashing, computed_delta, write)
-    // operates on the transformed rows. Memory stays bounded — only the fan-out of a single
-    // input row is buffered at a time.
-    List<RowTransformer> rowTransformers = loadRowTransformers(config.getHooks());
-    if (data != null && !rowTransformers.isEmpty()) {
-      data = applyRowTransformers(data, rowTransformers, config, variables);
-    }
-
-    // DQ sample cap: in DQ sample mode (GOVDATA_DQ=true) a table may declare dqRowLimit to
-    // bound rows per fetch-unit (per period). This wraps the per-combination iterator so each
-    // period (e.g. each program year) yields at most N rows — fast, but still spanning every
-    // period so year-over-year/format changes are exercised. Applied after row transformers so
-    // the cap bounds the final (post-expansion) output. Cache-safe: caching sources have
-    // already written their full body before this iterator runs, and CSV_STREAM writes none.
-    data = applyDqRowLimit(data, pipelineName);
+    // Fetch data via the (re-runnable) source chain — the expensive network I/O. The
+    // hash-freshness branch below drains this once to compute a streaming hash, then re-fetches
+    // from the now-warm raw cache for the write, so a large dataset is never held in memory.
+    Iterator<Map<String, Object>> data =
+        fetchDataChain(config, dataSource, variables, pipelineName, processedCount);
     // Hold the source-chain head so its underlying stream is released after the write even when
     // dqRowLimit stops iteration before EOF (otherwise the S3 InputStream leaks one connection per
-    // fetch-unit). The hash/computed_delta branches below fully drain it first (self-close); the
-    // finally-close is then an idempotent no-op.
+    // fetch-unit). The hash/computed_delta branches below fully drain it first (self-close).
     final Iterator<Map<String, Object>> sourceChain = data;
 
     // hash freshness gate (post-download): if freshness.type==HASH and the fetched content
     // is identical to the last run, skip the write and return 0 rows (no new snapshot).
-    // We materialise the iterator here regardless (hash type always requires a full pull).
+    // The hash is computed by STREAMING the fetched rows through an order-independent multiset
+    // digest (no full materialisation — a large table would OOM otherwise). When the content
+    // changed, the chain is re-fetched from the now-warm raw cache for the write.
     FreshnessConfig freshnessConfigForHash = config.getFreshness();
     boolean hashFreshnessActive = freshnessConfigForHash != null
         && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
@@ -1957,12 +1928,9 @@ public class EtlPipeline {
     // hashFreshnessToken is set if we computed a hash and must store it post-write
     String hashFreshnessToken = null;
     if (hashFreshnessActive) {
-      // Materialise so we can hash the full content deterministically
-      List<Map<String, Object>> allRowsForHash = new ArrayList<Map<String, Object>>();
-      while (data.hasNext()) {
-        allRowsForHash.add(data.next());
-      }
-      String currentHash = hashRows(allRowsForHash);
+      // Stream the chain once through a multiset hash — O(1) memory, order-independent.
+      String currentHash = hashRowsStreaming(data);
+      closeQuietly(data);
       String previousHash = incrementalTracker.getFreshnessToken(pipelineName);
       // Only skip when committed data exists to preserve. Under forceReprocessAll (no Iceberg data /
       // purged / cleared marker) we still capture+persist the hash below, but must WRITE this run —
@@ -1981,8 +1949,9 @@ public class EtlPipeline {
           pipelineName, processedCount,
           previousHash == null ? "<none>" : previousHash, currentHash);
       hashFreshnessToken = currentHash;
-      // Replace the iterator with the materialised list
-      data = allRowsForHash.iterator();
+      // Re-fetch for the write — the chain above was drained to hash it. The raw HTTP response
+      // is cached after the first pull, so this re-parses from the warm cache (no second download).
+      data = fetchDataChain(config, dataSource, variables, pipelineName, processedCount);
     }
 
     // computed_delta: filter rows to only those whose modifiedField advanced since the
@@ -2032,6 +2001,10 @@ public class EtlPipeline {
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final String finalNewComputedDeltaHwm = newComputedDeltaHwm;
     final String finalHashFreshnessToken = hashFreshnessToken;
+    // The write consumes `data`, which on a hash-CHANGED run is the re-fetched chain (not
+    // sourceChain). Close that chain after the write; sourceChain is closed too (idempotent,
+    // already drained/closed by the hash branch) when it is a different object.
+    final Iterator<Map<String, Object>> writeChain = data;
     try {
       synchronized (writeLock) {
         HttpSourceConfig sourceConfig = config.getSource();
@@ -2074,8 +2047,48 @@ public class EtlPipeline {
         return batchRows;
       }
     } finally {
-      closeQuietly(sourceChain);
+      closeQuietly(writeChain);
+      if (writeChain != sourceChain) {
+        closeQuietly(sourceChain);
+      }
     }
+  }
+
+  /**
+   * Builds the (re-runnable) fetch + transform + dq-cap chain for one batch. Called once up
+   * front and again by the hash-freshness branch to re-read the (now warm-cached) source after
+   * the first chain was drained to compute the content hash.
+   */
+  private Iterator<Map<String, Object>> fetchDataChain(EtlPipelineConfig config,
+      DataSource dataSource, Map<String, String> variables, String pipelineName,
+      int processedCount) throws IOException {
+    Iterator<Map<String, Object>> data = null;
+    if (dataProvider != null) {
+      data = dataProvider.fetch(config, variables);
+      if (data != null) {
+        LOGGER.debug("Using custom DataProvider for batch {}", processedCount);
+      }
+    }
+    if (data == null) {
+      // Delta: inject the recovered watermark as the incremental lower bound (e.g. updatedSince)
+      // so the source pulls only records changed since the last commit. Paired with an Iceberg
+      // append write, the delta adds to — rather than replaces — the committed table.
+      if (deltaBoundVar != null && deltaBoundValue != null) {
+        variables.put(deltaBoundVar, deltaBoundValue);
+      }
+      data = dataSource.fetch(variables);
+    }
+    // Apply configured row transformers as a streaming one-to-many flat-map so every downstream
+    // stage (hashing, computed_delta, write) sees transformed rows. Memory stays bounded — only
+    // the fan-out of a single input row is buffered at a time.
+    List<RowTransformer> rowTransformers = loadRowTransformers(config.getHooks());
+    if (data != null && !rowTransformers.isEmpty()) {
+      data = applyRowTransformers(data, rowTransformers, config, variables);
+    }
+    // DQ sample cap (GOVDATA_DQ): bound rows per fetch-unit. Applied after transformers so the
+    // cap bounds the final output; cache-safe since caching sources write their body first.
+    data = applyDqRowLimit(data, pipelineName);
+    return data;
   }
 
   /**
@@ -3285,36 +3298,60 @@ public class EtlPipeline {
   // ===== Hash freshness helper =====
 
   /**
-   * Computes a deterministic SHA-256 hash over a list of rows.
-   *
-   * <p>Serialisation is stable: for each row, keys are sorted alphabetically and
-   * each entry is rendered as {@code key=value\n}. Rows are then sorted by their
-   * serialised form before concatenation so that row-order variation in the source
-   * response does not produce a false "changed" signal.
+   * Computes a deterministic, order-independent content hash over a list of rows. Thin wrapper
+   * over {@link #hashRowsStreaming} so callers with a materialised list share the exact algorithm
+   * the freshness gate streams.
    *
    * @param rows the fetched rows (may be empty)
-   * @return hex SHA-256 string, or null if hashing fails
+   * @return 64-char hex string, or null if hashing fails
    */
   static String hashRows(List<Map<String, Object>> rows) {
-    if (rows == null || rows.isEmpty()) {
-      return FreshnessCheck.sha256Hex("");
-    }
-    List<String> serialised = new ArrayList<String>(rows.size());
-    for (Map<String, Object> row : rows) {
-      StringBuilder sb = new StringBuilder();
-      List<String> keys = new ArrayList<String>(row.keySet());
-      java.util.Collections.sort(keys);
-      for (String key : keys) {
-        sb.append(key).append('=').append(row.get(key)).append('\n');
+    return hashRowsStreaming(rows == null ? null : rows.iterator());
+  }
+
+  /**
+   * Streaming, order-independent content hash. Each row is serialised (keys sorted, rendered as
+   * {@code key=value\n}) and SHA-256'd; the per-row digests are summed as 256-bit integers
+   * (mod 2^256). The sum is commutative, so source row-order variation does not produce a false
+   * "changed" signal, and only one row is held in memory at a time — a large dataset is never
+   * materialised (which would OOM). The row count is folded in to disambiguate different
+   * multisets that happen to sum equally.
+   *
+   * @param rows iterator of fetched rows; fully drained by this call. May be null/empty.
+   * @return 64-char hex string, or null if SHA-256 is unavailable
+   */
+  static String hashRowsStreaming(Iterator<Map<String, Object>> rows) {
+    try {
+      java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+      final java.math.BigInteger mod = java.math.BigInteger.ONE.shiftLeft(256);
+      java.math.BigInteger acc = java.math.BigInteger.ZERO;
+      long count = 0;
+      while (rows != null && rows.hasNext()) {
+        Map<String, Object> row = rows.next();
+        StringBuilder sb = new StringBuilder();
+        List<String> keys = new ArrayList<String>(row.keySet());
+        java.util.Collections.sort(keys);
+        for (String key : keys) {
+          sb.append(key).append('=').append(row.get(key)).append('\n');
+        }
+        // md.digest(...) computes and resets, so each per-row digest is independent.
+        byte[] digest = md.digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        acc = acc.add(new java.math.BigInteger(1, digest));
+        count++;
       }
-      serialised.add(sb.toString());
+      if (count == 0) {
+        return FreshnessCheck.sha256Hex("");
+      }
+      acc = acc.add(java.math.BigInteger.valueOf(count)).mod(mod);
+      StringBuilder hex = new StringBuilder(acc.toString(16));
+      while (hex.length() < 64) {
+        hex.insert(0, '0');
+      }
+      return hex.toString();
+    } catch (java.security.NoSuchAlgorithmException e) {
+      LOGGER.warn("SHA-256 unavailable for row hashing: {}", e.getMessage());
+      return null;
     }
-    java.util.Collections.sort(serialised);
-    StringBuilder combined = new StringBuilder();
-    for (String s : serialised) {
-      combined.append(s);
-    }
-    return FreshnessCheck.sha256Hex(combined.toString());
   }
 
   // ===== computed_delta HWM comparison =====
