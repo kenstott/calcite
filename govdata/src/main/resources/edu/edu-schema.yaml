@@ -161,7 +161,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://educationdata.urban.org/api/v1/school-districts/ccd/directory/{year}/"
+      url: "https://educationdata.urban.org/api/v1/school-districts/ccd/directory/{effective_year}/"
       method: GET
       response:
         format: json
@@ -213,8 +213,9 @@ partitionedTables:
   # ~100,000 schools per year; 1986–present
   # ==========================================================================
   - name: ccd_schools
-    freshness:
-      type: hash
+    # No freshness:hash — this is a ~1M-row/year table and the hash gate materializes the
+    # full dataset in memory (OOM). It is gated by the year period (per-year completion) plus
+    # the releaseWindow, which is sufficient and cheap.
     releaseWindow:
       months: [7, 8]        # NCES posts CCD preliminary July, revised August
     pattern: "year={year}"
@@ -896,8 +897,9 @@ partitionedTables:
   # Tuition/fees are in a SEPARATE endpoint: academic-year-tuition/{year}/
   # ==========================================================================
   - name: ipeds_institutions
-    freshness:
-      type: hash
+    # Gated by the year period + releaseWindow; no freshness:hash (the hash gate materializes
+    # the full per-year dataset — unnecessary for a year-partitioned table, and a memory risk
+    # as it grows, cf. ccd_schools).
     releaseWindow:
       months: [11]          # IPEDS Fall Data Collection releases November
     pattern: "year={year}"

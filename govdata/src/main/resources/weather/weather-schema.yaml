@@ -610,7 +610,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOM&locationid=FIPS:{state_fips}&startdate={year}-01-01&enddate={year}-12-31&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOM&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31&limit=1000&offset=1"
       method: GET
       response:
         format: json
@@ -695,7 +695,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOY&locationid=FIPS:{state_fips}&startdate={year}-01-01&enddate={year}-12-31&limit=1000&offset=1"
+      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOY&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31&limit=1000&offset=1"
       method: GET
       response:
         format: json

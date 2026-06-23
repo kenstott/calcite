@@ -2393,7 +2393,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/cbp?get=NAME,NAICS2017,ESTAB,EMP,PAYANN,PAYQTR1&for={geography}:*&NAICS2017=*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2716,7 +2716,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/poverty/saipe?get=NAME,SAEPOVALL_PT,SAEPOVRTALL_PT,SAEPOV0_17_PT,SAEPOVRT0_17_PT,SAEMHI_PT&for={geography}:*&YEAR={year}&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/timeseries/poverty/saipe?get=NAME,SAEPOVALL_PT,SAEPOVRTALL_PT,SAEPOV0_17_PT,SAEPOVRT0_17_PT,SAEMHI_PT&for={geography}:*&YEAR={effective_year}&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2797,7 +2797,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/healthins/sahie?get=NAME,NIC_PT,NUI_PT,PCTIC_PT,PCTUI_PT&for={geography}:*&time={year}&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/timeseries/healthins/sahie?get=NAME,NIC_PT,NUI_PT,PCTIC_PT,PCTUI_PT&for={geography}:*&time={effective_year}&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2887,7 +2887,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/timeseries/bds?get=NAME,JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTAB,FIRM,EMP&for={geography}:*&YEAR={year}&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/timeseries/bds?get=NAME,JOB_CREATION,JOB_DESTRUCTION,NET_JOB_CREATION,ESTAB,FIRM,EMP&for={geography}:*&YEAR={effective_year}&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2967,7 +2967,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{year}/abscs?get=NAME,FIRMPDEMP,RCPPDEMP,EMP,PAYANN&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/abscs?get=NAME,FIRMPDEMP,RCPPDEMP,EMP,PAYANN&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -3051,7 +3051,7 @@ partitionedTables:
     source:
       type: http
       # Uses NESTAB and NRCPTOT (N prefix for nonemployer)
-      url: "https://api.census.gov/data/{year}/nonemp?get=NAME,NAICS2017,NESTAB,NRCPTOT&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/nonemp?get=NAME,NAICS2017,NESTAB,NRCPTOT&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -3429,7 +3429,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://lehd.ces.census.gov/data/lodes/LODES8/{state}/wac/{state}_wac_S000_JT00_{year}.csv.gz"
+      url: "https://lehd.ces.census.gov/data/lodes/LODES8/{state}/wac/{state}_wac_S000_JT00_{effective_year}.csv.gz"
       response:
         format: csv
         compressed: gzip

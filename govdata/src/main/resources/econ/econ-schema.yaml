@@ -1119,7 +1119,7 @@ partitionedTables:
     # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
-      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      url: "https://data.bls.gov/cew/data/files/{effective_year}/csv/{effective_year}_{frequency}_singlefile.zip"
       method: GET
       extractPattern: "*.csv"  # Extract CSV from ZIP archive
       # Row filter: state-level data has area_fips = XX000 (2-digit state + 000)
@@ -1336,7 +1336,7 @@ partitionedTables:
     # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
-      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      url: "https://data.bls.gov/cew/data/files/{effective_year}/csv/{effective_year}_{frequency}_singlefile.zip"
       method: GET
       extractPattern: "*.csv"  # Extract CSV from ZIP archive
       # Row filter: all metro/CSA codes (area_fips starting with C)
@@ -1443,7 +1443,7 @@ partitionedTables:
     # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
-      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      url: "https://data.bls.gov/cew/data/files/{effective_year}/csv/{effective_year}_{frequency}_singlefile.zip"
       method: GET
       extractPattern: "*.csv"  # Extract CSV from ZIP archive
       # Row filter: county-level data has 5-digit area_fips (excludes state 000 suffix)
@@ -1561,7 +1561,7 @@ partitionedTables:
     # Uses lazy streaming for large CSV files (parsed row-by-row, not loaded into memory)
     source:
       type: http
-      url: "https://data.bls.gov/cew/data/files/{year}/csv/{year}_{frequency}_singlefile.zip"
+      url: "https://data.bls.gov/cew/data/files/{effective_year}/csv/{effective_year}_{frequency}_singlefile.zip"
       method: GET
       extractPattern: "*.csv"  # Extract CSV from ZIP archive
       # Row filter: county-level data has 5-digit area_fips (excludes state 000 suffix)
@@ -2904,7 +2904,7 @@ partitionedTables:
         DataSetName: "NIPA"
         TableName: "{tablename}"
         Frequency: "{frequency}"
-        Year: "{year}"
+        Year: "{effective_year}"
         ResultFormat: "JSON"
       response:
         format: json
@@ -3786,7 +3786,7 @@ partitionedTables:
         TableName: "{tablename}"
         LineCode: "{line_code}"
         GeoFips: "{geo_fips_set}"
-        Year: "{year}"
+        Year: "{effective_year}"
         ResultFormat: "JSON"
       response:
         format: json
@@ -4029,7 +4029,7 @@ partitionedTables:
         DataSetName: "ITA"
         Indicator: "{indicator}"
         Frequency: "{frequency}"
-        Year: "{year}"
+        Year: "{effective_year}"
         ResultFormat: "JSON"
       response:
         format: json
@@ -4141,7 +4141,7 @@ partitionedTables:
         DataSetName: "NIPA"
         TableName: "T10101"
         Frequency: "{frequency}"
-        Year: "{year}"
+        Year: "{effective_year}"
         ResultFormat: "JSON"
       response:
         format: json
@@ -4317,7 +4317,7 @@ partitionedTables:
         DataSetName: "GDPbyIndustry"
         Industry: "{industry}"
         Frequency: "{frequency}"
-        Year: "{year}"
+        Year: "{effective_year}"
         TableID: "ALL"
         ResultFormat: "JSON"
       response:
