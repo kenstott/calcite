@@ -1,0 +1,450 @@
+# GovData Refresh / Freshness Strategy
+
+How every GovData ETL table decides whether to re-fetch and re-materialize on an
+`--etl-resume` run. The goal is idempotence: a second run over unchanged sources
+should do **no** downloads and **no** Iceberg writes.
+
+This document is generated from a survey of the schema YAMLs
+(`govdata/src/main/resources/**/*-schema.yaml`). Regenerate it when schemas change.
+
+## The three tiers
+
+Every fetch table is gated by exactly one of these standard mechanisms — there is
+no separate "cadence" abstraction, only the existing dimension + freshness machinery.
+
+| Tier | Mechanism | What it skips | When to use |
+|---|---|---|---|
+| **T1 — pre-download probe** | `freshness:` = `etag` / `last_modified` / `size` / `count` / `version` / `graphql`. A HEAD or cheap probe is compared to the last stored token. | The **fetch** (and the write). Cheapest. | Any source that exposes a validator (ETag, Last-Modified, a total-count endpoint, a version field). **Preferred wherever the source supports it.** |
+| **T2 — period + completion** | A period dimension (`year`/`quarter`/`month`/`week`/`day`/`day_of_week`). Per-period completion markers persist across runs; a completed period is dropped before any fetch. | The **attempt** (fetch + write) for periods already done. | Genuinely periodic data, and as the cadence gate for "latest" sources (see below). Proven by `bjs_ncvs`, `sec.*`, `census.acs_*`. |
+| **T3 — post-download hash** | `freshness:` = `hash`. The payload is downloaded, hashed, and the write is skipped if the hash matches the last run. | Only the **write**. Still downloads every run. | Last resort — only where neither a probe nor a natural period fits. Bound it with a period (see Tier-3 action list). |
+
+### The one rule
+
+**Never put a period dimension on a `dataset_type: snapshot` table.** `snapshot`
+means "the open snapshot always re-runs" — it deliberately ignores per-period
+completion. Pairing the two makes every resume run see the period as unprocessed,
+trip self-heal re-registration, and **duplicate rows** (verified on `cde_trends`:
+run 3 went 10 → 20 rows). A latest-snapshot table is either `snapshot` + a probe/hash
+(no period), **or** a plain period dimension (no `snapshot`) — never both.
+
+## Cadence for periodless "latest" tables
+
+A handful of T3 hash tables have **no natural period** (a single "LATEST" blob):
+they re-download on every resume run just to compute the hash. To bound that to the
+source's real update frequency, give them a standard period dimension matched to that
+frequency — `year/month` for monthly data, `year/month/day` for daily. This is the
+same Tier-2 machinery, not a new concept; the period also becomes a partition, so the
+table keeps a per-period history of the snapshot.
+
+`day_of_year` / `workday-of-year` (business-day, Mon–Fri) are proposed additions to
+the standard period-slot list for daily/business-day cadence; until they exist,
+`year/month/day` covers daily cadence with existing slots.
+
+## Inventory by schema and table
+
+Fetch tables only (derived/view tables are summarized at the end). `Tier` per the
+table above; `—` = none.
+
+### census
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| acs_population | year | — | T2 period |
+| acs_income | year | — | T2 period |
+| acs_housing | year | — | T2 period |
+| acs_education | year | — | T2 period |
+| acs_employment | year | — | T2 period |
+| acs_poverty | year | — | T2 period |
+| decennial_population | year | — | T2 period |
+| acs_race_ethnicity | year | — | T2 period |
+| acs_age | year | — | T2 period |
+| acs_commuting | year | — | T2 period |
+| acs_health_insurance | year | — | T2 period |
+| acs_language | year | — | T2 period |
+| acs_disability | year | — | T2 period |
+| acs_veterans | year | — | T2 period |
+| acs_migration | year | — | T2 period |
+| acs_occupation | year | — | T2 period |
+| acs_industry | year | — | T2 period |
+| acs_internet | year | — | T2 period |
+| acs_nativity | year | — | T2 period |
+| acs_marital_status | year | — | T2 period |
+| acs_household_type | year | — | T2 period |
+| acs_housing_tenure | year | — | T2 period |
+| acs_income_distribution | year | — | T2 period |
+| decennial_housing | year | — | T2 period |
+| pep_population | year | — | T2 period |
+| cbp_establishments | year | — | T2 period |
+| acs1_population | year | — | T2 period |
+| acs1_income | year | — | T2 period |
+| economic_census | year | — | T2 period |
+| saipe_poverty | year | — | T2 period |
+| sahie_insurance | year | — | T2 period |
+| bds_dynamics | year | — | T2 period |
+| abs_characteristics | year | — | T2 period |
+| nonemployer_statistics | year | — | T2 period |
+| building_permits | year | — | T2 period |
+| qwi_employment | time | hash | T3 hash |
+| lodes_workplace | year | — | T2 period |
+| trade_exports | time | hash | T3 hash |
+| trade_imports | time | hash | T3 hash |
+
+### econ
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| employment_statistics | year | — | T2 period |
+| inflation_metrics | year | — | T2 period |
+| regional_cpi | year | — | T2 period |
+| metro_cpi | year | — | T2 period |
+| state_industry | year | — | T2 period |
+| state_wages | year | — | T2 period |
+| metro_industry | year | — | T2 period |
+| metro_wages | year | — | T2 period |
+| county_qcew | year | — | T2 period |
+| county_wages | year | — | T2 period |
+| jolts_regional | year | — | T2 period |
+| jolts_industry | year | — | T2 period |
+| jolts_state | year | — | T2 period |
+| wage_growth | year | — | T2 period |
+| regional_employment | year | — | T2 period |
+| treasury_yields | year | — | T2 period |
+| federal_debt | year | — | T2 period |
+| world_indicators | year | last_modified | T1 pre-probe |
+| fred_indicators | year | — | T2 period |
+| national_accounts | year | — | T2 period |
+| state_personal_income | year | last_modified | T1 pre-probe |
+| state_gdp | year | last_modified | T1 pre-probe |
+| state_quarterly_income | year | last_modified | T1 pre-probe |
+| state_quarterly_gdp | year | last_modified | T1 pre-probe |
+| state_consumption | year | last_modified | T1 pre-probe |
+| regional_income | year | — | T2 period |
+| ita_data | year | — | T2 period |
+| gdp_statistics | year | — | T2 period |
+| industry_gdp | year | — | T2 period |
+
+### econ-reference
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| jolts_industries | year | — | T2 period |
+| jolts_dataelements | year | — | T2 period |
+| nipa_tables | year | — | T2 period |
+| regional_linecodes | year | — | T2 period |
+| fred_series | — | hash | T3 hash |
+
+### fec
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| candidates | year | — | T2 period |
+| committees | year | — | T2 period |
+| candidate_committee_linkages | year | — | T2 period |
+| individual_contributions | year | — | T2 period |
+| committee_contributions | year | — | T2 period |
+| intercommittee_transactions | year | — | T2 period |
+| operating_expenditures | year | — | T2 period |
+| independent_expenditures | year | — | T2 period |
+| electioneering_communications | year | — | T2 period |
+| communication_costs | year | — | T2 period |
+| candidate_summaries | year | — | T2 period |
+| committee_summaries | year | — | T2 period |
+
+### crime
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| cde_agencies | year | — | T2 period |
+| cde_offenses | year | — | T2 period |
+| cde_police_employment | year | — | T2 period |
+| cde_hate_crimes | year,month | — | T2 period |
+| cde_use_of_force | year | — | T2 period |
+| cde_reta | year | — | T2 period |
+| cde_arrests | year,month | — | T2 period |
+| cde_shr | year,month | — | T2 period |
+| cde_leoka | year | — | T2 period |
+| cde_trends | year | hash | T3 hash |
+| cde_supplemental | year,month | — | T2 period |
+| bjs_nibrs_estimates | year | — | T2 period |
+| bjs_ncvs_personal | year | — | T2 period |
+| bjs_ncvs_personal_pop | year | — | T2 period |
+| bjs_ncvs_household | year | — | T2 period |
+| bjs_ncvs_household_pop | year | — | T2 period |
+
+### cyber-threat
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| attack_techniques | — | etag | T1 pre-probe |
+| ioc_urls | — | etag | T1 pre-probe |
+| ioc_hashes | — | etag | T1 pre-probe |
+| ioc_ips | — | etag | T1 pre-probe |
+| ioc_mixed | — | hash | T3 hash |
+| nist_controls | — | etag | T1 pre-probe |
+| nist_csf_functions | — | etag | T1 pre-probe |
+| cis_controls | — | etag | T1 pre-probe |
+| owasp_top10 | — | etag | T1 pre-probe |
+| attack_to_nist_mappings | — | etag | T1 pre-probe |
+| threat_pulses | first_seen | hash | T3 hash |
+
+### cyber-vuln
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| cwe_catalog | — | last_modified | T1 pre-probe |
+| vulnerabilities | year,quarter | count | T1 pre-probe |
+| vulnerability_cwes | year,quarter | count | T1 pre-probe |
+| kev_catalog | — | etag | T1 pre-probe |
+| kev_cwes | — | etag | T1 pre-probe |
+| osv_vulnerabilities | — | hash | T3 hash |
+| vuln_cross_refs | — | graphql | T1 pre-probe |
+| advisories | year | — | T2 period |
+
+### edu
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| ccd_districts | year | — | T2 period |
+| ccd_schools | year | hash | T3 hash |
+| naep_scores | year | — | T2 period |
+| naep_achievement_levels | year | — | T2 period |
+| crdc_schools | year | — | T2 period |
+| ipeds_institutions | year | hash | T3 hash |
+| ipeds_completions | year | — | T2 period |
+| ipeds_financials | year | — | T2 period |
+| ipeds_tuition | year | — | T2 period |
+| college_scorecard | year | — | T2 period |
+| college_scorecard_programs | year | — | T2 period |
+
+### health
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| fda_ndc_products | — | version | T1 pre-probe |
+| fda_drug_approvals | — | version | T1 pre-probe |
+| fda_drug_recalls | — | version | T1 pre-probe |
+| fda_adverse_events | — | version | T1 pre-probe |
+| fda_device_recalls | — | version | T1 pre-probe |
+| clinical_trials | month | — | T2 period |
+| clinical_trial_conditions | month | — | T2 period |
+| clinical_trial_interventions | month | — | T2 period |
+| cdc_covid_vaccinations | — | last_modified | T1 pre-probe |
+| cms_hospital_quality | year,month | — | T2 period |
+| medicaid_drug_utilization | year | — | T2 period |
+| cdc_mortality | year | — | T2 period |
+| cdc_brfss | year | — | T2 period |
+| cms_open_payments | year | — | T2 period |
+| rxnorm_drugs | — | hash | T3 hash |
+
+### weather
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| nws_stations | — | hash | T3 hash |
+| nws_alerts | — | hash | T3 hash |
+| cdo_stations | — | hash | T3 hash |
+| cdo_monthly_summaries | year | — | T2 period |
+| cdo_annual_summaries | year | — | T2 period |
+| epa_annual_aqi | year | — | T2 period |
+| epa_daily_aqi | year | — | T2 period |
+| ghcnd_stations_with_county | — | last_modified | T1 pre-probe |
+| ghcnd_daily | year,month | — | T2 period |
+| drought_monitor_weekly | year | — | T2 period |
+| hms_smoke_daily | year,month | — | T2 period |
+| hms_smoke_polygons | year,month | — | T2 period |
+| climate_normals_monthly | month | — | T2 period |
+
+### geo
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| states | year | — | T2 period |
+| counties | year | — | T2 period |
+| places | year | — | T2 period |
+| zctas | year | — | T2 period |
+| census_tracts | year | — | T2 period |
+| block_groups | year | — | T2 period |
+| cbsa | year | — | T2 period |
+| congressional_districts | year | — | T2 period |
+| school_districts | year | — | T2 period |
+| state_legislative_lower | year | — | T2 period |
+| state_legislative_upper | year | — | T2 period |
+| county_subdivisions | year | — | T2 period |
+| tribal_areas | year | — | T2 period |
+| urban_areas | year | — | T2 period |
+| pumas | year | — | T2 period |
+| voting_districts | year | — | T2 period |
+| zip_county_crosswalk | year | — | T2 period |
+| zip_cbsa_crosswalk | year | — | T2 period |
+| tract_zip_crosswalk | year | — | T2 period |
+| zip_tract_crosswalk | year | — | T2 period |
+| zip_cd_crosswalk | year | — | T2 period |
+| county_zip_crosswalk | year | — | T2 period |
+| cd_zip_crosswalk | year | — | T2 period |
+| rural_urban_continuum | year | — | T2 period |
+| ruca_codes | year | — | T2 period |
+| gazetteer_counties | year | — | T2 period |
+| gazetteer_places | year | — | T2 period |
+| gazetteer_zctas | year | — | T2 period |
+| watersheds_huc2 | year | — | T2 period |
+| watersheds_huc4 | year | — | T2 period |
+| watersheds_huc8 | year | — | T2 period |
+| watersheds_huc12 | year | — | T2 period |
+
+### lands
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| national_forests | — | etag | T1 pre-probe |
+| timber_sales | year | — | T2 period |
+| forest_inventory | — | last_modified | T1 pre-probe |
+| forest_metrics | — | last_modified | T1 pre-probe |
+| fia_plots | — | last_modified | T1 pre-probe |
+| fia_tree_grm | — | last_modified | T1 pre-probe |
+| fia_seedlings | — | last_modified | T1 pre-probe |
+| fia_down_woody_debris | — | last_modified | T1 pre-probe |
+| fia_invasives | — | last_modified | T1 pre-probe |
+| fia_pop_evaluations | — | last_modified | T1 pre-probe |
+| nps_units | — | last_modified | T1 pre-probe |
+| nps_visitation | year | — | T2 period |
+| blm_field_offices | year | — | T2 period |
+| onrr_revenues | — | last_modified | T1 pre-probe |
+
+### patents
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| patent_grants | year,quarter | — | T2 period |
+| patent_assignees | quarter | — | T2 period |
+| patent_inventors | quarter | — | T2 period |
+| patent_cpc_classes | quarter | — | T2 period |
+| patent_abstracts | quarter | — | T2 period |
+| patent_applications | quarter | — | T2 period |
+| patent_figures | quarter | — | T2 period |
+| patent_locations | quarter | — | T2 period |
+| patent_claims | year,quarter | — | T2 period |
+| patent_summaries | year,quarter | — | T2 period |
+| trademark_applications | year | — | T2 period |
+
+### cftc
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| cftc_trades | year,month | — | T2 period |
+
+### fedregister
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| fr_documents | year,month | — | T2 period |
+
+### ref
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| gleif_entities | — | last_modified | T1 pre-probe |
+| gleif_cik_mapping | — | last_modified | T1 pre-probe |
+| sec_company_tickers | month | — | T2 period |
+| figi_instruments | — | hash | T3 hash |
+
+### energy
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| eia_electricity_generation | year,month | — | T2 period |
+| eia_electricity_prices | year | — | T2 period |
+| eia_utility_annual | year | — | T2 period |
+| eia_power_plants | year | — | T2 period |
+| eia_capacity_changes | year | — | T2 period |
+| eia_fossil_fuel_production | year,month | — | T2 period |
+| eia_state_energy_consumption | year | last_modified | T1 pre-probe |
+| eia_natural_gas_storage | year | last_modified | T1 pre-probe |
+| eia_petroleum_stocks | year | — | T2 period |
+| eia_crude_oil_imports | year | — | T2 period |
+| eia_refinery_operations | year,month | — | T2 period |
+| eia_coal_mines | year | — | T2 period |
+
+
+## Tier-3 action list (hash tables)
+
+Hash tables download on every run; the hash only saves the Iceberg write. **Since the
+freshness-token read fix (see Engine note), all of these are now write-idempotent** — the
+hash gate correctly skips the write across runs. So the items below are *fetch-bandwidth*
+optimizations, **not correctness gaps**, and each needs a non-trivial change:
+
+- **qwi/trade** would need `time` split into `year`+`quarter`/`month` dimensions — that
+  re-partitions the table (`time=*` → `year=*/quarter=*`) and changes the API templating, so
+  it's a breaking, full-rebuild change, not config. Deferred.
+- **Latest-snapshot tables** (fred_series, figi, rxnorm, nws_*, cdo_stations) have no natural
+  period; a cadence period would either hit the snapshot+period self-heal trap (the one rule)
+  or require a new completion-only `day_of_year`/`workday-of-year` period slot. Deferred to
+  that feature.
+
+Recommended follow-ups, best→worst preference (probe > period > bare hash):
+
+| Table | Today | Recommended | Cadence rationale |
+|---|---|---|---|
+| census/qwi_employment | hash, `time` partition | canonicalize `time`→`quarter` so per-period completion engages | QWI is quarterly |
+| census/trade_exports | hash, `time` partition | canonicalize `time`→`month` | Trade totals are monthly |
+| census/trade_imports | hash, `time` partition | canonicalize `time`→`month` | Trade totals are monthly |
+| econ-reference/fred_series | hash, no period | add daily / workday cadence | FRED catalog refreshes on business days |
+| crime/cde_trends | snapshot + hash, no period | keep snapshot+hash, or month cadence (non-snapshot) | Single LATEST trends blob, ~monthly |
+| cyber-threat/ioc_mixed | snapshot + hash | day cadence (ThreatFox POST, no HEAD validator) | IOC feed updates daily |
+| cyber-vuln/osv_vulnerabilities | snapshot + hash, `ecosystem` | weekly cadence (already `dow:[0]`) | OSV all.zip published weekly |
+| health/rxnorm_drugs | hash, no period | month cadence | RxNorm full release is monthly |
+| weather/nws_stations | hash, `state` fetch dim | month cadence | Station metadata changes rarely |
+| weather/nws_alerts | hash, `state` fetch dim | keep bare hash (or hourly) | Active alerts change continuously — no useful cadence |
+| weather/cdo_stations | hash, `state` fetch dim | month cadence | Station reference changes rarely |
+| ref/figi_instruments | hash, no period | month / workday cadence | OpenFIGI reference, changes rarely |
+| edu/ccd_schools | hash + `year` template + release-window `months` | no change — already period+probe-window | Annual NCES release (Jul/Aug) |
+| edu/ipeds_institutions | hash + `year` template + release-window `months` | no change — already period+probe-window | Annual IPEDS release (Nov) |
+
+## Resolved: cyber-threat/threat_pulses
+
+Previously `dataset_type: snapshot` with no freshness plus a hardcoded **7-day TTL cache**
+in `OtxResponseTransformer` (the cache re-served the assembled population for 7 days to avoid
+a ~31-min full re-pagination). OTX is a REST cursor API with no cheap probe and no GraphQL, so
+it cannot mirror `vuln_cross_refs`'s `graphql` watermark. Resolved by:
+
+- **`freshness: {type: hash}`** on the table — the post-download hash gate skips the Iceberg
+  write when the assembled subscribed-pulse population is byte-identical to the last run
+  (this works now that the freshness-token read is fixed; see Engine note below).
+- **`otxDeltaDays`** (`CYBER_OTX_DELTA_DAYS`) bounds the *fetch* via `modified_since` for
+  production incremental runs.
+- **`otxCacheTtlDays`** (`CYBER_OTX_CACHE_TTL_DAYS`, default **0 = off**) keeps the pull-cache
+  as a rarely-used opt-in escape hatch — no blind always-on TTL.
+
+## Engine note: freshness-token read fix
+
+The in-process DuckDB `httpfs` extension fails to LIST custom S3 endpoints (MinIO/R2):
+`readLatestState`/`getFreshnessToken` returned null on every call, so all freshness/watermark
+token reads silently failed across runs and freshness gates never skipped (masked only where a
+completion marker or self-heal-from-Iceberg skipped the write anyway). Fixed by routing those
+reads through the AWS SDK list + local-download path (the same path `getCompletedTables` already
+used), so Tier-1 probes and Tier-3 hash gates now actually skip across runs.
+
+## Derived tables (no fetch)
+
+98 tables are views / derived joins computed from the fetch tables above; they declare
+no source, so freshness does not apply. Per-schema fetch vs. derived counts:
+
+| Schema | Fetch | Derived |
+|---|---|---|
+| census | 39 | 5 |
+| econ | 29 | 17 |
+| econ-reference | 5 | 2 |
+| fec | 12 | 2 |
+| crime | 16 | 1 |
+| cyber-threat | 11 | 1 |
+| cyber-vuln | 8 | 6 |
+| edu | 11 | 12 |
+| health | 15 | 14 |
+| weather | 13 | 1 |
+| geo | 32 | 0 |
+| lands | 14 | 7 |
+| patents | 11 | 0 |
+| sec | 0 | 16 |
+| cftc | 1 | 7 |
+| fedregister | 1 | 0 |
+| ref | 4 | 1 |
+| energy | 12 | 6 |
