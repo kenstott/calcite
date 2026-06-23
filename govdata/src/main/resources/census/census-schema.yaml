@@ -3200,6 +3200,8 @@ partitionedTables:
   # QWI EMPLOYMENT - Quarterly employment by sex and age
   # ---------------------------------------------------------------------------
   - name: qwi_employment
+    freshness:
+      type: hash
     pattern: "type=qwi/time=*/*.parquet"
     partitions:
       style: hive
@@ -3457,6 +3459,8 @@ partitionedTables:
   # TRADE EXPORTS - Annual exports by country
   # ---------------------------------------------------------------------------
   - name: trade_exports
+    freshness:
+      type: hash
     pattern: "type=trade/direction=exports/time=*/*.parquet"
     partitions:
       style: hive
@@ -3532,6 +3536,8 @@ partitionedTables:
   # TRADE IMPORTS - Annual imports by country
   # ---------------------------------------------------------------------------
   - name: trade_imports
+    freshness:
+      type: hash
     pattern: "type=trade/direction=imports/time=*/*.parquet"
     partitions:
       style: hive

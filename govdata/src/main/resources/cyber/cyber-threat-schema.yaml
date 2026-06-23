@@ -21,6 +21,13 @@ materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 # mode (GOVDATA_DQ) ignores it and always full-loads (capped by dqRowLimit).
 otxDeltaDays: "${CYBER_OTX_DELTA_DAYS:}"
 
+# OTX pull-cache TTL (days). OFF by default (0). Idempotence comes from threat_pulses'
+# freshness:hash (skips the Iceberg write when the assembled population is unchanged) plus
+# otxDeltaDays (bounds the fetch). This cache is a rarely-used opt-in escape hatch for when
+# even the bounded re-pagination is too costly (e.g. heavy local testing): set >0 to reuse the
+# assembled population for that many days. Read via ModelOperand path cyber_threat.otxCacheTtlDays.
+otxCacheTtlDays: "${CYBER_OTX_CACHE_TTL_DAYS:0}"
+
 comment: >
   Cyber threat intelligence, exploit data, IOC feeds, MITRE ATT&CK taxonomy,
   and standards/compliance mappings. Part of the govdata cyber sub-domain.
@@ -484,6 +491,8 @@ partitionedTables:
   # IOC MIXED — ThreatFox IOC feed (all indicator types)
   # ==========================================================================
   - name: ioc_mixed
+    freshness:
+      type: hash
     pattern: "type=ioc_mixed/first_seen=${first_seen}.parquet"
     dataset_type: snapshot          # ThreatFox POST API (no HEAD freshness); key-gated in CyberSchemaFactory
     partitions:
@@ -796,6 +805,8 @@ partitionedTables:
   # CIS Controls v8 Safeguards
   # ==========================================================================
   - name: cis_controls
+    freshness:
+      type: etag
     pattern: "type=cis_controls.parquet"
     dataset_type: snapshot          # no freshness: transformer self-fetches ~153 per-safeguard RST files
     partitions:
@@ -891,6 +902,8 @@ partitionedTables:
   # OWASP Top 10 (2021)
   # ==========================================================================
   - name: owasp_top10
+    freshness:
+      type: etag
     pattern: "type=owasp_top10.parquet"
     dataset_type: snapshot          # no freshness: transformer self-fetches 10 per-entry Markdown files
     partitions:
@@ -1073,6 +1086,11 @@ partitionedTables:
   - name: threat_pulses
     pattern: "type=threat_pulses/first_seen=${first_seen}.parquet"
     dataset_type: snapshot          # OTX cursor-paginated GET (no single-probe freshness); key-gated in CyberSchemaFactory
+    # Post-download hash: skip the Iceberg write when the assembled subscribed-pulse population
+    # is byte-identical to the last run. Replaces the old hardcoded 7-day transformer TTL cache;
+    # the fetch is bounded by otxDeltaDays (modified_since delta), not a blind timer.
+    freshness:
+      type: hash
     # DQ sample cap (GOVDATA_DQ mode): OTX cursor-pages through all subscribed pulses (~8.6k);
     # the cap stops pagination early. Cache-safe — the paginated cache commits only on full
     # drain, so a capped run leaves the existing cache untouched.

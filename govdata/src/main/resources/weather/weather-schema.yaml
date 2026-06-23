@@ -275,6 +275,8 @@ partitionedTables:
   # NWS STATIONS - Weather station metadata (no auth)
   # ---------------------------------------------------------------------------
   - name: nws_stations
+    freshness:
+      type: hash
     pattern: "type=nws_station/state_abbr=*/*.parquet"
     partitions: *nws_partitions
     comment: >
@@ -362,6 +364,8 @@ partitionedTables:
   # NWS ALERTS - Active severe weather alerts (no auth)
   # ---------------------------------------------------------------------------
   - name: nws_alerts
+    freshness:
+      type: hash
     pattern: "type=nws_alert/state_abbr=*/*.parquet"
     partitions: *nws_partitions
     comment: >
@@ -461,6 +465,8 @@ partitionedTables:
   # CDO STATIONS - Climate observation station metadata (requires NOAA_CDO_TOKEN)
   # ---------------------------------------------------------------------------
   - name: cdo_stations
+    freshness:
+      type: hash
     pattern: "type=cdo_station/state_fips=*/*.parquet"
     partitions: *cdo_station_partitions
     comment: >

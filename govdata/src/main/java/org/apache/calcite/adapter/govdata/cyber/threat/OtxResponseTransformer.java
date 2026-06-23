@@ -79,7 +79,6 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
   private static final int TIMEOUT_MS = 60_000;
   private static final long RATE_DELAY_MS = 500L;
-  private static final long OTX_CACHE_TTL_MS = 7L * 24 * 60 * 60 * 1000;
 
   @Override public String transform(String response, RequestContext context) {
     // Read the key from the request context's headers — the framework resolves the source's
@@ -97,33 +96,40 @@ public class OtxResponseTransformer implements ResponseTransformer {
     boolean dqMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_DQ"));
     String cacheMode = dqMode ? "dq" : "full";
 
-    // Freshness-cache: reuse the assembled pulse population within the TTL to avoid
-    // re-paginating the full OTX subscribed API (~31 min) on every run.
+    // Optional pull-cache: OFF by default. Standard idempotence is the table's freshness:hash
+    // gate (skips the Iceberg write when the assembled population is unchanged) plus the
+    // modified_since delta below (bounds the fetch). The cache is an opt-in escape hatch for
+    // the rare case where even the bounded re-pagination is too costly (e.g. heavy local
+    // testing): set CYBER_OTX_CACHE_TTL_DAYS>0 to reuse the assembled population for that many
+    // days. 0 (default) disables it entirely — no blind always-on TTL.
+    long cacheTtlMs = ModelOperand.getLong("cyber_threat.otxCacheTtlDays", 0L) * 86_400_000L;
     StorageProvider sp = StorageProviderFactory.createForGovDataCache();
     String cachePath = sp.resolvePath(
         sp.resolvePath(StorageProviderFactory.getGovDataCacheDir(), "cyber_threat"),
         "otx_pulses_" + cacheMode + ".json");
 
-    try {
-      if (sp.exists(cachePath)) {
-        long age = System.currentTimeMillis() - sp.getMetadata(cachePath).getLastModified();
-        if (age < OTX_CACHE_TTL_MS) {
-          try (InputStream cacheIn = sp.openInputStream(cachePath)) {
-            ByteArrayOutputStream cacheBaos = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = cacheIn.read(buf)) != -1) {
-              cacheBaos.write(buf, 0, n);
+    if (cacheTtlMs > 0) {
+      try {
+        if (sp.exists(cachePath)) {
+          long age = System.currentTimeMillis() - sp.getMetadata(cachePath).getLastModified();
+          if (age < cacheTtlMs) {
+            try (InputStream cacheIn = sp.openInputStream(cachePath)) {
+              ByteArrayOutputStream cacheBaos = new ByteArrayOutputStream();
+              byte[] buf = new byte[8192];
+              int n;
+              while ((n = cacheIn.read(buf)) != -1) {
+                cacheBaos.write(buf, 0, n);
+              }
+              byte[] cached = cacheBaos.toByteArray();
+              LOGGER.info("OTX: reusing cached pulse population within {}-day opt-in TTL "
+                  + "({} bytes): {}", cacheTtlMs / 86_400_000L, cached.length, cachePath);
+              return new String(cached, StandardCharsets.UTF_8);
             }
-            byte[] cached = cacheBaos.toByteArray();
-            LOGGER.info("OTX: reusing cached pulse population within {}-day TTL ({} bytes): {}",
-                OTX_CACHE_TTL_MS / 86400000L, cached.length, cachePath);
-            return new String(cached, StandardCharsets.UTF_8);
           }
         }
+      } catch (IOException e) {
+        LOGGER.debug("OTX: cache read failed ({}), falling through to live pull", e.getMessage());
       }
-    } catch (IOException e) {
-      LOGGER.debug("OTX: cache read failed ({}), falling through to live pull", e.getMessage());
     }
 
     try {
@@ -171,7 +177,9 @@ public class OtxResponseTransformer implements ResponseTransformer {
         gen.writeEndArray();
         gen.close();
         String emptyResult = baos.toString("UTF-8");
-        writeCacheQuietly(sp, cachePath, emptyResult);
+        if (cacheTtlMs > 0) {
+          writeCacheQuietly(sp, cachePath, emptyResult);
+        }
         return emptyResult;
       }
 
@@ -196,7 +204,9 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
       LOGGER.info("OTX: returning {} threat_pulses rows", count[0]);
       String assembled = baos.toString("UTF-8");
-      writeCacheQuietly(sp, cachePath, assembled);
+      if (cacheTtlMs > 0) {
+        writeCacheQuietly(sp, cachePath, assembled);
+      }
       return assembled;
 
     } catch (Exception e) {

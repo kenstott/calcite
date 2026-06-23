@@ -726,6 +726,8 @@ partitionedTables:
 
   # --- REFERENCE FRED SERIES ---
   - name: fred_series
+    freshness:
+      type: hash
     pattern: "type=*/category=*/reference_fred_series.parquet"
     partitions:
       style: hive

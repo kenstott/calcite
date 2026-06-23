@@ -958,6 +958,8 @@ partitionedTables:
   # CDC COVID-19 VACCINATIONS — Socrata SODA API, ~ongoing updates
   # ==========================================================================
   - name: cdc_covid_vaccinations
+    freshness:
+      type: last_modified
     releaseWindow:
       dow: [1]              # CDC publishes weekly updates Fridays; Monday catches them
     pattern: "type=cdc_covid_vaccinations"

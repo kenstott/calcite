@@ -127,6 +127,11 @@ partitionedTables:
   # VULNERABILITIES — NVD CVE 2.0 canonical records
   # ==========================================================================
   - name: vulnerabilities
+    freshness:
+      type: count
+      count_probe:
+        url: "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1"
+        path: totalResults
     pattern: "type=vulnerabilities/year=*/quarter=*/*.parquet"
     # Windowing is driven by NvdPublishedWindowDimensionResolver (pubStartDate/pubEndDate
     # dims): quarterly history + daily tip, GOVDATA_START_YEAR-bounded. Rows route to the
@@ -279,6 +284,11 @@ partitionedTables:
   # VULNERABILITY_CWES — NVD CVE→CWE junction, materialized at ingest
   # ==========================================================================
   - name: vulnerability_cwes
+    freshness:
+      type: count
+      count_probe:
+        url: "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1"
+        path: totalResults
     pattern: "type=vulnerability_cwes/year=*/quarter=*/*.parquet"
     # Same NvdPublishedWindowDimensionResolver windowing as vulnerabilities; rows route to
     # [type,year,quarter] via pub_year/pub_month (CWE rows lack published → year from cve_id).
@@ -557,6 +567,8 @@ partitionedTables:
   # OSV VULNERABILITIES — Open Source Vulnerabilities per-ecosystem records
   # ==========================================================================
   - name: osv_vulnerabilities
+    freshness:
+      type: hash
     releaseWindow:
       dow: [0]              # Weekly refresh; OSV updates continuously but Sunday run is sufficient
     pattern: "type=osv_vulnerabilities/ecosystem=*/*.parquet"

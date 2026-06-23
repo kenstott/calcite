@@ -2419,6 +2419,8 @@ partitionedTables:
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
+    freshness:
+      type: last_modified
     pattern: "type=indicators/frequency=*/year=*/world_indicators.parquet"
     partitions: *standard_partitions
     comment: >

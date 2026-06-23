@@ -1527,6 +1527,13 @@ partitionedTables:
   # CDE TRENDS - National crime trend percentages (rolling 12-month)
   # ---------------------------------------------------------------------------
   - name: cde_trends
+    # Latest-snapshot table (no real year axis): the open snapshot always re-runs; the
+    # post-download hash gate skips the Iceberg write when the fetched content is identical
+    # to the last run. No period dimension — a yearRange here produces phantom unprocessed
+    # combos that trip self-heal re-registration on every resume.
+    dataset_type: snapshot
+    freshness:
+      type: hash
     pattern: "type=trends/*.parquet"
     partitions:
       style: hive

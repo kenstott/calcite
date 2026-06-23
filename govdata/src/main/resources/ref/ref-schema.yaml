@@ -109,6 +109,8 @@ partitionedTables:
   # GLEIF ENTITIES — Full LEI registry from bulk CSV download
   # ==========================================================================
   - name: gleif_entities
+    freshness:
+      type: last_modified
     pattern: "type=gleif_entities.parquet"
     partitions:
       style: hive
@@ -234,6 +236,8 @@ partitionedTables:
   # GLEIF CIK MAPPING — LEI <-> SEC CIK bridge table
   # ==========================================================================
   - name: gleif_cik_mapping
+    freshness:
+      type: last_modified
     pattern: "type=gleif_cik_mapping.parquet"
     partitions:
       style: hive
@@ -381,6 +385,8 @@ partitionedTables:
   # FIGI INSTRUMENTS — OpenFIGI instrument identifiers
   # ==========================================================================
   - name: figi_instruments
+    freshness:
+      type: hash
     pattern: "type=figi_instruments.parquet"
     partitions:
       style: hive

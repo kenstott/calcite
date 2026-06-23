@@ -213,6 +213,8 @@ partitionedTables:
   # ~100,000 schools per year; 1986–present
   # ==========================================================================
   - name: ccd_schools
+    freshness:
+      type: hash
     releaseWindow:
       months: [7, 8]        # NCES posts CCD preliminary July, revised August
     pattern: "year={year}"
@@ -894,6 +896,8 @@ partitionedTables:
   # Tuition/fees are in a SEPARATE endpoint: academic-year-tuition/{year}/
   # ==========================================================================
   - name: ipeds_institutions
+    freshness:
+      type: hash
     releaseWindow:
       months: [11]          # IPEDS Fall Data Collection releases November
     pattern: "year={year}"
