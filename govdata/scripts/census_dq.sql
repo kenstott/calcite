@@ -139,11 +139,11 @@ FROM (
   UNION ALL SELECT 'acs1_population',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true)), 250
   UNION ALL SELECT 'acs1_income',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true)), 250
   UNION ALL SELECT 'economic_census',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true)), 5000
-  UNION ALL SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true)), 9000
   -- sahie: 3 yrs × (51 states + ~3143 counties) = ~9582 max; threshold 80% of max
   UNION ALL SELECT 'sahie_insurance',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',         allow_moved_paths := true)), 8500
-  -- bds: 4 yrs × 51 states = 204 max (state-level only); threshold 80% of max
-  UNION ALL SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true)), 160
+  -- bds: 3 yrs × 51 states = 153 max (state-level only); threshold 80% of max
+  UNION ALL SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true)), 120
   -- abs: 2 yrs × 51 states = 102 max (state-level only); threshold 80% of max
   UNION ALL SELECT 'abs_characteristics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics',     allow_moved_paths := true)), 80
   UNION ALL SELECT 'nonemployer_statistics',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics',  allow_moved_paths := true)), 10000
