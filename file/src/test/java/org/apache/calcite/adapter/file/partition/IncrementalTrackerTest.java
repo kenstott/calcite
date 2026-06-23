@@ -506,7 +506,7 @@ public class IncrementalTrackerTest {
   @Test void testDefaultIsProcessedWithEmptyTtl() {
     // Default delegates to isProcessed
     boolean result =
-        IncrementalTracker.NOOP.isProcessedWithEmptyTtl("alt", "source", Collections.singletonMap("year", "2023"), 60000);
+        IncrementalTracker.NOOP.isProcessed("alt", "source", Collections.singletonMap("year", "2023"));
     assertFalse(result);
   }
 
@@ -517,7 +517,7 @@ public class IncrementalTrackerTest {
 
     // Default delegates to filterUnprocessed
     Set<Integer> result =
-        IncrementalTracker.NOOP.filterUnprocessedWithEmptyTtl("alt", "source", combos, 60000);
+        IncrementalTracker.NOOP.filterUnprocessed("alt", "source", combos);
 
     assertEquals(2, result.size());
   }
@@ -534,7 +534,7 @@ public class IncrementalTrackerTest {
 
     // Default delegates to filterUnprocessedWithEmptyTtl
     Set<Integer> result =
-        IncrementalTracker.NOOP.filterUnprocessedWithTtl("alt", "source", combos, 60000, 30000);
+        IncrementalTracker.NOOP.filterUnprocessed("alt", "source", combos);
 
     assertEquals(1, result.size());
   }
@@ -593,43 +593,6 @@ public class IncrementalTrackerTest {
     assertEquals(1000, cc.rowCount);
     assertEquals(999L, cc.completedAt);
     assertEquals(888L, cc.sourceFileWatermark);
-  }
-
-  @Test void testCachedCompletionEmptyResultTtlNotExpired() {
-    long now = System.currentTimeMillis();
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("cfg", "sig", 0, now);
-
-    // TTL of 1 hour, just completed -> not expired
-    assertFalse(cc.isEmptyResultTtlExpired(3600000));
-  }
-
-  @Test void testCachedCompletionEmptyResultTtlExpired() {
-    long oneHourAgo = System.currentTimeMillis() - 3600001;
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("cfg", "sig", 0, oneHourAgo);
-
-    // TTL of 1 hour, completed > 1 hour ago -> expired
-    assertTrue(cc.isEmptyResultTtlExpired(3600000));
-  }
-
-  @Test void testCachedCompletionNonEmptyNotExpired() {
-    long longAgo = 1000L;
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("cfg", "sig", 100, longAgo);
-
-    // rowCount > 0, so TTL never expires
-    assertFalse(cc.isEmptyResultTtlExpired(1));
-  }
-
-  @Test void testCachedCompletionTtlDisabled() {
-    long longAgo = 1000L;
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("cfg", "sig", 0, longAgo);
-
-    // TTL <= 0 means disabled
-    assertFalse(cc.isEmptyResultTtlExpired(0));
-    assertFalse(cc.isEmptyResultTtlExpired(-1));
   }
 
   @Test void testCachedCompletionSourceFilesModified() {

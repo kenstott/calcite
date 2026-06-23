@@ -154,8 +154,7 @@ public class EtlPipelineDeepCoverageTest5 {
           return all;
         });
     when(
-        tracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong()))
+        tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenAnswer(inv -> {
           List<?> combos = inv.getArgument(2);
           Set<Integer> all = new HashSet<Integer>();
@@ -524,12 +523,11 @@ public class EtlPipelineDeepCoverageTest5 {
     when(tracker.isTableComplete(eq("ice_zero"), anyString())).thenReturn(true);
     // Return no unprocessed after invalidation
     when(
-        tracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong()))
+        tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(Collections.<Integer>emptySet());
     // Iceberg format but readRowCountFromIceberg will return 0 (no actual Iceberg table)
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(7).build();
+        .build();
     EtlPipelineConfig config =
         createHttpConfig("ice_zero", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
@@ -551,7 +549,7 @@ public class EtlPipelineDeepCoverageTest5 {
     // When rowCount=0 AND emptyResultTtlMillis=0, it should NOT invalidate
     // (the options null check: options != null, then checks emptyResultTtlMillis > 0)
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(0).build();
+        .build();
     EtlPipelineConfig config =
         createHttpConfig("ice_skip", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
@@ -1357,8 +1355,7 @@ public class EtlPipelineDeepCoverageTest5 {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(true);
     when(tracker.isTableComplete(eq("not_mat"), anyString())).thenReturn(true);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     // Materialize disabled - table complete should result in skipped
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
@@ -1844,8 +1841,7 @@ public class EtlPipelineDeepCoverageTest5 {
     when(tracker.getCachedCompletion("zero_no_opts"))
         .thenReturn(new IncrementalTracker.CachedCompletion(hash, "sig", 0));
     // All combos already processed — stub Phase 2 filter to return empty
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
         createHttpConfig("zero_no_opts", dims, MaterializeConfig.Format.ICEBERG, null, null);
     EtlPipeline pipeline =
@@ -1866,7 +1862,7 @@ public class EtlPipelineDeepCoverageTest5 {
     // Parquet format: rowCount stays 0 (not read from Iceberg)
     // With emptyResultTtlDays=0, TTL millis=0 -> goes to else -> skipped
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(0).build();
+        .build();
     EtlPipelineConfig config =
         createHttpConfig("parq_no_ice", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.PARQUET, opts, null);

@@ -259,9 +259,9 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
     // Mark with 0 rows (empty result)
     store.markProcessedWithRowCount("alt1", "src1", keys, "target", 0);
     // Should be within large TTL
-    assertTrue(store.isProcessedWithEmptyTtl("alt1", "src1", keys, 60000L));
+    assertTrue(store.isProcessed("alt1", "src1", keys));
     // Should be expired with 0 TTL
-    assertFalse(store.isProcessedWithEmptyTtl("alt1", "src1", keys, 0L));
+    assertFalse(store.isProcessed("alt1", "src1", keys));
   }
 
   @Test void testIsProcessedWithEmptyTtlNonEmpty() {
@@ -271,13 +271,13 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
     // Mark with rows (non-empty result)
     store.markProcessedWithRowCount("alt1", "src1", keys, "target", 100);
     // Permanently processed (non-empty)
-    assertTrue(store.isProcessedWithEmptyTtl("alt1", "src1", keys, 0L));
+    assertTrue(store.isProcessed("alt1", "src1", keys));
   }
 
   @Test void testIsProcessedWithEmptyTtlNotFound() {
     Map<String, String> keys = new HashMap<String, String>();
     keys.put("year", "9998");
-    assertFalse(store.isProcessedWithEmptyTtl("alt_none", "src", keys, 60000L));
+    assertFalse(store.isProcessed("alt_none", "src", keys));
   }
 
   @Test void testMarkProcessedWithError() {
@@ -401,16 +401,16 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
     List<Map<String, String>> all = Arrays.asList(keys1);
 
     // With large TTL, should be considered processed
-    Set<Integer> resultLargeTtl = store.filterUnprocessedWithEmptyTtl("alt6", "src", all, 60000L);
+    Set<Integer> resultLargeTtl = store.filterUnprocessed("alt6", "src", all);
     assertTrue(resultLargeTtl.isEmpty());
 
     // With 0 TTL, should need processing
-    Set<Integer> resultZeroTtl = store.filterUnprocessedWithEmptyTtl("alt6", "src", all, 0L);
+    Set<Integer> resultZeroTtl = store.filterUnprocessed("alt6", "src", all);
     assertTrue(resultZeroTtl.contains(0));
   }
 
   @Test void testFilterUnprocessedWithEmptyTtlNull() {
-    Set<Integer> result = store.filterUnprocessedWithEmptyTtl("alt", "src", null, 60000L);
+    Set<Integer> result = store.filterUnprocessed("alt", "src", null);
     assertTrue(result.isEmpty());
   }
 
@@ -421,13 +421,13 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
     store.markProcessedWithRowCount("alt7", "src", keys1, "target", 0);
 
     List<Map<String, String>> all = Arrays.asList(keys1);
-    Set<Integer> result = store.filterUnprocessedWithTtl("alt7", "src", all, 60000L, 30000L);
+    Set<Integer> result = store.filterUnprocessed("alt7", "src", all);
     // Should be within TTL
     assertTrue(result.isEmpty());
   }
 
   @Test void testFilterUnprocessedWithTtlNull() {
-    Set<Integer> result = store.filterUnprocessedWithTtl("alt", "src", null, 60000L, 30000L);
+    Set<Integer> result = store.filterUnprocessed("alt", "src", null);
     assertTrue(result.isEmpty());
   }
 

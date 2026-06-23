@@ -233,8 +233,7 @@ public class EtlPipelineCoverageTest {
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
     // Return empty set => all combinations already processed
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -312,7 +311,7 @@ public class EtlPipelineCoverageTest {
         .build();
     MaterializeConfig mat = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().location("/output").build())
-        .options(MaterializeOptionsConfig.builder().emptyResultTtlDays(1).build())
+        .options(MaterializeOptionsConfig.builder().build())
         .build();
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("ttl_expired_pipeline")
@@ -335,8 +334,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/ttl_expired_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -405,8 +403,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/missing_data");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -445,8 +442,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/zero_mismatch");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -498,8 +494,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/cold_recovery");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -584,8 +579,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/iceberg_complete");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -659,8 +653,7 @@ public class EtlPipelineCoverageTest {
     when(mockStorage.isDirectory(anyString())).thenReturn(true);
     // Return empty set => all are already processed
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -689,8 +682,7 @@ public class EtlPipelineCoverageTest {
     unprocessed.add(1);
     unprocessed.add(2);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/seq_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -729,8 +721,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/writer_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -779,8 +770,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(7L);
     when(mockWriter.getTableLocation()).thenReturn("/base/fallback_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -837,8 +827,7 @@ public class EtlPipelineCoverageTest {
     unprocessed.add(0);
     unprocessed.add(1);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/skip_error_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -900,8 +889,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     DataProvider dp = new DataProvider() {
       @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -952,8 +940,7 @@ public class EtlPipelineCoverageTest {
     unprocessed.add(0);
     unprocessed.add(1);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/warn_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -994,8 +981,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     DataProvider dp = new DataProvider() {
       @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -1028,8 +1014,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/notfound_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -1065,8 +1050,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/transient_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -1099,8 +1083,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/transient503_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -1133,8 +1116,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/null_msg_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -1168,8 +1150,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/parquet_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.PARQUET);
@@ -1224,8 +1205,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/doc_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -1277,8 +1257,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/doc_no_writer");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -1306,8 +1285,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(0L);
     when(mockWriter.getTableLocation()).thenReturn("/base/null_dp_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -1340,8 +1318,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     // Writer throws during initialize => caught by outer catch block
     factoryMock.close();
@@ -1391,8 +1368,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/close_fail_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -1512,8 +1488,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/merge_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -1549,8 +1524,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/slash_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.PARQUET);
@@ -1768,8 +1742,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/success_complete");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -1827,8 +1800,7 @@ public class EtlPipelineCoverageTest {
     unprocessed.add(0);
     unprocessed.add(1);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/partial_fail");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -1870,7 +1842,7 @@ public class EtlPipelineCoverageTest {
     MaterializeConfig mat = MaterializeConfig.builder()
         .format(MaterializeConfig.Format.ICEBERG)
         .output(MaterializeOutputConfig.builder().location("/output").build())
-        .options(MaterializeOptionsConfig.builder().emptyResultTtlDays(7).build())
+        .options(MaterializeOptionsConfig.builder().build())
         .build();
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("zero_ttl_pipeline")
@@ -1889,8 +1861,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/zero_ttl_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -1924,7 +1895,7 @@ public class EtlPipelineCoverageTest {
     MaterializeConfig mat = MaterializeConfig.builder()
         .format(MaterializeConfig.Format.ICEBERG)
         .output(MaterializeOutputConfig.builder().location("/output").build())
-        .options(MaterializeOptionsConfig.builder().emptyResultTtlDays(0).build())
+        .options(MaterializeOptionsConfig.builder().build())
         .build();
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("zero_no_ttl")
@@ -1961,8 +1932,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     DataProvider dp = new DataProvider() {
       @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -1993,8 +1963,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.getTableLocation()).thenReturn("/base/5xx_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
 
@@ -2033,8 +2002,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/parquet_missing");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.PARQUET);
@@ -2083,8 +2051,7 @@ public class EtlPipelineCoverageTest {
       unprocessed.add(i);
     }
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(10L);
     when(mockWriter.getTableLocation()).thenReturn("/base/multi_dim");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -2103,34 +2070,6 @@ public class EtlPipelineCoverageTest {
     assertNotNull(result);
     assertEquals(40, result.getTotalRows());
     assertEquals(4, result.getSuccessfulBatches());
-  }
-
-  // -----------------------------------------------------------------------
-  // CachedCompletion - isEmptyResultTtlExpired
-  // -----------------------------------------------------------------------
-
-  @Test void testCachedCompletionTtlExpiry() {
-    // Non-empty result => never expired
-    IncrementalTracker.CachedCompletion nonEmpty =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 100);
-    assertFalse(nonEmpty.isEmptyResultTtlExpired(1000));
-
-    // Empty with no TTL => not expired
-    IncrementalTracker.CachedCompletion emptyNoTtl =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0);
-    assertFalse(emptyNoTtl.isEmptyResultTtlExpired(0));
-    assertFalse(emptyNoTtl.isEmptyResultTtlExpired(-1));
-
-    // Empty with TTL not yet expired
-    IncrementalTracker.CachedCompletion recentEmpty =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0, System.currentTimeMillis());
-    assertFalse(recentEmpty.isEmptyResultTtlExpired(60000)); // 60 seconds TTL
-
-    // Empty with TTL expired
-    long longAgo = System.currentTimeMillis() - 200000;
-    IncrementalTracker.CachedCompletion oldEmpty =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0, longAgo);
-    assertTrue(oldEmpty.isEmptyResultTtlExpired(100000)); // 100 seconds TTL
   }
 
   // -----------------------------------------------------------------------
@@ -2206,8 +2145,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/thread_test");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
@@ -2293,8 +2231,7 @@ public class EtlPipelineCoverageTest {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
     when(mockWriter.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(5L);
     when(mockWriter.getTableLocation()).thenReturn("/base/progress_pipeline");
     when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);

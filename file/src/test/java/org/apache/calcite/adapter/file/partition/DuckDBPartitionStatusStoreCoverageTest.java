@@ -150,14 +150,12 @@ public class DuckDBPartitionStatusStoreCoverageTest {
 
     // Within TTL should return true
     assertTrue(
-        store.isProcessedWithEmptyTtl("alt_empty", "source_empty",
-        keyValues, 60000));
+        store.isProcessed("alt_empty", "source_empty", keyValues));
 
     // With very short TTL
     Thread.sleep(50);
     assertFalse(
-        store.isProcessedWithEmptyTtl("alt_empty", "source_empty",
-        keyValues, 1));
+        store.isProcessed("alt_empty", "source_empty", keyValues));
   }
 
   @Test void testIsProcessedWithEmptyTtlNonEmptyResult() throws Exception {
@@ -170,8 +168,7 @@ public class DuckDBPartitionStatusStoreCoverageTest {
 
     // Non-empty results should always be considered processed regardless of TTL
     assertTrue(
-        store.isProcessedWithEmptyTtl("alt_nonempty", "source_nonempty",
-        keyValues, 1));
+        store.isProcessed("alt_nonempty", "source_nonempty", keyValues));
   }
 
   @Test void testGetProcessedKeyValues() throws Exception {

@@ -420,8 +420,7 @@ public class EtlPipelineDeepCoverageTest2 {
     Set<Integer> allIndices = new HashSet<Integer>();
     allIndices.add(0);
     when(
-        incrementalTracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong())).thenReturn(allIndices);
+        incrementalTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(allIndices);
 
     EtlResult result = pipeline.execute();
     assertNotNull(result);
@@ -601,8 +600,7 @@ public class EtlPipelineDeepCoverageTest2 {
     allIndices.add(0);
     when(incrementalTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
     when(
-        incrementalTracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong())).thenReturn(allIndices);
+        incrementalTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(allIndices);
 
     DataProvider dataProvider = mock(DataProvider.class);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -660,8 +658,7 @@ public class EtlPipelineDeepCoverageTest2 {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        incrementalTracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong())).thenReturn(unprocessed);
+        incrementalTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     Map<String, Object> row = new HashMap<String, Object>();
@@ -1182,8 +1179,7 @@ public class EtlPipelineDeepCoverageTest2 {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        incrementalTracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong())).thenReturn(unprocessed);
+        incrementalTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);
@@ -1288,8 +1284,7 @@ public class EtlPipelineDeepCoverageTest2 {
     Set<Integer> unprocessed = new HashSet<Integer>();
     unprocessed.add(0);
     when(
-        incrementalTracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong())).thenReturn(unprocessed);
+        incrementalTracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(unprocessed);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, storageProvider, tempDir.toString(), null, incrementalTracker);

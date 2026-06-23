@@ -35,7 +35,6 @@ class MaterializeOptionsConfigTest {
     assertEquals(10000, config.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.REMOTE, config.getStagingMode());
     assertFalse(config.isPreserveInsertionOrder());
-    assertEquals(7, config.getEmptyResultTtlDays());
   }
 
   @Test void testBuilderCustomValues() {
@@ -45,7 +44,6 @@ class MaterializeOptionsConfigTest {
         .batchSize(50000)
         .stagingMode(MaterializeOptionsConfig.StagingMode.LOCAL)
         .preserveInsertionOrder(true)
-        .emptyResultTtlDays(14)
         .build();
 
     assertEquals(8, config.getThreads());
@@ -53,7 +51,6 @@ class MaterializeOptionsConfigTest {
     assertEquals(50000, config.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.LOCAL, config.getStagingMode());
     assertTrue(config.isPreserveInsertionOrder());
-    assertEquals(14, config.getEmptyResultTtlDays());
   }
 
   @Test void testBuilderZeroValuesUseDefaults() {
@@ -61,22 +58,11 @@ class MaterializeOptionsConfigTest {
         .threads(0)
         .rowGroupSize(0)
         .batchSize(0)
-        .emptyResultTtlDays(0)
         .build();
 
     assertEquals(2, config.getThreads());
     assertEquals(100000, config.getRowGroupSize());
     assertEquals(10000, config.getBatchSize());
-    assertEquals(7, config.getEmptyResultTtlDays());
-  }
-
-  @Test void testEmptyResultTtlMillis() {
-    MaterializeOptionsConfig config = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(7)
-        .build();
-
-    long expectedMillis = 7L * 24L * 60L * 60L * 1000L;
-    assertEquals(expectedMillis, config.getEmptyResultTtlMillis());
   }
 
   @Test void testFromMap() {
@@ -86,7 +72,6 @@ class MaterializeOptionsConfigTest {
     map.put("batchSize", 25000);
     map.put("stagingMode", "local");
     map.put("preserveInsertionOrder", Boolean.TRUE);
-    map.put("emptyResultTtlDays", 30);
 
     MaterializeOptionsConfig config = MaterializeOptionsConfig.fromMap(map);
     assertNotNull(config);
@@ -95,7 +80,6 @@ class MaterializeOptionsConfigTest {
     assertEquals(25000, config.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.LOCAL, config.getStagingMode());
     assertTrue(config.isPreserveInsertionOrder());
-    assertEquals(30, config.getEmptyResultTtlDays());
   }
 
   @Test void testFromMapNull() {

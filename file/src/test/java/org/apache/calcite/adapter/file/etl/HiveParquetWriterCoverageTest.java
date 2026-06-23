@@ -1405,8 +1405,6 @@ class HiveParquetWriterCoverageTest {
     assertEquals(10000, config.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.REMOTE, config.getStagingMode());
     assertFalse(config.isPreserveInsertionOrder());
-    assertEquals(7, config.getEmptyResultTtlDays());
-    assertTrue(config.getEmptyResultTtlMillis() > 0);
   }
 
   @Test void testMaterializeOptionsConfigCustom() {
@@ -1416,7 +1414,6 @@ class HiveParquetWriterCoverageTest {
         .batchSize(50000)
         .stagingMode(MaterializeOptionsConfig.StagingMode.LOCAL)
         .preserveInsertionOrder(true)
-        .emptyResultTtlDays(14)
         .build();
 
     assertEquals(8, config.getThreads());
@@ -1424,7 +1421,6 @@ class HiveParquetWriterCoverageTest {
     assertEquals(50000, config.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.LOCAL, config.getStagingMode());
     assertTrue(config.isPreserveInsertionOrder());
-    assertEquals(14, config.getEmptyResultTtlDays());
   }
 
   @Test void testMaterializeOptionsConfigFromMap() {
@@ -1434,7 +1430,6 @@ class HiveParquetWriterCoverageTest {
     map.put("batchSize", 20000);
     map.put("stagingMode", "local");
     map.put("preserveInsertionOrder", true);
-    map.put("emptyResultTtlDays", 14);
 
     MaterializeOptionsConfig config = MaterializeOptionsConfig.fromMap(map);
     assertNotNull(config);
@@ -1443,7 +1438,6 @@ class HiveParquetWriterCoverageTest {
     assertEquals(20000, config.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.LOCAL, config.getStagingMode());
     assertTrue(config.isPreserveInsertionOrder());
-    assertEquals(14, config.getEmptyResultTtlDays());
   }
 
   @Test void testMaterializeOptionsConfigFromMapNull() {

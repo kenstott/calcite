@@ -157,7 +157,6 @@ public class EtlPipelineDeepCoverageTest {
 
   @Test void testExecuteCachedCompletionZeroRowsTtlNotExpired() throws IOException {
     MaterializeOptionsConfig options = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(1) // 1 day
         .build();
 
     EtlPipelineConfig config = buildConfigWithOptions("zero_rows_pipeline", options);
@@ -230,8 +229,7 @@ public class EtlPipelineDeepCoverageTest {
     Set<Integer> unprocessed = new HashSet<>();
     unprocessed.add(0);
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        anyList(), anyLong())).thenReturn(unprocessed);
+        mockTracker.filterUnprocessed(anyString(), anyString(), anyList())).thenReturn(unprocessed);
 
     List<Map<String, Object>> data = new ArrayList<>();
     Map<String, Object> row = new HashMap<>();
@@ -267,8 +265,7 @@ public class EtlPipelineDeepCoverageTest {
 
     // Return empty set - all combinations already processed
     when(
-        mockTracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        anyList(), anyLong())).thenReturn(new HashSet<Integer>());
+        mockTracker.filterUnprocessed(anyString(), anyString(), anyList())).thenReturn(new HashSet<Integer>());
 
     DataProvider dataProvider = (cfg, variables) -> Collections.<Map<String, Object>>emptyList().iterator();
     DataWriter dataWriter = mock(DataWriter.class);

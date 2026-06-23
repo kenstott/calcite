@@ -1141,30 +1141,6 @@ public class S3HivePipelineTrackerCoverageTest {
   }
 
   @Test
-  void testCachedCompletionIsEmptyResultTtlExpired() {
-    long now = System.currentTimeMillis();
-
-    // Non-empty result (rowCount > 0) - TTL never expires
-    IncrementalTracker.CachedCompletion nonEmpty =
-        new IncrementalTracker.CachedCompletion("h", "s", 100, now, 0);
-    assertFalse(nonEmpty.isEmptyResultTtlExpired(1000));
-
-    // Empty result within TTL
-    IncrementalTracker.CachedCompletion withinTtl =
-        new IncrementalTracker.CachedCompletion("h", "s", 0, now, 0);
-    assertFalse(withinTtl.isEmptyResultTtlExpired(60000));
-
-    // Empty result past TTL
-    IncrementalTracker.CachedCompletion pastTtl =
-        new IncrementalTracker.CachedCompletion("h", "s", 0, now - 10000, 0);
-    assertTrue(pastTtl.isEmptyResultTtlExpired(5000));
-
-    // No TTL configured (TTL <= 0)
-    assertFalse(withinTtl.isEmptyResultTtlExpired(0));
-    assertFalse(withinTtl.isEmptyResultTtlExpired(-1));
-  }
-
-  @Test
   void testCachedCompletionIsSourceFilesModified() {
     // Watermark not enabled (0)
     IncrementalTracker.CachedCompletion noWm =
@@ -1593,21 +1569,18 @@ public class S3HivePipelineTrackerCoverageTest {
         Collections.<String, String>emptyMap(), "target", 100);
 
     // isProcessedWithEmptyTtl default delegates to isProcessed
-    assertFalse(tracker.isProcessedWithEmptyTtl("alt", "src",
-        Collections.<String, String>emptyMap(), 1000));
+    assertFalse(tracker.isProcessed("alt", "src", Collections.<String, String>emptyMap()));
 
     // markProcessedWithError default delegates to markProcessedWithRowCount
     tracker.markProcessedWithError("alt", "src",
         Collections.<String, String>emptyMap(), "target", "error msg");
 
     // filterUnprocessedWithEmptyTtl default delegates to filterUnprocessed
-    Set<Integer> result = tracker.filterUnprocessedWithEmptyTtl("alt", "src",
-        Arrays.asList(Collections.<String, String>emptyMap()), 1000);
+    Set<Integer> result = tracker.filterUnprocessed("alt", "src", Arrays.asList(Collections.<String, String>emptyMap()));
     assertEquals(1, result.size());
 
     // filterUnprocessedWithTtl default delegates to filterUnprocessedWithEmptyTtl
-    result = tracker.filterUnprocessedWithTtl("alt", "src",
-        Arrays.asList(Collections.<String, String>emptyMap()), 1000, 500);
+    result = tracker.filterUnprocessed("alt", "src", Arrays.asList(Collections.<String, String>emptyMap()));
     assertEquals(1, result.size());
 
     // markTableCompleteWithConfig default delegates to markTableComplete
@@ -2185,31 +2158,6 @@ public class S3HivePipelineTrackerCoverageTest {
     assertEquals(5000, cc.rowCount);
     assertEquals(9999L, cc.sourceFileWatermark);
     assertTrue(cc.completedAt > 0);
-  }
-
-  @Test
-  void testCachedCompletionIsEmptyResultTtlExpiredEdge() {
-    long now = System.currentTimeMillis();
-    // Row count = 0, completed just now
-    PipelineTracker.CachedCompletion recent =
-        new PipelineTracker.CachedCompletion("h", "s", 0, now, 0);
-    // TTL of 1 day: should NOT be expired since just created
-    assertFalse(recent.isEmptyResultTtlExpired(
-        java.util.concurrent.TimeUnit.DAYS.toMillis(1)));
-
-    // Row count > 0: should never be considered expired
-    PipelineTracker.CachedCompletion nonEmpty =
-        new PipelineTracker.CachedCompletion("h", "s", 100,
-            now - java.util.concurrent.TimeUnit.DAYS.toMillis(30), 0);
-    assertFalse(nonEmpty.isEmptyResultTtlExpired(
-        java.util.concurrent.TimeUnit.DAYS.toMillis(1)));
-
-    // Row count = 0, completed 10 days ago with 1 day TTL: should be expired
-    PipelineTracker.CachedCompletion old =
-        new PipelineTracker.CachedCompletion("h", "s", 0,
-            now - java.util.concurrent.TimeUnit.DAYS.toMillis(10), 0);
-    assertTrue(old.isEmptyResultTtlExpired(
-        java.util.concurrent.TimeUnit.DAYS.toMillis(1)));
   }
 
   @Test

@@ -379,7 +379,7 @@ class BackfillCoalesceRegressionTest {
       List<Map<String, String>> allCombos =
           Collections.<Map<String, String>>singletonList(rawCombo);
       Set<Integer> unprocessed =
-          store.filterUnprocessedWithEmptyTtl(pipeline, pipeline, allCombos, 0L);
+          store.filterUnprocessed(pipeline, pipeline, allCombos);
       assertEquals(1, unprocessed.size(),
           "rawCombo should still appear unprocessed (key was enriched variant)");
     }

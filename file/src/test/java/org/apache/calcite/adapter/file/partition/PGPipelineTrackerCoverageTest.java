@@ -371,7 +371,7 @@ class PGPipelineTrackerCoverageTest {
     when(rs.next()).thenReturn(false);
 
     Map<String, String> keyValues = Collections.singletonMap("year", "2020");
-    assertFalse(tracker.isProcessedWithEmptyTtl("alt1", "source1", keyValues, 60000));
+    assertFalse(tracker.isProcessed("alt1", "source1", keyValues));
   }
 
   @Test void testIsProcessedWithEmptyTtlWithData() throws Exception {
@@ -386,7 +386,7 @@ class PGPipelineTrackerCoverageTest {
     when(rs.getLong("as_of")).thenReturn(System.currentTimeMillis());
 
     Map<String, String> keyValues = Collections.singletonMap("year", "2020");
-    assertTrue(tracker.isProcessedWithEmptyTtl("alt1", "source1", keyValues, 60000));
+    assertTrue(tracker.isProcessed("alt1", "source1", keyValues));
   }
 
   @Test void testIsProcessedWithEmptyTtlEmptyResultWithinTtl() throws Exception {
@@ -401,7 +401,7 @@ class PGPipelineTrackerCoverageTest {
     when(rs.getLong("as_of")).thenReturn(System.currentTimeMillis());
 
     Map<String, String> keyValues = Collections.singletonMap("year", "2020");
-    assertTrue(tracker.isProcessedWithEmptyTtl("alt1", "source1", keyValues, 60000));
+    assertTrue(tracker.isProcessed("alt1", "source1", keyValues));
   }
 
   @Test void testIsProcessedWithEmptyTtlErrorState() throws Exception {
@@ -414,7 +414,7 @@ class PGPipelineTrackerCoverageTest {
     when(rs.getString("state")).thenReturn("error");
 
     Map<String, String> keyValues = Collections.singletonMap("year", "2020");
-    assertFalse(tracker.isProcessedWithEmptyTtl("alt1", "source1", keyValues, 60000));
+    assertFalse(tracker.isProcessed("alt1", "source1", keyValues));
   }
 
   @Test void testIsProcessedWithEmptyTtlHandlesSQLException() throws Exception {
@@ -422,7 +422,7 @@ class PGPipelineTrackerCoverageTest {
         .thenThrow(new SQLException("connection lost"));
 
     Map<String, String> keyValues = Collections.singletonMap("year", "2020");
-    assertFalse(tracker.isProcessedWithEmptyTtl("alt1", "source1", keyValues, 60000));
+    assertFalse(tracker.isProcessed("alt1", "source1", keyValues));
   }
 
   // ===== getProcessedKeyValues =====

@@ -815,7 +815,7 @@ public class EtlPipelineDeepCoverageTest3 {
     IncrementalTracker tracker = mockTracker();
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
@@ -864,7 +864,7 @@ public class EtlPipelineDeepCoverageTest3 {
     when(tracker.getCachedCompletion("z")).thenReturn(
         new IncrementalTracker.CachedCompletion(hash, "sig", 0, System.currentTimeMillis()));
     when(sp.isDirectory(anyString())).thenReturn(true);
-    MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder().emptyResultTtlDays(7).build();
+    MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder().build();
     EtlPipelineConfig config = createHttpConfig("z", dims, MaterializeConfig.Format.ICEBERG, opts, null);
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult r = pipeline.execute();
@@ -880,10 +880,10 @@ public class EtlPipelineDeepCoverageTest3 {
     when(tracker.getCachedCompletion("e")).thenReturn(
         new IncrementalTracker.CachedCompletion(hash, "sig", 0, 1000L));
     when(sp.isDirectory(anyString())).thenReturn(true);
-    MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder().emptyResultTtlDays(1).build();
+    MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder().build();
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
@@ -904,7 +904,7 @@ public class EtlPipelineDeepCoverageTest3 {
     when(sp.isDirectory(anyString())).thenReturn(false);
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
@@ -919,7 +919,7 @@ public class EtlPipelineDeepCoverageTest3 {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(false);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(Collections.<Integer>emptySet());
     when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(Collections.<Integer>emptySet());
@@ -937,7 +937,7 @@ public class EtlPipelineDeepCoverageTest3 {
     when(sp.isDirectory(anyString())).thenReturn(false);
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
@@ -969,7 +969,7 @@ public class EtlPipelineDeepCoverageTest3 {
     when(sp.isDirectory(anyString())).thenReturn(false);
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
@@ -991,7 +991,7 @@ public class EtlPipelineDeepCoverageTest3 {
     when(sp.isDirectory(anyString())).thenReturn(false);
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
@@ -1065,7 +1065,7 @@ public class EtlPipelineDeepCoverageTest3 {
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
     allIdx.add(1);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
@@ -1087,7 +1087,7 @@ public class EtlPipelineDeepCoverageTest3 {
     Set<Integer> allIdx = new HashSet<Integer>();
     allIdx.add(0);
     allIdx.add(1);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(), any(List.class), anyLong()))
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(allIdx);
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))

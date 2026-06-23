@@ -149,8 +149,7 @@ public class EtlPipelineDeepCoverageTest4 {
           return all;
         });
     when(
-        tracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong()))
+        tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenAnswer(inv -> {
           List<?> combos = inv.getArgument(2);
           Set<Integer> all = new HashSet<Integer>();
@@ -937,8 +936,7 @@ public class EtlPipelineDeepCoverageTest4 {
     when(tracker.getCachedCompletion("test_cached"))
         .thenReturn(new IncrementalTracker.CachedCompletion(configHash, "sig", 500));
     // Stub Phase 2 filter to return empty — all combos already processed
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
         createHttpConfig("test_cached", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
@@ -956,8 +954,7 @@ public class EtlPipelineDeepCoverageTest4 {
     when(tracker.getCachedCompletion("test_mismatch"))
         .thenReturn(new IncrementalTracker.CachedCompletion("old_hash", "old_sig", 250));
     // Stub Phase 2 filter to return empty — all combos already processed
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
         createHttpConfig("test_mismatch", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
@@ -997,7 +994,7 @@ public class EtlPipelineDeepCoverageTest4 {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(true);
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(30).build();
+        .build();
     String configHash =
         IncrementalTracker.computeConfigHash(singleRangeDimension("y", 2020, 2020));
     // completedAt = now, so TTL not expired
@@ -1005,8 +1002,7 @@ public class EtlPipelineDeepCoverageTest4 {
         .thenReturn(
             new IncrementalTracker.CachedCompletion(
             configHash, "sig", 0, System.currentTimeMillis()));
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
         createHttpConfig("tbl_empty", singleRangeDimension("y", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
@@ -1022,7 +1018,7 @@ public class EtlPipelineDeepCoverageTest4 {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(true);
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(1).build();
+        .build();
     String configHash =
         IncrementalTracker.computeConfigHash(singleRangeDimension("y", 2020, 2020));
     // completedAt = 10 days ago, TTL is 1 day -> expired
@@ -1074,8 +1070,7 @@ public class EtlPipelineDeepCoverageTest4 {
     StorageProvider sp = mockStorage();
     // Return empty set from filterUnprocessedWithEmptyTtl
     when(
-        tracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong()))
+        tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(Collections.<Integer>emptySet());
     // Simulate empty dimensions by using a range where start > end
     Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
@@ -1140,8 +1135,7 @@ public class EtlPipelineDeepCoverageTest4 {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
     when(tracker.isTableComplete(eq("tbl_nomat"), anyString())).thenReturn(true);
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     HttpSourceConfig source = HttpSourceConfig.builder()
         .url("https://api.example.com/data").build();
     // materialize is present but disabled
@@ -1169,8 +1163,7 @@ public class EtlPipelineDeepCoverageTest4 {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(true);
     when(
-        tracker.filterUnprocessedWithEmptyTtl(
-        anyString(), anyString(), any(List.class), anyLong()))
+        tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
         createHttpConfig("tbl_done", singleRangeDimension("y", 2020, 2020),
@@ -1678,40 +1671,6 @@ public class EtlPipelineDeepCoverageTest4 {
   // 29. CachedCompletion edge cases
   // -----------------------------------------------------------------------
 
-  @Test void testCachedCompletion_isEmptyResultTtlExpired_nonEmptyResult() {
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 100, 0L);
-    assertFalse(cc.isEmptyResultTtlExpired(86400000L));
-  }
-
-  @Test void testCachedCompletion_isEmptyResultTtlExpired_noTtlConfigured() {
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0, 0L);
-    assertFalse(cc.isEmptyResultTtlExpired(0L));
-  }
-
-  @Test void testCachedCompletion_isEmptyResultTtlExpired_negativeTtl() {
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0, 0L);
-    assertFalse(cc.isEmptyResultTtlExpired(-1L));
-  }
-
-  @Test void testCachedCompletion_isEmptyResultTtlExpired_expired() {
-    long completedAt = System.currentTimeMillis() - (2 * 24 * 60 * 60 * 1000L);
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0, completedAt);
-    // 1 day TTL, completed 2 days ago -> expired
-    assertTrue(cc.isEmptyResultTtlExpired(24 * 60 * 60 * 1000L));
-  }
-
-  @Test void testCachedCompletion_isEmptyResultTtlExpired_notYetExpired() {
-    long completedAt = System.currentTimeMillis();
-    IncrementalTracker.CachedCompletion cc =
-        new IncrementalTracker.CachedCompletion("hash", "sig", 0, completedAt);
-    // 30 day TTL, completed now -> not expired
-    assertFalse(cc.isEmptyResultTtlExpired(30L * 24 * 60 * 60 * 1000L));
-  }
-
   @Test void testCachedCompletion_threeArgConstructorSetsCompletedAtToNow() {
     long before = System.currentTimeMillis();
     IncrementalTracker.CachedCompletion cc =
@@ -1752,7 +1711,6 @@ public class EtlPipelineDeepCoverageTest4 {
     assertEquals(10000, opts.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.REMOTE, opts.getStagingMode());
     assertFalse(opts.isPreserveInsertionOrder());
-    assertEquals(7, opts.getEmptyResultTtlDays());
   }
 
   @Test void testMaterializeOptionsConfig_customValues() {
@@ -1762,22 +1720,12 @@ public class EtlPipelineDeepCoverageTest4 {
         .batchSize(20000)
         .stagingMode(MaterializeOptionsConfig.StagingMode.LOCAL)
         .preserveInsertionOrder(true)
-        .emptyResultTtlDays(14)
         .build();
     assertEquals(8, opts.getThreads());
     assertEquals(50000, opts.getRowGroupSize());
     assertEquals(20000, opts.getBatchSize());
     assertEquals(MaterializeOptionsConfig.StagingMode.LOCAL, opts.getStagingMode());
     assertTrue(opts.isPreserveInsertionOrder());
-    assertEquals(14, opts.getEmptyResultTtlDays());
-  }
-
-  @Test void testMaterializeOptionsConfig_emptyResultTtlMillis() {
-    MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(3)
-        .build();
-    long expectedMillis = 3L * 24L * 60L * 60L * 1000L;
-    assertEquals(expectedMillis, opts.getEmptyResultTtlMillis());
   }
 
   @Test void testMaterializeOptionsConfig_fromMapNullReturnsDefaults() {
@@ -1811,24 +1759,15 @@ public class EtlPipelineDeepCoverageTest4 {
     assertEquals(MaterializeOptionsConfig.StagingMode.REMOTE, opts.getStagingMode());
   }
 
-  @Test void testMaterializeOptionsConfig_fromMapEmptyResultTtlDays() {
-    Map<String, Object> map = new HashMap<String, Object>();
-    map.put("emptyResultTtlDays", 30);
-    MaterializeOptionsConfig opts = MaterializeOptionsConfig.fromMap(map);
-    assertEquals(30, opts.getEmptyResultTtlDays());
-  }
-
   @Test void testMaterializeOptionsConfig_zeroValuesUseDefaults() {
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .threads(0)
         .rowGroupSize(0)
         .batchSize(0)
-        .emptyResultTtlDays(0)
         .build();
     assertEquals(2, opts.getThreads());
     assertEquals(100000, opts.getRowGroupSize());
     assertEquals(10000, opts.getBatchSize());
-    assertEquals(7, opts.getEmptyResultTtlDays());
   }
 
   // -----------------------------------------------------------------------
@@ -2006,7 +1945,7 @@ public class EtlPipelineDeepCoverageTest4 {
     when(sp.isDirectory(anyString())).thenReturn(true);
     when(tracker.isTableComplete(eq("tbl_0ttl"), anyString())).thenReturn(true);
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
-        .emptyResultTtlDays(7).build();
+        .build();
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
@@ -2029,8 +1968,7 @@ public class EtlPipelineDeepCoverageTest4 {
     when(tracker.isTableComplete(eq("tbl_0notl"), anyString())).thenReturn(true);
     // With disabled materialize, Phase 1.5 is skipped. Stub the filter to return empty
     // so neededCount=0, triggering the all-done skip path (EtlResult.skippedEntirePipeline).
-    when(tracker.filterUnprocessedWithEmptyTtl(anyString(), anyString(),
-        any(List.class), anyLong())).thenReturn(Collections.<Integer>emptySet());
+    when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     MaterializeConfig mc = MaterializeConfig.builder()
         .enabled(false)
         .output(MaterializeOutputConfig.builder().build())
