@@ -1181,31 +1181,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Read the latest state for a (source_key, table_name, phase) combination.
    */
   private String readLatestState(String sourceKey, String tableName, String phase) {
-    String year = completionYearFor(sourceKey, System.currentTimeMillis());
-    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
-        + "/*.parquet";
-    String sql = "SELECT state FROM read_parquet('" + glob + "', "
-        + "hive_partitioning=true, union_by_name=true) "
-        + "WHERE source_key = ? AND table_name = ? AND phase = ? "
-        + "ORDER BY as_of DESC LIMIT 1";
-
-    synchronized (connectionLock) {
-      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-        stmt.setString(1, sourceKey);
-        stmt.setString(2, tableName);
-        stmt.setString(3, phase);
-        try (ResultSet rs = stmt.executeQuery()) {
-          if (rs.next()) {
-            return rs.getString("state");
-          }
-        }
-      } catch (SQLException e) {
-        // Glob may match no files, treat as not found
-        LOGGER.debug("No tracker state found for {}/{}/{}: {}",
-            sourceKey, tableName, phase, e.getMessage());
-      }
-    }
-    return null;
+    return readLatestStateAndAsOf(sourceKey, tableName, phase)[0];
   }
 
   // ===== PipelineTracker Implementation =====
@@ -2058,27 +2034,50 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    *         (may be null if not found)
    */
   private String[] readLatestStateAndAsOf(String sourceKey, String tableName, String phase) {
+    // List via the AWS SDK and read the parquet from a local temp copy — NOT a direct DuckDB
+    // httpfs s3:// read. The in-memory DuckDB httpfs LIST fails ("connection error") against
+    // custom S3 endpoints (MinIO/R2), so a direct read silently returns nothing and every
+    // freshness/watermark token read comes back null (gates never skip). This mirrors
+    // getCompletedTables, which is why per-period completion already works cross-run.
     String year = completionYearFor(sourceKey, System.currentTimeMillis());
-    String glob = bucketPath + "/year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey)
-        + "/*.parquet";
-    String sql = "SELECT state, as_of FROM read_parquet('" + glob + "', "
-        + "hive_partitioning=true, union_by_name=true) "
-        + "WHERE source_key = ? AND table_name = ? AND phase = ? "
-        + "ORDER BY as_of DESC LIMIT 1";
-
-    synchronized (connectionLock) {
-      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-        stmt.setString(1, sourceKey);
-        stmt.setString(2, tableName);
-        stmt.setString(3, phase);
-        try (ResultSet rs = stmt.executeQuery()) {
-          if (rs.next()) {
-            return new String[]{rs.getString("state"), String.valueOf(rs.getLong("as_of"))};
+    String prefix = "year=" + year + "/source_key=" + sanitizeHiveValue(sourceKey) + "/";
+    List<String> files;
+    try {
+      files = listTrackerFiles(prefix);
+    } catch (Exception e) {
+      LOGGER.debug("No tracker state listing for {}/{}/{}: {}",
+          sourceKey, tableName, phase, e.getMessage());
+      return new String[]{null, null};
+    }
+    if (files.isEmpty()) {
+      return new String[]{null, null};
+    }
+    java.io.File tempDir = null;
+    try {
+      tempDir = downloadTrackerFilesParallel(files, year);
+      String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+      String sql = "SELECT state, as_of FROM read_parquet('" + localGlob + "', "
+          + "union_by_name=true) "
+          + "WHERE source_key = ? AND table_name = ? AND phase = ? "
+          + "ORDER BY as_of DESC LIMIT 1";
+      synchronized (connectionLock) {
+        try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+          stmt.setString(1, sourceKey);
+          stmt.setString(2, tableName);
+          stmt.setString(3, phase);
+          try (ResultSet rs = stmt.executeQuery()) {
+            if (rs.next()) {
+              return new String[]{rs.getString("state"), String.valueOf(rs.getLong("as_of"))};
+            }
           }
         }
-      } catch (SQLException e) {
-        LOGGER.debug("No tracker state found for {}/{}/{}: {}",
-            sourceKey, tableName, phase, e.getMessage());
+      }
+    } catch (Exception e) {
+      LOGGER.debug("No tracker state found for {}/{}/{}: {}",
+          sourceKey, tableName, phase, e.getMessage());
+    } finally {
+      if (tempDir != null) {
+        deleteDir(tempDir);
       }
     }
     return new String[]{null, null};

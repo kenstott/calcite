@@ -108,11 +108,13 @@ public class EtlPipeline {
   private boolean perUnitFreshnessEnabled;
 
   /**
-   * True when a per-unit freshness match is allowed to actually SKIP (vs only probe+capture the
-   * token). Mirrors the pipeline-level gate: under forceReprocessAll (no committed data / cleared
-   * marker) we still probe and persist the token so the NEXT run can skip, but never skip THIS run.
+   * True when a freshness match is allowed to actually SKIP a write (vs only probe/hash and
+   * capture the token). Equals {@code !forceReprocessAll}: under forceReprocessAll (no committed
+   * data / cleared marker) we still capture and persist the token so the NEXT run can skip, but
+   * never skip THIS run — otherwise a purged/rebuilt table whose source is unchanged would skip
+   * forever and stay empty. Shared by the per-unit freshness gate and the pipeline-level hash gate.
    */
-  private boolean perUnitFreshnessSkipAllowed;
+  private boolean freshnessSkipAllowed;
 
   /**
    * Delta incremental bound for this run: the fetch variable name and the recovered watermark
@@ -410,15 +412,6 @@ public class EtlPipeline {
         forceReprocessAll = true;
       }
 
-      // Table was explicitly cleared (invalidateTableCompletion was called) — skip both the
-      // Phase 1.5 Iceberg manifest scan AND the Phase 2 full-bucket batch scan.
-      if (!forceReprocessAll && incrementalTracker.wasTableCleared(pipelineName)) {
-        LOGGER.info("Pipeline '{}': tracker was explicitly cleared — "
-            + "skipping Phase 2 batch scan, force-reprocessing all {} combinations",
-            pipelineName, totalBatches);
-        forceReprocessAll = true;
-      }
-
       if (progressListener != null) {
         progressListener.onPhaseStart("dimension_expansion", totalBatches);
         progressListener.onPhaseComplete("dimension_expansion", totalBatches);
@@ -448,20 +441,14 @@ public class EtlPipeline {
       } else {
         // Standard mode: Phase 1.5 + Phase 2 as before
 
-        // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed.
-        // Skip when the table was explicitly cleared — cleared means reprocess from scratch,
-        // not self-heal from existing partitions (which scans all Iceberg manifests on S3).
+        // Phase 1.5: Self-healing - rebuild cache from existing Iceberg data if needed, so the
+        // Phase 2 filter skips combinations already committed to Iceberg.
         Set<Integer> prefilteredIndices = null;
         if (materializeConfig != null
             && materializeConfig.getFormat() == MaterializeConfig.Format.ICEBERG
             && materializeConfig.isEnabled()
-            && verifyDataExists(pipelineName, config)
-            && !incrementalTracker.wasTableCleared(pipelineName)) {
+            && verifyDataExists(pipelineName, config)) {
           prefilteredIndices = rebuildCacheFromIceberg(pipelineName, config, combinations);
-        } else if (incrementalTracker.wasTableCleared(pipelineName)) {
-          LOGGER.info("Pipeline '{}': tracker was explicitly cleared — "
-              + "skipping Phase 1.5 manifest scan, treating all {} combinations as unprocessed",
-              pipelineName, totalBatches);
         }
 
         // Phase 2: Bulk filter to find unprocessed combinations
@@ -681,7 +668,7 @@ public class EtlPipeline {
           && dataSource instanceof HttpSource;
       // Probe+capture always runs (to seed the token on a cold run); only the skip is gated on
       // having committed data, exactly like the pipeline-level gate above.
-      perUnitFreshnessSkipAllowed = !forceReprocessAll;
+      freshnessSkipAllowed = !forceReprocessAll;
 
       // Phase 4: Create and initialize materialization writer
       MaterializeConfig.Format format = materializeConfig != null
@@ -1888,7 +1875,7 @@ public class EtlPipeline {
         String currentToken = FreshnessCheck.token(
             freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
         String previousToken = incrementalTracker.getFreshnessToken(unitKey);
-        if (perUnitFreshnessSkipAllowed
+        if (freshnessSkipAllowed
             && previousToken != null
             && !FreshnessCheck.changed(previousToken, currentToken)) {
           LOGGER.info("Pipeline '{}': per-period freshness UNCHANGED for unit {} (token={}) — "
@@ -1977,7 +1964,10 @@ public class EtlPipeline {
       }
       String currentHash = hashRows(allRowsForHash);
       String previousHash = incrementalTracker.getFreshnessToken(pipelineName);
-      if (!FreshnessCheck.changed(previousHash, currentHash)) {
+      // Only skip when committed data exists to preserve. Under forceReprocessAll (no Iceberg data /
+      // purged / cleared marker) we still capture+persist the hash below, but must WRITE this run —
+      // otherwise an unchanged source after a purge would skip forever and leave the table empty.
+      if (freshnessSkipAllowed && !FreshnessCheck.changed(previousHash, currentHash)) {
         LOGGER.info("Pipeline '{}' batch {}: hash freshness UNCHANGED (hash={}) — skipping write",
             pipelineName, processedCount, currentHash);
         // No write, no snapshot — return 0 rows for this batch
