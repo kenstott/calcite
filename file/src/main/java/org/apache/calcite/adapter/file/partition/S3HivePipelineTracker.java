@@ -1243,6 +1243,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     List<String> files;
     try {
       files = listTrackerFiles(prefix);
+      // Compacted markers move to year=<y>/_compacted/ (outside the per-source_key prefix); add them
+      // or compacted completions are invisible and the table re-materialises. The SQL filters by
+      // source_key, so including the whole year's compacted file is harmless.
+      files.addAll(listTrackerFilesIncludeCompacted("year=" + year + "/_compacted/"));
     } catch (Exception e) {
       LOGGER.warn("Error listing tracker files for {}/{}: {}", sourceKey, phase, e.getMessage());
       stageCache.put(cacheKey, tables);
@@ -1254,15 +1258,19 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       try {
         tempDir = downloadTrackerFilesParallel(files, year);
         String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+        // Filter by source_key explicitly: the file set now includes the year's _compacted/ file,
+        // which holds markers for OTHER source_keys too (the per-source_key prefix no longer scopes
+        // the read on its own). Without this the result would leak other combos' completions.
         String sql = "SELECT table_name FROM ("
             + "  SELECT table_name, state, ROW_NUMBER() OVER "
             + "    (PARTITION BY table_name ORDER BY as_of DESC) AS rn "
             + "  FROM read_parquet('" + localGlob + "', union_by_name=true) "
-            + "  WHERE phase = ?"
+            + "  WHERE phase = ? AND source_key = ?"
             + ") WHERE rn = 1 AND state = 'complete'";
         synchronized (connectionLock) {
           try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
             stmt.setString(1, phase);
+            stmt.setString(2, sourceKey);
             try (ResultSet rs = stmt.executeQuery()) {
               while (rs.next()) {
                 tables.add(rs.getString("table_name"));
@@ -1564,40 +1572,56 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     if (years.isEmpty()) {
       return result;
     }
-    String globPath = bucketPath + "/year={" + String.join(",", years)
-        + "}/source_key=*/*.parquet";
-
-    // WHERE table_name = ? scopes to this table; the brace glob scopes the file listing
-    // to this table's own year partitions (no cross-schema full-bucket reads).
-    String sql = "SELECT source_key FROM ("
-        + "  SELECT source_key, state, ROW_NUMBER() OVER "
-        + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
-        + "  FROM read_parquet('" + globPath + "', "
-        + "hive_partitioning=true, union_by_name=true) "
-        + "  WHERE phase = 'incremental' AND table_name = ?"
-        + ") WHERE rn = 1 AND state = 'complete'";
-
+    // List + download the per-combo markers via the AWS SDK, then read them from a transient
+    // local copy — NOT a direct httpfs read_parquet('s3://…'). The in-process DuckDB httpfs cannot
+    // LIST the custom S3 endpoint, so a direct read silently returns nothing → every combo looks
+    // unprocessed → the whole table re-materialises closed history on every resume. Markers stay
+    // authoritative in S3; the temp copy is per-read scratch, deleted in the finally. Scoped to this
+    // table's year partitions (one list per year), mirroring getCompletedTables.
     long start = System.currentTimeMillis();
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, tableName);
-      try (ResultSet rs = stmt.executeQuery()) {
-        while (rs.next()) {
-          result.add(rs.getString("source_key"));
+    List<String> files = new ArrayList<String>();
+    for (String y : years) {
+      // A genuine S3 list failure PROPAGATES — it must never be masked as "no processed keys",
+      // which would re-materialise the table's whole history. Include _compacted/ files: the
+      // tracker compaction merges per-combo markers into year=<y>/_compacted/, and excluding
+      // them makes every compacted combo look unprocessed → full re-materialisation on resume.
+      files.addAll(listTrackerFilesIncludeCompacted("year=" + y + "/"));
+    }
+    if (files.isEmpty()) {
+      LOGGER.info("No tracker batch files found for {} ({}ms)",
+          tableName, System.currentTimeMillis() - start);
+      return result;
+    }
+    java.io.File tempDir = null;
+    try {
+      tempDir = downloadTrackerFilesParallel(files, years.first());
+      String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+      String sql = "SELECT source_key FROM ("
+          + "  SELECT source_key, state, ROW_NUMBER() OVER "
+          + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
+          + "  FROM read_parquet('" + localGlob + "', union_by_name=true) "
+          + "  WHERE phase = 'incremental' AND table_name = ?"
+          + ") WHERE rn = 1 AND state = 'complete'";
+      synchronized (connectionLock) {
+        try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+          stmt.setString(1, tableName);
+          try (ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+              result.add(rs.getString("source_key"));
+            }
+          }
         }
       }
-      long elapsed = System.currentTimeMillis() - start;
-      LOGGER.info("Tracker scan for {}: {} processed keys in {}ms",
-          tableName, result.size(), elapsed);
-    } catch (SQLException e) {
-      String msg = e.getMessage();
-      if (msg != null && (msg.contains("No files found")
-          || msg.contains("Could not find")
-          || msg.contains("HTTP 404"))) {
-        LOGGER.info("No tracker batch files found for {} ({}ms)",
-            tableName, System.currentTimeMillis() - start);
-        return result;
+      LOGGER.info("Tracker scan for {}: {} processed keys from {} files in {}ms",
+          tableName, result.size(), files.size(), System.currentTimeMillis() - start);
+    } catch (Exception e) {
+      // Fail loud: a read failure of existing markers must not be swallowed into "all unprocessed".
+      throw new RuntimeException("Failed to load processed keys for " + tableName + " — refusing to "
+          + "continue (would re-materialise closed history): " + e.getMessage(), e);
+    } finally {
+      if (tempDir != null) {
+        deleteDir(tempDir);
       }
-      LOGGER.debug("Error loading tracker data for {}: {}", tableName, msg);
     }
     return result;
   }
@@ -1672,118 +1696,93 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       return null;
     }
 
-    long queryStart = System.currentTimeMillis();
-    String glob = bucketPath + "/year=" + COMPLETION_YEAR
-        + "/source_key=_table_complete/*.parquet";
-    String sql = "SELECT config_hash, signature, row_count, as_of, state "
-        + "FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true) "
-        + "WHERE table_name = ? AND phase = 'table_completion' "
-        + "ORDER BY as_of DESC LIMIT 1";
-    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
-      stmt.setString(1, pipelineName);
-      try (ResultSet rs = stmt.executeQuery()) {
-        long queryElapsed = System.currentTimeMillis() - queryStart;
-        if (rs.next()) {
-          String state = rs.getString("state");
-          if (!"complete".equals(state)) {
-            LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — latest state is '{}', not complete",
-                pipelineName, queryElapsed, state);
-            if ("cleared".equals(state)) {
-              clearedTables.add(pipelineName);
-            }
-            return null;
-          }
-          String configHash = rs.getString("config_hash");
-          String signature = rs.getString("signature");
-          long rowCount = rs.getLong("row_count");
-          long completedAt = rs.getLong("as_of");
-
-          // Parse watermark from config hash if present
-          long watermark = 0;
-          if (configHash != null && configHash.contains(":wm=")) {
-            int wmIdx = configHash.indexOf(":wm=");
-            try {
-              watermark = Long.parseLong(configHash.substring(wmIdx + 4));
-              configHash = configHash.substring(0, wmIdx);
-            } catch (NumberFormatException e) {
-              // ignore
-            }
-          }
-          CachedCompletion result =
-              new CachedCompletion(configHash, signature, rowCount, completedAt, watermark);
-          completionCache.put(pipelineName, result);
-          LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — found ({} rows)",
-              pipelineName, queryElapsed, rowCount);
-          return result;
-        } else {
-          LOGGER.info("getCachedCompletion({}) hit S3 in {}ms — not found",
-              pipelineName, queryElapsed);
-        }
-      }
-    } catch (SQLException e) {
-      long queryElapsed = System.currentTimeMillis() - queryStart;
-      LOGGER.info("getCachedCompletion({}) S3 query failed after {}ms: {}",
-          pipelineName, queryElapsed, e.getMessage());
-    }
-    return null;
+    // Not preloaded yet — run the SDK-backed bulk preload once (authoritative; it fails loud on a
+    // genuine S3 error rather than masking it as "not complete"), then serve from the now-populated
+    // cache. We never read _table_complete via a direct httpfs read_parquet('s3://...') here: the
+    // in-process DuckDB httpfs cannot LIST the custom S3 endpoint, so that read silently returns
+    // nothing and the table cold-starts + re-materialises history.
+    preloadAllCompletions();
+    return completionCache.get(pipelineName);
   }
 
   @Override public void preloadAllCompletions() {
     long start = System.currentTimeMillis();
     LOGGER.info("Preloading all table completion markers from S3 (year={})...", COMPLETION_YEAR);
-    String glob = bucketPath + "/year=" + COMPLETION_YEAR
-        + "/source_key=_table_complete/*.parquet";
-    String sql = "SELECT table_name, config_hash, signature, row_count, as_of, state "
-        + "FROM ("
-        + "  SELECT table_name, config_hash, signature, row_count, as_of, state,"
-        + "    ROW_NUMBER() OVER (PARTITION BY table_name ORDER BY as_of DESC) AS rn"
-        + "  FROM read_parquet('" + glob + "', hive_partitioning=true, union_by_name=true)"
-        + "  WHERE phase = 'table_completion'"
-        + ") WHERE rn = 1 AND state IN ('complete', 'cleared')";
-    int count = 0;
-    try (Statement stmt = getConnection().createStatement();
-         ResultSet rs = stmt.executeQuery(sql)) {
-      while (rs.next()) {
-        String tableName = rs.getString("table_name");
-        String state = rs.getString("state");
-        if ("cleared".equals(state)) {
-          clearedTables.add(tableName);
-          continue;
-        }
-        String configHash = rs.getString("config_hash");
-        String signature = rs.getString("signature");
-        long rowCount = rs.getLong("row_count");
-        long completedAt = rs.getLong("as_of");
-
-        long watermark = 0;
-        if (configHash != null && configHash.contains(":wm=")) {
-          int wmIdx = configHash.indexOf(":wm=");
-          try {
-            watermark = Long.parseLong(configHash.substring(wmIdx + 4));
-            configHash = configHash.substring(0, wmIdx);
-          } catch (NumberFormatException e) {
-            // ignore
-          }
-        }
-        completionCache.put(tableName,
-            new CachedCompletion(configHash, signature, rowCount, completedAt, watermark));
-        count++;
-      }
-    } catch (SQLException e) {
-      String msg = e.getMessage();
-      if (msg != null && (msg.contains("No files found")
-          || msg.contains("Could not find")
-          || msg.contains("HTTP 404"))) {
-        LOGGER.info("No table completion markers found ({}ms)", System.currentTimeMillis() - start);
-        completionsPreloaded = true;
-        return;
-      }
-      LOGGER.warn("Failed to preload table completions: {}", msg);
+    // Read the markers via the AWS SDK (list) + a transient local copy — NOT a direct DuckDB
+    // httpfs read_parquet('s3://...'). The in-memory DuckDB httpfs cannot LIST the custom S3
+    // endpoint (MinIO/R2), so a direct read silently returns nothing and EVERY table cold-starts
+    // and re-materialises history. The markers stay authoritative in S3; the temp copy is per-read
+    // scratch, deleted in the finally. Mirrors getCompletedTables (why per-period completion works).
+    // List the whole COMPLETION_YEAR partition INCLUDING year=0/_compacted/ — the tracker
+    // compaction merges _table_complete markers into _compacted/, and a source_key=_table_complete/
+    // prefix (or a compacted-excluding list) would miss them → every compacted table cold-starts and
+    // re-materialises history on resume. The SQL below filters phase = 'table_completion'.
+    String prefix = "year=" + COMPLETION_YEAR + "/";
+    // A genuine S3 list failure PROPAGATES (unchecked) — it must never be masked as "no markers",
+    // which would cold-start every table and re-materialise all history. An empty result is the
+    // only valid "nothing to preload" state (a first run before any table has completed).
+    List<String> files = listTrackerFilesIncludeCompacted(prefix);
+    if (files.isEmpty()) {
+      LOGGER.info("No table completion markers found ({}ms)", System.currentTimeMillis() - start);
+      completionsPreloaded = true;
       return;
     }
-    completionsPreloaded = true;
-    long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("Preloaded {} table completion markers in {}ms", count, elapsed);
+    java.io.File tempDir = null;
+    int count = 0;
+    try {
+      tempDir = downloadTrackerFilesParallel(files, COMPLETION_YEAR);
+      String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
+      String sql = "SELECT table_name, config_hash, signature, row_count, as_of, state "
+          + "FROM ("
+          + "  SELECT table_name, config_hash, signature, row_count, as_of, state,"
+          + "    ROW_NUMBER() OVER (PARTITION BY table_name ORDER BY as_of DESC) AS rn"
+          + "  FROM read_parquet('" + localGlob + "', union_by_name=true)"
+          + "  WHERE phase = 'table_completion'"
+          + ") WHERE rn = 1 AND state IN ('complete', 'cleared')";
+      synchronized (connectionLock) {
+        try (Statement stmt = getConnection().createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+          while (rs.next()) {
+            String tableName = rs.getString("table_name");
+            String state = rs.getString("state");
+            if ("cleared".equals(state)) {
+              clearedTables.add(tableName);
+              continue;
+            }
+            String configHash = rs.getString("config_hash");
+            String signature = rs.getString("signature");
+            long rowCount = rs.getLong("row_count");
+            long completedAt = rs.getLong("as_of");
+
+            long watermark = 0;
+            if (configHash != null && configHash.contains(":wm=")) {
+              int wmIdx = configHash.indexOf(":wm=");
+              try {
+                watermark = Long.parseLong(configHash.substring(wmIdx + 4));
+                configHash = configHash.substring(0, wmIdx);
+              } catch (NumberFormatException e) {
+                // ignore
+              }
+            }
+            completionCache.put(tableName,
+                new CachedCompletion(configHash, signature, rowCount, completedAt, watermark));
+            count++;
+          }
+        }
+      }
+      completionsPreloaded = true;
+      LOGGER.info("Preloaded {} table completion markers in {}ms",
+          count, System.currentTimeMillis() - start);
+    } catch (Exception e) {
+      // Fail loud: a download/read failure of existing markers must not be swallowed into an
+      // empty cache (which would cold-start and re-materialise all history). Better to abort.
+      throw new RuntimeException("Failed to preload table completion markers from S3 — refusing to "
+          + "continue (would cold-start and re-materialise all history): " + e.getMessage(), e);
+    } finally {
+      if (tempDir != null) {
+        deleteDir(tempDir);
+      }
+    }
   }
 
   @Override public void invalidateTableCompletion(String pipelineName) {
@@ -2044,6 +2043,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     List<String> files;
     try {
       files = listTrackerFiles(prefix);
+      // Compacted markers move to year=<y>/_compacted/ (outside the per-source_key prefix); add them
+      // or a compacted freshness/watermark token is invisible and the gate re-fetches every run. The
+      // SQL below filters by source_key, so pulling in the whole year's compacted file is harmless.
+      files.addAll(listTrackerFilesIncludeCompacted("year=" + year + "/_compacted/"));
     } catch (Exception e) {
       LOGGER.debug("No tracker state listing for {}/{}/{}: {}",
           sourceKey, tableName, phase, e.getMessage());
