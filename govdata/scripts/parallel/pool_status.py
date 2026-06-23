@@ -30,8 +30,16 @@ STATUS_RE = re.compile(
     r"^\[(?P<t>\d{2}:\d{2}:\d{2})\]\s+Running:\s+(?P<running>\d+)\s+Done:\s+(?P<done>\d+)\s+"
     r"Failed:\s+(?P<failed>\d+)\s+Queued:\s+(?P<queued>\d+)\s+Restarts:\s+(?P<restarts>\d+)\s+"
     r"Heap:\s+(?P<heap_used>\d+)/(?P<heap_total>\d+)MB\s+Free:\s+(?P<free>\d+)MB"
-    r"(?:\s+\|\s+(?P<workers>.*))?$"
+    # The final completion line has Running 0, no "| workers" suffix, and trailing spaces —
+    # so the workers group is lazy/optional and trailing whitespace is absorbed; otherwise that
+    # line fails to match and the monitor is stuck on the prior "Running 1" line forever.
+    r"(?:\s+\|\s+(?P<workers>.*?))?\s*$"
 )
+# Sentinel printed by run-pool.sh after the monitor loop exits (all workers reaped).
+POOL_COMPLETE_RE = re.compile(r"^=== Pool Complete ===\s*$")
+# Final summary line, e.g. "Total: 20  Done: 19  Failed: 1  Restarts: 0"
+TOTAL_RE = re.compile(
+    r"^Total:\s+(?P<total>\d+)\s+Done:\s+(?P<done>\d+)\s+Failed:\s+(?P<failed>\d+)")
 # [2026-06-17 15:48:00] worker-sec-dq-rebuild FAILED (40m): check launch.log for details
 # [2026-06-17 15:27:35] worker-weather-dq-rebuild finished OK (22m)
 EVENT_RE = re.compile(
@@ -73,13 +81,28 @@ def newest_pool_log(runs_dir):
 
 
 def parse(path):
-    """Return (last_status_dict, events{worker:(state,dur,reason,ts)}, activity{worker:(elapsed,msg)})."""
+    """Return (last_status, events{worker:(state,dur,reason,ts)}, activity{worker:(elapsed,msg)}, final).
+
+    ``final`` is None until the pool prints its ``=== Pool Complete ===`` sentinel, then a dict
+    with the run totals — used to render a definitive COMPLETE banner and stop the watch loop.
+    """
     last_status = None
     events = {}
     activity = {}
+    final = None
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        complete_seen = False
         for line in fh:
             line = line.rstrip("\n")
+            if POOL_COMPLETE_RE.match(line):
+                complete_seen = True
+                final = final or {}
+                continue
+            if complete_seen and final is not None and not final:
+                m = TOTAL_RE.match(line)
+                if m:
+                    final = m.groupdict()
+                continue
             m = STATUS_RE.match(line)
             if m:
                 last_status = m.groupdict()
@@ -94,7 +117,7 @@ def parse(path):
             if m:
                 g = m.groupdict()
                 activity[g["worker"]] = (g["elapsed"], g["msg"].strip())
-    return last_status, events, activity
+    return last_status, events, activity, final
 
 
 def schema_of(worker):
@@ -108,12 +131,23 @@ def schema_of(worker):
 
 
 def render(path, color):
-    last_status, events, activity = parse(path)
+    last_status, events, activity, final = parse(path)
     out = []
     pool_name = os.path.basename(path)
     age = time.time() - os.path.getmtime(path)
-    stale = " (no update >120s — may be finished/stalled)" if age > 120 else ""
-    out.append(f"{C.BOLD}run-pool: {pool_name}{C.RESET}  {C.GREY}updated {int(age)}s ago{stale}{C.RESET}")
+    if final is not None:
+        # Pool exited cleanly — no ambiguous "stalled" guess.
+        if final:
+            tail = (f"  Total {final['total']} · {C.GREEN}Done {final['done']}{C.RESET}"
+                    f" · {(C.RED if int(final['failed']) else C.GREY)}Failed {final['failed']}{C.RESET}")
+        else:
+            tail = ""
+        out.append(f"{C.BOLD}run-pool: {pool_name}{C.RESET}  "
+                   f"{C.BOLD}{C.GREEN}✓ POOL COMPLETE{C.RESET}{tail}")
+    else:
+        stale = " (no update >120s — may be finished/stalled)" if age > 120 else ""
+        out.append(f"{C.BOLD}run-pool: {pool_name}{C.RESET}  "
+                   f"{C.GREY}updated {int(age)}s ago{stale}{C.RESET}")
 
     if not last_status:
         out.append(f"{C.YELLOW}No status line parsed yet — pool may be starting up.{C.RESET}")
@@ -216,10 +250,12 @@ def main():
             frame = "\033[H" + "".join(ln + "\033[K\n" for ln in lines) + "\033[J"
             sys.stdout.write(frame)
             sys.stdout.flush()
-            # stop once nothing is running
-            last_status, events, _ = parse(path)
+            # stop once the pool printed its completion sentinel, or nothing is running
+            last_status, events, _, final = parse(path)
             running = [w for w in ((last_status or {}).get("workers") or "").split()
                        if w and w not in events]
+            if final is not None:
+                break
             if last_status and int(last_status["running"]) == 0 and not running:
                 break
             time.sleep(args.watch)

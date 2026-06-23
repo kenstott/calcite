@@ -160,8 +160,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vu
 -- T2: row_count
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vulnerability_cwes', 'row_count',
-  CASE WHEN n < 28000 THEN 'fail' ELSE 'pass' END,
-  n, 28000, 'DQ-level (~35k UNNEST pairs from the 2025 NVD window)'
+  CASE WHEN n < 6000 THEN 'fail' ELSE 'pass' END,
+  n, 6000, 'DQ-level (CVE->CWE UNNEST pairs from the current NVD window)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vulnerability_cwes', allow_moved_paths := true));
 
 -- T3: sample

@@ -16,7 +16,7 @@ no separate "cadence" abstraction, only the existing dimension + freshness machi
 |---|---|---|---|
 | **T1 — pre-download probe** | `freshness:` = `etag` / `last_modified` / `size` / `count` / `version` / `graphql`. A HEAD or cheap probe is compared to the last stored token. | The **fetch** (and the write). Cheapest. | Any source that exposes a validator (ETag, Last-Modified, a total-count endpoint, a version field). **Preferred wherever the source supports it.** |
 | **T2 — period + completion** | A period dimension (`year`/`quarter`/`month`/`week`/`day`/`day_of_week`). Per-period completion markers persist across runs; a completed period is dropped before any fetch. | The **attempt** (fetch + write) for periods already done. | Genuinely periodic data, and as the cadence gate for "latest" sources (see below). Proven by `bjs_ncvs`, `sec.*`, `census.acs_*`. |
-| **T3 — post-download hash** | `freshness:` = `hash`. The payload is downloaded, hashed, and the write is skipped if the hash matches the last run. | Only the **write**. Still downloads every run. | Last resort — only where neither a probe nor a natural period fits. Bound it with a period (see Tier-3 action list). |
+| **T3 — post-download hash** | `freshness:` = `hash`. The payload is downloaded, hashed, and the write is skipped if the hash matches the last run. | Only the **write**. Still downloads every run. | Last resort — only where neither a probe nor a natural period fits. The hash is computed by **streaming** the rows through an order-independent multiset digest (O(1) memory — it no longer materialises the whole fetch, so large tables are safe), but it still **re-downloads every run**. Prefer a period/probe when one exists. |
 
 ### The one rule
 
@@ -396,8 +396,8 @@ Recommended follow-ups, best→worst preference (probe > period > bare hash):
 | weather/nws_alerts | hash, `state` fetch dim | keep bare hash (or hourly) | Active alerts change continuously — no useful cadence |
 | weather/cdo_stations | hash, `state` fetch dim | month cadence | Station reference changes rarely |
 | ref/figi_instruments | hash, no period | month / workday cadence | OpenFIGI reference, changes rarely |
-| edu/ccd_schools | hash + `year` template + release-window `months` | no change — already period+probe-window | Annual NCES release (Jul/Aug) |
-| edu/ipeds_institutions | hash + `year` template + release-window `months` | no change — already period+probe-window | Annual IPEDS release (Nov) |
+| edu/ccd_schools | year + releaseWindow (hash REMOVED) | done — hash was redundant (year completion + release window already gate it); it also OOMed before the streaming-hash fix | Annual NCES release (Jul/Aug) |
+| edu/ipeds_institutions | year + releaseWindow (hash REMOVED) | done — redundant hash removed (year period gates it) | Annual IPEDS release (Nov) |
 
 ## Resolved: cyber-threat/threat_pulses
 
@@ -414,14 +414,45 @@ it cannot mirror `vuln_cross_refs`'s `graphql` watermark. Resolved by:
 - **`otxCacheTtlDays`** (`CYBER_OTX_CACHE_TTL_DAYS`, default **0 = off**) keeps the pull-cache
   as a rarely-used opt-in escape hatch — no blind always-on TTL.
 
-## Engine note: freshness-token read fix
+## Engine note: in-process httpfs reads → SDK local-download
 
-The in-process DuckDB `httpfs` extension fails to LIST custom S3 endpoints (MinIO/R2):
-`readLatestState`/`getFreshnessToken` returned null on every call, so all freshness/watermark
-token reads silently failed across runs and freshness gates never skipped (masked only where a
-completion marker or self-heal-from-Iceberg skipped the write anyway). Fixed by routing those
-reads through the AWS SDK list + local-download path (the same path `getCompletedTables` already
-used), so Tier-1 probes and Tier-3 hash gates now actually skip across runs.
+The in-process (bundled) DuckDB `httpfs` extension **cannot LIST custom S3 endpoints**
+(MinIO/R2) — a direct `read_parquet('s3://…/*.parquet')` silently returns nothing. The markers
+are authoritative in S3 (written via the AWS SDK); the bug was purely on the read side. It hit
+**three** tracker reads, all now routed through the AWS SDK list + transient local-download +
+local read (the same path `getCompletedTables` always used; the temp copy is per-read scratch,
+deleted immediately — never authoritative):
+
+1. **Freshness/watermark tokens** (`readLatestState`/`getFreshnessToken`) returned null every
+   call → Tier-1 probes and Tier-3 hash gates never skipped across runs. Fixed.
+2. **Table-completion markers** (`preloadAllCompletions`/`getCachedCompletion` for
+   `_table_complete`) returned null → every table hit "cold-start (no marker but Iceberg data
+   exists)". Fixed, and made **fail-loud**. *(Note: cold-start alone did NOT cause re-writes —
+   a cold-started table still falls through to per-period/per-combo filtering; ACS cold-starts
+   yet skips. The real re-write cause was #3.)*
+3. **Per-combo "processed" keys** (`loadProcessedKeysForTable`, behind `filterUnprocessed`)
+   returned null → `"No tracker data found for X — all N combinations unprocessed"` → the table
+   re-fetched and **re-materialised its entire closed history every resume**. Fixed, fail-loud.
+   **Validated on econ:** a 2nd resume now logs `"Tracker scan for regional_income: 2074 processed
+   keys"` and econ historical writes fell **3103 → 382** (the 1.6M-row `regional_income` skips).
+
+ACS tables were always idempotent because per-period completion (read #1) drops their combos
+*before* read #3 runs; the re-writers fell through to the broken #3.
+
+**Known residual (separate cause):** some tables with a `dataLag` year offset — `census`
+`lodes_workplace`/`cbp_establishments` (~3.4M rows), and similar with non-canonical keys
+`qwi`/`trade` (`time=`) — still re-write. With read #3 fixed the per-combo read now *engages*
+(`"Tracker scan for cbp_establishments: 0 processed keys from 191 files"` — it reads the files,
+vs "No tracker data found" before), but finds **0 markers** because those combos are never
+*written* as complete: the dimension year (from the `{year}` template) differs from the actual
+data/partition year (`getPartitionYear` fiscal heuristic), so the marker key and the Iceberg
+partition never line up. This is a distinct framework fix (reconcile dimension-year vs data-year
+for `dataLag` tables; recognize `time=YYYY-Qn`/`YYYY-MM` as canonical periods) — pending.
+
+**FIA archives:** `FiaStateArchive` now gates its per-state archive download on a content-based
+**ETag** (preferred) falling back to `Last-Modified`, so a server re-stamping the timestamp
+without a content change no longer forces a multi-GB re-download. (The per-state combo is also
+gated by #3, which skips the materialization that would trigger the download.)
 
 ## Derived tables (no fetch)
 
