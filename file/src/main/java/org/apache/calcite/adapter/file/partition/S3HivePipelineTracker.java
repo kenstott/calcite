@@ -526,6 +526,31 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * @return list of individual S3 files that were scanned (empty if fast-path hit),
    *         or null if the scan failed
    */
+  /**
+   * Drop value-bearing marker files (freshness/watermark tokens, stored under
+   * {@code source_key=_freshness}) from a list of files about to be compacted+deleted.
+   *
+   * <p>Compaction folds individual markers into a presence-only {@link #stageCache}
+   * ({@code Map<sourceKey\0phase, Set<tableName>>}) and writes the {@code _compacted/} file with a
+   * hard-coded {@code state='complete'} (see {@link #compactFromCache}). That is correct for
+   * presence markers (incremental-complete, table-completion) but DESTRUCTIVE for freshness tokens,
+   * whose meaning lives in the {@code state} column (the upstream ETag/Last-Modified/hash): folding
+   * them loses the value, and the read then returns null so the freshness gate re-fetches and
+   * re-materialises every unit on every run. They are few and bounded — an unchanged unit skips
+   * without writing a new token — so it is safe and correct to leave them as individual files for
+   * {@link #readLatestStateAndAsOf} to read directly.
+   */
+  private List<String> excludeValueBearingMarkers(List<String> files) {
+    String freshSeg = "/source_key=" + sanitizeHiveValue(FRESHNESS_SOURCE_KEY) + "/";
+    List<String> kept = new ArrayList<String>(files.size());
+    for (String f : files) {
+      if (!f.contains(freshSeg)) {
+        kept.add(f);
+      }
+    }
+    return kept;
+  }
+
   private List<String> scanAndCacheYear(String year) {
     long start = System.currentTimeMillis();
 
@@ -549,7 +574,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       // SIGKILL after batch N still leaves N batches' worth of stragglers deleted,
       // so the backlog shrinks monotonically across runs.
       String prefix = "year=" + year + "/source_key=";
-      List<String> stragglers = listTrackerFiles(prefix);
+      List<String> stragglers = excludeValueBearingMarkers(listTrackerFiles(prefix));
       // Track which straggler files were already compacted+deleted in this loop so that
       // the caller's deleteSpecificFiles (which receives the full straggler list) skips them.
       List<String> alreadyCompacted = new ArrayList<String>();
@@ -627,7 +652,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // This avoids DuckDB's glob expansion which tries to list+open all files at once.
     LOGGER.info("Scanning full tracker year={} — listing files via S3 API...", year);
     String prefix = "year=" + year + "/source_key=";
-    List<String> files = listTrackerFiles(prefix);
+    List<String> files = excludeValueBearingMarkers(listTrackerFiles(prefix));
 
     if (files.isEmpty()) {
       long elapsed = System.currentTimeMillis() - start;
