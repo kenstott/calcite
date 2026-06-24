@@ -5327,14 +5327,18 @@ public class XbrlToParquetConverter implements FileConverter {
         LOGGER.debug("Failed to list exhibits in {}: {}", accessionDir, e.getMessage());
       }
 
-      // 3. Write earnings_transcripts (unchanged - only when earnings content found)
+      // 3. Write earnings_transcripts. FORM_8K's per-filing completeness check (FileInventory
+      // .isComplete) requires an EARNINGS output, but most 8-Ks carry no earnings release, so
+      // earningsRecords is empty. Write the parquet unconditionally — populated when earnings
+      // content was found, an empty (schema-only) file otherwise — so every processed 8-K records
+      // its EARNINGS output. Without it, hasEarnings is always false, isComplete(8-K) never holds,
+      // and the gate re-materialises the immutable filing on every run (see SecFilingCache.checkFiling
+      // -> inventoryFromCompletedTables -> FileInventory.isComplete).
+      String earningsPath = storageProvider.resolvePath(targetDirectoryPath,
+          relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, uniqueId));
+      storageProvider.writeAvroParquet(earningsPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
+      outputFiles.add(earningsPath);
       if (!earningsRecords.isEmpty()) {
-        String earningsPath = storageProvider.resolvePath(targetDirectoryPath,
-            relativePartitionPath + "/" + String.format("%s_%s_earnings.parquet", cik, uniqueId));
-
-        storageProvider.writeAvroParquet(earningsPath, earningsColumns, earningsRecords, "EarningsTranscript", "earnings_transcripts");
-        outputFiles.add(earningsPath);
-
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
       }
 
