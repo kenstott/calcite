@@ -157,11 +157,13 @@ SELECT 'cyber_vuln', 'vulnerability_cwes', 'existence',
   n, 1, 'row count'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vulnerability_cwes', allow_moved_paths := true));
 
--- T2: row_count
+-- T2: row_count. DQ caps the fetch at ~5000 rows/unit, so the CVE->CWE UNNEST of the current
+-- NVD window yields ~5002 pairs — a 6000 floor is unreachable under the cap and flakes at the
+-- boundary. Floor at 4000 evaluates the sampled run without flaking (still fails a broken table).
 INSERT INTO dq_results
 SELECT 'cyber_vuln', 'vulnerability_cwes', 'row_count',
-  CASE WHEN n < 6000 THEN 'fail' ELSE 'pass' END,
-  n, 6000, 'DQ-level (CVE->CWE UNNEST pairs from the current NVD window)'
+  CASE WHEN n < 4000 THEN 'fail' ELSE 'pass' END,
+  n, 4000, 'DQ-level (CVE->CWE UNNEST pairs from the current NVD window)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cyber_vuln/vulnerability_cwes', allow_moved_paths := true));
 
 -- T3: sample
