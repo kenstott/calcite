@@ -500,6 +500,8 @@ public class MaterializeConfig {
     private final int compactionMinFiles;
     private final long compactionSmallFileSizeBytes;
     private final boolean overwritePartitions;
+    private final String appendWhenOperand;
+    private final String appendWhenValue;
     private final int incrementalTtlDays;
     private final ReleaseWindowConfig releaseWindow;
 
@@ -527,6 +529,8 @@ public class MaterializeConfig {
       this.compactionSmallFileSizeBytes = builder.compactionSmallFileSizeBytes > 0
           ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
       this.overwritePartitions = builder.overwritePartitions;
+      this.appendWhenOperand = builder.appendWhenOperand;
+      this.appendWhenValue = builder.appendWhenValue;
       this.incrementalTtlDays = builder.incrementalTtlDays;
       this.releaseWindow = builder.releaseWindow;
     }
@@ -662,6 +666,22 @@ public class MaterializeConfig {
     }
 
     /**
+     * Dotted {@link ModelOperand} path (e.g. {@code cyber_threat.runMode}) whose value, when it
+     * equals {@link #getAppendWhenValue()}, flips this write from replace-partitions to append for
+     * that run. Null disables the override (the static {@link #isOverwritePartitions()} applies).
+     * Lets a snapshot table do a full-load replace in one run mode and an incremental append in
+     * another without a second table definition.
+     */
+    public String getAppendWhenOperand() {
+      return appendWhenOperand;
+    }
+
+    /** Operand value at {@link #getAppendWhenOperand()} that selects append over replace. */
+    public String getAppendWhenValue() {
+      return appendWhenValue;
+    }
+
+    /**
      * @deprecated TTL-based refresh is replaced by dimension-driven cache-busting:
      *     declare a period dimension (quarter/month/week/day) so each new period is
      *     fresh tracker work, or a {@code *_CURRENT_*} cache-bust var for a true
@@ -781,6 +801,15 @@ public class MaterializeConfig {
         builder.overwritePartitions((Boolean) overwriteObj);
       }
 
+      Object appendWhenOperandObj = map.get("appendWhenOperand");
+      if (appendWhenOperandObj instanceof String) {
+        builder.appendWhenOperand((String) appendWhenOperandObj);
+      }
+      Object appendWhenValueObj = map.get("appendWhenValue");
+      if (appendWhenValueObj instanceof String) {
+        builder.appendWhenValue((String) appendWhenValueObj);
+      }
+
       Object ttlObj = map.get("incrementalTtlDays");
       if (ttlObj instanceof Number) {
         builder.incrementalTtlDays(((Number) ttlObj).intValue());
@@ -828,6 +857,8 @@ public class MaterializeConfig {
       private int compactionMinFiles;
       private long compactionSmallFileSizeBytes;
       private boolean overwritePartitions = true;
+      private String appendWhenOperand;
+      private String appendWhenValue;
       private int incrementalTtlDays;
       private ReleaseWindowConfig releaseWindow;
 
@@ -903,6 +934,16 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder overwritePartitions(boolean overwritePartitions) {
         this.overwritePartitions = overwritePartitions;
+        return this;
+      }
+
+      public IcebergConfigBuilder appendWhenOperand(String appendWhenOperand) {
+        this.appendWhenOperand = appendWhenOperand;
+        return this;
+      }
+
+      public IcebergConfigBuilder appendWhenValue(String appendWhenValue) {
+        this.appendWhenValue = appendWhenValue;
         return this;
       }
 

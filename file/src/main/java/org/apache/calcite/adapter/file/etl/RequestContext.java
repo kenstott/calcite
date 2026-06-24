@@ -41,6 +41,7 @@ public class RequestContext {
   private final Map<String, String> parameters;
   private final Map<String, String> headers;
   private final Map<String, String> dimensionValues;
+  private final Map<String, String> variables;
 
   private RequestContext(Builder builder) {
     this.url = builder.url;
@@ -52,6 +53,9 @@ public class RequestContext {
         : Collections.<String, String>emptyMap();
     this.dimensionValues = builder.dimensionValues != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.dimensionValues))
+        : Collections.<String, String>emptyMap();
+    this.variables = builder.variables != null
+        ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.variables))
         : Collections.<String, String>emptyMap();
   }
 
@@ -92,6 +96,19 @@ public class RequestContext {
   }
 
   /**
+   * Returns the fetch variables in effect for this request — including any incremental
+   * lower bound (watermark) injected by the pipeline before the pull (e.g. the
+   * {@code watermark_var} value recovered from the prior run). Lets a transformer apply a
+   * delta bound (such as an API {@code modified_since}) sourced from the committed watermark
+   * rather than a fixed window.
+   *
+   * @return Unmodifiable map of variable name to value
+   */
+  public Map<String, String> getVariables() {
+    return variables;
+  }
+
+  /**
    * Creates a new builder for RequestContext.
    *
    * @return A new Builder instance
@@ -124,6 +141,7 @@ public class RequestContext {
     private Map<String, String> parameters;
     private Map<String, String> headers;
     private Map<String, String> dimensionValues;
+    private Map<String, String> variables;
 
     /**
      * Sets the request URL.
@@ -166,6 +184,17 @@ public class RequestContext {
      */
     public Builder dimensionValues(Map<String, String> dimensionValues) {
       this.dimensionValues = dimensionValues;
+      return this;
+    }
+
+    /**
+     * Sets the fetch variables (including any injected watermark/delta bound).
+     *
+     * @param variables Map of variable name to value
+     * @return This builder
+     */
+    public Builder variables(Map<String, String> variables) {
+      this.variables = variables;
       return this;
     }
 

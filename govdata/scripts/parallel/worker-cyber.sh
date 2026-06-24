@@ -60,6 +60,16 @@ run_cyber_model() {
   local extra_operands="${1:-}"
 
   local model_file="$MODEL_DIR/${model_name}.json"
+
+  # threat_pulses write/fetch mode: production daily appends only the pulses modified since the
+  # prior run (watermark delta), accumulating version history; historical (full snapshot) and DQ
+  # sample runs (which need full row-count/variety) full-load + replace-partitions. Read as the
+  # cyber_threat.otxWriteMode operand by OtxResponseTransformer and the Iceberg writer.
+  local otx_write="replace"
+  if [ "$MODE" = "daily" ] && [ "${GOVDATA_DQ:-}" != "true" ]; then
+    otx_write="append"
+  fi
+
   local extra_json=""
   [ -n "$extra_operands" ] && extra_json=",
       ${extra_operands}"
@@ -77,6 +87,7 @@ run_cyber_model() {
     "factory": "org.apache.calcite.adapter.govdata.GovDataSchemaFactory",
     "operand": {
       "dataSource": "${schema}",
+      "otxWriteMode": "${otx_write}",
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
       "autoDownload": true,

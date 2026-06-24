@@ -14,18 +14,17 @@
 schemaName: "${CYBER_THREAT_SCHEMA_NAME:cyber_threat}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
-# OTX incremental window (days). When set to a positive integer, OtxResponseTransformer
-# appends modified_since=now-N days to the subscribed-pulses URL and walks only the bounded,
-# filtered chain (production daily/incremental). Empty default = full load of all subscribed
-# pulses (initial/historical). Read via ModelOperand path cyber_threat.otxDeltaDays; DQ-sample
-# mode (GOVDATA_DQ) ignores it and always full-loads (capped by dqRowLimit).
-otxDeltaDays: "${CYBER_OTX_DELTA_DAYS:}"
+# OTX incremental fetch is now driven by the threat_pulses freshness watermark, not a fixed
+# day window: type:version probes the max pulse `modified` (one page) and watermark_var
+# (otxModifiedSince) feeds it back as modified_since on the next production-daily run. The
+# write/fetch mode is keyed on cyber_threat.otxWriteMode (set by the launch script: "append"
+# for production daily, "replace" for historical/DQ/cold). See the threat_pulses table below.
 
 # OTX pull-cache TTL (days). OFF by default (0). Idempotence comes from threat_pulses'
-# freshness:hash (skips the Iceberg write when the assembled population is unchanged) plus
-# otxDeltaDays (bounds the fetch). This cache is a rarely-used opt-in escape hatch for when
-# even the bounded re-pagination is too costly (e.g. heavy local testing): set >0 to reuse the
-# assembled population for that many days. Read via ModelOperand path cyber_threat.otxCacheTtlDays.
+# version watermark (skips the write when the max `modified` is unchanged, and bounds the fetch
+# to pulses modified since the last run). This cache is a rarely-used opt-in escape hatch for
+# when even the bounded re-pagination is too costly (e.g. heavy local testing): set >0 to reuse
+# the assembled population for that many days. Read via ModelOperand cyber_threat.otxCacheTtlDays.
 otxCacheTtlDays: "${CYBER_OTX_CACHE_TTL_DAYS:0}"
 
 comment: >
@@ -1085,12 +1084,16 @@ partitionedTables:
   # ==========================================================================
   - name: threat_pulses
     pattern: "type=threat_pulses/first_seen=${first_seen}.parquet"
-    dataset_type: snapshot          # OTX cursor-paginated GET (no single-probe freshness); key-gated in CyberSchemaFactory
-    # Post-download hash: skip the Iceberg write when the assembled subscribed-pulse population
-    # is byte-identical to the last run. Replaces the old hardcoded 7-day transformer TTL cache;
-    # the fetch is bounded by otxDeltaDays (modified_since delta), not a blind timer.
+    dataset_type: snapshot          # OTX cursor-paginated GET; freshness via the version probe below
+    # Freshness = max pulse `modified`, read from a 1-row probe of the subscribed feed (which is
+    # ordered modified-desc), so it costs a single page. The token gates the write (skip when the
+    # max is unchanged) and, via watermark_var, is the daily delta bound: the next daily run fetches
+    # only pulses modified since this max (see OtxResponseTransformer). Historical/cold runs full-load.
     freshness:
-      type: hash
+      type: version
+      probe_url: "https://otx.alienvault.com/api/v1/pulses/subscribed?limit=1"
+      version_field: "results[0].modified"
+      watermark_var: otxModifiedSince
     # DQ sample cap (GOVDATA_DQ mode): OTX cursor-pages through all subscribed pulses (~8.6k);
     # the cap stops pagination early. Cache-safe — the paginated cache commits only on full
     # drain, so a capped run leaves the existing cache untouched.
@@ -1199,7 +1202,13 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 1825
         runCompaction: true
-        overwritePartitions: true   # replace each first_seen partition present in the current feed
+        overwritePartitions: true   # default + historical/DQ: replace each first_seen partition
+        # Production daily appends instead — accumulating pulse version history in each first_seen
+        # partition (query the current view via max(modified) per pulse_id). otxWriteMode is set
+        # by the launch script ("append" only for production daily; "replace" for historical, DQ
+        # sample, and any run that omits it), so the write mirrors the transformer's fetch mode.
+        appendWhenOperand: "cyber_threat.otxWriteMode"
+        appendWhenValue: "append"
 
 # ============================================================================
 # CONSTRAINTS

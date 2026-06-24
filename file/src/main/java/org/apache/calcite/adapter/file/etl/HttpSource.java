@@ -3081,12 +3081,15 @@ public class HttpSource implements DataSource {
       return response;
     }
 
-    // Build request context for the transformer
+    // Build request context for the transformer. The 4th arg is the full fetch-variables map
+    // (dimension values plus any injected delta bound / watermark), surfaced via both
+    // getDimensionValues() (legacy) and getVariables() so a transformer can read the watermark.
     RequestContext context = RequestContext.builder()
         .url(url)
         .parameters(params)
         .headers(config.getHeaders())
         .dimensionValues(dimensionValues)
+        .variables(dimensionValues)
         .build();
 
     try {

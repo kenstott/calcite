@@ -32,8 +32,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -79,6 +77,9 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
   private static final int TIMEOUT_MS = 60_000;
   private static final long RATE_DELAY_MS = 500L;
+
+  /** Fetch variable carrying the recovered incremental watermark (freshness {@code watermark_var}). */
+  private static final String OTX_WATERMARK_VAR = "otxModifiedSince";
 
   @Override public String transform(String response, RequestContext context) {
     // Read the key from the request context's headers — the framework resolves the source's
@@ -139,30 +140,26 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
       int[] count = {0};
 
-      // Apply delta filter if CYBER_OTX_DELTA_DAYS is set (e.g., "1" for daily incremental).
-      // DQ sample mode (GOVDATA_DQ=true) must full-load the subscribed population — capped by
-      // dqRowLimit — so it never also applies the production incremental window (which would
-      // collapse the sample to a handful of recently-modified pulses and fail row-count/variety).
+      // Incremental bound, keyed on cyber_threat.otxWriteMode (set by the launch script; mirrors
+      // the Iceberg write so fetch and write never disagree):
+      //   - append (production daily, warm): fetch only pulses modified since the prior run's
+      //     committed watermark. The engine recovers that watermark from the freshness token
+      //     (type: version = max pulse `modified`) and injects it as otxModifiedSince; here it
+      //     becomes modified_since. The Iceberg write appends, accumulating version history.
+      //   - append (cold, no watermark): full load — the first pull seeds the watermark.
+      //   - replace (historical full snapshot, and DQ sample which needs full row-count/variety):
+      //     full load, paired with replace-partitions so the snapshot stays canonical. Default.
       String baseUrl = context.getUrl();
-      // Delta-days is value config — a model operand (like nvdDeltaDays), read by path.
-      String deltaDaysEnv = dqMode ? null : ModelOperand.getString("cyber_threat.otxDeltaDays");
-      if (dqMode) {
-        LOGGER.info("OTX: DQ sample mode — full load (ignoring CYBER_OTX_DELTA_DAYS)");
-      }
-      if (deltaDaysEnv != null && !deltaDaysEnv.trim().isEmpty()) {
-        try {
-          int deltaDays = Integer.parseInt(deltaDaysEnv.trim());
-          if (deltaDays > 0) {
-            String since = LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(deltaDays)
-                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-            baseUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?") + "modified_since=" + since;
-            LOGGER.info("OTX: delta mode — modified_since={} ({} days)", since, deltaDays);
-          }
-        } catch (NumberFormatException e) {
-          LOGGER.warn("OTX: invalid CYBER_OTX_DELTA_DAYS '{}', using full load", deltaDaysEnv);
-        }
+      String writeMode = ModelOperand.getString("cyber_threat.otxWriteMode", "replace");
+      String watermark = context.getVariables().get(OTX_WATERMARK_VAR);
+      if (!"append".equalsIgnoreCase(writeMode)) {
+        LOGGER.info("OTX: {} mode — full load (canonical snapshot)", writeMode);
+      } else if (watermark != null && !watermark.trim().isEmpty()) {
+        baseUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?")
+            + "modified_since=" + watermark.trim();
+        LOGGER.info("OTX: daily delta — modified_since={} (recovered watermark)", watermark.trim());
       } else {
-        LOGGER.info("OTX: full load mode (CYBER_OTX_DELTA_DAYS not set)");
+        LOGGER.info("OTX: daily append cold start (no watermark) — full load");
       }
 
       // First page: reuse the source-provided response only in full-load mode. In delta
