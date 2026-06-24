@@ -266,14 +266,18 @@ if [ -n "$SCHEMA_FILTER" ]; then
 fi
 
 # Serial pre-pool tracker compaction (default on; --no-compact-first to skip). For each UNIQUE
-# queued schema, generate a daily-mode model (so compactYearRange targets year=0 + the current
-# year — the bloat-prone partitions where SIGKILL/OOM strand individual markers) and run
-# EtlRunner --compact-only, one JVM at a time. Reuses generate_single_schema_model (handles every
-# schema, incl. DQ-only ones) and the per-schema tracker bucket (namespaced, so each scan touches
-# only its own schema). Best-effort: a failure is logged and never blocks the pool.
+# queued schema, compact the FULL tracker range — year=0 (table-complete/freshness markers) plus
+# every data year 2010..current — because SIGKILL/OOM strand individual markers in whichever year
+# was active (per-year for backfill schemas like census, the current year for daily ones). A
+# historical-mode model with INCREMENTAL_START_YEAR=current+1 yields startYear=2010, endYear=current
+# so compactYearRange covers them all. Runs EtlRunner --compact-only one JVM at a time. Reuses
+# generate_single_schema_model (handles every schema, incl. DQ-only ones); the per-schema tracker
+# bucket is namespaced, so each scan touches only its own schema. Best-effort: a failure is logged
+# and never blocks the pool.
 compact_trackers_first() {
-  local seen=" " slot schema model log_file compacted=0 failed=0 jar
+  local seen=" " slot schema model log_file compacted=0 failed=0 jar _cy
   jar=$(resolve_classpath)
+  _cy=$(date +%Y)
   # In a DQ context (run-all-dq sourced .env.dq) the plain model build does not point the tracker
   # at the -dq bucket — set it here, mirroring worker-dq-run.sh. Outside DQ these stay unset and
   # the model falls back to the prod buckets.
@@ -281,7 +285,7 @@ compact_trackers_first() {
     export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
     [ -n "${GOVDATA_DQ_BUCKET:-}" ] && export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   fi
-  log_info "Pre-pool tracker compaction: sweeping schemas serially (year=0 + current year)…"
+  log_info "Pre-pool tracker compaction: sweeping schemas serially (year=0 + 2010..${_cy})…"
   for slot in "${queue[@]}"; do
     schema="${slot%%:*}"
     case "$seen" in *" $schema "*) continue ;; esac
@@ -289,7 +293,8 @@ compact_trackers_first() {
     model=$(mktemp "/tmp/compact-${schema}-XXXXXX.json" 2>/dev/null) \
       || { log_info "  skip $schema (mktemp failed)"; failed=$((failed + 1)); continue; }
     log_file="$SCRIPT_DIR/runs/compact-${schema}.log"
-    if GOVDATA_RUN_MODE=daily generate_single_schema_model "$schema" "$model" 2>/dev/null; then
+    if GOVDATA_RUN_MODE=historical GOVDATA_INCREMENTAL_START_YEAR=$((_cy + 1)) \
+        generate_single_schema_model "$schema" "$model" 2>/dev/null; then
       log_info "  compacting tracker: $schema -> $log_file"
       if java -cp "$jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
           --compact-only --model "$model" > "$log_file" 2>&1; then
