@@ -49,6 +49,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -66,8 +67,31 @@ import java.util.concurrent.TimeUnit;
 public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
 
+  /**
+   * Per-table commit serialization. Every table-mutating commit (append, replace-partitions,
+   * delete, snapshot expiry, and compaction rewrite) on a given table runs under this lock, so no
+   * two commits to the same table ever overlap within the JVM. The Hadoop/filesystem Iceberg
+   * catalog tracks the current table via a non-atomic {@code version-hint.text} pointer and is not
+   * safe under concurrent commits: interleaving a partition replace with the compaction's
+   * expire-snapshots + orphan deletion can leave the live snapshot referencing physically-deleted
+   * data files (a dangling ref that 404s on read). Keyed by {@link Table#location()} so all
+   * writer instances for the same table share one lock. Cross-process writers are already
+   * sequential (daily then historical), so a JVM-wide lock fully serializes per-table commits.
+   */
+  private static final ConcurrentHashMap<String, Object> COMMIT_LOCKS =
+      new ConcurrentHashMap<String, Object>();
+
   private final Table table;
   private final StorageProvider storageProvider;
+
+  /** The serialization monitor for commits to this writer's table. */
+  private Object commitLock() {
+    return COMMIT_LOCKS.computeIfAbsent(table.location(), new java.util.function.Function<String, Object>() {
+      @Override public Object apply(String k) {
+        return new Object();
+      }
+    });
+  }
 
   /**
    * Creates a writer for the specified Iceberg table.
@@ -159,10 +183,11 @@ public class IcebergTableWriter {
     for (DataFile dataFile : dataFiles) {
       append.appendFile(dataFile);
     }
-    append.commit();
-
-    // Ensure version-hint.text exists after commit (repairs orphaned tables)
-    ensureVersionHint();
+    synchronized (commitLock()) {
+      append.commit();
+      // Ensure version-hint.text exists after commit (repairs orphaned tables)
+      ensureVersionHint();
+    }
 
     LOGGER.info("Successfully committed {} files to Iceberg table {}", dataFiles.size(), table.name());
   }
@@ -193,10 +218,11 @@ public class IcebergTableWriter {
     for (DataFile dataFile : allDataFiles) {
       append.appendFile(dataFile);
     }
-    append.commit();
-
-    // Ensure version-hint.text exists after commit (repairs orphaned tables)
-    ensureVersionHint();
+    synchronized (commitLock()) {
+      append.commit();
+      // Ensure version-hint.text exists after commit (repairs orphaned tables)
+      ensureVersionHint();
+    }
 
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
@@ -218,8 +244,10 @@ public class IcebergTableWriter {
     for (DataFile dataFile : allDataFiles) {
       replace.addFile(dataFile);
     }
-    replace.commit();
-    ensureVersionHint();
+    synchronized (commitLock()) {
+      replace.commit();
+      ensureVersionHint();
+    }
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Replace-partitions commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
   }
@@ -516,9 +544,11 @@ public class IcebergTableWriter {
     }
 
     LOGGER.info("Deleting partition with filter: {}", partitionFilter);
-    table.newDelete()
-        .deleteFromRowFilter(filter)
-        .commit();
+    synchronized (commitLock()) {
+      table.newDelete()
+          .deleteFromRowFilter(filter)
+          .commit();
+    }
   }
 
   /**
@@ -843,9 +873,11 @@ public class IcebergTableWriter {
 
     // Expire old snapshots
     try {
-      table.expireSnapshots()
-          .expireOlderThan(expireSnapshotsMillis)
-          .commit();
+      synchronized (commitLock()) {
+        table.expireSnapshots()
+            .expireOlderThan(expireSnapshotsMillis)
+            .commit();
+      }
       LOGGER.info("Expired snapshots older than {} days", expireSnapshotsDays);
     } catch (Exception e) {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
@@ -1036,10 +1068,12 @@ public class IcebergTableWriter {
         }
         if (expiredCount > 0) {
           // Expire all snapshots older than now (keeps only current)
-          table.expireSnapshots()
-              .expireOlderThan(System.currentTimeMillis())
-              .retainLast(1)
-              .commit();
+          synchronized (commitLock()) {
+            table.expireSnapshots()
+                .expireOlderThan(System.currentTimeMillis())
+                .retainLast(1)
+                .commit();
+          }
           LOGGER.info("Expired {} old snapshots after compaction", expiredCount);
         }
       } catch (Exception e) {
@@ -1190,7 +1224,9 @@ public class IcebergTableWriter {
     for (DataFile newFile : newFiles) {
       rewrite.addFile(newFile);
     }
-    rewrite.commit();
+    synchronized (commitLock()) {
+      rewrite.commit();
+    }
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
   }
