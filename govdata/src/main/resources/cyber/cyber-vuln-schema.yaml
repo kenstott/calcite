@@ -568,7 +568,12 @@ partitionedTables:
   # ==========================================================================
   - name: osv_vulnerabilities
     freshness:
-      type: hash
+      # GCS serves a content-MD5 ETag (and Content-Length) on a HEAD of each ecosystem's all.zip, so
+      # freshness is one cheap HEAD per ecosystem — no download. Replaces type: hash, which had to
+      # download every ecosystem's all.zip each run just to digest it. probe_url targets the per-
+      # ecosystem object (the source url is only the bucket base; the transformer appends the path).
+      type: etag
+      probe_url: "https://osv-vulnerabilities.storage.googleapis.com/{ecosystem}/all.zip"
     releaseWindow:
       dow: [0]              # Weekly refresh; OSV updates continuously but Sunday run is sufficient
     pattern: "type=osv_vulnerabilities/ecosystem=*/*.parquet"
