@@ -130,11 +130,33 @@ def schema_of(worker):
     return name
 
 
+def _elapsed_str(pool_name, end_epoch):
+    """Total wall-clock from the pool's start (encoded in its filename) to end_epoch."""
+    m = re.search(r"pool-(\d{8})-(\d{6})", pool_name)
+    if not m:
+        return None
+    try:
+        start = time.mktime(time.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S"))
+    except ValueError:
+        return None
+    secs = max(0, int(end_epoch - start))
+    h, rem = divmod(secs, 3600)
+    mnt, s = divmod(rem, 60)
+    if h:
+        return f"{h}h{mnt:02d}m"
+    if mnt:
+        return f"{mnt}m{s:02d}s"
+    return f"{s}s"
+
+
 def render(path, color):
     last_status, events, activity, final = parse(path)
     out = []
     pool_name = os.path.basename(path)
-    age = time.time() - os.path.getmtime(path)
+    mtime = os.path.getmtime(path)
+    age = time.time() - mtime
+    # Completed: span start→last write. Running: start→now (the live wall-clock).
+    elapsed = _elapsed_str(pool_name, mtime if final is not None else time.time())
     if final is not None:
         # Pool exited cleanly — no ambiguous "stalled" guess.
         if final:
@@ -148,6 +170,8 @@ def render(path, color):
         stale = " (no update >120s — may be finished/stalled)" if age > 120 else ""
         out.append(f"{C.BOLD}run-pool: {pool_name}{C.RESET}  "
                    f"{C.GREY}updated {int(age)}s ago{stale}{C.RESET}")
+    if elapsed:
+        out.append(f"  {C.BOLD}Elapsed {elapsed}{C.RESET}")
 
     if not last_status:
         out.append(f"{C.YELLOW}No status line parsed yet — pool may be starting up.{C.RESET}")
