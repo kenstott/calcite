@@ -267,10 +267,13 @@ fi
 
 # Serial pre-pool tracker compaction (default on; --no-compact-first to skip). For each UNIQUE
 # queued schema, compact the FULL tracker range — year=0 (table-complete/freshness markers) plus
-# every data year 2010..current — because SIGKILL/OOM strand individual markers in whichever year
-# was active (per-year for backfill schemas like census, the current year for daily ones). A
-# historical-mode model with INCREMENTAL_START_YEAR=current+1 yields startYear=2010, endYear=current
-# so compactYearRange covers them all. Runs EtlRunner --compact-only one JVM at a time. Reuses
+# every data year 2000..current — because SIGKILL/OOM strand individual markers in whichever year
+# was active (per-year for backfill schemas like census, the current year for daily ones). The
+# floor is 2000, NOT the publish start (2010): dataLag stores markers under effective_year =
+# year - dataLag, so census ACS markers live under year=2007/2008/2009 — below 2010, and missed
+# entirely by a 2010 floor. A historical-mode model with START_YEAR=2000 and
+# INCREMENTAL_START_YEAR=current+1 yields startYear=2000, endYear=current so compactYearRange covers
+# them all. Runs EtlRunner --compact-only one JVM at a time. Reuses
 # generate_single_schema_model (handles every schema, incl. DQ-only ones); the per-schema tracker
 # bucket is namespaced, so each scan touches only its own schema. Best-effort: a failure is logged
 # and never blocks the pool.
@@ -285,7 +288,7 @@ compact_trackers_first() {
     export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
     [ -n "${GOVDATA_DQ_BUCKET:-}" ] && export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   fi
-  log_info "Pre-pool tracker compaction: sweeping schemas serially (year=0 + 2010..${_cy})…"
+  log_info "Pre-pool tracker compaction: sweeping schemas serially (year=0 + 2000..${_cy})…"
   for slot in "${queue[@]}"; do
     schema="${slot%%:*}"
     case "$seen" in *" $schema "*) continue ;; esac
@@ -293,7 +296,7 @@ compact_trackers_first() {
     model=$(mktemp "/tmp/compact-${schema}-XXXXXX.json" 2>/dev/null) \
       || { log_info "  skip $schema (mktemp failed)"; failed=$((failed + 1)); continue; }
     log_file="$SCRIPT_DIR/runs/compact-${schema}.log"
-    if GOVDATA_RUN_MODE=historical GOVDATA_INCREMENTAL_START_YEAR=$((_cy + 1)) \
+    if GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR=2000 GOVDATA_INCREMENTAL_START_YEAR=$((_cy + 1)) \
         generate_single_schema_model "$schema" "$model" 2>/dev/null; then
       log_info "  compacting tracker: $schema -> $log_file"
       if java -cp "$jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
