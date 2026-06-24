@@ -349,7 +349,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -433,7 +433,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -531,7 +531,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -617,7 +617,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -693,7 +693,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -766,7 +766,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -838,7 +838,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
@@ -919,7 +919,7 @@ partitionedTables:
     # instead of reprocessing all ~51 states every resume run. (FIA returns Last-Modified even
     # though it ignores If-Modified-Since.)
     freshness:
-      type: last_modified
+      type: etag
     source:
       type: http
       url: "https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip"
