@@ -3240,8 +3240,13 @@ public class HttpSource implements DataSource {
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     try {
       conn.setRequestMethod("HEAD");
-      conn.setConnectTimeout(15000);
-      conn.setReadTimeout(15000);
+      conn.setConnectTimeout(30000);
+      // Throttled upstreams (e.g. the USDA FIA datamart, ~800 KB/s) can take well over 15s just
+      // to answer a HEAD. A short read timeout here makes the per-unit freshness probe fail and
+      // fall back to a full fetch + re-materialise on every run — the exact re-write this gate is
+      // meant to prevent. Match FiaStateArchive's 60s HEAD; a HEAD body is tiny, so this only ever
+      // waits longer for slow servers and never delays fast ones.
+      conn.setReadTimeout(60000);
       conn.setInstanceFollowRedirects(true);
       applyProbeHeaders(conn, vars);
       conn.connect();
