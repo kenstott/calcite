@@ -541,14 +541,27 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * {@link #readLatestStateAndAsOf} to read directly.
    */
   private List<String> excludeValueBearingMarkers(List<String> files) {
-    String freshSeg = "/source_key=" + sanitizeHiveValue(FRESHNESS_SOURCE_KEY) + "/";
     List<String> kept = new ArrayList<String>(files.size());
     for (String f : files) {
-      if (!f.contains(freshSeg)) {
+      if (!isValueBearingMarker(f)) {
         kept.add(f);
       }
     }
     return kept;
+  }
+
+  /**
+   * True if {@code filePath} is a value-bearing (freshness-token) marker — its meaning lives in the
+   * {@code state} column (upstream ETag/Last-Modified/hash/HWM), not in mere presence. The single
+   * predicate behind the compaction invariant: such markers are never folded into a
+   * {@code _compacted/} file (which hardcodes {@code state='complete'}, see {@link #compactFromCache})
+   * and their individual files are never deleted (see {@link #deleteSpecificFiles}). Enforced at
+   * those two chokepoints so no scan path can lose a token regardless of how it populated
+   * {@link #stageCache}; {@link #excludeValueBearingMarkers} is then only a read-cost optimization.
+   */
+  private boolean isValueBearingMarker(String filePath) {
+    return filePath != null
+        && filePath.contains("/source_key=" + sanitizeHiveValue(FRESHNESS_SOURCE_KEY) + "/");
   }
 
   private List<String> scanAndCacheYear(String year) {
@@ -973,6 +986,15 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           }
           String sourceKey = key.substring(0, sep);
           String phase = key.substring(sep + 1);
+          // Compaction invariant (write chokepoint): never fold a value-bearing freshness token
+          // into _compacted/. This writer hardcodes state='complete', which would overwrite the
+          // token's value (ETag/Last-Modified/hash/HWM) and make the freshness gate re-fetch every
+          // unit. Tokens stay as individual files (and deleteSpecificFiles never removes them), so
+          // readLatestStateAndAsOf reads them directly. Guarding here means no stageCache pollution
+          // — however a scan got them in — can ever destroy a token.
+          if (FRESHNESS_SOURCE_KEY.equals(sourceKey)) {
+            continue;
+          }
           String skYear = "_table_complete".equals(sourceKey)
               ? COMPLETION_YEAR : extractYear(sourceKey, asOf);
           if (!year.equals(skYear)) {
@@ -1087,6 +1109,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
           new ArrayList<DeleteObjectsRequest.KeyVersion>();
       int deleted = 0;
       for (String file : s3Files) {
+        // Compaction invariant (delete chokepoint): a value-bearing freshness token's individual
+        // file IS the authoritative copy (it is never folded into _compacted/), so it must never be
+        // deleted by compaction. Guarding here means no straggler list — however assembled — can
+        // ever remove a token, so preservation no longer depends on every scan caller filtering.
+        if (isValueBearingMarker(file)) {
+          continue;
+        }
         String filePath = file.startsWith("s3://") ? file.substring(5) : file;
         int fileSlash = filePath.indexOf('/');
         String key = filePath.substring(fileSlash + 1);
