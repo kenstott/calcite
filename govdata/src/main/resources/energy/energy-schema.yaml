@@ -553,6 +553,7 @@ partitionedTables:
       type: http
       url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
       method: GET
+      parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
       response:
         format: TEXT
       rawCache: *raw_cache_enabled
@@ -737,6 +738,11 @@ partitionedTables:
       type: http
       url: "https://www.eia.gov/electricity/data/eia860/archive/xls/eia860{effective_year}.zip"
       method: GET
+      # Bulk-XLSX pipeline: the transformer rebuilds two full POI workbooks
+      # (~24k-row sheets, ~10-20x file size in heap) per fetch. Pin to one fetch
+      # at a time so concurrent year-batches can't multiply that footprint and OOM
+      # (observed at the 3g historical default). caps below the global thread count.
+      parallel: 1
       response:
         format: TEXT
       rawCache: *raw_cache_enabled
@@ -864,6 +870,7 @@ partitionedTables:
       type: http
       url: "https://www.eia.gov/electricity/data/eia860m/archive/xls/december_generator{effective_year}.xlsx"
       method: GET
+      parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
       response:
         format: TEXT
       rawCache: *raw_cache_enabled
@@ -1371,6 +1378,7 @@ partitionedTables:
       type: http
       url: "https://www.eia.gov/petroleum/imports/companylevel/"
       method: GET
+      parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
       response:
         format: TEXT
       rawCache: *raw_cache_enabled

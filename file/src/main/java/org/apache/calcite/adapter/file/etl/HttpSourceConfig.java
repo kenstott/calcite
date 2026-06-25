@@ -200,7 +200,11 @@ public class HttpSourceConfig {
     this.urlRules = builder.urlRules != null
         ? Collections.unmodifiableList(new ArrayList<UrlRule>(builder.urlRules))
         : Collections.<UrlRule>emptyList();
-    this.parallel = builder.parallel > 0 ? builder.parallel : 1;
+    // 0 = unset (defer to the global calcite.etl.threads). An explicit positive
+    // value is authoritative downstream — it caps as well as raises (see
+    // EtlPipeline.getParallelThreadCount), so a memory-heavy table can pin itself
+    // to parallel: 1 even when the worker runs a higher global thread count.
+    this.parallel = builder.parallel;
     this.incremental = builder.incremental;
     this.skipResponseBody = builder.skipResponseBody;
     this.urlResolver = builder.urlResolver;
@@ -504,7 +508,9 @@ public class HttpSourceConfig {
   }
 
   /**
-   * Returns the number of parallel HTTP fetch threads (default 1 = sequential).
+   * Returns the explicitly-configured number of parallel fetch threads, or 0 when
+   * unset. 0 means "defer to the global calcite.etl.threads"; any positive value is
+   * authoritative (caps as well as raises) in EtlPipeline.getParallelThreadCount.
    */
   public int getParallel() {
     return parallel;
@@ -2563,7 +2569,7 @@ public class HttpSourceConfig {
     private DocumentSourceConfig documentSource;
     private String sourceType;
     private List<UrlRule> urlRules;
-    private int parallel = 1;
+    private int parallel = 0;  // 0 = unset; defer to global calcite.etl.threads
     private IncrementalConfig incremental;
     private boolean skipResponseBody;
 

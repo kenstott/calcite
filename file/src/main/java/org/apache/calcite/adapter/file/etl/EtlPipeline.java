@@ -3260,9 +3260,12 @@ public class EtlPipeline {
    * {@code calcite.etl.threads} system property. Returns 1 (sequential) if neither is set.
    */
   private int getParallelThreadCount() {
-    // Per-table parallel config takes precedence
+    // An explicit per-table parallel setting is authoritative — it caps as well as
+    // raises. A memory-heavy table (e.g. bulk-XLSX pipelines that rebuild a POI
+    // workbook per fetch) can pin itself to parallel: 1 to stay sequential even
+    // when the worker runs a higher global calcite.etl.threads. 0 = unset.
     HttpSourceConfig sourceConfig = config.getSource();
-    if (sourceConfig != null && sourceConfig.getParallel() > 1) {
+    if (sourceConfig != null && sourceConfig.getParallel() > 0) {
       return sourceConfig.getParallel();
     }
     try {
