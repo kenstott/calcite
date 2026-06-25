@@ -11,24 +11,61 @@
 package org.apache.calcite.adapter.govdata.health;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.PerRecordResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;
 import java.io.StringReader;
+import java.util.Iterator;
+import java.util.Map;
 
 /**
- * Base class for transformers that receive CSV batches (with header line) and return JSON.
+ * Base class for transformers that receive CSV rows (with header) and map them to output records.
  *
- * <p>The input is a CSV string: first line is the header, subsequent lines are data rows.
- * Subclasses implement {@link #mapRow(String[], String[], ObjectNode)} to produce output records.
+ * <p>Implements {@link PerRecordResponseTransformer} so {@code HttpSource} streams the CSV one row
+ * at a time (its per-record cache path) instead of reading the whole response into a single String.
+ * This keeps memory O(1) per row — essential for the multi-GB bulk CSVs (e.g. CMS Open Payments),
+ * where the legacy whole-String {@link #transform(String, RequestContext)} path OOMed. That String
+ * path is retained only as a fallback for callers that do not stream.
+ *
+ * <p>Subclasses implement {@link #mapRow(String[], String[], ObjectNode)} to produce output records;
+ * the same hook serves both the streaming and fallback paths.
  */
-public abstract class AbstractCsvResponseTransformer implements ResponseTransformer {
+public abstract class AbstractCsvResponseTransformer implements PerRecordResponseTransformer {
   protected static final ObjectMapper MAPPER = new ObjectMapper();
+
+  /**
+   * Streaming per-record path: {@code row} holds one CSV record keyed by header name. Reuse
+   * {@link #mapRow} to build the output columns, then replace the record's contents in place (the
+   * streaming writer consumes the mutated map), so the full CSV is never buffered as one String.
+   */
+  @Override
+  public void transformRecord(Map<String, Object> row, RequestContext context) {
+    int n = row.size();
+    String[] headers = new String[n];
+    String[] values = new String[n];
+    int i = 0;
+    for (Map.Entry<String, Object> e : row.entrySet()) {
+      headers[i] = e.getKey();
+      Object v = e.getValue();
+      values[i] = v == null ? "" : String.valueOf(v);
+      i++;
+    }
+    ObjectNode mapped = MAPPER.createObjectNode();
+    mapRow(headers, values, mapped);
+    row.clear();
+    Iterator<Map.Entry<String, JsonNode>> fields = mapped.fields();
+    while (fields.hasNext()) {
+      Map.Entry<String, JsonNode> e = fields.next();
+      JsonNode val = e.getValue();
+      row.put(e.getKey(), val == null || val.isNull() ? null : val.asText());
+    }
+  }
 
   @Override
   public String transform(String response, RequestContext context) {
