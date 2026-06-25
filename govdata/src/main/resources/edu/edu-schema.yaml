@@ -213,9 +213,14 @@ partitionedTables:
   # ~100,000 schools per year; 1986–present
   # ==========================================================================
   - name: ccd_schools
-    # No freshness:hash — this is a ~1M-row/year table and the hash gate materializes the
-    # full dataset in memory (OOM). It is gated by the year period (per-year completion) plus
-    # the releaseWindow, which is sufficient and cheap.
+    # Single all-years bulk CSV split by responsePartitioning → there is NO year *dimension*,
+    # so the assumed "per-year period completion" never marks anything complete and every resume
+    # re-downloaded + rewrote the full ~1M rows. Gate on the source ETag instead: a cheap HTTP
+    # HEAD that skips the whole download when the Urban Institute file is unchanged (republished
+    # ~annually). Not freshness:hash — that materializes the per-year dataset in memory (OOM);
+    # the ETag is computed server-side and never touches the data. cf. econ/world_indicators.
+    freshness:
+      type: etag
     releaseWindow:
       months: [7, 8]        # NCES posts CCD preliminary July, revised August
     pattern: "year={year}"
@@ -897,9 +902,13 @@ partitionedTables:
   # Tuition/fees are in a SEPARATE endpoint: academic-year-tuition/{year}/
   # ==========================================================================
   - name: ipeds_institutions
-    # Gated by the year period + releaseWindow; no freshness:hash (the hash gate materializes
-    # the full per-year dataset — unnecessary for a year-partitioned table, and a memory risk
-    # as it grows, cf. ccd_schools).
+    # Single all-years bulk CSV split by responsePartitioning → NO year *dimension*, so the
+    # assumed per-year period completion never marks and every resume re-downloaded + rewrote the
+    # full dataset. Gate on the source ETag (cheap HTTP HEAD; skips the download when the Urban
+    # Institute file is unchanged). Not freshness:hash — that materializes the per-year dataset
+    # (memory risk as it grows); the ETag is server-side and never touches the data.
+    freshness:
+      type: etag
     releaseWindow:
       months: [11]          # IPEDS Fall Data Collection releases November
     pattern: "year={year}"
