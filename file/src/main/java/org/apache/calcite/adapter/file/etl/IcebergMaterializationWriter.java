@@ -1314,6 +1314,41 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         tmpJson.delete();
       }
 
+      // Pad _src with any referenced source columns it lacks, as NULL. read_json_auto infers the
+      // schema from the rows it was handed, so a batch whose rows omit a field — e.g. PEP
+      // state-level responses carry no "county", and an empty Census response yields only "NAME" —
+      // produces a _src missing that column. A direct or expression reference to src."<missing>"
+      // then raises a DuckDB binder error, the WHOLE batch falls back to the Java evaluator, and
+      // every COMPUTED column (which the Java path does not evaluate) silently becomes NULL — that
+      // is exactly how pep_population.county_fips was 100% null. Adding the missing columns as NULL
+      // lets the SQL bind and evaluate: computed columns resolve correctly, and the genuinely-absent
+      // fields are simply NULL.
+      java.util.Set<String> existingLower = new java.util.HashSet<String>();
+      try (ResultSet rsCols = stmt.executeQuery("SELECT * FROM _src LIMIT 0")) {
+        ResultSetMetaData m = rsCols.getMetaData();
+        for (int i = 1; i <= m.getColumnCount(); i++) {
+          existingLower.add(m.getColumnLabel(i).toLowerCase(java.util.Locale.ROOT));
+        }
+      }
+      java.util.Set<String> referenced = new java.util.LinkedHashSet<String>();
+      java.util.regex.Pattern srcRef = java.util.regex.Pattern.compile("src\\.\"([^\"]+)\"");
+      for (ColumnConfig col : columns) {
+        if (col.isComputed() && col.getExpression() != null) {
+          java.util.regex.Matcher mm = srcRef.matcher(col.getExpression());
+          while (mm.find()) {
+            referenced.add(mm.group(1));
+          }
+        } else {
+          referenced.add(col.getEffectiveSource());
+        }
+      }
+      for (String refCol : referenced) {
+        if (refCol != null && !existingLower.contains(refCol.toLowerCase(java.util.Locale.ROOT))) {
+          stmt.execute("ALTER TABLE _src ADD COLUMN \"" + refCol.replace("\"", "\\\"") + "\" VARCHAR");
+          existingLower.add(refCol.toLowerCase(java.util.Locale.ROOT));
+        }
+      }
+
       // Build SELECT: use expression for computed columns, direct field for others.
       // FROM _src AS src so expressions using src."FIELD" resolve against the alias.
       StringBuilder sel = new StringBuilder("SELECT ");
