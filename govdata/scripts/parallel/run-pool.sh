@@ -37,6 +37,15 @@ trap '' PIPE
 MAX_WORKERS=99       # Effectively unlimited — memory budget is the real constraint
 TIMEOUT_MINS=60
 OS_RESERVE_MB=1500   # Memory reserved for OS, kernel buffers, and non-ETL processes
+# Per-worker native footprint the heap budget can't see: each ETL JVM also holds
+# the in-process DuckDB working set (DUCKDB_MEMORY_LIMIT, default 2GB) + NIO/S3A
+# direct buffers (MaxDirectMemorySize 768m) + metaspace (256m). Admission must
+# count this on top of -Xmx or it over-admits and the box pages (free→~180MB at
+# 8 workers). Live jcmd sampling showed actual native ≈0.9-2.1GB/worker (avg
+# ~1.5GB) under the old 1500m direct cap; with direct now 768m it drops further,
+# so 2048 covers typical + peak headroom without the over-conservatism of the
+# 3200MB absolute ceiling. Tunable via env.
+WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-2048}"
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 
 # Parse flags
@@ -540,11 +549,14 @@ launch_worker() {
   active_labels+=("$id")
   active_starts+=("$(date +%s)")
   active_slots+=("$slot")
-  active_heap_mb+=("$heap_mb")
+  # Budget on full footprint (heap + native), not -Xmx alone. active_heap_mb holds
+  # the footprint so remove_active credits the same amount back on exit.
+  local foot_mb=$((heap_mb + WORKER_NATIVE_MB))
+  active_heap_mb+=("$foot_mb")
   active_timeout_secs+=("$timeout_secs")
-  committed_mb=$((committed_mb + heap_mb))
+  committed_mb=$((committed_mb + foot_mb))
 
-  log_info "Launched $id (PID $pid, heap ${heap_mb}MB, timeout ${timeout_mins}min) — committed: ${committed_mb}MB / ${budget_mb}MB budget"
+  log_info "Launched $id (PID $pid, heap ${heap_mb}MB +${WORKER_NATIVE_MB}MB native = ${foot_mb}MB, timeout ${timeout_mins}min) — committed: ${committed_mb}MB / ${budget_mb}MB budget"
   return 0
 }
 
@@ -565,15 +577,16 @@ fill_pool() {
   local scan_idx=$queue_idx
   while [ "${#active_pids[@]}" -lt "$MAX_WORKERS" ] && [ "$scan_idx" -lt "$total" ]; do
     local next_slot="${queue[$scan_idx]}"
-    local next_heap_mb
+    local next_heap_mb next_foot_mb
     next_heap_mb=$(get_worker_heap_mb "$next_slot")
+    next_foot_mb=$((next_heap_mb + WORKER_NATIVE_MB))   # heap + native footprint
     local next_schema="${next_slot%%:*}"
     local next_mode="${next_slot#*:}"
     local next_id="worker-${next_schema}-${next_mode}"
 
-    # Skip if this worker's heap exceeds total budget — can never run on this machine
-    if [ "$next_heap_mb" -gt "$budget_mb" ]; then
-      log_info "SKIPPING ${next_id}: needs ${next_heap_mb}MB but budget is only ${budget_mb}MB"
+    # Skip if this worker's footprint exceeds total budget — can never run on this machine
+    if [ "$next_foot_mb" -gt "$budget_mb" ]; then
+      log_info "SKIPPING ${next_id}: needs ${next_foot_mb}MB (heap ${next_heap_mb}MB + ${WORKER_NATIVE_MB}MB native) but budget is only ${budget_mb}MB"
       ((done_count++)) || true
       ((failed_count++)) || true
       if [ "$scan_idx" -eq "$queue_idx" ]; then
@@ -583,10 +596,10 @@ fill_pool() {
       continue
     fi
 
-    # Check 1: committed budget
-    local projected=$((committed_mb + next_heap_mb))
+    # Check 1: committed budget (full footprint, not -Xmx alone)
+    local projected=$((committed_mb + next_foot_mb))
     if [ "$projected" -gt "$budget_mb" ]; then
-      log_info "Memory budget: ${next_id} needs ${next_heap_mb}MB, committed=${committed_mb}MB, budget=${budget_mb}MB — holding"
+      log_info "Memory budget: ${next_id} needs ${next_foot_mb}MB, committed=${committed_mb}MB, budget=${budget_mb}MB — holding"
       break
     fi
 
@@ -594,8 +607,8 @@ fill_pool() {
     if [ "${#active_pids[@]}" -gt 0 ]; then
       local avail_mb
       avail_mb=$(get_available_mb)
-      if [ "$avail_mb" -lt "$((next_heap_mb + OS_RESERVE_MB / 2))" ]; then
-        log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_heap_mb}MB — holding"
+      if [ "$avail_mb" -lt "$((next_foot_mb + OS_RESERVE_MB / 2))" ]; then
+        log_info "Memory pressure: ${avail_mb}MB available, ${next_id} needs ${next_foot_mb}MB — holding"
         break
       fi
     fi

@@ -28,8 +28,11 @@ PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 #   MaxMetaspaceSize/Xss - bound metaspace + per-thread stacks (many S3A threads)
 #   NativeMemoryTracking - lets `jcmd <pid> VM.native_memory summary` attribute RSS
 #   MALLOC_ARENA_MAX     - glibc spawns up to 8*nproc 64MB arenas under IO threads
+#   -Xlog:gc             - prints per-collection heap transitions (used->used(cap))
+#                          to the worker log so true peak heap is extractable
+#                          post-run, to right-size per-schema -Xmx from evidence.
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
-GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=1500m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary}"
+GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=768m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary -Xlog:gc}"
 
 # Load base credentials from govdata/.env.prod, then parallel overrides.
 # Caller-exported variables take precedence: if GOVDATA_START_YEAR or
@@ -869,16 +872,26 @@ get_heap_config() {
   local _schema="${_id%-*}"             # everything before the last dash
   local _mode="${_id##*-}"              # everything after the last dash
 
+  # Heap caps right-sized 2026-06-25 from logged per-pipeline peakHeap on a
+  # fresh-start historical run (see runs/worker-*/launch.log "peakHeap=").
   case "$_schema" in
     geo)
-      # TIGER shapefiles (census_tracts, ZCTAs) need large heap for geometry parsing
-      _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;
-    ref)
-      # GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows
-      _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
-    fec)
-      # Individual contributions: 3M+ rows/year, streaming to Iceberg
+      # TIGER shapefiles (census_tracts, ZCTAs) need large heap for geometry parsing.
+      # Observed peak 3752MB → 5g cap (1.3g headroom); was 6g.
       _HEAP_MIN="4g"; _HEAP_MAX="5g" ;;
+    ref)
+      # GLEIF golden copy is ~450MB ZIP / 3.2M CSV rows. Peak 1841MB → 3g; was 4g.
+      _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+    fec)
+      # Individual contributions: 3M+ rows/year, streaming to Iceberg keeps heap
+      # bounded — peak 2388MB even mid-100k-row chunk writes → 4g; was 5g.
+      _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
+    energy)
+      # eia_power_plants processes 18MB responses across PARALLEL batches whose
+      # combined heap OOMed the 3g default (per-pipeline peak logged 2651MB, but
+      # concurrent batches exceed it) → raised to 4g. Deeper fix: bound parallel
+      # batch concurrency / stream eia_power_plants (like CMS).
+      _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
     cyber_threat|cyber_vuln)
       case "$_mode" in
         initial) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;  # full NVD ~350k CVEs + OTX backfill
@@ -895,8 +908,9 @@ get_heap_config() {
         *)       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
       esac ;;
     crime)
-      # Large dimension expansion (type × year × state × offense × ori)
-      _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
+      # Large dimension expansion (type × year × state × offense × ori).
+      # Peak 1780MB → 3g (1.2g headroom); was 4g.
+      _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
     *)
       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
   esac
