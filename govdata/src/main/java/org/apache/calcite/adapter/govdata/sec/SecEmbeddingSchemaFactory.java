@@ -166,10 +166,9 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
       FileSchemaFactory fileFactory = FileSchemaFactory.INSTANCE;
       schema = fileFactory.create(parentSchema, name, config);
 
-      // Register vector functions
-      if (parentSchema != null && name != null) {
-        registerVectorFunctions(parentSchema.add(name, schema));
-      }
+      // Vector similarity functions are registered by the file adapter
+      // (FileAdapterFunctions) for every schema it builds, so no govdata-side
+      // registration is needed here.
 
       LOGGER.info("Successfully created XBRL schema with embeddings and vector functions");
 
