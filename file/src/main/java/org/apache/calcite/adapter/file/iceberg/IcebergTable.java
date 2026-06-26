@@ -155,7 +155,12 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     Schema icebergSchema = icebergTable.schema();
     for (Types.NestedField field : icebergSchema.columns()) {
       fieldNames.add(field.name());
-      fieldTypes.add(icebergTypeToSqlType(field.type(), typeFactory));
+      // Honor Iceberg nullability: optional→nullable, required→NOT NULL.
+      // icebergTypeToSqlType() uses createSqlType(), which defaults to NOT NULL,
+      // so without this every column was typed NOT NULL — and reading a null value
+      // (e.g. a null DATE) through Calcite's non-null conversion path threw NPE.
+      fieldTypes.add(typeFactory.createTypeWithNullability(
+          icebergTypeToSqlType(field.type(), typeFactory), field.isOptional()));
     }
 
     return typeFactory.createStructType(fieldTypes, fieldNames);
@@ -200,7 +205,8 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
         List<RelDataType> fieldTypes = new ArrayList<>();
         for (Types.NestedField field : structType.fields()) {
           fieldNames.add(field.name());
-          fieldTypes.add(icebergTypeToSqlType(field.type(), typeFactory));
+          fieldTypes.add(typeFactory.createTypeWithNullability(
+              icebergTypeToSqlType(field.type(), typeFactory), field.isOptional()));
         }
         return typeFactory.createStructType(fieldTypes, fieldNames);
       case LIST:
