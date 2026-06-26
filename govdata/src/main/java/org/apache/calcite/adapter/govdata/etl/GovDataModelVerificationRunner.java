@@ -85,6 +85,10 @@ public final class GovDataModelVerificationRunner {
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
+    // Resolve identifiers/functions case-insensitively so unquoted (TO_LOWER) calls
+    // match the registered UDF names (COSINE_SIMILARITY, ST_*), which Calcite stores
+    // upper-cased.
+    props.setProperty("caseSensitive", "false");
     props.setProperty("model", cfg.model);
     // Enable Calcite's spatial operator library so ST_* parse (execution still
     // pushes to DuckDB where applicable).
@@ -236,6 +240,10 @@ public final class GovDataModelVerificationRunner {
           if (r.error == null) {
             r.error = e.getMessage();
           }
+          if (System.getenv("VERIFY_STACK") != null) {
+            System.err.println("STACK for " + schema + "." + table + ":");
+            e.printStackTrace();
+          }
         } finally {
           closeQuietly(rs);
           closeQuietly(st);
@@ -326,7 +334,7 @@ public final class GovDataModelVerificationRunner {
               + " first=[" + first + "]");
         } catch (Exception e) {
           failures++;
-          System.out.println("  [FAIL]  " + label + " -> " + trunc(e.getMessage(), 160));
+          System.out.println("  [FAIL]  " + label + " -> " + trunc(e.getMessage(), 600));
         } finally {
           if (rs != null) {
             try {
