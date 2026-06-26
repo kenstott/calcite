@@ -112,7 +112,8 @@ dimension_values:
   # Example in March 2026: effectiveEnd = min(2026-2, 2026) = 2024, then month 3 < 12 → 2023
   acs_year_range: &acs_year_range
     type: yearRange
-    start: 2009
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2009          # ACS 5-year feed began 2009 (informational; below the 2010 default floor)
     dataLag: 2
     releaseMonth: 12
 
@@ -123,7 +124,8 @@ dimension_values:
   # Example in March 2026: effectiveEnd = min(2026-1, 2026) = 2025, then month 3 < 9 → 2024
   acs1_year_range: &acs1_year_range
     type: yearRange
-    start: 2006
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2006          # ACS 1-year feed began 2006 (informational; below the 2010 default floor)
     dataLag: 1
     releaseMonth: 9
 
@@ -133,7 +135,8 @@ dimension_values:
   # census year), so 2030 won't be fetched until 2032.
   decennial_years: &decennial_years
     type: yearRange
-    start: 2000
+    start: 2000            # cadence anchor (feed-began): aligns the decennial step at 2000/2010/2020
+    minYear: "${GOVDATA_START_YEAR:2010}"   # global demarcation clamp (daily → current year)
     step: 10
     dataLag: 2
 
@@ -475,11 +478,13 @@ partitionedTables:
       type:
         - acs
       # B15003 (educational attainment) was added to ACS5 in 2012; earlier years return
-      # 400 "unknown variable 'B15003_001E'" (fatal — no skipOn here). Floor at 2012 rather
-      # than the shared acs_year_range (2009). Same dataLag/releaseMonth as the anchor.
+      # 400 "unknown variable 'B15003_001E'" (fatal — no skipOn here). minYear floors at 2012
+      # (feed-began for this variable) while start follows the global demarcation. Same
+      # dataLag/releaseMonth as the anchor.
       year:
         type: yearRange
-        start: 2012
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2012
         dataLag: 2
         releaseMonth: 12
       geography: *all_geographies
@@ -2586,7 +2591,8 @@ partitionedTables:
       # 2017, 2022, 2027, ... — no off-census-year 404s.
       year:
         type: yearRange
-        start: 2017
+        start: 2017            # cadence anchor (feed-began): quinquennial step 2017/2022/2027
+        minYear: "${GOVDATA_START_YEAR:2010}"   # global demarcation clamp (daily → current year)
         step: 5
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 3
@@ -3105,11 +3111,14 @@ partitionedTables:
     dimensions:
       type:
         - bps
-      # Custom dimension resolver generates YYMM codes dynamically
-      # BuildingPermitsDimensionResolver transforms years to YYMM format for Census API URLs
+      # Custom dimension resolver generates YYMM codes dynamically.
+      # BuildingPermitsDimensionResolver iterates PUBLISH years [start..current] (the global
+      # demarcation), converts each to its data year (effective = publish - dataLag), and emits
+      # the final YYMM code consumed directly by the URL. No literal floor: BPS data runs back to
+      # 1992, so the global start (default 2010) is the only floor.
       year:
         type: custom
-        start: 2020
+        start: "${GOVDATA_START_YEAR:2010}"
         dataLag: 1
 
     # Columns match Census Building Permits Survey fixed-width text file format

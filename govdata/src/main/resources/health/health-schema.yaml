@@ -1598,14 +1598,15 @@ partitionedTables:
         - ownership
       year:
         type: yearRange
-        # Open Payments data begins program year (CY) 2018, published the following
-        # June/July (publish year = data year + 1). start is a FIXED publish-year floor,
-        # NOT tied to GOVDATA_START_YEAR: the latest available data is CY2024 (publish 2025),
-        # so a GOVDATA_START_YEAR >= 2025 would push the publish-year start past the ceiling
-        # and empty the range (-> {effective_year} unsubstituted -> URISyntaxException).
-        # {effective_year} (= year - dataLag) is the program year used in the URL and is
-        # mapped to the `year` partition by the Iceberg writer.
-        start: 2019
+        # Computed global demarcation (default 2010, same as every schema). The literal
+        # 2019 floor is a feed-began bound (allowed): Open Payments did not exist before
+        # publish year 2019 (program year CY2018, published the following June/July =
+        # data year + 1), so minYear clamps the range up to 2019. In daily mode
+        # GOVDATA_START_YEAR = current year → the range is the current publish year forward
+        # (empty/skipped before the July release). {effective_year} (= year - dataLag) is
+        # the program year used in the URL and mapped to the `year` partition on write.
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2019
         dataLag: 1
         releaseMonth: 7
 

@@ -388,8 +388,13 @@ partitionedTables:
         fields:
           year: "year"
         yearFilter:
+          # Default floor 2010 (Urban Institute directory data runs back to the 1980s, so no
+          # feed-began cap). Fixed literal, NOT ${GOVDATA_START_YEAR}: the daily/historical
+          # demarcation for this freshness:etag-gated bulk table is handled by freshness, and a
+          # dynamic value would resolve to the current year in the daily pool and discard newly
+          # published (lagged) rows on an etag-triggered reprocess.
           field: "year"
-          start: 2015
+          start: 2010
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.CcdSchoolsResponseTransformer"
@@ -1074,8 +1079,13 @@ partitionedTables:
         fields:
           year: "year"
         yearFilter:
+          # Default floor 2010 (Urban Institute directory data runs back to the 1980s, so no
+          # feed-began cap). Fixed literal, NOT ${GOVDATA_START_YEAR}: the daily/historical
+          # demarcation for this freshness:etag-gated bulk table is handled by freshness, and a
+          # dynamic value would resolve to the current year in the daily pool and discard newly
+          # published (lagged) rows on an etag-triggered reprocess.
           field: "year"
-          start: 2015
+          start: 2010
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer"

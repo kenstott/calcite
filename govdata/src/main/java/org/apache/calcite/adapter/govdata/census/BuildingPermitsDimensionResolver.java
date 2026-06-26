@@ -35,9 +35,9 @@ import java.util.Map;
  * <pre>{@code
  * dimensions:
  *   year:
- *     type: yearRange
- *     start: 2020
- *     dataLag: 1
+ *     type: custom
+ *     start: "${GOVDATA_START_YEAR:2010}"   # publish-year demarcation (daily -> current year)
+ *     dataLag: 1                             # data year = publish - dataLag; emitted YYMM is final
  *
  * hooks:
  *   dimensionResolver: "org.apache.calcite.adapter.govdata.census.BuildingPermitsDimensionResolver"
@@ -55,28 +55,35 @@ public class BuildingPermitsDimensionResolver implements DimensionResolver {
       return Collections.emptyList();
     }
 
-    Integer startYear = config.getStart();
+    // The year demarcation is in PUBLISH years (the global GOVDATA_START_YEAR boundary, passed
+    // as the 'start' operand). BPS's URL needs the DATA year (stYYMMy.txt), and data/effective
+    // year = publish - dataLag, so iterate publish years from the global start to the current
+    // year and convert each to its data year. The emitted YYMM is the FINAL dimension value
+    // (used directly in the URL — no downstream transform). Daily mode (start = current publish
+    // year) therefore resolves to the latest available data year (publish - lag) rather than
+    // requesting the not-yet-published current-year file.
+    Integer startPublish = config.getStart();
     Integer dataLag = config.getDataLag();
 
-    if (startYear == null) {
-      startYear = 2020;
+    if (startPublish == null) {
+      startPublish = 2010;
     }
     if (dataLag == null) {
       dataLag = 1;
     }
 
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-    int effectiveMaxYear = currentYear - dataLag;
 
     List<String> yymms = new ArrayList<>();
-    for (int year = startYear; year <= effectiveMaxYear; year++) {
-      String yymm = toYYMM(year);
+    for (int publishYear = startPublish; publishYear <= currentYear; publishYear++) {
+      int dataYear = publishYear - dataLag;
+      String yymm = toYYMM(dataYear);
       yymms.add(yymm);
-      LOGGER.debug("BPS-YEARS: generated YYMM code {} for year {}", yymm, year);
+      LOGGER.debug("BPS-YEARS: publish {} -> data {} -> YYMM {}", publishYear, dataYear, yymm);
     }
 
-    LOGGER.info("BPS-YEARS: resolved {} year codes (start={}, maxYear={}, dataLag={})",
-        yymms.size(), startYear, effectiveMaxYear, dataLag);
+    LOGGER.info("BPS-YEARS: resolved {} year codes (startPublish={}, currentYear={}, dataLag={})",
+        yymms.size(), startPublish, currentYear, dataLag);
     return yymms;
   }
 
