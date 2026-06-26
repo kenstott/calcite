@@ -85,8 +85,13 @@ public interface SubSchemaFactory {
    * <p>When enabled, ETL runs automatically when the schema is created.
    * When disabled, requires explicit call to {@link FileSchemaBuilder#runEtl()}.
    *
+   * <p>Defaults to {@code false}: opening a model to read/query must never
+   * trigger a naive ETL load. Ingestion is an explicit opt-in, requested either
+   * by {@code "autoDownload": true} in the operand (as the ETL runner's models
+   * do) or by setting the {@code GOVDATA_AUTO_DOWNLOAD} environment variable.
+   *
    * @param operand Configuration map
-   * @return true if auto-download is enabled (default: true)
+   * @return true if auto-download is enabled (default: false)
    */
   default boolean shouldAutoDownload(Map<String, Object> operand) {
     Object autoDownload = operand.get("autoDownload");
@@ -100,7 +105,7 @@ public interface SubSchemaFactory {
     if (envVal != null) {
       return Boolean.parseBoolean(envVal);
     }
-    return true;
+    return false;
   }
 
   /**
