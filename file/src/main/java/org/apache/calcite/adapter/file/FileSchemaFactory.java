@@ -831,9 +831,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // Register the schema with the parent so SQL queries can find the tables
       // This is critical for Calcite's SQL validator to see the tables
       // Note: Schema uniqueness already validated at method start
-      parentSchema.add(name, schemaToRegister);
+      SchemaPlus registeredSchema = parentSchema.add(name, schemaToRegister);
       LOGGER.info("FileSchemaFactory: Registered {} schema '{}' with parent schema for SQL validation",
                   schemaToRegister.getClass().getSimpleName(), name);
+
+      // Standard file-adapter UDFs (vector similarity + spatial ST_*) on every
+      // schema, so they validate in Calcite and pass through to DuckDB at pushdown.
+      FileAdapterFunctions.registerStandardFunctions(registeredSchema);
 
       // Add metadata schemas as sibling schemas
       addMetadataSchemas(parentSchema);

@@ -61,6 +61,26 @@ public class SimilarityFunctions {
   }
 
   /**
+   * Cosine similarity between two raw texts, each embedded with the standard model
+   * via the vendored Python embedding server ({@link EmbeddingService}). Both
+   * arguments are {@code String}, so the function validates cleanly (unlike the
+   * array-typed cosine, which Calcite's reflective UDFs can't accept).
+   *
+   * <p>This is the end-to-end smoke test for the embedding server, and a useful
+   * ad-hoc "are these two texts alike?" primitive. It is <em>not</em> scalable —
+   * it embeds both sides on every call and cannot push down. For column search,
+   * embed the query once and score against the pre-computed vectors in DuckDB.
+   */
+  public static double semanticSimilarity(String text1, String text2) {
+    if (text1 == null || text2 == null) {
+      return 0.0;
+    }
+    double[] v1 = EmbeddingService.get().embed(text1);
+    double[] v2 = EmbeddingService.get().embed(text2);
+    return computeCosineSimilarity(v1, v2);
+  }
+
+  /**
    * Core cosine similarity computation.
    */
   private static double computeCosineSimilarity(double[] v1, double[] v2) {
@@ -380,6 +400,11 @@ public class SimilarityFunctions {
     // Vector operations
     schema.add("COSINE_SIMILARITY",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "cosineSimilarity"));
+    // Text-to-text semantic similarity via the vendored Python embedding server
+    // (standard model). (String,String) validates cleanly; exercises the server
+    // end to end.
+    schema.add("SEMANTIC_SIMILARITY",
+        ScalarFunctionImpl.create(SimilarityFunctions.class, "semanticSimilarity"));
     schema.add("COSINE_DISTANCE",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "cosineDistance"));
     schema.add("EUCLIDEAN_DISTANCE",
