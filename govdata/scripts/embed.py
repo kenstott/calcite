@@ -44,6 +44,38 @@ def cmd_query(args):
     return 0
 
 
+def cmd_serve(args):
+    # Persistent embedding server for the airgapped query side. Reads one JSON
+    # request per line on stdin and writes one JSON response per line on stdout,
+    # with the model loaded exactly once. Java owns the process lifecycle.
+    #
+    #   request:  {"text": "<query>"}            (or a bare JSON string)
+    #   response: {"embedding": [<384 floats>]}  | {"error": "<message>"}
+    #
+    # Same model as ETL, so query vectors live in the stored vectors' space.
+    model = _model()
+    sys.stderr.write("embed: serve ready (%s, %d-d)\n" % (MODEL_NAME, EMBEDDING_DIM))
+    sys.stderr.flush()
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            text = req["text"] if isinstance(req, dict) else str(req)
+            vec = list(model.embed([text]))[0]
+            out = [float(x) for x in vec]
+            if len(out) != EMBEDDING_DIM:
+                raise ValueError(
+                    "model returned %d dims, expected %d" % (len(out), EMBEDDING_DIM))
+            sys.stdout.write(json.dumps({"embedding": out}))
+        except Exception as e:  # noqa: BLE001 - keep serving across bad requests
+            sys.stdout.write(json.dumps({"error": str(e)}))
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+    return 0
+
+
 def cmd_embed_parquet(args):
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -90,6 +122,10 @@ def main():
     q = sub.add_parser("query", help="print the 384-d embedding of a text as JSON")
     q.add_argument("text")
     q.set_defaults(func=cmd_query)
+
+    s = sub.add_parser("serve",
+                       help="persistent server: JSON request per line on stdin -> JSON response per line on stdout")
+    s.set_defaults(func=cmd_serve)
 
     e = sub.add_parser("embed-parquet",
                        help="embed a text column from a parquet, emit (id, embedding) parquet")
