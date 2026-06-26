@@ -66,7 +66,11 @@ public class TigerDataProvider implements StorageAwareDataProvider {
   private StorageProvider storageProvider() {
     if (storageProvider == null) {
       storageProvider = StorageProviderFactory.createForGovDataCache();
-      cacheBaseDir = StorageProviderFactory.getGovDataCacheDir();
+      // Fallback when setStorageProvider() wasn't called with the schema-scoped operand:
+      // getGovDataCacheDir() is the unscoped raw-bucket root, so scope it to "geo" here —
+      // otherwise cachePath() writes tiger data at <raw>/tiger instead of <raw>/geo/tiger.
+      cacheBaseDir =
+          storageProvider.resolvePath(StorageProviderFactory.getGovDataCacheDir(), "geo");
     }
     return storageProvider;
   }

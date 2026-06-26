@@ -204,12 +204,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (autoDownload != null && autoDownload) {
         LOGGER.info("Triggering SEC document download (autoDownload=true)");
 
-        // Set up cache directory
+        // Set up cache directory. The operand cacheDirectory is already schema-scoped
+        // (=${GOVDATA_CACHE_DIR}/sec) by the worker, so use it as-is — appending another
+        // "sec" produced the sec/sec double-nest.
         String cacheDir = (String) operand.get("cacheDirectory");
-        if (cacheDir != null && storageProvider != null) {
-          this.secCacheDirectory = storageProvider.resolvePath(cacheDir, "sec");
-        } else if (cacheDir != null) {
-          this.secCacheDirectory = cacheDir + "/sec";
+        if (cacheDir != null) {
+          this.secCacheDirectory = cacheDir;
         }
 
         // Download SEC data using DocumentETLProcessor

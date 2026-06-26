@@ -86,7 +86,11 @@ public class GhcndBulkDataProvider implements DataProvider {
   }
 
   private String cacheDir() {
-    return storageProvider().resolvePath(StorageProviderFactory.getGovDataCacheDir(), "ghcnd_bulk");
+    // getGovDataCacheDir() is the unscoped raw-bucket root; prepend the schema ("weather")
+    // so the GHCND bulk cache lands at <raw>/weather/ghcnd_bulk, not <raw>/ghcnd_bulk.
+    String weatherCache =
+        storageProvider().resolvePath(StorageProviderFactory.getGovDataCacheDir(), "weather");
+    return storageProvider().resolvePath(weatherCache, "ghcnd_bulk");
   }
 
   private String cachePath(String filename) {

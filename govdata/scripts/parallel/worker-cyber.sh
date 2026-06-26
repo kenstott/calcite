@@ -89,7 +89,7 @@ run_cyber_model() {
       "dataSource": "${schema}",
       "otxWriteMode": "${otx_write}",
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema}",
       "autoDownload": true,
       "trackerBackend": "s3",
       "trackerConfig": {
