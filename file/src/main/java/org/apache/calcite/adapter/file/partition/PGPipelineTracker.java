@@ -56,6 +56,15 @@ import java.util.Set;
 public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(PGPipelineTracker.class);
 
+  /** Marker state for a genuine empty fetch (HTTP 200, zero rows), re-evaluated against the
+   *  table high-water mark on read. See {@link S3HivePipelineTracker} for the rationale. */
+  private static final String STATE_EMPTY = "empty";
+
+  /** Years back an empty period stays pending when no later period has data. Override with the
+   *  {@code govdata.tracker.emptyRecencyHorizonYears} system property. */
+  private static final int EMPTY_RECENCY_HORIZON_YEARS =
+      Integer.getInteger("govdata.tracker.emptyRecencyHorizonYears", 3);
+
   private final String jdbcUrl;
   private final String user;
   private final String password;
@@ -274,6 +283,45 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         "complete", rowCount, null, null, null);
   }
 
+  @Override public void markProcessedEmpty(String alternateName, String sourceTable,
+      Map<String, String> keyValues) {
+    // Non-'complete' state: filterUnprocessed re-evaluates it against the table high-water
+    // mark and promotes it to 'complete' only once it is settled.
+    upsertState(flattenKeyValues(keyValues), alternateName, "incremental",
+        STATE_EMPTY, 0, null, null, null);
+  }
+
+  /** Empty (zero-row) markers for a table, as unflattened key maps. */
+  private Set<Map<String, String>> getEmptyKeyValues(String alternateName) {
+    Set<Map<String, String>> result = new HashSet<>();
+    String sql = "SELECT source_key FROM pipeline_tracker "
+        + "WHERE table_name = ? AND phase = 'incremental' AND state = '" + STATE_EMPTY + "'";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          result.add(unflattenKeyValues(rs.getString("source_key")));
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error getting empty keys for {}: {}", alternateName, e.getMessage());
+    }
+    return result;
+  }
+
+  /** Year carried by a combo's {@code year} slot, or 0 when absent/non-numeric. */
+  private static int yearOf(Map<String, String> keyValues) {
+    String y = keyValues != null ? keyValues.get("year") : null;
+    if (y == null || y.isEmpty()) {
+      return 0;
+    }
+    try {
+      return Integer.parseInt(y);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
+
   @Override public void markProcessedWithError(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern, String errorMessage) {
     upsertState(flattenKeyValues(keyValues), alternateName, "incremental",
@@ -318,6 +366,32 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       return Collections.emptySet();
     }
     Set<Map<String, String>> processed = getProcessedKeyValues(alternateName);
+    // Settle/promote empty markers against the high-water-mark year (newest period with data).
+    // An empty period at/below the HWM, aged past the recency horizon, or with no period is
+    // genuinely empty → processed (and promoted to 'complete'); an empty period above the HWM
+    // is still pending → left unprocessed so the source is re-fetched.
+    Set<Map<String, String>> empties = getEmptyKeyValues(alternateName);
+    if (!empties.isEmpty()) {
+      int hwm = 0;
+      for (Map<String, String> c : processed) {
+        int y = yearOf(c);
+        if (y > hwm) {
+          hwm = y;
+        }
+      }
+      int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
+      for (Map<String, String> e : empties) {
+        int y = yearOf(e);
+        boolean settled = y <= 0
+            || (hwm > 0 && y <= hwm)
+            || (currentYear - y > EMPTY_RECENCY_HORIZON_YEARS);
+        if (settled) {
+          processed.add(e);
+          upsertState(flattenKeyValues(e), alternateName, "incremental",
+              "complete", 0, null, null, null);
+        }
+      }
+    }
     Set<Integer> unprocessed = new HashSet<>();
     for (int i = 0; i < allCombinations.size(); i++) {
       if (!processed.contains(allCombinations.get(i))) {

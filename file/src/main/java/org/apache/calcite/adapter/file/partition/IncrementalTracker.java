@@ -70,19 +70,47 @@ public interface IncrementalTracker {
   /**
    * Marks a combination as processed with a specific row count.
    *
-   * <p>When rowCount is 0 (empty result), the entry will be subject to TTL-based
-   * requerying. When rowCount > 0, the entry is permanently marked as processed.
+   * <p>This always records a terminal {@code complete} marker. A genuinely-empty
+   * fetch (HTTP 200 with no rows) must NOT use this method — it should call
+   * {@link #markProcessedEmpty} so the period can be re-queried until the source
+   * publishes data. Use this for: rows written ({@code rowCount > 0}); a skip where
+   * prior data is still valid (e.g. freshness unchanged); or self-heal.
    *
    * @param alternateName The alternate partition name
    * @param sourceTable The source table name
    * @param keyValues Map of incremental key names to values
    * @param targetPattern The target pattern used for this combination
-   * @param rowCount Number of rows written (0 = empty, will be requeried after TTL)
+   * @param rowCount Number of rows written ({@code -1} = unknown)
    */
   default void markProcessedWithRowCount(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern, long rowCount) {
     // Default implementation ignores row count for backward compatibility
     markProcessed(alternateName, sourceTable, keyValues, targetPattern);
+  }
+
+  /**
+   * Marks a combination as a genuine empty result (a successful fetch that returned
+   * zero rows), as distinct from a terminal {@code complete}.
+   *
+   * <p>An empty marker is NOT unconditionally treated as done. Period-partitioned
+   * trackers re-evaluate it against the table's high-water mark (the newest period
+   * that has data): an empty period at or below the frontier — or older than the
+   * recency horizon — is settled (genuinely empty); an empty period above the
+   * frontier is still pending and will be re-fetched until the source publishes it.
+   * This is what lets a lagged source (e.g. an annual survey not yet released for the
+   * current year) self-heal without per-table publication-lag tuning.
+   *
+   * <p>The default implementation degrades to {@link #markProcessed} (terminal
+   * complete) so trackers that do not model emptiness keep their prior behavior.
+   *
+   * @param alternateName The alternate partition name
+   * @param sourceTable The source table name
+   * @param keyValues Map of incremental key names to values
+   */
+  default void markProcessedEmpty(String alternateName, String sourceTable,
+      Map<String, String> keyValues) {
+    // Default: trackers that don't model emptiness treat it as a normal completion.
+    markProcessed(alternateName, sourceTable, keyValues, null);
   }
 
   /**

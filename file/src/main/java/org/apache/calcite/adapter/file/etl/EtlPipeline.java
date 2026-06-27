@@ -1747,7 +1747,8 @@ public class EtlPipeline {
 
     if (!filtered.hasNext()) {
       LOGGER.info("No rows to write after year filtering (total scanned: {})", counts[0]);
-      tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, 0);
+      // Genuine empty result — mark 'empty' so a not-yet-published period is re-fetched later.
+      tracker.markProcessedEmpty(pipelineName, pipelineName, urlVariables);
       return 0;
     }
 
@@ -2028,7 +2029,14 @@ public class EtlPipeline {
           } else {
             batchRows = writer.writeBatch(data, variables);
           }
-          markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
+          // A successful fetch that wrote zero rows is a genuine empty result — mark it
+          // 'empty' (not terminal 'complete') so a period the source has not published yet
+          // is re-fetched on later runs until it appears (see PipelineTracker high-water mark).
+          if (batchRows == 0) {
+            markCombosEmpty(fetchUnit, config, pipelineName);
+          } else {
+            markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
+          }
           // Persist computed_delta HWM after a successful write
           if (finalNewComputedDeltaHwm != null) {
             incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
@@ -2145,6 +2153,21 @@ public class EtlPipeline {
     if (fetchUnit.isCoalesced()) {
       LOGGER.info("Coalesced fetch unit: marked {} fine combos processed for '{}'",
           fetchUnit.getCombosToMark().size(), pipelineName);
+    }
+  }
+
+  /**
+   * Marks every fine combo in the {@link FetchUnit} as a genuine empty result (zero rows
+   * fetched), using the same period-enriched key as {@link #markCombosProcessed}. The
+   * tracker keeps these distinct from terminal completions so a period the source has not
+   * published yet is re-fetched until it appears.
+   */
+  private void markCombosEmpty(FetchUnit fetchUnit, EtlPipelineConfig config,
+      String pipelineName) {
+    String backfillPeriod = config.getBackfillPeriod();
+    for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
+      Map<String, String> markKey = enrichWithPeriodBounds(combo, backfillPeriod);
+      incrementalTracker.markProcessedEmpty(pipelineName, pipelineName, markKey);
     }
   }
 

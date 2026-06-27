@@ -76,6 +76,17 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   /** Fixed year partition for _table_complete markers. Avoids year=* wildcard scans. */
   private static final String COMPLETION_YEAR = "0";
 
+  /** Marker state for a genuine empty fetch (HTTP 200, zero rows), as distinct from a
+   *  terminal {@code complete}. Re-evaluated against the table high-water mark on read. */
+  private static final String STATE_EMPTY = "empty";
+
+  /** How many years back an empty period stays "pending" (re-fetched) when no later period
+   *  has data yet. Past this, an empty with no high-water mark above it settles to complete
+   *  so a year the source never publishes is not retried forever. Override with the
+   *  {@code govdata.tracker.emptyRecencyHorizonYears} system property. */
+  private static final int EMPTY_RECENCY_HORIZON_YEARS =
+      Integer.getInteger("govdata.tracker.emptyRecencyHorizonYears", 3);
+
   /** Max files per batch when reading tracker files via explicit list.
    *  Tracker files are tiny (~1-5KB), so large batches are fine for data volume.
    *  DuckDB parallelizes reads across cores within each batch. */
@@ -1415,6 +1426,14 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         null, null, null);
   }
 
+  @Override public void markProcessedEmpty(String alternateName, String sourceTable,
+      Map<String, String> keyValues) {
+    String sourceKey = flattenKeyValues(keyValues);
+    // A non-'complete' state: filterUnprocessed re-evaluates it against the table
+    // high-water mark and promotes it to 'complete' only once it is settled.
+    writeState(sourceKey, alternateName, "incremental", STATE_EMPTY, 0, null, null, null);
+  }
+
   @Override public void markProcessedWithError(String alternateName, String sourceTable,
       Map<String, String> keyValues, String targetPattern, String errorMessage) {
     String sourceKey = flattenKeyValues(keyValues);
@@ -1650,21 +1669,46 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     try {
       tempDir = downloadTrackerFilesParallel(files, years.first());
       String localGlob = tempDir.getAbsolutePath() + "/*.parquet";
-      String sql = "SELECT source_key FROM ("
+      // Pull the latest 'complete' AND 'empty' markers. 'complete' keys are processed
+      // outright; 'empty' keys (genuine zero-row fetches) are settled or pending depending
+      // on the table high-water mark (computed from the 'complete' keys' years) below.
+      String sql = "SELECT source_key, state FROM ("
           + "  SELECT source_key, state, ROW_NUMBER() OVER "
           + "    (PARTITION BY source_key ORDER BY as_of DESC) AS rn "
           + "  FROM read_parquet('" + localGlob + "', union_by_name=true) "
           + "  WHERE phase = 'incremental' AND table_name = ?"
-          + ") WHERE rn = 1 AND state = 'complete'";
+          + ") WHERE rn = 1 AND state IN ('complete', '" + STATE_EMPTY + "')";
+      List<String> emptyKeys = new ArrayList<String>();
       synchronized (connectionLock) {
         try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
           stmt.setString(1, tableName);
           try (ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) {
-              result.add(rs.getString("source_key"));
+              String sk = rs.getString("source_key");
+              if (STATE_EMPTY.equals(rs.getString("state"))) {
+                emptyKeys.add(sk);
+              } else {
+                result.add(sk); // 'complete' → processed
+              }
             }
           }
         }
+      }
+      // High-water mark = newest period (year) that has data. An empty period at or below
+      // the HWM is genuinely empty (settled); above it the source simply hasn't published
+      // that period yet (pending) → leave it unprocessed so it is re-fetched. Empties older
+      // than the recency horizon settle even without a HWM above them (the source may never
+      // publish that year). Settled empties are promoted to 'complete' so they fold during
+      // compaction and stop being re-evaluated; pending empties are left for the next run.
+      List<String> settledEmpties = classifySettledEmpties(emptyKeys, result);
+      result.addAll(settledEmpties);
+      for (String sk : settledEmpties) {
+        writeState(sk, tableName, "incremental", "complete", 0, null, null, null);
+      }
+      if (!emptyKeys.isEmpty()) {
+        LOGGER.info("Tracker scan for {}: {} empty markers, {} settled (promoted), {} pending",
+            tableName, emptyKeys.size(), settledEmpties.size(),
+            emptyKeys.size() - settledEmpties.size());
       }
       LOGGER.info("Tracker scan for {}: {} processed keys from {} files in {}ms",
           tableName, result.size(), files.size(), System.currentTimeMillis() - start);
@@ -1678,6 +1722,56 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       }
     }
     return result;
+  }
+
+  /**
+   * Partition empty markers into settled (genuinely empty) versus pending. An empty period
+   * is settled when it is at or below the table high-water-mark year (the newest period that
+   * has a {@code complete} marker), or older than the recency horizon, or carries no period
+   * at all. Pending empties — a period the source has not published yet — are excluded so the
+   * caller leaves them unprocessed for re-fetch.
+   *
+   * @param emptyKeys    flattened source keys whose latest state is {@code empty}
+   * @param completeKeys flattened source keys whose latest state is {@code complete}
+   *                     (used only to derive the high-water-mark year)
+   * @return the subset of {@code emptyKeys} that is settled
+   */
+  private List<String> classifySettledEmpties(List<String> emptyKeys, Set<String> completeKeys) {
+    List<String> settled = new ArrayList<String>();
+    if (emptyKeys.isEmpty()) {
+      return settled;
+    }
+    int hwm = 0;
+    for (String sk : completeKeys) {
+      int y = yearOf(sk);
+      if (y > hwm) {
+        hwm = y;
+      }
+    }
+    int currentYear = java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
+    for (String sk : emptyKeys) {
+      int y = yearOf(sk);
+      boolean isSettled = y <= 0                                  // non-period key — no frontier
+          || (hwm > 0 && y <= hwm)                                // at/below the published frontier
+          || (currentYear - y > EMPTY_RECENCY_HORIZON_YEARS);     // aged out — source never published
+      if (isSettled) {
+        settled.add(sk);
+      }
+    }
+    return settled;
+  }
+
+  /** Year embedded in a flattened source key, or 0 when the key has no period component. */
+  private int yearOf(String sourceKey) {
+    String y = extractYear(sourceKey, System.currentTimeMillis());
+    if (y == null) {
+      return 0;
+    }
+    try {
+      return Integer.parseInt(y);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
   }
 
   private Set<Integer> allIndices(int size) {
