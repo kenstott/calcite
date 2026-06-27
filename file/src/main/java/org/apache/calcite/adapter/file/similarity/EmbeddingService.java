@@ -53,6 +53,13 @@ public final class EmbeddingService {
 
   private final String python = System.getProperty("calcite.embed.python", "python3");
   private final String script = System.getProperty("calcite.embed.script", "");
+  // A self-contained embedding-server executable (e.g. the hugot Go binary) that
+  // speaks the same JSON-per-line protocol. Preferred over python+script when set.
+  private final String command = System.getProperty("calcite.embed.command", "");
+  // Self-contained embedder "home" directory laid out as bin/hugot-embed, lib/
+  // (libonnxruntime.so), model/. This is what the jar extracts its bundled
+  // resources into at startup; EmbeddingService then sets the child's env from it.
+  private final String home = System.getProperty("calcite.embed.home", "");
 
   private Process proc;
   private BufferedWriter toProc;
@@ -70,11 +77,36 @@ public final class EmbeddingService {
     if (proc != null && proc.isAlive()) {
       return;
     }
-    if (script == null || script.isEmpty()) {
-      throw new IllegalStateException(
-          "calcite.embed.script is not set (absolute path to embed.py)");
+    ProcessBuilder pb;
+    if (command != null && !command.isEmpty()) {
+      // Explicit server binary; env (ORT_LIB_PATH, EMBED_MODEL_PATH,
+      // LD_LIBRARY_PATH) inherited from this JVM process.
+      java.util.List<String> argv = new java.util.ArrayList<String>();
+      for (String part : command.trim().split("\\s+")) {
+        if (!part.isEmpty()) {
+          argv.add(part);
+        }
+      }
+      pb = new ProcessBuilder(argv);
+    } else if (home != null && !home.isEmpty()) {
+      // Self-contained bundle home: configure the binary and its env from the
+      // <home>/{bin,lib,model} layout (what the jar extracts to at startup).
+      java.io.File h = new java.io.File(home);
+      String lib = new java.io.File(h, "lib").getAbsolutePath();
+      pb = new ProcessBuilder(new java.io.File(h, "bin/hugot-embed").getAbsolutePath());
+      java.util.Map<String, String> env = pb.environment();
+      env.put("ORT_LIB_PATH", lib);
+      env.put("EMBED_MODEL_PATH", new java.io.File(h, "model").getAbsolutePath());
+      String prevLd = env.get("LD_LIBRARY_PATH");
+      env.put("LD_LIBRARY_PATH",
+          prevLd == null || prevLd.isEmpty() ? lib : lib + java.io.File.pathSeparator + prevLd);
+    } else {
+      if (script == null || script.isEmpty()) {
+        throw new IllegalStateException(
+            "set calcite.embed.command, calcite.embed.home, or calcite.embed.script");
+      }
+      pb = new ProcessBuilder(python, script, "serve");
     }
-    ProcessBuilder pb = new ProcessBuilder(python, script, "serve");
     pb.redirectErrorStream(false);
     proc = pb.start();
     toProc = new BufferedWriter(
@@ -98,7 +130,7 @@ public final class EmbeddingService {
     }, "embed-py-stderr");
     drain.setDaemon(true);
     drain.start();
-    LOGGER.info("Started embedding server: {} {} serve", python, script);
+    LOGGER.info("Started embedding server: {}", pb.command());
   }
 
   /**
