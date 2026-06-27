@@ -59,6 +59,14 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
   private final Map<String, List<IndexEntry>> entriesByCik =
       new HashMap<String, List<IndexEntry>>();
 
+  /**
+   * Optional set of normalized 10-digit CIKs to retain while parsing. When non-null, index
+   * entries for CIKs outside this set are dropped during parse, so a CIK-sharded worker holds
+   * only its own slice of the index in memory instead of the full ~7800-filer map. Null means
+   * retain every CIK (the {@code _ALL_EDGAR_FILERS} / unscoped case).
+   */
+  private final Set<String> cikFilter;
+
   /** Tracks which (year, quarter) combinations have a current (still-growing) quarter. */
   private final int currentYear;
   private final int currentQuarter;
@@ -76,6 +84,29 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
    */
   public EdgarFullIndexCache(StorageProvider storageProvider, String cacheBasePath,
       int startYear, int endYear) {
+    this(storageProvider, cacheBasePath, startYear, endYear, null);
+  }
+
+  /**
+   * Loads quarterly full-index files for the given year range, retaining only the given CIKs.
+   *
+   * @param storageProvider Storage provider for S3 cache
+   * @param cacheBasePath   Base path for cached index files (e.g. s3://bucket/sec/full-index)
+   * @param startYear       First year to load
+   * @param endYear         Last year to load
+   * @param cikFilter       CIKs to retain (any format — normalized internally), or null for all
+   */
+  public EdgarFullIndexCache(StorageProvider storageProvider, String cacheBasePath,
+      int startYear, int endYear, Set<String> cikFilter) {
+    if (cikFilter == null) {
+      this.cikFilter = null;
+    } else {
+      Set<String> normalized = new HashSet<String>(cikFilter.size() * 2);
+      for (String c : cikFilter) {
+        normalized.add(normalizeCik(c));
+      }
+      this.cikFilter = normalized;
+    }
     LocalDate now = LocalDate.now(java.time.ZoneOffset.UTC);
     this.currentYear = now.getYear();
     this.currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
@@ -378,12 +409,8 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
   }
 
   private String downloadIndex(String url) throws IOException {
-    // SEC rate limit: 10 requests/sec
-    try {
-      Thread.sleep(100);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
+    // SEC rate limit: 10 requests/sec per IP — host-wide shared budget
+    EdgarRateLimiter.acquire();
 
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod("GET");
@@ -474,6 +501,11 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
 
       // Normalize CIK to 10-digit zero-padded
       String normalizedCik = normalizeCik(cikField);
+
+      // Drop entries outside this worker's CIK slice (CIK-sharded runs) to bound heap.
+      if (cikFilter != null && !cikFilter.contains(normalizedCik)) {
+        continue;
+      }
 
       IndexEntry entry = new IndexEntry(companyName, formType, normalizedCik,
           filingDate, accession, year, quarter);

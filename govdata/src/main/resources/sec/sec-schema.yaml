@@ -31,6 +31,7 @@ schemaName: "${SCHEMA_NAME:sec}"
 stockPriceSource: "${STOCK_PRICE_SOURCE:stooq}"
 submissionsTtlHours: "${SEC_SUBMISSIONS_TTL_HOURS:24}"
 alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
+edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:100}"
 cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"

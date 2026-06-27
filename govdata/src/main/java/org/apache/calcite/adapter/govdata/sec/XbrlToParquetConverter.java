@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.etl.IncompleteFetchException;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -4109,6 +4110,7 @@ public class XbrlToParquetConverter implements FileConverter {
     for (int attempt = 0; attempt < maxRetries; attempt++) {
       HttpURLConnection conn = null;
       try {
+        EdgarRateLimiter.acquire();
         URI uri = URI.create(urlString);
         URL url = uri.toURL();
         conn = (HttpURLConnection) url.openConnection();
@@ -4144,7 +4146,8 @@ public class XbrlToParquetConverter implements FileConverter {
           }
           LOGGER.warn("HTTP {} from {} after {} attempts - giving up",
               responseCode, urlString, maxRetries);
-          return null;
+          throw new IncompleteFetchException("HTTP " + responseCode + " after "
+              + maxRetries + " attempts (transient, will retry next run): " + urlString);
         }
 
         if (responseCode != HttpURLConnection.HTTP_OK) {
@@ -4163,6 +4166,8 @@ public class XbrlToParquetConverter implements FileConverter {
           }
           return content.toString();
         }
+      } catch (IncompleteFetchException e) {
+        throw e;
       } catch (Exception e) {
         String msg = e.getMessage();
         boolean retryable = isRetryableException(msg);
@@ -6648,6 +6653,8 @@ public class XbrlToParquetConverter implements FileConverter {
       writeMetadataToParquet(primaryDoc, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
       outputFiles.add(metadataPath);
 
+    } catch (IncompleteFetchException e) {
+      throw e;
     } catch (Exception e) {
       LOGGER.warn("Failed to process 13F form: " + e.getMessage());
     }
@@ -6728,6 +6735,8 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.warn("No 13F information table found for {}/{}", cikNumeric, accessionNoDash);
       return null;
 
+    } catch (IncompleteFetchException e) {
+      throw e;
     } catch (Exception e) {
       LOGGER.warn("Failed to download 13F info table for {}: {}", accession, e.getMessage());
       return null;

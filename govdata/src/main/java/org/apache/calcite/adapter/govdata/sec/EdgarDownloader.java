@@ -179,12 +179,9 @@ public class EdgarDownloader {
       }
     }
 
-    // Rate limiting - SEC allows 10 requests per second
-    try {
-      Thread.sleep(100); // 100ms = 10 requests per second max
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
+    // Rate limiting - SEC allows 10 requests per second per IP.
+    // Host-wide shared budget so parallel worker processes don't collectively exceed it.
+    EdgarRateLimiter.acquire();
 
     int responseCode = conn.getResponseCode();
 
@@ -416,12 +413,8 @@ public class EdgarDownloader {
         conn.setConnectTimeout(30000);
         conn.setReadTimeout(30000);
 
-        // Rate limiting
-        try {
-          Thread.sleep(100);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
+        // Rate limiting — host-wide shared per-IP budget
+        EdgarRateLimiter.acquire();
 
         int responseCode = conn.getResponseCode();
         if (responseCode == 200) {
