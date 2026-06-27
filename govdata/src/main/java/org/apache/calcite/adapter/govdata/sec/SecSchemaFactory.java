@@ -835,11 +835,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               : null;
           LOGGER.debug("Document tracker: {}", documentTracker != null ? "enabled" : "disabled (no cache)");
 
+          // Scope the index parse + downstream filter to the configured CIKs (when not
+          // _ALL_EDGAR_FILERS), so each CIK-sharded worker holds only its own slice of the
+          // ~7800-filer index in memory instead of the full map.
+          Object indexCikConfig = operand.get("ciks");
+          boolean indexAllFilers = indexCikConfig instanceof String
+              && (((String) indexCikConfig).contains("_ALL_EDGAR_FILERS")
+                  || ((String) indexCikConfig).contains("_ALL"));
+          Set<String> indexCikFilter = (!indexAllFilers && !ciks.isEmpty())
+              ? new HashSet<String>(ciks) : null;
+
           // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
           FilingIndexProvider indexCache = null;
           try {
             indexCache = new EdgarFullIndexCache(
-                storageProvider, this.secCacheDirectory, startYear, endYear);
+                storageProvider, this.secCacheDirectory, startYear, endYear, indexCikFilter);
           } catch (Exception e) {
             LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
                 e.getMessage());
@@ -850,16 +860,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             long preloadStart = System.currentTimeMillis();
             LOGGER.info("Building accession list from full-index for years {}-{}...",
                 startYear, endYear);
-            // Scope the tracker preload to the configured CIKs (when not _ALL_EDGAR_FILERS).
-            // Preloading the FULL year index (hundreds of thousands of accessions) is the bulk of
-            // per-run startup cost and stalls on slow object storage; the downstream CIK filter
-            // (below) discards the unscoped ones anyway, so preload only what will be processed.
-            Object preloadCikConfig = operand.get("ciks");
-            boolean preloadAllFilers = preloadCikConfig instanceof String
-                && (((String) preloadCikConfig).contains("_ALL_EDGAR_FILERS")
-                    || ((String) preloadCikConfig).contains("_ALL"));
-            Set<String> preloadCikSet = (!preloadAllFilers && !ciks.isEmpty())
-                ? new HashSet<String>(ciks) : null;
+            // Reuse the same CIK scope applied to the index parse above: with a scoped index the
+            // unscoped CIKs are already absent, so preload only what will be processed.
+            Set<String> preloadCikSet = indexCikFilter;
             List<String> allAccessions = new ArrayList<String>();
             for (int year = startYear; year <= endYear; year++) {
               if (preloadCikSet == null) {
