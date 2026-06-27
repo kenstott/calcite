@@ -88,24 +88,19 @@ public final class EmbeddingService {
         }
       }
       pb = new ProcessBuilder(argv);
-    } else if (home != null && !home.isEmpty()) {
-      // Self-contained bundle home: configure the binary and its env from the
-      // <home>/{bin,lib,model} layout (what the jar extracts to at startup).
-      java.io.File h = new java.io.File(home);
-      String lib = new java.io.File(h, "lib").getAbsolutePath();
-      pb = new ProcessBuilder(new java.io.File(h, "bin/hugot-embed").getAbsolutePath());
-      java.util.Map<String, String> env = pb.environment();
-      env.put("ORT_LIB_PATH", lib);
-      env.put("EMBED_MODEL_PATH", new java.io.File(h, "model").getAbsolutePath());
-      String prevLd = env.get("LD_LIBRARY_PATH");
-      env.put("LD_LIBRARY_PATH",
-          prevLd == null || prevLd.isEmpty() ? lib : lib + java.io.File.pathSeparator + prevLd);
     } else {
-      if (script == null || script.isEmpty()) {
+      // Self-contained bundle home: an explicit calcite.embed.home, or the
+      // embedder bundled in the jar (extracted to a cache dir at startup).
+      String h = (home != null && !home.isEmpty()) ? home : resolveBundledHome();
+      if (h != null) {
+        pb = processForHome(h);
+      } else if (script != null && !script.isEmpty()) {
+        pb = new ProcessBuilder(python, script, "serve");
+      } else {
         throw new IllegalStateException(
-            "set calcite.embed.command, calcite.embed.home, or calcite.embed.script");
+            "no embedder configured: set calcite.embed.command, calcite.embed.home, "
+            + "bundle embedder-bundle.zip, or set calcite.embed.script");
       }
-      pb = new ProcessBuilder(python, script, "serve");
     }
     pb.redirectErrorStream(false);
     proc = pb.start();
@@ -131,6 +126,77 @@ public final class EmbeddingService {
     drain.setDaemon(true);
     drain.start();
     LOGGER.info("Started embedding server: {}", pb.command());
+  }
+
+  /** Builds a process for a bundle home laid out as bin/hugot-embed, lib/, model/,
+   *  deriving the child's ORT_LIB_PATH / EMBED_MODEL_PATH / LD_LIBRARY_PATH from it. */
+  private static ProcessBuilder processForHome(String home) {
+    java.io.File h = new java.io.File(home);
+    String lib = new java.io.File(h, "lib").getAbsolutePath();
+    ProcessBuilder pb =
+        new ProcessBuilder(new java.io.File(h, "bin/hugot-embed").getAbsolutePath());
+    java.util.Map<String, String> env = pb.environment();
+    env.put("ORT_LIB_PATH", lib);
+    env.put("EMBED_MODEL_PATH", new java.io.File(h, "model").getAbsolutePath());
+    String prevLd = env.get("LD_LIBRARY_PATH");
+    env.put("LD_LIBRARY_PATH",
+        prevLd == null || prevLd.isEmpty() ? lib : lib + java.io.File.pathSeparator + prevLd);
+    return pb;
+  }
+
+  /**
+   * Extracts the embedder bundled in the jar (classpath resource
+   * {@code /embedder-bundle.zip}, added at package time: bin/hugot-embed, lib/,
+   * model/) into a cache directory and returns it as a home dir — making the
+   * query-time embedder fully self-contained in the single jar. Idempotent; returns
+   * null if no bundle is present (callers then fall back to embed.py).
+   */
+  private static String resolveBundledHome() {
+    java.io.InputStream in =
+        EmbeddingService.class.getResourceAsStream("/embedder-bundle.zip");
+    if (in == null) {
+      return null;
+    }
+    try {
+      java.io.File cache = new java.io.File(
+          System.getProperty("java.io.tmpdir"), "calcite-embedder");
+      java.io.File marker = new java.io.File(cache, "bin/hugot-embed");
+      if (!marker.exists()) {
+        cache.mkdirs();
+        try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(in)) {
+          java.util.zip.ZipEntry e;
+          byte[] buf = new byte[1 << 16];
+          while ((e = zis.getNextEntry()) != null) {
+            java.io.File out = new java.io.File(cache, e.getName());
+            if (e.isDirectory()) {
+              out.mkdirs();
+            } else {
+              java.io.File parent = out.getParentFile();
+              if (parent != null) {
+                parent.mkdirs();
+              }
+              try (java.io.OutputStream os = new java.io.FileOutputStream(out)) {
+                int n;
+                while ((n = zis.read(buf)) > 0) {
+                  os.write(buf, 0, n);
+                }
+              }
+            }
+          }
+        }
+        marker.setExecutable(true, false);
+      }
+      return cache.getAbsolutePath();
+    } catch (Exception ex) {
+      LOGGER.warn("Failed to extract bundled embedder: {}", ex.getMessage());
+      return null;
+    } finally {
+      try {
+        in.close();
+      } catch (Exception ignored) {
+        // ignore
+      }
+    }
   }
 
   /**
