@@ -94,6 +94,20 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Runs a table-mutating commit under both serialization layers: the in-JVM
+   * per-table monitor (serializes threads in this process) and the host-local
+   * {@link CrossProcessCommitLock} (serializes the parallel writer processes on
+   * this device). One committer per table per host. See {@link CrossProcessCommitLock}.
+   */
+  private void underCommitLock(Runnable commitBody) {
+    synchronized (commitLock()) {
+      try (CrossProcessCommitLock.Handle xlock = CrossProcessCommitLock.acquire(table.location())) {
+        commitBody.run();
+      }
+    }
+  }
+
+  /**
    * Creates a writer for the specified Iceberg table.
    */
   public IcebergTableWriter(Table table, StorageProvider storageProvider) {
@@ -183,11 +197,11 @@ public class IcebergTableWriter {
     for (DataFile dataFile : dataFiles) {
       append.appendFile(dataFile);
     }
-    synchronized (commitLock()) {
+    underCommitLock(() -> {
       append.commit();
       // Ensure version-hint.text exists after commit (repairs orphaned tables)
       ensureVersionHint();
-    }
+    });
 
     LOGGER.info("Successfully committed {} files to Iceberg table {}", dataFiles.size(), table.name());
   }
@@ -218,11 +232,11 @@ public class IcebergTableWriter {
     for (DataFile dataFile : allDataFiles) {
       append.appendFile(dataFile);
     }
-    synchronized (commitLock()) {
+    underCommitLock(() -> {
       append.commit();
       // Ensure version-hint.text exists after commit (repairs orphaned tables)
       ensureVersionHint();
-    }
+    });
 
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Bulk commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
@@ -244,10 +258,10 @@ public class IcebergTableWriter {
     for (DataFile dataFile : allDataFiles) {
       replace.addFile(dataFile);
     }
-    synchronized (commitLock()) {
+    underCommitLock(() -> {
       replace.commit();
       ensureVersionHint();
-    }
+    });
     long elapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("Replace-partitions commit complete: {} files in {}ms", allDataFiles.size(), elapsed);
   }
@@ -544,11 +558,12 @@ public class IcebergTableWriter {
     }
 
     LOGGER.info("Deleting partition with filter: {}", partitionFilter);
-    synchronized (commitLock()) {
+    final org.apache.iceberg.expressions.Expression deleteFilter = filter;
+    underCommitLock(() -> {
       table.newDelete()
-          .deleteFromRowFilter(filter)
+          .deleteFromRowFilter(deleteFilter)
           .commit();
-    }
+    });
   }
 
   /**
@@ -873,11 +888,11 @@ public class IcebergTableWriter {
 
     // Expire old snapshots
     try {
-      synchronized (commitLock()) {
+      underCommitLock(() -> {
         table.expireSnapshots()
             .expireOlderThan(expireSnapshotsMillis)
             .commit();
-      }
+      });
       LOGGER.info("Expired snapshots older than {} days", expireSnapshotsDays);
     } catch (Exception e) {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
@@ -1068,12 +1083,12 @@ public class IcebergTableWriter {
         }
         if (expiredCount > 0) {
           // Expire all snapshots older than now (keeps only current)
-          synchronized (commitLock()) {
+          underCommitLock(() -> {
             table.expireSnapshots()
                 .expireOlderThan(System.currentTimeMillis())
                 .retainLast(1)
                 .commit();
-          }
+          });
           LOGGER.info("Expired {} old snapshots after compaction", expiredCount);
         }
       } catch (Exception e) {
@@ -1224,9 +1239,9 @@ public class IcebergTableWriter {
     for (DataFile newFile : newFiles) {
       rewrite.addFile(newFile);
     }
-    synchronized (commitLock()) {
+    underCommitLock(() -> {
       rewrite.commit();
-    }
+    });
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
   }
