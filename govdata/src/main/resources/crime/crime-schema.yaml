@@ -1791,7 +1791,11 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 0
+        # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
+        # daily publish-year window to that vintage so daily fetches the most-recent published
+        # year; historical covers the back catalogue. URL uses {effective_year}; the partition
+        # stores effective_year (the data vintage), not the publish year.
+        dataLag: 2
 
     columns:
       - name: year
@@ -1865,10 +1869,16 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.ojp.gov/bjsdataset/v1/gcuy-rt5g.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/gcuy-rt5g.json?$where=year='{effective_year}'"
       method: GET
       response:
         format: json
+        # SODA caps a single request at 50k rows; page through $offset for the full year.
+        pagination:
+          type: OFFSET
+          limitParam: "$limit"
+          offsetParam: "$offset"
+          pageSize: 50000
       rateLimit:
         requestsPerSecond: 10.0
         retryOn: [429, 503]
@@ -1885,6 +1895,8 @@ partitionedTables:
         pattern: "type=ncvs/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_personal
@@ -1914,7 +1926,11 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 0
+        # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
+        # daily publish-year window to that vintage so daily fetches the most-recent published
+        # year; historical covers the back catalogue. URL uses {effective_year}; the partition
+        # stores effective_year (the data vintage), not the publish year.
+        dataLag: 2
 
     columns:
       - name: year
@@ -1976,10 +1992,16 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.ojp.gov/bjsdataset/v1/r4j4-fdwx.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/r4j4-fdwx.json?$where=year='{effective_year}'"
       method: GET
       response:
         format: json
+        # SODA caps a single request at 50k rows; page through $offset for the full year.
+        pagination:
+          type: OFFSET
+          limitParam: "$limit"
+          offsetParam: "$offset"
+          pageSize: 50000
       rateLimit:
         requestsPerSecond: 10.0
         retryOn: [429, 503]
@@ -1996,6 +2018,8 @@ partitionedTables:
         pattern: "type=ncvs_pop/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_personal_pop
@@ -2024,7 +2048,11 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 0
+        # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
+        # daily publish-year window to that vintage so daily fetches the most-recent published
+        # year; historical covers the back catalogue. URL uses {effective_year}; the partition
+        # stores effective_year (the data vintage), not the publish year.
+        dataLag: 2
 
     columns:
       - name: year
@@ -2074,10 +2102,16 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.ojp.gov/bjsdataset/v1/gkck-euys.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/gkck-euys.json?$where=year='{effective_year}'"
       method: GET
       response:
         format: json
+        # SODA caps a single request at 50k rows; page through $offset for the full year.
+        pagination:
+          type: OFFSET
+          limitParam: "$limit"
+          offsetParam: "$offset"
+          pageSize: 50000
       rateLimit:
         requestsPerSecond: 10.0
         retryOn: [429, 503]
@@ -2094,6 +2128,8 @@ partitionedTables:
         pattern: "type=ncvs_hh/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_household
@@ -2122,7 +2158,11 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 0
+        # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
+        # daily publish-year window to that vintage so daily fetches the most-recent published
+        # year; historical covers the back catalogue. URL uses {effective_year}; the partition
+        # stores effective_year (the data vintage), not the publish year.
+        dataLag: 2
 
     columns:
       - name: year
@@ -2160,10 +2200,16 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.ojp.gov/bjsdataset/v1/ya4e-n9zp.json?$where=year='{year}'&$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/ya4e-n9zp.json?$where=year='{effective_year}'"
       method: GET
       response:
         format: json
+        # SODA caps a single request at 50k rows; page through $offset for the full year.
+        pagination:
+          type: OFFSET
+          limitParam: "$limit"
+          offsetParam: "$offset"
+          pageSize: 50000
       rateLimit:
         requestsPerSecond: 10.0
         retryOn: [429, 503]
@@ -2180,6 +2226,8 @@ partitionedTables:
         pattern: "type=ncvs_hh_pop/year=*/"
       partition:
         columns: [type, year]
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
         tableName: bjs_ncvs_household_pop
