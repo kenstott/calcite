@@ -51,7 +51,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
+# Script lives in <project>/.claude/scripts; the .env.* files live in <project>/govdata.
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+GOVDATA_HOME="${GOVDATA_HOME:-$PROJECT_ROOT/govdata}"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 SCHEMA=""
@@ -140,7 +142,9 @@ if [[ "$ENV_NAME" == "dq" ]]; then
 else
   PARQUET_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
   TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
-  RCLONE_REMOTE="r2"
+  # Prod remote comes from .env.prod (GOVDATA_RCLONE_REMOTE); default to the real
+  # prod R2 remote when unset. Lets a local prod-on-MinIO setup point at its own remote.
+  RCLONE_REMOTE="${GOVDATA_RCLONE_REMOTE:-r2}"
 fi
 
 s3_to_rclone() {

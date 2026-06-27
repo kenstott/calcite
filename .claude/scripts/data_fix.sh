@@ -34,7 +34,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
+# Script lives in <project>/.claude/scripts; the .env.* files and scripts/ live in <project>/govdata.
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+GOVDATA_HOME="${GOVDATA_HOME:-$PROJECT_ROOT/govdata}"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 SCHEMA=""
