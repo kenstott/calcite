@@ -49,10 +49,12 @@ load_env() {
     local _pre_cache_dir="${GOVDATA_CACHE_DIR+set}"
     local _pre_parquet_dir="${GOVDATA_PARQUET_DIR+set}"
     local _pre_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET+set}"
+    local _pre_raw_cache="${ETL_LOCAL_RAW_CACHE+set}"
     local _saved_start_year="${GOVDATA_START_YEAR:-}"
     local _saved_cache_dir="${GOVDATA_CACHE_DIR:-}"
     local _saved_parquet_dir="${GOVDATA_PARQUET_DIR:-}"
     local _saved_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET:-}"
+    local _saved_raw_cache="${ETL_LOCAL_RAW_CACHE:-}"
 
     set -a
     # shellcheck disable=SC1090
@@ -70,6 +72,9 @@ load_env() {
     [ "${_pre_cache_dir}" = "set" ] && export GOVDATA_CACHE_DIR="$_saved_cache_dir"
     [ "${_pre_parquet_dir}" = "set" ] && export GOVDATA_PARQUET_DIR="$_saved_parquet_dir"
     [ "${_pre_tracker_bucket}" = "set" ] && export CALCITE_TRACKER_S3_BUCKET="$_saved_tracker_bucket"
+    # ETL_LOCAL_RAW_CACHE: .env.prod hardcodes /tmp; preserve a caller/overlay override
+    # (e.g. .env.preprod's durable ext4 path) so worker staging survives reboots/crashes.
+    [ "${_pre_raw_cache}" = "set" ] && export ETL_LOCAL_RAW_CACHE="$_saved_raw_cache"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
