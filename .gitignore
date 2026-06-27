@@ -129,3 +129,4 @@ runs/
 *.pfx
 *.pyc
 *.out
+*.wal

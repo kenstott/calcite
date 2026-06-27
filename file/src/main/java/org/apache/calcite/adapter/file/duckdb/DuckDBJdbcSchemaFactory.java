@@ -209,10 +209,22 @@ public class DuckDBJdbcSchemaFactory {
         dbName = null;  // DuckDB will use default catalog name
         LOGGER.info("Creating new DuckDB database: {} for schema: {}", catalogPath, schemaName);
       } else {
-        // Fallback to named in-memory database
+        // Ephemeral schema: determineCatalogPath returned no persistent catalog (e.g. a temp source
+        // directory). A bare relative database name makes DuckDB create the database file AND its
+        // .wal in the process working directory (the repo root) — litter that survives the run.
+        // Place it under the operating cache directory's .duckdb subdir instead. A real file (not an
+        // unnamed in-memory db) is required here: the kept-alive setup connection and the per-query
+        // connections created below reconnect to this same URL and must share one catalog/view set —
+        // separate unnamed :memory: connections would each get an empty database. The operating
+        // cache directory is guaranteed non-null on this branch (checked above). DuckDB derives the
+        // catalog name from the file's base name, so dbName still matches.
+        File duckdbDir = new File(fileSchema.getOperatingCacheDirectory(), ".duckdb");
+        if (!duckdbDir.exists()) {
+          duckdbDir.mkdirs();
+        }
         dbName = "calcite_" + schemaName + "_" + System.nanoTime();
-        jdbcUrl = "jdbc:duckdb:" + dbName;
-        LOGGER.info("Using ephemeral in-memory DuckDB database: {}", dbName);
+        jdbcUrl = "jdbc:duckdb:" + new File(duckdbDir, dbName).getAbsolutePath();
+        LOGGER.info("Using ephemeral DuckDB database under operating dir: {}", jdbcUrl);
       }
 
       // Create initial connection for setup
