@@ -90,11 +90,22 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       throws IOException {
 
     String tableName = config.getName();
-    String year = variables.get("year");
+    // Download, gate, and parse by the data VINTAGE, not the publish year. The framework injects
+    // effective_year = year - dataLag for every YEAR_RANGE dimension (DimensionIterator line 187) and
+    // partitions by it (materialize.partition.valueSource.year = effective_year). TIGER directories
+    // are named by vintage (TIGER2025/tl_2025_us_state.zip), so using the publish year (e.g. 2026)
+    // requests an unpublished/wrong-vintage directory — the gate then skips and 0 rows are written.
+    // effective_year is always present for these YEAR_RANGE-backed tables; fall back to year only if
+    // a table somehow has no YEAR_RANGE companion (then year already is the effective vintage).
+    String publishYear = variables.get("year");
+    String year = variables.get("effective_year");
+    if (year == null || year.isEmpty()) {
+      year = publishYear;
+    }
     String stateFips = variables.get("state_fips");
 
-    LOGGER.info("TigerDataProvider: Fetching {} for year={}, state={}",
-        tableName, year, stateFips);
+    LOGGER.info("TigerDataProvider: Fetching {} for vintage={} (publishYear={}), state={}",
+        tableName, year, publishYear, stateFips);
 
     // Catalog gate FIRST: never request a TIGER vintage Census has not published yet. An unpublished
     // vintage directory (e.g. TIGER2026 before its autumn release) does not 404 cleanly — the host

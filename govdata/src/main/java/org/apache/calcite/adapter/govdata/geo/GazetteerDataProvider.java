@@ -68,9 +68,18 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
       throws IOException {
 
     String tableName = config.getName();
-    String year = variables.get("year");
+    // Download by the data VINTAGE (effective_year = year - dataLag), not the publish year. The
+    // framework injects effective_year for every YEAR_RANGE dimension (DimensionIterator line 187)
+    // and partitions by it; Gazetteer files are named by vintage (2025_Gazetteer/2025_Gaz_*), so the
+    // publish year (e.g. 2026) 404s as "not yet published". Fall back to year only if no companion.
+    String publishYear = variables.get("year");
+    String year = variables.get("effective_year");
+    if (year == null || year.isEmpty()) {
+      year = publishYear;
+    }
 
-    LOGGER.info("GazetteerDataProvider: Fetching {} for year={}", tableName, year);
+    LOGGER.info("GazetteerDataProvider: Fetching {} for vintage={} (publishYear={})",
+        tableName, year, publishYear);
 
     String url = buildDownloadUrl(tableName, year);
     if (url == null) {
