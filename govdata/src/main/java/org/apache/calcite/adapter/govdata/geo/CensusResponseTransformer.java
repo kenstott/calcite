@@ -249,6 +249,20 @@ public class CensusResponseTransformer implements ResponseTransformer {
       headers[i] = headerRow.get(i).asText();
     }
 
+    // Vintage-varying request variables (e.g. the Nonemployer Statistics NAICS variable
+    // NAICS2007/2012/2017/2022, injected per data reference year by
+    // NonemployerNaicsDimensionResolver) are renamed to a stable canonical header so the
+    // materialization column expression is vintage-independent. Only applies to pipelines
+    // that declare a naics_var dimension; cbp and the rest are unaffected.
+    String naicsVar = context.getDimensionValues().get("naics_var");
+    if (naicsVar != null) {
+      for (int i = 0; i < headers.length; i++) {
+        if (naicsVar.equals(headers[i])) {
+          headers[i] = "NAICS";
+        }
+      }
+    }
+
     // Convert data rows to objects
     ArrayNode resultArray = MAPPER.createArrayNode();
     for (int rowIndex = 1; rowIndex < table.size(); rowIndex++) {

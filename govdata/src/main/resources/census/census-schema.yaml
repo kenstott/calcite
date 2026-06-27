@@ -2278,20 +2278,29 @@ partitionedTables:
         - pep
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
+        # Floor is a literal 2022 (NOT ${GOVDATA_START_YEAR}): with dataLag=3 this yields data
+        # years 2019-2023 — the only range the PEP API serves cleanly (charv vintage 2023 covers
+        # 2020-2023; pep/population for 2019). Pre-2019 vintages use different variable names and
+        # are intentionally excluded. Bump the floor when CURRENT_VINTAGE advances in the resolver.
+        start: 2022
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 1
+        dataLag: 3
         descending: true
       geography: *all_geographies
-      # Dynamic dimensions resolved based on year - uses hooks.dimensionResolver
+      # Dynamic dimensions resolved per data year by CensusPepDimensionResolver. dataLag here
+      # MUST match the year dimension's dataLag above — the resolver reads it to derive the data year.
       endpoint:
         type: custom
+        dataLag: 3
       variables:
         type: custom
+        dataLag: 3
       vintage:
         type: custom
+        dataLag: 3
       year_filter:
         type: custom
+        dataLag: 3
 
     columns:
       - *name_column
@@ -2361,7 +2370,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 2
+        dataLag: 3
         descending: true
       geography: *all_geographies
 
@@ -2685,7 +2694,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 1
+        dataLag: 2
         descending: true
       geography: *all_geographies
 
@@ -2771,7 +2780,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 2
+        dataLag: 3
         descending: true
       geography: *all_geographies
 
@@ -2852,7 +2861,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 2
+        dataLag: 3
         descending: true
       geography:
         - state
@@ -2942,7 +2951,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 2
+        dataLag: 3
         descending: true
       geography:
         - state
@@ -3029,9 +3038,16 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 2
+        dataLag: 3
         descending: true
       geography: *all_geographies
+      # The NAICS request variable is renamed with each Census NAICS vintage, so a single
+      # hard-coded name only retrieves a five-year slice. NonemployerNaicsDimensionResolver
+      # picks NAICS2007/2012/2017/2022 by data reference year (year - dataLag); dataLag here
+      # MUST match the year dimension's dataLag above.
+      naics_var:
+        type: custom
+        dataLag: 3
 
     columns:
       - *name_column
@@ -3041,8 +3057,8 @@ partitionedTables:
       - name: naics_code
         type: string
         nullable: true
-        expression: 'src."NAICS2017"'
-        comment: NAICS industry code
+        expression: 'src."NAICS"'
+        comment: NAICS industry code (canonical header; source variable is the vintage-specific NAICS20xx, normalized by CensusResponseTransformer)
       - name: establishments
         type: long
         nullable: true
@@ -3057,7 +3073,7 @@ partitionedTables:
     source:
       type: http
       # Uses NESTAB and NRCPTOT (N prefix for nonemployer)
-      url: "https://api.census.gov/data/{effective_year}/nonemp?get=NAME,NAICS2017,NESTAB,NRCPTOT&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/nonemp?get=NAME,{naics_var},NESTAB,NRCPTOT&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -3069,6 +3085,7 @@ partitionedTables:
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.census.NonemployerNaicsDimensionResolver"
 
     materialize:
       format: iceberg
