@@ -170,27 +170,7 @@ public class DimensionIterator {
     }
 
     // For every YEAR_RANGE dimension inject effective_year = year - dataLag into each combination.
-    // When dataLag=0, effective_year equals year (no distinction). When dataLag>0, effective_year
-    // is the actual data year; the iteration variable year is the publish year.
-    // URL templates use ${effective_year} for APIs that take the data year (most schemas).
-    // The Iceberg writer uses effective_year as the year partition key.
-    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
-      DimensionConfig config = entry.getValue();
-      if (config.getType() != DimensionType.YEAR_RANGE) {
-        continue;
-      }
-      int dataLag = config.getDataLag() != null ? config.getDataLag() : 0;
-      for (Map<String, String> combo : combinations) {
-        String yearVal = combo.get(entry.getKey());
-        if (yearVal != null) {
-          try {
-            combo.put("effective_year", String.valueOf(Integer.parseInt(yearVal) - dataLag));
-          } catch (NumberFormatException e) {
-            // non-numeric year value; skip companion injection
-          }
-        }
-      }
-    }
+    injectEffectiveYear(combinations, dimensions);
 
     // For every monthlyYTD YEAR_RANGE dimension, inject a per-year `month` companion so a
     // monthly-cadence feed fetches one year-end file per completed year (month=12) and a
@@ -285,6 +265,13 @@ public class DimensionIterator {
     }
     List<Map<String, String>> prefixCombinations = expandStandard(prefixDimensions);
     LOGGER.info("Prefix expansion (non-CUSTOM): {} combinations", prefixCombinations.size());
+
+    // The streaming/partition path (expandPartition) bypasses expand()'s companion injection, so
+    // inject effective_year into the year-bearing prefix combos here. CUSTOM-resolver tables (e.g.
+    // state_legislative_lower, voting_districts) cross-product the resolved values onto these prefix
+    // combos, so the companion propagates to every fetch. Without it the provider sees only the raw
+    // publish year and a lagged-annual table gate-skips the current year (daily writes 0 rows).
+    injectEffectiveYear(prefixCombinations, prefixDimensions);
 
     // Identify context key from properties or fallback
     String contextKey = null;
@@ -401,6 +388,37 @@ public class DimensionIterator {
         plan.getContextKey(), contextValue, currentCombos.size(), customDimNames.size());
 
     return new DimensionPartition(partContext, currentCombos);
+  }
+
+  /**
+   * Injects {@code effective_year = year - dataLag} into each combination for every YEAR_RANGE
+   * dimension. When dataLag=0 effective_year equals year; when dataLag&gt;0 effective_year is the
+   * actual data year while the iteration variable {@code year} is the publish year. URL templates
+   * use {@code ${effective_year}} for APIs that take the data year (most schemas) and the Iceberg
+   * writer uses it as the year partition key.
+   *
+   * <p>Called from both {@link #expand} (standard path) and {@link #planPartitions} (the CUSTOM /
+   * streaming path) — the latter would otherwise emit fetches carrying only the raw publish year.
+   */
+  private static void injectEffectiveYear(List<Map<String, String>> combinations,
+      Map<String, DimensionConfig> dimensions) {
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      DimensionConfig config = entry.getValue();
+      if (config.getType() != DimensionType.YEAR_RANGE) {
+        continue;
+      }
+      int dataLag = config.getDataLag() != null ? config.getDataLag() : 0;
+      for (Map<String, String> combo : combinations) {
+        String yearVal = combo.get(entry.getKey());
+        if (yearVal != null) {
+          try {
+            combo.put("effective_year", String.valueOf(Integer.parseInt(yearVal) - dataLag));
+          } catch (NumberFormatException e) {
+            // non-numeric year value; skip companion injection
+          }
+        }
+      }
+    }
   }
 
   /**
