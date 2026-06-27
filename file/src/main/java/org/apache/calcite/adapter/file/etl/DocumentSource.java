@@ -237,7 +237,7 @@ public class DocumentSource {
    */
   private String fetchUrl(String urlStr) throws IOException {
     for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      enforceRateLimit();
+      enforceRateLimit(urlStr);
 
       HttpURLConnection conn = null;
       try {
@@ -313,7 +313,7 @@ public class DocumentSource {
    */
   private void downloadToPath(String urlStr, String targetPath) throws IOException {
     for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      enforceRateLimit();
+      enforceRateLimit(urlStr);
 
       HttpURLConnection conn = null;
       try {
@@ -396,7 +396,16 @@ public class DocumentSource {
    * Uses a global lock so all DocumentSource instances share one rate limiter,
    * preventing multiple threads from exceeding EDGAR's 10 req/sec limit.
    */
-  private void enforceRateLimit() {
+  private void enforceRateLimit(String urlStr) {
+    // sec.gov enforces ~10 req/s PER IP across all endpoints (data.sec.gov/submissions,
+    // www.sec.gov/Archives, full-index, ...). Route those through the host-wide,
+    // cross-process EdgarRateLimiter so parallel worker JVMs on one IP share a single
+    // budget. The in-JVM lock below only bounds threads within this process, which is
+    // insufficient when multiple worker processes run on the same IP.
+    if (EdgarRateLimiter.isSecUrl(urlStr)) {
+      EdgarRateLimiter.acquire();
+      return;
+    }
     synchronized (GLOBAL_RATE_LOCK) {
       long now = System.currentTimeMillis();
       long elapsed = now - globalLastRequestTime;

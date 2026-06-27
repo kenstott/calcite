@@ -8,9 +8,7 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
-package org.apache.calcite.adapter.govdata.sec;
-
-import org.apache.calcite.adapter.file.etl.ModelOperand;
+package org.apache.calcite.adapter.file.etl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,15 +23,17 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
 /**
- * Host-local, cross-process rate limiter for EDGAR HTTP access.
+ * Host-local, cross-process rate limiter for EDGAR (sec.gov) HTTP access.
  *
- * <p>SEC enforces ~10 requests/second <em>per IP</em>. The previous throttle was
- * a per-process {@code Thread.sleep(100)}, so N parallel worker processes on one
- * host (= one IP) collectively issued up to N×10 req/s and tripped EDGAR's limit,
- * producing 429s that sometimes exhausted retries and silently dropped data.
+ * <p>SEC enforces ~10 requests/second <em>per IP</em>, across all sec.gov
+ * endpoints (www.sec.gov/Archives, data.sec.gov/submissions, full-index, ...).
+ * Per-process throttles (a {@code Thread.sleep} or an in-JVM "global" lock) do
+ * not bound this: N worker processes on one host (= one IP) each pace
+ * themselves and collectively issue up to N×10 req/s, tripping EDGAR's limit
+ * and producing 429s that can exhaust retries and drop data.
  *
- * <p>This limiter paces <em>all</em> EDGAR requests from every process and thread
- * on the host through a single shared budget. It keeps one monotonically
+ * <p>This limiter paces <em>all</em> sec.gov requests from every process and
+ * thread on the host through a single shared budget. It keeps one monotonically
  * advancing "next slot" timestamp in a small file under the host temp dir,
  * guarded by an OS file lock so the read-compute-write is atomic across
  * processes. Each caller claims the next free slot (spaced {@code intervalMs}
@@ -41,9 +41,11 @@ import java.nio.file.StandardOpenOption;
  * only briefly and aggregate throughput is bounded to one request per interval
  * across the whole host.
  *
- * <p>The interval is read from the model ({@code sec.edgarRateLimitMs}, default
- * 100ms = 10 req/s). Host-scoped is exactly IP-scoped under the deployment model
- * where each host has its own egress IP.
+ * <p>Lives in the file ETL layer so both the SEC adapter downloaders (govdata)
+ * and the generic {@link DocumentSource} fetch path (file) share one budget.
+ * The interval is read from the model ({@code sec.edgarRateLimitMs}, default
+ * 100ms = 10 req/s). Host-scoped is exactly IP-scoped under the deployment
+ * model where each host has its own egress IP.
  */
 public final class EdgarRateLimiter {
 
@@ -63,9 +65,19 @@ public final class EdgarRateLimiter {
     return v > 0 ? v : DEFAULT_INTERVAL_MS;
   }
 
+  /** Returns true if the URL targets a sec.gov host (so it shares the budget). */
+  public static boolean isSecUrl(String url) {
+    if (url == null) {
+      return false;
+    }
+    String lower = url.toLowerCase(java.util.Locale.ROOT);
+    return lower.contains("sec.gov/") || lower.contains("://sec.gov")
+        || lower.contains(".sec.gov");
+  }
+
   /**
    * Blocks until this caller's slot in the host-wide EDGAR request budget, then
-   * returns. Call immediately before each EDGAR HTTP request.
+   * returns. Call immediately before each sec.gov HTTP request.
    */
   public static void acquire() {
     long interval = intervalMs();
