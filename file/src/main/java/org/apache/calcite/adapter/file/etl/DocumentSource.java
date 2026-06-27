@@ -77,12 +77,6 @@ public class DocumentSource {
   private static final int MAX_RETRIES = 3;
   private static final long INITIAL_RETRY_DELAY_MS = 1000;
 
-  // Global rate limiter — shared across all DocumentSource instances so that
-  // multiple threads (parallel entity processing) collectively respect EDGAR's
-  // 10 req/sec limit instead of each instance running its own timer.
-  private static long globalLastRequestTime = 0;
-  private static final Object GLOBAL_RATE_LOCK = new Object();
-
   /**
    * Creates a DocumentSource from configuration.
    *
@@ -397,28 +391,31 @@ public class DocumentSource {
    * preventing multiple threads from exceeding EDGAR's 10 req/sec limit.
    */
   private void enforceRateLimit(String urlStr) {
-    // sec.gov enforces ~10 req/s PER IP across all endpoints (data.sec.gov/submissions,
-    // www.sec.gov/Archives, full-index, ...). Route those through the host-wide,
-    // cross-process EdgarRateLimiter so parallel worker JVMs on one IP share a single
-    // budget. The in-JVM lock below only bounds threads within this process, which is
-    // insufficient when multiple worker processes run on the same IP.
-    if (EdgarRateLimiter.isSecUrl(urlStr)) {
-      EdgarRateLimiter.acquire();
-      return;
-    }
-    synchronized (GLOBAL_RATE_LOCK) {
-      long now = System.currentTimeMillis();
-      long elapsed = now - globalLastRequestTime;
+    // Host-wide, cross-process pacing keyed by the request's registrable domain, so
+    // sibling hosts (e.g. data.sec.gov + www.sec.gov) and parallel worker JVMs on one
+    // host share a single per-domain budget. A per-JVM lock cannot bound multiple
+    // worker processes on the same IP.
+    CrossProcessRateLimiter.acquire(rateLimitKey(urlStr), minRequestIntervalMs);
+  }
 
-      if (elapsed < minRequestIntervalMs) {
-        try {
-          Thread.sleep(minRequestIntervalMs - elapsed);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
+  /**
+   * Rate-limit budget key for a URL: its registrable domain (last two labels), so all
+   * hosts under one domain share a single host-wide budget (e.g. every {@code *.sec.gov}
+   * endpoint collapses to {@code sec.gov}, matching the SEC adapter's budget key).
+   */
+  private static String rateLimitKey(String urlStr) {
+    try {
+      String host = URI.create(urlStr).getHost();
+      if (host == null || host.isEmpty()) {
+        return "default";
       }
-
-      globalLastRequestTime = System.currentTimeMillis();
+      String[] labels = host.split("\\.");
+      if (labels.length >= 2) {
+        return labels[labels.length - 2] + "." + labels[labels.length - 1];
+      }
+      return host;
+    } catch (RuntimeException e) {
+      return "default";
     }
   }
 

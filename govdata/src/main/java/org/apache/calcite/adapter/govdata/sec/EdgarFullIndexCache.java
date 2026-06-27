@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
-import org.apache.calcite.adapter.file.etl.EdgarRateLimiter;
 import org.apache.calcite.adapter.file.etl.FilingIndexProvider;
 import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
