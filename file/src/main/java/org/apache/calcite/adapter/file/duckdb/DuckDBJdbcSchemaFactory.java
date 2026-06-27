@@ -1202,17 +1202,42 @@ public class DuckDBJdbcSchemaFactory {
               LOGGER.info("Creating DuckDB view for Iceberg table: \"{}.{}\" -> {}",
                          duckdbSchema, tableName, icebergTablePath);
 
-              try {
-                conn.createStatement().execute(sql);
-                viewCount++;
-                LOGGER.info("✅ Created Iceberg view: {}.{}", duckdbSchema, tableName);
-              } catch (SQLException scanError) {
-                // iceberg_scan failed - Iceberg table doesn't exist or is corrupted
-                // No fallbacks - fail fast so the error is visible
-                LOGGER.error("Failed to create Iceberg view for table '{}' at '{}': {}",
-                    tableName, icebergTablePath, scanError.getMessage());
-                throw new RuntimeException("Iceberg table '" + tableName + "' at '" + icebergTablePath +
-                    "' does not exist or is corrupted. Run ETL to create the table.", scanError);
+              // Contention with a concurrently-writing ETL pool is transient (a
+              // snapshot expired between metadata-read and scan -> HTTP 404, or the
+              // .aperio metadata is mid-commit). Retry with exponential backoff so a
+              // live write doesn't fail the view; each attempt re-reads the current
+              // Iceberg snapshot. Only after retries are exhausted do we skip the
+              // table (log, continue) rather than abort the whole schema/connection.
+              final int maxAttempts = 5;
+              SQLException lastError = null;
+              for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                  conn.createStatement().execute(sql);
+                  viewCount++;
+                  LOGGER.info("✅ Created Iceberg view: {}.{}", duckdbSchema, tableName);
+                  lastError = null;
+                  break;
+                } catch (SQLException scanError) {
+                  lastError = scanError;
+                  if (attempt < maxAttempts) {
+                    long backoffMs = 250L * (1L << (attempt - 1)); // 250,500,1000,2000
+                    LOGGER.warn("iceberg_scan view for {}.{} failed (attempt {}/{}), "
+                        + "retrying in {}ms: {}", duckdbSchema, tableName, attempt,
+                        maxAttempts, backoffMs, scanError.getMessage());
+                    try {
+                      Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                      Thread.currentThread().interrupt();
+                      break;
+                    }
+                  }
+                }
+              }
+              if (lastError != null) {
+                // Persistent after retries: the table is genuinely absent/corrupt.
+                // Skip it (do not abort the schema), matching the parquet branch.
+                LOGGER.warn("Skipping Iceberg view for '{}' at '{}' after {} attempts: {}",
+                    tableName, icebergTablePath, maxAttempts, lastError.getMessage());
               }
             }
           } catch (SQLException e) {
