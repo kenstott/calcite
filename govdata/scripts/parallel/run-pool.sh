@@ -109,7 +109,7 @@ if [ $# -eq 0 ]; then
   echo "    historical — backfill workers: all SEC years (2010→current), all schemas (historical/initial)"
   echo "    all        — union of historical + daily"
   echo ""
-  echo "  Valid schemas: sec_primary, sec_secondary, sec_prices, sec, econ, census, geo, crime, weather,"
+  echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
   echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
@@ -155,6 +155,18 @@ _add_sec_secondary_years() {
   done
 }
 
+# Helper: append all historical SEC 13F year slots (separate parse-heavy slot)
+_add_sec_13f_years() {
+  local cy
+  cy=$(date +%Y)
+  queue+=("sec_13f:${cy}")
+  local y=$((cy - 1))
+  while [ "$y" -ge 2010 ]; do
+    queue+=("sec_13f:${y}")
+    y=$((y - 1))
+  done
+}
+
 for arg in "$@"; do
   case "$arg" in
 
@@ -163,6 +175,7 @@ for arg in "$@"; do
       _add_sec_primary_years
       queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
       _add_sec_secondary_years
+      _add_sec_13f_years
       queue+=(sec_prices:historical ref:daily fec:historical fedregister:historical)
       queue+=(cyber_vuln:historical cyber_threat:historical cyber_vuln:daily cyber_threat:daily)
       queue+=(health:historical health:daily)
@@ -178,6 +191,7 @@ for arg in "$@"; do
       _add_sec_primary_years
       queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
       _add_sec_secondary_years
+      _add_sec_13f_years
       queue+=(sec_prices:historical ref:historical fec:historical fedregister:historical)
       queue+=(cyber_vuln:historical cyber_threat:historical health:historical edu:historical energy:historical)
       queue+=(patents:historical lands:historical cftc:historical)
@@ -228,6 +242,7 @@ for arg in "$@"; do
         "sec_primary:${_cy}"
         econ:daily census:daily geo:daily crime:daily weather:daily
         "sec_secondary:${_cy}"
+        "sec_13f:${_cy}"
         "sec_prices:daily"
         ref:daily
         fec:daily fedregister:daily

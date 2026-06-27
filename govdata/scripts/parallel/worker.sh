@@ -96,14 +96,16 @@ case "$SCHEMA" in
       "$WORKER_ID"
     ;;
 
-  # ── SEC secondary (8-K, proxy, insider, 13F, 13D/G) — one year ────────────
+  # ── SEC secondary (8-K, proxy, insider, 13D/G) — one year ─────────────────
+  #    13F-HR is handled by the separate sec_13f slot (parse-heavy; isolated so
+  #    it doesn't throttle these lighter, download-bound forms).
 
   sec_secondary)
-    # Secondary SEC forms → tables insider_transactions (3/4/5), institutional_holdings (13F),
+    # Secondary SEC forms → tables insider_transactions (3/4/5),
     # beneficial_ownership (13D/G), earnings_transcripts (8-K). Two vocabularies share this arm:
     #   • daily|historical (DQ harness)         → DQ_SAMPLE scope (or caller GOVDATA_CIKS)
     #   • <year>|current   (run-pool prod)      → _ALL_EDGAR_FILERS full universe
-    SEC2_FORMS='"8-K","8-K/A","DEF 14A","3","4","5","13F-HR","13F-HR/A","SC 13D","SC 13D/A","SC 13G","SC 13G/A"'
+    SEC2_FORMS='"8-K","8-K/A","DEF 14A","3","4","5","SC 13D","SC 13D/A","SC 13G","SC 13G/A"'
     case "$MODE" in
       historical) SEC2_START="${GOVDATA_START_YEAR:-2010}"; SEC2_END=$((INCREMENTAL_YEAR - 1)); SEC2_DQ=1 ;;
       daily)      SEC2_START="$INCREMENTAL_YEAR";           SEC2_END="$INCREMENTAL_YEAR";       SEC2_DQ=1 ;;
@@ -123,6 +125,39 @@ case "$SCHEMA" in
       export GOVDATA_END_YEAR="$SEC2_END"
       run_etl_inline "$(build_inline_model sec \
         "\"ciks\":\"_ALL_EDGAR_FILERS\",\"filingTypes\":[${SEC2_FORMS}],\"fetchStockPrices\":false")" \
+        "$WORKER_ID"
+    fi
+    ;;
+
+  # ── SEC 13F (institutional holdings) — one year; parse-heavy, isolated ─────
+  #    Runs alongside sec_secondary on the same host: shares the host-wide EDGAR
+  #    rate limiter so the download-bound secondary forms keep the IP budget
+  #    saturated while 13F parses in parallel. CPU-bound → more entity threads.
+
+  sec_13f)
+    # 13F-HR/A → table institutional_holdings (+ filing_metadata). Same two vocabularies
+    # as sec_secondary: daily|historical (DQ) vs <year>|current (run-pool prod).
+    export ETL_PARALLEL_THREADS="${ETL_PARALLEL_THREADS:-4}"
+    SEC13F_FORMS='"13F-HR","13F-HR/A"'
+    case "$MODE" in
+      historical) SEC13F_START="${GOVDATA_START_YEAR:-2010}"; SEC13F_END=$((INCREMENTAL_YEAR - 1)); SEC13F_DQ=1 ;;
+      daily)      SEC13F_START="$INCREMENTAL_YEAR";           SEC13F_END="$INCREMENTAL_YEAR";       SEC13F_DQ=1 ;;
+      current)              SEC13F_START=$(date +%Y); SEC13F_END="$SEC13F_START"; SEC13F_DQ=0 ;;
+      [0-9][0-9][0-9][0-9]) SEC13F_START="$MODE";     SEC13F_END="$MODE";         SEC13F_DQ=0 ;;
+      *) echo "sec_13f: mode must be daily|historical (DQ) or a 4-digit year|current (prod)" >&2; exit 1 ;;
+    esac
+    if [ "$SEC13F_DQ" = "1" ]; then
+      SEC13F_OPS="\"fetchStockPrices\":false,\"ciks\":\"${GOVDATA_CIKS:-DQ_SAMPLE}\",\"filingTypes\":[${SEC13F_FORMS}]"
+      for (( SEC13F_YEAR=SEC13F_END; SEC13F_YEAR>=SEC13F_START; SEC13F_YEAR-- )); do
+        export GOVDATA_START_YEAR="$SEC13F_YEAR"
+        export GOVDATA_END_YEAR="$SEC13F_YEAR"
+        run_etl_inline "$(build_inline_model sec "$SEC13F_OPS")" "worker-sec_13f-${MODE}-${SEC13F_YEAR}"
+      done
+    else
+      export GOVDATA_START_YEAR="$SEC13F_START"
+      export GOVDATA_END_YEAR="$SEC13F_END"
+      run_etl_inline "$(build_inline_model sec \
+        "\"ciks\":\"_ALL_EDGAR_FILERS\",\"filingTypes\":[${SEC13F_FORMS}],\"fetchStockPrices\":false")" \
         "$WORKER_ID"
     fi
     ;;
