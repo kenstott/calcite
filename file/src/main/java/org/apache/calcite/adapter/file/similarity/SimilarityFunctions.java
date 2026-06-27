@@ -81,6 +81,29 @@ public class SimilarityFunctions {
   }
 
   /**
+   * Embeds the text with the standard model and returns the vector as a
+   * comma-separated {@code VARCHAR}. Returning a string (rather than an array)
+   * is deliberate: Calcite's reflective UDFs reject {@code ARRAY} operands, but
+   * accept {@code VARCHAR}, so this composes directly with {@link #cosineSimilarity}
+   * and with a stored embedding column cast to text, e.g.
+   * <pre>COSINE_SIMILARITY(EMBED('query text'), CAST(embedding AS VARCHAR))</pre>
+   */
+  public static String embedText(String text) {
+    if (text == null) {
+      return null;
+    }
+    double[] v = EmbeddingService.get().embed(text);
+    StringBuilder sb = new StringBuilder(v.length * 12);
+    for (int i = 0; i < v.length; i++) {
+      if (i > 0) {
+        sb.append(',');
+      }
+      sb.append(v[i]);
+    }
+    return sb.toString();
+  }
+
+  /**
    * Core cosine similarity computation.
    */
   private static double computeCosineSimilarity(double[] v1, double[] v2) {
@@ -405,6 +428,10 @@ public class SimilarityFunctions {
     // end to end.
     schema.add("SEMANTIC_SIMILARITY",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "semanticSimilarity"));
+    // EMBED(text) -> VARCHAR vector; composes with COSINE_SIMILARITY against a
+    // stored embedding column cast to text (avoids ARRAY-typed UDF operands).
+    schema.add("EMBED",
+        ScalarFunctionImpl.create(SimilarityFunctions.class, "embedText"));
     schema.add("COSINE_DISTANCE",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "cosineDistance"));
     schema.add("EUCLIDEAN_DISTANCE",
