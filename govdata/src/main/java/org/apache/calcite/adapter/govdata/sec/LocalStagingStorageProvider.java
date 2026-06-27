@@ -70,7 +70,7 @@ public class LocalStagingStorageProvider implements StorageProvider {
    * Example: {@code 0000320193-24-000006_facts.parquet} → group 1 = {@code facts}
    */
   private static final Pattern TABLE_TYPE_PATTERN =
-      Pattern.compile("_([a-z]+)\\.parquet$", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("_([a-z0-9]+)\\.parquet$", Pattern.CASE_INSENSITIVE);
 
   private final StorageProvider delegate;
   private final File stagingDir;
