@@ -58,6 +58,14 @@ public class DuckDBJdbcSchemaFactory {
   private static final Map<String, SharedDatabaseInfo> DATABASE_POOL = new ConcurrentHashMap<>();
 
   /**
+   * Max {@code {name}_N.duckdb} fallbacks to try when another OS process holds DuckDB's
+   * single-writer file lock on a persistent catalog. DuckDB locks a database file to one process,
+   * so a second reader process would otherwise fail to open the shared catalog; it instead opens
+   * its own numbered copy and rebuilds the (cheap, metadata-only) views.
+   */
+  private static final int MAX_CATALOG_LOCK_FALLBACKS = 16;
+
+  /**
    * Information about a shared database instance.
    */
   private static class SharedDatabaseInfo {
@@ -191,6 +199,9 @@ public class DuckDBJdbcSchemaFactory {
 
       String jdbcUrl;
       String dbName;
+      // Pool key stays the canonical catalog path even when a lock-conflict fallback below opens a
+      // numbered copy, so every schema in THIS process shares the one connection.
+      final String baseCatalogPath = catalogPath;
 
       if (catalogPath != null) {
         // Check if this database is already in the connection pool
@@ -227,8 +238,51 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.info("Using ephemeral DuckDB database under operating dir: {}", jdbcUrl);
       }
 
-      // Create initial connection for setup
-      Connection setupConn = DriverManager.getConnection(jdbcUrl);
+      // Create initial connection for setup. For a persistent file catalog another OS process may
+      // hold DuckDB's single-writer lock on the file; fall back to a numbered copy
+      // ({name}_N.duckdb) so a concurrent reader opens its own catalog instead of failing. The
+      // numbered files form a small, self-reusing pool — a process grabs the lowest-numbered free
+      // one and leaves it for the next run. Each fallback is SEEDED by copying the already-built
+      // base catalog, so the copied views satisfy CREATE VIEW IF NOT EXISTS and we skip re-reading
+      // Iceberg metadata for every view (only the base file is copied, never the live .wal, so the
+      // copy can't capture a half-written WAL). Ephemeral catalogs use a unique name and never
+      // collide, so they open directly.
+      Connection setupConn = null;
+      if (catalogPath != null) {
+        for (int lockAttempt = 0; ; lockAttempt++) {
+          boolean seeded = false;
+          if (lockAttempt > 0) {
+            catalogPath = numberedCatalogPath(baseCatalogPath, lockAttempt);
+            jdbcUrl = "jdbc:duckdb:" + catalogPath;
+            seeded = seedCatalogCopy(baseCatalogPath, catalogPath);
+          }
+          try {
+            setupConn = DriverManager.getConnection(jdbcUrl);
+            break;
+          } catch (SQLException openErr) {
+            if (isCatalogLockConflict(openErr)) {
+              if (lockAttempt >= MAX_CATALOG_LOCK_FALLBACKS) {
+                throw openErr;
+              }
+              LOGGER.warn("DuckDB catalog '{}' is locked by another process; trying numbered copy",
+                  catalogPath);
+              continue;
+            }
+            if (seeded) {
+              // The seeded copy is unusable (e.g. copied during a base checkpoint). Drop it and
+              // reopen an empty file at the same path so the views rebuild from scratch.
+              LOGGER.warn("Seeded catalog copy '{}' could not be opened ({}); rebuilding views",
+                  catalogPath, openErr.getMessage());
+              new File(catalogPath).delete();
+              setupConn = DriverManager.getConnection(jdbcUrl);
+              break;
+            }
+            throw openErr;
+          }
+        }
+      } else {
+        setupConn = DriverManager.getConnection(jdbcUrl);
+      }
 
       // Configure DuckDB settings for production use
       setupConn.createStatement().execute("SET threads TO 4");  // Adjust based on workload
@@ -477,8 +531,11 @@ public class DuckDBJdbcSchemaFactory {
       if (catalogPath != null) {
         SharedDatabaseInfo sharedInfo =
             new SharedDatabaseInfo(dataSource, setupConn, jdbcUrl, catalogPath);
-        DATABASE_POOL.put(catalogPath, sharedInfo);
-        LOGGER.info("Added DuckDB database to connection pool: {}", catalogPath);
+        // Key by the canonical path so all in-process schemas share this connection even if a
+        // lock-conflict fallback opened a numbered file (catalogPath/jdbcUrl hold the actual file).
+        DATABASE_POOL.put(baseCatalogPath, sharedInfo);
+        LOGGER.info("Added DuckDB database to connection pool: {} (catalog file: {})",
+            baseCatalogPath, catalogPath);
       }
 
       return schema;
@@ -682,6 +739,60 @@ public class DuckDBJdbcSchemaFactory {
         .withLex(Lex.ORACLE)
         .withUnquotedCasing(Casing.TO_LOWER)
         .withQuotedCasing(Casing.UNCHANGED);
+  }
+
+  /**
+   * True if the exception is DuckDB's single-process file-lock conflict on a database file
+   * (another OS process already has the catalog open). Walks the cause chain.
+   */
+  private static boolean isCatalogLockConflict(SQLException e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      String msg = t.getMessage();
+      if (msg != null) {
+        String lower = msg.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("could not set lock") || lower.contains("conflicting lock")) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Inserts {@code _n} before the {@code .duckdb} suffix
+   * (e.g. {@code sec_db.duckdb} -> {@code sec_db_1.duckdb}) for the lock-conflict fallback.
+   */
+  private static String numberedCatalogPath(String catalogPath, int n) {
+    String suffix = ".duckdb";
+    if (catalogPath.endsWith(suffix)) {
+      return catalogPath.substring(0, catalogPath.length() - suffix.length()) + "_" + n + suffix;
+    }
+    return catalogPath + "_" + n;
+  }
+
+  /**
+   * Seeds a numbered fallback catalog by copying the already-built base catalog file, so its views
+   * satisfy {@code CREATE VIEW IF NOT EXISTS} and the fallback skips re-reading Iceberg metadata
+   * for every view. Copies only the base {@code .duckdb} file (never the live {@code .wal}), so it
+   * cannot capture a half-written WAL. Best-effort: returns false (caller opens an empty file and
+   * rebuilds the views) when the numbered file already exists, the base is absent/empty, or the
+   * copy fails.
+   */
+  private static boolean seedCatalogCopy(String baseCatalogPath, String numberedCatalogPath) {
+    try {
+      File base = new File(baseCatalogPath);
+      File numbered = new File(numberedCatalogPath);
+      if (numbered.exists() || !base.isFile() || base.length() == 0) {
+        return false;
+      }
+      java.nio.file.Files.copy(base.toPath(), numbered.toPath());
+      LOGGER.info("Seeded DuckDB catalog copy {} from {}", numberedCatalogPath, baseCatalogPath);
+      return true;
+    } catch (Exception e) {
+      LOGGER.warn("Could not seed catalog copy {} from {} ({}); will rebuild views",
+          numberedCatalogPath, baseCatalogPath, e.getMessage());
+      return false;
+    }
   }
 
   /**
