@@ -33,6 +33,10 @@ submissionsTtlHours: "${SEC_SUBMISSIONS_TTL_HOURS:24}"
 alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
 edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:100}"
 cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
+# Periodic table commit: flush + materialize to Iceberg every N accessions so a worker
+# killed mid-run (large years have ~293k accessions) still leaves queryable tables.
+# <= 0 disables periodic commit (single final commit at end of run).
+commitIntervalAccessions: "${SEC_COMMIT_INTERVAL_ACCESSIONS:25000}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 refreshInterval: "PT1H"

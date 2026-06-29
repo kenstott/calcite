@@ -106,6 +106,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   private static final int SEC_RATE_LIMIT_PER_SECOND = 8; // Conservative: 8 requests/sec (SEC allows 10)
   private static final long INITIAL_RATE_LIMIT_DELAY_MS = 125; // Initial: 125ms between requests (8/sec)
   private static final long MAX_RATE_LIMIT_DELAY_MS = 500; // Max: 500ms between requests (2/sec)
+  // Periodic table commit: flush + materialize to Iceberg after this many accessions so a
+  // killed worker still leaves queryable tables. Override via operand "commitIntervalAccessions"
+  // (declared in sec-schema.yaml); <= 0 disables periodic commit (single final commit).
+  private static final int COMMIT_INTERVAL_ACCESSIONS_DEFAULT = 25000;
 
   // Dynamic rate limiting
   private final AtomicLong currentRateLimitDelayMs = new AtomicLong(INITIAL_RATE_LIMIT_DELAY_MS);
@@ -965,10 +969,52 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             if (threads > 1) {
               LOGGER.info("Using {} parallel threads for {} accessions",
                   threads, activeAccessions.size());
-              result = processor.processAccessionsParallel(activeAccessions, threads);
-            } else {
-              result = processor.processAccessions(activeAccessions);
             }
+            // Periodic table commit: process accessions in chunks and flush +
+            // materialize to Iceberg after each chunk, so partial progress becomes
+            // durable, queryable tables even when the worker is killed before the
+            // full (very large) accession list completes. The post-loop flushAll() +
+            // materializeStagingFilesToIceberg() finalize the trailing chunk.
+            int commitInterval = COMMIT_INTERVAL_ACCESSIONS_DEFAULT;
+            Object commitIntervalObj = operand.get("commitIntervalAccessions");
+            if (commitIntervalObj != null) {
+              commitInterval = Integer.parseInt(commitIntervalObj.toString());
+            }
+            if (commitInterval <= 0) {
+              commitInterval = Integer.MAX_VALUE;
+            }
+            int total = activeAccessions.size();
+            int totalProcessed = 0;
+            int totalSkipped = 0;
+            int totalFailed = 0;
+            long totalDuration = 0L;
+            List<String> allOutputFiles = new ArrayList<String>();
+            List<String> allErrors = new ArrayList<String>();
+            for (int chunkStart = 0; chunkStart < total; chunkStart += commitInterval) {
+              int chunkEnd = Math.min(chunkStart + commitInterval, total);
+              List<DocumentETLProcessor.AccessionRef> chunk =
+                  activeAccessions.subList(chunkStart, chunkEnd);
+              DocumentETLProcessor.DocumentETLResult chunkResult = threads > 1
+                  ? processor.processAccessionsParallel(chunk, threads)
+                  : processor.processAccessions(chunk);
+              totalProcessed += chunkResult.getDocumentsProcessed();
+              totalSkipped += chunkResult.getDocumentsSkipped();
+              totalFailed += chunkResult.getDocumentsFailed();
+              totalDuration += chunkResult.getDurationMs();
+              allOutputFiles.addAll(chunkResult.getOutputFiles());
+              allErrors.addAll(chunkResult.getErrors());
+              // Commit this chunk now unless it is the final one — the post-loop
+              // flushAll() + materialize handle the trailing chunk (avoids a redundant pass).
+              if (chunkEnd < total) {
+                LOGGER.info("Periodic commit after {}/{} accessions — flushing staged "
+                    + "parquet and materializing to Iceberg", chunkEnd, total);
+                stagingProvider.flushAll();
+                materializeStagingFilesToIceberg(operand, secParquetDir);
+              }
+            }
+            result = new DocumentETLProcessor.DocumentETLResult(
+                totalProcessed, totalSkipped, totalFailed, allOutputFiles, allErrors,
+                totalDuration);
           } else {
             // CIK-centric fallback (when full-index cache is unavailable)
             List<Map<String, String>> entities = new ArrayList<Map<String, String>>();
