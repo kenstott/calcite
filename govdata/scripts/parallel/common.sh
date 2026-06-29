@@ -616,11 +616,11 @@ generate_single_schema_model() {
       operand_body="\"dataSource\": \"cftc\",
       ${_YEAR_RANGE}"
       ;;
-    sec|sec_prices|sec_secondary)
-      # sec_prices (stock-price slot) and sec_secondary (8-K/proxy/insider/13F/13D-G slot) both
-      # write their tracker under the same "sec" dataSource path, so their compaction model is
-      # identical to sec — this lets the harness compact the sec/ tracker for those slots instead
-      # of skipping ("unknown schema 'sec_prices'" / "'sec_secondary'").
+    sec|sec_primary|sec_prices|sec_secondary|sec_13f)
+      # sec_primary, sec_prices, sec_secondary and sec_13f are workload splits of the single
+      # "sec" schema and all write their tracker under the same "sec" dataSource path, so their
+      # compaction model is identical to sec — this lets the harness compact the sec/ tracker for
+      # those slots instead of skipping ("unknown schema 'sec_primary'" / "'sec_13f'" / ...).
       operand_body="\"dataSource\": \"sec\",
       ${_YEAR_RANGE}"
       ;;

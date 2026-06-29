@@ -313,6 +313,11 @@ compact_trackers_first() {
   log_info "Pre-pool tracker compaction: sweeping schemas serially (year=0 + 2000..${_cy})…"
   for slot in "${queue[@]}"; do
     schema="${slot%%:*}"
+    # sec_primary/sec_secondary/sec_13f/sec_prices are workload splits of the single "sec"
+    # schema sharing one "sec" tracker — collapse them to "sec" so the tracker is compacted
+    # exactly once (not 4x, each a heavy 38k-file merge that can OOM) with a model that
+    # generate_single_schema_model actually recognizes.
+    case "$schema" in sec_*) schema="sec" ;; esac
     case "$seen" in *" $schema "*) continue ;; esac
     seen="$seen$schema "
     model=$(mktemp "/tmp/compact-${schema}-XXXXXX.json" 2>/dev/null) \
