@@ -14,8 +14,10 @@ package org.apache.calcite.adapter.file.metadata;
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.type.MapType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +54,14 @@ public class ConversionMetadata {
 
   private final File metadataFile;
   private final Map<String, ConversionRecord> conversions = new ConcurrentHashMap<>();
+
+  // Optional warehouse-root namespace (e.g. "s3://govdata-parquet-v1"). When set, the
+  // persisted .conversions.json is keyed at the top level by this root so the same operating
+  // directory can hold independent record sets for different data locations (e.g. prod vs a
+  // truncated sample bucket). Without it, a parquet-dir change would silently reuse stale
+  // sourceFile paths keyed only by table name. Only remote roots (containing "://") namespace;
+  // local file-adapter usage keeps the flat format unchanged.
+  private final String namespace;
 
   /** Generic hints passed from ETL processors to file converters (e.g. cik, form, filingDate). */
   private final Map<String, String> hints = new HashMap<>();
@@ -383,9 +393,25 @@ public class ConversionMetadata {
    * Always stores the .conversions.json file directly in the provided directory.
    */
   public ConversionMetadata(File directory) {
-    // Always store metadata directly in the provided directory
+    this(directory, null);
+  }
+
+  /**
+   * Creates a metadata tracker for the given directory, namespaced by a warehouse root.
+   *
+   * <p>When {@code warehouseRoot} is a remote URI (contains {@code "://"}), records are stored
+   * under that root as a top-level key in {@code .conversions.json}, so distinct data locations
+   * (e.g. {@code s3://bucket} vs {@code s3://bucket-dq}) keep independent record sets in the same
+   * file and a location change can never serve a stale path. A null/local root keeps the flat
+   * (single-level) format used by the general file adapter.
+   *
+   * @param directory     Local directory holding the metadata file (for file locking)
+   * @param warehouseRoot Data-location root used as the namespace, or null for flat format
+   */
+  public ConversionMetadata(File directory, String warehouseRoot) {
     this.metadataFile = new File(directory, METADATA_FILE);
-    LOGGER.debug("Using metadata file: {}", metadataFile);
+    this.namespace = (warehouseRoot != null && warehouseRoot.contains("://")) ? warehouseRoot : null;
+    LOGGER.debug("Using metadata file: {} (namespace={})", metadataFile, namespace);
     loadMetadata();
   }
 
@@ -397,6 +423,7 @@ public class ConversionMetadata {
    * @param directoryPath Path to directory (may be S3 URI like "s3://bucket/path")
    */
   public ConversionMetadata(String directoryPath) {
+    this.namespace = null;
     // Construct metadata file path - for S3 this is just a path reference
     if (directoryPath.contains("://")) {
       // S3 or other URI - just store path, don't use File
@@ -1497,6 +1524,101 @@ public class ConversionMetadata {
   /**
    * Loads metadata from disk with file locking for concurrent access.
    */
+  /** Flat type: {@code Map<String, ConversionRecord>}. */
+  private MapType flatType() {
+    return MAPPER.getTypeFactory()
+        .constructMapType(HashMap.class, String.class, ConversionRecord.class);
+  }
+
+  /** Namespaced type: {@code Map<String, Map<String, ConversionRecord>>}. */
+  private MapType nestedType() {
+    return MAPPER.getTypeFactory()
+        .constructMapType(HashMap.class, MAPPER.getTypeFactory().constructType(String.class), flatType());
+  }
+
+  /** True when the on-disk file uses the legacy flat layout (top-level values are records). */
+  private boolean isFlatLayout(JsonNode root) {
+    if (root == null || !root.isObject() || root.size() == 0) {
+      return true;
+    }
+    JsonNode first = root.elements().next();
+    return first != null && first.has("tableName");
+  }
+
+  /** True when a record's recorded location is under the current warehouse root. */
+  private boolean belongsToNamespace(ConversionRecord record) {
+    if (namespace == null || record == null) {
+      return true;
+    }
+    String loc = record.sourceFile != null ? record.sourceFile : record.originalFile;
+    return loc != null && loc.startsWith(namespace);
+  }
+
+  /**
+   * Reads the records belonging to this instance's namespace. Handles the flat layout and the
+   * namespaced layout, migrating a legacy flat file by keeping only records whose location falls
+   * under the current warehouse root (so a different location can never be served stale).
+   */
+  private Map<String, ConversionRecord> readCurrentNamespaceRecords() throws IOException {
+    JsonNode root = MAPPER.readTree(metadataFile);
+    if (root == null || !root.isObject() || root.size() == 0) {
+      return new HashMap<>();
+    }
+    if (namespace == null) {
+      if (isFlatLayout(root)) {
+        // Flat format (general file adapter): the whole file is records.
+        return MAPPER.convertValue(root, flatType());
+      }
+      // A namespaced file read without a namespace (e.g. the cross-schema scan): merge every
+      // warehouse root into one unified view so existing readers see all records.
+      Map<String, Map<String, ConversionRecord>> nested = MAPPER.convertValue(root, nestedType());
+      Map<String, ConversionRecord> merged = new HashMap<>();
+      for (Map<String, ConversionRecord> sub : nested.values()) {
+        if (sub != null) {
+          merged.putAll(sub);
+        }
+      }
+      return merged;
+    }
+    if (isFlatLayout(root)) {
+      Map<String, ConversionRecord> flat = MAPPER.convertValue(root, flatType());
+      Map<String, ConversionRecord> mine = new HashMap<>();
+      for (Map.Entry<String, ConversionRecord> e : flat.entrySet()) {
+        if (belongsToNamespace(e.getValue())) {
+          mine.put(e.getKey(), e.getValue());
+        }
+      }
+      return mine;
+    }
+    JsonNode nsNode = root.get(namespace);
+    if (nsNode == null || !nsNode.isObject()) {
+      return new HashMap<>();
+    }
+    return MAPPER.convertValue(nsNode, flatType());
+  }
+
+  /**
+   * Builds the object to persist: the flat record map when not namespaced, otherwise the full
+   * namespaced map (preserving other warehouse roots already on disk) with this instance's
+   * records under its namespace.
+   */
+  private Object buildPersistedStructure() throws IOException {
+    if (namespace == null) {
+      return conversions;
+    }
+    Map<String, Map<String, ConversionRecord>> nested = new HashMap<>();
+    if (metadataFile.exists()) {
+      JsonNode root = MAPPER.readTree(metadataFile);
+      if (root != null && root.isObject() && root.size() > 0 && !isFlatLayout(root)) {
+        nested = MAPPER.convertValue(root, nestedType());
+      }
+      // A legacy flat file (or absent file) is replaced by the namespaced layout; records for
+      // this root were already migrated into `conversions` on load.
+    }
+    nested.put(namespace, new HashMap<>(conversions));
+    return nested;
+  }
+
   private void loadMetadata() {
     if (!metadataFile.exists()) {
       return;
@@ -1517,13 +1639,10 @@ public class ConversionMetadata {
 
         // Now safe to acquire file lock - no other thread in this JVM will try simultaneously
         try (FileLock lock = acquireLockWithRetry(channel, 0, Long.MAX_VALUE, true)) {
-          @SuppressWarnings("unchecked")
-          Map<String, ConversionRecord> loaded =
-              MAPPER.readValue(
-                  metadataFile, MAPPER.getTypeFactory().constructMapType(HashMap.class,
-                  String.class, ConversionRecord.class));
+          Map<String, ConversionRecord> loaded = readCurrentNamespaceRecords();
 
-          LOGGER.debug("Loaded {} conversion records from metadata", loaded.size());
+          LOGGER.debug("Loaded {} conversion records from metadata (namespace={})",
+              loaded.size(), namespace);
 
           // Clean up entries for files that no longer exist
           boolean needsCleanup = false;
@@ -1596,8 +1715,8 @@ public class ConversionMetadata {
 
       // Acquire exclusive lock with retry
       try (FileLock lock = acquireLockWithRetry(channel, 0, Long.MAX_VALUE, false)) {
-        // Write to temp file first
-        MAPPER.writeValue(tempFile, conversions);
+        // Write to temp file first (namespaced layout preserves other warehouse roots on disk)
+        MAPPER.writeValue(tempFile, buildPersistedStructure());
 
         // Atomically move temp file to actual file
         Files.move(tempFile.toPath(), metadataFile.toPath(),

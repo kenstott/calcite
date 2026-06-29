@@ -547,8 +547,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     LOGGER.debug("Operating cache directory: {}", this.operatingCacheDirectory.getAbsolutePath());
     LOGGER.debug("Base directory (data location): {}", this.baseDirectory);
 
-    // Initialize conversion metadata using operating cache directory (always local for file locking)
-    this.conversionMetadata = new ConversionMetadata(this.operatingCacheDirectory);
+    // Initialize conversion metadata using operating cache directory (always local for file
+    // locking). Namespace by the data-location root (baseDirectory) so the same operating dir
+    // can hold independent record sets per location (e.g. prod vs a sample bucket) and a
+    // location change never serves a stale sourceFile. Remote roots namespace; local stays flat.
+    this.conversionMetadata = new ConversionMetadata(this.operatingCacheDirectory, this.baseDirectory);
     this.directoryPattern = directoryPattern;
     this.engineConfig = engineConfig;
     this.recursive = recursive;
