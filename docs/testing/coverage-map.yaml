@@ -51,14 +51,14 @@
 - {id: FILE-102, grade: PARTIAL, action: RECODE, test: converters/ExcelToJsonConverterCoverageTest#testConvertBlankAndNullCells, note: "splitting/title/header-cap weak"}
 - {id: FILE-103, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (dup-suffix + sanitize)"}
 - {id: FILE-104, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (detection + XXE)"}
-- {id: FILE-105, grade: WEAK, action: RECODE, test: markdown/MarkdownTableTest#testMarkdownWithSpecialCharacters, note: ">=3-line/sparse rules not pinned"}
+- {id: FILE-105, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-105)"}
 - {id: FILE-106, grade: PARTIAL, action: RECODE, test: converters/DocxTableScannerDeepCoverageTest#testBuildColumnHeadersMultipleRows, note: "type-inference output weak"}
 - {id: FILE-107, grade: STRONG, action: LINK, test: format/json/JsonFlattenerTest#testFlattenArrayOfObjectsReturnsNull}
 - {id: FILE-108, grade: STRONG, action: LINK, test: converters/ConverterUtilsTest#testSanitizeIdentifierPreservesDoubleUnderscore}
-- {id: FILE-109, grade: WEAK, action: RECODE, test: converters/ConverterUtilsTest#testTimezonePropertyConstant, note: "only constants; behavior untested"}
+- {id: FILE-109, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-109)"}
 - {id: FILE-148, grade: STRONG, action: LINK, test: util/SmartCasingTest#testNumberHandling}
 - {id: FILE-155, grade: STRONG, action: LINK, test: format/csv/CsvTypeConverterTest#testConvertTime}
-- {id: FILE-156, grade: PARTIAL, action: RECODE, test: format/csv/CsvTypeInferrerTest#testFromMapClampsSamplingRateAboveOne, note: "parseDecimal rounding/overflow uncovered"}
+- {id: FILE-156, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-156)"}
 - {id: FILE-157, grade: PARTIAL, action: RECODE, test: format/csv/CsvTypeInferrerTest#testInferTypesHeaderOnlyCsv, note: "NL date + cross-conn not covered"}
 - {id: FILE-158, grade: STRONG, action: LINK, test: format/json/JsonMultiTableFactoryTest#testNameConflictResolution}
 - {id: FILE-171, grade: STRONG, action: LINK, test: ExcelNamingTest#testMultipleTablesWithSuffix}
@@ -74,7 +74,7 @@
 - {id: FILE-032, grade: STRONG, action: LINK, test: table/PartitionedTableTest#testHiveStylePartitionedTable}
 - {id: FILE-033, grade: STRONG, action: LINK, test: partition/DuckDBPartitionStatusStoreTest#testFilterUnprocessed}
 - {id: FILE-045, grade: PARTIAL, action: RECODE, test: FileSchemaStorageTypeCoverageTest#testLocalStorageTypeWithSourceDir, note: "precedence/forcing untested"}
-- {id: FILE-046, grade: PARTIAL, action: RECODE, test: storage/StorageProviderFactoryCoverageTest#testLocalType, note: "closed value-set not pinned"}
+- {id: FILE-046, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-046)"}
 - {id: FILE-047, grade: NONE, action: WRITE, note: "operand default values"}
 - {id: FILE-048, grade: STRONG, action: LINK, test: config/CasingTest#testDefaultSmartCasingBehavior}
 - {id: FILE-049, grade: STRONG, action: LINK, test: config/EnvironmentVariableTest#testMissingVariableThrows}
@@ -91,10 +91,10 @@
 - {id: FILE-110, grade: PARTIAL, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testNonRecursiveModeOnlyFindsRootFiles, note: "string-true case; C-01 default-true target"}
 - {id: FILE-111, grade: PARTIAL, action: RECODE, test: FileSchemaDeepCoverageTest3#testIsGlobPatternHttpUrl, note: "glob alias + bounded-depth not tied"}
 - {id: FILE-112, grade: STRONG, action: LINK, test: storage/StorageProviderFactoryCoverageTest#testS3Scheme}
-- {id: FILE-113, grade: PARTIAL, action: RECODE, test: storage/LocalFileStorageProviderTest#testFileEntryDirectory, note: "error messages + size not pinned"}
+- {id: FILE-113, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-113)"}
 - {id: FILE-114, grade: STRONG, action: LINK, test: storage/HttpStorageProviderCoverageTest#testIsDirectoryAlwaysFalse}
-- {id: FILE-115, grade: PARTIAL, action: RECODE, test: storage/FtpStorageProviderCoverageTest#testDefaultPortConstant, note: "sftp/binary/passive uncovered"}
-- {id: FILE-116, grade: PARTIAL, action: RECODE, test: storage/S3StorageProviderCoverageTest#testConstructorWithConfigMissingCredentials, note: "timeouts/region/delimiter uncovered"}
+- {id: FILE-115, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-115)"}
+- {id: FILE-116, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-116)"}
 - {id: FILE-117, grade: STRONG, action: LINK, test: storage/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists}
 - {id: FILE-118, grade: STRONG, action: LINK, test: storage/StorageProviderBaseCoverageTest#testHasChangedWithNullMetadata}
 - {id: FILE-141, grade: STRONG, action: LINK, test: partition/IncrementalTrackerTest#testPeriodCompletionKeyYearOnlyNaFills}
@@ -115,7 +115,7 @@
 - {id: FILE-037, grade: NONE, action: WRITE, note: "duckdb x storageType httpfs parity"}
 - {id: FILE-038, grade: NONE, action: DONE, note: "FileOptimizationTransparencyTest (result-transparency)"}
 - {id: FILE-039, grade: WEAK, action: RECODE, test: rules/HLLCountDistinctRuleTest#testCountDistinctRewrittenToHLL, note: "loose band; no plan/rule-fires assert"}
-- {id: FILE-040, grade: WEAK, action: RECODE, test: statistics/HyperLogLogSketchDeepTest#testMerge, note: "merge not within union error-bound"}
+- {id: FILE-040, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-040)"}
 - {id: FILE-041, grade: PARTIAL, action: RECODE, test: rules/CountStarStatisticsRuleTest#testCountStarReplacedWithMetadataValue, note: "rule-fired/no-scan not asserted"}
 - {id: FILE-042, grade: PARTIAL, action: RECODE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "no on==off identity"}
 - {id: FILE-043, grade: PARTIAL, action: RECODE, test: statistics/ColumnStatisticsDeepTest#testBasicStatistics, note: "parquet footer/NDV not golden"}
@@ -129,12 +129,12 @@
 - {id: FILE-093, grade: PARTIAL, action: RECODE, test: similarity/SimilarityFunctionsDeepTest#testRegisterFunctionsDoesNotThrow, note: "full set/ranges not pinned"}
 - {id: FILE-094, grade: STRONG, action: LINK, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityWithFloatArray}
 - {id: FILE-119, grade: STRONG, action: LINK, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine}
-- {id: FILE-120, grade: PARTIAL, action: RECODE, test: statistics/HyperLogLogSketchDeepTest#testDefaultPrecision, note: "MD5/longValue collision not exercised"}
-- {id: FILE-121, grade: PARTIAL, action: RECODE, test: statistics/StatisticsConfigDeepTest#testFromSystemPropertiesDefaults, note: "rule-gating defaults not asserted (C-04)"}
+- {id: FILE-120, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-120)"}
+- {id: FILE-121, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-121)"}
 - {id: FILE-122, grade: WEAK, action: RECODE, test: rules/CountStarStatisticsRuleTest#testCountStarWithWhereClauseNotReplaced, note: "result-only; no VALUES/match-cond"}
 - {id: FILE-123, grade: WEAK, action: RECODE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "thresholds via result-count only"}
 - {id: FILE-124, grade: NONE, action: WRITE, note: "deferred — needs plan-level Aggregate; do in the HLL rule-test RECODE (C-18)"}
-- {id: FILE-126, grade: PARTIAL, action: RECODE, test: statistics/ColumnStatisticsDeepTest#testDistinctCountWithoutHLL, note: "synthetic-seed fallback not exercised (C-16)"}
+- {id: FILE-126, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-126)"}
 - {id: FILE-150, grade: PARTIAL, action: RECODE, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityDimensionMismatch, note: "exactly-10/EMBED uncovered"}
 - {id: FILE-152, grade: WEAK, action: RECODE, test: statistics/HyperLogLogSketchTest#testLargeDatasetAccuracy, note: "statistical/loose (acceptable for HLL)"}
 - {id: FILE-153, grade: STRONG, action: LINK, test: statistics/ColumnStatisticsDeepTest#testSelectivityEqualityWithDistinct}

@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 17 complete, 8 in-progress, 143 proposed, 3 rejected)
+## file  (173: 2 accepted, 28 complete, 8 in-progress, 132 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -48,13 +48,13 @@
 | [.] | FILE-037 | MUST | behavioral | interaction / Engine-storage interaction | duckdb reads storage directly via httpfs (DuckDBFunctionMapping), bypassing StorageProvider — the duckdb × st… | — |
 | [x] | FILE-038 | MUST | constraint | optimization / Transparency | Every exact optimization preserves results — a query with the rule enabled yields a table identical to the sa… | file/FileOptimizationTransparencyTest#exactOptimizationsPre… |
 | [.] | FILE-039 | MUST | behavioral | optimization / HLL approx-distinct | APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact COUNT(DISTINCT), and … | — |
-| [.] | FILE-040 | MUST | behavioral | optimization / HLL sketch reuse | HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files — the merged es… | — |
+| [x] | FILE-040 | MUST | behavioral | optimization / HLL sketch reuse | HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files — the merged es… | file/StatisticsRequirementsTest (tagged FILE-040) |
 | [.] | FILE-041 | MUST | behavioral | optimization / Count-star from statistics | COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and the rule fire… | — |
 | [.] | FILE-042 | SHOULD | behavioral | optimization / Pushdown / pruning | Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule, SimpleFileColumnPrunin… | — |
 | [.] | FILE-043 | MUST | structural | optimization / Statistics accuracy | ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong stats silently c… | — |
 | [.] | FILE-044 | SHOULD | behavioral | optimization / Engine-specific parity | Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule, ClickHouseHLLC… | — |
 | [.] | FILE-045 | MUST | behavioral | config / storageType precedence | Selection priority: (1) schema-level storageType forces ALL files through that provider and `directory` is ig… | — |
-| [.] | FILE-046 | MUST | structural | config / storageType value set | Supported storageType values are local, s3, http, sharepoint, graph, ftp, sftp, hdfs (sharepoint/graph have n… | — |
+| [x] | FILE-046 | MUST | structural | config / storageType value set | Supported storageType values are local, s3, http, sharepoint, graph, ftp, sftp, hdfs (sharepoint/graph have n… | file/StorageProviderRequirementsTest (tagged FILE-046) |
 | [.] | FILE-047 | MUST | structural | config / operand defaults | Operand defaults: recursive=true (README says false for the JDBC driver — reconcile), executionEngine=parquet… | — |
 | [.] | FILE-048 | MUST | behavioral | config / name casing | tableNameCasing/columnNameCasing ∈ {SMART_CASING (→snake_case, default), UPPER, LOWER, UNCHANGED}; SMART_CASI… | — |
 | [.] | FILE-049 | MUST | behavioral | config / env-var substitution | Operand values support ${VAR} (throws IllegalArgumentException if undefined) and ${VAR:default}, resolved env… | — |
@@ -113,28 +113,28 @@
 | [.] | FILE-102 | MUST | behavioral | xlsx / table detection | MultiTableExcelToJsonConverter splits a sheet on ≥ MIN_EMPTY_ROWS_BETWEEN_TABLES (2) blank rows, treats a sin… | — |
 | [x] | FILE-103 | MUST | behavioral | html / table name & sanitization | HtmlTableScanner.getTableName priority: id attr > caption > preceding h1-h6 (≤3 sibs) > preceding title/heade… | file/TableScannerCatalogTest#htmlDuplicateNamesGetSuffixed,… |
 | [x] | FILE-104 | MUST | behavioral | xml / detection & XXE hardening | XmlTableScanner detects a table as ≥ MIN_REPEATING_ELEMENTS (2) structurally-similar same-tag siblings (attr-… | file/TableScannerCatalogTest#xmlRepeatingElementsAreDetecte… |
-| [.] | FILE-105 | MUST | behavioral | markdown / parsing & sparse rows | MarkdownTableScanner needs ≥3 lines (header, separator not at index 0, ≥1 data row); cells split on unescaped… | — |
+| [x] | FILE-105 | MUST | behavioral | markdown / parsing & sparse rows | MarkdownTableScanner needs ≥3 lines (header, separator not at index 0, ≥1 data row); cells split on unescaped… | file/ConverterUtilRequirementsTest (tagged FILE-105) |
 | [.] | FILE-106 | MUST | behavioral | docx / header rows & cell typing | DocxTableScanner assumes row 0 is a header, promotes row 1 to a 2nd header by cell-count/looksLikeHeader (≤3 … | — |
 | [.] | FILE-107 | MUST | behavioral | json / flattener semantics | JsonFlattener defaults: separator "__", maxDepth 3, nullValue "". Nested objects join keys with __; empty obj… | — |
 | [.] | FILE-108 | MUST | constraint | table-naming / identifier sanitization | ConverterUtils.sanitizeIdentifier maps non-[A-Za-z0-9_]→_, collapses 3+ underscores to EXACTLY "__" (delibera… | — |
-| [.] | FILE-109 | SHOULD | behavioral | converters / converter system properties | ConverterUtils datetime ISO coercion stays LOCAL unless system property calcite.file.converter.timezone is se… | — |
+| [x] | FILE-109 | SHOULD | behavioral | converters / converter system properties | ConverterUtils datetime ISO coercion stays LOCAL unless system property calcite.file.converter.timezone is se… | file/ConverterUtilRequirementsTest (tagged FILE-109) |
 | [.] | FILE-110 | MUST | constraint | walking / recursive default (actual) | FileSchemaFactory reads recursive as operand.get("recursive") == Boolean.TRUE, so the default is FALSE and a … | — |
 | [.] | FILE-111 | MUST | behavioral | walking / hidden-file skip & glob | FileSchema.listFilesRecursively skips any file/dir whose basename startsWith "." (dotfiles, .aperio). directo… | — |
 | [.] | FILE-112 | MUST | behavioral | config / storage routing (createFromUrl) | StorageProviderFactory.createFromUrl: s3:// THROWS IllegalArgumentException (S3 needs explicit credentials — … | — |
-| [.] | FILE-113 | MUST | behavioral | storage/local / listFiles contract | LocalFileStorageProvider.listFiles throws IOException("Directory does not exist") on a missing/non-dir path; … | — |
+| [x] | FILE-113 | MUST | behavioral | storage/local / listFiles contract | LocalFileStorageProvider.listFiles throws IOException("Directory does not exist") on a missing/non-dir path; … | file/StorageProviderRequirementsTest (tagged FILE-113) |
 | [.] | FILE-114 | MUST | constraint | storage/http / timeouts & response codes | HttpStorageProvider hard-codes 30000ms connect+read timeouts, a fixed User-Agent, accepts only HTTP 200/201/3… | — |
-| [.] | FILE-115 | SHOULD | behavioral | storage/ftp / ftp/sftp defaults | FtpStorageProvider: port 21, default anonymous creds, 30s connect/60s data, BINARY+passive; refusal/login thr… | — |
-| [.] | FILE-116 | MUST | constraint | storage/s3 / client config & listing | S3StorageProvider with config requires accessKeyId+secretAccessKey or throws (NO env fallback); region defaul… | — |
+| [x] | FILE-115 | SHOULD | behavioral | storage/ftp / ftp/sftp defaults | FtpStorageProvider: port 21, default anonymous creds, 30s connect/60s data, BINARY+passive; refusal/login thr… | file/StorageProviderRequirementsTest (tagged FILE-115) |
+| [x] | FILE-116 | MUST | constraint | storage/s3 / client config & listing | S3StorageProvider with config requires accessKeyId+secretAccessKey or throws (NO env fallback); region defaul… | file/StorageProviderRequirementsTest (tagged FILE-116) |
 | [.] | FILE-117 | MUST | behavioral | storage/hdfs / missing-path contract | HDFSStorageProvider defaults fs.defaultFS to hdfs://localhost:9000; listFiles on a MISSING path returns an EM… | — |
 | [.] | FILE-118 | MUST | behavioral | storage / hasChanged comparison | StorageProvider.hasChanged: null cached → changed; compares size, then ETag (when both present), then lastMod… | — |
 | [.] | FILE-119 | MUST | behavioral | engine / default engine (actual) | ExecutionEngineConfig.getDefaultEngine() unconditionally returns "parquet" (no DuckDB/classpath detection); n… | — |
-| [.] | FILE-120 | MUST | behavioral | statistics / HLL precision & hashing | HyperLogLogSketch default precision 14 (16384 buckets), ctor rejects <4 or >16; add() hashes via MD5 first-8-… | — |
-| [.] | FILE-121 | MUST | constraint | statistics / stats-rule activation gates | The statistics optimization rules are each gated by a system property defaulting FALSE: calcite.file.statisti… | — |
+| [x] | FILE-120 | MUST | behavioral | statistics / HLL precision & hashing | HyperLogLogSketch default precision 14 (16384 buckets), ctor rejects <4 or >16; add() hashes via MD5 first-8-… | file/StatisticsRequirementsTest (tagged FILE-120) |
+| [x] | FILE-121 | MUST | constraint | statistics / stats-rule activation gates | The statistics optimization rules are each gated by a system property defaulting FALSE: calcite.file.statisti… | file/StatisticsRequirementsTest (tagged FILE-121) |
 | [.] | FILE-122 | MUST | behavioral | optimization / count-star guards | CountStarStatisticsRule fires only for true COUNT(*) (empty groupSet, single non-distinct COUNT, empty argLis… | — |
 | [.] | FILE-123 | MUST | behavioral | optimization / pushdown/prune/reorder thresholds | SimpleFileFilterPushdownRule (ParquetTranslatableTable only): folds always-true to scan / always-false to emp… | — |
 | [.] | FILE-124 | SHOULD | behavioral | optimization / HLL rule instance bug | SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize() ignores th… | — |
 | [~] | FILE-125 | SHOULD | constraint | optimization / debug-artifact leak | DuckDBHLLCountDistinctRule writes hard-coded /tmp/duckdb_hll_rule_loaded.txt (static init) and appends /tmp/d… | file/ResolvedBugTargetsTest#duckdbHllRuleWritesNoTmpArtifac… |
-| [.] | FILE-126 | MUST | behavioral | statistics / parquet stats & NDV fallbacks | ParquetStatisticsExtractor reads min/max/nullCount/rowCount from the footer (no NDV), summing across row grou… | — |
+| [x] | FILE-126 | MUST | behavioral | statistics / parquet stats & NDV fallbacks | ParquetStatisticsExtractor reads min/max/nullCount/rowCount from the footer (no NDV), summing across row grou… | file/StatisticsRequirementsTest (tagged FILE-126) |
 | [.] | FILE-127 | MUST | behavioral | concurrency / parquet conversion lock | ConcurrentParquetCache.convertWithLocking: Redis lock if available, else per-(schema:absPath) ReentrantLock t… | — |
 | [.] | FILE-128 | MUST | behavioral | concurrency / source file locks | SourceFileLockManager.acquireReadLock takes a SHARED FileLock, acquireWriteLock EXCLUSIVE, 30s timeout, 100ms… | — |
 | [.] | FILE-129 | MUST | behavioral | concurrency / iceberg commit lock | Every table-mutating Iceberg commit runs under IcebergTableWriter.underCommitLock = a JVM monitor keyed by Ta… | — |
@@ -164,7 +164,7 @@
 | [.] | FILE-153 | MUST | behavioral | statistics / selectivity formulas | ColumnStatistics.getSelectivity pins: "=" → 1/distinct, "!=" → 1-1/distinct, IS NULL → nullCount/total, IS NO… | — |
 | [.] | FILE-154 | MUST | behavioral | engine / engine equivalence (tested) | Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for CSV/JSON… | — |
 | [.] | FILE-155 | MUST | behavioral | csv / explicit typed header | A typed CSV header ("EMPNO:int,NAME:string,SLACKER:boolean,...") drives column SQL types directly, independen… | — |
-| [.] | FILE-156 | SHOULD | behavioral | csv / decimal & config clamping | parseDecimal uses HALF_UP symmetric for negatives ("123.455"→123.46, "-123.455"→-123.46); precision overflow … | — |
+| [x] | FILE-156 | SHOULD | behavioral | csv / decimal & config clamping | parseDecimal uses HALF_UP symmetric for negatives ("123.455"→123.46, "-123.455"→-123.46); precision overflow … | file/ConverterUtilRequirementsTest (tagged FILE-156) |
 | [.] | FILE-157 | SHOULD | behavioral | csv / empty & header-only sources | An empty source and a disabled config both return an EMPTY type list; a header-only CSV returns one nullable … | — |
 | [.] | FILE-158 | SHOULD | behavioral | json / multi-table discovery defaults | jsonSearchPaths register one table per path (keyed by last segment); the wrapper/source table is NOT register… | — |
 | [.] | FILE-159 | MUST | behavioral | walking / glob semantics matrix | PathMatcher contract: "**" matches root+sub+nested, "**/*" matches sub+nested but NOT root, "*" matches only … | — |

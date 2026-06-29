@@ -646,7 +646,7 @@
 
 - id: FILE-040
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: HLL sketch reuse
   priority: MUST
@@ -656,7 +656,9 @@
   description: >
     HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files —
     the merged estimate is within bound of the union's exact distinct count.
-  tests: []
+  tests:
+    - file/StatisticsRequirementsTest (tagged FILE-040)
+  since: 2026-06
 
 - id: FILE-041
   module: file
@@ -741,7 +743,7 @@
 
 - id: FILE-046
   module: file
-  status: proposed
+  status: complete
   group: config
   category: storageType value set
   priority: MUST
@@ -749,7 +751,9 @@
   seam: catalog
   description: Supported storageType values are local, s3, http, sharepoint, graph, ftp, sftp, hdfs (sharepoint/graph have no URL scheme — schema-config only).
   source: file/docs/configuration-reference.md (Available Storage Providers)
-  tests: []
+  tests:
+    - file/StorageProviderRequirementsTest (tagged FILE-046)
+  since: 2026-06
 
 - id: FILE-047
   module: file
@@ -1685,7 +1689,7 @@
 
 - id: FILE-105
   module: file
-  status: proposed
+  status: complete
   group: markdown
   category: parsing & sparse rows
   priority: MUST
@@ -1698,7 +1702,9 @@
     unescaped '|', empty cell values are OMITTED from the row object (sparse). Base name is PascalCase.
   source: file/src/main/java/.../converters/MarkdownTableScanner.java 94-280
   notes: "RESOLVED C-10 (code-wrong): make markdown lowercase snake_case like the other converters."
-  tests: []
+  tests:
+    - file/ConverterUtilRequirementsTest (tagged FILE-105)
+  since: 2026-06
 
 - id: FILE-106
   module: file
@@ -1752,7 +1758,7 @@
 
 - id: FILE-109
   module: file
-  status: proposed
+  status: complete
   group: converters
   category: converter system properties
   priority: SHOULD
@@ -1764,7 +1770,9 @@
     SIMPLIFIED path (leading $, dot nav, single field[index]) — NOT Jayway (no filters/wildcards) — and
     write atomically via temp + ATOMIC_MOVE.
   source: file/src/main/java/.../converters/ConverterUtils.java 105-422; JsonPathConverter.java 97-148
-  tests: []
+  tests:
+    - file/ConverterUtilRequirementsTest (tagged FILE-109)
+  since: 2026-06
 
 # ===================================== storage / walking ========================================
 
@@ -1820,7 +1828,7 @@
 
 - id: FILE-113
   module: file
-  status: proposed
+  status: complete
   group: storage/local
   category: listFiles contract
   priority: MUST
@@ -1831,7 +1839,9 @@
     path; entries INCLUDE directory FileEntries (size 0); file size = File.length(); order is OS-dependent
     (File.listFiles). Missing file on open* throws IOException("File does not exist").
   source: file/src/main/java/.../storage/LocalFileStorageProvider.java 38-177
-  tests: []
+  tests:
+    - file/StorageProviderRequirementsTest (tagged FILE-113)
+  since: 2026-06
 
 - id: FILE-114
   module: file
@@ -1850,7 +1860,7 @@
 
 - id: FILE-115
   module: file
-  status: proposed
+  status: complete
   group: storage/ftp
   category: ftp/sftp defaults
   priority: SHOULD
@@ -1862,11 +1872,13 @@
     PreferredAuthentications "publickey,password", default user=System user, key auto-discovered from
     ~/.ssh/{id_rsa,id_ed25519,id_ecdsa,id_dsa}.
   source: file/src/main/java/.../storage/FtpStorageProvider.java 37-321; SftpStorageProvider.java 37-378
-  tests: []
+  tests:
+    - file/StorageProviderRequirementsTest (tagged FILE-115)
+  since: 2026-06
 
 - id: FILE-116
   module: file
-  status: proposed
+  status: complete
   group: storage/s3
   category: client config & listing
   priority: MUST
@@ -1878,7 +1890,9 @@
     non-recursive (commonPrefixes as dir entries) and follows continuation tokens; multipart write 16MB
     parts, <5MB simple put, batch-delete 1000; fixed socket 15min/conn 60s/retry 8.
   source: file/src/main/java/.../storage/S3StorageProvider.java 88-941
-  tests: []
+  tests:
+    - file/StorageProviderRequirementsTest (tagged FILE-116)
+  since: 2026-06
 
 - id: FILE-117
   module: file
@@ -1931,7 +1945,7 @@
 
 - id: FILE-120
   module: file
-  status: proposed
+  status: complete
   group: statistics
   category: HLL precision & hashing
   priority: MUST
@@ -1944,11 +1958,13 @@
     (add would NPE).
   source: file/src/main/java/.../statistics/HyperLogLogSketch.java 51-235
   notes: "RESOLVED C-03 (reconcile): publish ~2% as the guaranteed bound (real ~0.8%); align the code comment to ~2%."
-  tests: []
+  tests:
+    - file/StatisticsRequirementsTest (tagged FILE-120)
+  since: 2026-06
 
 - id: FILE-121
   module: file
-  status: proposed
+  status: complete
   group: statistics
   category: stats-rule activation gates
   priority: MUST
@@ -1961,7 +1977,9 @@
     StatisticsBuilder) default it false — runtime default depends on construction path.
   source: file/src/main/java/.../statistics/StatisticsConfig.java 96-268; rules/*.java onMatch
   notes: "RESOLVED C-04 (code-wrong): enable optimization rules by default (keep a disable switch); document sketch-gen vs rule-activation layers. HLL still APPROX-only per C-18."
-  tests: []
+  tests:
+    - file/StatisticsRequirementsTest (tagged FILE-121)
+  since: 2026-06
 
 - id: FILE-122
   module: file
@@ -2029,7 +2047,7 @@
 
 - id: FILE-126
   module: file
-  status: proposed
+  status: complete
   group: statistics
   category: parquet stats & NDV fallbacks
   priority: MUST
@@ -2042,7 +2060,9 @@
     sketch on missing column/file/error.
   source: file/src/main/java/.../statistics/{ParquetStatisticsExtractor,ColumnStatistics,StatisticsBuilder}.java
   notes: "RESOLVED C-16 (code-wrong): remove synthetic HLL seeds; raise/absent instead. Issue staged."
-  tests: []
+  tests:
+    - file/StatisticsRequirementsTest (tagged FILE-126)
+  since: 2026-06
 
 # ===================================== concurrency (new group) ==================================
 
@@ -2544,7 +2564,7 @@
 
 - id: FILE-156
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: decimal & config clamping
   priority: SHOULD
@@ -2555,7 +2575,9 @@
     overflow ("12345" into (4,0), "1e+5") throws IllegalArgumentException. TypeInferenceConfig.fromMap clamps
     samplingRate>1→1.0 and negative confidenceThreshold→0.0; nullEquivalents stored UPPERCASE.
   source: file/src/test/java/.../core/CsvEnumeratorTest.java; format/csv/CsvTypeInferrerTest.java
-  tests: []
+  tests:
+    - file/ConverterUtilRequirementsTest (tagged FILE-156)
+  since: 2026-06
 
 - id: FILE-157
   module: file
