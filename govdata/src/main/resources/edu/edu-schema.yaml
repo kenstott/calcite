@@ -2153,8 +2153,8 @@ views:
         i.inst_name,
         i.state_abbr,
         i.sector
-      FROM college_scorecard_programs p
-      LEFT JOIN ipeds_institutions i
+      FROM edu.college_scorecard_programs p
+      LEFT JOIN edu.ipeds_institutions i
         ON p.unit_id = i.unitid AND p.year = i.year
 
   - name: district_charter_profile
@@ -2218,8 +2218,8 @@ views:
         SUM(CASE WHEN c.award_level IN (1, 2)
             THEN c.awards ELSE 0 END)                                       AS certificate_total,
         SUM(c.awards)                                                       AS completions_total
-      FROM ipeds_institutions i
-      LEFT JOIN ipeds_completions c
+      FROM edu.ipeds_institutions i
+      LEFT JOIN edu.ipeds_completions c
         ON i.unitid = c.unitid AND i.year = c.year
         AND c.race = 99 AND c.sex = 99 AND c.majornum = 1
       GROUP BY
@@ -2275,18 +2275,18 @@ views:
       FROM naep_scores n
       LEFT JOIN (
         SELECT
-          fips,
-          year,
-          SUM(enrollment)                                               AS total_enrollment,
-          AVG(enrollment / NULLIF(teachers_total_fte, 0))              AS avg_pupil_teacher_ratio,
+          d2.fips,
+          d2.year,
+          SUM(d2.enrollment)                                           AS total_enrollment,
+          AVG(d2.enrollment / NULLIF(d2.teachers_total_fte, 0))        AS avg_pupil_teacher_ratio,
           COUNT(*)                                                      AS district_count,
-          SUM(school_frpl.frpl_count) * 1.0 / NULLIF(SUM(enrollment), 0) AS avg_frpl_rate
-        FROM ccd_districts d2
+          SUM(school_frpl.frpl_count) * 1.0 / NULLIF(SUM(d2.enrollment), 0) AS avg_frpl_rate
+        FROM edu.ccd_districts d2
         LEFT JOIN (
           SELECT leaid, year, SUM(free_or_reduced_price_lunch) AS frpl_count
-          FROM ccd_schools GROUP BY leaid, year
+          FROM edu.ccd_schools GROUP BY leaid, year
         ) school_frpl ON d2.leaid = school_frpl.leaid AND d2.year = school_frpl.year
-        GROUP BY fips, year
+        GROUP BY d2.fips, d2.year
       ) d ON n.jurisdiction = d.fips AND n.year = d.year
       WHERE n.variable_type = 'TOTAL' AND n.subgroup_name = 'All students'
 
@@ -2322,7 +2322,7 @@ views:
         i.hbcu,
         i.tribal_college,
         i.degree_granting
-      FROM ipeds_institutions i
+      FROM edu.ipeds_institutions i
       LEFT JOIN geo.counties c
         ON i.county_fips_str = c.county_fips
 

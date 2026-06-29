@@ -60,6 +60,7 @@ public final class DuckDBPendingViews {
     final String duckdbSchema;
     final String viewName;
     final String viewSql;
+    SQLException lastError;  // most recent create/validate failure, for end-of-flush reporting
 
     PendingView(String duckdbSchema, String viewName, String viewSql) {
       this.duckdbSchema = duckdbSchema;
@@ -126,55 +127,26 @@ public final class DuckDBPendingViews {
 
         LOGGER.info("Flushing {} deferred SQL views for database '{}'", pending.size(), dbPath);
 
+        // Fixpoint: each pass creates as many views as possible; ANY view that fails (its
+        // referenced table/view may simply not be created yet this pass) is retried in the next
+        // pass. Loop until a full pass resolves nothing new — at which point the remainder is
+        // genuinely unresolvable (a missing table/view, a missing column, or a circular reference),
+        // which is a view-design problem, not something more retries can fix.
         while (!pending.isEmpty()) {
           List<PendingView> failed = new ArrayList<>();
           for (PendingView pv : pending) {
-            try {
-              String sql =
-                  String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
-                  pv.duckdbSchema, pv.viewName, pv.viewSql);
-              try (Statement stmt = conn.createStatement()) {
-                stmt.execute(sql);
-              }
-              // Validate by actually executing the view (SELECT … LIMIT 0).
-              // DESCRIBE passes even when cross-schema refs are unavailable (DuckDB defers
-              // resolution), but a real execution will fail.  Drop unexecutable views so
-              // they never appear in JDBC metadata.
-              try (Statement validateStmt = conn.createStatement()) {
-                validateStmt.execute(
-                    String.format(
-                    "SELECT * FROM \"%s\".\"%s\" LIMIT 0", pv.duckdbSchema, pv.viewName));
-              } catch (SQLException validateEx) {
-                try (Statement dropStmt = conn.createStatement()) {
-                  dropStmt.execute(
-                      String.format(
-                      "DROP VIEW IF EXISTS \"%s\".\"%s\"", pv.duckdbSchema, pv.viewName));
-                } catch (SQLException ignored) {
-                  // best-effort drop
-                }
-                LOGGER.info("Dropped inaccessible view {}.{} (cross-schema ref unavailable): {}",
-                    pv.duckdbSchema, pv.viewName, firstLine(validateEx.getMessage()));
-                continue;
-              }
+            SQLException err = tryCreateView(conn, pv);
+            if (err == null) {
               LOGGER.info("✅ Created deferred view: {}.{}", pv.duckdbSchema, pv.viewName);
-            } catch (SQLException e) {
-              if (isDependencyError(e)) {
-                LOGGER.debug("Deferring view {}.{} — dependency not yet available: {}",
-                    pv.duckdbSchema, pv.viewName, firstLine(e.getMessage()));
-                failed.add(pv);
-              } else {
-                LOGGER.error("Failed to create view {}.{}: {}",
-                    pv.duckdbSchema, pv.viewName, e.getMessage());
-                LOGGER.error("View SQL: {}",
-                    pv.viewSql.length() > 300 ? pv.viewSql.substring(0, 300) + "..." : pv.viewSql);
-              }
+            } else {
+              pv.lastError = err;
+              failed.add(pv);
             }
           }
           if (failed.size() == pending.size()) {
-            // No progress — circular dependency or unresolvable errors
             for (PendingView pv : failed) {
-              LOGGER.error("Cannot create view {}.{} — unresolvable dependency or circular reference. SQL: {}",
-                  pv.duckdbSchema, pv.viewName,
+              LOGGER.error("Cannot create view {}.{} — {}. SQL: {}",
+                  pv.duckdbSchema, pv.viewName, classifyError(pv.lastError),
                   pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
             }
             break;
@@ -200,16 +172,50 @@ public final class DuckDBPendingViews {
     SQL_VIEW_NAMES.remove(dbPath);
   }
 
-  private static boolean isDependencyError(SQLException e) {
-    String msg = e.getMessage();
-    if (msg == null) {
-      return false;
+  /**
+   * Creates and validates one deferred view. Returns null on success; otherwise returns the error
+   * and leaves nothing half-created. DuckDB defers name resolution at CREATE time, so a view with
+   * an unresolved reference is created but fails the validating SELECT — it is dropped here so it
+   * never appears in JDBC metadata and so the next pass can retry it cleanly.
+   */
+  private static SQLException tryCreateView(Connection conn, PendingView pv) {
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute(String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
+          pv.duckdbSchema, pv.viewName, pv.viewSql));
+    } catch (SQLException createEx) {
+      return createEx;
     }
-    return msg.contains("does not exist")
-        || msg.contains("Table with name")
-        || msg.contains("View with name")
-        || msg.contains("Schema with name")
-        || msg.contains("Catalog Error");
+    try (Statement validateStmt = conn.createStatement()) {
+      validateStmt.execute(String.format("SELECT * FROM \"%s\".\"%s\" LIMIT 0",
+          pv.duckdbSchema, pv.viewName));
+      return null;
+    } catch (SQLException validateEx) {
+      try (Statement dropStmt = conn.createStatement()) {
+        dropStmt.execute(String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"",
+            pv.duckdbSchema, pv.viewName));
+      } catch (SQLException ignored) {
+        // best-effort drop
+      }
+      return validateEx;
+    }
+  }
+
+  /** Human-readable cause for a view that never resolved, from the underlying DuckDB error. */
+  private static String classifyError(SQLException e) {
+    String msg = e == null ? null : e.getMessage();
+    if (msg == null) {
+      return "unresolvable dependency or circular reference";
+    }
+    String lower = msg.toLowerCase();
+    if (lower.contains("binder error") || lower.contains("referenced column")
+        || (lower.contains("column") && lower.contains("not found"))) {
+      return "references a missing column: " + firstLine(msg);
+    }
+    if (lower.contains("does not exist")
+        && (lower.contains("table") || lower.contains("view") || lower.contains("catalog"))) {
+      return "references a missing table/view (or a circular view reference): " + firstLine(msg);
+    }
+    return firstLine(msg);
   }
 
   private static String firstLine(String msg) {

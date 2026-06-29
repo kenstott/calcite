@@ -134,6 +134,16 @@ public class GovDataDriver extends Driver {
         LOGGER.info("No data source specified, defaulting to 'sec'");
       }
 
+      // Debug: rebuild the shared DuckDB catalog from scratch (?rebuildCatalog=true or
+      // -Dgovdata.rebuild.catalog=true) so a run never serves stale views/tables from a catalog
+      // built before a code fix.
+      boolean rebuildCatalog =
+          "true".equalsIgnoreCase(extractParameter(paramString, "rebuildCatalog"))
+          || "true".equalsIgnoreCase(System.getProperty("govdata.rebuild.catalog"));
+      if (rebuildCatalog) {
+        deleteSharedCatalog();
+      }
+
       // Create model file — supports comma-delimited list of sources
       String modelPath = createModelFile(paramString, sourceParam);
 
@@ -201,15 +211,34 @@ public class GovDataDriver extends Driver {
    * An absolute path under the operating-dir base is used so all schemas resolve to the same file
    * regardless of the process working directory.
    */
-  private String sharedCatalogPath() {
+  private File sharedCatalogFile() {
     String base = System.getProperty("govdata.operating.dir.base");
     if (base == null || base.isEmpty()) {
       String home = System.getProperty("user.home");
       base = resolveOperatingDirBase((home != null && !home.isEmpty())
           ? home : System.getProperty("java.io.tmpdir"));
     }
+    return new File(base, ".duckdb/govdata.duckdb");
+  }
+
+  private String sharedCatalogPath() {
     // JSON-escape backslashes so Windows-style paths embed safely in the generated model.
-    return new File(base, ".duckdb/govdata.duckdb").getAbsolutePath().replace("\\", "\\\\");
+    return sharedCatalogFile().getAbsolutePath().replace("\\", "\\\\");
+  }
+
+  /**
+   * Debug aid: delete the shared DuckDB catalog (and its WAL) so the next connection rebuilds it
+   * from scratch. A persistent catalog built before a code fix can otherwise keep serving stale
+   * views/tables; rebuilding guarantees the catalog reflects the current code.
+   */
+  private void deleteSharedCatalog() {
+    File db = sharedCatalogFile();
+    File[] targets = new File[] {db, new File(db.getAbsolutePath() + ".wal")};
+    for (int i = 0; i < targets.length; i++) {
+      if (targets[i].exists() && targets[i].delete()) {
+        LOGGER.info("rebuildCatalog: deleted {}", targets[i].getAbsolutePath());
+      }
+    }
   }
 
   private String createSingleSourceModel(String paramString, String dataSource)

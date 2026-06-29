@@ -79,9 +79,10 @@ load_env() {
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
 
-  # Source DQ overrides if present (e.g., GOVDATA_JAR from run-all-dq.sh)
+  # Source DQ overrides only in an explicit DQ run (GOVDATA_DQ=true). Gating on file
+  # existence alone armed the -dq bucket reroute on every prod/preprod run.
   local env_dq="$GOVDATA_ROOT/.env.dq"
-  if [ -f "$env_dq" ]; then
+  if [ "${GOVDATA_DQ:-}" = "true" ] && [ -f "$env_dq" ]; then
     set -a
     # shellcheck disable=SC1090
     source <(tr -d '\r' < "$env_dq")   # CRLF-tolerant (see note above)

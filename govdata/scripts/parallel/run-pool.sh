@@ -355,6 +355,11 @@ fi
 # Verify shadow JAR before launching
 resolve_classpath > /dev/null
 
+# Record the resolved jar's signature (mtime-size) so the monitor loop can detect a mid-run
+# rebuild (build-jar restage) and gracefully recycle in-flight workers onto the new code.
+POOL_JAR="$(resolve_classpath)"
+POOL_JAR_SIG="$(stat -c '%Y-%s' "$POOL_JAR" 2>/dev/null || echo "")"
+
 PID_DIR="$SCRIPT_DIR/runs/pids"
 mkdir -p "$PID_DIR"
 
@@ -726,6 +731,22 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     fi
     ((i++)) || true
   done
+
+  # Detect a rebuilt jar (build-jar restage) and gracefully recycle in-flight workers onto it.
+  # _kill_worker_session sends SIGTERM to each worker's session first, so the worker JVM's
+  # LocalStagingStorageProvider shutdown hook flushes its staged batches before exit; the slot
+  # is then re-queued and relaunched reading the new (unversioned) jar bytes. Counts as a
+  # restart, not a failure.
+  if [ -n "${POOL_JAR_SIG:-}" ] && [ "${#active_pids[@]}" -gt 0 ]; then
+    cur_jar_sig=$(stat -c '%Y-%s' "$POOL_JAR" 2>/dev/null || echo "$POOL_JAR_SIG")
+    if [ "$cur_jar_sig" != "$POOL_JAR_SIG" ]; then
+      log_info "JAR CHANGED ($POOL_JAR) — gracefully recycling ${#active_pids[@]} in-flight worker(s) onto new code"
+      POOL_JAR_SIG="$cur_jar_sig"
+      for (( ji=${#active_pids[@]}-1; ji>=0; ji-- )); do
+        kill_and_requeue "$ji"
+      done
+    fi
+  fi
 
   # Check for stuck workers
   i=0

@@ -93,6 +93,8 @@ public final class GovDataModelVerificationRunner {
   private static final class Config {
     String model;
     String source;  // comma-separated dataSource list; connects via jdbc:govdata:source=
+    String primary; // primary schema (first in source) — only its tables are probed/reported;
+                    // any other schemas are mounted only to resolve the primary's cross-schema views
     int limit = 1;
     String expected;
     String probes;
@@ -145,6 +147,18 @@ public final class GovDataModelVerificationRunner {
 
   public static void main(String[] args) throws Exception {
     Config cfg = parseArgs(args);
+    // The primary schema is the first in --source; only it is probed/reported. Any other schemas
+    // in the list are mounted purely to resolve the primary's cross-schema (inter-schema) views.
+    if (cfg.source != null) {
+      String[] sp = cfg.source.split(",");
+      for (int i = 0; i < sp.length; i++) {
+        String s = sp[i].trim().toLowerCase();
+        if (!s.isEmpty()) {
+          cfg.primary = s;
+          break;
+        }
+      }
+    }
     if (cfg.source == null && cfg.model == null) {
       printUsage();
       System.exit(2);
@@ -200,18 +214,15 @@ public final class GovDataModelVerificationRunner {
       // then cross-reference with what the connection actually exposed. Inter-schema views are
       // dropped when their dependency schema is not mounted, so they surface here as MISSING
       // rather than being silently absent.
+      // Classify/report only the primary schema (secondary schemas were mounted just to resolve
+      // its cross-schema views). In --model mode (no primary), fall back to all exposed schemas.
       Set<String> verifiedSchemas = new LinkedHashSet<String>();
-      if (cfg.source != null) {
-        String[] parts = cfg.source.split(",");
-        for (int i = 0; i < parts.length; i++) {
-          String s = parts[i].trim().toLowerCase();
-          if (!s.isEmpty()) {
-            verifiedSchemas.add(s);
-          }
+      if (cfg.primary != null) {
+        verifiedSchemas.add(cfg.primary);
+      } else {
+        for (int i = 0; i < results.size(); i++) {
+          verifiedSchemas.add(results.get(i).schema.toLowerCase());
         }
-      }
-      for (int i = 0; i < results.size(); i++) {
-        verifiedSchemas.add(results.get(i).schema.toLowerCase());
       }
       Map<String, Defined> defined = classifyDefined(verifiedSchemas);
       Map<String, TableResult> exposed = new LinkedHashMap<String, TableResult>();
@@ -296,6 +307,11 @@ public final class GovDataModelVerificationRunner {
         continue;
       }
       if (!cfg.schemaFilter.isEmpty() && !cfg.schemaFilter.contains(slc)) {
+        continue;
+      }
+      // Probe/report only the primary schema; secondary schemas are mounted just to resolve the
+      // primary's cross-schema views.
+      if (cfg.primary != null && !slc.equals(cfg.primary)) {
         continue;
       }
       coords.add(new String[] {schema, table});

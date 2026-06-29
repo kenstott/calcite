@@ -101,6 +101,19 @@ public class LocalStagingStorageProvider implements StorageProvider {
     this.flushThreshold = resolveFlushThreshold();
     LOGGER.info("LocalStagingStorageProvider initialized: stagingDir={}, flushThreshold={}",
         stagingDir.getAbsolutePath(), flushThreshold);
+    // Flush staged-but-unbatched files on JVM shutdown (e.g. SIGTERM from a graceful pool
+    // restart when the jar is rebuilt mid-run), so an interrupted worker uploads its tail
+    // instead of stranding it. Idempotent: a clean completion already drained the map, so the
+    // hook then sees nothing to flush.
+    Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+      @Override public void run() {
+        try {
+          flushAll();
+        } catch (Exception e) {
+          LOGGER.warn("Shutdown flush failed: {}", e.getMessage());
+        }
+      }
+    }, "local-staging-flush"));
   }
 
   private static File resolveStagingDir() {
