@@ -183,7 +183,12 @@ public class DuckDBJdbcSchemaFactory {
 
           catalogPath = new File(duckdbDir, databaseFilename).getAbsolutePath();
         } else {
-          // Absolute path - use as-is
+          // Absolute path - use as-is, but ensure its parent directory exists so DuckDB can
+          // create the catalog file (the relative branch above mkdirs its dir; this one must too).
+          File parentDir = dbFile.getParentFile();
+          if (parentDir != null && !parentDir.exists()) {
+            parentDir.mkdirs();
+          }
           catalogPath = dbFile.getAbsolutePath();
         }
         LOGGER.info("Using configured database filename: {} (resolved to: {})", databaseFilename, catalogPath);
@@ -429,6 +434,20 @@ public class DuckDBJdbcSchemaFactory {
       // Enqueue SQL views for deferred creation (views may reference cross-schema tables
       // that don't exist yet during schema init — flushed lazily on first getTable() call)
       registerSqlViewsInDuckDB(catalogPath, duckdbSchema, operand);
+
+      // Durably fold the freshly-created Iceberg views into the base catalog file. Without this
+      // the view DDL lives only in the write-ahead log (.wal) and survives only a clean shutdown;
+      // an abrupt kill would leave an un-checkpointed .wal and force a full re-read of Iceberg
+      // metadata for every view on the next startup. Only meaningful for a persistent file catalog
+      // (the ephemeral temp-dir database is discarded, so a checkpoint would be wasted work).
+      if (catalogPath != null) {
+        try (Statement stmt = setupConn.createStatement()) {
+          stmt.execute("CHECKPOINT");
+          LOGGER.info("Checkpointed DuckDB catalog after view setup: {}", catalogPath);
+        } catch (SQLException e) {
+          LOGGER.warn("CHECKPOINT after view setup failed (non-fatal): {}", e.getMessage());
+        }
+      }
 
       // Debug: List all registered views
       try (Statement stmt = setupConn.createStatement();
