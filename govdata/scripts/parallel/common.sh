@@ -89,7 +89,7 @@ load_env() {
     set +a
   fi
 
-  local env_override="$SCRIPT_DIR/env.sh"
+  local env_override="$SCRIPT_DIR/.env.sh"
   if [ -f "$env_override" ]; then
     # shellcheck disable=SC1090
     source "$env_override"

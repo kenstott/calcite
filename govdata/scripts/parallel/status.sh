@@ -23,7 +23,7 @@ load_env
 
 TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
 if [ -z "$TRACKER_BUCKET" ]; then
-  echo "ERROR: CALCITE_TRACKER_S3_BUCKET not set. Source env.sh or export it."
+  echo "ERROR: CALCITE_TRACKER_S3_BUCKET not set. Source .env.sh or export it."
   exit 1
 fi
 
