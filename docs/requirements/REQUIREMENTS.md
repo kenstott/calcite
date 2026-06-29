@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 3 accepted, 12 complete, 8 in-progress, 147 proposed, 3 rejected)
+## file  (173: 3 accepted, 13 complete, 8 in-progress, 146 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -46,7 +46,7 @@
 | [.] | FILE-035 | SHOULD | behavioral | compression / Transparent decompression | Compressed sources (gzip, etc.) decompress transparently; the table equals the uncompressed golden. | — |
 | [.] | FILE-036 | MAY | behavioral | compaction / Compaction correctness | CompactionRunner merges small files/partitions without changing query results (value-identical before/after). | — |
 | [.] | FILE-037 | MUST | behavioral | interaction / Engine-storage interaction | duckdb reads storage directly via httpfs (DuckDBFunctionMapping), bypassing StorageProvider — the duckdb × st… | — |
-| [.] | FILE-038 | MUST | constraint | optimization / Transparency | Every exact optimization preserves results — a query with the rule enabled yields a table identical to the sa… | — |
+| [x] | FILE-038 | MUST | constraint | optimization / Transparency | Every exact optimization preserves results — a query with the rule enabled yields a table identical to the sa… | file/FileOptimizationTransparencyTest#exactOptimizationsPre… |
 | [.] | FILE-039 | MUST | behavioral | optimization / HLL approx-distinct | APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact COUNT(DISTINCT), and … | — |
 | [.] | FILE-040 | MUST | behavioral | optimization / HLL sketch reuse | HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files — the merged es… | — |
 | [.] | FILE-041 | MUST | behavioral | optimization / Count-star from statistics | COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and the rule fire… | — |

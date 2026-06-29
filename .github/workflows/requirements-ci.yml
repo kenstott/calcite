@@ -1,0 +1,42 @@
+name: Requirements CI
+
+# Enforces the per-adapter requirement ledgers under docs/requirements/ (see docs/testing/strategy.md):
+#   - schema validation (a MUST complete behavioral/constraint requirement must cite tests)
+#   - generated REQUIREMENTS.md is not stale (drift gate)
+# Coverage/triage are printed for visibility but do not fail the build (proposed/accepted reqs are
+# expected to lack tests during the rebuild).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'docs/requirements/**'
+      - 'docs/testing/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  requirements:
+    name: Validate requirement ledgers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install pyyaml
+
+      - name: Schema validation (fails on schema errors / MUST-complete-without-tests)
+        run: python3 docs/testing/validate_requirements.py
+
+      - name: Drift check (REQUIREMENTS.md regenerated)
+        run: python3 docs/testing/gen_requirements_md.py --check
+
+      - name: Coverage + triage (informational)
+        run: python3 docs/testing/validate_requirements.py --coverage --matrix --triage || true
