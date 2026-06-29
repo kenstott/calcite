@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 84 complete, 9 in-progress, 75 proposed, 3 rejected)
+## file  (173: 2 accepted, 91 complete, 9 in-progress, 68 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -26,7 +26,7 @@
 | [x] | FILE-015 | MUST | constraint | xlsx / Conversion idempotence | Re-converting an unchanged workbook produces byte-identical JSON and is skipped via the etag/mtime gate (Conv… | file/XlsxConversionIdempotenceTest#reConvertingUnchangedXls… |
 | [x] | FILE-016 | MUST | behavioral | docx / Extraction (decomposition) | DocxTableScanner scans the document body for inline tables and emits one JSON per detected table; the catalog… | file/ConverterDecompositionTest |
 | [x] | FILE-017 | MUST | behavioral | html / Extraction (decomposition) | HtmlTableScanner emits one JSON per detected HTML table; catalog golden pins the table-set. | file/TableExtractionRequirementsTest |
-| [.] | FILE-018 | SHOULD | behavioral | html / Crawl discovery | The HTML crawler (CrawlerConfiguration maxDepth / linkPattern / followExternalLinks) discovers the correct pa… | — |
+| [x] | FILE-018 | SHOULD | behavioral | html / Crawl discovery | The HTML crawler (CrawlerConfiguration maxDepth / linkPattern / followExternalLinks) discovers the correct pa… | file/HtmlCrawlerHttpPostRequirementsTest |
 | [x] | FILE-019 | SHOULD | behavioral | pptx / Extraction (decomposition) | PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set. | file/ConverterDecompositionTest |
 | [.] | FILE-020 | SHOULD | behavioral | xml / Extraction (decomposition) | XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set. | — |
 | [x] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | file/TableExtractionRequirementsTest |
@@ -44,7 +44,7 @@
 | [.] | FILE-033 | SHOULD | behavioral | partitioning / Incremental tracking | IncrementalTracker records processed partitions so a re-run only ingests new partitions (idempotent). | — |
 | [~] | FILE-034 | SHOULD | behavioral | schema-evolution / Column evolution | Across files with added/removed columns, the unified table exposes the superset with nulls for absent columns… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-035 | SHOULD | behavioral | compression / Transparent decompression | Compressed sources (gzip, etc.) decompress transparently; the table equals the uncompressed golden. | — |
-| [.] | FILE-036 | MAY | behavioral | compaction / Compaction correctness | CompactionRunner merges small files/partitions without changing query results (value-identical before/after). | — |
+| [x] | FILE-036 | MAY | behavioral | compaction / Compaction correctness | CompactionRunner merges small files/partitions without changing query results (value-identical before/after). | file/IcebergCompactionEnumeratorRequirementsTest |
 | [.] | FILE-037 | MUST | behavioral | interaction / Engine-storage interaction | duckdb reads storage directly via httpfs (DuckDBFunctionMapping), bypassing StorageProvider — the duckdb × st… | — |
 | [x] | FILE-038 | MUST | constraint | optimization / Transparency | Every exact optimization preserves results — a query with the rule enabled yields a table identical to the sa… | file/FileOptimizationTransparencyTest#exactOptimizationsPre… |
 | [x] | FILE-039 | MUST | behavioral | optimization / HLL approx-distinct | APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact COUNT(DISTINCT), and … | file/OptimizationRuleRequirementsTest |
@@ -83,7 +83,7 @@
 | [.] | FILE-072 | MUST | behavioral | iceberg / snapshot isolation | Each query reads a single consistent snapshot; concurrent readers see a consistent snapshot; each write is an… | — |
 | [x] | FILE-073 | SHOULD | behavioral | schema-evolution / resolution strategy defaults | Schema resolution defaults: parquet LATEST_SCHEMA_WINS, csv RICHEST_FILE, json LATEST_FILE. LATEST_SCHEMA_WIN… | file/CsvSchemaRequirementsTest (tagged FILE-073) |
 | [.] | FILE-074 | MUST | constraint | iceberg / read-only limitation | Iceberg READ integration is read-only (no INSERT/UPDATE/DELETE); position/equality deletes unsupported; only … | — |
-| [.] | FILE-075 | SHOULD | behavioral | write/iceberg / inline compaction | materialize.iceberg.runCompaction (default false) compacts a partition when small-file count hits compactionM… | — |
+| [x] | FILE-075 | SHOULD | behavioral | write/iceberg / inline compaction | materialize.iceberg.runCompaction (default false) compacts a partition when small-file count hits compactionM… | file/IcebergCompactionEnumeratorRequirementsTest |
 | [x] | FILE-076 | MUST | behavioral | optimization / count-star from metadata | COUNT(*) answered from Iceberg/Parquet-footer row counts (no scan), equal to a full-scan count, whenever the … | file/ExecutionRefinementRequirementsTest |
 | [x] | FILE-077 | SHOULD | behavioral | optimization / HLL error bound & gate | APPROX_COUNT_DISTINCT (and intercepted COUNT(DISTINCT)) answered from HLL sketches built per ingestion (stati… | file/ExecutionRefinementRequirementsTest |
 | [x] | FILE-078 | SHOULD | behavioral | optimization / pushdown operators | Filter pushdown (enableFilterPushdown, default on) pushes =,!=,<,>,<=,>=,IN,LIKE to storage; pushed results e… | file/ExecutionRefinementRequirementsTest |
@@ -141,7 +141,7 @@
 | [.] | FILE-130 | MUST | behavioral | conversion / staleness decision | ParquetConversionUtil.needsConversion skips re-conversion only when the cache exists AND source.lastModified(… | — |
 | [x] | FILE-131 | MUST | behavioral | conversion / conversion-record preservation | ConversionMetadata.recordTable preserves an existing non-DIRECT conversionType (e.g. SEC_XBRL_TO_PARQUET, ICE… | file/EtlMetadataRequirementsTest |
 | [.] | FILE-132 | MUST | behavioral | refresh / lazy trigger & anti-thrash | File-table refresh is LAZY (query-time: project/toRel/scan/getRowType per table type). needsRefresh() gates t… | — |
-| [.] | FILE-133 | MUST | behavioral | refresh / eager conversion watcher | ConversionFileWatcher is the ONLY eager/timer refresher: a daemon scheduleWithFixedDelay (default 60000ms whe… | — |
+| [x] | FILE-133 | MUST | behavioral | refresh / eager conversion watcher | ConversionFileWatcher is the ONLY eager/timer refresher: a daemon scheduleWithFixedDelay (default 60000ms whe… | file/WatcherRawCacheRequirementsTest |
 | [.] | FILE-134 | SHOULD | constraint | refresh / interval parsing | RefreshInterval.parse accepts ISO-8601 (P/PT) and "<n> (second|minute|hour|day)s?"; null/empty/unmatched → nu… | — |
 | [x] | FILE-135 | MUST | behavioral | refresh / partitioned staleness | RefreshablePartitionedParquetTable.filesChangedComparedToBaseline → true on null/empty baseline, file-count c… | file/RefreshLogicRequirementsTest |
 | [x] | FILE-136 | MUST | behavioral | refresh / parquet-cache rewrite | RefreshableParquetCacheTable.doRefresh, when the monitored source changed, deletes the old parquet + *.tmp.*.… | file/EtlMetadataRequirementsTest |
@@ -151,9 +151,9 @@
 | [x] | FILE-140 | MUST | behavioral | document-etl / circuit breaker & rate limit | HttpSource keeps a process-wide consecutive-503 counter per base URI; at threshold 5 it fast-skips via Skippe… | file/EtlTrackerRequirementsTest |
 | [.] | FILE-141 | MUST | structural | partitioning / incremental tracker keys | IncrementalTracker period key is year_quarter_month_week_day_day_of_week_<pipeline> with literal "NA" for abs… | — |
 | [.] | FILE-142 | MUST | behavioral | partitioning / empty vs complete (self-heal) | IncrementalTracker.markProcessedEmpty (HTTP 200, zero rows) is distinct from terminal complete: an empty peri… | — |
-| [.] | FILE-143 | MUST | behavioral | raw-cache / no-TTL & tier resolution | Raw cache is immutable with NO TTL — HttpSource.hasValidRawCache returns valid whenever the cache file exists… | — |
+| [x] | FILE-143 | MUST | behavioral | raw-cache / no-TTL & tier resolution | Raw cache is immutable with NO TTL — HttpSource.hasValidRawCache returns valid whenever the cache file exists… | file/WatcherRawCacheRequirementsTest |
 | [x] | FILE-144 | MUST | behavioral | iceberg / commit mode & version hint | IcebergTableWriter commits via AppendFiles (newAppend, append-only, relying on SQL dedup); replace-partitions… | file/IcebergRequirementsTest |
-| [.] | FILE-145 | MUST | behavioral | iceberg / time-travel precedence & stats gap | IcebergEnumerator snapshot precedence: snapshotId > asOfTimestamp (Instant.parse; bad format throws) > curren… | — |
+| [x] | FILE-145 | MUST | behavioral | iceberg / time-travel precedence & stats gap | IcebergEnumerator snapshot precedence: snapshotId > asOfTimestamp (Instant.parse; bad format throws) > curren… | file/IcebergCompactionEnumeratorRequirementsTest |
 | [.] | FILE-146 | MUST | behavioral | jdbc / second JDBC driver | A SECOND driver FileJdbcDriver accepts jdbc:calcite: URLs containing schema=file|materialized_view with snake… | — |
 | [~] | FILE-147 | MUST | behavioral | jdbc / AperioDriver defaults & var expansion | AperioDriver.buildOperand always emits lex=ORACLE, unquotedCasing=TO_LOWER, quotedCasing=UNCHANGED, table/col… | file/AperioDriverOperandTest#operandDefaults, file/AperioDr… |
 | [.] | FILE-148 | MUST | behavioral | table-naming / SmartCasing rules | SmartCasing.toSnakeCase lowercases an all-uppercase non-acronym without splitting (DEPTS→depts), applies a di… | — |
@@ -170,7 +170,7 @@
 | [.] | FILE-159 | MUST | behavioral | walking / glob semantics matrix | PathMatcher contract: "**" matches root+sub+nested, "**/*" matches sub+nested but NOT root, "*" matches only … | — |
 | [.] | FILE-160 | SHOULD | behavioral | storage / provider edge contracts | readRange beyond EOF returns a trimmed array (no padding/error). Local resolvePath normalizes ".." and lets a… | — |
 | [.] | FILE-161 | MUST | behavioral | partitioning / partition detection | PartitionDetector: extractHivePartitions parses ordered key=value segments across levels (special chars prese… | — |
-| [.] | FILE-162 | SHOULD | behavioral | storage/http / POST/GraphQL & mime override | HttpStorageProvider supports method=POST with a request body (REST search / GraphQL); a configured mimeType o… | — |
+| [x] | FILE-162 | SHOULD | behavioral | storage/http / POST/GraphQL & mime override | HttpStorageProvider supports method=POST with a request body (REST search / GraphQL); a configured mimeType o… | file/HtmlCrawlerHttpPostRequirementsTest |
 | [.] | FILE-163 | MUST | constraint | write/iceberg / writer preconditions & evolution | IcebergMaterializationWriter.initialize rejects null config (IAE), non-ICEBERG format (IAE), disabled materia… | — |
 | [.] | FILE-164 | SHOULD | structural | iceberg / metadata tables shape | IcebergMetadataTables.createMetadataTables returns exactly 5 ScannableTables: history (4 cols), snapshots (6 … | — |
 | [x] | FILE-165 | MUST | behavioral | partitioning / per-period completion isolation | IncrementalTracker keys completion per canonical period, so completing year 2025 never marks an unprocessed y… | file/NamingUnionTrackerRequirementsTest |

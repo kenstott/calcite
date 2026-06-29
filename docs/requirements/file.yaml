@@ -328,7 +328,7 @@
 
 - id: FILE-018
   module: file
-  status: proposed
+  status: complete
   group: html
   category: Crawl discovery
   priority: SHOULD
@@ -340,7 +340,9 @@
   description: >
     The HTML crawler (CrawlerConfiguration maxDepth / linkPattern / followExternalLinks) discovers
     the correct page-set; the discovery golden pins which pages are visited.
-  tests: []
+  tests:
+    - file/HtmlCrawlerHttpPostRequirementsTest
+  since: 2026-06
 
 - id: FILE-019
   module: file
@@ -612,14 +614,16 @@
 
 - id: FILE-036
   module: file
-  status: proposed
+  status: complete
   group: compaction
   category: Compaction correctness
   priority: MAY
   type: behavioral
   mode: write
   description: CompactionRunner merges small files/partitions without changing query results (value-identical before/after).
-  tests: []
+  tests:
+    - file/IcebergCompactionEnumeratorRequirementsTest
+  since: 2026-06
 
 # ================================ interaction cells =============================================
 
@@ -1227,7 +1231,7 @@
 
 - id: FILE-075
   module: file
-  status: proposed
+  status: complete
   group: write/iceberg
   category: inline compaction
   priority: SHOULD
@@ -1239,7 +1243,9 @@
     compactionMinFiles (inline 10; standalone CompactionRunner 3), merging files < compactionSmallFileSizeBytes
     (10MB) to compactionTargetFileSizeBytes (128MB), then expires non-current snapshots and removes orphans.
   source: file/docs/iceberg-integration.md (Inline Compaction)
-  tests: []
+  tests:
+    - file/IcebergCompactionEnumeratorRequirementsTest
+  since: 2026-06
 
 # ============================ optimization detail (seam: execution) =============================
 
@@ -2263,7 +2269,7 @@
 
 - id: FILE-133
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: eager conversion watcher
   priority: MUST
@@ -2276,7 +2282,9 @@
     advances stored mtime on success (failed conversion retries next tick), feeding JSON that
     RefreshableJsonTable then lazily picks up.
   source: file/src/main/java/.../refresh/ConversionFileWatcher.java 64-326
-  tests: []
+  tests:
+    - file/WatcherRawCacheRequirementsTest
+  since: 2026-06
 
 - id: FILE-134
   module: file
@@ -2445,7 +2453,7 @@
 
 - id: FILE-143
   module: file
-  status: proposed
+  status: complete
   group: raw-cache
   category: no-TTL & tier resolution
   priority: MUST
@@ -2458,7 +2466,9 @@
     to local) → origin (null). Commit is after a complete copy (partial never poisons cache).
   source: file/src/main/java/.../etl/HttpSource.java 3374-3468; etl/cache/CacheResolver.java 79-163
   notes: "RESOLVED C-05 (doc-wrong): no TTL is intended; fix docs to state the IncrementalTracker is the sole staleness authority."
-  tests: []
+  tests:
+    - file/WatcherRawCacheRequirementsTest
+  since: 2026-06
 
 # ===================================== iceberg semantics ========================================
 
@@ -2483,7 +2493,7 @@
 
 - id: FILE-145
   module: file
-  status: proposed
+  status: complete
   group: iceberg
   category: time-travel precedence & stats gap
   priority: MUST
@@ -2496,7 +2506,9 @@
     dedup. BUT IcebergTable.getStatistic always uses currentSnapshot row counts, ignoring snapshotId/asOfTimestamp.
   source: file/src/main/java/.../iceberg/{IcebergEnumerator,IcebergTable,IcebergTimeRangeResolver}.java
   notes: "RESOLVED C-22 (code-wrong): align getStatistic to the selected snapshotId/asOfTimestamp + test. Issue staged."
-  tests: []
+  tests:
+    - file/IcebergCompactionEnumeratorRequirementsTest
+  since: 2026-06
 
 # ===================================== jdbc / casing / constraints / vector / errors ============
 
@@ -2780,7 +2792,7 @@
 
 - id: FILE-162
   module: file
-  status: proposed
+  status: complete
   group: storage/http
   category: POST/GraphQL & mime override
   priority: SHOULD
@@ -2790,7 +2802,9 @@
     HttpStorageProvider supports method=POST with a request body (REST search / GraphQL); a configured
     mimeType overrides the server Content-Type in getMetadata; a missing URL → exists false, openInputStream IOException.
   source: file/src/test/java/.../storage/HttpStorageProviderTest.java
-  tests: []
+  tests:
+    - file/HtmlCrawlerHttpPostRequirementsTest
+  since: 2026-06
 
 - id: FILE-163
   module: file

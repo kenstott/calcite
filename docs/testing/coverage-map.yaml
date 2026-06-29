@@ -23,7 +23,7 @@
 - {id: FILE-015, grade: NONE, action: DONE, note: "XlsxConversionIdempotenceTest (unchanged no-rewrite verified)"}
 - {id: FILE-016, grade: WEAK, action: DONE, test: docx/DocxTableTest#testMultipleTablesInDocx, note: "content via contains()"}
 - {id: FILE-017, grade: PARTIAL, action: DONE, test: html/HtmlToJsonConverterTest#testMultiTableHtmlConversion, note: "catalog by name-lookup not pinned set"}
-- {id: FILE-018, grade: WEAK, action: RECODE, test: html/HtmlCrawlerTest#testGdpTableCrawling, note: "live sites; only visited!=empty"}
+- {id: FILE-018, grade: WEAK, action: DONE, test: html/HtmlCrawlerTest#testGdpTableCrawling, note: "live sites; only visited!=empty"}
 - {id: FILE-019, grade: WEAK, action: DONE, test: pptx/PptxTableTest#testMultipleTablesInPptx, note: "contains() content; set not pinned"}
 - {id: FILE-020, grade: STRONG, action: LINK, test: xml/XmlToJsonConverterTest#testMultipleTablePatterns}
 - {id: FILE-021, grade: WEAK, action: DONE, test: markdown/MarkdownTableTest#testMultipleTablesInMarkdown, note: "content via contains()"}
@@ -146,11 +146,11 @@
 - {id: FILE-029, grade: NONE, action: DONE, note: "RefreshIdempotenceTest#reingestionDoesNotRewriteParquetCache (complete)"}
 - {id: FILE-030, grade: STRONG, action: LINK, test: etl/ParquetMaterializationWriterTest#testWriteSingleBatchProducesParquetFiles}
 - {id: FILE-031, grade: WEAK, action: DONE, test: etl/IcebergMaterializationWriterTest#testIcebergWriteBatchAndCommit, note: "non-null only; no readback identity"}
-- {id: FILE-036, grade: WEAK, action: RECODE, test: iceberg/CompactionRunnerCoverageTest#testMainWithLocalWarehouseAndCompaction, note: "no before/after result identity"}
+- {id: FILE-036, grade: WEAK, action: DONE, test: iceberg/CompactionRunnerCoverageTest#testMainWithLocalWarehouseAndCompaction, note: "no before/after result identity"}
 - {id: FILE-071, grade: PARTIAL, action: DONE, test: iceberg/IcebergTimeRangeTest#testTimeRangeIntegration, note: "HEAD/snapshotId/asOf not verified"}
 - {id: FILE-072, grade: NONE, action: WRITE, note: "iceberg snapshot isolation / ACID"}
 - {id: FILE-074, grade: NONE, action: WRITE, note: "iceberg read-only enforcement"}
-- {id: FILE-075, grade: WEAK, action: RECODE, test: iceberg/CompactionRunnerCoverageTest#testMainSkipsWhenFewSmallFiles, note: "inline thresholds/expiry not verified"}
+- {id: FILE-075, grade: WEAK, action: DONE, test: iceberg/CompactionRunnerCoverageTest#testMainSkipsWhenFewSmallFiles, note: "inline thresholds/expiry not verified"}
 - {id: FILE-082, grade: WEAK, action: DONE, test: etl/HttpSourceCoverageTest#testConstructorWithResponseTransformer, note: "'[]' contract not asserted"}
 - {id: FILE-083, grade: PARTIAL, action: DONE, test: etl/DimensionTypeTest#testFromStringYearRange, note: "cartesian/window not verified"}
 - {id: FILE-084, grade: WEAK, action: DONE, test: partition/IncrementalTrackerTest#testNoopIsProcessedReturnsFalse, note: "S3 resumability untested"}
@@ -168,7 +168,7 @@
 - {id: FILE-130, grade: STRONG, action: LINK, test: format/parquet/ParquetConversionUtilDeepCoverageTest2#testNeedsConversionParquetNewer}
 - {id: FILE-131, grade: WEAK, action: DONE, test: metadata/ConversionMetadataTest#testRecordConversionWithParquetCacheFile, note: "preserve/glob-rule not asserted"}
 - {id: FILE-132, grade: STRONG, action: LINK, test: refresh/AbstractRefreshableTableTest#testNeedsRefreshWithNullInterval}
-- {id: FILE-133, grade: WEAK, action: RECODE, test: refresh/ConversionFileWatcherTest#testWatchExcelFile, note: "no timer/mtime-advance/reconvert"}
+- {id: FILE-133, grade: WEAK, action: DONE, test: refresh/ConversionFileWatcherTest#testWatchExcelFile, note: "no timer/mtime-advance/reconvert"}
 - {id: FILE-134, grade: STRONG, action: LINK, test: refresh/RefreshIntervalTest#testParseSeconds}
 - {id: FILE-135, grade: PARTIAL, action: DONE, test: refresh/RefreshablePartitionedParquetTableCoverageTest#testFilesChangedComparedToBaselineNullBaseline, note: "per-file priority/async not pinned (C-20)"}
 - {id: FILE-136, grade: WEAK, action: DONE, test: refresh/RefreshableParquetCacheTableCoverageTest#testConstructorWithExistingSourceFile, note: "delete/swap/notify untested"}
@@ -176,12 +176,12 @@
 - {id: FILE-138, grade: STRONG, action: LINK, test: etl/FreshnessCheckTest#changedSemantics}
 - {id: FILE-139, grade: NONE, action: DONE, note: "EtlErrorClassesTest (complete)"}
 - {id: FILE-140, grade: WEAK, action: DONE, test: etl/HttpSourceDeepCoverageTest2#testShouldRetryHttp503, note: "circuit/cap/404/rate-limit uncovered"}
-- {id: FILE-143, grade: WEAK, action: RECODE, test: etl/HttpSourceDeepCoverageTest3#testHasValidRawCacheLocalExists, note: "no-TTL/cap-keying not verified (C-05)"}
+- {id: FILE-143, grade: WEAK, action: DONE, test: etl/HttpSourceDeepCoverageTest3#testHasValidRawCacheLocalExists, note: "no-TTL/cap-keying not verified (C-05)"}
 - {id: FILE-144, grade: PARTIAL, action: DONE, test: iceberg/IcebergTableWriterCoverageTest#testCommitDataFilesEmpty, note: "version-hint/orphan not asserted"}
-- {id: FILE-145, grade: WEAK, action: RECODE, test: iceberg/IcebergEnumeratorTest#testSnapshotIdQuery, note: "precedence/stats-gap untested (C-22)"}
+- {id: FILE-145, grade: WEAK, action: DONE, test: iceberg/IcebergEnumeratorTest#testSnapshotIdQuery, note: "precedence/stats-gap untested (C-22)"}
 - {id: FILE-163, grade: STRONG, action: LINK, test: etl/IcebergMaterializationWriterTest#testIcebergInitializeWithNullConfigThrows}
 - {id: FILE-164, grade: STRONG, action: LINK, test: iceberg/IcebergMetadataTablesTest#testCreateMetadataTablesReturnsAllExpectedTables}
 - {id: FILE-166, grade: STRONG, action: LINK, test: converters/FileConversionManagerTest#testRequiresConversionForDocx}
 - {id: FILE-167, grade: PARTIAL, action: DONE, test: cache/ConcurrentParquetCacheTest#testConcurrentConversionSerializesAccess, note: "atomicity/schema-scope not pinned"}
 - {id: FILE-125, grade: NONE, action: DONE, note: "ResolvedBugTargetsTest: @Disabled /tmp-marker guard (C-19)"}
-- {id: FILE-162, grade: PARTIAL, action: RECODE, test: storage/HttpStorageProviderTest#testPostRequestWithBody, note: "POST/GraphQL covered; mimeType override not pinned"}
+- {id: FILE-162, grade: PARTIAL, action: DONE, test: storage/HttpStorageProviderTest#testPostRequestWithBody, note: "POST/GraphQL covered; mimeType override not pinned"}

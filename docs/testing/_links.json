@@ -1,7 +1,9 @@
 {
-  "FILE-095": ["file/CatalogErrorRequirementsTest"],
-  "FILE-110": ["file/CatalogErrorRequirementsTest"],
-  "FILE-111": ["file/CatalogErrorRequirementsTest"],
-  "FILE-152": ["file/HllAccuracyEngineParityRequirementsTest"],
-  "FILE-154": ["file/HllAccuracyEngineParityRequirementsTest"]
+  "FILE-036": ["file/IcebergCompactionEnumeratorRequirementsTest"],
+  "FILE-075": ["file/IcebergCompactionEnumeratorRequirementsTest"],
+  "FILE-145": ["file/IcebergCompactionEnumeratorRequirementsTest"],
+  "FILE-133": ["file/WatcherRawCacheRequirementsTest"],
+  "FILE-143": ["file/WatcherRawCacheRequirementsTest"],
+  "FILE-018": ["file/HtmlCrawlerHttpPostRequirementsTest"],
+  "FILE-162": ["file/HtmlCrawlerHttpPostRequirementsTest"]
 }
