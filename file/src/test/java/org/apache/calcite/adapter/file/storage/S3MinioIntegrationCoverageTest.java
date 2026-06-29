@@ -22,9 +22,7 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,9 +51,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests for {@link S3StorageProvider} using a MinIO S3-compatible server.
  *
- * <p>Requires MinIO running at {@code http://localhost:9000} with default credentials
- * {@code minioadmin/minioadmin}. Tests are skipped via JUnit assumption if MinIO is
- * not available.
+ * <p>Runs against a dedicated EPHEMERAL MinIO container ({@link MinioTestContainer},
+ * credentials {@code minioadmin/minioadmin}) started for the suite and torn down at
+ * the end via a JVM shutdown hook. The tests NEVER touch a standing MinIO/R2 at
+ * {@code http://localhost:9000}. If Docker is unavailable the container fails to start.
  *
  * <p>Run with: {@code ./gradlew :file:test -PincludeTags=integration --tests
  * "*S3MinioIntegrationCoverageTest*"}
@@ -64,10 +63,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @Execution(ExecutionMode.SAME_THREAD)
 public class S3MinioIntegrationCoverageTest {
 
-  private static final String ENDPOINT = "http://localhost:9000";
-  private static final String ACCESS_KEY = "minioadmin";
-  private static final String SECRET_KEY = "minioadmin";
-  private static final String REGION = "us-east-1";
+  /** Endpoint of the dedicated EPHEMERAL MinIO container (random mapped port). */
+  private static final String ENDPOINT = MinioTestContainer.endpoint();
+  private static final String ACCESS_KEY = MinioTestContainer.accessKey();
+  private static final String SECRET_KEY = MinioTestContainer.secretKey();
+  private static final String REGION = MinioTestContainer.region();
   private static final String BUCKET = "test-bucket";
 
   /** Unique prefix per test run to avoid collisions across parallel test runs. */
@@ -87,26 +87,11 @@ public class S3MinioIntegrationCoverageTest {
   // -----------------------------------------------------------------------
 
   @BeforeAll
-  static void checkMinioAvailable() {
-    try {
-      java.net.HttpURLConnection conn =
-          (java.net.HttpURLConnection) java.net.URI.create(
-              ENDPOINT + "/minio/health/live").toURL().openConnection();
-      conn.setConnectTimeout(3000);
-      conn.setReadTimeout(3000);
-      conn.setRequestMethod("GET");
-      int code = conn.getResponseCode();
-      Assumptions.assumeTrue(code == 200,
-          "MinIO not available at " + ENDPOINT + " (HTTP " + code + ")");
-      conn.disconnect();
-    } catch (Exception e) {
-      Assumptions.assumeTrue(false,
-          "MinIO not available at " + ENDPOINT + ": " + e.getMessage());
-    }
-  }
-
-  @BeforeAll
   static void setupS3Client() {
+    // Use the dedicated EPHEMERAL MinIO container (never the standing localhost:9000).
+    MinioTestContainer.ensureStarted();
+    MinioTestContainer.createBucket(BUCKET);
+
     BasicAWSCredentials credentials = new BasicAWSCredentials(ACCESS_KEY, SECRET_KEY);
     s3Client = AmazonS3ClientBuilder.standard()
         .withEndpointConfiguration(
@@ -114,11 +99,6 @@ public class S3MinioIntegrationCoverageTest {
         .withCredentials(new AWSStaticCredentialsProvider(credentials))
         .withPathStyleAccessEnabled(true)
         .build();
-
-    // Ensure test bucket exists
-    if (!s3Client.doesBucketExistV2(BUCKET)) {
-      s3Client.createBucket(BUCKET);
-    }
   }
 
   @AfterEach

@@ -18,6 +18,7 @@ import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
 import org.apache.calcite.adapter.file.refresh.RefreshablePartitionedParquetTable;
+import org.apache.calcite.adapter.file.storage.MinioTestContainer;
 import org.apache.calcite.adapter.file.storage.S3StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.schema.Schema;
@@ -37,7 +38,6 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -48,8 +48,6 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -90,9 +88,11 @@ import static org.junit.jupiter.api.Assertions.*;
  *       getRowType, scan</li>
  * </ul>
  *
- * <p>Requires MinIO running at {@code http://localhost:9000} with default
- * credentials {@code minioadmin/minioadmin}. Tests are skipped via JUnit
- * assumption if MinIO is not available.
+ * <p>Runs against a dedicated EPHEMERAL MinIO container
+ * ({@link org.apache.calcite.adapter.file.storage.MinioTestContainer}, credentials
+ * {@code minioadmin/minioadmin}) started for the suite and torn down at the end via a
+ * JVM shutdown hook. The tests NEVER touch a standing MinIO/R2 at
+ * {@code http://localhost:9000}. If Docker is unavailable the container fails to start.
  *
  * <p>Run with:
  * <pre>
@@ -104,10 +104,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @Execution(ExecutionMode.SAME_THREAD)
 public class S3DeepIntegrationCoverageTest {
 
-  private static final String ENDPOINT = "http://localhost:9000";
-  private static final String ACCESS_KEY = "minioadmin";
-  private static final String SECRET_KEY = "minioadmin";
-  private static final String REGION = "us-east-1";
+  /** Endpoint of the dedicated EPHEMERAL MinIO container (random mapped port). */
+  private static final String ENDPOINT = MinioTestContainer.endpoint();
+  private static final String ACCESS_KEY = MinioTestContainer.accessKey();
+  private static final String SECRET_KEY = MinioTestContainer.secretKey();
+  private static final String REGION = MinioTestContainer.region();
   private static final String BUCKET = "test-bucket";
 
   /** Unique prefix per test run to avoid collisions. */
@@ -127,26 +128,11 @@ public class S3DeepIntegrationCoverageTest {
   // -----------------------------------------------------------------------
 
   @BeforeAll
-  static void checkMinioAvailable() {
-    try {
-      HttpURLConnection conn =
-          (HttpURLConnection) URI.create(
-              ENDPOINT + "/minio/health/live").toURL().openConnection();
-      conn.setConnectTimeout(3000);
-      conn.setReadTimeout(3000);
-      conn.setRequestMethod("GET");
-      int code = conn.getResponseCode();
-      Assumptions.assumeTrue(code == 200,
-          "MinIO not available at " + ENDPOINT + " (HTTP " + code + ")");
-      conn.disconnect();
-    } catch (Exception e) {
-      Assumptions.assumeTrue(false,
-          "MinIO not available at " + ENDPOINT + ": " + e.getMessage());
-    }
-  }
-
-  @BeforeAll
   static void setupS3Client() {
+    // Use the dedicated EPHEMERAL MinIO container (never the standing localhost:9000).
+    MinioTestContainer.ensureStarted();
+    MinioTestContainer.createBucket(BUCKET);
+
     BasicAWSCredentials credentials = new BasicAWSCredentials(ACCESS_KEY, SECRET_KEY);
     s3Client = AmazonS3ClientBuilder.standard()
         .withEndpointConfiguration(
@@ -154,11 +140,6 @@ public class S3DeepIntegrationCoverageTest {
         .withCredentials(new AWSStaticCredentialsProvider(credentials))
         .withPathStyleAccessEnabled(true)
         .build();
-
-    // Ensure test bucket exists
-    if (!s3Client.doesBucketExistV2(BUCKET)) {
-      s3Client.createBucket(BUCKET);
-    }
   }
 
   @AfterEach

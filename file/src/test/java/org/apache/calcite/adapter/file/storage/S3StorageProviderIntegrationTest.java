@@ -10,11 +10,7 @@
  */
 package org.apache.calcite.adapter.file.storage;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 
 import org.junit.jupiter.api.AfterAll;
@@ -23,16 +19,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,10 +44,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * wiring established here (custom endpoint, path-style access, static credentials) is
  * the same wiring used against any S3-compatible service.
  *
- * <p>The container is started once for the class in {@link #startMinio()} and torn
- * down in {@link #stopMinio()}. A control-plane {@link AmazonS3} client (built the
- * same way the provider builds its own client) is used only to create the bucket and
- * to upload the known fixture objects; every assertion exercises the provider itself.
+ * <p>The dedicated EPHEMERAL container is the shared {@link MinioTestContainer},
+ * started on first use and torn down at suite end via a JVM shutdown hook. A
+ * control-plane {@link AmazonS3} client (built the same way the provider builds its
+ * own client) is used only to create the bucket and to upload the known fixture
+ * objects; every assertion exercises the provider itself.
  *
  * <p>Run with:
  * {@code ./gradlew :file:test -PincludeTags="FILE-023,FILE-065" --console=plain}
@@ -64,17 +57,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Execution(ExecutionMode.SAME_THREAD)
 public class S3StorageProviderIntegrationTest {
 
-  private static final String IMAGE = "minio/minio:latest";
-  private static final int MINIO_PORT = 9000;
-  private static final String ACCESS_KEY = "minioadmin";
-  private static final String SECRET_KEY = "minioadmin";
-  private static final String REGION = "us-east-1";
+  private static final String ACCESS_KEY = MinioTestContainer.accessKey();
+  private static final String SECRET_KEY = MinioTestContainer.secretKey();
+  private static final String REGION = MinioTestContainer.region();
   private static final String BUCKET = "calcite-it-bucket";
 
-  /** Manual lifecycle (started in @BeforeAll, stopped in @AfterAll). */
-  private static GenericContainer<?> minio;
-
-  /** Custom endpoint of the running MinIO container, e.g. http://localhost:32812. */
+  /** Custom endpoint of the shared ephemeral MinIO container. */
   private static String endpoint;
 
   /** Control-plane client used ONLY to create the bucket + upload fixtures. */
@@ -86,33 +74,15 @@ public class S3StorageProviderIntegrationTest {
 
   @BeforeAll
   static void startMinio() {
-    minio = new GenericContainer<>(DockerImageName.parse(IMAGE))
-        .withCommand("server", "/data")
-        .withEnv("MINIO_ROOT_USER", ACCESS_KEY)
-        .withEnv("MINIO_ROOT_PASSWORD", SECRET_KEY)
-        .withExposedPorts(MINIO_PORT)
-        .waitingFor(
-            Wait.forHttp("/minio/health/ready")
-                .forPort(MINIO_PORT)
-                .withStartupTimeout(Duration.ofMinutes(2)));
-    minio.start();
-
-    endpoint = "http://" + minio.getHost() + ":" + minio.getMappedPort(MINIO_PORT);
+    // Use the shared, dedicated EPHEMERAL MinIO container (DRY; never localhost:9000).
+    MinioTestContainer.ensureStarted();
+    endpoint = MinioTestContainer.endpoint();
 
     // Build the control-plane client exactly the way the provider does: custom
     // endpoint + path-style + static creds. This proves the wiring before any test.
-    controlClient = AmazonS3ClientBuilder.standard()
-        .withEndpointConfiguration(
-            new AwsClientBuilder.EndpointConfiguration(endpoint, REGION))
-        .withCredentials(
-            new AWSStaticCredentialsProvider(
-                new BasicAWSCredentials(ACCESS_KEY, SECRET_KEY)))
-        .withPathStyleAccessEnabled(true)
-        .build();
+    controlClient = MinioTestContainer.newClient();
 
-    if (!controlClient.doesBucketExistV2(BUCKET)) {
-      controlClient.createBucket(BUCKET);
-    }
+    MinioTestContainer.createBucket(BUCKET);
   }
 
   @AfterAll
@@ -121,10 +91,7 @@ public class S3StorageProviderIntegrationTest {
       controlClient.shutdown();
       controlClient = null;
     }
-    if (minio != null) {
-      minio.stop();
-      minio = null;
-    }
+    // The shared container is torn down by MinioTestContainer's JVM shutdown hook.
   }
 
   // -----------------------------------------------------------------------

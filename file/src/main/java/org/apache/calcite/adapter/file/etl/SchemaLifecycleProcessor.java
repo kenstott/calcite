@@ -420,9 +420,16 @@ public class SchemaLifecycleProcessor {
         Object instance = clazz.getDeclaredConstructor().newInstance();
         if (instance instanceof DataProvider) {
           if (instance instanceof StorageAwareDataProvider) {
+            // When no sourceDirectory is configured, the raw-cache root must still be scoped to
+            // the schema (<raw>/<schema>/<table>/…) to match the ${GOVDATA_CACHE_DIR}/<schema>
+            // operand convention. getGovDataCacheDir() is the UNSCOPED bucket root; passing it
+            // bare let StorageAwareDataProviders (e.g. geo's TigerDataProvider) write at the root
+            // (<raw>/tiger instead of <raw>/geo/tiger).
             String cacheDir = sourceDirectory != null ? sourceDirectory
-                : org.apache.calcite.adapter.file.storage.StorageProviderFactory
-                    .getGovDataCacheDir();
+                : sourceStorageProvider.resolvePath(
+                    org.apache.calcite.adapter.file.storage.StorageProviderFactory
+                        .getGovDataCacheDir(),
+                    this.config.getName());
             ((StorageAwareDataProvider) instance)
                 .setStorageProvider(sourceStorageProvider, cacheDir);
           }
