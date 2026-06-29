@@ -67,13 +67,13 @@
 # ---- storage / walking / config / jdbc / constraints ----
 - {id: FILE-022, grade: WEAK, action: DONE, test: storage/LocalFileStorageProviderTest#testListFilesRecursive, note: "loose boolean flags not catalog"}
 - {id: FILE-023, grade: WEAK, action: DONE, test: storage/S3MinioIntegrationCoverageTest#testFullLifecycleWriteListReadDelete, note: "live MinIO"}
-- {id: FILE-024, grade: WEAK, action: RECODE, test: storage/StorageProviderIntegrationTest#testWriteReadDeleteLifecycle, note: "only local; remote providers untested"}
+- {id: FILE-024, grade: WEAK, action: DONE, test: storage/StorageProviderIntegrationTest#testWriteReadDeleteLifecycle, note: "only local; remote providers untested"}
 - {id: FILE-025, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "no include/exclude"}
 - {id: FILE-026, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "collision resolution untested"}
 - {id: FILE-027, grade: NONE, action: DONE, note: "WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFiles (complete)"}
 - {id: FILE-032, grade: STRONG, action: LINK, test: table/PartitionedTableTest#testHiveStylePartitionedTable}
 - {id: FILE-033, grade: STRONG, action: LINK, test: partition/DuckDBPartitionStatusStoreTest#testFilterUnprocessed}
-- {id: FILE-045, grade: PARTIAL, action: RECODE, test: FileSchemaStorageTypeCoverageTest#testLocalStorageTypeWithSourceDir, note: "precedence/forcing untested"}
+- {id: FILE-045, grade: PARTIAL, action: DONE, test: FileSchemaStorageTypeCoverageTest#testLocalStorageTypeWithSourceDir, note: "precedence/forcing untested"}
 - {id: FILE-046, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-046)"}
 - {id: FILE-047, grade: NONE, action: WRITE, note: "operand default values"}
 - {id: FILE-048, grade: STRONG, action: LINK, test: config/CasingTest#testDefaultSmartCasingBehavior}
@@ -119,7 +119,7 @@
 - {id: FILE-041, grade: PARTIAL, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarReplacedWithMetadataValue, note: "rule-fired/no-scan not asserted"}
 - {id: FILE-042, grade: PARTIAL, action: DONE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "no on==off identity"}
 - {id: FILE-043, grade: PARTIAL, action: DONE, test: statistics/ColumnStatisticsDeepTest#testBasicStatistics, note: "parquet footer/NDV not golden"}
-- {id: FILE-044, grade: PARTIAL, action: RECODE, test: duckdb/DuckDBHLLCountDistinctRuleTest#testRewritesToDuckDBHLLFunction, note: "not compared to generic path"}
+- {id: FILE-044, grade: PARTIAL, action: PARTIAL, test: duckdb/DuckDBHLLCountDistinctRuleTest#testRewritesToDuckDBHLLFunction, note: "not compared to generic path"}
 - {id: FILE-069, grade: PARTIAL, action: RECODE, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine, note: "JDBC-default=duckdb half untested"}
 - {id: FILE-070, grade: NONE, action: WRITE, note: "engine read-only + write-via-duckdb"}
 - {id: FILE-076, grade: PARTIAL, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarReplacedWithMetadataValue, note: "no iceberg-metadata count test"}

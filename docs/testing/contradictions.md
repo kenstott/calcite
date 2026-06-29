@@ -165,3 +165,8 @@ rewrite (track as gaps).
 - **Found by:** RECODE wave 5 (TableExtractionRequirementsTest).
 - **Discrepancy:** FILE-056 states nested arrays become CHILD tables with a synthesized parent-id FK column. `JsonMultiTableFactory.createTables` maps each JSONPath to exactly one `JsonScannableTable`; there is no nested-array→child promotion and no FK injection anywhere in `format/json/*`. A nested array becomes its own table ONLY via an explicit JSONPath aimed at it.
 - **Status:** FILE-056 description amended to match reality (one table per path; nested array via explicit path; no auto FK). Resolution: doc was overstated.
+
+## C-31 — file-adapter ClickHouse engine views not enumerated by Calcite JdbcSchema (FILE-044)
+- **Found by:** live-service wave (ClickHouseEngineConsistencyIntegrationTest).
+- **Discrepancy:** executionEngine=clickhouse (ClickHouseJdbcSchemaFactory) creates `CREATE OR REPLACE VIEW s.<table> AS SELECT * FROM file('<parquet>','Parquet')` on the server (confirmed in factory logs), but `JdbcSchema.getTableNames()` returns [] for the ClickHouse database, so a query through jdbc:calcite fails validation "Object '<table>' not found". The engine cannot be driven end-to-end through Calcite. (Also: clickhouse-jdbc 0.7.1 returns a bare "Query failed" for statements that succeed over the ClickHouse HTTP interface.)
+- **Status:** FILE-044 kept **in-progress**. The integration test proves the clickhouse model creates the views and that ClickHouse-server-side COUNT/filter/GROUP BY + uniq() match the parquet path; the through-Calcite consistency is blocked pending a fix to ClickHouseJdbcSchema view enumeration.

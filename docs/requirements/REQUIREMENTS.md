@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 95 complete, 9 in-progress, 64 proposed, 3 rejected)
+## file  (173: 2 accepted, 97 complete, 10 in-progress, 61 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -32,7 +32,7 @@
 | [x] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | file/TableExtractionRequirementsTest |
 | [x] | FILE-022 | MUST | behavioral | storage/local / Storage seam | LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and openInputStream re… | file/CompressionStorageRequirementsTest |
 | [x] | FILE-023 | MUST | behavioral | storage/s3 / Storage seam | S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam. | file/storage/S3StorageProviderIntegrationTest |
-| [.] | FILE-024 | SHOULD | behavioral | storage/remote / Storage seam | Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where listable) the corr… | — |
+| [x] | FILE-024 | SHOULD | behavioral | storage/remote / Storage seam | Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where listable) the corr… | file/storage/StorageSelectionRequirementsTest |
 | [x] | FILE-025 | MUST | behavioral | walking / Discovery | A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude rules; the d… | file/WalkingDiscoveryRequirementsTest |
 | [x] | FILE-026 | MUST | structural | walking / Table-set assembly | The discovered catalog assembles into a schema: table names derived from paths, partition columns recognized,… | file/WalkingDiscoveryRequirementsTest |
 | [x] | FILE-027 | MUST | behavioral | walking / Incremental refresh | Re-walking detects added / removed / changed files and updates the table-set correctly; an unchanged tree is … | file/WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFi… |
@@ -52,8 +52,8 @@
 | [x] | FILE-041 | MUST | behavioral | optimization / Count-star from statistics | COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and the rule fire… | file/OptimizationRuleRequirementsTest |
 | [x] | FILE-042 | SHOULD | behavioral | optimization / Pushdown / pruning | Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule, SimpleFileColumnPrunin… | file/OptimizationRuleRequirementsTest |
 | [x] | FILE-043 | MUST | structural | optimization / Statistics accuracy | ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong stats silently c… | file/StatisticsRuleFiringRequirementsTest |
-| [.] | FILE-044 | SHOULD | behavioral | optimization / Engine-specific parity | Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule, ClickHouseHLLC… | — |
-| [.] | FILE-045 | MUST | behavioral | config / storageType precedence | Selection priority: (1) schema-level storageType forces ALL files through that provider and `directory` is ig… | — |
+| [~] | FILE-044 | SHOULD | behavioral | optimization / Engine-specific parity | Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule, ClickHouseHLLC… | file/clickhouse/ClickHouseEngineConsistencyIntegrationTest |
+| [x] | FILE-045 | MUST | behavioral | config / storageType precedence | Selection priority: (1) schema-level storageType forces ALL files through that provider and `directory` is ig… | file/storage/StorageSelectionRequirementsTest |
 | [x] | FILE-046 | MUST | structural | config / storageType value set | Supported storageType values are local, s3, http, sharepoint, graph, ftp, sftp, hdfs (sharepoint/graph have n… | file/StorageProviderRequirementsTest (tagged FILE-046) |
 | [.] | FILE-047 | MUST | structural | config / operand defaults | Operand defaults: recursive=true (README says false for the JDBC driver — reconcile), executionEngine=parquet… | — |
 | [.] | FILE-048 | MUST | behavioral | config / name casing | tableNameCasing/columnNameCasing ∈ {SMART_CASING (→snake_case, default), UPPER, LOWER, UNCHANGED}; SMART_CASI… | — |

@@ -1,4 +1,4 @@
 {
-  "FILE-064": ["file/storage/HDFSStorageProviderIntegrationTest"],
-  "FILE-067": ["file/storage/SftpFtpStorageProviderIntegrationTest"]
+  "FILE-045": ["file/storage/StorageSelectionRequirementsTest"],
+  "FILE-024": ["file/storage/StorageSelectionRequirementsTest"]
 }

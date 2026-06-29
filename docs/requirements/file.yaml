@@ -425,7 +425,7 @@
 
 - id: FILE-024
   module: file
-  status: proposed
+  status: complete
   group: storage/remote
   category: Storage seam
   priority: SHOULD
@@ -436,7 +436,9 @@
     Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where
     listable) the correct catalog. One seam golden per provider; refine into separate reqs later.
   applies: { storagetypes: [http, ftp, sftp, hdfs, sharepoint] }
-  tests: []
+  tests:
+    - file/storage/StorageSelectionRequirementsTest
+  since: 2026-06
 
 # =============================== walking sources & assembly ======================================
 
@@ -749,7 +751,7 @@
 
 - id: FILE-044
   module: file
-  status: proposed
+  status: in-progress
   group: optimization
   category: Engine-specific parity
   priority: SHOULD
@@ -760,8 +762,14 @@
     Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule,
     ClickHouseHLLCountDistinctRule, ClickHouseIcebergCountStarRule) produce results consistent with
     the generic path (within bound for HLL).
+  notes: "C-31: ClickHouse-server-side parity (COUNT/filter/GROUP BY + uniq() vs parquet) is asserted
+    by ClickHouseEngineConsistencyIntegrationTest, but the file-adapter clickhouse engine cannot be
+    driven through jdbc:calcite — JdbcSchema does not enumerate the file()-backed views it creates.
+    Through-Calcite ClickHouse parity is blocked pending the enumeration fix."
   applies: { engines: [duckdb, clickhouse] }
-  tests: []
+  tests:
+    - file/clickhouse/ClickHouseEngineConsistencyIntegrationTest
+  since: 2026-06
 
 # ###############################################################################################
 # Reverse-engineered from file/docs/*.md and file/README.md (doc pass — to be verified vs code).
@@ -772,7 +780,7 @@
 
 - id: FILE-045
   module: file
-  status: proposed
+  status: complete
   group: config
   category: storageType precedence
   priority: MUST
@@ -783,7 +791,9 @@
     `directory` is ignored (no mixing within a schema); (2) per-table URL scheme auto-detection
     (s3://, http(s)://, ftp://, sftp://, hdfs://, file:// or /path → local); (3) default local.
   source: file/docs/storage-providers.md; file/docs/configuration-reference.md
-  tests: []
+  tests:
+    - file/storage/StorageSelectionRequirementsTest
+  since: 2026-06
 
 - id: FILE-046
   module: file
