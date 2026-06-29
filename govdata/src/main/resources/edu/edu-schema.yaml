@@ -2193,9 +2193,10 @@ views:
   - name: institution_completions_summary
     comment: >
       Institution-level completions totals by award level per year.
-      Collapses ipeds_completions to one row per institution per year by summing
-      awards for all race=99 (total), sex=99 (total), majornum=1 (first-major)
-      rows. Joins to ipeds_institutions for institutional context.
+      Collapses ipeds_completions (wide format) to one row per institution per
+      year by summing ctotalt — the grand total of awards across all races and
+      both sexes — for majornum=1 (first-major) rows. Joins to ipeds_institutions
+      for institutional context.
       award_level codes: 3=Associate, 5=Bachelor, 7=Master, 17/18/19=Doctoral.
     sql: >
       SELECT
@@ -2208,20 +2209,20 @@ views:
         i.hbcu,
         i.tribal_college,
         SUM(CASE WHEN c.award_level = 3
-            THEN c.awards ELSE 0 END)                                       AS associate_total,
+            THEN c.ctotalt ELSE 0 END)                                      AS associate_total,
         SUM(CASE WHEN c.award_level = 5
-            THEN c.awards ELSE 0 END)                                       AS bachelor_total,
+            THEN c.ctotalt ELSE 0 END)                                      AS bachelor_total,
         SUM(CASE WHEN c.award_level = 7
-            THEN c.awards ELSE 0 END)                                       AS masters_total,
+            THEN c.ctotalt ELSE 0 END)                                      AS masters_total,
         SUM(CASE WHEN c.award_level IN (17, 18, 19)
-            THEN c.awards ELSE 0 END)                                       AS doctoral_total,
+            THEN c.ctotalt ELSE 0 END)                                      AS doctoral_total,
         SUM(CASE WHEN c.award_level IN (1, 2)
-            THEN c.awards ELSE 0 END)                                       AS certificate_total,
-        SUM(c.awards)                                                       AS completions_total
+            THEN c.ctotalt ELSE 0 END)                                      AS certificate_total,
+        SUM(c.ctotalt)                                                      AS completions_total
       FROM edu.ipeds_institutions i
       LEFT JOIN edu.ipeds_completions c
         ON i.unitid = c.unitid AND i.year = c.year
-        AND c.race = 99 AND c.sex = 99 AND c.majornum = 1
+        AND c.majornum = 1
       GROUP BY
         i.unitid, i.inst_name, i.year, i.state_abbr, i.sector,
         i.inst_control, i.hbcu, i.tribal_college
