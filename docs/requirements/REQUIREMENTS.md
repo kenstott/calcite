@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 66 complete, 9 in-progress, 93 proposed, 3 rejected)
+## file  (173: 2 accepted, 69 complete, 9 in-progress, 90 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -51,7 +51,7 @@
 | [x] | FILE-040 | MUST | behavioral | optimization / HLL sketch reuse | HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files — the merged es… | file/StatisticsRequirementsTest (tagged FILE-040) |
 | [x] | FILE-041 | MUST | behavioral | optimization / Count-star from statistics | COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and the rule fire… | file/OptimizationRuleRequirementsTest |
 | [x] | FILE-042 | SHOULD | behavioral | optimization / Pushdown / pruning | Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule, SimpleFileColumnPrunin… | file/OptimizationRuleRequirementsTest |
-| [.] | FILE-043 | MUST | structural | optimization / Statistics accuracy | ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong stats silently c… | — |
+| [x] | FILE-043 | MUST | structural | optimization / Statistics accuracy | ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong stats silently c… | file/StatisticsRuleFiringRequirementsTest |
 | [.] | FILE-044 | SHOULD | behavioral | optimization / Engine-specific parity | Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule, ClickHouseHLLC… | — |
 | [.] | FILE-045 | MUST | behavioral | config / storageType precedence | Selection priority: (1) schema-level storageType forces ALL files through that provider and `directory` is ig… | — |
 | [x] | FILE-046 | MUST | structural | config / storageType value set | Supported storageType values are local, s3, http, sharepoint, graph, ftp, sftp, hdfs (sharepoint/graph have n… | file/StorageProviderRequirementsTest (tagged FILE-046) |
@@ -130,8 +130,8 @@
 | [.] | FILE-119 | MUST | behavioral | engine / default engine (actual) | ExecutionEngineConfig.getDefaultEngine() unconditionally returns "parquet" (no DuckDB/classpath detection); n… | — |
 | [x] | FILE-120 | MUST | behavioral | statistics / HLL precision & hashing | HyperLogLogSketch default precision 14 (16384 buckets), ctor rejects <4 or >16; add() hashes via MD5 first-8-… | file/StatisticsRequirementsTest (tagged FILE-120) |
 | [x] | FILE-121 | MUST | constraint | statistics / stats-rule activation gates | The statistics optimization rules are each gated by a system property defaulting FALSE: calcite.file.statisti… | file/StatisticsRequirementsTest (tagged FILE-121) |
-| [.] | FILE-122 | MUST | behavioral | optimization / count-star guards | CountStarStatisticsRule fires only for true COUNT(*) (empty groupSet, single non-distinct COUNT, empty argLis… | — |
-| [.] | FILE-123 | MUST | behavioral | optimization / pushdown/prune/reorder thresholds | SimpleFileFilterPushdownRule (ParquetTranslatableTable only): folds always-true to scan / always-false to emp… | — |
+| [x] | FILE-122 | MUST | behavioral | optimization / count-star guards | CountStarStatisticsRule fires only for true COUNT(*) (empty groupSet, single non-distinct COUNT, empty argLis… | file/StatisticsRuleFiringRequirementsTest |
+| [x] | FILE-123 | MUST | behavioral | optimization / pushdown/prune/reorder thresholds | SimpleFileFilterPushdownRule (ParquetTranslatableTable only): folds always-true to scan / always-false to emp… | file/StatisticsRuleFiringRequirementsTest |
 | [.] | FILE-124 | SHOULD | behavioral | optimization / HLL rule instance bug | SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize() ignores th… | — |
 | [~] | FILE-125 | SHOULD | constraint | optimization / debug-artifact leak | DuckDBHLLCountDistinctRule writes hard-coded /tmp/duckdb_hll_rule_loaded.txt (static init) and appends /tmp/d… | file/ResolvedBugTargetsTest#duckdbHllRuleWritesNoTmpArtifac… |
 | [x] | FILE-126 | MUST | behavioral | statistics / parquet stats & NDV fallbacks | ParquetStatisticsExtractor reads min/max/nullCount/rowCount from the footer (no NDV), summing across row grou… | file/StatisticsRequirementsTest (tagged FILE-126) |

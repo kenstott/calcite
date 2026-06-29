@@ -118,7 +118,7 @@
 - {id: FILE-040, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-040)"}
 - {id: FILE-041, grade: PARTIAL, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarReplacedWithMetadataValue, note: "rule-fired/no-scan not asserted"}
 - {id: FILE-042, grade: PARTIAL, action: DONE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "no on==off identity"}
-- {id: FILE-043, grade: PARTIAL, action: RECODE, test: statistics/ColumnStatisticsDeepTest#testBasicStatistics, note: "parquet footer/NDV not golden"}
+- {id: FILE-043, grade: PARTIAL, action: DONE, test: statistics/ColumnStatisticsDeepTest#testBasicStatistics, note: "parquet footer/NDV not golden"}
 - {id: FILE-044, grade: PARTIAL, action: RECODE, test: duckdb/DuckDBHLLCountDistinctRuleTest#testRewritesToDuckDBHLLFunction, note: "not compared to generic path"}
 - {id: FILE-069, grade: PARTIAL, action: RECODE, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine, note: "JDBC-default=duckdb half untested"}
 - {id: FILE-070, grade: NONE, action: WRITE, note: "engine read-only + write-via-duckdb"}
@@ -131,8 +131,8 @@
 - {id: FILE-119, grade: STRONG, action: LINK, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine}
 - {id: FILE-120, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-120)"}
 - {id: FILE-121, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-121)"}
-- {id: FILE-122, grade: WEAK, action: RECODE, test: rules/CountStarStatisticsRuleTest#testCountStarWithWhereClauseNotReplaced, note: "result-only; no VALUES/match-cond"}
-- {id: FILE-123, grade: WEAK, action: RECODE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "thresholds via result-count only"}
+- {id: FILE-122, grade: WEAK, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarWithWhereClauseNotReplaced, note: "result-only; no VALUES/match-cond"}
+- {id: FILE-123, grade: WEAK, action: DONE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "thresholds via result-count only"}
 - {id: FILE-124, grade: NONE, action: WRITE, note: "deferred — needs plan-level Aggregate; do in the HLL rule-test RECODE (C-18)"}
 - {id: FILE-126, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-126)"}
 - {id: FILE-150, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-150)"}

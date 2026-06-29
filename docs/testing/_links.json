@@ -1,7 +1,5 @@
 {
-  "FILE-063": ["file/CompressionStorageRequirementsTest"],
-  "FILE-022": ["file/CompressionStorageRequirementsTest"],
-  "FILE-076": ["file/ExecutionRefinementRequirementsTest"],
-  "FILE-077": ["file/ExecutionRefinementRequirementsTest"],
-  "FILE-078": ["file/ExecutionRefinementRequirementsTest"]
+  "FILE-043": ["file/StatisticsRuleFiringRequirementsTest"],
+  "FILE-122": ["file/StatisticsRuleFiringRequirementsTest"],
+  "FILE-123": ["file/StatisticsRuleFiringRequirementsTest"]
 }

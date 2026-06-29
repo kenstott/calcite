@@ -723,7 +723,7 @@
 
 - id: FILE-043
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: Statistics accuracy
   priority: MUST
@@ -733,7 +733,9 @@
   description: >
     ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong
     stats silently corrupt pruning and count-star, so the stats themselves are pinned by golden.
-  tests: []
+  tests:
+    - file/StatisticsRuleFiringRequirementsTest
+  since: 2026-06
 
 - id: FILE-044
   module: file
@@ -2050,7 +2052,7 @@
 
 - id: FILE-122
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: count-star guards
   priority: MUST
@@ -2062,11 +2064,13 @@
     any Filter sits between aggregate and scan, and self-heals a null/zero rowCount by summing Iceberg
     FileScanTask recordCounts.
   source: file/src/main/java/.../rules/CountStarStatisticsRule.java 70-146; duckdb/DuckDBIcebergCountStarRule.java 58-221
-  tests: []
+  tests:
+    - file/StatisticsRuleFiringRequirementsTest
+  since: 2026-06
 
 - id: FILE-123
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: pushdown/prune/reorder thresholds
   priority: MUST
@@ -2078,7 +2082,9 @@
     Column pruning fires only when I/O savings >15%; join reorder only when cost ratio >1.25
     (cost=rows*0.001+bytes*0.0001), LEFT joins never reordered.
   source: file/src/main/java/.../rules/{SimpleFileFilterPushdownRule,SimpleFileColumnPruningRule,SimpleFileJoinReorderRule}.java
-  tests: []
+  tests:
+    - file/StatisticsRuleFiringRequirementsTest
+  since: 2026-06
 
 - id: FILE-124
   module: file
