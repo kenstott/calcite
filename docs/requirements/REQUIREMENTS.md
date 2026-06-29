@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 35 complete, 8 in-progress, 125 proposed, 3 rejected)
+## file  (173: 2 accepted, 43 complete, 8 in-progress, 117 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -91,16 +91,16 @@
 | [x] | FILE-080 | MUST | constraint | constraints / declaration model | constraints block declares primaryKey (composite allowed), foreignKeys (columns/targetTable/targetColumns, ma… | file/ConstraintRequirementsTest (tagged FILE-080) |
 | [x] | FILE-081 | MUST | structural | constraints / jdbc/statistic exposure | Constraints exposed via DatabaseMetaData (getPrimaryKeys KEY_SEQ order, getImportedKeys, getIndexInfo NON_UNI… | file/ConstraintRequirementsTest (tagged FILE-081) |
 | [.] | FILE-082 | MUST | behavioral | document-etl / ResponseTransformer contract | A ResponseTransformer(raw, RequestContext) MUST return a JSON array string whose object keys match the canoni… | — |
-| [.] | FILE-083 | MUST | behavioral | document-etl / dimension types & expansion | Dimension types list/range(inclusive,step1)/yearRange(dataLag,releaseMonth,excludeYears,min/max)/query/json_c… | — |
-| [.] | FILE-084 | MUST | behavioral | document-etl / resumability tracker | Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips … | — |
+| [x] | FILE-083 | MUST | behavioral | document-etl / dimension types & expansion | Dimension types list/range(inclusive,step1)/yearRange(dataLag,releaseMonth,excludeYears,min/max)/query/json_c… | file/EtlTrackerRequirementsTest |
+| [x] | FILE-084 | MUST | behavioral | document-etl / resumability tracker | Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips … | file/EtlTrackerRequirementsTest |
 | [.] | FILE-085 | MUST | behavioral | document-etl / hook order & error policy | Per-row order responseTransformer → rowTransformers (declaration order; null drops row) → validators (drop|wa… | — |
 | [~] | FILE-086 | MUST | constraint | refresh / refresh vs cache exclusivity | Setting refreshInterval disables Parquet conversion caching (mutually exclusive); refresh is lazy (on query a… | file/RefreshIdempotenceTest#refreshIntervalDisablesParquetC… |
 | [.] | FILE-087 | SHOULD | behavioral | refresh / materialized-view rewrite | A model.json materialization computes once on first access (stored Parquet) and the optimizer transparently r… | — |
 | [.] | FILE-088 | SHOULD | behavioral | refresh / freshness skip gate | freshness (opt-in; snapshot/computed_delta only) stores a tracker high-water token and probes→compares→skips.… | — |
 | [.] | FILE-089 | SHOULD | behavioral | period-dimensions / calendar-correct providers | quarter/month/week/day/day_of_week providers emit calendar-correct values (leap days, 30/31, ISO 52/53), desc… | — |
 | [.] | FILE-090 | SHOULD | behavioral | period-dimensions / dataset_type semantics | dataset_type ∈ {snapshot, delta(default), computed_delta}: snapshot overwrites only the open period (closed f… | — |
-| [.] | FILE-091 | SHOULD | behavioral | raw-cache / bundle archive & classification | At session end BundleArchiver scans cache/raw and classifies by size (default 1MB): small files concatenated … | — |
-| [.] | FILE-092 | MUST | behavioral | raw-cache / read-tier resolution | CacheResolver.resolve tries tier-1 local first, then merged index byte-range GET from .bin or full GET from .… | — |
+| [x] | FILE-091 | SHOULD | behavioral | raw-cache / bundle archive & classification | At session end BundleArchiver scans cache/raw and classifies by size (default 1MB): small files concatenated … | file/RawCacheRequirementsTest |
+| [x] | FILE-092 | MUST | behavioral | raw-cache / read-tier resolution | CacheResolver.resolve tries tier-1 local first, then merged index byte-range GET from .bin or full GET from .… | file/RawCacheRequirementsTest |
 | [x] | FILE-093 | MUST | behavioral | vector-search / similarity UDFs | Every schema auto-registers COSINE_SIMILARITY (−1..1), COSINE_DISTANCE (0..2), EUCLIDEAN_DISTANCE, DOT_PRODUC… | file/VectorFunctionRequirementsTest (tagged FILE-093) |
 | [.] | FILE-094 | SHOULD | behavioral | vector-search / input encodings & pushdown | Vector UDFs accept comma-strings, '[..]', '(..)', native float[]/double[]/int[], List<Number>, Avro arrays — … | — |
 | [.] | FILE-095 | SHOULD | constraint | error-handling / documented errors & SQLStates | Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) report… | — |
@@ -135,9 +135,9 @@
 | [.] | FILE-124 | SHOULD | behavioral | optimization / HLL rule instance bug | SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize() ignores th… | — |
 | [~] | FILE-125 | SHOULD | constraint | optimization / debug-artifact leak | DuckDBHLLCountDistinctRule writes hard-coded /tmp/duckdb_hll_rule_loaded.txt (static init) and appends /tmp/d… | file/ResolvedBugTargetsTest#duckdbHllRuleWritesNoTmpArtifac… |
 | [x] | FILE-126 | MUST | behavioral | statistics / parquet stats & NDV fallbacks | ParquetStatisticsExtractor reads min/max/nullCount/rowCount from the footer (no NDV), summing across row grou… | file/StatisticsRequirementsTest (tagged FILE-126) |
-| [.] | FILE-127 | MUST | behavioral | concurrency / parquet conversion lock | ConcurrentParquetCache.convertWithLocking: Redis lock if available, else per-(schema:absPath) ReentrantLock t… | — |
-| [.] | FILE-128 | MUST | behavioral | concurrency / source file locks | SourceFileLockManager.acquireReadLock takes a SHARED FileLock, acquireWriteLock EXCLUSIVE, 30s timeout, 100ms… | — |
-| [.] | FILE-129 | MUST | behavioral | concurrency / iceberg commit lock | Every table-mutating Iceberg commit runs under IcebergTableWriter.underCommitLock = a JVM monitor keyed by Ta… | — |
+| [x] | FILE-127 | MUST | behavioral | concurrency / parquet conversion lock | ConcurrentParquetCache.convertWithLocking: Redis lock if available, else per-(schema:absPath) ReentrantLock t… | file/ConcurrencyRequirementsTest |
+| [x] | FILE-128 | MUST | behavioral | concurrency / source file locks | SourceFileLockManager.acquireReadLock takes a SHARED FileLock, acquireWriteLock EXCLUSIVE, 30s timeout, 100ms… | file/ConcurrencyRequirementsTest |
+| [x] | FILE-129 | MUST | behavioral | concurrency / iceberg commit lock | Every table-mutating Iceberg commit runs under IcebergTableWriter.underCommitLock = a JVM monitor keyed by Ta… | file/ConcurrencyRequirementsTest |
 | [.] | FILE-130 | MUST | behavioral | conversion / staleness decision | ParquetConversionUtil.needsConversion skips re-conversion only when the cache exists AND source.lastModified(… | — |
 | [.] | FILE-131 | MUST | behavioral | conversion / conversion-record preservation | ConversionMetadata.recordTable preserves an existing non-DIRECT conversionType (e.g. SEC_XBRL_TO_PARQUET, ICE… | — |
 | [.] | FILE-132 | MUST | behavioral | refresh / lazy trigger & anti-thrash | File-table refresh is LAZY (query-time: project/toRel/scan/getRowType per table type). needsRefresh() gates t… | — |
@@ -148,7 +148,7 @@
 | [.] | FILE-137 | MUST | behavioral | materialized-view / one-shot CAS invalidation | MaterializedViewTable.materialize is one-shot via materialized.compareAndSet(false,true) with NO staleness ch… | — |
 | [.] | FILE-138 | MUST | behavioral | document-etl / freshness fail-safe | FreshnessCheck.changed(prev,cur) → true whenever prev or cur is null, else !prev.equals(cur) — an unknown/mis… | — |
 | [x] | FILE-139 | MUST | constraint | document-etl / error fatality classes | IncompleteFetchException (unchecked) marks a fetch that could not complete (e.g. 429 exhausted) as a FAILURE … | file/EtlErrorClassesTest#incompleteFetchIsUnchecked, file/E… |
-| [.] | FILE-140 | MUST | behavioral | document-etl / circuit breaker & rate limit | HttpSource keeps a process-wide consecutive-503 counter per base URI; at threshold 5 it fast-skips via Skippe… | — |
+| [x] | FILE-140 | MUST | behavioral | document-etl / circuit breaker & rate limit | HttpSource keeps a process-wide consecutive-503 counter per base URI; at threshold 5 it fast-skips via Skippe… | file/EtlTrackerRequirementsTest |
 | [.] | FILE-141 | MUST | structural | partitioning / incremental tracker keys | IncrementalTracker period key is year_quarter_month_week_day_day_of_week_<pipeline> with literal "NA" for abs… | — |
 | [.] | FILE-142 | MUST | behavioral | partitioning / empty vs complete (self-heal) | IncrementalTracker.markProcessedEmpty (HTTP 200, zero rows) is distinct from terminal complete: an empty peri… | — |
 | [.] | FILE-143 | MUST | behavioral | raw-cache / no-TTL & tier resolution | Raw cache is immutable with NO TTL — HttpSource.hasValidRawCache returns valid whenever the cache file exists… | — |

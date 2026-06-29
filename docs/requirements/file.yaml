@@ -1301,7 +1301,7 @@
 
 - id: FILE-083
   module: file
-  status: proposed
+  status: complete
   group: document-etl
   category: dimension types & expansion
   priority: MUST
@@ -1313,11 +1313,13 @@
     N dimensions fetch the full cartesian product (one call per combination) unless a custom DimensionResolver emits
     only valid combos. yearRange dataLag:1 releaseMonth:9 → end=current-2 before Sept, current-1 from Sept.
   source: file/docs/document-etl.md (Dimension Types / Multi-Dimension)
-  tests: []
+  tests:
+    - file/EtlTrackerRequirementsTest
+  since: 2026-06
 
 - id: FILE-084
   module: file
-  status: proposed
+  status: complete
   group: document-etl
   category: resumability tracker
   priority: MUST
@@ -1328,7 +1330,9 @@
     Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips
     `complete` batches and re-runs non-complete/error. Backend via CALCITE_TRACKER_BACKEND=s3. (Idempotence/resume.)
   source: file/docs/document-etl.md (Resumability)
-  tests: []
+  tests:
+    - file/EtlTrackerRequirementsTest
+  since: 2026-06
 
 - id: FILE-085
   module: file
@@ -1436,7 +1440,7 @@
 
 - id: FILE-091
   module: file
-  status: proposed
+  status: complete
   group: raw-cache
   category: bundle archive & classification
   priority: SHOULD
@@ -1448,11 +1452,13 @@
     into 256MB .bin chunks with one JSONL index line each (index split at 50k entries); large files PUT to
     .raw/objects/<schema>/<sourceKey> recorded storage:"object". One bundle/session, bundleId=run-{ISO ts}.
   source: file/raw-cache.md
-  tests: []
+  tests:
+    - file/RawCacheRequirementsTest
+  since: 2026-06
 
 - id: FILE-092
   module: file
-  status: proposed
+  status: complete
   group: raw-cache
   category: read-tier resolution
   priority: MUST
@@ -1464,7 +1470,9 @@
     .raw/objects (newer bundles win on conflict), promoting to tier-1; returns null only when absent everywhere so
     the caller re-fetches origin. Archive failure is non-fatal; LRU-evicted files recover from S3.
   source: file/raw-cache.md
-  tests: []
+  tests:
+    - file/RawCacheRequirementsTest
+  since: 2026-06
 
 # ============================ vector / similarity search =======================================
 
@@ -2076,7 +2084,7 @@
 
 - id: FILE-127
   module: file
-  status: proposed
+  status: complete
   group: concurrency
   category: parquet conversion lock
   priority: MUST
@@ -2089,11 +2097,13 @@
     <parquet>.tmp.<hash> then Files.move REPLACE+ATOMIC (readers never see partial). Remote/S3 convert via
     temp file with NO locking; performConversion re-checks staleness under lock (lost-race no-op).
   source: file/src/main/java/.../format/parquet/ConcurrentParquetCache.java 64-187
-  tests: []
+  tests:
+    - file/ConcurrencyRequirementsTest
+  since: 2026-06
 
 - id: FILE-128
   module: file
-  status: proposed
+  status: complete
   group: concurrency
   category: source file locks
   priority: MUST
@@ -2104,11 +2114,13 @@
     100ms retry; same-JVM shared re-entry is ref-counted (releases only at count 0); a write lock fails when
     the file is already locked in-JVM. Redis distributed lock tried first when available.
   source: file/src/main/java/.../cache/SourceFileLockManager.java 53-244
-  tests: []
+  tests:
+    - file/ConcurrencyRequirementsTest
+  since: 2026-06
 
 - id: FILE-129
   module: file
-  status: proposed
+  status: complete
   group: concurrency
   category: iceberg commit lock
   priority: MUST
@@ -2121,7 +2133,9 @@
     <tmp>/calcite-iceberg-commit-locks/<sha256(location)>.lock, reentrant hold-count, OS-released on exit) —
     one committer per table per host, preventing replace/compaction interleave leaving dangling refs.
   source: file/src/main/java/.../iceberg/IcebergTableWriter.java 81-108; CrossProcessCommitLock.java 80-178
-  tests: []
+  tests:
+    - file/ConcurrencyRequirementsTest
+  since: 2026-06
 
 - id: FILE-130
   module: file
@@ -2300,7 +2314,7 @@
 
 - id: FILE-140
   module: file
-  status: proposed
+  status: complete
   group: document-etl
   category: circuit breaker & rate limit
   priority: MUST
@@ -2313,7 +2327,9 @@
     a real 404 is cached per-run. CrossProcessRateLimiter paces one request/intervalMs host-wide via a FileLock
     slot file, falling back to a local sleep on IOException.
   source: file/src/main/java/.../etl/HttpSource.java 1238-1572; CrossProcessRateLimiter.java 65-89
-  tests: []
+  tests:
+    - file/EtlTrackerRequirementsTest
+  since: 2026-06
 
 - id: FILE-141
   module: file

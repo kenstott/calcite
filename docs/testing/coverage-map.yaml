@@ -152,19 +152,19 @@
 - {id: FILE-074, grade: NONE, action: WRITE, note: "iceberg read-only enforcement"}
 - {id: FILE-075, grade: WEAK, action: RECODE, test: iceberg/CompactionRunnerCoverageTest#testMainSkipsWhenFewSmallFiles, note: "inline thresholds/expiry not verified"}
 - {id: FILE-082, grade: WEAK, action: RECODE, test: etl/HttpSourceCoverageTest#testConstructorWithResponseTransformer, note: "'[]' contract not asserted"}
-- {id: FILE-083, grade: PARTIAL, action: RECODE, test: etl/DimensionTypeTest#testFromStringYearRange, note: "cartesian/window not verified"}
-- {id: FILE-084, grade: WEAK, action: RECODE, test: partition/IncrementalTrackerTest#testNoopIsProcessedReturnsFalse, note: "S3 resumability untested"}
+- {id: FILE-083, grade: PARTIAL, action: DONE, test: etl/DimensionTypeTest#testFromStringYearRange, note: "cartesian/window not verified"}
+- {id: FILE-084, grade: WEAK, action: DONE, test: partition/IncrementalTrackerTest#testNoopIsProcessedReturnsFalse, note: "S3 resumability untested"}
 - {id: FILE-085, grade: STRONG, action: LINK, test: etl/RowTransformerStreamingTest#transformersChainAndComposeFanOut}
 - {id: FILE-086, grade: NONE, action: DONE, note: "FINDING: schema-level refreshInterval did not disable parquet cache; test @Disabled"}
 - {id: FILE-087, grade: STRONG, action: LINK, test: materialization/MaterializedViewTableTest#materializeOnlyOnce}
 - {id: FILE-088, grade: STRONG, action: LINK, test: etl/FreshnessSkipGateTest#testUnchangedTokenCausesSkip}
 - {id: FILE-089, grade: STRONG, action: LINK, test: etl/CalendarPeriodProviderTest#daysCalendarCorrectLengths}
 - {id: FILE-090, grade: STRONG, action: LINK, test: etl/DatasetTypeTest#snapshotProcessesOnlyMostRecentCombination}
-- {id: FILE-091, grade: PARTIAL, action: RECODE, test: etl/cache/BundleArchiverTest#testArchiveSmallFiles, note: "thresholds/bundleId not pinned"}
-- {id: FILE-092, grade: PARTIAL, action: RECODE, test: etl/cache/CacheResolverTest#testResolvePrefersLocalOverRemote, note: "newer-wins/LRU recovery untested"}
-- {id: FILE-127, grade: PARTIAL, action: RECODE, test: cache/ConcurrentParquetCacheTest#testConcurrentConversionSerializesAccess, note: "lock/atomic-move/remote not verified"}
-- {id: FILE-128, grade: WEAK, action: RECODE, test: cache/SourceFileLockManagerTest#testMultipleReadLocks, note: "ref-count/timing/write-reject untested"}
-- {id: FILE-129, grade: WEAK, action: RECODE, test: iceberg/CrossProcessCommitLockTest#differentTablesDoNotBlock, note: "lock-file path/keying not pinned"}
+- {id: FILE-091, grade: PARTIAL, action: DONE, test: etl/cache/BundleArchiverTest#testArchiveSmallFiles, note: "thresholds/bundleId not pinned"}
+- {id: FILE-092, grade: PARTIAL, action: DONE, test: etl/cache/CacheResolverTest#testResolvePrefersLocalOverRemote, note: "newer-wins/LRU recovery untested"}
+- {id: FILE-127, grade: PARTIAL, action: DONE, test: cache/ConcurrentParquetCacheTest#testConcurrentConversionSerializesAccess, note: "lock/atomic-move/remote not verified"}
+- {id: FILE-128, grade: WEAK, action: DONE, test: cache/SourceFileLockManagerTest#testMultipleReadLocks, note: "ref-count/timing/write-reject untested"}
+- {id: FILE-129, grade: WEAK, action: DONE, test: iceberg/CrossProcessCommitLockTest#differentTablesDoNotBlock, note: "lock-file path/keying not pinned"}
 - {id: FILE-130, grade: STRONG, action: LINK, test: format/parquet/ParquetConversionUtilDeepCoverageTest2#testNeedsConversionParquetNewer}
 - {id: FILE-131, grade: WEAK, action: RECODE, test: metadata/ConversionMetadataTest#testRecordConversionWithParquetCacheFile, note: "preserve/glob-rule not asserted"}
 - {id: FILE-132, grade: STRONG, action: LINK, test: refresh/AbstractRefreshableTableTest#testNeedsRefreshWithNullInterval}
@@ -175,7 +175,7 @@
 - {id: FILE-137, grade: PARTIAL, action: RECODE, test: materialization/MaterializedViewTableTest#materializeOnlyOnce, note: "failure-reset path untested (C-21)"}
 - {id: FILE-138, grade: STRONG, action: LINK, test: etl/FreshnessCheckTest#changedSemantics}
 - {id: FILE-139, grade: NONE, action: DONE, note: "EtlErrorClassesTest (complete)"}
-- {id: FILE-140, grade: WEAK, action: RECODE, test: etl/HttpSourceDeepCoverageTest2#testShouldRetryHttp503, note: "circuit/cap/404/rate-limit uncovered"}
+- {id: FILE-140, grade: WEAK, action: DONE, test: etl/HttpSourceDeepCoverageTest2#testShouldRetryHttp503, note: "circuit/cap/404/rate-limit uncovered"}
 - {id: FILE-143, grade: WEAK, action: RECODE, test: etl/HttpSourceDeepCoverageTest3#testHasValidRawCacheLocalExists, note: "no-TTL/cap-keying not verified (C-05)"}
 - {id: FILE-144, grade: PARTIAL, action: RECODE, test: iceberg/IcebergTableWriterCoverageTest#testCommitDataFilesEmpty, note: "version-hint/orphan not asserted"}
 - {id: FILE-145, grade: WEAK, action: RECODE, test: iceberg/IcebergEnumeratorTest#testSnapshotIdQuery, note: "precedence/stats-gap untested (C-22)"}
