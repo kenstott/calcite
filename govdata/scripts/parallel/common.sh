@@ -1003,6 +1003,7 @@ get_timeout_config() {
     census)       echo 240 ;;  # ACS 5-year span
     energy)       echo 180 ;;  # SEDS multi-year
     patents)      echo 480 ;;  # full bulk dumps (g_patent.tsv, owner.csv ~700MB each) + summaries
+    sec|sec_primary|sec_secondary|sec_13f) echo 720 ;;  # ~293k accessions/year × download+convert+materialize; full pass ≫ 4h
     sec_prices)   echo 240 ;;  # Stooq bulk: 508MB zip + ~22M-row materialize
     cftc)         echo 240 ;;  # large derivatives history
     cyber_vuln)   echo 240 ;;  # full NVD ~350k CVEs at 0.167 req/s (no API key) — long quiet crawls
