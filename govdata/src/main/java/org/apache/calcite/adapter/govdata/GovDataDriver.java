@@ -192,6 +192,26 @@ public class GovDataDriver extends Driver {
     return createMultiSourceModel(paramString, sources);
   }
 
+  /**
+   * Absolute path to the single DuckDB catalog shared by every schema in a connection. The file
+   * adapter supports a shared database via the {@code database_filename} operand "for cross-schema
+   * joins"; pointing all mounted schemas at one catalog (instead of a per-schema
+   * {@code <schema>_db.duckdb}) lets cross-schema views resolve (e.g. an edu view that joins
+   * geo.counties), and keeps a single persistent, checkpointed catalog instead of N of them.
+   * An absolute path under the operating-dir base is used so all schemas resolve to the same file
+   * regardless of the process working directory.
+   */
+  private String sharedCatalogPath() {
+    String base = System.getProperty("govdata.operating.dir.base");
+    if (base == null || base.isEmpty()) {
+      String home = System.getProperty("user.home");
+      base = resolveOperatingDirBase((home != null && !home.isEmpty())
+          ? home : System.getProperty("java.io.tmpdir"));
+    }
+    // JSON-escape backslashes so Windows-style paths embed safely in the generated model.
+    return new File(base, ".duckdb/govdata.duckdb").getAbsolutePath().replace("\\", "\\\\");
+  }
+
   private String createSingleSourceModel(String paramString, String dataSource)
       throws IOException {
     String ciks = extractParameter(paramString, "ciks");
@@ -219,6 +239,7 @@ public class GovDataDriver extends Driver {
         + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
         + "    \"operand\": {\n"
         + "      \"dataSource\": \"" + dataSource.toLowerCase() + "\",\n"
+        + "      \"database_filename\": \"" + sharedCatalogPath() + "\",\n"
         + ciksJson
         + startYearJson
         + endYearJson
@@ -240,6 +261,8 @@ public class GovDataDriver extends Driver {
 
     boolean isS3 = dataDirectory != null && dataDirectory.startsWith("s3://");
     String engineJson = isS3 ? "      \"executionEngine\": \"duckdb\",\n" : "";
+    // One shared DuckDB catalog for every schema in this connection so cross-schema views resolve.
+    String dbFilenameJson = "      \"database_filename\": \"" + sharedCatalogPath() + "\",\n";
 
     List<String> schemaEntries = new ArrayList<String>();
     for (String dataSource : sources) {
@@ -254,6 +277,7 @@ public class GovDataDriver extends Driver {
           + "    \"factory\": \"org.apache.calcite.adapter.govdata.GovDataSchemaFactory\",\n"
           + "    \"operand\": {\n"
           + "      \"dataSource\": \"" + dataSource.toLowerCase() + "\",\n"
+          + dbFilenameJson
           + engineJson
           + "      \"autoDownload\": false,\n"
           + "      \"testMode\": false,\n"
@@ -294,11 +318,39 @@ public class GovDataDriver extends Driver {
       return "";
     }
 
-    Map<String, String> creds = R2CredentialProvider.resolve();
-    String credBlock = "        \"accessKeyId\": \"" + creds.get("accessKeyId") + "\","
-        + "\n        \"secretAccessKey\": \"" + creds.get("secretAccessKey") + "\","
-        + "\n        \"endpoint\": \"" + creds.get("endpoint") + "\","
-        + "\n        \"region\": \"" + creds.get("region") + "\"";
+    String accessKeyId;
+    String secretAccessKey;
+    String endpoint;
+    String region;
+
+    // Honor an explicit object-store endpoint from the environment (AWS_* in .env.prod — e.g. a
+    // local MinIO) over the bundled R2 defaults. This makes the configured store work with no
+    // credentials file and regardless of which home directory the JVM resolves. AWS_* are
+    // launch/infra flags, exempt from the model-operand rule.
+    String envEndpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
+    String envAccessKey = System.getenv("AWS_ACCESS_KEY_ID");
+    String envSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+    if (envEndpoint != null && !envEndpoint.isEmpty()
+        && envAccessKey != null && !envAccessKey.isEmpty()
+        && envSecretKey != null && !envSecretKey.isEmpty()) {
+      accessKeyId = envAccessKey;
+      secretAccessKey = envSecretKey;
+      endpoint = envEndpoint;
+      String envRegion = System.getenv("AWS_REGION");
+      region = (envRegion != null && !envRegion.isEmpty()) ? envRegion : "auto";
+      LOGGER.info("Using object-store endpoint from environment (AWS_ENDPOINT_OVERRIDE): {}", endpoint);
+    } else {
+      Map<String, String> creds = R2CredentialProvider.resolve();
+      accessKeyId = creds.get("accessKeyId");
+      secretAccessKey = creds.get("secretAccessKey");
+      endpoint = creds.get("endpoint");
+      region = creds.get("region");
+    }
+
+    String credBlock = "        \"accessKeyId\": \"" + accessKeyId + "\","
+        + "\n        \"secretAccessKey\": \"" + secretAccessKey + "\","
+        + "\n        \"endpoint\": \"" + endpoint + "\","
+        + "\n        \"region\": \"" + region + "\"";
 
     return ",\n      \"s3Config\": {\n" + credBlock + "\n      }"
         + ",\n      \"storageConfig\": {\n" + credBlock + "\n      }";
@@ -316,7 +368,22 @@ public class GovDataDriver extends Driver {
   }
 
   private String writeTempModel(String prefix, String modelJson) throws IOException {
-    File tempFile = File.createTempFile(prefix, ".json");
+    // Write the generated model under the stable operating-dir base (e.g. ~/.govdata), NOT
+    // java.io.tmpdir. Calcite derives the schema baseDirectory from the model file's location,
+    // and that becomes the local .aperio operating/cache root. Writing to /tmp lands caches in
+    // /tmp/.aperio, a hidden location that persists stale state across runs; a stable home/base
+    // keeps the operating dir visible and per-user.
+    String base = System.getProperty("govdata.operating.dir.base");
+    File modelDir = null;
+    if (base != null && !base.isEmpty()) {
+      modelDir = new File(base);
+      if (!modelDir.exists() && !modelDir.mkdirs() && !modelDir.exists()) {
+        modelDir = null;  // could not create the base dir; fall back to default temp location
+      }
+    }
+    File tempFile = modelDir != null
+        ? File.createTempFile(prefix, ".json", modelDir)
+        : File.createTempFile(prefix, ".json");
     tempFile.deleteOnExit();
     try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
         new java.io.FileOutputStream(tempFile), java.nio.charset.StandardCharsets.UTF_8)) {

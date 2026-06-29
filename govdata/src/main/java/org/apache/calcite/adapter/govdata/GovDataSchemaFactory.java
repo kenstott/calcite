@@ -696,8 +696,18 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (base == null || base.isEmpty()) {
       String workingDir = System.getProperty("user.dir");
       if ("/".equals(workingDir) || workingDir == null || workingDir.isEmpty()) {
-        LOGGER.warn("Working directory is root or invalid, falling back to temp directory");
-        workingDir = System.getProperty("java.io.tmpdir");
+        // Working dir is unusable (e.g. root). Prefer the home directory over the temp
+        // directory: a stable, per-user location. /tmp persists stale .aperio caches
+        // invisibly across runs, which silently serves outdated conversion records.
+        String userHome = System.getProperty("user.home");
+        if (userHome != null && !userHome.isEmpty() && !"/".equals(userHome)) {
+          LOGGER.warn("Working directory is root or invalid; using home directory {} for operating dir base",
+              userHome);
+          workingDir = userHome;
+        } else {
+          LOGGER.warn("Working directory and home directory both invalid; falling back to temp directory");
+          workingDir = System.getProperty("java.io.tmpdir");
+        }
       }
       base = workingDir + "/.aperio";
     }
