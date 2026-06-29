@@ -491,7 +491,7 @@
 
 - id: FILE-028
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: Change detection
   priority: MUST
@@ -501,7 +501,9 @@
   description: >
     A refreshable table re-reads its source when the change signal fires (local mtime, remote ETag);
     a stale read never serves pre-change data past the refresh.
-  tests: []
+  tests:
+    - file/RefreshLogicRequirementsTest
+  since: 2026-06
 
 - id: FILE-029
   module: file
@@ -537,7 +539,7 @@
 
 - id: FILE-031
   module: file
-  status: proposed
+  status: complete
   group: write/iceberg
   category: Materialization
   priority: SHOULD
@@ -545,7 +547,9 @@
   mode: write
   seam: table
   description: IcebergTableWriter materializes a table that reads back value-identical; snapshots advance correctly.
-  tests: []
+  tests:
+    - file/IcebergRequirementsTest
+  since: 2026-06
 
 # ================================ partitioning & evolution ======================================
 
@@ -1161,7 +1165,7 @@
 
 - id: FILE-071
   module: file
-  status: proposed
+  status: complete
   group: iceberg
   category: time travel
   priority: MUST
@@ -1173,7 +1177,9 @@
     asOfTimestamp reads as of a timestamp. timeRange {start,end} (ISO-8601, inclusive) → unified table across
     snapshots adding snapshotColumn (default snapshot_time).
   source: file/docs/iceberg-integration.md (Time Travel / Time Range)
-  tests: []
+  tests:
+    - file/IcebergRequirementsTest
+  since: 2026-06
 
 - id: FILE-072
   module: file
@@ -1335,7 +1341,7 @@
 
 - id: FILE-082
   module: file
-  status: proposed
+  status: complete
   group: document-etl
   category: ResponseTransformer contract
   priority: MUST
@@ -1346,7 +1352,9 @@
     A ResponseTransformer(raw, RequestContext) MUST return a JSON array string whose object keys match the
     canonical columns; empty/error responses MUST return "[]" (never null/throw to the pipeline).
   source: file/docs/document-etl.md
-  tests: []
+  tests:
+    - file/EtlMetadataRequirementsTest
+  since: 2026-06
 
 - id: FILE-083
   module: file
@@ -2212,7 +2220,7 @@
 
 - id: FILE-131
   module: file
-  status: proposed
+  status: complete
   group: conversion
   category: conversion-record preservation
   priority: MUST
@@ -2225,7 +2233,9 @@
     parquetCacheFile an exact file list replaces a glob but never the reverse. Recording failure never fails
     table creation. hasChangedViaMetadata: ETag>size>lastModified(1s tol).
   source: file/src/main/java/.../metadata/ConversionMetadata.java 243-646
-  tests: []
+  tests:
+    - file/EtlMetadataRequirementsTest
+  since: 2026-06
 
 # ===================================== refresh / materialized views =============================
 
@@ -2280,7 +2290,7 @@
 
 - id: FILE-135
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: partitioned staleness
   priority: MUST
@@ -2294,11 +2304,13 @@
     get(120s) and proceed with the current view on timeout.
   source: file/src/main/java/.../refresh/RefreshablePartitionedParquetTable.java 277-393
   notes: "RESOLVED C-20 (code-wrong): add the null/empty guard scan() is missing + regression test. Issue staged."
-  tests: []
+  tests:
+    - file/RefreshLogicRequirementsTest
+  since: 2026-06
 
 - id: FILE-136
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: parquet-cache rewrite
   priority: MUST
@@ -2310,11 +2322,13 @@
     *.tmp.*.parquet, touches intermediate JSON mtime to force re-conversion, rebuilds the cache, swaps the
     volatile delegate, and notifies DuckDB (notifyTableRefreshed); conversion failure retains the existing cache.
   source: file/src/main/java/.../refresh/RefreshableParquetCacheTable.java doRefresh 149-224
-  tests: []
+  tests:
+    - file/EtlMetadataRequirementsTest
+  since: 2026-06
 
 - id: FILE-137
   module: file
-  status: proposed
+  status: complete
   group: materialized-view
   category: one-shot CAS invalidation
   priority: MUST
@@ -2327,7 +2341,9 @@
     deletes the parquet, resets the flag, and re-materializes when needsRefresh (purely time-based) fires.
   source: file/src/main/java/.../materialized/{MaterializedViewTable,RefreshableMaterializedViewTable}.java
   notes: "RESOLVED C-21 (code-wrong): set materialized=true only on success; on failure reset and delete the partial parquet. Issue staged."
-  tests: []
+  tests:
+    - file/RefreshLogicRequirementsTest
+  since: 2026-06
 
 # ===================================== document-etl / freshness / tracker =======================
 
@@ -2442,7 +2458,7 @@
 
 - id: FILE-144
   module: file
-  status: proposed
+  status: complete
   group: iceberg
   category: commit mode & version hint
   priority: MUST
@@ -2455,7 +2471,9 @@
     ensureVersionHint repairs version-hint.text by scanning for the highest v<N>.metadata.json; orphan parquet
     under data/ is re-registered (filename match) so a cleared catalog self-heals.
   source: file/src/main/java/.../iceberg/IcebergTableWriter.java 184-267, 474-517, 1300-1358
-  tests: []
+  tests:
+    - file/IcebergRequirementsTest
+  since: 2026-06
 
 - id: FILE-145
   module: file
@@ -2831,7 +2849,7 @@
 
 - id: FILE-167
   module: file
-  status: proposed
+  status: complete
   group: concurrency
   category: conversion at-least-once
   priority: MUST
@@ -2845,7 +2863,9 @@
     LockHandle.close is idempotent.
   source: file/src/test/java/.../cache/{ConcurrentParquetCacheTest,SourceFileLockManagerDeepCoverageTest}.java
   notes: NOT exactly-once — any "single physical conversion" requirement is wrong.
-  tests: []
+  tests:
+    - file/ConcurrencyRequirementsTest
+  since: 2026-06
 
 - id: FILE-168
   module: file

@@ -1,5 +1,12 @@
 {
-  "FILE-043": ["file/StatisticsRuleFiringRequirementsTest"],
-  "FILE-122": ["file/StatisticsRuleFiringRequirementsTest"],
-  "FILE-123": ["file/StatisticsRuleFiringRequirementsTest"]
+  "FILE-031": ["file/IcebergRequirementsTest"],
+  "FILE-071": ["file/IcebergRequirementsTest"],
+  "FILE-144": ["file/IcebergRequirementsTest"],
+  "FILE-028": ["file/RefreshLogicRequirementsTest"],
+  "FILE-135": ["file/RefreshLogicRequirementsTest"],
+  "FILE-137": ["file/RefreshLogicRequirementsTest"],
+  "FILE-082": ["file/EtlMetadataRequirementsTest"],
+  "FILE-131": ["file/EtlMetadataRequirementsTest"],
+  "FILE-136": ["file/EtlMetadataRequirementsTest"],
+  "FILE-167": ["file/ConcurrencyRequirementsTest"]
 }

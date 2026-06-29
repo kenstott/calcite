@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 69 complete, 9 in-progress, 90 proposed, 3 rejected)
+## file  (173: 2 accepted, 79 complete, 9 in-progress, 80 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -36,10 +36,10 @@
 | [x] | FILE-025 | MUST | behavioral | walking / Discovery | A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude rules; the d… | file/WalkingDiscoveryRequirementsTest |
 | [x] | FILE-026 | MUST | structural | walking / Table-set assembly | The discovered catalog assembles into a schema: table names derived from paths, partition columns recognized,… | file/WalkingDiscoveryRequirementsTest |
 | [x] | FILE-027 | MUST | behavioral | walking / Incremental refresh | Re-walking detects added / removed / changed files and updates the table-set correctly; an unchanged tree is … | file/WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFi… |
-| [.] | FILE-028 | MUST | behavioral | refresh / Change detection | A refreshable table re-reads its source when the change signal fires (local mtime, remote ETag); a stale read… | — |
+| [x] | FILE-028 | MUST | behavioral | refresh / Change detection | A refreshable table re-reads its source when the change signal fires (local mtime, remote ETag); a stale read… | file/RefreshLogicRequirementsTest |
 | [x] | FILE-029 | MUST | constraint | refresh / Idempotence | Refresh of an unchanged source performs no rewrite (no new parquet/cache artifact) — gated by ConversionMetad… | file/RefreshIdempotenceTest#reingestionDoesNotRewriteParque… |
 | [.] | FILE-030 | MUST | behavioral | write/parquet / Materialization | ParquetMaterializationWriter writes a table whose read-back is value-identical to the source (round-trip gold… | — |
-| [.] | FILE-031 | SHOULD | behavioral | write/iceberg / Materialization | IcebergTableWriter materializes a table that reads back value-identical; snapshots advance correctly. | — |
+| [x] | FILE-031 | SHOULD | behavioral | write/iceberg / Materialization | IcebergTableWriter materializes a table that reads back value-identical; snapshots advance correctly. | file/IcebergRequirementsTest |
 | [.] | FILE-032 | SHOULD | behavioral | partitioning / Partition pruning | Partition columns are derived from the path layout and a filtered query prunes to the correct partition set, … | — |
 | [.] | FILE-033 | SHOULD | behavioral | partitioning / Incremental tracking | IncrementalTracker records processed partitions so a re-run only ingests new partitions (idempotent). | — |
 | [~] | FILE-034 | SHOULD | behavioral | schema-evolution / Column evolution | Across files with added/removed columns, the unified table exposes the superset with nulls for absent columns… | file/NamingUnionTrackerRequirementsTest |
@@ -79,7 +79,7 @@
 | [.] | FILE-068 | MUST | behavioral | storage/sharepoint / sharepoint auth modes | storageType sharepoint supports oauth (clientId/secret/tenantId) and ntlm; client-secret auth requires legacy… | — |
 | [.] | FILE-069 | SHOULD | behavioral | engine / default selection | JDBC default engine duckdb (CALCITE_FILE_ENGINE_TYPE / queryEngine.type override). In-process guidance: PARQU… | — |
 | [.] | FILE-070 | MUST | constraint | engine / write path is duckdb | JDBC query engines (DuckDB/Trino/ClickHouse/Spark) are read-only; ALL writes (materialization, partition reor… | — |
-| [.] | FILE-071 | MUST | behavioral | iceberg / time travel | No timeRange/snapshotId/asOfTimestamp → read latest snapshot (HEAD); snapshotId selects an exact snapshot; as… | — |
+| [x] | FILE-071 | MUST | behavioral | iceberg / time travel | No timeRange/snapshotId/asOfTimestamp → read latest snapshot (HEAD); snapshotId selects an exact snapshot; as… | file/IcebergRequirementsTest |
 | [.] | FILE-072 | MUST | behavioral | iceberg / snapshot isolation | Each query reads a single consistent snapshot; concurrent readers see a consistent snapshot; each write is an… | — |
 | [x] | FILE-073 | SHOULD | behavioral | schema-evolution / resolution strategy defaults | Schema resolution defaults: parquet LATEST_SCHEMA_WINS, csv RICHEST_FILE, json LATEST_FILE. LATEST_SCHEMA_WIN… | file/CsvSchemaRequirementsTest (tagged FILE-073) |
 | [.] | FILE-074 | MUST | constraint | iceberg / read-only limitation | Iceberg READ integration is read-only (no INSERT/UPDATE/DELETE); position/equality deletes unsupported; only … | — |
@@ -90,7 +90,7 @@
 | [.] | FILE-079 | SHOULD | behavioral | optimization / constraint-driven | Declared PK drives self-join/join elimination; FK drives join reordering and cardinality estimation; results … | — |
 | [x] | FILE-080 | MUST | constraint | constraints / declaration model | constraints block declares primaryKey (composite allowed), foreignKeys (columns/targetTable/targetColumns, ma… | file/ConstraintRequirementsTest (tagged FILE-080) |
 | [x] | FILE-081 | MUST | structural | constraints / jdbc/statistic exposure | Constraints exposed via DatabaseMetaData (getPrimaryKeys KEY_SEQ order, getImportedKeys, getIndexInfo NON_UNI… | file/ConstraintRequirementsTest (tagged FILE-081) |
-| [.] | FILE-082 | MUST | behavioral | document-etl / ResponseTransformer contract | A ResponseTransformer(raw, RequestContext) MUST return a JSON array string whose object keys match the canoni… | — |
+| [x] | FILE-082 | MUST | behavioral | document-etl / ResponseTransformer contract | A ResponseTransformer(raw, RequestContext) MUST return a JSON array string whose object keys match the canoni… | file/EtlMetadataRequirementsTest |
 | [x] | FILE-083 | MUST | behavioral | document-etl / dimension types & expansion | Dimension types list/range(inclusive,step1)/yearRange(dataLag,releaseMonth,excludeYears,min/max)/query/json_c… | file/EtlTrackerRequirementsTest |
 | [x] | FILE-084 | MUST | behavioral | document-etl / resumability tracker | Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips … | file/EtlTrackerRequirementsTest |
 | [.] | FILE-085 | MUST | behavioral | document-etl / hook order & error policy | Per-row order responseTransformer → rowTransformers (declaration order; null drops row) → validators (drop|wa… | — |
@@ -139,20 +139,20 @@
 | [x] | FILE-128 | MUST | behavioral | concurrency / source file locks | SourceFileLockManager.acquireReadLock takes a SHARED FileLock, acquireWriteLock EXCLUSIVE, 30s timeout, 100ms… | file/ConcurrencyRequirementsTest |
 | [x] | FILE-129 | MUST | behavioral | concurrency / iceberg commit lock | Every table-mutating Iceberg commit runs under IcebergTableWriter.underCommitLock = a JVM monitor keyed by Ta… | file/ConcurrencyRequirementsTest |
 | [.] | FILE-130 | MUST | behavioral | conversion / staleness decision | ParquetConversionUtil.needsConversion skips re-conversion only when the cache exists AND source.lastModified(… | — |
-| [.] | FILE-131 | MUST | behavioral | conversion / conversion-record preservation | ConversionMetadata.recordTable preserves an existing non-DIRECT conversionType (e.g. SEC_XBRL_TO_PARQUET, ICE… | — |
+| [x] | FILE-131 | MUST | behavioral | conversion / conversion-record preservation | ConversionMetadata.recordTable preserves an existing non-DIRECT conversionType (e.g. SEC_XBRL_TO_PARQUET, ICE… | file/EtlMetadataRequirementsTest |
 | [.] | FILE-132 | MUST | behavioral | refresh / lazy trigger & anti-thrash | File-table refresh is LAZY (query-time: project/toRel/scan/getRowType per table type). needsRefresh() gates t… | — |
 | [.] | FILE-133 | MUST | behavioral | refresh / eager conversion watcher | ConversionFileWatcher is the ONLY eager/timer refresher: a daemon scheduleWithFixedDelay (default 60000ms whe… | — |
 | [.] | FILE-134 | SHOULD | constraint | refresh / interval parsing | RefreshInterval.parse accepts ISO-8601 (P/PT) and "<n> (second|minute|hour|day)s?"; null/empty/unmatched → nu… | — |
-| [.] | FILE-135 | MUST | behavioral | refresh / partitioned staleness | RefreshablePartitionedParquetTable.filesChangedComparedToBaseline → true on null/empty baseline, file-count c… | — |
-| [.] | FILE-136 | MUST | behavioral | refresh / parquet-cache rewrite | RefreshableParquetCacheTable.doRefresh, when the monitored source changed, deletes the old parquet + *.tmp.*.… | — |
-| [.] | FILE-137 | MUST | behavioral | materialized-view / one-shot CAS invalidation | MaterializedViewTable.materialize is one-shot via materialized.compareAndSet(false,true) with NO staleness ch… | — |
+| [x] | FILE-135 | MUST | behavioral | refresh / partitioned staleness | RefreshablePartitionedParquetTable.filesChangedComparedToBaseline → true on null/empty baseline, file-count c… | file/RefreshLogicRequirementsTest |
+| [x] | FILE-136 | MUST | behavioral | refresh / parquet-cache rewrite | RefreshableParquetCacheTable.doRefresh, when the monitored source changed, deletes the old parquet + *.tmp.*.… | file/EtlMetadataRequirementsTest |
+| [x] | FILE-137 | MUST | behavioral | materialized-view / one-shot CAS invalidation | MaterializedViewTable.materialize is one-shot via materialized.compareAndSet(false,true) with NO staleness ch… | file/RefreshLogicRequirementsTest |
 | [.] | FILE-138 | MUST | behavioral | document-etl / freshness fail-safe | FreshnessCheck.changed(prev,cur) → true whenever prev or cur is null, else !prev.equals(cur) — an unknown/mis… | — |
 | [x] | FILE-139 | MUST | constraint | document-etl / error fatality classes | IncompleteFetchException (unchecked) marks a fetch that could not complete (e.g. 429 exhausted) as a FAILURE … | file/EtlErrorClassesTest#incompleteFetchIsUnchecked, file/E… |
 | [x] | FILE-140 | MUST | behavioral | document-etl / circuit breaker & rate limit | HttpSource keeps a process-wide consecutive-503 counter per base URI; at threshold 5 it fast-skips via Skippe… | file/EtlTrackerRequirementsTest |
 | [.] | FILE-141 | MUST | structural | partitioning / incremental tracker keys | IncrementalTracker period key is year_quarter_month_week_day_day_of_week_<pipeline> with literal "NA" for abs… | — |
 | [.] | FILE-142 | MUST | behavioral | partitioning / empty vs complete (self-heal) | IncrementalTracker.markProcessedEmpty (HTTP 200, zero rows) is distinct from terminal complete: an empty peri… | — |
 | [.] | FILE-143 | MUST | behavioral | raw-cache / no-TTL & tier resolution | Raw cache is immutable with NO TTL — HttpSource.hasValidRawCache returns valid whenever the cache file exists… | — |
-| [.] | FILE-144 | MUST | behavioral | iceberg / commit mode & version hint | IcebergTableWriter commits via AppendFiles (newAppend, append-only, relying on SQL dedup); replace-partitions… | — |
+| [x] | FILE-144 | MUST | behavioral | iceberg / commit mode & version hint | IcebergTableWriter commits via AppendFiles (newAppend, append-only, relying on SQL dedup); replace-partitions… | file/IcebergRequirementsTest |
 | [.] | FILE-145 | MUST | behavioral | iceberg / time-travel precedence & stats gap | IcebergEnumerator snapshot precedence: snapshotId > asOfTimestamp (Instant.parse; bad format throws) > curren… | — |
 | [.] | FILE-146 | MUST | behavioral | jdbc / second JDBC driver | A SECOND driver FileJdbcDriver accepts jdbc:calcite: URLs containing schema=file|materialized_view with snake… | — |
 | [~] | FILE-147 | MUST | behavioral | jdbc / AperioDriver defaults & var expansion | AperioDriver.buildOperand always emits lex=ORACLE, unquotedCasing=TO_LOWER, quotedCasing=UNCHANGED, table/col… | file/AperioDriverOperandTest#operandDefaults, file/AperioDr… |
@@ -175,7 +175,7 @@
 | [.] | FILE-164 | SHOULD | structural | iceberg / metadata tables shape | IcebergMetadataTables.createMetadataTables returns exactly 5 ScannableTables: history (4 cols), snapshots (6 … | — |
 | [x] | FILE-165 | MUST | behavioral | partitioning / per-period completion isolation | IncrementalTracker keys completion per canonical period, so completing year 2025 never marks an unprocessed y… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-166 | MUST | behavioral | conversion / format routing | FileConversionManager routes docx/pptx/md/html/xml to document converters (requiresConversion true, isDirectl… | — |
-| [.] | FILE-167 | MUST | behavioral | concurrency / conversion at-least-once | Under 5 racing threads on one source, ConcurrentParquetCache serializes via the lock with the invariant conve… | — |
+| [x] | FILE-167 | MUST | behavioral | concurrency / conversion at-least-once | Under 5 racing threads on one source, ConcurrentParquetCache serializes via the lock with the invariant conve… | file/ConcurrencyRequirementsTest |
 | [.] | FILE-168 | MUST | behavioral | jdbc / FileJdbcDriver parsing & precedence | FileJdbcDriver: schema=file → schema named "files", default engine "parquet", storage_path ${tmp}/calcite_fil… | — |
 | [.] | FILE-169 | SHOULD | structural | constraints / declaration paths & iceberg | PKs may be declared via top-level constraints OR partitionedTables.primaryKey, both surfacing through getPrim… | — |
 | [.] | FILE-170 | MUST | behavioral | vector-search / exact UDF results & null policy | COSINE_SIMILARITY identical=1.0/orthogonal=0.0/opposite=-1.0/zero-norm=0.0; COSINE_DISTANCE=1-sim; EUCLIDEAN_… | — |
