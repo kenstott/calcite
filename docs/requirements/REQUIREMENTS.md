@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 15 complete, 8 in-progress, 145 proposed, 3 rejected)
+## file  (173: 2 accepted, 17 complete, 8 in-progress, 143 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -111,8 +111,8 @@
 | [.] | FILE-100 | MUST | behavioral | csv / value coercion & storage | CsvTypeConverter stores DATE as int epoch-day, TIME as int millis-of-day, TIMESTAMP as long UTC wall-clock mi… | — |
 | [~] | FILE-101 | MUST | constraint | csv / silent temporal fallback | On an unparseable DATE/TIME/TIMESTAMP, CsvTypeConverter logs a warning and returns null (and parses a date-on… | file/ResolvedBugTargetsTest#badTemporalValueRaises_target, … |
 | [.] | FILE-102 | MUST | behavioral | xlsx / table detection | MultiTableExcelToJsonConverter splits a sheet on ≥ MIN_EMPTY_ROWS_BETWEEN_TABLES (2) blank rows, treats a sin… | — |
-| [.] | FILE-103 | MUST | behavioral | html / table name & sanitization | HtmlTableScanner.getTableName priority: id attr > caption > preceding h1-h6 (≤3 sibs) > preceding title/heade… | — |
-| [.] | FILE-104 | MUST | behavioral | xml / detection & XXE hardening | XmlTableScanner detects a table as ≥ MIN_REPEATING_ELEMENTS (2) structurally-similar same-tag siblings (attr-… | — |
+| [x] | FILE-103 | MUST | behavioral | html / table name & sanitization | HtmlTableScanner.getTableName priority: id attr > caption > preceding h1-h6 (≤3 sibs) > preceding title/heade… | file/TableScannerCatalogTest#htmlDuplicateNamesGetSuffixed,… |
+| [x] | FILE-104 | MUST | behavioral | xml / detection & XXE hardening | XmlTableScanner detects a table as ≥ MIN_REPEATING_ELEMENTS (2) structurally-similar same-tag siblings (attr-… | file/TableScannerCatalogTest#xmlRepeatingElementsAreDetecte… |
 | [.] | FILE-105 | MUST | behavioral | markdown / parsing & sparse rows | MarkdownTableScanner needs ≥3 lines (header, separator not at index 0, ≥1 data row); cells split on unescaped… | — |
 | [.] | FILE-106 | MUST | behavioral | docx / header rows & cell typing | DocxTableScanner assumes row 0 is a header, promotes row 1 to a 2nd header by cell-count/looksLikeHeader (≤3 … | — |
 | [.] | FILE-107 | MUST | behavioral | json / flattener semantics | JsonFlattener defaults: separator "__", maxDepth 3, nullValue "". Nested objects join keys with __; empty obj… | — |

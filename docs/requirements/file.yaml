@@ -1643,7 +1643,7 @@
 
 - id: FILE-103
   module: file
-  status: proposed
+  status: complete
   group: html
   category: table name & sanitization
   priority: MUST
@@ -1656,11 +1656,15 @@
     title/header-class (≤3 sibs) > "T{n}"; duplicates get _2/_3. sanitizeName: non-[A-Za-z0-9_]→_,
     truncate 50, prefix _ if leading non-letter, empty→"table".
   source: file/src/main/java/.../converters/HtmlTableScanner.java 99-232
-  tests: []
+  notes: "duplicate-name _2 suffixing + sanitization pinned (recode); name-priority order covered by html/MultiTableHtmlTest."
+  tests:
+    - file/TableScannerCatalogTest#htmlDuplicateNamesGetSuffixed
+    - file/TableScannerCatalogTest#htmlTableNameIsSanitized
+  since: 2026-06
 
 - id: FILE-104
   module: file
-  status: proposed
+  status: complete
   group: xml
   category: detection & XXE hardening
   priority: MUST
@@ -1673,7 +1677,11 @@
     siblings (attr-count diff ≤2 AND ≥50% child-name overlap), recursing to depth 5. The parser
     disallows DOCTYPE and external entities (XXE-hardened), so DOCTYPE-bearing XML fails to parse.
   source: file/src/main/java/.../converters/XmlTableScanner.java 40-282
-  tests: []
+  notes: "repeating-element detection + XXE/DOCTYPE rejection pinned (recode)."
+  tests:
+    - file/TableScannerCatalogTest#xmlRepeatingElementsAreDetected
+    - file/TableScannerCatalogTest#xmlDoctypeIsRejectedXxeHardening
+  since: 2026-06
 
 - id: FILE-105
   module: file

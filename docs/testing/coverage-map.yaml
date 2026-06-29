@@ -49,8 +49,8 @@
 - {id: FILE-100, grade: STRONG, action: LINK, test: format/csv/CsvTypeConverterTest#testConvertBooleanTrue}
 - {id: FILE-101, grade: STRONG, action: RECODE, test: format/csv/CsvTypeConverterTest#testConvertUnparseableTime, note: "pins CURRENT silent-fallback; recode to C-16 target @Disabled, archive this"}
 - {id: FILE-102, grade: PARTIAL, action: RECODE, test: converters/ExcelToJsonConverterCoverageTest#testConvertBlankAndNullCells, note: "splitting/title/header-cap weak"}
-- {id: FILE-103, grade: PARTIAL, action: RECODE, test: html/MultiTableHtmlTest#testMultiTableHtmlDetection, note: "dup-suffix + sanitize not pinned"}
-- {id: FILE-104, grade: PARTIAL, action: RECODE, test: xml/XmlTableScannerTest#testScanIgnoresSingleElements, note: "thresholds + XXE/DOCTYPE not pinned"}
+- {id: FILE-103, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (dup-suffix + sanitize)"}
+- {id: FILE-104, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (detection + XXE)"}
 - {id: FILE-105, grade: WEAK, action: RECODE, test: markdown/MarkdownTableTest#testMarkdownWithSpecialCharacters, note: ">=3-line/sparse rules not pinned"}
 - {id: FILE-106, grade: PARTIAL, action: RECODE, test: converters/DocxTableScannerDeepCoverageTest#testBuildColumnHeadersMultipleRows, note: "type-inference output weak"}
 - {id: FILE-107, grade: STRONG, action: LINK, test: format/json/JsonFlattenerTest#testFlattenArrayOfObjectsReturnsNull}
