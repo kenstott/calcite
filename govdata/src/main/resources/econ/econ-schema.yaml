@@ -2472,7 +2472,16 @@ partitionedTables:
       method: GET
       parameters:
         format: "json"
-        date: "{env:GOVDATA_START_YEAR:2000}:{env:GOVDATA_END_YEAR:2025}"
+        # Bulk table: fetch the full history on every run, decoupled from the run-mode year
+        # window (GOVDATA_START_YEAR is the current year in daily mode). The responsePartitioning
+        # yearFilter trims on write and overwritePartitions replaces, so re-fetching all years is
+        # idempotent. Throttling is the job of the freshness gate, not a per-run year window.
+        # End is an open-ended sentinel, NOT a real cutoff: World Bank only returns years that
+        # exist (<= current), so a far-future end never over-fetches and never freezes the table at
+        # a fixed year; the yearFilter (end: current) does the precise upper trim on write. The 2000
+        # floor (not the start) is what bounds row count under per_page=20000 (~266 rows/yr → the
+        # single-call limit is reached ~year 2075, the only real ceiling here).
+        date: "2000:2100"
         per_page: "20000"  # Get all data in one request (API supports up to ~20k)
       response:
         format: json
@@ -2488,9 +2497,11 @@ partitionedTables:
       responsePartitioning:
         fields:
           year: "date"  # Used for year filtering only
+        # Fixed floor (not the run-mode start year): a bulk-replace table keeps the full
+        # history every run; the upper bound tracks the current year.
         yearFilter:
           field: "date"
-          start: "${GOVDATA_START_YEAR:-2020}"
+          start: 2000
           end: current
 
     # Materialization configuration
@@ -2510,7 +2521,8 @@ partitionedTables:
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        # Bulk table: each run overwrites the year partitions wholesale (replace, not append).
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true
