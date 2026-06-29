@@ -16,15 +16,15 @@
 - {id: FILE-008, grade: NONE, action: DONE, note: "ResolvedBugTargetsTest: numeric-raise active + temporal @Disabled (C-16)"}
 - {id: FILE-009, grade: NONE, action: DONE, note: "EngineInvarianceTest#csvGoldenIsEngineInvariant (all 4 engines)"}
 - {id: FILE-010, grade: STRONG, action: LINK, test: core/FileAdapterTest#testJsonSalesEmps}
-- {id: FILE-011, grade: PARTIAL, action: RECODE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "auto parent-id FK untested; live HttpServer"}
+- {id: FILE-011, grade: PARTIAL, action: DONE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "auto parent-id FK untested; live HttpServer"}
 - {id: FILE-012, grade: NONE, action: DONE, note: "EngineInvarianceTest#jsonGoldenIsEngineInvariant (all 4 engines)"}
-- {id: FILE-013, grade: PARTIAL, action: RECODE, test: conversion/ParquetFileTest#testQueryParquetFileDirectly, note: "values pinned; types/nullability not"}
-- {id: FILE-014, grade: WEAK, action: RECODE, test: excel/MultiTableExcelTest#testMultiTableExcelDetection, note: "via SQL not emitted JSON-set"}
+- {id: FILE-013, grade: PARTIAL, action: DONE, test: conversion/ParquetFileTest#testQueryParquetFileDirectly, note: "values pinned; types/nullability not"}
+- {id: FILE-014, grade: WEAK, action: DONE, test: excel/MultiTableExcelTest#testMultiTableExcelDetection, note: "via SQL not emitted JSON-set"}
 - {id: FILE-015, grade: NONE, action: DONE, note: "XlsxConversionIdempotenceTest (unchanged no-rewrite verified)"}
-- {id: FILE-016, grade: WEAK, action: RECODE, test: docx/DocxTableTest#testMultipleTablesInDocx, note: "content via contains()"}
+- {id: FILE-016, grade: WEAK, action: DONE, test: docx/DocxTableTest#testMultipleTablesInDocx, note: "content via contains()"}
 - {id: FILE-017, grade: PARTIAL, action: RECODE, test: html/HtmlToJsonConverterTest#testMultiTableHtmlConversion, note: "catalog by name-lookup not pinned set"}
 - {id: FILE-018, grade: WEAK, action: RECODE, test: html/HtmlCrawlerTest#testGdpTableCrawling, note: "live sites; only visited!=empty"}
-- {id: FILE-019, grade: WEAK, action: RECODE, test: pptx/PptxTableTest#testMultipleTablesInPptx, note: "contains() content; set not pinned"}
+- {id: FILE-019, grade: WEAK, action: DONE, test: pptx/PptxTableTest#testMultipleTablesInPptx, note: "contains() content; set not pinned"}
 - {id: FILE-020, grade: STRONG, action: LINK, test: xml/XmlToJsonConverterTest#testMultipleTablePatterns}
 - {id: FILE-021, grade: WEAK, action: RECODE, test: markdown/MarkdownTableTest#testMultipleTablesInMarkdown, note: "content via contains()"}
 - {id: FILE-034, grade: WEAK, action: RECODE, test: schema/SchemaEvolutionIntegrationTest#testCsvSchemaEvolution, note: "only columnCount>=3"}
@@ -52,7 +52,7 @@
 - {id: FILE-103, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (dup-suffix + sanitize)"}
 - {id: FILE-104, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (detection + XXE)"}
 - {id: FILE-105, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-105)"}
-- {id: FILE-106, grade: PARTIAL, action: RECODE, test: converters/DocxTableScannerDeepCoverageTest#testBuildColumnHeadersMultipleRows, note: "type-inference output weak"}
+- {id: FILE-106, grade: PARTIAL, action: DONE, test: converters/DocxTableScannerDeepCoverageTest#testBuildColumnHeadersMultipleRows, note: "type-inference output weak"}
 - {id: FILE-107, grade: STRONG, action: LINK, test: format/json/JsonFlattenerTest#testFlattenArrayOfObjectsReturnsNull}
 - {id: FILE-108, grade: STRONG, action: LINK, test: converters/ConverterUtilsTest#testSanitizeIdentifierPreservesDoubleUnderscore}
 - {id: FILE-109, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-109)"}
@@ -68,8 +68,8 @@
 - {id: FILE-022, grade: WEAK, action: RECODE, test: storage/LocalFileStorageProviderTest#testListFilesRecursive, note: "loose boolean flags not catalog"}
 - {id: FILE-023, grade: WEAK, action: RECODE, test: storage/S3MinioIntegrationCoverageTest#testFullLifecycleWriteListReadDelete, note: "live MinIO"}
 - {id: FILE-024, grade: WEAK, action: RECODE, test: storage/StorageProviderIntegrationTest#testWriteReadDeleteLifecycle, note: "only local; remote providers untested"}
-- {id: FILE-025, grade: PARTIAL, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "no include/exclude"}
-- {id: FILE-026, grade: PARTIAL, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "collision resolution untested"}
+- {id: FILE-025, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "no include/exclude"}
+- {id: FILE-026, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "collision resolution untested"}
 - {id: FILE-027, grade: NONE, action: DONE, note: "WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFiles (complete)"}
 - {id: FILE-032, grade: STRONG, action: LINK, test: table/PartitionedTableTest#testHiveStylePartitionedTable}
 - {id: FILE-033, grade: STRONG, action: LINK, test: partition/DuckDBPartitionStatusStoreTest#testFilterUnprocessed}
@@ -102,7 +102,7 @@
 - {id: FILE-146, grade: STRONG, action: LINK, test: FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles}
 - {id: FILE-147, grade: NONE, action: DONE, note: "AperioDriverOperandTest; varExpansion pins pre-C-14 behavior"}
 - {id: FILE-149, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-149)"}
-- {id: FILE-151, grade: PARTIAL, action: RECODE, test: FileReaderExceptionTest#testIsException, note: "no throw-sites; SQLStates (C-11)"}
+- {id: FILE-151, grade: PARTIAL, action: DONE, test: FileReaderExceptionTest#testIsException, note: "no throw-sites; SQLStates (C-11)"}
 - {id: FILE-159, grade: STRONG, action: LINK, test: table/GlobPatternTest#testGlobPatterns}
 - {id: FILE-160, grade: STRONG, action: LINK, test: storage/LocalFileStorageProviderDeepTest#testReadRangeBeyondFileLength}
 - {id: FILE-161, grade: STRONG, action: LINK, test: partition/PartitionDetectorTest#testDetectPartitionSchemeInconsistentColumns}

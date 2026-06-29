@@ -1,10 +1,11 @@
 {
-  "FILE-083": ["file/EtlTrackerRequirementsTest"],
-  "FILE-084": ["file/EtlTrackerRequirementsTest"],
-  "FILE-140": ["file/EtlTrackerRequirementsTest"],
-  "FILE-127": ["file/ConcurrencyRequirementsTest"],
-  "FILE-128": ["file/ConcurrencyRequirementsTest"],
-  "FILE-129": ["file/ConcurrencyRequirementsTest"],
-  "FILE-091": ["file/RawCacheRequirementsTest"],
-  "FILE-092": ["file/RawCacheRequirementsTest"]
+  "FILE-014": ["file/ConverterDecompositionTest"],
+  "FILE-016": ["file/ConverterDecompositionTest"],
+  "FILE-019": ["file/ConverterDecompositionTest"],
+  "FILE-106": ["file/ConverterDecompositionTest"],
+  "FILE-025": ["file/WalkingDiscoveryRequirementsTest"],
+  "FILE-026": ["file/WalkingDiscoveryRequirementsTest"],
+  "FILE-011": ["file/JsonPathParquetReaderTest"],
+  "FILE-013": ["file/JsonPathParquetReaderTest"],
+  "FILE-151": ["file/JsonPathParquetReaderTest"]
 }

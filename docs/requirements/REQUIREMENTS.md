@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 43 complete, 8 in-progress, 117 proposed, 3 rejected)
+## file  (173: 2 accepted, 52 complete, 8 in-progress, 108 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -19,22 +19,22 @@
 | [~] | FILE-008 | MUST | constraint | csv / Error handling | A non-null value violating an inferred column type must surface an error, not be silently coerced to NULL/def… | file/ResolvedBugTargetsTest#badNumericValueRaises, file/Res… |
 | [x] | FILE-009 | MUST | behavioral | csv / Engine invariance | The csv golden (FILE-001..004) holds identically across every applicable engine — same source, same table — r… | file/EngineInvarianceTest#csvGoldenIsEngineInvariant |
 | [.] | FILE-010 | MUST | behavioral | json / Value fidelity | A flat JSON source round-trips to exact cell values and inferred types — the basis every complex format decom… | — |
-| [.] | FILE-011 | SHOULD | behavioral | json / Path extraction | Nested JSON is flattened/extracted per a configured path (JsonPathConverter) to an exact table, arrays and ne… | — |
+| [x] | FILE-011 | SHOULD | behavioral | json / Path extraction | Nested JSON is flattened/extracted per a configured path (JsonPathConverter) to an exact table, arrays and ne… | file/JsonPathParquetReaderTest |
 | [x] | FILE-012 | MUST | behavioral | json / Engine invariance | The json golden holds identically across engines. | file/EngineInvarianceTest#jsonGoldenIsEngineInvariant |
-| [.] | FILE-013 | MUST | behavioral | parquet / Value fidelity | A Parquet source round-trips to exact values with types taken from the file schema (self-describing, no infer… | — |
-| [.] | FILE-014 | MUST | behavioral | xlsx / Extraction (decomposition) | MultiTableExcelToJsonConverter scans a workbook and emits one JSON file per discovered sheet/table; the golde… | — |
+| [x] | FILE-013 | MUST | behavioral | parquet / Value fidelity | A Parquet source round-trips to exact values with types taken from the file schema (self-describing, no infer… | file/JsonPathParquetReaderTest |
+| [x] | FILE-014 | MUST | behavioral | xlsx / Extraction (decomposition) | MultiTableExcelToJsonConverter scans a workbook and emits one JSON file per discovered sheet/table; the golde… | file/ConverterDecompositionTest |
 | [x] | FILE-015 | MUST | constraint | xlsx / Conversion idempotence | Re-converting an unchanged workbook produces byte-identical JSON and is skipped via the etag/mtime gate (Conv… | file/XlsxConversionIdempotenceTest#reConvertingUnchangedXls… |
-| [.] | FILE-016 | MUST | behavioral | docx / Extraction (decomposition) | DocxTableScanner scans the document body for inline tables and emits one JSON per detected table; the catalog… | — |
+| [x] | FILE-016 | MUST | behavioral | docx / Extraction (decomposition) | DocxTableScanner scans the document body for inline tables and emits one JSON per detected table; the catalog… | file/ConverterDecompositionTest |
 | [.] | FILE-017 | MUST | behavioral | html / Extraction (decomposition) | HtmlTableScanner emits one JSON per detected HTML table; catalog golden pins the table-set. | — |
 | [.] | FILE-018 | SHOULD | behavioral | html / Crawl discovery | The HTML crawler (CrawlerConfiguration maxDepth / linkPattern / followExternalLinks) discovers the correct pa… | — |
-| [.] | FILE-019 | SHOULD | behavioral | pptx / Extraction (decomposition) | PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set. | — |
+| [x] | FILE-019 | SHOULD | behavioral | pptx / Extraction (decomposition) | PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set. | file/ConverterDecompositionTest |
 | [.] | FILE-020 | SHOULD | behavioral | xml / Extraction (decomposition) | XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set. | — |
 | [.] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | — |
 | [.] | FILE-022 | MUST | behavioral | storage/local / Storage seam | LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and openInputStream re… | — |
 | [.] | FILE-023 | MUST | behavioral | storage/s3 / Storage seam | S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam. | — |
 | [.] | FILE-024 | SHOULD | behavioral | storage/remote / Storage seam | Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where listable) the corr… | — |
-| [.] | FILE-025 | MUST | behavioral | walking / Discovery | A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude rules; the d… | — |
-| [.] | FILE-026 | MUST | structural | walking / Table-set assembly | The discovered catalog assembles into a schema: table names derived from paths, partition columns recognized,… | — |
+| [x] | FILE-025 | MUST | behavioral | walking / Discovery | A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude rules; the d… | file/WalkingDiscoveryRequirementsTest |
+| [x] | FILE-026 | MUST | structural | walking / Table-set assembly | The discovered catalog assembles into a schema: table names derived from paths, partition columns recognized,… | file/WalkingDiscoveryRequirementsTest |
 | [x] | FILE-027 | MUST | behavioral | walking / Incremental refresh | Re-walking detects added / removed / changed files and updates the table-set correctly; an unchanged tree is … | file/WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFi… |
 | [.] | FILE-028 | MUST | behavioral | refresh / Change detection | A refreshable table re-reads its source when the change signal fires (local mtime, remote ETag); a stale read… | — |
 | [x] | FILE-029 | MUST | constraint | refresh / Idempotence | Refresh of an unchanged source performs no rewrite (no new parquet/cache artifact) — gated by ConversionMetad… | file/RefreshIdempotenceTest#reingestionDoesNotRewriteParque… |
@@ -114,7 +114,7 @@
 | [x] | FILE-103 | MUST | behavioral | html / table name & sanitization | HtmlTableScanner.getTableName priority: id attr > caption > preceding h1-h6 (≤3 sibs) > preceding title/heade… | file/TableScannerCatalogTest#htmlDuplicateNamesGetSuffixed,… |
 | [x] | FILE-104 | MUST | behavioral | xml / detection & XXE hardening | XmlTableScanner detects a table as ≥ MIN_REPEATING_ELEMENTS (2) structurally-similar same-tag siblings (attr-… | file/TableScannerCatalogTest#xmlRepeatingElementsAreDetecte… |
 | [x] | FILE-105 | MUST | behavioral | markdown / parsing & sparse rows | MarkdownTableScanner needs ≥3 lines (header, separator not at index 0, ≥1 data row); cells split on unescaped… | file/ConverterUtilRequirementsTest (tagged FILE-105) |
-| [.] | FILE-106 | MUST | behavioral | docx / header rows & cell typing | DocxTableScanner assumes row 0 is a header, promotes row 1 to a 2nd header by cell-count/looksLikeHeader (≤3 … | — |
+| [x] | FILE-106 | MUST | behavioral | docx / header rows & cell typing | DocxTableScanner assumes row 0 is a header, promotes row 1 to a 2nd header by cell-count/looksLikeHeader (≤3 … | file/ConverterDecompositionTest |
 | [.] | FILE-107 | MUST | behavioral | json / flattener semantics | JsonFlattener defaults: separator "__", maxDepth 3, nullValue "". Nested objects join keys with __; empty obj… | — |
 | [.] | FILE-108 | MUST | constraint | table-naming / identifier sanitization | ConverterUtils.sanitizeIdentifier maps non-[A-Za-z0-9_]→_, collapses 3+ underscores to EXACTLY "__" (delibera… | — |
 | [x] | FILE-109 | SHOULD | behavioral | converters / converter system properties | ConverterUtils datetime ISO coercion stays LOCAL unless system property calcite.file.converter.timezone is se… | file/ConverterUtilRequirementsTest (tagged FILE-109) |
@@ -159,7 +159,7 @@
 | [.] | FILE-148 | MUST | behavioral | table-naming / SmartCasing rules | SmartCasing.toSnakeCase lowercases an all-uppercase non-acronym without splitting (DEPTS→depts), applies a di… | — |
 | [x] | FILE-149 | MUST | structural | constraints / positional FK resolution | TableConstraints builds PK/unique bitsets from columnNames.indexOf, SILENTLY dropping unfound columns (and a … | file/ConstraintRequirementsTest (tagged FILE-149) |
 | [x] | FILE-150 | MUST | behavioral | vector-search / UDF semantics & encodings | SimilarityFunctions registers exactly 10 UDFs (COSINE_SIMILARITY, SEMANTIC_SIMILARITY, EMBED, COSINE_DISTANCE… | file/VectorFunctionRequirementsTest (tagged FILE-150) |
-| [.] | FILE-151 | MUST | structural | error-handling / FileReaderException has no SQLState | FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor … | — |
+| [x] | FILE-151 | MUST | structural | error-handling / FileReaderException has no SQLState | FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor … | file/JsonPathParquetReaderTest |
 | [.] | FILE-152 | MUST | behavioral | statistics / HLL measured error bounds | Tested HLL accuracy: precision 12 estimates 100 distinct within 20%, 10k within 5%, 100k within 5%; precision… | — |
 | [.] | FILE-153 | MUST | behavioral | statistics / selectivity formulas | ColumnStatistics.getSelectivity pins: "=" → 1/distinct, "!=" → 1-1/distinct, IS NULL → nullCount/total, IS NO… | — |
 | [.] | FILE-154 | MUST | behavioral | engine / engine equivalence (tested) | Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for CSV/JSON… | — |

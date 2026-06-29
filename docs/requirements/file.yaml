@@ -203,7 +203,7 @@
 
 - id: FILE-011
   module: file
-  status: proposed
+  status: complete
   group: json
   category: Path extraction
   priority: SHOULD
@@ -214,7 +214,9 @@
   description: >
     Nested JSON is flattened/extracted per a configured path (JsonPathConverter) to an exact table,
     arrays and nested objects handled per the documented rule.
-  tests: []
+  tests:
+    - file/JsonPathParquetReaderTest
+  since: 2026-06
 
 - id: FILE-012
   module: file
@@ -236,7 +238,7 @@
 
 - id: FILE-013
   module: file
-  status: proposed
+  status: complete
   group: parquet
   category: Value fidelity
   priority: MUST
@@ -248,7 +250,9 @@
     A Parquet source round-trips to exact values with types taken from the file schema (self-describing,
     no inference), nullability preserved.
   applies: { engines: [linq4j, parquet, arrow, duckdb], storagetypes: [local] }
-  tests: []
+  tests:
+    - file/JsonPathParquetReaderTest
+  since: 2026-06
 
 # ============================ complex formats (1:N, seam: json-set) ==============================
 # Each: extraction golden (document -> exact set of JSON files) + conversion idempotence. Per-table
@@ -256,7 +260,7 @@
 
 - id: FILE-014
   module: file
-  status: proposed
+  status: complete
   group: xlsx
   category: Extraction (decomposition)
   priority: MUST
@@ -269,7 +273,9 @@
     MultiTableExcelToJsonConverter scans a workbook and emits one JSON file per discovered sheet/table;
     the golden pins the exact emitted file-set (names + content).
   applies: { storagetypes: [local, s3] }
-  tests: []
+  tests:
+    - file/ConverterDecompositionTest
+  since: 2026-06
 
 - id: FILE-015
   module: file
@@ -290,7 +296,7 @@
 
 - id: FILE-016
   module: file
-  status: proposed
+  status: complete
   group: docx
   category: Extraction (decomposition)
   priority: MUST
@@ -301,7 +307,9 @@
   description: >
     DocxTableScanner scans the document body for inline tables and emits one JSON per detected table;
     the catalog golden pins count, boundaries, headers and names.
-  tests: []
+  tests:
+    - file/ConverterDecompositionTest
+  since: 2026-06
 
 - id: FILE-017
   module: file
@@ -334,7 +342,7 @@
 
 - id: FILE-019
   module: file
-  status: proposed
+  status: complete
   group: pptx
   category: Extraction (decomposition)
   priority: SHOULD
@@ -343,7 +351,9 @@
   cardinality: "1:N"
   seam: json-set
   description: PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set.
-  tests: []
+  tests:
+    - file/ConverterDecompositionTest
+  since: 2026-06
 
 - id: FILE-020
   module: file
@@ -422,7 +432,7 @@
 
 - id: FILE-025
   module: file
-  status: proposed
+  status: complete
   group: walking
   category: Discovery
   priority: MUST
@@ -433,11 +443,13 @@
   description: >
     A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude
     rules; the discovery golden pins the catalog, format-agnostic.
-  tests: []
+  tests:
+    - file/WalkingDiscoveryRequirementsTest
+  since: 2026-06
 
 - id: FILE-026
   module: file
-  status: proposed
+  status: complete
   group: walking
   category: Table-set assembly
   priority: MUST
@@ -447,7 +459,9 @@
   description: >
     The discovered catalog assembles into a schema: table names derived from paths, partition
     columns recognized, name collisions resolved deterministically.
-  tests: []
+  tests:
+    - file/WalkingDiscoveryRequirementsTest
+  since: 2026-06
 
 - id: FILE-027
   module: file
@@ -1724,7 +1738,7 @@
 
 - id: FILE-106
   module: file
-  status: proposed
+  status: complete
   group: docx
   category: header rows & cell typing
   priority: MUST
@@ -1737,7 +1751,9 @@
     (≤3 header rows), skips header-less tables, and runs per-cell type inference
     (ConverterUtils.setJsonValueWithTypeInference) — unlike pptx/markdown which keep raw trimmed strings.
   source: file/src/main/java/.../converters/DocxTableScanner.java 159-293
-  tests: []
+  tests:
+    - file/ConverterDecompositionTest
+  since: 2026-06
 
 - id: FILE-107
   module: file
@@ -2509,7 +2525,7 @@
 
 - id: FILE-151
   module: file
-  status: proposed
+  status: complete
   group: error-handling
   category: FileReaderException has no SQLState
   priority: MUST
@@ -2521,7 +2537,9 @@
     ambiguous selection, and "no tables found". Documented SQLStates originate in the Calcite/Avatica layer, not here.
   source: file/src/main/java/.../FileReaderException.java 16-23; FileReader.java 62-185
   notes: "RESOLVED C-11 (code-wrong): make FileReaderException a SQLException carrying the documented SQLStates."
-  tests: []
+  tests:
+    - file/JsonPathParquetReaderTest
+  since: 2026-06
 
 # ###############################################################################################
 # TEST PASS — reverse-engineered from file/src/test/java. Exact values/thresholds/edge behaviors the
