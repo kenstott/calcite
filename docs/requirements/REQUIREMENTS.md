@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 61 complete, 9 in-progress, 98 proposed, 3 rejected)
+## file  (173: 2 accepted, 66 complete, 9 in-progress, 93 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -30,7 +30,7 @@
 | [x] | FILE-019 | SHOULD | behavioral | pptx / Extraction (decomposition) | PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set. | file/ConverterDecompositionTest |
 | [.] | FILE-020 | SHOULD | behavioral | xml / Extraction (decomposition) | XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set. | — |
 | [x] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | file/TableExtractionRequirementsTest |
-| [.] | FILE-022 | MUST | behavioral | storage/local / Storage seam | LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and openInputStream re… | — |
+| [x] | FILE-022 | MUST | behavioral | storage/local / Storage seam | LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and openInputStream re… | file/CompressionStorageRequirementsTest |
 | [.] | FILE-023 | MUST | behavioral | storage/s3 / Storage seam | S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam. | — |
 | [.] | FILE-024 | SHOULD | behavioral | storage/remote / Storage seam | Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where listable) the corr… | — |
 | [x] | FILE-025 | MUST | behavioral | walking / Discovery | A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude rules; the d… | file/WalkingDiscoveryRequirementsTest |
@@ -71,7 +71,7 @@
 | [.] | FILE-060 | MUST | structural | table-naming / multi-table separator | Embedded multi-table names use `__` separator (report__summary, document__table_1, slides__slide__table); sub… | — |
 | [x] | FILE-061 | MUST | structural | table-naming / filename normalization | Table names derive from filename (no extension), lowercased, hyphens→underscores (PRODUCTS.JSON→products, use… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-062 | SHOULD | behavioral | yaml / yaml flattening | YAML nested keys flatten like JSON (profile.age→profile_age); list-of-records → rows. | — |
-| [.] | FILE-063 | SHOULD | behavioral | compression / supported codecs | Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompre… | — |
+| [x] | FILE-063 | SHOULD | behavioral | compression / supported codecs | Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompre… | file/CompressionStorageRequirementsTest |
 | [.] | FILE-064 | SHOULD | behavioral | storage/hdfs / hdfs routing & auth | directory starting hdfs:// auto-routes to HDFS (recursive listing like local/S3); namenode from fs.defaultFS … | — |
 | [.] | FILE-065 | SHOULD | behavioral | storage/s3 / s3-compatible endpoints | S3 supports MinIO/Wasabi/R2 via custom endpoint + options.usePathStyleAccess=true; region may be "auto" (R2);… | — |
 | [.] | FILE-066 | SHOULD | behavioral | storage/http / http auth & error policy | HTTP auth types bearer/basic/apikey/oauth2; error handling is timeout (httpTimeout) + simple retry count (htt… | — |
@@ -84,9 +84,9 @@
 | [x] | FILE-073 | SHOULD | behavioral | schema-evolution / resolution strategy defaults | Schema resolution defaults: parquet LATEST_SCHEMA_WINS, csv RICHEST_FILE, json LATEST_FILE. LATEST_SCHEMA_WIN… | file/CsvSchemaRequirementsTest (tagged FILE-073) |
 | [.] | FILE-074 | MUST | constraint | iceberg / read-only limitation | Iceberg READ integration is read-only (no INSERT/UPDATE/DELETE); position/equality deletes unsupported; only … | — |
 | [.] | FILE-075 | SHOULD | behavioral | write/iceberg / inline compaction | materialize.iceberg.runCompaction (default false) compacts a partition when small-file count hits compactionM… | — |
-| [.] | FILE-076 | MUST | behavioral | optimization / count-star from metadata | COUNT(*) answered from Iceberg/Parquet-footer row counts (no scan), equal to a full-scan count, whenever the … | — |
-| [.] | FILE-077 | SHOULD | behavioral | optimization / HLL error bound & gate | APPROX_COUNT_DISTINCT (and intercepted COUNT(DISTINCT)) answered from HLL sketches built per ingestion (stati… | — |
-| [.] | FILE-078 | SHOULD | behavioral | optimization / pushdown operators | Filter pushdown (enableFilterPushdown, default on) pushes =,!=,<,>,<=,>=,IN,LIKE to storage; pushed results e… | — |
+| [x] | FILE-076 | MUST | behavioral | optimization / count-star from metadata | COUNT(*) answered from Iceberg/Parquet-footer row counts (no scan), equal to a full-scan count, whenever the … | file/ExecutionRefinementRequirementsTest |
+| [x] | FILE-077 | SHOULD | behavioral | optimization / HLL error bound & gate | APPROX_COUNT_DISTINCT (and intercepted COUNT(DISTINCT)) answered from HLL sketches built per ingestion (stati… | file/ExecutionRefinementRequirementsTest |
+| [x] | FILE-078 | SHOULD | behavioral | optimization / pushdown operators | Filter pushdown (enableFilterPushdown, default on) pushes =,!=,<,>,<=,>=,IN,LIKE to storage; pushed results e… | file/ExecutionRefinementRequirementsTest |
 | [.] | FILE-079 | SHOULD | behavioral | optimization / constraint-driven | Declared PK drives self-join/join elimination; FK drives join reordering and cardinality estimation; results … | — |
 | [x] | FILE-080 | MUST | constraint | constraints / declaration model | constraints block declares primaryKey (composite allowed), foreignKeys (columns/targetTable/targetColumns, ma… | file/ConstraintRequirementsTest (tagged FILE-080) |
 | [x] | FILE-081 | MUST | structural | constraints / jdbc/statistic exposure | Constraints exposed via DatabaseMetaData (getPrimaryKeys KEY_SEQ order, getImportedKeys, getIndexInfo NON_UNI… | file/ConstraintRequirementsTest (tagged FILE-081) |

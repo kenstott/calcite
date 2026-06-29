@@ -389,7 +389,7 @@
 
 - id: FILE-022
   module: file
-  status: proposed
+  status: complete
   group: storage/local
   category: Storage seam
   priority: MUST
@@ -401,7 +401,9 @@
     LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and
     openInputStream returns correct bytes — asserted at the seam, format/engine-agnostic.
   applies: { storagetypes: [local] }
-  tests: []
+  tests:
+    - file/CompressionStorageRequirementsTest
+  since: 2026-06
 
 - id: FILE-023
   module: file
@@ -1032,7 +1034,7 @@
 
 - id: FILE-063
   module: file
-  status: proposed
+  status: complete
   group: compression
   category: supported codecs
   priority: SHOULD
@@ -1041,7 +1043,9 @@
   seam: bytes
   description: Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompressedSize (e.g. "1GB"), tempDirectory. (Refines FILE-035.)
   source: file/docs/supported-formats.md (Compressed Files)
-  tests: []
+  tests:
+    - file/CompressionStorageRequirementsTest
+  since: 2026-06
 
 # ============================ storage provider detail ============================================
 
@@ -1233,7 +1237,7 @@
 
 - id: FILE-076
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: count-star from metadata
   priority: MUST
@@ -1241,11 +1245,13 @@
   seam: execution
   description: COUNT(*) answered from Iceberg/Parquet-footer row counts (no scan), equal to a full-scan count, whenever the table is materialized to Iceberg/Hive-partitioned Parquet. (Refines FILE-041.)
   source: file/docs/performance-tuning.md (Metadata-Based COUNT(*))
-  tests: []
+  tests:
+    - file/ExecutionRefinementRequirementsTest
+  since: 2026-06
 
 - id: FILE-077
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: HLL error bound & gate
   priority: SHOULD
@@ -1257,11 +1263,13 @@
     calcite.file.statistics.hll.enabled≠false; exact COUNT(DISTINCT) without sketch still full-scans. (Refines FILE-039.)
   source: file/docs/performance-tuning.md; file/docs/troubleshooting.md
   notes: doc gives both ~2% and accuracy 0.05 — verify which binds.
-  tests: []
+  tests:
+    - file/ExecutionRefinementRequirementsTest
+  since: 2026-06
 
 - id: FILE-078
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: pushdown operators
   priority: SHOULD
@@ -1269,7 +1277,9 @@
   seam: execution
   description: Filter pushdown (enableFilterPushdown, default on) pushes =,!=,<,>,<=,>=,IN,LIKE to storage; pushed results equal unpushed. Column pruning always on. Partition pruning on Hive year=/month= and Iceberg layouts. (Refines FILE-042.)
   source: file/docs/performance-tuning.md
-  tests: []
+  tests:
+    - file/ExecutionRefinementRequirementsTest
+  since: 2026-06
 
 - id: FILE-079
   module: file
