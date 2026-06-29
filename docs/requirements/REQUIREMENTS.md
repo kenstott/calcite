@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 79 complete, 9 in-progress, 80 proposed, 3 rejected)
+## file  (173: 2 accepted, 84 complete, 9 in-progress, 75 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -103,7 +103,7 @@
 | [x] | FILE-092 | MUST | behavioral | raw-cache / read-tier resolution | CacheResolver.resolve tries tier-1 local first, then merged index byte-range GET from .bin or full GET from .… | file/RawCacheRequirementsTest |
 | [x] | FILE-093 | MUST | behavioral | vector-search / similarity UDFs | Every schema auto-registers COSINE_SIMILARITY (−1..1), COSINE_DISTANCE (0..2), EUCLIDEAN_DISTANCE, DOT_PRODUC… | file/VectorFunctionRequirementsTest (tagged FILE-093) |
 | [.] | FILE-094 | SHOULD | behavioral | vector-search / input encodings & pushdown | Vector UDFs accept comma-strings, '[..]', '(..)', native float[]/double[]/int[], List<Number>, Avro arrays — … | — |
-| [.] | FILE-095 | SHOULD | constraint | error-handling / documented errors & SQLStates | Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) report… | — |
+| [x] | FILE-095 | SHOULD | constraint | error-handling / documented errors & SQLStates | Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) report… | file/CatalogErrorRequirementsTest |
 | [~] | FILE-096 | MUST | behavioral | csv / type resolution order | CsvTypeInferrer.determineType forces VARCHAR if any sampled value is VARCHAR, else picks the most general typ… | file/CsvInferenceRequirementsTest#allNullColumnIsNullableVa… |
 | [~] | FILE-097 | MUST | behavioral | csv / numeric promotion | Integer-pattern values fitting [Integer.MIN,MAX] → INTEGER, outside → BIGINT; INTEGER_PATTERN is tried before… | file/CsvInferenceRequirementsTest#numericPromotion, file/Cs… |
 | [x] | FILE-098 | MUST | constraint | csv / null tokens (exact) | NullEquivalents.DEFAULT = {NULL, NA, N/A, NONE, NIL, ""} matched case-insensitively after trim; any empty/whi… | file/CsvInferenceRequirementsTest#defaultNullTokenSet, file… |
@@ -118,8 +118,8 @@
 | [.] | FILE-107 | MUST | behavioral | json / flattener semantics | JsonFlattener defaults: separator "__", maxDepth 3, nullValue "". Nested objects join keys with __; empty obj… | — |
 | [.] | FILE-108 | MUST | constraint | table-naming / identifier sanitization | ConverterUtils.sanitizeIdentifier maps non-[A-Za-z0-9_]→_, collapses 3+ underscores to EXACTLY "__" (delibera… | — |
 | [x] | FILE-109 | SHOULD | behavioral | converters / converter system properties | ConverterUtils datetime ISO coercion stays LOCAL unless system property calcite.file.converter.timezone is se… | file/ConverterUtilRequirementsTest (tagged FILE-109) |
-| [.] | FILE-110 | MUST | constraint | walking / recursive default (actual) | FileSchemaFactory reads recursive as operand.get("recursive") == Boolean.TRUE, so the default is FALSE and a … | — |
-| [.] | FILE-111 | MUST | behavioral | walking / hidden-file skip & glob | FileSchema.listFilesRecursively skips any file/dir whose basename startsWith "." (dotfiles, .aperio). directo… | — |
+| [x] | FILE-110 | MUST | constraint | walking / recursive default (actual) | FileSchemaFactory reads recursive as operand.get("recursive") == Boolean.TRUE, so the default is FALSE and a … | file/CatalogErrorRequirementsTest |
+| [x] | FILE-111 | MUST | behavioral | walking / hidden-file skip & glob | FileSchema.listFilesRecursively skips any file/dir whose basename startsWith "." (dotfiles, .aperio). directo… | file/CatalogErrorRequirementsTest |
 | [.] | FILE-112 | MUST | behavioral | config / storage routing (createFromUrl) | StorageProviderFactory.createFromUrl: s3:// THROWS IllegalArgumentException (S3 needs explicit credentials — … | — |
 | [x] | FILE-113 | MUST | behavioral | storage/local / listFiles contract | LocalFileStorageProvider.listFiles throws IOException("Directory does not exist") on a missing/non-dir path; … | file/StorageProviderRequirementsTest (tagged FILE-113) |
 | [.] | FILE-114 | MUST | constraint | storage/http / timeouts & response codes | HttpStorageProvider hard-codes 30000ms connect+read timeouts, a fixed User-Agent, accepts only HTTP 200/201/3… | — |
@@ -160,9 +160,9 @@
 | [x] | FILE-149 | MUST | structural | constraints / positional FK resolution | TableConstraints builds PK/unique bitsets from columnNames.indexOf, SILENTLY dropping unfound columns (and a … | file/ConstraintRequirementsTest (tagged FILE-149) |
 | [x] | FILE-150 | MUST | behavioral | vector-search / UDF semantics & encodings | SimilarityFunctions registers exactly 10 UDFs (COSINE_SIMILARITY, SEMANTIC_SIMILARITY, EMBED, COSINE_DISTANCE… | file/VectorFunctionRequirementsTest (tagged FILE-150) |
 | [x] | FILE-151 | MUST | structural | error-handling / FileReaderException has no SQLState | FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor … | file/JsonPathParquetReaderTest |
-| [.] | FILE-152 | MUST | behavioral | statistics / HLL measured error bounds | Tested HLL accuracy: precision 12 estimates 100 distinct within 20%, 10k within 5%, 100k within 5%; precision… | — |
+| [x] | FILE-152 | MUST | behavioral | statistics / HLL measured error bounds | Tested HLL accuracy: precision 12 estimates 100 distinct within 20%, 10k within 5%, 100k within 5%; precision… | file/HllAccuracyEngineParityRequirementsTest |
 | [.] | FILE-153 | MUST | behavioral | statistics / selectivity formulas | ColumnStatistics.getSelectivity pins: "=" → 1/distinct, "!=" → 1-1/distinct, IS NULL → nullCount/total, IS NO… | — |
-| [.] | FILE-154 | MUST | behavioral | engine / engine equivalence (tested) | Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for CSV/JSON… | — |
+| [x] | FILE-154 | MUST | behavioral | engine / engine equivalence (tested) | Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for CSV/JSON… | file/HllAccuracyEngineParityRequirementsTest |
 | [.] | FILE-155 | MUST | behavioral | csv / explicit typed header | A typed CSV header ("EMPNO:int,NAME:string,SLACKER:boolean,...") drives column SQL types directly, independen… | — |
 | [x] | FILE-156 | SHOULD | behavioral | csv / decimal & config clamping | parseDecimal uses HALF_UP symmetric for negatives ("123.455"→123.46, "-123.455"→-123.46); precision overflow … | file/ConverterUtilRequirementsTest (tagged FILE-156) |
 | [x] | FILE-157 | SHOULD | behavioral | csv / empty & header-only sources | An empty source and a disabled config both return an EMPTY type list; a header-only CSV returns one nullable … | file/CsvSchemaRequirementsTest (tagged FILE-157) |

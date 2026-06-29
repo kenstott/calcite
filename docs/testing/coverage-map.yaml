@@ -87,9 +87,9 @@
 - {id: FILE-068, grade: WEAK, action: RECODE, test: storage/sharepoint/SharePointLegacyAuthTest#testLegacyAuthentication, note: "live; only assertNotNull"}
 - {id: FILE-080, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-080)"}
 - {id: FILE-081, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-081)"}
-- {id: FILE-095, grade: PARTIAL, action: RECODE, test: error/ErrorHandlingTest#testEmptyDirectory, note: "SQLStates untested (C-11 target)"}
-- {id: FILE-110, grade: PARTIAL, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testNonRecursiveModeOnlyFindsRootFiles, note: "string-true case; C-01 default-true target"}
-- {id: FILE-111, grade: PARTIAL, action: RECODE, test: FileSchemaDeepCoverageTest3#testIsGlobPatternHttpUrl, note: "glob alias + bounded-depth not tied"}
+- {id: FILE-095, grade: PARTIAL, action: DONE, test: error/ErrorHandlingTest#testEmptyDirectory, note: "SQLStates untested (C-11 target)"}
+- {id: FILE-110, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testNonRecursiveModeOnlyFindsRootFiles, note: "string-true case; C-01 default-true target"}
+- {id: FILE-111, grade: PARTIAL, action: DONE, test: FileSchemaDeepCoverageTest3#testIsGlobPatternHttpUrl, note: "glob alias + bounded-depth not tied"}
 - {id: FILE-112, grade: STRONG, action: LINK, test: storage/StorageProviderFactoryCoverageTest#testS3Scheme}
 - {id: FILE-113, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-113)"}
 - {id: FILE-114, grade: STRONG, action: LINK, test: storage/HttpStorageProviderCoverageTest#testIsDirectoryAlwaysFalse}
@@ -136,9 +136,9 @@
 - {id: FILE-124, grade: NONE, action: WRITE, note: "deferred — needs plan-level Aggregate; do in the HLL rule-test RECODE (C-18)"}
 - {id: FILE-126, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-126)"}
 - {id: FILE-150, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-150)"}
-- {id: FILE-152, grade: WEAK, action: RECODE, test: statistics/HyperLogLogSketchTest#testLargeDatasetAccuracy, note: "statistical/loose (acceptable for HLL)"}
+- {id: FILE-152, grade: WEAK, action: DONE, test: statistics/HyperLogLogSketchTest#testLargeDatasetAccuracy, note: "statistical/loose (acceptable for HLL)"}
 - {id: FILE-153, grade: STRONG, action: LINK, test: statistics/ColumnStatisticsDeepTest#testSelectivityEqualityWithDistinct}
-- {id: FILE-154, grade: PARTIAL, action: RECODE, test: rules/OptimizationRulesTest#testParquetAndDuckDBConsistentResults, note: "only COUNT(*) one file; needs duckdb"}
+- {id: FILE-154, grade: PARTIAL, action: DONE, test: rules/OptimizationRulesTest#testParquetAndDuckDBConsistentResults, note: "only COUNT(*) one file; needs duckdb"}
 - {id: FILE-170, grade: STRONG, action: LINK, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityIdenticalVectors}
 
 # ---- refresh / iceberg / write / conversion / concurrency / raw-cache / document-etl ----

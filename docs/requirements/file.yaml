@@ -1572,7 +1572,7 @@
 
 - id: FILE-095
   module: file
-  status: proposed
+  status: complete
   group: error-handling
   category: documented errors & SQLStates
   priority: SHOULD
@@ -1583,7 +1583,9 @@
     SQLStates 42S02 (table not found), 22018 (type conversion), 08001 (storage connect), HY000 (file access),
     42000 (config syntax). Clear errors, never silent.
   source: file/docs/troubleshooting.md; file/docs/api-reference.md
-  tests: []
+  tests:
+    - file/CatalogErrorRequirementsTest
+  since: 2026-06
 
 # ###############################################################################################
 # CODE PASS — reverse-engineered from file/src/main/java (parallel readers). Code-grounded specifics
@@ -1855,7 +1857,7 @@
 
 - id: FILE-110
   module: file
-  status: proposed
+  status: complete
   group: walking
   category: recursive default (actual)
   priority: MUST
@@ -1868,11 +1870,13 @@
     FALSE and a JSON string "true" does NOT enable recursion (only a real boolean does).
   source: file/src/main/java/.../FileSchemaFactory.java 463-464
   notes: "RESOLVED C-01 (code-wrong): default recursive=true AND accept string 'true'. Issue staged."
-  tests: []
+  tests:
+    - file/CatalogErrorRequirementsTest
+  since: 2026-06
 
 - id: FILE-111
   module: file
-  status: proposed
+  status: complete
   group: walking
   category: hidden-file skip & glob
   priority: MUST
@@ -1885,7 +1889,9 @@
     directoryPattern (alias "glob"); patterns with "**" list recursively, fixed-depth "a/b/*" use bounded
     depth listing; isGlobPattern returns false for any http(s):// URL.
   source: file/src/main/java/.../FileSchema.java listFilesRecursively 4809-4849; findMatchingFiles 4486-4523
-  tests: []
+  tests:
+    - file/CatalogErrorRequirementsTest
+  since: 2026-06
 
 - id: FILE-112
   module: file
@@ -2607,7 +2613,7 @@
 
 - id: FILE-152
   module: file
-  status: proposed
+  status: complete
   group: statistics
   category: HLL measured error bounds
   priority: MUST
@@ -2618,7 +2624,9 @@
     precision 14 estimates 1,000,000 within 2% (errorRate < 0.02; class comment says ~0.8% std error).
     Every precision 8/10/12/14 keeps error < 10% over 50k; memory = 2^precision bytes (1 byte/bucket).
   source: file/src/test/java/.../statistics/HyperLogLogSketchTest.java#testLargeDatasetAccuracy
-  tests: []
+  tests:
+    - file/HllAccuracyEngineParityRequirementsTest
+  since: 2026-06
 
 - id: FILE-153
   module: file
@@ -2638,7 +2646,7 @@
 
 - id: FILE-154
   module: file
-  status: proposed
+  status: complete
   group: engine
   category: engine equivalence (tested)
   priority: MUST
@@ -2649,7 +2657,9 @@
     CSV/JSON/Parquet/TSV scans, filters, GROUP BY, and cross-format joins through the full JDBC path. (The
     concrete engine-invariance target behind FILE-009/012.)
   source: file/src/test/java/.../rules/OptimizationRulesTest.java#testParquetAndDuckDBConsistentResults
-  tests: []
+  tests:
+    - file/HllAccuracyEngineParityRequirementsTest
+  since: 2026-06
 
 - id: FILE-155
   module: file
