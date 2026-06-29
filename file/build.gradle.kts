@@ -199,16 +199,14 @@ tasks.test {
     }
 
     useJUnitPlatform {
-        // By default, run only unit tests for faster feedback
-        includeTags("unit")
-        // To run all tests: ./gradlew test -PrunAllTests=true
-        // To run specific tags: ./gradlew test -PincludeTags=integration,performance
-        if (project.hasProperty("runAllTests")) {
-            includeTags() // Clear filters to run all tests
-        }
+        // Default: only unit tests for faster feedback.
+        // -PincludeTags=<tags> runs EXACTLY those tags (replaces the default, enabling REQ-id isolation
+        //   e.g. -PincludeTags=FILE-002). -PrunAllTests=true runs everything.
         if (project.hasProperty("includeTags")) {
             val tags = project.property("includeTags").toString().split(",")
             includeTags(*tags.toTypedArray())
+        } else if (!project.hasProperty("runAllTests")) {
+            includeTags("unit")
         }
         if (project.hasProperty("excludeTags")) {
             val tags = project.property("excludeTags").toString().split(",")
