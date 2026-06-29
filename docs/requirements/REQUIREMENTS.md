@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 52 complete, 8 in-progress, 108 proposed, 3 rejected)
+## file  (173: 2 accepted, 61 complete, 9 in-progress, 98 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -25,11 +25,11 @@
 | [x] | FILE-014 | MUST | behavioral | xlsx / Extraction (decomposition) | MultiTableExcelToJsonConverter scans a workbook and emits one JSON file per discovered sheet/table; the golde… | file/ConverterDecompositionTest |
 | [x] | FILE-015 | MUST | constraint | xlsx / Conversion idempotence | Re-converting an unchanged workbook produces byte-identical JSON and is skipped via the etag/mtime gate (Conv… | file/XlsxConversionIdempotenceTest#reConvertingUnchangedXls… |
 | [x] | FILE-016 | MUST | behavioral | docx / Extraction (decomposition) | DocxTableScanner scans the document body for inline tables and emits one JSON per detected table; the catalog… | file/ConverterDecompositionTest |
-| [.] | FILE-017 | MUST | behavioral | html / Extraction (decomposition) | HtmlTableScanner emits one JSON per detected HTML table; catalog golden pins the table-set. | — |
+| [x] | FILE-017 | MUST | behavioral | html / Extraction (decomposition) | HtmlTableScanner emits one JSON per detected HTML table; catalog golden pins the table-set. | file/TableExtractionRequirementsTest |
 | [.] | FILE-018 | SHOULD | behavioral | html / Crawl discovery | The HTML crawler (CrawlerConfiguration maxDepth / linkPattern / followExternalLinks) discovers the correct pa… | — |
 | [x] | FILE-019 | SHOULD | behavioral | pptx / Extraction (decomposition) | PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set. | file/ConverterDecompositionTest |
 | [.] | FILE-020 | SHOULD | behavioral | xml / Extraction (decomposition) | XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set. | — |
-| [.] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | — |
+| [x] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | file/TableExtractionRequirementsTest |
 | [.] | FILE-022 | MUST | behavioral | storage/local / Storage seam | LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and openInputStream re… | — |
 | [.] | FILE-023 | MUST | behavioral | storage/s3 / Storage seam | S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam. | — |
 | [.] | FILE-024 | SHOULD | behavioral | storage/remote / Storage seam | Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where listable) the corr… | — |
@@ -42,15 +42,15 @@
 | [.] | FILE-031 | SHOULD | behavioral | write/iceberg / Materialization | IcebergTableWriter materializes a table that reads back value-identical; snapshots advance correctly. | — |
 | [.] | FILE-032 | SHOULD | behavioral | partitioning / Partition pruning | Partition columns are derived from the path layout and a filtered query prunes to the correct partition set, … | — |
 | [.] | FILE-033 | SHOULD | behavioral | partitioning / Incremental tracking | IncrementalTracker records processed partitions so a re-run only ingests new partitions (idempotent). | — |
-| [.] | FILE-034 | SHOULD | behavioral | schema-evolution / Column evolution | Across files with added/removed columns, the unified table exposes the superset with nulls for absent columns… | — |
+| [~] | FILE-034 | SHOULD | behavioral | schema-evolution / Column evolution | Across files with added/removed columns, the unified table exposes the superset with nulls for absent columns… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-035 | SHOULD | behavioral | compression / Transparent decompression | Compressed sources (gzip, etc.) decompress transparently; the table equals the uncompressed golden. | — |
 | [.] | FILE-036 | MAY | behavioral | compaction / Compaction correctness | CompactionRunner merges small files/partitions without changing query results (value-identical before/after). | — |
 | [.] | FILE-037 | MUST | behavioral | interaction / Engine-storage interaction | duckdb reads storage directly via httpfs (DuckDBFunctionMapping), bypassing StorageProvider — the duckdb × st… | — |
 | [x] | FILE-038 | MUST | constraint | optimization / Transparency | Every exact optimization preserves results — a query with the rule enabled yields a table identical to the sa… | file/FileOptimizationTransparencyTest#exactOptimizationsPre… |
-| [.] | FILE-039 | MUST | behavioral | optimization / HLL approx-distinct | APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact COUNT(DISTINCT), and … | — |
+| [x] | FILE-039 | MUST | behavioral | optimization / HLL approx-distinct | APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact COUNT(DISTINCT), and … | file/OptimizationRuleRequirementsTest |
 | [x] | FILE-040 | MUST | behavioral | optimization / HLL sketch reuse | HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files — the merged es… | file/StatisticsRequirementsTest (tagged FILE-040) |
-| [.] | FILE-041 | MUST | behavioral | optimization / Count-star from statistics | COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and the rule fire… | — |
-| [.] | FILE-042 | SHOULD | behavioral | optimization / Pushdown / pruning | Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule, SimpleFileColumnPrunin… | — |
+| [x] | FILE-041 | MUST | behavioral | optimization / Count-star from statistics | COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and the rule fire… | file/OptimizationRuleRequirementsTest |
+| [x] | FILE-042 | SHOULD | behavioral | optimization / Pushdown / pruning | Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule, SimpleFileColumnPrunin… | file/OptimizationRuleRequirementsTest |
 | [.] | FILE-043 | MUST | structural | optimization / Statistics accuracy | ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong stats silently c… | — |
 | [.] | FILE-044 | SHOULD | behavioral | optimization / Engine-specific parity | Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule, ClickHouseHLLC… | — |
 | [.] | FILE-045 | MUST | behavioral | config / storageType precedence | Selection priority: (1) schema-level storageType forces ALL files through that provider and `directory` is ig… | — |
@@ -64,12 +64,12 @@
 | [.] | FILE-053 | SHOULD | behavioral | csv / numeric promotion | Whole numbers in 32-bit range → INTEGER, outside → BIGINT, decimals/scientific → DOUBLE. | — |
 | [x] | FILE-054 | SHOULD | behavioral | csv / boolean & temporal tokens | BOOLEAN matches {true,false,TRUE,FALSE,True,False,0,1}. Temporal detects DATE (yyyy-MM-dd, MM/dd/yyyy, dd/MM/… | file/CsvInferenceRequirementsTest#timeAndSlashDateFormatsIn… |
 | [.] | FILE-055 | MUST | behavioral | csv / null token set | Recognized null tokens: empty, NULL/null/Null, NA, N/A, NONE/None, NIL/nil. With makeAllNullable=false a colu… | — |
-| [.] | FILE-056 | SHOULD | behavioral | json / multi-table jsonSearchPaths | jsonSearchPaths (JSONPath, e.g. $.data.users) yields one table per path; nested arrays become child tables wi… | — |
+| [x] | FILE-056 | SHOULD | behavioral | json / multi-table jsonSearchPaths | jsonSearchPaths (JSONPath, e.g. $.data.users) yields one table per configured path (named by the path's last … | file/TableExtractionRequirementsTest |
 | [-] | FILE-057 | SHOULD | structural | xlsx / excelConfig | excelConfig keys evaluateFormulas, skipEmptyRows, headerRowIndex (e.g. 0), and a `sheets` allow-list; each sh… | — |
 | [-] | FILE-058 | SHOULD | structural | html / htmlConfig / crawlConfig | htmlConfig tableSelector (default "table"), headerSelector ("th"), skipEmptyTables; crawlConfig generateTable… | — |
 | [-] | FILE-059 | SHOULD | structural | xml / xmlConfig | xmlConfig rootPath/recordPath (XPath) define the repeating record set; attributePrefix prefixes attribute col… | — |
 | [.] | FILE-060 | MUST | structural | table-naming / multi-table separator | Embedded multi-table names use `__` separator (report__summary, document__table_1, slides__slide__table); sub… | — |
-| [.] | FILE-061 | MUST | structural | table-naming / filename normalization | Table names derive from filename (no extension), lowercased, hyphens→underscores (PRODUCTS.JSON→products, use… | — |
+| [x] | FILE-061 | MUST | structural | table-naming / filename normalization | Table names derive from filename (no extension), lowercased, hyphens→underscores (PRODUCTS.JSON→products, use… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-062 | SHOULD | behavioral | yaml / yaml flattening | YAML nested keys flatten like JSON (profile.age→profile_age); list-of-records → rows. | — |
 | [.] | FILE-063 | SHOULD | behavioral | compression / supported codecs | Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompre… | — |
 | [.] | FILE-064 | SHOULD | behavioral | storage/hdfs / hdfs routing & auth | directory starting hdfs:// auto-routes to HDFS (recursive listing like local/S3); namenode from fs.defaultFS … | — |
@@ -110,7 +110,7 @@
 | [x] | FILE-099 | MUST | constraint | csv / sampling determinism | inferTypes samples via Math.random() against samplingRate (default 0.10), capped at maxSampleRows (default 10… | file/CsvInferenceRequirementsTest#inferenceIsDeterministicA… |
 | [.] | FILE-100 | MUST | behavioral | csv / value coercion & storage | CsvTypeConverter stores DATE as int epoch-day, TIME as int millis-of-day, TIMESTAMP as long UTC wall-clock mi… | — |
 | [~] | FILE-101 | MUST | constraint | csv / silent temporal fallback | On an unparseable DATE/TIME/TIMESTAMP, CsvTypeConverter logs a warning and returns null (and parses a date-on… | file/ResolvedBugTargetsTest#badTemporalValueRaises_target, … |
-| [.] | FILE-102 | MUST | behavioral | xlsx / table detection | MultiTableExcelToJsonConverter splits a sheet on ≥ MIN_EMPTY_ROWS_BETWEEN_TABLES (2) blank rows, treats a sin… | — |
+| [x] | FILE-102 | MUST | behavioral | xlsx / table detection | MultiTableExcelToJsonConverter splits a sheet on ≥ MIN_EMPTY_ROWS_BETWEEN_TABLES (2) blank rows, treats a sin… | file/TableExtractionRequirementsTest |
 | [x] | FILE-103 | MUST | behavioral | html / table name & sanitization | HtmlTableScanner.getTableName priority: id attr > caption > preceding h1-h6 (≤3 sibs) > preceding title/heade… | file/TableScannerCatalogTest#htmlDuplicateNamesGetSuffixed,… |
 | [x] | FILE-104 | MUST | behavioral | xml / detection & XXE hardening | XmlTableScanner detects a table as ≥ MIN_REPEATING_ELEMENTS (2) structurally-similar same-tag siblings (attr-… | file/TableScannerCatalogTest#xmlRepeatingElementsAreDetecte… |
 | [x] | FILE-105 | MUST | behavioral | markdown / parsing & sparse rows | MarkdownTableScanner needs ≥3 lines (header, separator not at index 0, ≥1 data row); cells split on unescaped… | file/ConverterUtilRequirementsTest (tagged FILE-105) |
@@ -173,7 +173,7 @@
 | [.] | FILE-162 | SHOULD | behavioral | storage/http / POST/GraphQL & mime override | HttpStorageProvider supports method=POST with a request body (REST search / GraphQL); a configured mimeType o… | — |
 | [.] | FILE-163 | MUST | constraint | write/iceberg / writer preconditions & evolution | IcebergMaterializationWriter.initialize rejects null config (IAE), non-ICEBERG format (IAE), disabled materia… | — |
 | [.] | FILE-164 | SHOULD | structural | iceberg / metadata tables shape | IcebergMetadataTables.createMetadataTables returns exactly 5 ScannableTables: history (4 cols), snapshots (6 … | — |
-| [.] | FILE-165 | MUST | behavioral | partitioning / per-period completion isolation | IncrementalTracker keys completion per canonical period, so completing year 2025 never marks an unprocessed y… | — |
+| [x] | FILE-165 | MUST | behavioral | partitioning / per-period completion isolation | IncrementalTracker keys completion per canonical period, so completing year 2025 never marks an unprocessed y… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-166 | MUST | behavioral | conversion / format routing | FileConversionManager routes docx/pptx/md/html/xml to document converters (requiresConversion true, isDirectl… | — |
 | [.] | FILE-167 | MUST | behavioral | concurrency / conversion at-least-once | Under 5 racing threads on one source, ConcurrentParquetCache serializes via the lock with the invariant conve… | — |
 | [.] | FILE-168 | MUST | behavioral | jdbc / FileJdbcDriver parsing & precedence | FileJdbcDriver: schema=file → schema named "files", default engine "parquet", storage_path ${tmp}/calcite_fil… | — |

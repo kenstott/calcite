@@ -150,3 +150,18 @@ cases). (FILE-148)
 ### C-26 — Weak tests  → **FOLD INTO GOLDEN REWRITE**
 **Resolution:** Leave for now; replace with proper golden/invariant tests during the strangler
 rewrite (track as gaps).
+
+## C-28 — Uppercase file extension `.JSON` not recognized (FILE-061)
+- **Found by:** RECODE wave 5 (NamingUnionTrackerRequirementsTest).
+- **Discrepancy:** supported-formats.md documents `PRODUCTS.JSON -> products`, but `FileSchema` bulk-conversion discovery gates on `source.trimOrNull(".json")` (FileSchema.java:1803), which is case-sensitive; `isJsonFile` lowercases but is not the gate. An uppercase `.JSON` extension registers no table.
+- **Status:** staged `@Disabled("C-28")` target in NamingUnionTrackerRequirementsTest#uppercaseJsonExtensionIsRecognized. Resolution pending: make extension match case-insensitive, or correct the doc.
+
+## C-29 — CSV multi-file union is RICHEST_FILE, not superset+null-fill (FILE-034)
+- **Found by:** RECODE wave 5 (NamingUnionTrackerRequirementsTest).
+- **Discrepancy:** FILE-034 states the unified table exposes the column SUPERSET with NULLs for absent columns. For CSV, `resolveCsvSchema` is hard-wired to RICHEST_FILE (single file's columns by max count) — never a superset, never NULL-filled. The superset+NULL behavior is the **Parquet** `UNION_ALL_COLUMNS` path (`resolveParquetUnionAllColumns`), which needs real parquet files (not hermetic).
+- **Status:** FILE-034 kept **in-progress**. CSV richest-file subset asserted now; the parquet-superset path needs an integration parquet fixture (follow-up).
+
+## C-30 — jsonSearchPaths has no auto child-table / parent-id FK promotion (FILE-056)
+- **Found by:** RECODE wave 5 (TableExtractionRequirementsTest).
+- **Discrepancy:** FILE-056 states nested arrays become CHILD tables with a synthesized parent-id FK column. `JsonMultiTableFactory.createTables` maps each JSONPath to exactly one `JsonScannableTable`; there is no nested-array→child promotion and no FK injection anywhere in `format/json/*`. A nested array becomes its own table ONLY via an explicit JSONPath aimed at it.
+- **Status:** FILE-056 description amended to match reality (one table per path; nested array via explicit path; no auto FK). Resolution: doc was overstated.

@@ -313,7 +313,7 @@
 
 - id: FILE-017
   module: file
-  status: proposed
+  status: complete
   group: html
   category: Extraction (decomposition)
   priority: MUST
@@ -322,7 +322,9 @@
   cardinality: "1:N"
   seam: json-set
   description: HtmlTableScanner emits one JSON per detected HTML table; catalog golden pins the table-set.
-  tests: []
+  tests:
+    - file/TableExtractionRequirementsTest
+  since: 2026-06
 
 - id: FILE-018
   module: file
@@ -370,7 +372,7 @@
 
 - id: FILE-021
   module: file
-  status: proposed
+  status: complete
   group: markdown
   category: Extraction (decomposition)
   priority: MAY
@@ -379,7 +381,9 @@
   cardinality: "1:N"
   seam: json-set
   description: MarkdownTableScanner emits JSON per detected table; catalog golden pins the set.
-  tests: []
+  tests:
+    - file/TableExtractionRequirementsTest
+  since: 2026-06
 
 # ================================ storage seams (bytes / catalog) ================================
 
@@ -570,7 +574,7 @@
 
 - id: FILE-034
   module: file
-  status: proposed
+  status: in-progress
   group: schema-evolution
   category: Column evolution
   priority: SHOULD
@@ -580,7 +584,13 @@
   description: >
     Across files with added/removed columns, the unified table exposes the superset with nulls for
     absent columns; types reconciled per the documented rule.
-  tests: []
+  notes: "C-29: superset+NULL-fill is the Parquet UNION_ALL_COLUMNS path (resolveParquetUnionAllColumns,
+    needs real parquet — not hermetic). CSV is hard-wired RICHEST_FILE (single richest file's columns,
+    no superset/NULL-fill). NamingUnionTrackerRequirementsTest pins the CSV richest-file subset now;
+    the parquet-superset path is a follow-up integration fixture."
+  tests:
+    - file/NamingUnionTrackerRequirementsTest
+  since: 2026-06
 
 - id: FILE-035
   module: file
@@ -645,7 +655,7 @@
 
 - id: FILE-039
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: HLL approx-distinct
   priority: MUST
@@ -656,7 +666,9 @@
     APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact
     COUNT(DISTINCT), and HLLCountDistinctRule fires (plan assertion).
   applies: { engines: [linq4j, parquet, duckdb] }
-  tests: []
+  tests:
+    - file/OptimizationRuleRequirementsTest
+  since: 2026-06
 
 - id: FILE-040
   module: file
@@ -676,7 +688,7 @@
 
 - id: FILE-041
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: Count-star from statistics
   priority: MUST
@@ -686,11 +698,13 @@
   description: >
     COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and
     the rule fires.
-  tests: []
+  tests:
+    - file/OptimizationRuleRequirementsTest
+  since: 2026-06
 
 - id: FILE-042
   module: file
-  status: proposed
+  status: complete
   group: optimization
   category: Pushdown / pruning
   priority: SHOULD
@@ -701,7 +715,9 @@
     Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule,
     SimpleFileColumnPruningRule, AlternatePartitionSelectionRule, PartitionDistinctRule) each yield
     results identical to the unoptimized plan and fire when applicable.
-  tests: []
+  tests:
+    - file/OptimizationRuleRequirementsTest
+  since: 2026-06
 
 - id: FILE-043
   module: file
@@ -908,7 +924,7 @@
 
 - id: FILE-056
   module: file
-  status: proposed
+  status: complete
   group: json
   category: multi-table jsonSearchPaths
   priority: SHOULD
@@ -917,10 +933,15 @@
   cardinality: "1:N"
   seam: json-set
   description: >
-    jsonSearchPaths (JSONPath, e.g. $.data.users) yields one table per path; nested arrays become child tables
-    with a parent-id FK column (e.g. orders gets customer_id).
+    jsonSearchPaths (JSONPath, e.g. $.data.users) yields one table per configured path (named by the
+    path's last segment). A nested array becomes its own table only via an explicit JSONPath aimed at
+    it; there is NO automatic nested-array→child-table promotion and NO synthesized parent-id FK column.
+  notes: "C-30 (doc-overstated): the original FK/auto-child claim does not exist in code —
+    JsonMultiTableFactory.createTables maps each path to one JsonScannableTable; corrected to match."
   source: file/docs/supported-formats.md (JSON)
-  tests: []
+  tests:
+    - file/TableExtractionRequirementsTest
+  since: 2026-06
 
 - id: FILE-057
   module: file
@@ -983,7 +1004,7 @@
 
 - id: FILE-061
   module: file
-  status: proposed
+  status: complete
   group: table-naming
   category: filename normalization
   priority: MUST
@@ -991,7 +1012,9 @@
   seam: catalog
   description: Table names derive from filename (no extension), lowercased, hyphens→underscores (PRODUCTS.JSON→products, user-data.csv→user_data, sales/2024/january.xlsx→sales_2024_january).
   source: file/docs/supported-formats.md; file/README.md
-  tests: []
+  tests:
+    - file/NamingUnionTrackerRequirementsTest
+  since: 2026-06
 
 - id: FILE-062
   module: file
@@ -1660,7 +1683,7 @@
 
 - id: FILE-102
   module: file
-  status: proposed
+  status: complete
   group: xlsx
   category: table detection
   priority: MUST
@@ -1673,7 +1696,9 @@
     treats a single-non-empty-cell row as a title, allows ≤ MAX_HEADER_ROWS (3) header rows, drops
     zero-data-row tables; empty cells are written as JSON null (putNull, key present).
   source: file/src/main/java/.../converters/MultiTableExcelToJsonConverter.java 62-381
-  tests: []
+  tests:
+    - file/TableExtractionRequirementsTest
+  since: 2026-06
 
 - id: FILE-103
   module: file
@@ -2758,7 +2783,7 @@
 
 - id: FILE-165
   module: file
-  status: proposed
+  status: complete
   group: partitioning
   category: per-period completion isolation
   priority: MUST
@@ -2770,7 +2795,9 @@
     unprocessed year 2022 done (guards the cross-period false-skip bug). An empty partition above the published
     high-water mark stays pending and is re-fetched; only periods at/below the frontier settle.
   source: file/src/test/java/.../partition/{IncrementalTrackerTest,S3HivePipelineTrackerEmptyHwmTest}.java
-  tests: []
+  tests:
+    - file/NamingUnionTrackerRequirementsTest
+  since: 2026-06
 
 - id: FILE-166
   module: file

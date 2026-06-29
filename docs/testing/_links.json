@@ -1,11 +1,11 @@
 {
-  "FILE-014": ["file/ConverterDecompositionTest"],
-  "FILE-016": ["file/ConverterDecompositionTest"],
-  "FILE-019": ["file/ConverterDecompositionTest"],
-  "FILE-106": ["file/ConverterDecompositionTest"],
-  "FILE-025": ["file/WalkingDiscoveryRequirementsTest"],
-  "FILE-026": ["file/WalkingDiscoveryRequirementsTest"],
-  "FILE-011": ["file/JsonPathParquetReaderTest"],
-  "FILE-013": ["file/JsonPathParquetReaderTest"],
-  "FILE-151": ["file/JsonPathParquetReaderTest"]
+  "FILE-017": ["file/TableExtractionRequirementsTest"],
+  "FILE-021": ["file/TableExtractionRequirementsTest"],
+  "FILE-102": ["file/TableExtractionRequirementsTest"],
+  "FILE-056": ["file/TableExtractionRequirementsTest"],
+  "FILE-039": ["file/OptimizationRuleRequirementsTest"],
+  "FILE-041": ["file/OptimizationRuleRequirementsTest"],
+  "FILE-042": ["file/OptimizationRuleRequirementsTest"],
+  "FILE-061": ["file/NamingUnionTrackerRequirementsTest"],
+  "FILE-165": ["file/NamingUnionTrackerRequirementsTest"]
 }

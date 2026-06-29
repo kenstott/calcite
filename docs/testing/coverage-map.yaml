@@ -22,23 +22,23 @@
 - {id: FILE-014, grade: WEAK, action: DONE, test: excel/MultiTableExcelTest#testMultiTableExcelDetection, note: "via SQL not emitted JSON-set"}
 - {id: FILE-015, grade: NONE, action: DONE, note: "XlsxConversionIdempotenceTest (unchanged no-rewrite verified)"}
 - {id: FILE-016, grade: WEAK, action: DONE, test: docx/DocxTableTest#testMultipleTablesInDocx, note: "content via contains()"}
-- {id: FILE-017, grade: PARTIAL, action: RECODE, test: html/HtmlToJsonConverterTest#testMultiTableHtmlConversion, note: "catalog by name-lookup not pinned set"}
+- {id: FILE-017, grade: PARTIAL, action: DONE, test: html/HtmlToJsonConverterTest#testMultiTableHtmlConversion, note: "catalog by name-lookup not pinned set"}
 - {id: FILE-018, grade: WEAK, action: RECODE, test: html/HtmlCrawlerTest#testGdpTableCrawling, note: "live sites; only visited!=empty"}
 - {id: FILE-019, grade: WEAK, action: DONE, test: pptx/PptxTableTest#testMultipleTablesInPptx, note: "contains() content; set not pinned"}
 - {id: FILE-020, grade: STRONG, action: LINK, test: xml/XmlToJsonConverterTest#testMultipleTablePatterns}
-- {id: FILE-021, grade: WEAK, action: RECODE, test: markdown/MarkdownTableTest#testMultipleTablesInMarkdown, note: "content via contains()"}
-- {id: FILE-034, grade: WEAK, action: RECODE, test: schema/SchemaEvolutionIntegrationTest#testCsvSchemaEvolution, note: "only columnCount>=3"}
+- {id: FILE-021, grade: WEAK, action: DONE, test: markdown/MarkdownTableTest#testMultipleTablesInMarkdown, note: "content via contains()"}
+- {id: FILE-034, grade: WEAK, action: PARTIAL, test: schema/SchemaEvolutionIntegrationTest#testCsvSchemaEvolution, note: "only columnCount>=3"}
 - {id: FILE-035, grade: STRONG, action: LINK, test: format/CompressedFileTest#testGzippedCsvFile}
 - {id: FILE-052, grade: STRONG, action: LINK, test: format/csv/CsvTypeInferrerTest#testDefaultConfigReturnsExpectedDefaults}
 - {id: FILE-053, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#numericPromotion}
 - {id: FILE-054, grade: PARTIAL, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest#timeAndSlashDateFormatsInfer (+FILE-097/006)"}
 - {id: FILE-055, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#defaultNullTokenSet}
-- {id: FILE-056, grade: PARTIAL, action: RECODE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "nested-array child FK untested"}
+- {id: FILE-056, grade: PARTIAL, action: DONE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "nested-array child FK untested"}
 - {id: FILE-057, grade: NONE, action: REJECTED, note: "doc-only — excelConfig absent in source; requirement rejected"}
 - {id: FILE-058, grade: NONE, action: REJECTED, note: "doc-only — htmlConfig/crawlConfig absent in source; requirement rejected"}
 - {id: FILE-059, grade: NONE, action: REJECTED, note: "doc-only — xmlConfig absent in source; requirement rejected"}
 - {id: FILE-060, grade: STRONG, action: LINK, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning}
-- {id: FILE-061, grade: PARTIAL, action: RECODE, test: config/CasingTest#testDefaultSmartCasingBehavior, note: "hyphen->_ and nested path not pinned"}
+- {id: FILE-061, grade: PARTIAL, action: DONE, test: config/CasingTest#testDefaultSmartCasingBehavior, note: "hyphen->_ and nested path not pinned"}
 - {id: FILE-062, grade: STRONG, action: LINK, test: format/YamlFileTest#testNestedYaml}
 - {id: FILE-063, grade: PARTIAL, action: RECODE, test: format/CompressedFileTest#testGzippedCsvFile, note: "only gz; bz2/xz/zip uncovered"}
 - {id: FILE-073, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-073)"}
@@ -48,7 +48,7 @@
 - {id: FILE-099, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#inferenceIsDeterministicAtFullSampling}
 - {id: FILE-100, grade: STRONG, action: LINK, test: format/csv/CsvTypeConverterTest#testConvertBooleanTrue}
 - {id: FILE-101, grade: STRONG, action: RECODE, test: format/csv/CsvTypeConverterTest#testConvertUnparseableTime, note: "pins CURRENT silent-fallback; recode to C-16 target @Disabled, archive this"}
-- {id: FILE-102, grade: PARTIAL, action: RECODE, test: converters/ExcelToJsonConverterCoverageTest#testConvertBlankAndNullCells, note: "splitting/title/header-cap weak"}
+- {id: FILE-102, grade: PARTIAL, action: DONE, test: converters/ExcelToJsonConverterCoverageTest#testConvertBlankAndNullCells, note: "splitting/title/header-cap weak"}
 - {id: FILE-103, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (dup-suffix + sanitize)"}
 - {id: FILE-104, grade: PARTIAL, action: DONE, note: "RECODEd -> TableScannerCatalogTest (detection + XXE)"}
 - {id: FILE-105, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-105)"}
@@ -106,7 +106,7 @@
 - {id: FILE-159, grade: STRONG, action: LINK, test: table/GlobPatternTest#testGlobPatterns}
 - {id: FILE-160, grade: STRONG, action: LINK, test: storage/LocalFileStorageProviderDeepTest#testReadRangeBeyondFileLength}
 - {id: FILE-161, grade: STRONG, action: LINK, test: partition/PartitionDetectorTest#testDetectPartitionSchemeInconsistentColumns}
-- {id: FILE-165, grade: WEAK, action: RECODE, test: partition/S3HivePeriodMarkerTest#periodMarkedOnlyWhenAllCombosDone, note: "live MinIO gated"}
+- {id: FILE-165, grade: WEAK, action: DONE, test: partition/S3HivePeriodMarkerTest#periodMarkedOnlyWhenAllCombosDone, note: "live MinIO gated"}
 - {id: FILE-168, grade: STRONG, action: LINK, test: FileJdbcDriverDeepCoverageTest#testParseConfigBatchSizeFloat}
 - {id: FILE-169, grade: STRONG, action: LINK, test: metadata/ConstraintMetadataJdbcTest#getPrimaryKeys_fromPartitionedTablesPrimaryKeyField}
 - {id: FILE-173, grade: STRONG, action: LINK, test: OracleLexicalSettingsTest#testCaseSensitivityDemo}
@@ -114,10 +114,10 @@
 # ---- engine / optimization / statistics / vector ----
 - {id: FILE-037, grade: NONE, action: WRITE, note: "duckdb x storageType httpfs parity"}
 - {id: FILE-038, grade: NONE, action: DONE, note: "FileOptimizationTransparencyTest (result-transparency)"}
-- {id: FILE-039, grade: WEAK, action: RECODE, test: rules/HLLCountDistinctRuleTest#testCountDistinctRewrittenToHLL, note: "loose band; no plan/rule-fires assert"}
+- {id: FILE-039, grade: WEAK, action: DONE, test: rules/HLLCountDistinctRuleTest#testCountDistinctRewrittenToHLL, note: "loose band; no plan/rule-fires assert"}
 - {id: FILE-040, grade: WEAK, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-040)"}
-- {id: FILE-041, grade: PARTIAL, action: RECODE, test: rules/CountStarStatisticsRuleTest#testCountStarReplacedWithMetadataValue, note: "rule-fired/no-scan not asserted"}
-- {id: FILE-042, grade: PARTIAL, action: RECODE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "no on==off identity"}
+- {id: FILE-041, grade: PARTIAL, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarReplacedWithMetadataValue, note: "rule-fired/no-scan not asserted"}
+- {id: FILE-042, grade: PARTIAL, action: DONE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "no on==off identity"}
 - {id: FILE-043, grade: PARTIAL, action: RECODE, test: statistics/ColumnStatisticsDeepTest#testBasicStatistics, note: "parquet footer/NDV not golden"}
 - {id: FILE-044, grade: PARTIAL, action: RECODE, test: duckdb/DuckDBHLLCountDistinctRuleTest#testRewritesToDuckDBHLLFunction, note: "not compared to generic path"}
 - {id: FILE-069, grade: PARTIAL, action: RECODE, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine, note: "JDBC-default=duckdb half untested"}
