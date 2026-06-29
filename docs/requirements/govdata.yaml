@@ -1,0 +1,1151 @@
+# GovData adapter — requirements ledger. Schema: README.md. Strategy: ../testing/govdata.md
+#
+# Unit of work = a schema. Single-store, engine-agnostic (no file-track matrix fields).
+# DRAFT pilot: econ, reverse-engineered from econ-schema.yaml. Status `accepted` = spec known,
+# feature implemented, golden pending. Other schemas added one group at a time (see plan).
+
+# ===================================== econ ====================================================
+
+- id: GOV-001
+  module: govdata
+  status: accepted
+  group: econ
+  category: Schema shape
+  priority: MUST
+  type: structural
+  description: >
+    The econ schema exposes BLS/BEA/FRED economic series as tables whose grain is one observation
+    per (series identifier, year, period); every row carries the series id, data year, period code
+    and numeric value.
+  source: econ-schema.yaml (employment_statistics, inflation_metrics)
+  tests: []
+
+- id: GOV-002
+  module: govdata
+  status: accepted
+  group: econ
+  category: Period semantics
+  priority: MUST
+  type: behavioral
+  description: >
+    In employment_statistics the period code encodes granularity — M01–M12 monthly, Q01–Q04
+    quarterly — and is_latest flags exactly one most-recent observation per series.
+  scenario: >
+    Given employment_statistics rows for a series across several periods
+    When the table is read
+    Then period codes are valid M01–M12 / Q01–Q04 and exactly one row per series has is_latest=true.
+  source: econ-schema.yaml (employment_statistics ~439-510)
+  tests: []
+
+- id: GOV-003
+  module: govdata
+  status: accepted
+  group: econ
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    inflation_metrics values are base-period-indexed price indices (base = 100) for CPI/PPI series,
+    not raw prices or percentages.
+  scenario: >
+    Given inflation_metrics for a CPI series (e.g. CUUR0000SA0)
+    When a value is read
+    Then it is a price index relative to a base period of 100.
+  source: econ-schema.yaml (inflation_metrics ~577-640)
+  tests: []
+
+- id: GOV-004
+  module: govdata
+  status: accepted
+  group: econ
+  category: Freshness
+  priority: MUST
+  type: constraint
+  description: >
+    econ data honors each source's publication lag — the queryable window excludes periods more
+    recent than the known dataLag (schema default 2 years; QCEW ~1 year) so partial/unpublished
+    periods are never surfaced. Tied to the resume/freshness defects this rebuild targets.
+  source: "econ-schema.yaml (dataLagYears: 2 at line 18; per-table dataLag overrides)"
+  tests: []
+
+- id: GOV-005
+  module: govdata
+  status: accepted
+  group: econ
+  category: Schema shape
+  priority: SHOULD
+  type: behavioral
+  description: >
+    regional_cpi exposes CPI by US census region, each row carrying the census region code and name
+    alongside a base-period-100 index value.
+  scenario: >
+    Given regional_cpi
+    When a row is read
+    Then it has a valid census region code+name and a base-100 CPI value.
+  source: econ-schema.yaml (regional_cpi ~705-740)
+  tests: []
+
+# =================================== sec (reverse-engineered draft) =============================
+
+- id: GOV-006
+  module: govdata
+  status: accepted
+  group: sec
+  category: Schema shape
+  priority: MUST
+  type: structural
+  description: >
+    The sec schema exposes SEC EDGAR filings as document-derived tables, all year-partitioned
+    (Hive type=*/year=*), keyed on the filer cik (10-digit zero-padded Central Index Key) and
+    accession_number (filing id, format 0000000000-00-000000); a row is one extracted unit
+    (a fact, context, paragraph, transaction, holding, or price observation).
+  source: "sec-schema.yaml (partitionedTables; column_templates cik_column ~56, accession_number ~62)"
+  notes: "Year range defaults to 2010 (XBRL adoption) through CURRENT_YEAR."
+  tests: []
+
+- id: GOV-007
+  module: govdata
+  status: accepted
+  group: sec
+  category: Reference table
+  priority: MUST
+  type: behavioral
+  description: >
+    filing_metadata is the core reference table with one row per (cik, accession_number) carrying
+    filing_type, filing_date, period_of_report, company_name, sic_code, state_of_incorporation and
+    ticker; every other SEC table foreign-keys back to it on (cik, accession_number).
+  scenario: >
+    Given any SEC fact/context/transaction row
+    When it is joined on (cik, accession_number) to filing_metadata
+    Then exactly one parent filing_metadata row exists with the filing's type and date.
+  source: "sec-schema.yaml (filing_metadata ~330-447; constraints ~1456-1547)"
+  tests: []
+
+- id: GOV-008
+  module: govdata
+  status: accepted
+  group: sec
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    In financial_line_items, value is the raw XBRL text and value_numeric is a best-effort numeric
+    representation (NOT the original filing value); unit_ref_normalized gives the canonical unit
+    (USD, shares, pure, usdPerShare) and is_instant=true marks a point-in-time fact vs a duration fact.
+  scenario: >
+    Given a financial_line_items row with a us-gaap concept
+    When value_numeric and scale are read
+    Then the true dollar amount is value_numeric * POWER(10, COALESCE(scale,0)) and unit_ref_normalized
+    names the canonical unit.
+  source: "sec-schema.yaml (financial_line_items ~454-541; value_numeric ~120-130; financial_facts view ~1617-1682)"
+  notes: "value_dollars in the financial_facts view applies the scale so callers need not."
+  tests: []
+
+- id: GOV-009
+  module: govdata
+  status: accepted
+  group: sec
+  category: Period semantics
+  priority: MUST
+  type: behavioral
+  description: >
+    filing_contexts defines each XBRL fact's reporting period and entity; a context is either an
+    instant (period_instant set) or a duration (period_start/period_end set), and context_id is unique
+    only within a filing so financial_line_items references it via the composite (cik, accession_number,
+    context_ref) -> (cik, accession_number, context_id).
+  scenario: >
+    Given a financial_line_items.context_ref
+    When resolved against filing_contexts within the same filing
+    Then it matches exactly one context_id, which is either instant or duration but not both.
+  source: "sec-schema.yaml (filing_contexts ~549-625; constraints ~1481-1491)"
+  tests: []
+
+- id: GOV-010
+  module: govdata
+  status: accepted
+  group: sec
+  category: Units & meaning
+  priority: SHOULD
+  type: behavioral
+  description: >
+    insider_transactions (Form 3/4/5) carries one row per reporting insider transaction with
+    transaction_code (P=purchase, S=sale, A=award, H=holding, I=initial), acquired_disposed_code
+    (A=acquired, D=disposed), shares_transacted and price_per_share; transaction_date, shares_transacted
+    and acquired_disposed_code are null for pure holdings rows.
+  scenario: >
+    Given an insider_transactions row with transaction_code='H'
+    When transaction_date and shares_transacted are read
+    Then both are null because holdings carry no transaction event.
+  source: "sec-schema.yaml (insider_transactions ~814-922)"
+  tests: []
+
+- id: GOV-011
+  module: govdata
+  status: accepted
+  group: sec
+  category: Grain & units
+  priority: SHOULD
+  type: behavioral
+  description: >
+    institutional_holdings (Form 13F-HR, filed quarterly by $100M+ managers) is one row per
+    (cik, accession_number, cusip): value_thousands is market value in thousands of USD,
+    shares_or_principal is qualified by shares_or_principal_type (SH=shares, PRN=principal), and
+    report_period is the calendar-quarter-end date the holdings are as of.
+  scenario: >
+    Given an institutional_holdings row
+    When value_thousands is read
+    Then it is interpreted as USD thousands (multiply by 1000 for dollars) for the report_period quarter.
+  source: "sec-schema.yaml (institutional_holdings ~930-1038)"
+  tests: []
+
+- id: GOV-012
+  module: govdata
+  status: accepted
+  group: sec
+  category: Grain & meaning
+  priority: SHOULD
+  type: behavioral
+  description: >
+    beneficial_ownership (Schedule 13D activist / 13G passive, >5% holders) carries percent_of_class,
+    shares_beneficially_owned, the sole/shared voting and dispositive power breakdown, and the Item 4
+    purpose_of_transaction text distinguishing activist intent (M&A, board change) from passive holding.
+  source: "sec-schema.yaml (beneficial_ownership ~1046-1159)"
+  tests: []
+
+- id: GOV-013
+  module: govdata
+  status: accepted
+  group: sec
+  category: Text extraction
+  priority: SHOULD
+  type: behavioral
+  description: >
+    mda_sections holds Management Discussion & Analysis prose chunked one row per
+    (cik, accession_number, section, paragraph_number) from 10-K Item 7 and 10-Q Item 2 (and 8-K);
+    earnings_transcripts holds 8-K Item 2.02 results-of-operations text with section_type in
+    (prepared_remarks, qa_session).
+  source: "sec-schema.yaml (mda_sections ~633-713; earnings_transcripts ~1167-1237)"
+  tests: []
+
+- id: GOV-014
+  module: govdata
+  status: accepted
+  group: sec
+  category: Units & grain
+  priority: SHOULD
+  type: behavioral
+  description: >
+    stock_prices is daily OHLCV, one row per (ticker, date) with ticker in Stooq format (e.g.
+    'AAPL.US'); open/high/low/close/adjusted_close are prices and volume is share count. The table is
+    opt-in (FETCH_STOCK_PRICES, default false) and raw data is partitioned by year only while the
+    Iceberg table partitions by [year, ticker].
+  scenario: >
+    Given stock_prices is enabled
+    When a row is read
+    Then it has a Stooq-format ticker, an ISO date, and adjusted_close reflects splits/dividends.
+  source: "sec-schema.yaml (stock_prices ~1245-1316; constraints ~1549-1559)"
+  tests: []
+
+- id: GOV-015
+  module: govdata
+  status: accepted
+  group: sec
+  category: Constraint
+  priority: MUST
+  type: constraint
+  description: >
+    SEC documents non-enforced primary keys and foreign keys for query optimization: financial_line_items
+    PK is (cik, accession_number, element_id); filing_metadata.state_of_incorporation references
+    geo.states.state_abbr; and stock_prices.ticker references ref.figi_instruments.ticker.
+  source: "sec-schema.yaml (constraints ~1454-1567)"
+  tests: []
+
+- id: GOV-016
+  module: govdata
+  status: accepted
+  group: sec
+  category: Freshness
+  priority: SHOULD
+  type: constraint
+  description: >
+    SEC ingestion has dataLagYears=0 (filings are available the day they are submitted, unlike the lagged
+    econ/geo/census sources) and SEC EDGAR access is rate-limited to <=8 requests/second with retry on
+    429/503 to remain within the 10 req/sec compliance ceiling.
+  source: "sec-schema.yaml (dataLagYears ~36; document_source_defaults rateLimit ~265-269)"
+  tests: []
+
+- id: GOV-017
+  module: govdata
+  status: accepted
+  group: sec
+  category: Derived view
+  priority: MAY
+  type: behavioral
+  description: >
+    The financial_facts view maps XBRL concept variants to canonical metric names (e.g. both
+    us-gaap:Revenues and us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax -> revenue) with a
+    metric_category (income_statement, balance_sheet, cash_flow) and exposes scale-applied value_dollars.
+  source: "sec-schema.yaml (financial_facts view ~1617-1682)"
+  tests: []
+
+# =================================== geo (reverse-engineered draft) =============================
+
+- id: GOV-018
+  module: govdata
+  status: accepted
+  group: geo
+  category: Schema shape
+  priority: MUST
+  type: structural
+  description: >
+    The geo schema exposes TIGER/Line boundaries, HUD ZIP crosswalks, USDA rural-urban classifications,
+    Census Gazetteer reference, and USGS watershed tables, all Hive-partitioned by (type, year) where type
+    is one of boundary | crosswalk | classification | gazetteer | watershed.
+  source: "geo-schema.yaml (partition templates ~80-100; partitionedTables)"
+  tests: []
+
+- id: GOV-019
+  module: govdata
+  status: accepted
+  group: geo
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    Boundary tables (states, counties, places, tracts, block_groups, etc.) carry FIPS identifiers of a
+    fixed digit length per level (state_fips 2, county_fips 5, tract_fips 11, block_group_fips 12,
+    place_fips 7), a WKT geometry polygon, and land_area/water_area expressed in square meters.
+  scenario: >
+    Given a counties row
+    When county_fips and land_area are read
+    Then county_fips is the 5-digit state+county FIPS and land_area is in square meters.
+  source: "geo-schema.yaml (column_templates ~48-76; counties ~282-302)"
+  tests: []
+
+- id: GOV-020
+  module: govdata
+  status: accepted
+  group: geo
+  category: Freshness
+  priority: MUST
+  type: constraint
+  description: >
+    TIGER boundary/gazetteer tables use dataLagYears=1 (TIGER vintage Y publishes ~Sep Y+1, so the current
+    year is never requested) and HUD crosswalk tables use a 3-year lag (hud_year_range dataLag=3); the
+    queryable window excludes years more recent than the source's known publication lag.
+  source: "geo-schema.yaml (dataLagYears ~18; tiger_year_range ~115-118; hud_year_range ~122-126)"
+  tests: []
+
+- id: GOV-021
+  module: govdata
+  status: accepted
+  group: geo
+  category: Vintage handling
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Tables whose Census field names change across the 2010 vs 2020 census vintage (zctas, urban_areas,
+    pumas, voting_districts) are normalized to canonical columns via a vintage field normalizer
+    (e.g. ZCTA5CE10/ZCTA5CE20 -> zcta, UACE10/UACE20 -> uace) so the output schema is stable across years.
+  scenario: >
+    Given zctas rows from a 2010-vintage and a 2020-vintage TIGER file
+    When read
+    Then both expose the same canonical zcta column regardless of source field name.
+  source: "geo-schema.yaml (zctas fieldNormalizer ~447-457; urban_areas ~1099-1107; pumas ~1187-1195)"
+  tests: []
+
+- id: GOV-022
+  module: govdata
+  status: accepted
+  group: geo
+  category: Vintage availability
+  priority: SHOULD
+  type: constraint
+  description: >
+    Years with no published shapefile are excluded rather than 404'd: zctas, urban_areas and pumas
+    exclude 2011, voting_districts exist only for census vintages (2012, 2020), and congressional_districts
+    start at 2023 (cd118) with a 2-year lag.
+  source: "geo-schema.yaml (zctas excludeYears ~426; urban_areas ~1072; pumas ~1157; voting_districts ~1249)"
+  tests: []
+
+- id: GOV-023
+  module: govdata
+  status: accepted
+  group: geo
+  category: Crosswalk semantics
+  priority: MUST
+  type: behavioral
+  description: >
+    HUD ZIP crosswalk tables (zip_county, zip_cbsa, zip_tract, zip_cd and their reverses) carry
+    res_ratio, bus_ratio, oth_ratio and tot_ratio, each the fraction of that address class falling in the
+    target geography; rows are one per (source-geo, target-geo, year) sourced from HUD USPS quarter-4 data.
+  scenario: >
+    Given the zip_county_crosswalk rows for one ZIP and year
+    When the res_ratio values across its counties are summed
+    Then they approximately total 1.0 (full residential allocation of the ZIP).
+  source: "geo-schema.yaml (zip_county_crosswalk ~1306-1333; reverse crosswalks ~1664-1800)"
+  tests: []
+
+- id: GOV-024
+  module: govdata
+  status: accepted
+  group: geo
+  category: Classification
+  priority: SHOULD
+  type: behavioral
+  description: >
+    rural_urban_continuum is one row per county with rucc_code 1-9 (metro 1-3 / nonmetro 4-9), and
+    ruca_codes is one row per census tract with primary_ruca 1-10 plus a secondary subdivision code; both
+    are USDA decennial classifications keyed to geo.counties / geo.census_tracts.
+  source: "geo-schema.yaml (rural_urban_continuum ~1810-1840; ruca_codes ~1881-1925)"
+  tests: []
+
+- id: GOV-025
+  module: govdata
+  status: accepted
+  group: geo
+  category: Reference data
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Gazetteer tables (gazetteer_counties, gazetteer_places, gazetteer_zctas) give authoritative names plus
+    land_area_sqmi / water_area_sqmi in square miles and a representative internal point (latitude,
+    longitude centroid) per geography, foreign-keyed to the matching boundary table.
+  source: "geo-schema.yaml (gazetteer_counties ~1969-1998; gazetteer_places ~2038-2081)"
+  tests: []
+
+- id: GOV-026
+  module: govdata
+  status: accepted
+  group: geo
+  category: Hierarchy
+  priority: SHOULD
+  type: behavioral
+  description: >
+    USGS watershed tables form a nested hierarchy by Hydrologic Unit Code length: watersheds_huc2 (22
+    regions) -> huc4 -> huc8 -> huc12, each child carrying its parent HUC code and area_sq_km in square
+    kilometers, enforced by foreign keys up the chain.
+  source: "geo-schema.yaml (watersheds_huc2 ~2200-2219; huc4 ~2261-2284; constraints ~2700-2722)"
+  tests: []
+
+- id: GOV-027
+  module: govdata
+  status: accepted
+  group: geo
+  category: Constraint
+  priority: MUST
+  type: constraint
+  description: >
+    Every geo table's primary key is (geographic_id, year), with hierarchical foreign keys
+    (counties.state_fips -> states; census_tracts.county_fips -> counties; block_groups.tract_fips ->
+    census_tracts), making year part of identity since boundaries are re-published per vintage.
+  source: "geo-schema.yaml (constraints ~2461-2560)"
+  tests: []
+
+- id: GOV-028
+  module: govdata
+  status: accepted
+  group: geo
+  category: Coverage
+  priority: SHOULD
+  type: constraint
+  description: >
+    State-partitioned boundary tables cover all 50 states + DC (FIPS 01-56 excluding 03,07,14,43,52), with
+    custom resolvers dropping chambers/states that do not exist: state_legislative_lower omits DC (11) and
+    Nebraska (31) which have no lower chamber.
+  source: "geo-schema.yaml (all_state_fips ~127-179; state_legislative_lower resolver ~816-829)"
+  tests: []
+
+# =================================== census (reverse-engineered draft) ==========================
+
+- id: GOV-029
+  module: govdata
+  status: accepted
+  group: census
+  category: Schema shape
+  priority: MUST
+  type: structural
+  description: >
+    The census schema exposes ACS, Decennial, PEP and Census economic programs as tables partitioned by
+    (type, year, geography) where geography is 'state' or 'county'; rows carry state (2-digit FIPS),
+    county (3-digit within-state), and a derived county_fips (5-digit state+county) for joining to geo.
+  source: "census-schema.yaml (standard_partitions ~92-98; county_fips_column ~69-74)"
+  tests: []
+
+- id: GOV-030
+  module: govdata
+  status: accepted
+  group: census
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    ACS estimate columns are population/household counts (long) cast via TRY_CAST from API variable codes;
+    income columns are dollars in the past 12 months (acs_income.median_household_income, per_capita_income),
+    acs_housing.median_home_value/median_rent are dollars, and acs_age.median_age is a double year value.
+  scenario: >
+    Given an acs_income row
+    When median_household_income is read
+    Then it is whole dollars (past-12-month) for that geography and year.
+  source: "census-schema.yaml (acs_income ~319-347; acs_housing ~387-430; acs_age ~894-915)"
+  tests: []
+
+- id: GOV-031
+  module: govdata
+  status: accepted
+  group: census
+  category: Schema evolution
+  priority: MUST
+  type: behavioral
+  description: >
+    Census columns use conceptual canonical names normalized by CensusVariableNormalizer from
+    year/program-specific API variable codes (e.g. B01001_001E for ACS and P001001/P1_001N for Decennial
+    both map to total_population), so a table's output schema is identical across vintages.
+  scenario: >
+    Given decennial_population rows for 2000, 2010 and 2020
+    When total_population is read
+    Then all three resolve to the same canonical column despite different source variable codes.
+  source: "census-schema.yaml (acs_population ~261-278; decennial_population ~706-758)"
+  tests: []
+
+- id: GOV-032
+  module: govdata
+  status: accepted
+  group: census
+  category: Freshness
+  priority: MUST
+  type: constraint
+  description: >
+    Each census product honors its own publication lag via the year dimension: ACS 5-year dataLag=2 with
+    releaseMonth=12, ACS 1-year dataLag=1 releaseMonth=9, decennial step=10 dataLag=2, PEP dataLag=3,
+    CBP/SAHIE/BDS dataLag=3, SAIPE dataLag=2 - the queryable window never surfaces unpublished years.
+  source: "census-schema.yaml (acs_year_range ~113-119; acs1_year_range ~125-130; decennial_years ~136-141)"
+  tests: []
+
+- id: GOV-033
+  module: govdata
+  status: accepted
+  group: census
+  category: Minimum-year floors
+  priority: SHOULD
+  type: constraint
+  description: >
+    Tables whose source feed begins after the global default start floor at a minYear that returns data:
+    ACS 5-year minYear 2009, ACS 1-year minYear 2006, acs_education minYear 2012 (B15003 added then),
+    PEP floored at literal 2022 - earlier requests would return fatal API errors and are excluded.
+  source: "census-schema.yaml (acs_year_range minYear ~116; acs1 ~128; acs_education ~480-489; pep ~2281-2285)"
+  tests: []
+
+- id: GOV-034
+  module: govdata
+  status: accepted
+  group: census
+  category: Geography & grain
+  priority: MUST
+  type: behavioral
+  description: >
+    ACS/decennial tables are one row per (year, geography, state, county) - that is their primary key -
+    with county null when geography='state'; county_fips is computed only when a county component exists
+    (CASE WHEN LENGTH(county)>0 THEN state||county).
+  scenario: >
+    Given an acs_population row with geography='state'
+    When county and county_fips are read
+    Then both are null and the row is keyed by (year, geography, state).
+  source: "census-schema.yaml (county_fips_column ~69-74; constraints ~3758-3759)"
+  tests: []
+
+- id: GOV-035
+  module: govdata
+  status: accepted
+  group: census
+  category: Derived breakdowns
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Aggregate demographic columns are summed from many fine-grained ACS variables in SQL expressions:
+    acs_age.age_18_to_64 / age_65_and_over sum the B01001 sex-by-age cells, and
+    acs_health_insurance.with_health_insurance / no_health_insurance sum the B27001 age-by-coverage cells.
+  source: "census-schema.yaml (acs_age expressions ~916-935; acs_health_insurance ~1082-1101)"
+  tests: []
+
+- id: GOV-036
+  module: govdata
+  status: accepted
+  group: census
+  category: Economic programs
+  priority: SHOULD
+  type: behavioral
+  description: >
+    cbp_establishments is one row per (geography, year, NAICS2017 industry) with establishments, employees
+    (mid-March) and annual_payroll/first_quarter_payroll expressed in $1,000 units; employees and payroll
+    are not raw dollars.
+  scenario: >
+    Given a cbp_establishments row
+    When annual_payroll is read
+    Then it is in thousands of dollars (multiply by 1000 for dollars).
+  source: "census-schema.yaml (cbp_establishments ~2359-2406)"
+  tests: []
+
+- id: GOV-037
+  module: govdata
+  status: accepted
+  group: census
+  category: Small-area estimates
+  priority: SHOULD
+  type: behavioral
+  description: >
+    SAIPE (saipe_poverty) gives annual county poverty counts and rates plus median_household_income, and
+    SAHIE (sahie_insurance) gives county insured/uninsured counts and percent rates; rate columns are
+    percentages (double) and count columns are people (long), both model-based estimates.
+  source: "census-schema.yaml (saipe_poverty ~2682-2730; sahie_insurance ~2769-2811)"
+  tests: []
+
+- id: GOV-038
+  module: govdata
+  status: accepted
+  group: census
+  category: Time-series grain
+  priority: SHOULD
+  type: behavioral
+  description: >
+    qwi_employment is partitioned by (type, time) with time in YYYY-QN format and one fetch per state FIPS
+    (the QWI API rejects wildcard states); employment is beginning-of-quarter, stable_employment is
+    full-quarter employed, and earnings is average monthly earnings of stable workers.
+  source: "census-schema.yaml (qwi_employment ~3228-3300)"
+  tests: []
+
+- id: GOV-039
+  module: govdata
+  status: accepted
+  group: census
+  category: Fixed-width parsing
+  priority: MAY
+  type: behavioral
+  description: >
+    building_permits parses the Census Building Permits Survey fixed-width state file (stYYMMy.txt, December
+    cumulative YTD), keeping its positional columns (column0 survey YYYYMM, column1 state FIPS, column6/7
+    single-family units/value in $1000, etc.) with rows filtered to a 6-digit survey_date.
+  source: "census-schema.yaml (building_permits ~3112-3204)"
+  tests: []
+
+- id: GOV-040
+  module: govdata
+  status: accepted
+  group: census
+  category: Constraint
+  priority: MUST
+  type: constraint
+  description: >
+    Census tables foreign-key into the geo schema for geographic resolution: every ACS/decennial table's
+    state -> geo.states.state_fips and county_fips -> geo.counties.county_fips (the latter active only when
+    geography='county').
+  source: "census-schema.yaml (constraints ~3756-3842)"
+  tests: []
+
+- id: GOV-041
+  module: govdata
+  status: accepted
+  group: census
+  category: Derived view
+  priority: MAY
+  type: behavioral
+  description: >
+    State-level summary views (population_summary, income_summary, poverty_rate, education_attainment,
+    unemployment_rate) restrict to geography='state' and compute rate percentages with NULLIF guards
+    (e.g. unemployment_rate_pct = 100*unemployed/NULLIF(labor_force,0)).
+  source: "census-schema.yaml (views ~3645-3748)"
+  tests: []
+
+# =================================== energy (reverse-engineered draft) ==========================
+
+- id: GOV-042
+  module: govdata
+  status: accepted
+  group: energy
+  category: Schema shape
+  priority: MUST
+  type: structural
+  description: >
+    The energy schema exposes EIA and MSHA datasets; all state-level tables carry state_abbr
+    (2-letter, e.g. 'CA') with a FK to geo.states.state_abbr, and Hive-partition every table by
+    type+year (sub-annual EIA series add a month partition).
+  source: "energy-schema.yaml (column_templates state_abbr_column ~44; standard_partitions ~68; constraints ~1624)"
+  tests: []
+
+- id: GOV-043
+  module: govdata
+  status: accepted
+  group: energy
+  category: Grain
+  priority: MUST
+  type: structural
+  description: >
+    eia_electricity_generation is one row per (state_abbr, energy_source_code, sector_code,
+    generation_year, generation_month); generation is net electricity in thousand MWh, fuel
+    consumption in MMBtu, and fuel_cost_per_mmbtu in dollars.
+  source: "energy-schema.yaml (eia_electricity_generation ~219-290; PK ~1626)"
+  tests: []
+
+- id: GOV-044
+  module: govdata
+  status: accepted
+  group: energy
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    eia_electricity_prices avg_price_cents_kwh is in cents per kWh, revenue_million_dollars in
+    millions of dollars, and sales_million_kwh in millions of kWh, one row per (state_abbr,
+    sector_code, price_year[, price_month]); price_month is null for annual aggregates.
+  scenario: >
+    Given an eia_electricity_prices row for a state+sector+year
+    When avg_price_cents_kwh is read
+    Then it is expressed in cents per kWh (not dollars/MWh) and price_month is null for the annual aggregate.
+  source: "energy-schema.yaml (eia_electricity_prices ~332-381; PK ~1634)"
+  tests: []
+
+- id: GOV-045
+  module: govdata
+  status: accepted
+  group: energy
+  category: Grain & keys
+  priority: MUST
+  type: structural
+  description: >
+    eia_power_plants (EIA-860) is one row per generator keyed (plant_id, generator_id,
+    report_year), with capacity in MW (nameplate/summer/winter/minimum_load) and a FK on
+    utility_id to eia_utility_annual; eia_capacity_changes (EIA-860M) joins it via plant_id.
+  source: "energy-schema.yaml (eia_power_plants ~581-735; PK/FK ~1650)"
+  tests: []
+
+- id: GOV-046
+  module: govdata
+  status: accepted
+  group: energy
+  category: Freshness
+  priority: MUST
+  type: constraint
+  description: >
+    Each EIA bulk source honors its archive publication lag via dataLag on the year range:
+    EIA-861 utility (dataLag 3), EIA-860 plants (dataLag 3), EIA-860M capacity (dataLag 1),
+    petroleum stocks (dataLag 0), so the URL {effective_year} only targets an archive that exists
+    and partial/unpublished years are never fetched.
+  source: "energy-schema.yaml (eia_utility_years ~133, eia_plant_years ~143, eia_capacity_years ~153)"
+  tests: []
+
+- id: GOV-047
+  module: govdata
+  status: accepted
+  group: energy
+  category: Partition strategy
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Sub-annual EIA series (eia_electricity_generation, eia_fossil_fuel_production,
+    eia_refinery_operations) partition by year+month so each per-month fetch lands its own
+    partition and overwritePartitions replaces a single month rather than the whole year.
+  scenario: >
+    Given a monthly EIA series re-fetched for one month
+    When the partition is written
+    Then only that type=*/year=*/month=* partition is overwritten and other months are untouched.
+  source: "energy-schema.yaml (standard_partitions_monthly ~78-83; eia_months ~110)"
+  tests: []
+
+- id: GOV-048
+  module: govdata
+  status: accepted
+  group: energy
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    eia_natural_gas_storage volumes are in billion cubic feet (volume_bcf), one row per
+    (eia_region_code, storage_type_code, report_date); eia_petroleum_stocks stocks are in
+    thousand barrels (stocks_kbbl) one row per (eia_area_code, product_code, process_code, report_date).
+  source: "energy-schema.yaml (eia_natural_gas_storage ~1098-1158; eia_petroleum_stocks ~1190-1252)"
+  tests: []
+
+- id: GOV-049
+  module: govdata
+  status: accepted
+  group: energy
+  category: Encoded codes
+  priority: SHOULD
+  type: behavioral
+  description: >
+    eia_state_energy_consumption (SEDS) is one row per (state_abbr, msn, consumption_year) where
+    msn is a 5-char EIA Mnemonic Series Name; the transformer decodes it into sector, fuel_type,
+    and one of consumption_bbtu (billion BTU), expenditure_million (M$), or price_per_mmbtu, the
+    others being null per series kind.
+  source: "energy-schema.yaml (eia_state_energy_consumption ~998-1067; PK ~1680)"
+  tests: []
+
+- id: GOV-050
+  module: govdata
+  status: accepted
+  group: energy
+  category: Grain & meaning
+  priority: SHOULD
+  type: behavioral
+  description: >
+    eia_fossil_fuel_production unions crude oil and natural gas into one table distinguished by
+    fuel_type ('crude_oil'|'natural_gas'), one row per (eia_area_code, fuel_type, process_code,
+    production_year, production_month), with production_volume in the units named by production_unit.
+  source: "energy-schema.yaml (eia_fossil_fuel_production ~898-955; PK ~1672)"
+  tests: []
+
+- id: GOV-051
+  module: govdata
+  status: accepted
+  group: energy
+  category: Grain & filtering
+  priority: SHOULD
+  type: behavioral
+  description: >
+    eia_coal_mines (MSHA MinesProdYearly joined to Mines on mine_id) is one row per (mine_id,
+    subunit_code, report_year), filtered to coal mines (COAL_METAL_IND='C'), with
+    production_short_tons in short tons and labor_productivity in short tons per employee hour.
+  source: "energy-schema.yaml (eia_coal_mines ~1502-1593; PK ~1705)"
+  tests: []
+
+- id: GOV-052
+  module: govdata
+  status: accepted
+  group: energy
+  category: Derived views
+  priority: MAY
+  type: behavioral
+  description: >
+    state_energy_mix aggregates eia_electricity_generation to one row per state+year, classifying
+    energy_source_code into renewable/nuclear/fossil/other and computing renewable_pct and
+    fossil_pct of total thousand MWh.
+  source: "energy-schema.yaml (views state_energy_mix ~1719-1761)"
+  tests: []
+
+# =================================== health (reverse-engineered draft) ==========================
+
+- id: GOV-053
+  module: govdata
+  status: accepted
+  group: health
+  category: Schema shape
+  priority: MUST
+  type: structural
+  description: >
+    The health schema exposes openFDA, ClinicalTrials.gov, CDC, CMS, Medicaid, and RxNorm
+    datasets as single-partition (type=...) Iceberg tables; date columns are stored as strings in
+    the source format (YYYYMMDD for FDA, YYYY-MM-DD for clinical/CDC).
+  source: "health-schema.yaml (comment ~10; fda_ndc_products ~33)"
+  tests: []
+
+- id: GOV-054
+  module: govdata
+  status: accepted
+  group: health
+  category: Grain & keys
+  priority: MUST
+  type: structural
+  description: >
+    fda_ndc_products is the master drug reference, one row per product_ndc (PK), with FKs
+    application_number -> fda_drug_approvals and rxcui -> rxnorm_drugs; it is the join hub for
+    medicaid_drug_utilization (ndc=product_ndc).
+  source: "health-schema.yaml (fda_ndc_products ~33-107; constraints ~2032)"
+  tests: []
+
+- id: GOV-055
+  module: govdata
+  status: accepted
+  group: health
+  category: Freshness
+  priority: MUST
+  type: constraint
+  description: >
+    Each openFDA table (fda_ndc_products, fda_drug_approvals, fda_drug_recalls,
+    fda_adverse_events, fda_device_recalls) gates fetch+commit on freshness type:version,
+    probing api.fda.gov/download.json for that endpoint's export_date and skipping when unchanged
+    since the last successful run.
+  source: "health-schema.yaml (freshness blocks ~38, ~161, ~278, ~413, ~531)"
+  tests: []
+
+- id: GOV-056
+  module: govdata
+  status: accepted
+  group: health
+  category: Units & meaning
+  priority: MUST
+  type: behavioral
+  description: >
+    fda_drug_recalls and fda_device_recalls use the FDA classification scheme where Class I is
+    most severe, Class II less, Class III least; recall date columns are YYYYMMDD and
+    termination_date / event_date_terminated is null while a recall is ongoing.
+  scenario: >
+    Given an ongoing FDA recall row
+    When termination_date is read
+    Then it is null and status/recall_status is 'Ongoing'.
+  source: "health-schema.yaml (fda_drug_recalls classification ~307, termination_date ~349; fda_device_recalls ~543)"
+  tests: []
+
+- id: GOV-057
+  module: govdata
+  status: accepted
+  group: health
+  category: Grain & keys
+  priority: MUST
+  type: structural
+  description: >
+    clinical_trials is one row per nct_id (PK); clinical_trial_conditions (composite PK nct_id+
+    condition_name) and clinical_trial_interventions (composite PK nct_id+intervention_name) are
+    derived child tables with FK nct_id -> clinical_trials, all three sharing one monthly raw-cache response.
+  source: "health-schema.yaml (clinical_trials ~654; conditions ~784; interventions ~868; rawCache sharedKey ~750)"
+  tests: []
+
+- id: GOV-058
+  module: govdata
+  status: accepted
+  group: health
+  category: Grain & keys
+  priority: MUST
+  type: structural
+  description: >
+    medicaid_drug_utilization has composite PK (state, ndc, year, quarter) with quarter in
+    {Q1..Q4}; ndc is FK to fda_ndc_products.product_ndc and reimbursement columns
+    (total/medicaid/non_medicaid_amount_reimbursed) are dollar amounts.
+  source: "health-schema.yaml (medicaid_drug_utilization ~1193-1260; PK/FK ~2111)"
+  tests: []
+
+- id: GOV-059
+  module: govdata
+  status: accepted
+  group: health
+  category: Release window
+  priority: SHOULD
+  type: constraint
+  description: >
+    cms_open_payments is partitioned by (payment_type in {general,research,ownership}, year) with
+    dataLag 1 and minYear 2019 (program year CY2018 floor); the program year used in the bulk CSV
+    URL is {effective_year} = year - dataLag, released ~July each year.
+  source: "health-schema.yaml (cms_open_payments ~1496-1611)"
+  tests: []
+
+- id: GOV-060
+  module: govdata
+  status: accepted
+  group: health
+  category: Release window
+  priority: SHOULD
+  type: constraint
+  description: >
+    Source-specific release windows gate fetches: cms_hospital_quality July-October, cdc_brfss
+    May-August (dataLag 1), medicaid_drug_utilization quarterly months [3,6,9,12], and
+    cdc_covid_vaccinations / cdc_mortality weekly via dow [1] (Monday).
+  source: "health-schema.yaml (releaseWindow blocks ~963, ~1058, ~1194, ~1321, ~1401, ~1497)"
+  tests: []
+
+- id: GOV-061
+  module: govdata
+  status: accepted
+  group: health
+  category: Frozen data
+  priority: SHOULD
+  type: behavioral
+  description: >
+    cdc_covid_vaccinations is a frozen dataset (no updates after 2023-05-12) carried with no
+    incremental block, so freshness type:last_modified surfaces it once and any sinceDate after
+    the freeze returns zero rows.
+  source: "health-schema.yaml (cdc_covid_vaccinations ~960-1031)"
+  tests: []
+
+- id: GOV-062
+  module: govdata
+  status: accepted
+  group: health
+  category: Grain & union
+  priority: SHOULD
+  type: behavioral
+  description: >
+    cdc_mortality unions CDC annual (bi63-dtpu) and weekly provisional (muzy-jte6) feeds into one
+    table, distinguished by source_type ('annual'|'weekly') which is part of the PK (source_type,
+    year, state, cause_name) and the partition column.
+  source: "health-schema.yaml (cdc_mortality ~1320-1392; PK ~2093)"
+  tests: []
+
+- id: GOV-063
+  module: govdata
+  status: accepted
+  group: health
+  category: Grain & FK
+  priority: SHOULD
+  type: structural
+  description: >
+    rxnorm_drugs is one row per rxcui (PK) covering term types tty in {IN, BN, SCD}, gated by
+    freshness type:hash over the single ~37k-concept page; rxcui joins to fda_ndc_products.rxcui.
+  source: "health-schema.yaml (rxnorm_drugs ~1629-1687; PK ~2133)"
+  tests: []
+
+# =================================== cyber (reverse-engineered draft) ===========================
+
+- id: GOV-064
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Grain & keys
+  priority: MUST
+  type: structural
+  description: >
+    vulnerabilities (NVD CVE 2.0) is one row per cve_id (PK [type, cve_id]) partitioned by
+    type/year/quarter via computed pub_year/pub_month from published; CVSS v3.1 is preferred with
+    v2 fallback, and cvss_v40_score stored when present.
+  source: "cyber-vuln-schema.yaml (vulnerabilities ~129-221; PK ~1044)"
+  tests: []
+
+- id: GOV-065
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Freshness
+  priority: MUST
+  type: constraint
+  description: >
+    NVD ingest (vulnerabilities, vulnerability_cwes) gates on freshness type:count, probing
+    services.nvd.nist.gov totalResults, and is windowed by NvdPublishedWindowDimensionResolver
+    (quarterly history + a <=120-day rolling daily tip) bounded by GOVDATA_START_YEAR (NVD floor 1999).
+  source: "cyber-vuln-schema.yaml (vulnerabilities freshness ~130, dimensions startYear/tipDays ~252-261)"
+  tests: []
+
+- id: GOV-066
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Junction tables
+  priority: MUST
+  type: structural
+  description: >
+    vulnerability_cwes (PK type+cve_id+cwe_id) and kev_cwes (PK type+cve_id+cwe_id) are
+    ingest-time materialized CVE->CWE junctions, each row one (cve_id, cwe_id) pair, replacing
+    query-time UNNEST of the pipe-delimited cwe_ids/cwes columns, with FKs back to their CVE
+    record and to cwe_catalog.cwe_id.
+  source: "cyber-vuln-schema.yaml (vulnerability_cwes ~286-330; kev_cwes ~503-527; constraints ~1068)"
+  tests: []
+
+- id: GOV-067
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Snapshot semantics
+  priority: MUST
+  type: behavioral
+  description: >
+    Catalog tables (cwe_catalog, kev_catalog, kev_cwes, osv_vulnerabilities) are
+    dataset_type:snapshot with overwritePartitions:true, so each refresh fully replaces the
+    type (or type/ecosystem) partition; kev_catalog gates on ETag and diffs catalog_version (YYYY.MM.DD).
+  scenario: >
+    Given kev_catalog after a refresh where the CISA feed changed
+    When the table is read
+    Then the type=kev_catalog partition is fully replaced and catalog_version reflects the new YYYY.MM.DD.
+  source: "cyber-vuln-schema.yaml (cwe_catalog ~32-124; kev_catalog ~396-498; osv_vulnerabilities ~569-698)"
+  tests: []
+
+- id: GOV-068
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Delimited fields
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Multi-valued cyber columns are pipe-delimited strings, not arrays: vulnerabilities.cwe_ids,
+    cwe_catalog.parent_ids, kev_catalog.cwes/notes_urls, osv_vulnerabilities.aliases, and
+    advisories.cve_ids; KEV cwes may be empty on older entries.
+  source: "cyber-vuln-schema.yaml (cwe_ids ~203, parent_ids ~79, kev cwes/notes_urls ~450-457, osv aliases ~617)"
+  tests: []
+
+- id: GOV-069
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Append-log & dedup
+  priority: MUST
+  type: behavioral
+  description: >
+    vuln_cross_refs is a GHSA-only incremental APPEND log (overwritePartitions:false) keyed
+    (type, cve_id, external_id, external_source) where external_source='ghsa'; it may hold
+    cross-run exact duplicates, so the vuln_cross_refs_unique view collapses to one row per
+    (cve_id, external_id, external_source).
+  scenario: >
+    Given vuln_cross_refs after several delta crawls
+    When the same GHSA->CVE mapping recurs
+    Then the base table may duplicate it and vuln_cross_refs_unique returns exactly one row per key.
+  source: "cyber-vuln-schema.yaml (vuln_cross_refs ~703-818; view ~931-944; PK ~1059)"
+  tests: []
+
+- id: GOV-070
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Freshness & watermark
+  priority: SHOULD
+  type: constraint
+  description: >
+    vuln_cross_refs gates on freshness type:graphql (max securityAdvisories.updatedAt); when
+    unchanged the whole crawl is skipped, and when changed the prior committed value feeds back as
+    the updatedSince delta bound (watermark_var) so only advisories changed since then are fetched.
+  source: "cyber-vuln-schema.yaml (vuln_cross_refs freshness ~720-724, boundParam updatedSince ~785)"
+  tests: []
+
+- id: GOV-071
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Grain & partition
+  priority: SHOULD
+  type: structural
+  description: >
+    IOC threat tables (ioc_urls/URLhaus, ioc_hashes/MalwareBazaar, ioc_ips/Feodo,
+    ioc_mixed/ThreatFox, threat_pulses/OTX) partition by first_seen date for TTL pruning, each
+    keyed on its indicator value plus first_seen (e.g. ioc_hashes PK type+sha256+first_seen).
+  source: "cyber-threat-schema.yaml (ioc_urls ~151, ioc_hashes ~263, ioc_ips ~390, ioc_mixed ~492, threat_pulses ~1085)"
+  tests: []
+
+- id: GOV-072
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Write-mode & idempotence
+  priority: MUST
+  type: behavioral
+  description: >
+    threat_pulses (OTX) gates on freshness type:version (max pulse modified) with watermark_var
+    otxModifiedSince as the daily delta bound; the write mode is keyed on cyber_threat.otxWriteMode -
+    'append' only for production daily (accumulating pulse version history), 'replace' for
+    historical/DQ/cold runs.
+  source: "cyber-threat-schema.yaml (threat_pulses ~1085-1211; appendWhenOperand ~1210)"
+  tests: []
+
+- id: GOV-073
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Taxonomy tables
+  priority: SHOULD
+  type: structural
+  description: >
+    Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID:
+    attack_techniques (technique_id), nist_controls (control_id, SP 800-53 Rev 5),
+    nist_csf_functions (subcategory_id, CSF 2.0 functions GV/ID/PR/DE/RS/RC), cis_controls
+    (safeguard_id, v8), owasp_top10 (entry_id, 2021).
+  source: "cyber-threat-schema.yaml (attack_techniques ~43, nist_controls ~626, nist_csf_functions ~718, cis_controls ~806, owasp_top10 ~903)"
+  tests: []
+
+- id: GOV-074
+  module: govdata
+  status: accepted
+  group: cyber
+  category: Cross-domain mapping
+  priority: SHOULD
+  type: structural
+  description: >
+    attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates',
+    status='complete', non_mappable rows excluded) links ATT&CK techniques to NIST 800-53
+    controls; the vuln_threat_chain view bridges cyber_vuln and cyber_threat (CVE->KEV->CWE->OWASP).
+  source: "cyber-threat-schema.yaml (attack_to_nist_mappings ~986-1064; vuln_threat_chain view ~979-1006)"
+  tests: []

@@ -1,0 +1,2817 @@
+# File adapter — requirements ledger.  Schema: see README.md.  Strategy: ../testing/file.md
+#
+# DRAFT — derived mostly from the design conversation, to be refined and golden-backed in a later
+# pass (code review + old-test mining). Status: FILE-001..004 are `complete` (backed by
+# file/CsvGoldenIngestTest); everything else is `proposed`/`accepted` pending its golden.
+# IDs are contiguous within groups but not guaranteed gap-free after refinement.
+
+# ============================== csv (simple basis, 1:1, seam: table) =============================
+
+- id: FILE-001
+  module: file
+  status: complete
+  group: csv
+  category: Type inference
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  topology: single
+  seam: table
+  description: >
+    CSV type inference maps each column to an exact SQL type (INTEGER, VARCHAR, DOUBLE, DATE, TIME,
+    BOOLEAN) via a deterministic inferrer.
+  scenario: >
+    Given mixed-types.csv with integer, text, decimal, date, time and boolean columns
+    When the columns are inferred
+    Then each resolves to exactly one SQL type with no ambiguity.
+  applies: { engines: [linq4j], storagetypes: [local] }
+  tests: [ file/CsvGoldenIngestTest#mixedTypes_inferredTypesAreExact ]
+  supersedes: [ CsvTypeInferenceTest#testTypeInferrerDirectly, CsvTypeInferenceTest#testMixedTypesInference ]
+  since: 2026-06
+
+- id: FILE-002
+  module: file
+  status: complete
+  group: csv
+  category: Value fidelity
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  topology: single
+  seam: table
+  description: >
+    A CSV table round-trips to its exact cell values, SQL NULL distinct from the empty string in
+    every column.
+  scenario: >
+    Given mixed-types.csv
+    When SELECT * is ordered by id
+    Then every cell equals the committed golden value, NULL distinct from "".
+  applies: { engines: [linq4j], storagetypes: [local] }
+  tests: [ file/CsvGoldenIngestTest#mixedTypes_fullTableMatchesGolden ]
+  since: 2026-06
+
+- id: FILE-003
+  module: file
+  status: complete
+  group: csv
+  category: Null handling
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  topology: single
+  seam: table
+  description: >
+    Textual null sentinels (NULL, NA, N/A, NONE, nil + case variants) in non-VARCHAR columns
+    collapse to SQL NULL; a blank cell in a VARCHAR column is preserved as "".
+  scenario: >
+    Given nulls-and-empty.csv with sentinel and blank cells
+    When the table is read
+    Then sentinels in typed columns are SQL NULL and blank VARCHAR cells are "".
+  applies: { engines: [linq4j], storagetypes: [local] }
+  tests:
+    - file/CsvGoldenIngestTest#nullsAndEmpty_sentinelsCollapseToNull
+    - file/CsvGoldenIngestTest#mixedTypes_fullTableMatchesGolden
+  supersedes: [ CsvTypeInferenceTest#testNullHandling ]
+  since: 2026-06
+
+- id: FILE-004
+  module: file
+  status: complete
+  group: csv
+  category: Idempotence
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  topology: single
+  seam: table
+  description: >
+    Re-ingesting identical CSV bytes into a persistent cache yields an identical materialized table.
+  scenario: >
+    Given mixed-types.csv ingested once into a persistent cache
+    When the same bytes are ingested again
+    Then the second table is identical to the first, cell for cell.
+  applies: { engines: [linq4j], storagetypes: [local] }
+  tests: [ file/CsvGoldenIngestTest#mixedTypes_reingestionIsIdempotent ]
+  since: 2026-06
+
+- id: FILE-005
+  module: file
+  status: accepted
+  group: csv
+  category: Type inference
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: With type inference disabled, every column is VARCHAR and values are preserved as raw text.
+  supersedes: [ CsvTypeInferenceTest#testNoInferenceByDefault ]
+  tests: []
+
+- id: FILE-006
+  module: file
+  status: accepted
+  group: csv
+  category: Temporal inference
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: >
+    Local, UTC and RFC datetime formats are inferred as TIMESTAMP / TIMESTAMP WITH TIME ZONE and
+    round-trip to canonical values.
+  supersedes: [ CsvTypeInferenceTest#testTimestampInference ]
+  tests: []
+
+- id: FILE-007
+  module: file
+  status: accepted
+  group: csv
+  category: Null handling
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: >
+    blankStringsAsNull controls whether a blank VARCHAR cell becomes SQL NULL (true) or "" (false);
+    whitespace-only cells are preserved verbatim.
+  supersedes: [ CsvTypeInferenceTest#testBlankStringsAsNullWithNoInference, CsvTypeInferenceTest#testBlankStringsPreserved ]
+  tests: []
+
+- id: FILE-008
+  module: file
+  status: in-progress
+  group: csv
+  category: Error handling
+  priority: MUST
+  type: constraint
+  mode: read
+  seam: table
+  description: >
+    A non-null value violating an inferred column type must surface an error, not be silently
+    coerced to NULL/default (CLAUDE.md rule #6). Numerics already raise; temporal raise is the C-16 target.
+  tests:
+    - file/ResolvedBugTargetsTest#badNumericValueRaises
+    - file/ResolvedBugTargetsTest#badTemporalValueRaises_target
+
+- id: FILE-009
+  module: file
+  status: complete
+  group: csv
+  category: Engine invariance
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: >
+    The csv golden (FILE-001..004) holds identically across every applicable engine — same source,
+    same table — replacing the legacy type-OR tolerances with declared exceptions.
+  applies: { engines: [linq4j, parquet, arrow, duckdb], storagetypes: [local] }
+  exceptions:
+    - { engine: duckdb, reason: "TIME/TIMESTAMP surface as JAVA_OBJECT, not java.sql.Time/Timestamp" }
+  tests:
+    - file/EngineInvarianceTest#csvGoldenIsEngineInvariant
+  since: 2026-06
+
+# ============================== json (simple basis, 1:1, seam: table) ============================
+
+- id: FILE-010
+  module: file
+  status: proposed
+  group: json
+  category: Value fidelity
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: >
+    A flat JSON source round-trips to exact cell values and inferred types — the basis every complex
+    format decomposes into.
+  applies: { engines: [linq4j, parquet, arrow, duckdb], storagetypes: [local] }
+  tests: []
+
+- id: FILE-011
+  module: file
+  status: proposed
+  group: json
+  category: Path extraction
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: >
+    Nested JSON is flattened/extracted per a configured path (JsonPathConverter) to an exact table,
+    arrays and nested objects handled per the documented rule.
+  tests: []
+
+- id: FILE-012
+  module: file
+  status: complete
+  group: json
+  category: Engine invariance
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: The json golden holds identically across engines.
+  applies: { engines: [linq4j, parquet, arrow, duckdb], storagetypes: [local] }
+  tests:
+    - file/EngineInvarianceTest#jsonGoldenIsEngineInvariant
+  since: 2026-06
+
+# ============================== parquet (simple basis, 1:1, seam: table) =========================
+
+- id: FILE-013
+  module: file
+  status: proposed
+  group: parquet
+  category: Value fidelity
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: >
+    A Parquet source round-trips to exact values with types taken from the file schema (self-describing,
+    no inference), nullability preserved.
+  applies: { engines: [linq4j, parquet, arrow, duckdb], storagetypes: [local] }
+  tests: []
+
+# ============================ complex formats (1:N, seam: json-set) ==============================
+# Each: extraction golden (document -> exact set of JSON files) + conversion idempotence. Per-table
+# fidelity is inherited from the json basis (FILE-010).
+
+- id: FILE-014
+  module: file
+  status: proposed
+  group: xlsx
+  category: Extraction (decomposition)
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  topology: single
+  seam: json-set
+  description: >
+    MultiTableExcelToJsonConverter scans a workbook and emits one JSON file per discovered sheet/table;
+    the golden pins the exact emitted file-set (names + content).
+  applies: { storagetypes: [local, s3] }
+  tests: []
+
+- id: FILE-015
+  module: file
+  status: complete
+  group: xlsx
+  category: Conversion idempotence
+  priority: MUST
+  type: constraint
+  mode: write
+  seam: json-set
+  description: >
+    Re-converting an unchanged workbook produces byte-identical JSON and is skipped via the
+    etag/mtime gate (ConversionMetadata); a changed workbook re-converts.
+  notes: "unchanged-workbook no-rewrite (the idempotence gate) verified; the changed-workbook re-convert direction is an easy follow-up assertion."
+  tests:
+    - file/XlsxConversionIdempotenceTest#reConvertingUnchangedXlsxDoesNotRewriteJson
+  since: 2026-06
+
+- id: FILE-016
+  module: file
+  status: proposed
+  group: docx
+  category: Extraction (decomposition)
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    DocxTableScanner scans the document body for inline tables and emits one JSON per detected table;
+    the catalog golden pins count, boundaries, headers and names.
+  tests: []
+
+- id: FILE-017
+  module: file
+  status: proposed
+  group: html
+  category: Extraction (decomposition)
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: HtmlTableScanner emits one JSON per detected HTML table; catalog golden pins the table-set.
+  tests: []
+
+- id: FILE-018
+  module: file
+  status: proposed
+  group: html
+  category: Crawl discovery
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  topology: walking
+  seam: catalog
+  description: >
+    The HTML crawler (CrawlerConfiguration maxDepth / linkPattern / followExternalLinks) discovers
+    the correct page-set; the discovery golden pins which pages are visited.
+  tests: []
+
+- id: FILE-019
+  module: file
+  status: proposed
+  group: pptx
+  category: Extraction (decomposition)
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: PptxTableScanner emits one JSON per detected slide table; catalog golden pins the set.
+  tests: []
+
+- id: FILE-020
+  module: file
+  status: proposed
+  group: xml
+  category: Extraction (decomposition)
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set.
+  tests: []
+
+- id: FILE-021
+  module: file
+  status: proposed
+  group: markdown
+  category: Extraction (decomposition)
+  priority: MAY
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: MarkdownTableScanner emits JSON per detected table; catalog golden pins the set.
+  tests: []
+
+# ================================ storage seams (bytes / catalog) ================================
+
+- id: FILE-022
+  module: file
+  status: proposed
+  group: storage/local
+  category: Storage seam
+  priority: MUST
+  type: behavioral
+  mode: read
+  topology: walking
+  seam: catalog
+  description: >
+    LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and
+    openInputStream returns correct bytes — asserted at the seam, format/engine-agnostic.
+  applies: { storagetypes: [local] }
+  tests: []
+
+- id: FILE-023
+  module: file
+  status: proposed
+  group: storage/s3
+  category: Storage seam
+  priority: MUST
+  type: behavioral
+  mode: read
+  topology: walking
+  seam: catalog
+  description: S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam.
+  applies: { storagetypes: [s3] }
+  tests: []
+
+- id: FILE-024
+  module: file
+  status: proposed
+  group: storage/remote
+  category: Storage seam
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where
+    listable) the correct catalog. One seam golden per provider; refine into separate reqs later.
+  applies: { storagetypes: [http, ftp, sftp, hdfs, sharepoint] }
+  tests: []
+
+# =============================== walking sources & assembly ======================================
+
+- id: FILE-025
+  module: file
+  status: proposed
+  group: walking
+  category: Discovery
+  priority: MUST
+  type: behavioral
+  mode: read
+  topology: walking
+  seam: catalog
+  description: >
+    A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude
+    rules; the discovery golden pins the catalog, format-agnostic.
+  tests: []
+
+- id: FILE-026
+  module: file
+  status: proposed
+  group: walking
+  category: Table-set assembly
+  priority: MUST
+  type: structural
+  mode: read
+  topology: walking
+  description: >
+    The discovered catalog assembles into a schema: table names derived from paths, partition
+    columns recognized, name collisions resolved deterministically.
+  tests: []
+
+- id: FILE-027
+  module: file
+  status: complete
+  group: walking
+  category: Incremental refresh
+  priority: MUST
+  type: behavioral
+  mode: read
+  topology: walking
+  seam: catalog
+  description: >
+    Re-walking detects added / removed / changed files and updates the table-set correctly; an
+    unchanged tree is idempotent. Change signal differs by store (mtime vs ETag). The keystone cell.
+  notes: "added/removed re-walk verified at schema-build level; the live refresh-driven incremental re-walk + mtime/ETag change-signal is partially in FILE-135."
+  tests:
+    - file/WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFiles
+  since: 2026-06
+
+# ================================== refresh feature =============================================
+
+- id: FILE-028
+  module: file
+  status: proposed
+  group: refresh
+  category: Change detection
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    A refreshable table re-reads its source when the change signal fires (local mtime, remote ETag);
+    a stale read never serves pre-change data past the refresh.
+  tests: []
+
+- id: FILE-029
+  module: file
+  status: complete
+  group: refresh
+  category: Idempotence
+  priority: MUST
+  type: constraint
+  mode: write
+  description: >
+    Refresh of an unchanged source performs no rewrite (no new parquet/cache artifact) — gated by
+    ConversionMetadata. Directly targets the resume/re-write defect class.
+  tests:
+    - file/RefreshIdempotenceTest#reingestionDoesNotRewriteParquetCache
+  since: 2026-06
+
+# ================================ write / materialization =======================================
+
+- id: FILE-030
+  module: file
+  status: proposed
+  group: write/parquet
+  category: Materialization
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: table
+  description: >
+    ParquetMaterializationWriter writes a table whose read-back is value-identical to the source
+    (round-trip golden through the cache).
+  applies: { engines: [linq4j, parquet, duckdb] }
+  tests: []
+
+- id: FILE-031
+  module: file
+  status: proposed
+  group: write/iceberg
+  category: Materialization
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: table
+  description: IcebergTableWriter materializes a table that reads back value-identical; snapshots advance correctly.
+  tests: []
+
+# ================================ partitioning & evolution ======================================
+
+- id: FILE-032
+  module: file
+  status: proposed
+  group: partitioning
+  category: Partition pruning
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    Partition columns are derived from the path layout and a filtered query prunes to the correct
+    partition set, values exact.
+  tests: []
+
+- id: FILE-033
+  module: file
+  status: proposed
+  group: partitioning
+  category: Incremental tracking
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  description: IncrementalTracker records processed partitions so a re-run only ingests new partitions (idempotent).
+  tests: []
+
+- id: FILE-034
+  module: file
+  status: proposed
+  group: schema-evolution
+  category: Column evolution
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    Across files with added/removed columns, the unified table exposes the superset with nulls for
+    absent columns; types reconciled per the documented rule.
+  tests: []
+
+- id: FILE-035
+  module: file
+  status: proposed
+  group: compression
+  category: Transparent decompression
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: Compressed sources (gzip, etc.) decompress transparently; the table equals the uncompressed golden.
+  tests: []
+
+- id: FILE-036
+  module: file
+  status: proposed
+  group: compaction
+  category: Compaction correctness
+  priority: MAY
+  type: behavioral
+  mode: write
+  description: CompactionRunner merges small files/partitions without changing query results (value-identical before/after).
+  tests: []
+
+# ================================ interaction cells =============================================
+
+- id: FILE-037
+  module: file
+  status: proposed
+  group: interaction
+  category: Engine-storage interaction
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    duckdb reads storage directly via httpfs (DuckDBFunctionMapping), bypassing StorageProvider —
+    the duckdb × storageType cell must produce the same table as the StorageProvider path.
+  applies: { engines: [duckdb], storagetypes: [local, s3, http] }
+  tests: []
+
+# ================================ optimizations (seam: execution) ================================
+# Two-part contract: TRANSPARENCY (optimized result == unoptimized, or within bound for approximate)
+# + ACTIVATION (the rule fires in the plan — assert on EXPLAIN). Several are engine-specific.
+
+- id: FILE-038
+  module: file
+  status: complete
+  group: optimization
+  category: Transparency
+  priority: MUST
+  type: constraint
+  mode: read
+  seam: execution
+  description: >
+    Every exact optimization preserves results — a query with the rule enabled yields a table
+    identical to the same query with it disabled. The headline invariant for the whole group.
+  notes: "result-transparency verified across filter/column-prune/join-reorder gates (HLL excluded as approximate); plan-fires verification is a per-rule RECODE concern."
+  tests:
+    - file/FileOptimizationTransparencyTest#exactOptimizationsPreserveResults
+  since: 2026-06
+
+- id: FILE-039
+  module: file
+  status: proposed
+  group: optimization
+  category: HLL approx-distinct
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    APPROX_COUNT_DISTINCT returns an estimate within the documented relative error of exact
+    COUNT(DISTINCT), and HLLCountDistinctRule fires (plan assertion).
+  applies: { engines: [linq4j, parquet, duckdb] }
+  tests: []
+
+- id: FILE-040
+  module: file
+  status: proposed
+  group: optimization
+  category: HLL sketch reuse
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    HLL sketches are computed once and cached (HLLSketchCache), and merge across partitions/files —
+    the merged estimate is within bound of the union's exact distinct count.
+  tests: []
+
+- id: FILE-041
+  module: file
+  status: proposed
+  group: optimization
+  category: Count-star from statistics
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    COUNT(*) is answered from metadata (CountStarStatisticsRule) — result exact, no full scan — and
+    the rule fires.
+  tests: []
+
+- id: FILE-042
+  module: file
+  status: proposed
+  group: optimization
+  category: Pushdown / pruning
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    Filter pushdown, column pruning and partition selection (SimpleFileFilterPushdownRule,
+    SimpleFileColumnPruningRule, AlternatePartitionSelectionRule, PartitionDistinctRule) each yield
+    results identical to the unoptimized plan and fire when applicable.
+  tests: []
+
+- id: FILE-043
+  module: file
+  status: proposed
+  group: optimization
+  category: Statistics accuracy
+  priority: MUST
+  type: structural
+  mode: read
+  seam: execution
+  description: >
+    ColumnStatistics / ParquetStatisticsExtractor produce correct min/max/null-count/NDV — wrong
+    stats silently corrupt pruning and count-star, so the stats themselves are pinned by golden.
+  tests: []
+
+- id: FILE-044
+  module: file
+  status: proposed
+  group: optimization
+  category: Engine-specific parity
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    Engine-specific optimization variants (DuckDBHLLCountDistinctRule, DuckDBIcebergCountStarRule,
+    ClickHouseHLLCountDistinctRule, ClickHouseIcebergCountStarRule) produce results consistent with
+    the generic path (within bound for HLL).
+  applies: { engines: [duckdb, clickhouse] }
+  tests: []
+
+# ###############################################################################################
+# Reverse-engineered from file/docs/*.md and file/README.md (doc pass — to be verified vs code).
+# `notes: PLANNED` marks guarantees the docs themselves flag as future/unimplemented.
+# ###############################################################################################
+
+# ===================================== config / connection ======================================
+
+- id: FILE-045
+  module: file
+  status: proposed
+  group: config
+  category: storageType precedence
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    Selection priority: (1) schema-level storageType forces ALL files through that provider and
+    `directory` is ignored (no mixing within a schema); (2) per-table URL scheme auto-detection
+    (s3://, http(s)://, ftp://, sftp://, hdfs://, file:// or /path → local); (3) default local.
+  source: file/docs/storage-providers.md; file/docs/configuration-reference.md
+  tests: []
+
+- id: FILE-046
+  module: file
+  status: proposed
+  group: config
+  category: storageType value set
+  priority: MUST
+  type: structural
+  seam: catalog
+  description: Supported storageType values are local, s3, http, sharepoint, graph, ftp, sftp, hdfs (sharepoint/graph have no URL scheme — schema-config only).
+  source: file/docs/configuration-reference.md (Available Storage Providers)
+  tests: []
+
+- id: FILE-047
+  module: file
+  status: proposed
+  group: config
+  category: operand defaults
+  priority: MUST
+  type: structural
+  seam: catalog
+  description: >
+    Operand defaults: recursive=true (README says false for the JDBC driver — reconcile), executionEngine=parquet,
+    tableNameCasing/columnNameCasing=SMART_CASING, enableStatistics=true, filePatterns=["*"], excludePatterns=[],
+    maxFileSize=1GB, compressionSupport=true, encoding=UTF-8, batchSize=2048, memoryThreshold=64MB,
+    primeCache=true, ephemeralCache=false; `directory` is required.
+  source: file/docs/configuration-reference.md; file/docs/api-reference.md; file/README.md
+  notes: README (driver) says recursive default false vs config-reference true — verify.
+  tests: []
+
+- id: FILE-048
+  module: file
+  status: proposed
+  group: config
+  category: name casing
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    tableNameCasing/columnNameCasing ∈ {SMART_CASING (→snake_case, default), UPPER, LOWER, UNCHANGED};
+    SMART_CASING maps e.g. CustomerOrders→customer_orders; UNCHANGED preserves original.
+  source: file/docs/configuration-reference.md (Name Casing Strategies)
+  tests: []
+
+- id: FILE-049
+  module: file
+  status: proposed
+  group: config
+  category: env-var substitution
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    Operand values support ${VAR} (throws IllegalArgumentException if undefined) and ${VAR:default},
+    resolved env → system property → default → error; numeric/boolean strings are type-converted.
+  source: file/docs/api-reference.md; file/docs/configuration-reference.md; file/docs/troubleshooting.md
+  tests: []
+
+- id: FILE-050
+  module: file
+  status: proposed
+  group: config
+  category: schema name uniqueness
+  priority: MUST
+  type: constraint
+  seam: catalog
+  description: Schema names are case-sensitive and unique within a connection; a duplicate throws IllegalArgumentException ("already exists in parent schema") at schema creation.
+  source: file/docs/configuration-reference.md; file/docs/troubleshooting.md
+  tests: []
+
+- id: FILE-051
+  module: file
+  status: in-progress
+  group: config
+  category: JDBC driver
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    AperioDriver (org.apache.calcite.adapter.file.AperioDriver) accepts jdbc:aperio:<path>[?param=...];
+    a bare path opens schema "files"; params executionEngine (duckdb|parquet, default duckdb) and recursive
+    take effect from the URL or env (APERIO_EXECUTION_ENGINE, …).
+  source: file/README.md; file/README_JDBC_DRIVER.md
+  notes: "operand params/defaults tested; URL-parse (jdbc:aperio: -> schema 'files') still needs a connect-level test."
+  tests:
+    - file/AperioDriverOperandTest#operandDefaults
+
+# ============================ csv type-inference detail (seam: catalog) ==========================
+
+- id: FILE-052
+  module: file
+  status: proposed
+  group: csv
+  category: inference config defaults
+  priority: SHOULD
+  type: behavioral
+  seam: catalog
+  description: >
+    csvTypeInference defaults: enabled=false, samplingRate=0.1, maxSampleRows=1000, confidenceThreshold=0.95,
+    makeAllNullable=true, inferDates/Times/Timestamps=true; disabled (default) → all VARCHAR. Flat JDBC-URL aliases
+    csv_type_inference_enabled/_sampling_rate/_confidence are equivalent.
+  source: file/docs/csv-type-inference.md
+  tests: []
+
+- id: FILE-053
+  module: file
+  status: proposed
+  group: csv
+  category: numeric promotion
+  priority: SHOULD
+  type: behavioral
+  seam: catalog
+  description: Whole numbers in 32-bit range → INTEGER, outside → BIGINT, decimals/scientific → DOUBLE.
+  source: file/docs/csv-type-inference.md (Numeric)
+  tests: []
+
+- id: FILE-054
+  module: file
+  status: proposed
+  group: csv
+  category: boolean & temporal tokens
+  priority: SHOULD
+  type: behavioral
+  seam: catalog
+  description: >
+    BOOLEAN matches {true,false,TRUE,FALSE,True,False,0,1}. Temporal detects DATE (yyyy-MM-dd, MM/dd/yyyy,
+    dd/MM/yyyy), TIME (HH:mm:ss, h:mm a), TIMESTAMP for date-time, TIMESTAMP WITH TIME ZONE for RFC w/ tz.
+  source: file/docs/csv-type-inference.md (Boolean, Temporal)
+  tests: []
+
+- id: FILE-055
+  module: file
+  status: proposed
+  group: csv
+  category: null token set
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    Recognized null tokens: empty, NULL/null/Null, NA, N/A, NONE/None, NIL/nil. With makeAllNullable=false a
+    column becomes nullable when its null ratio exceeds nullableThreshold. (Refines FILE-003.)
+  source: file/docs/csv-type-inference.md (Null Handling)
+  tests: []
+
+# ============================ format config & table naming =======================================
+
+- id: FILE-056
+  module: file
+  status: proposed
+  group: json
+  category: multi-table jsonSearchPaths
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    jsonSearchPaths (JSONPath, e.g. $.data.users) yields one table per path; nested arrays become child tables
+    with a parent-id FK column (e.g. orders gets customer_id).
+  source: file/docs/supported-formats.md (JSON)
+  tests: []
+
+- id: FILE-057
+  module: file
+  status: rejected
+  group: xlsx
+  category: excelConfig
+  priority: SHOULD
+  type: structural
+  mode: read
+  seam: catalog
+  description: excelConfig keys evaluateFormulas, skipEmptyRows, headerRowIndex (e.g. 0), and a `sheets` allow-list; each sheet → a table.
+  source: file/docs/supported-formats.md (Excel)
+  rejection_reason: "doc-only — excelConfig keys have zero occurrences in file/src/main; feature not implemented"
+  tests: []
+
+- id: FILE-058
+  module: file
+  status: rejected
+  group: html
+  category: htmlConfig / crawlConfig
+  priority: SHOULD
+  type: structural
+  mode: read
+  seam: catalog
+  description: >
+    htmlConfig tableSelector (default "table"), headerSelector ("th"), skipEmptyTables; crawlConfig
+    generateTablesFromHtml, htmlTableMinRows/MaxRows, dataFilePattern/ExcludePattern (regex; dataFilePattern=null
+    disables data-file link processing).
+  source: file/docs/supported-formats.md (HTML)
+  rejection_reason: "doc-only — htmlConfig/crawlConfig keys have zero occurrences in file/src/main; feature not implemented"
+  tests: []
+
+- id: FILE-059
+  module: file
+  status: rejected
+  group: xml
+  category: xmlConfig
+  priority: SHOULD
+  type: structural
+  mode: read
+  seam: catalog
+  description: xmlConfig rootPath/recordPath (XPath) define the repeating record set; attributePrefix prefixes attribute columns; textContentColumn names the element-text column.
+  source: file/docs/supported-formats.md (XML)
+  rejection_reason: "doc-only — xmlConfig keys have zero occurrences in file/src/main; feature not implemented"
+  tests: []
+
+- id: FILE-060
+  module: file
+  status: proposed
+  group: table-naming
+  category: multi-table separator
+  priority: MUST
+  type: structural
+  seam: catalog
+  description: >
+    Embedded multi-table names use `__` separator (report__summary, document__table_1, slides__slide__table);
+    subdirectory crawls prefix with the subdir path joined by `__`.
+  source: file/docs/tabular-mode.md (Naming convention)
+  tests: []
+
+- id: FILE-061
+  module: file
+  status: proposed
+  group: table-naming
+  category: filename normalization
+  priority: MUST
+  type: structural
+  seam: catalog
+  description: Table names derive from filename (no extension), lowercased, hyphens→underscores (PRODUCTS.JSON→products, user-data.csv→user_data, sales/2024/january.xlsx→sales_2024_january).
+  source: file/docs/supported-formats.md; file/README.md
+  tests: []
+
+- id: FILE-062
+  module: file
+  status: proposed
+  group: yaml
+  category: yaml flattening
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:1"
+  seam: table
+  description: YAML nested keys flatten like JSON (profile.age→profile_age); list-of-records → rows.
+  source: file/docs/supported-formats.md; file/docs/tabular-mode.md
+  tests: []
+
+- id: FILE-063
+  module: file
+  status: proposed
+  group: compression
+  category: supported codecs
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompressedSize (e.g. "1GB"), tempDirectory. (Refines FILE-035.)
+  source: file/docs/supported-formats.md (Compressed Files)
+  tests: []
+
+# ============================ storage provider detail ============================================
+
+- id: FILE-064
+  module: file
+  status: proposed
+  group: storage/hdfs
+  category: hdfs routing & auth
+  priority: SHOULD
+  type: behavioral
+  topology: walking
+  seam: catalog
+  description: >
+    directory starting hdfs:// auto-routes to HDFS (recursive listing like local/S3); namenode from fs.defaultFS
+    (core-site/hdfs-site on classpath); auth = Hadoop Simple (OS user) or Kerberos (auto when
+    hadoop.security.authentication=kerberos). No adapter-level override.
+  source: file/docs/storage-providers.md (HDFS)
+  tests: []
+
+- id: FILE-065
+  module: file
+  status: proposed
+  group: storage/s3
+  category: s3-compatible endpoints
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    S3 supports MinIO/Wasabi/R2 via custom endpoint + options.usePathStyleAccess=true; region may be "auto" (R2);
+    creds via storageConfig.accessKey/secretKey, AWS_* env, roleArn, or profileName.
+  source: file/docs/storage-providers.md; file/docs/deployment.md
+  tests: []
+
+- id: FILE-066
+  module: file
+  status: proposed
+  group: storage/http
+  category: http auth & error policy
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    HTTP auth types bearer/basic/apikey/oauth2; error handling is timeout (httpTimeout) + simple retry count
+    (httpRetries) ONLY — exponential backoff/circuit-breakers/configurable retry policies explicitly NOT supported.
+  source: file/docs/storage-providers.md (HTTP/HTTPS)
+  tests: []
+
+- id: FILE-067
+  module: file
+  status: proposed
+  group: storage/sftp
+  category: sftp/ftp auth & host-key
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    SFTP (port 22) password or SSH key (privateKeyPath + passphrase); host-key via options.strictHostKeyChecking
+    + knownHostsFile. FTP (port 21) passiveMode (default true), encoding (UTF-8).
+  source: file/docs/storage-providers.md (FTP and SFTP)
+  tests: []
+
+- id: FILE-068
+  module: file
+  status: proposed
+  group: storage/sharepoint
+  category: sharepoint auth modes
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    storageType sharepoint supports oauth (clientId/secret/tenantId) and ntlm; client-secret auth requires legacy
+    (useLegacyAuth, accesscontrol.windows.net) or Graph (useGraphApi) — modern Azure AD REST w/ secret fails
+    "Unsupported app only token"/401; legacy tokens ~1h auto-refresh, realm auto-discovers.
+  source: file/docs/sharepoint-legacy-auth.md; file/docs/storage-providers.md
+  tests: []
+
+# ============================ engines & iceberg =================================================
+
+- id: FILE-069
+  module: file
+  status: proposed
+  group: engine
+  category: default selection
+  priority: SHOULD
+  type: behavioral
+  seam: execution
+  description: >
+    JDBC default engine duckdb (CALCITE_FILE_ENGINE_TYPE / queryEngine.type override). In-process guidance:
+    PARQUET default (>2GB), DUCKDB (>2GB complex SQL), ARROW (<2GB), LINQ4J (<100MB). System default when
+    unconfigured = PARQUET.
+  source: file/docs/jdbc-engines.md; file/docs/performance-tuning.md; file/docs/deployment.md
+  notes: Two "engine" notions (JDBC vs in-process) — reconcile during refinement.
+  tests: []
+
+- id: FILE-070
+  module: file
+  status: proposed
+  group: engine
+  category: write path is duckdb
+  priority: MUST
+  type: constraint
+  mode: write
+  seam: execution
+  description: JDBC query engines (DuckDB/Trino/ClickHouse/Spark) are read-only; ALL writes (materialization, partition reorg) go through DuckDB via the Iceberg Java API regardless of configured query engine.
+  source: file/docs/jdbc-engines.md (Write Operations)
+  tests: []
+
+- id: FILE-071
+  module: file
+  status: proposed
+  group: iceberg
+  category: time travel
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: catalog
+  description: >
+    No timeRange/snapshotId/asOfTimestamp → read latest snapshot (HEAD); snapshotId selects an exact snapshot;
+    asOfTimestamp reads as of a timestamp. timeRange {start,end} (ISO-8601, inclusive) → unified table across
+    snapshots adding snapshotColumn (default snapshot_time).
+  source: file/docs/iceberg-integration.md (Time Travel / Time Range)
+  tests: []
+
+- id: FILE-072
+  module: file
+  status: proposed
+  group: iceberg
+  category: snapshot isolation
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: catalog
+  description: Each query reads a single consistent snapshot; concurrent readers see a consistent snapshot; each write is an ACID transaction.
+  source: file/docs/iceberg-integration.md; file/docs/lake-features.md
+  tests: []
+
+- id: FILE-073
+  module: file
+  status: proposed
+  group: schema-evolution
+  category: resolution strategy defaults
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    Schema resolution defaults: parquet LATEST_SCHEMA_WINS, csv RICHEST_FILE, json LATEST_FILE.
+    LATEST_SCHEMA_WINS drops deleted fields and NULLs new columns for old data; UNION_ALL_COLUMNS keeps all.
+    (Refines FILE-034.)
+  source: file/docs/iceberg-integration.md (Schema Evolution)
+  tests: []
+
+- id: FILE-074
+  module: file
+  status: proposed
+  group: iceberg
+  category: read-only limitation
+  priority: MUST
+  type: constraint
+  mode: write
+  seam: catalog
+  description: Iceberg READ integration is read-only (no INSERT/UPDATE/DELETE); position/equality deletes unsupported; only copy-on-write tables. (Distinct from the ETL materialize write path, FILE-070.)
+  source: file/docs/iceberg-integration.md (Limitations)
+  tests: []
+
+- id: FILE-075
+  module: file
+  status: proposed
+  group: write/iceberg
+  category: inline compaction
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: table
+  description: >
+    materialize.iceberg.runCompaction (default false) compacts a partition when small-file count hits
+    compactionMinFiles (inline 10; standalone CompactionRunner 3), merging files < compactionSmallFileSizeBytes
+    (10MB) to compactionTargetFileSizeBytes (128MB), then expires non-current snapshots and removes orphans.
+  source: file/docs/iceberg-integration.md (Inline Compaction)
+  tests: []
+
+# ============================ optimization detail (seam: execution) =============================
+
+- id: FILE-076
+  module: file
+  status: proposed
+  group: optimization
+  category: count-star from metadata
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: COUNT(*) answered from Iceberg/Parquet-footer row counts (no scan), equal to a full-scan count, whenever the table is materialized to Iceberg/Hive-partitioned Parquet. (Refines FILE-041.)
+  source: file/docs/performance-tuning.md (Metadata-Based COUNT(*))
+  tests: []
+
+- id: FILE-077
+  module: file
+  status: proposed
+  group: optimization
+  category: HLL error bound & gate
+  priority: SHOULD
+  type: behavioral
+  seam: execution
+  description: >
+    APPROX_COUNT_DISTINCT (and intercepted COUNT(DISTINCT)) answered from HLL sketches built per ingestion
+    (statisticsConfig.enableHLL, accuracy 0.05 / docs say ~2%), gated by system property
+    calcite.file.statistics.hll.enabled≠false; exact COUNT(DISTINCT) without sketch still full-scans. (Refines FILE-039.)
+  source: file/docs/performance-tuning.md; file/docs/troubleshooting.md
+  notes: doc gives both ~2% and accuracy 0.05 — verify which binds.
+  tests: []
+
+- id: FILE-078
+  module: file
+  status: proposed
+  group: optimization
+  category: pushdown operators
+  priority: SHOULD
+  type: behavioral
+  seam: execution
+  description: Filter pushdown (enableFilterPushdown, default on) pushes =,!=,<,>,<=,>=,IN,LIKE to storage; pushed results equal unpushed. Column pruning always on. Partition pruning on Hive year=/month= and Iceberg layouts. (Refines FILE-042.)
+  source: file/docs/performance-tuning.md
+  tests: []
+
+- id: FILE-079
+  module: file
+  status: proposed
+  group: optimization
+  category: constraint-driven
+  priority: SHOULD
+  type: behavioral
+  seam: execution
+  description: Declared PK drives self-join/join elimination; FK drives join reordering and cardinality estimation; results unchanged vs no constraints (given accurate constraints).
+  source: file/docs/lake-features.md (Relational Model)
+  tests: []
+
+# ============================ constraints (metadata) ===========================================
+
+- id: FILE-080
+  module: file
+  status: proposed
+  group: constraints
+  category: declaration model
+  priority: MUST
+  type: constraint
+  seam: catalog
+  description: >
+    constraints block declares primaryKey (composite allowed), foreignKeys (columns/targetTable/targetColumns,
+    matched by position not name), uniqueKeys. Metadata-only, NOT enforced on write (Parquet immutable) — inaccurate
+    constraints can yield wrong results.
+  source: file/docs/CONSTRAINTS.md
+  tests: []
+
+- id: FILE-081
+  module: file
+  status: proposed
+  group: constraints
+  category: jdbc/statistic exposure
+  priority: MUST
+  type: structural
+  seam: catalog
+  description: >
+    Constraints exposed via DatabaseMetaData (getPrimaryKeys KEY_SEQ order, getImportedKeys, getIndexInfo
+    NON_UNIQUE=false for unique) and Calcite Statistic (getKeys/getReferentialConstraints/isKey) via
+    metadata.TableConstraints.
+  source: file/docs/CONSTRAINTS.md (JDBC Metadata)
+  tests: []
+
+# ============================ document / ETL pipeline ===========================================
+
+- id: FILE-082
+  module: file
+  status: proposed
+  group: document-etl
+  category: ResponseTransformer contract
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: json-set
+  description: >
+    A ResponseTransformer(raw, RequestContext) MUST return a JSON array string whose object keys match the
+    canonical columns; empty/error responses MUST return "[]" (never null/throw to the pipeline).
+  source: file/docs/document-etl.md
+  tests: []
+
+- id: FILE-083
+  module: file
+  status: proposed
+  group: document-etl
+  category: dimension types & expansion
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    Dimension types list/range(inclusive,step1)/yearRange(dataLag,releaseMonth,excludeYears,min/max)/query/json_catalog/custom;
+    N dimensions fetch the full cartesian product (one call per combination) unless a custom DimensionResolver emits
+    only valid combos. yearRange dataLag:1 releaseMonth:9 → end=current-2 before Sept, current-1 from Sept.
+  source: file/docs/document-etl.md (Dimension Types / Multi-Dimension)
+  tests: []
+
+- id: FILE-084
+  module: file
+  status: proposed
+  group: document-etl
+  category: resumability tracker
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips
+    `complete` batches and re-runs non-complete/error. Backend via CALCITE_TRACKER_BACKEND=s3. (Idempotence/resume.)
+  source: file/docs/document-etl.md (Resumability)
+  tests: []
+
+- id: FILE-085
+  module: file
+  status: proposed
+  group: document-etl
+  category: hook order & error policy
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    Per-row order responseTransformer → rowTransformers (declaration order; null drops row) → validators
+    (drop|warn|fail). errorHandling defaults responseTransformer=fail, rowTransformer=skip_row, validator=continue.
+    Pagination offset|cursor|page|csv_stream streams to Iceberg incrementally (no OOM).
+  source: file/docs/document-etl.md (Hooks / Pagination)
+  tests: []
+
+# ============================ refresh / freshness ==============================================
+
+- id: FILE-086
+  module: file
+  status: in-progress
+  group: refresh
+  category: refresh vs cache exclusivity
+  priority: MUST
+  type: constraint
+  mode: read
+  seam: execution
+  description: >
+    Setting refreshInterval disables Parquet conversion caching (mutually exclusive); refresh is lazy
+    (on query access) and only for CSV/JSON/YAML/Parquet — Excel/Word/PowerPoint/HTML/XML/Markdown convert once
+    at startup and need restart. (Refines FILE-028.)
+  source: file/docs/tabular-mode.md (Refresh)
+  notes: "FINDING: a schema-level refreshInterval did NOT suppress the parquet cache (a .parquet was still written). Exclusivity likely needs per-table config, or refreshInterval swaps in a refreshable cache — test @Disabled pending the precise contract."
+  tests:
+    - file/RefreshIdempotenceTest#refreshIntervalDisablesParquetCache
+
+- id: FILE-087
+  module: file
+  status: proposed
+  group: refresh
+  category: materialized-view rewrite
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    A model.json materialization computes once on first access (stored Parquet) and the optimizer transparently
+    rewrites eligible queries to the cache; the holding schema must use DUCKDB or PARQUET. Refresh = delete the
+    .materialized_views/<table>.parquet file (no auto TTL). (Refines FILE-030.)
+  source: file/docs/lake-features.md; file/docs/api-reference.md
+  tests: []
+
+- id: FILE-088
+  module: file
+  status: proposed
+  group: refresh
+  category: freshness skip gate
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    freshness (opt-in; snapshot/computed_delta only) stores a tracker high-water token and probes→compares→skips.
+    etag/last_modified/version/checksum/size/count skip pre-download; hash skips only the commit. size/count are weak.
+  source: file/docs/etl_dimension_features.md §4; file/docs/period_dimensions_design.md §8
+  notes: PLANNED — freshness subsystem marked entirely missing in the design doc's gap analysis; verify before testing.
+  tests: []
+
+# ============================ period dimensions (mostly PLANNED) ================================
+
+- id: FILE-089
+  module: file
+  status: proposed
+  group: period-dimensions
+  category: calendar-correct providers
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: catalog
+  description: >
+    quarter/month/week/day/day_of_week providers emit calendar-correct values (leap days, 30/31, ISO 52/53),
+    descending, capped at the current open period; finer providers read coarser from context. week needs weekYear iso|calendar.
+  source: file/docs/etl_dimension_features.md §1; file/docs/period_dimensions_design.md
+  notes: PLANNED — design_status "not yet implemented".
+  tests: []
+
+- id: FILE-090
+  module: file
+  status: proposed
+  group: period-dimensions
+  category: dataset_type semantics
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    dataset_type ∈ {snapshot, delta(default), computed_delta}: snapshot overwrites only the open period (closed frozen);
+    computed_delta upserts rows whose modified advanced by incrementalKeys; backfill_period sets fetch-window grain.
+  source: file/docs/etl_dimension_features.md §3; file/docs/period_dimensions_design.md
+  notes: PLANNED — dataset_type/backfill_period marked missing in gap analysis.
+  tests: []
+
+# ============================ raw cache ========================================================
+
+- id: FILE-091
+  module: file
+  status: proposed
+  group: raw-cache
+  category: bundle archive & classification
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    At session end BundleArchiver scans cache/raw and classifies by size (default 1MB): small files concatenated
+    into 256MB .bin chunks with one JSONL index line each (index split at 50k entries); large files PUT to
+    .raw/objects/<schema>/<sourceKey> recorded storage:"object". One bundle/session, bundleId=run-{ISO ts}.
+  source: file/raw-cache.md
+  tests: []
+
+- id: FILE-092
+  module: file
+  status: proposed
+  group: raw-cache
+  category: read-tier resolution
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    CacheResolver.resolve tries tier-1 local first, then merged index byte-range GET from .bin or full GET from
+    .raw/objects (newer bundles win on conflict), promoting to tier-1; returns null only when absent everywhere so
+    the caller re-fetches origin. Archive failure is non-fatal; LRU-evicted files recover from S3.
+  source: file/raw-cache.md
+  tests: []
+
+# ============================ vector / similarity search =======================================
+
+- id: FILE-093
+  module: file
+  status: proposed
+  group: vector-search
+  category: similarity UDFs
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    Every schema auto-registers COSINE_SIMILARITY (−1..1), COSINE_DISTANCE (0..2), EUCLIDEAN_DISTANCE, DOT_PRODUCT,
+    VECTOR_NORM (→DOUBLE), NORMALIZE_VECTOR (→VARCHAR), VECTORS_SIMILAR(v1,v2,threshold=0.7)→BOOLEAN,
+    TEXT_SIMILARITY (Jaccard); available on all engines.
+  source: file/docs/vector-search.md
+  tests: []
+
+- id: FILE-094
+  module: file
+  status: proposed
+  group: vector-search
+  category: input encodings & pushdown
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    Vector UDFs accept comma-strings, '[..]', '(..)', native float[]/double[]/int[], List<Number>, Avro arrays —
+    equivalent results across encodings. On DuckDB, COSINE_SIMILARITY/DISTANCE push down to array_cosine_*;
+    embedding/HNSW are DuckDB-only.
+  source: file/docs/vector-search.md
+  notes: embedding generation PLANNED for non-DuckDB engines.
+  tests: []
+
+# ============================ error handling ===================================================
+
+- id: FILE-095
+  module: file
+  status: proposed
+  group: error-handling
+  category: documented errors & SQLStates
+  priority: SHOULD
+  type: constraint
+  seam: catalog
+  description: >
+    Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) reports
+    SQLStates 42S02 (table not found), 22018 (type conversion), 08001 (storage connect), HY000 (file access),
+    42000 (config syntax). Clear errors, never silent.
+  source: file/docs/troubleshooting.md; file/docs/api-reference.md
+  tests: []
+
+# ###############################################################################################
+# CODE PASS — reverse-engineered from file/src/main/java (parallel readers). Code-grounded specifics
+# the docs missed. notes: CONTRADICTS-DOCS marks where code disagrees with a doc-pass requirement;
+# notes: BUG-SUSPECT marks behavior a reader flagged as a likely defect (verify, then pin correct).
+# ###############################################################################################
+
+# ===================================== csv / type inference =====================================
+
+- id: FILE-096
+  module: file
+  status: in-progress
+  group: csv
+  category: type resolution order
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    CsvTypeInferrer.determineType forces VARCHAR if any sampled value is VARCHAR, else picks the most
+    general type by fixed order VARCHAR>TIMESTAMP_TZ>TIMESTAMP>DATE>TIME>DOUBLE>BIGINT>INTEGER>BOOLEAN.
+    confidenceThreshold (default 0.95) is NEVER consulted.
+  source: file/src/main/java/.../format/csv/CsvTypeInferrer.java determineType 522-580
+  notes: "RESOLVED C-08 (code-wrong): honor confidenceThreshold — promote when non-conforming string ratio < 1-threshold instead of any string forcing VARCHAR. Issue staged. Stable parts tested; threshold-promotion target @Disabled."
+  tests:
+    - file/CsvInferenceRequirementsTest#allNullColumnIsNullableVarchar
+    - file/CsvInferenceRequirementsTest#allStringColumnIsVarchar
+    - file/CsvInferenceRequirementsTest#confidenceThresholdPromotesMajority_target
+
+- id: FILE-097
+  module: file
+  status: in-progress
+  group: csv
+  category: numeric promotion
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    Integer-pattern values fitting [Integer.MIN,MAX] → INTEGER, outside → BIGINT; INTEGER_PATTERN is
+    tried before BOOLEAN so "0"/"1" are INTEGER not BOOLEAN. FLOAT_PATTERN requires a literal decimal
+    point, so "1e5" (no dot) is NOT numeric → VARCHAR; matched floats are always DOUBLE.
+  source: file/src/main/java/.../format/csv/CsvTypeInferrer.java analyzeValue 368-398
+  notes: "RESOLVED C-09 (code-wrong): infer dot-less scientific notation (1e5) as DOUBLE; document yes/y/no/n booleans. INT/BIGINT + 0/1 tested; 1e5-DOUBLE target @Disabled."
+  tests:
+    - file/CsvInferenceRequirementsTest#numericPromotion
+    - file/CsvInferenceRequirementsTest#zeroOneAreIntegerNotBoolean
+    - file/CsvInferenceRequirementsTest#scientificNotationIsNumeric_target
+
+- id: FILE-098
+  module: file
+  status: complete
+  group: csv
+  category: null tokens (exact)
+  priority: MUST
+  type: constraint
+  seam: catalog
+  description: >
+    NullEquivalents.DEFAULT = {NULL, NA, N/A, NONE, NIL, ""} matched case-insensitively after trim; any
+    empty/whitespace-only string is always null regardless of the set; custom nullEquivalents are
+    upper-cased on load. (Pins FILE-098/FILE-055.) all-null column → nullable VARCHAR, confidence 1.0.
+  source: file/src/main/java/.../util/NullEquivalents.java 27-72; CsvTypeInferrer determineType 498-503
+  tests:
+    - file/CsvInferenceRequirementsTest#defaultNullTokenSet
+    - file/CsvInferenceRequirementsTest#nullRepresentationIsCaseInsensitiveAndCoversBlanks
+  since: 2026-06
+
+- id: FILE-099
+  module: file
+  status: complete
+  group: csv
+  category: sampling determinism
+  priority: MUST
+  type: constraint
+  seam: catalog
+  description: >
+    inferTypes samples via Math.random() against samplingRate (default 0.10), capped at maxSampleRows
+    (default 1000) — inference is NON-deterministic run to run. Golden tests MUST set samplingRate=1.0.
+  source: file/src/main/java/.../format/csv/CsvTypeInferrer.java inferTypes 301-315
+  notes: test hazard — non-determinism unless samplingRate=1.0.
+  tests:
+    - file/CsvInferenceRequirementsTest#inferenceIsDeterministicAtFullSampling
+  since: 2026-06
+
+- id: FILE-100
+  module: file
+  status: proposed
+  group: csv
+  category: value coercion & storage
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    CsvTypeConverter stores DATE as int epoch-day, TIME as int millis-of-day, TIMESTAMP as long UTC
+    wall-clock millis, TIMESTAMP_TZ as long true-UTC millis; parseBoolean accepts true/1/yes/y and
+    false/0/no/n (case-insensitive), throwing NumberFormatException otherwise. VARCHAR empties preserved.
+  source: file/src/main/java/.../format/csv/CsvTypeConverter.java 185-335
+  notes: CONTRADICTS-DOCS — boolean coercion accepts yes/y/no/n beyond the documented inference set.
+  tests: []
+
+- id: FILE-101
+  module: file
+  status: in-progress
+  group: csv
+  category: silent temporal fallback
+  priority: MUST
+  type: constraint
+  seam: execution
+  description: >
+    On an unparseable DATE/TIME/TIMESTAMP, CsvTypeConverter logs a warning and returns null (and parses a
+    date-only string as midnight, TZ-less as wall clock) instead of failing.
+  source: file/src/main/java/.../format/csv/CsvTypeConverter.java parseDate/parseTimestamp 244-406
+  notes: "RESOLVED C-16/C-17 (code-wrong): raise a clear parse error on bad temporal/numeric (fixes the DATE NPE too); no silent null. Issue staged. Target tests @Disabled until fix."
+  tests:
+    - file/ResolvedBugTargetsTest#badTemporalValueRaises_target
+    - file/ResolvedBugTargetsTest#badDateIsCleanErrorNotNpe_target
+
+# ===================================== complex formats / converters ==============================
+
+- id: FILE-102
+  module: file
+  status: proposed
+  group: xlsx
+  category: table detection
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    MultiTableExcelToJsonConverter splits a sheet on ≥ MIN_EMPTY_ROWS_BETWEEN_TABLES (2) blank rows,
+    treats a single-non-empty-cell row as a title, allows ≤ MAX_HEADER_ROWS (3) header rows, drops
+    zero-data-row tables; empty cells are written as JSON null (putNull, key present).
+  source: file/src/main/java/.../converters/MultiTableExcelToJsonConverter.java 62-381
+  tests: []
+
+- id: FILE-103
+  module: file
+  status: proposed
+  group: html
+  category: table name & sanitization
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    HtmlTableScanner.getTableName priority: id attr > caption > preceding h1-h6 (≤3 sibs) > preceding
+    title/header-class (≤3 sibs) > "T{n}"; duplicates get _2/_3. sanitizeName: non-[A-Za-z0-9_]→_,
+    truncate 50, prefix _ if leading non-letter, empty→"table".
+  source: file/src/main/java/.../converters/HtmlTableScanner.java 99-232
+  tests: []
+
+- id: FILE-104
+  module: file
+  status: proposed
+  group: xml
+  category: detection & XXE hardening
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    XmlTableScanner detects a table as ≥ MIN_REPEATING_ELEMENTS (2) structurally-similar same-tag
+    siblings (attr-count diff ≤2 AND ≥50% child-name overlap), recursing to depth 5. The parser
+    disallows DOCTYPE and external entities (XXE-hardened), so DOCTYPE-bearing XML fails to parse.
+  source: file/src/main/java/.../converters/XmlTableScanner.java 40-282
+  tests: []
+
+- id: FILE-105
+  module: file
+  status: proposed
+  group: markdown
+  category: parsing & sparse rows
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    MarkdownTableScanner needs ≥3 lines (header, separator not at index 0, ≥1 data row); cells split on
+    unescaped '|', empty cell values are OMITTED from the row object (sparse). Base name is PascalCase.
+  source: file/src/main/java/.../converters/MarkdownTableScanner.java 94-280
+  notes: "RESOLVED C-10 (code-wrong): make markdown lowercase snake_case like the other converters."
+  tests: []
+
+- id: FILE-106
+  module: file
+  status: proposed
+  group: docx
+  category: header rows & cell typing
+  priority: MUST
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    DocxTableScanner assumes row 0 is a header, promotes row 1 to a 2nd header by cell-count/looksLikeHeader
+    (≤3 header rows), skips header-less tables, and runs per-cell type inference
+    (ConverterUtils.setJsonValueWithTypeInference) — unlike pptx/markdown which keep raw trimmed strings.
+  source: file/src/main/java/.../converters/DocxTableScanner.java 159-293
+  tests: []
+
+- id: FILE-107
+  module: file
+  status: proposed
+  group: json
+  category: flattener semantics
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: bytes
+  description: >
+    JsonFlattener defaults: separator "__", maxDepth 3, nullValue "". Nested objects join keys with __;
+    empty objects skipped; primitive arrays joined CSV with "," (quoting embedded delimiters); arrays
+    containing any Map are DROPPED entirely; beyond maxDepth a sub-object becomes its Java toString().
+  source: file/src/main/java/.../format/json/JsonFlattener.java 28-103
+  notes: BUG-SUSPECT — arrays-of-objects silently dropped; over-depth becomes non-JSON toString().
+  tests: []
+
+- id: FILE-108
+  module: file
+  status: proposed
+  group: table-naming
+  category: identifier sanitization
+  priority: MUST
+  type: constraint
+  seam: catalog
+  description: >
+    ConverterUtils.sanitizeIdentifier maps non-[A-Za-z0-9_]→_, collapses 3+ underscores to EXACTLY "__"
+    (deliberately preserving the multi-table separator), trims leading/trailing _, prefixes _ before a
+    leading digit, returns literal "column" for null/empty.
+  source: file/src/main/java/.../converters/ConverterUtils.java sanitizeIdentifier 173-203
+  notes: boundary test — 3+ underscores collapse to __ collides with the FILE-060 multi-table separator.
+  tests: []
+
+- id: FILE-109
+  module: file
+  status: proposed
+  group: converters
+  category: converter system properties
+  priority: SHOULD
+  type: behavioral
+  seam: bytes
+  description: >
+    ConverterUtils datetime ISO coercion stays LOCAL unless system property calcite.file.converter.timezone
+    is set; calcite.file.converter.date.strict restricts to obvious date shapes. JsonPath/YamlPath use a
+    SIMPLIFIED path (leading $, dot nav, single field[index]) — NOT Jayway (no filters/wildcards) — and
+    write atomically via temp + ATOMIC_MOVE.
+  source: file/src/main/java/.../converters/ConverterUtils.java 105-422; JsonPathConverter.java 97-148
+  tests: []
+
+# ===================================== storage / walking ========================================
+
+- id: FILE-110
+  module: file
+  status: proposed
+  group: walking
+  category: recursive default (actual)
+  priority: MUST
+  type: constraint
+  mode: read
+  topology: walking
+  seam: catalog
+  description: >
+    FileSchemaFactory reads recursive as operand.get("recursive") == Boolean.TRUE, so the default is
+    FALSE and a JSON string "true" does NOT enable recursion (only a real boolean does).
+  source: file/src/main/java/.../FileSchemaFactory.java 463-464
+  notes: "RESOLVED C-01 (code-wrong): default recursive=true AND accept string 'true'. Issue staged."
+  tests: []
+
+- id: FILE-111
+  module: file
+  status: proposed
+  group: walking
+  category: hidden-file skip & glob
+  priority: MUST
+  type: behavioral
+  mode: read
+  topology: walking
+  seam: catalog
+  description: >
+    FileSchema.listFilesRecursively skips any file/dir whose basename startsWith "." (dotfiles, .aperio).
+    directoryPattern (alias "glob"); patterns with "**" list recursively, fixed-depth "a/b/*" use bounded
+    depth listing; isGlobPattern returns false for any http(s):// URL.
+  source: file/src/main/java/.../FileSchema.java listFilesRecursively 4809-4849; findMatchingFiles 4486-4523
+  tests: []
+
+- id: FILE-112
+  module: file
+  status: proposed
+  group: config
+  category: storage routing (createFromUrl)
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    StorageProviderFactory.createFromUrl: s3:// THROWS IllegalArgumentException (S3 needs explicit
+    credentials — only createFromType("s3",creds) works); scheme match case-insensitive; no "://" → local;
+    null/empty → fresh local; unknown scheme → IllegalArgumentException. Default providers cached per type.
+  source: file/src/main/java/.../storage/StorageProviderFactory.java createFromUrl 36-87, createFromType 96-126
+  notes: "RESOLVED C-06 (code-wrong): route s3:// and fall back to the AWS default credential chain (env/IAM/profile)."
+  tests: []
+
+- id: FILE-113
+  module: file
+  status: proposed
+  group: storage/local
+  category: listFiles contract
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    LocalFileStorageProvider.listFiles throws IOException("Directory does not exist") on a missing/non-dir
+    path; entries INCLUDE directory FileEntries (size 0); file size = File.length(); order is OS-dependent
+    (File.listFiles). Missing file on open* throws IOException("File does not exist").
+  source: file/src/main/java/.../storage/LocalFileStorageProvider.java 38-177
+  tests: []
+
+- id: FILE-114
+  module: file
+  status: proposed
+  group: storage/http
+  category: timeouts & response codes
+  priority: MUST
+  type: constraint
+  seam: bytes
+  description: >
+    HttpStorageProvider hard-codes 30000ms connect+read timeouts, a fixed User-Agent, accepts only HTTP
+    200/201/304 (else IOException "HTTP error code"), listFiles always UnsupportedOperationException,
+    isDirectory always false; HttpConfig cacheTtl default 300000ms; auth precedence bearer>apiKey>basic.
+  source: file/src/main/java/.../storage/HttpStorageProvider.java 150-507; HttpConfig.java 54-93
+  tests: []
+
+- id: FILE-115
+  module: file
+  status: proposed
+  group: storage/ftp
+  category: ftp/sftp defaults
+  priority: SHOULD
+  type: behavioral
+  seam: bytes
+  description: >
+    FtpStorageProvider: port 21, default anonymous creds, 30s connect/60s data, BINARY+passive; refusal/login
+    throw IOException. SftpStorageProvider: port 22, strictHostKeyChecking default false,
+    PreferredAuthentications "publickey,password", default user=System user, key auto-discovered from
+    ~/.ssh/{id_rsa,id_ed25519,id_ecdsa,id_dsa}.
+  source: file/src/main/java/.../storage/FtpStorageProvider.java 37-321; SftpStorageProvider.java 37-378
+  tests: []
+
+- id: FILE-116
+  module: file
+  status: proposed
+  group: storage/s3
+  category: client config & listing
+  priority: MUST
+  type: constraint
+  seam: bytes
+  description: >
+    S3StorageProvider with config requires accessKeyId+secretAccessKey or throws (NO env fallback); region
+    default us-east-1; non-null endpoint enables path-style. listFiles sets delimiter "/" only when
+    non-recursive (commonPrefixes as dir entries) and follows continuation tokens; multipart write 16MB
+    parts, <5MB simple put, batch-delete 1000; fixed socket 15min/conn 60s/retry 8.
+  source: file/src/main/java/.../storage/S3StorageProvider.java 88-941
+  tests: []
+
+- id: FILE-117
+  module: file
+  status: proposed
+  group: storage/hdfs
+  category: missing-path contract
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    HDFSStorageProvider defaults fs.defaultFS to hdfs://localhost:9000; listFiles on a MISSING path returns
+    an EMPTY list (not an exception); recursive uses listFiles(path,true) files-only, non-recursive listStatus
+    includes dirs; delete is always recursive; modificationTime is the pseudo-ETag.
+  source: file/src/main/java/.../storage/HDFSStorageProvider.java 66-365
+  notes: "RESOLVED C-07 (code-wrong): standardize on throw — HDFS throws on a missing dir too."
+  tests: []
+
+- id: FILE-118
+  module: file
+  status: proposed
+  group: storage
+  category: hasChanged comparison
+  priority: MUST
+  type: behavioral
+  seam: bytes
+  description: >
+    StorageProvider.hasChanged: null cached → changed; compares size, then ETag (when both present), then
+    lastModified with a 1000ms tolerance; any IOException → changed=true. (Shared change-detection primitive
+    behind refresh/conversion.)
+  source: file/src/main/java/.../storage/StorageProvider.java hasChanged 245-273
+  tests: []
+
+# ===================================== engines / optimization / statistics ======================
+
+- id: FILE-119
+  module: file
+  status: proposed
+  group: engine
+  category: default engine (actual)
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    ExecutionEngineConfig.getDefaultEngine() unconditionally returns "parquet" (no DuckDB/classpath
+    detection); no-arg config = PARQUET, batchSize 2048, memoryThreshold 64MB. parseExecutionEngine
+    upper-cases, unknown → IllegalArgumentException listing 8 engines; linq4j/arrow/vectorized log a WARN.
+  source: file/src/main/java/.../execution/ExecutionEngineConfig.java 39-178
+  notes: "RESOLVED C-02 (code-wrong): implement DuckDB-if-available detection (default to DuckDB when the driver is on the classpath, else parquet). Issue staged."
+  tests: []
+
+- id: FILE-120
+  module: file
+  status: proposed
+  group: statistics
+  category: HLL precision & hashing
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    HyperLogLogSketch default precision 14 (16384 buckets), ctor rejects <4 or >16; add() hashes via MD5
+    first-8-bytes, Numbers via longValue() ONLY (so 1.1 and 1.9 collide), nulls skipped; merge requires
+    equal precision (per-bucket max); fromEstimate(n) short-circuits getEstimate to n and has a null hasher
+    (add would NPE).
+  source: file/src/main/java/.../statistics/HyperLogLogSketch.java 51-235
+  notes: "RESOLVED C-03 (reconcile): publish ~2% as the guaranteed bound (real ~0.8%); align the code comment to ~2%."
+  tests: []
+
+- id: FILE-121
+  module: file
+  status: proposed
+  group: statistics
+  category: stats-rule activation gates
+  priority: MUST
+  type: constraint
+  seam: execution
+  description: >
+    The statistics optimization rules are each gated by a system property defaulting FALSE:
+    calcite.file.statistics.filter.enabled, .column.pruning.enabled, .join.reorder.enabled, .hll.enabled.
+    StatisticsConfig DEFAULT enables HLL but fromSystemProperties()/getEffectiveConfig() (used by
+    StatisticsBuilder) default it false — runtime default depends on construction path.
+  source: file/src/main/java/.../statistics/StatisticsConfig.java 96-268; rules/*.java onMatch
+  notes: "RESOLVED C-04 (code-wrong): enable optimization rules by default (keep a disable switch); document sketch-gen vs rule-activation layers. HLL still APPROX-only per C-18."
+  tests: []
+
+- id: FILE-122
+  module: file
+  status: proposed
+  group: optimization
+  category: count-star guards
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    CountStarStatisticsRule fires only for true COUNT(*) (empty groupSet, single non-distinct COUNT, empty
+    argList) with a non-null Statistic.rowCount → VALUES(rowCount). DuckDBIcebergCountStarRule refuses when
+    any Filter sits between aggregate and scan, and self-heals a null/zero rowCount by summing Iceberg
+    FileScanTask recordCounts.
+  source: file/src/main/java/.../rules/CountStarStatisticsRule.java 70-146; duckdb/DuckDBIcebergCountStarRule.java 58-221
+  tests: []
+
+- id: FILE-123
+  module: file
+  status: proposed
+  group: optimization
+  category: pushdown/prune/reorder thresholds
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    SimpleFileFilterPushdownRule (ParquetTranslatableTable only): folds always-true to scan / always-false
+    to empty VALUES using Parquet min/max, EQUALS always-true only if min==max==value, unwraps NlsString.
+    Column pruning fires only when I/O savings >15%; join reorder only when cost ratio >1.25
+    (cost=rows*0.001+bytes*0.0001), LEFT joins never reordered.
+  source: file/src/main/java/.../rules/{SimpleFileFilterPushdownRule,SimpleFileColumnPruningRule,SimpleFileJoinReorderRule}.java
+  tests: []
+
+- id: FILE-124
+  module: file
+  status: proposed
+  group: optimization
+  category: HLL rule instance bug
+  priority: SHOULD
+  type: behavioral
+  seam: execution
+  description: >
+    SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize()
+    ignores the flag and optimizes EVERY COUNT(DISTINCT); all HLL rules no-op (leave the plan) when no
+    cached sketch exists.
+  source: file/src/main/java/.../rules/SimpleHLLCountDistinctRule.java shouldOptimize 112-122
+  notes: "RESOLVED C-18 (code-wrong): exact COUNT(DISTINCT) stays exact; HLL only for APPROX_COUNT_DISTINCT (or explicit opt-in). Issue staged."
+  tests: []
+
+- id: FILE-125
+  module: file
+  status: in-progress
+  group: optimization
+  category: debug-artifact leak
+  priority: SHOULD
+  type: constraint
+  seam: execution
+  description: >
+    DuckDBHLLCountDistinctRule writes hard-coded /tmp/duckdb_hll_rule_loaded.txt (static init) and appends
+    /tmp/duckdb_hll_rule_matched.txt per onMatch, and logs at WARN — production debug artifacts.
+  source: file/src/main/java/.../duckdb/DuckDBHLLCountDistinctRule.java 51-153
+  notes: "RESOLVED C-19 (code-wrong): gate diagnostics behind a debug flag; no hard-coded /tmp by default. Issue staged. Target test @Disabled until fix."
+  tests:
+    - file/ResolvedBugTargetsTest#duckdbHllRuleWritesNoTmpArtifacts
+
+- id: FILE-126
+  module: file
+  status: proposed
+  group: statistics
+  category: parquet stats & NDV fallbacks
+  priority: MUST
+  type: behavioral
+  seam: table
+  description: >
+    ParquetStatisticsExtractor reads min/max/nullCount/rowCount from the footer (no NDV), summing across
+    row groups, Binary decoded UTF-8; a missing file is swallowed (partial map). ColumnStatistics.getDistinctCount
+    returns the HLL estimate else min(1000,totalCount); StatisticsBuilder seeds a SYNTHETIC 1000/10000-value
+    sketch on missing column/file/error.
+  source: file/src/main/java/.../statistics/{ParquetStatisticsExtractor,ColumnStatistics,StatisticsBuilder}.java
+  notes: "RESOLVED C-16 (code-wrong): remove synthetic HLL seeds; raise/absent instead. Issue staged."
+  tests: []
+
+# ===================================== concurrency (new group) ==================================
+
+- id: FILE-127
+  module: file
+  status: proposed
+  group: concurrency
+  category: parquet conversion lock
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    ConcurrentParquetCache.convertWithLocking: Redis lock if available, else per-(schema:absPath)
+    ReentrantLock tryLock(30s), then a cross-JVM FileChannel.tryLock on <parquet>.lock; output written to
+    <parquet>.tmp.<hash> then Files.move REPLACE+ATOMIC (readers never see partial). Remote/S3 convert via
+    temp file with NO locking; performConversion re-checks staleness under lock (lost-race no-op).
+  source: file/src/main/java/.../format/parquet/ConcurrentParquetCache.java 64-187
+  tests: []
+
+- id: FILE-128
+  module: file
+  status: proposed
+  group: concurrency
+  category: source file locks
+  priority: MUST
+  type: behavioral
+  seam: bytes
+  description: >
+    SourceFileLockManager.acquireReadLock takes a SHARED FileLock, acquireWriteLock EXCLUSIVE, 30s timeout,
+    100ms retry; same-JVM shared re-entry is ref-counted (releases only at count 0); a write lock fails when
+    the file is already locked in-JVM. Redis distributed lock tried first when available.
+  source: file/src/main/java/.../cache/SourceFileLockManager.java 53-244
+  tests: []
+
+- id: FILE-129
+  module: file
+  status: proposed
+  group: concurrency
+  category: iceberg commit lock
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: catalog
+  description: >
+    Every table-mutating Iceberg commit runs under IcebergTableWriter.underCommitLock = a JVM monitor keyed
+    by Table.location() composed with CrossProcessCommitLock (host-local advisory file
+    <tmp>/calcite-iceberg-commit-locks/<sha256(location)>.lock, reentrant hold-count, OS-released on exit) —
+    one committer per table per host, preventing replace/compaction interleave leaving dangling refs.
+  source: file/src/main/java/.../iceberg/IcebergTableWriter.java 81-108; CrossProcessCommitLock.java 80-178
+  tests: []
+
+- id: FILE-130
+  module: file
+  status: proposed
+  group: conversion
+  category: staleness decision
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    ParquetConversionUtil.needsConversion skips re-conversion only when the cache exists AND
+    source.lastModified() <= parquet.lastModified() (strict source > parquet triggers convert; equal mtimes
+    reuse); any IOException reading timestamps → convert. No tolerance window.
+  source: file/src/main/java/.../format/parquet/ParquetConversionUtil.java needsConversion 228-271
+  tests: []
+
+- id: FILE-131
+  module: file
+  status: proposed
+  group: conversion
+  category: conversion-record preservation
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: catalog
+  description: >
+    ConversionMetadata.recordTable preserves an existing non-DIRECT conversionType (e.g. SEC_XBRL_TO_PARQUET,
+    ICEBERG_PARQUET, or any with viewScanPattern) rather than overwriting with DIRECT discovery; for
+    parquetCacheFile an exact file list replaces a glob but never the reverse. Recording failure never fails
+    table creation. hasChangedViaMetadata: ETag>size>lastModified(1s tol).
+  source: file/src/main/java/.../metadata/ConversionMetadata.java 243-646
+  tests: []
+
+# ===================================== refresh / materialized views =============================
+
+- id: FILE-132
+  module: file
+  status: proposed
+  group: refresh
+  category: lazy trigger & anti-thrash
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    File-table refresh is LAZY (query-time: project/toRel/scan/getRowType per table type). needsRefresh()
+    gates the interval BEFORE any mtime check, so a changed file within the interval is intentionally skipped;
+    null interval = never refresh, null lastRefreshTime = always refresh on first call.
+  source: file/src/main/java/.../refresh/AbstractRefreshableTable.java needsRefresh 54-66
+  tests: []
+
+- id: FILE-133
+  module: file
+  status: proposed
+  group: refresh
+  category: eager conversion watcher
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: execution
+  description: >
+    ConversionFileWatcher is the ONLY eager/timer refresher: a daemon scheduleWithFixedDelay (default 60000ms
+    when interval null) watching EXCEL/HTML/XML/MARKDOWN/DOCX/PPTX; re-converts on mtime increase and only
+    advances stored mtime on success (failed conversion retries next tick), feeding JSON that
+    RefreshableJsonTable then lazily picks up.
+  source: file/src/main/java/.../refresh/ConversionFileWatcher.java 64-326
+  tests: []
+
+- id: FILE-134
+  module: file
+  status: proposed
+  group: refresh
+  category: interval parsing
+  priority: SHOULD
+  type: constraint
+  mode: read
+  seam: catalog
+  description: >
+    RefreshInterval.parse accepts ISO-8601 (P/PT) and "<n> (second|minute|hour|day)s?"; null/empty/unmatched
+    → null (no refresh). getEffectiveInterval prefers table-level over schema-level; tables have NO default
+    interval (only ConversionFileWatcher defaults to 1 minute).
+  source: file/src/main/java/.../refresh/RefreshInterval.java 43-99
+  tests: []
+
+- id: FILE-135
+  module: file
+  status: proposed
+  group: refresh
+  category: partitioned staleness
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    RefreshablePartitionedParquetTable.filesChangedComparedToBaseline → true on null/empty baseline, file-count
+    change, added/removed path, or per-file FileBaseline.hasChanged (etag>size>lastModified 1s); getMetadata
+    failure assumes changed. Refresh runs async (CompletableFuture, double-checked), scan/getRowType block on
+    get(120s) and proceed with the current view on timeout.
+  source: file/src/main/java/.../refresh/RefreshablePartitionedParquetTable.java 277-393
+  notes: "RESOLVED C-20 (code-wrong): add the null/empty guard scan() is missing + regression test. Issue staged."
+  tests: []
+
+- id: FILE-136
+  module: file
+  status: proposed
+  group: refresh
+  category: parquet-cache rewrite
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    RefreshableParquetCacheTable.doRefresh, when the monitored source changed, deletes the old parquet +
+    *.tmp.*.parquet, touches intermediate JSON mtime to force re-conversion, rebuilds the cache, swaps the
+    volatile delegate, and notifies DuckDB (notifyTableRefreshed); conversion failure retains the existing cache.
+  source: file/src/main/java/.../refresh/RefreshableParquetCacheTable.java doRefresh 149-224
+  tests: []
+
+- id: FILE-137
+  module: file
+  status: proposed
+  group: materialized-view
+  category: one-shot CAS invalidation
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    MaterializedViewTable.materialize is one-shot via materialized.compareAndSet(false,true) with NO
+    staleness check — never re-materializes within an instance. RefreshableMaterializedViewTable.toRel
+    deletes the parquet, resets the flag, and re-materializes when needsRefresh (purely time-based) fires.
+  source: file/src/main/java/.../materialized/{MaterializedViewTable,RefreshableMaterializedViewTable}.java
+  notes: "RESOLVED C-21 (code-wrong): set materialized=true only on success; on failure reset and delete the partial parquet. Issue staged."
+  tests: []
+
+# ===================================== document-etl / freshness / tracker =======================
+
+- id: FILE-138
+  module: file
+  status: proposed
+  group: document-etl
+  category: freshness fail-safe
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    FreshnessCheck.changed(prev,cur) → true whenever prev or cur is null, else !prev.equals(cur) — an
+    unknown/missing token always forces reprocess (never silently skips). Pre-download types
+    (ETAG/LAST_MODIFIED/SIZE/VERSION/CHECKSUM/COUNT/GRAPHQL) skip the pull; HASH skips only the commit;
+    freshness OFF when config/type null/unparseable. watermarkVar set → incremental delta + Iceberg append.
+  source: file/src/main/java/.../etl/FreshnessCheck.java 43-86; FreshnessConfig.java 42-198
+  tests: []
+
+- id: FILE-139
+  module: file
+  status: complete
+  group: document-etl
+  category: error fatality classes
+  priority: MUST
+  type: constraint
+  mode: write
+  seam: execution
+  description: >
+    IncompleteFetchException (unchecked) marks a fetch that could not complete (e.g. 429 exhausted) as a
+    FAILURE — the document is left unprocessed and re-fetched next run (no empty table committed as done).
+    SkippedBatchException (checked IOException) is a non-fatal skip that does NOT increment the consecutive-failure
+    counter. StreamingResponseTransformer.transform always throws (must be driven via fetch).
+  source: file/src/main/java/.../etl/{IncompleteFetchException,SkippedBatchException,StreamingResponseTransformer}.java
+  tests:
+    - file/EtlErrorClassesTest#incompleteFetchIsUnchecked
+    - file/EtlErrorClassesTest#skippedBatchIsCheckedIoExceptionNotRuntime
+    - file/EtlErrorClassesTest#streamingTransformerStringTransformAlwaysThrows
+  since: 2026-06
+
+- id: FILE-140
+  module: file
+  status: proposed
+  group: document-etl
+  category: circuit breaker & rate limit
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    HttpSource keeps a process-wide consecutive-503 counter per base URI; at threshold 5 it fast-skips via
+    SkippedBatchException and any 2xx resets it; 503/429 honor Retry-After capped 300000ms else exponential;
+    a real 404 is cached per-run. CrossProcessRateLimiter paces one request/intervalMs host-wide via a FileLock
+    slot file, falling back to a local sleep on IOException.
+  source: file/src/main/java/.../etl/HttpSource.java 1238-1572; CrossProcessRateLimiter.java 65-89
+  tests: []
+
+- id: FILE-141
+  module: file
+  status: proposed
+  group: partitioning
+  category: incremental tracker keys
+  priority: MUST
+  type: structural
+  mode: write
+  seam: catalog
+  description: >
+    IncrementalTracker period key is year_quarter_month_week_day_day_of_week_<pipeline> with literal "NA" for
+    absent slots; hasCanonicalPeriod gates per-period tracking, else per-combo. computeConfigHash hashes sorted
+    dimension type/start/end/step/dataLag/values/sql; cleared sentinels written at year=0 and compared by as_of.
+  source: file/src/main/java/.../partition/IncrementalTracker.java 352-622
+  tests: []
+
+- id: FILE-142
+  module: file
+  status: proposed
+  group: partitioning
+  category: empty vs complete (self-heal)
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: catalog
+  description: >
+    IncrementalTracker.markProcessedEmpty (HTTP 200, zero rows) is distinct from terminal complete: an empty
+    period is re-evaluated against the table high-water mark — settled if at/below frontier or older than the
+    recency horizon, else still pending (re-fetched) — letting a lagged source self-heal. Default degrades to
+    terminal for trackers not modelling emptiness.
+  source: file/src/main/java/.../partition/IncrementalTracker.java markProcessedEmpty 91-114
+  tests: []
+
+- id: FILE-143
+  module: file
+  status: proposed
+  group: raw-cache
+  category: no-TTL & tier resolution
+  priority: MUST
+  type: behavioral
+  seam: bytes
+  description: >
+    Raw cache is immutable with NO TTL — HttpSource.hasValidRawCache returns valid whenever the cache file
+    exists; the IncrementalTracker is the sole staleness authority; DQ-capped caches are keyed under cap=<N>/.
+    CacheResolver.resolve tier order: local (hit only if length>0) → S3 bundle byte-range/object GET (promotes
+    to local) → origin (null). Commit is after a complete copy (partial never poisons cache).
+  source: file/src/main/java/.../etl/HttpSource.java 3374-3468; etl/cache/CacheResolver.java 79-163
+  notes: "RESOLVED C-05 (doc-wrong): no TTL is intended; fix docs to state the IncrementalTracker is the sole staleness authority."
+  tests: []
+
+# ===================================== iceberg semantics ========================================
+
+- id: FILE-144
+  module: file
+  status: proposed
+  group: iceberg
+  category: commit mode & version hint
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: catalog
+  description: >
+    IcebergTableWriter commits via AppendFiles (newAppend, append-only, relying on SQL dedup); replace-partitions
+    via newReplacePartitions; empty data-file lists are a no-op (a zero-row run never mutates). After each commit
+    ensureVersionHint repairs version-hint.text by scanning for the highest v<N>.metadata.json; orphan parquet
+    under data/ is re-registered (filename match) so a cleared catalog self-heals.
+  source: file/src/main/java/.../iceberg/IcebergTableWriter.java 184-267, 474-517, 1300-1358
+  tests: []
+
+- id: FILE-145
+  module: file
+  status: proposed
+  group: iceberg
+  category: time-travel precedence & stats gap
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    IcebergEnumerator snapshot precedence: snapshotId > asOfTimestamp (Instant.parse; bad format throws) >
+    current. withSnapshot/asOf return NEW immutable tables. timeRange is INCLUSIVE both ends with no cross-snapshot
+    dedup. BUT IcebergTable.getStatistic always uses currentSnapshot row counts, ignoring snapshotId/asOfTimestamp.
+  source: file/src/main/java/.../iceberg/{IcebergEnumerator,IcebergTable,IcebergTimeRangeResolver}.java
+  notes: "RESOLVED C-22 (code-wrong): align getStatistic to the selected snapshotId/asOfTimestamp + test. Issue staged."
+  tests: []
+
+# ===================================== jdbc / casing / constraints / vector / errors ============
+
+- id: FILE-146
+  module: file
+  status: proposed
+  group: jdbc
+  category: second JDBC driver
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    A SECOND driver FileJdbcDriver accepts jdbc:calcite: URLs containing schema=file|materialized_view with
+    snake_case params (schema, storage_path, engine, data_path, batch_size; defaults engine=parquet, batchSize=2048,
+    storagePath=${java.io.tmpdir}/calcite_file_storage, dataPath=${user.dir}/data) — distinct from AperioDriver's
+    jdbc:aperio: camelCase params.
+  source: file/src/main/java/.../FileJdbcDriver.java parseConfiguration 151-276
+  notes: "RESOLVED C-12 (consolidate): make AperioDriver canonical; deprecate FileJdbcDriver; align to DuckDB-if-available."
+  tests: []
+
+- id: FILE-147
+  module: file
+  status: in-progress
+  group: jdbc
+  category: AperioDriver defaults & var expansion
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    AperioDriver.buildOperand always emits lex=ORACLE, unquotedCasing=TO_LOWER, quotedCasing=UNCHANGED,
+    table/columnNameCasing=SMART_CASING, executionEngine default "duckdb" (APERIO_EXECUTION_ENGINE override);
+    recursive is emitted only when explicitly present (no default). expandVarString resolves ${VAR} env→sysprop,
+    has NO ${VAR:default} support, and leaves unresolved placeholders literal.
+  source: file/src/main/java/.../AperioDriver.java buildOperand 144-177, expandVarString 334-354
+  notes: "RESOLVED C-12/C-14: AperioDriver canonical; reuse the shared VariableResolver (delete expandVarString) — C-14 analysis found NO pass-through design, just a weaker duplicate. varExpansion test pins CURRENT pre-fix behavior (will be replaced when expandVarString is deleted)."
+  tests:
+    - file/AperioDriverOperandTest#operandDefaults
+    - file/AperioDriverOperandTest#varExpansionResolvesAndLeavesUndefinedLiteral
+
+- id: FILE-148
+  module: file
+  status: proposed
+  group: table-naming
+  category: SmartCasing rules
+  priority: MUST
+  type: behavioral
+  seam: table
+  description: >
+    SmartCasing.toSnakeCase lowercases an all-uppercase non-acronym without splitting (DEPTS→depts), applies a
+    dictionary (XMLHttpRequest→xml_http_request), inserts no underscore between a trailing letter and a single
+    digit (TLS1→tls1) but does between two digits ("12"→1_2), and protects preserved terms via greedy
+    longest-match at word boundaries. applyCasing sanitizes (hyphens→_) then applies the strategy; UNCHANGED is verbatim.
+  source: file/src/main/java/.../util/SmartCasing.java toSnakeCase 263-373, applyCasing 631-650
+  tests: []
+
+- id: FILE-149
+  module: file
+  status: proposed
+  group: constraints
+  category: positional FK resolution
+  priority: MUST
+  type: structural
+  seam: catalog
+  description: >
+    TableConstraints builds PK/unique bitsets from columnNames.indexOf, SILENTLY dropping unfound columns (and a
+    key whose bitset is empty); FK pairs use source=indexOf and target ordinal = positional index i (matched by
+    POSITION not name); uniqueKeys are added as ADDITIONAL keys; validateForeignKeys drops FKs whose target table
+    does not exist (warns). No constraints → Statistics.UNKNOWN.
+  source: file/src/main/java/.../metadata/TableConstraints.java parsePrimaryKeys 161-203, parseForeignKeys 229-301
+  tests: []
+
+- id: FILE-150
+  module: file
+  status: proposed
+  group: vector-search
+  category: UDF semantics & encodings
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    SimilarityFunctions registers exactly 10 UDFs (COSINE_SIMILARITY, SEMANTIC_SIMILARITY, EMBED, COSINE_DISTANCE,
+    EUCLIDEAN_DISTANCE, DOT_PRODUCT, VECTORS_SIMILAR, VECTOR_NORM, NORMALIZE_VECTOR, TEXT_SIMILARITY). cosine returns
+    0.0 on null arg or zero norm, accepts string/[..]/(..)/float[]/double[]/List<Number>/Avro arrays, mismatched
+    dims → IllegalArgumentException; VECTORS_SIMILAR threshold default 0.7; EUCLIDEAN null→Double.MAX_VALUE; EMBED→VARCHAR.
+  source: file/src/main/java/.../similarity/SimilarityFunctions.java 41-473
+  tests: []
+
+- id: FILE-151
+  module: file
+  status: proposed
+  group: error-handling
+  category: FileReaderException has no SQLState
+  priority: MUST
+  type: structural
+  seam: bytes
+  description: >
+    FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor
+    code; FileReader throws it for missing file, null source, IOException, no-match selector, non-<table> element,
+    ambiguous selection, and "no tables found". Documented SQLStates originate in the Calcite/Avatica layer, not here.
+  source: file/src/main/java/.../FileReaderException.java 16-23; FileReader.java 62-185
+  notes: "RESOLVED C-11 (code-wrong): make FileReaderException a SQLException carrying the documented SQLStates."
+  tests: []
+
+# ###############################################################################################
+# TEST PASS — reverse-engineered from file/src/test/java. Exact values/thresholds/edge behaviors the
+# tests pin (net-new beyond doc+code passes). Contradictions surfaced here are in docs/testing/contradictions.md.
+# ###############################################################################################
+
+- id: FILE-152
+  module: file
+  status: proposed
+  group: statistics
+  category: HLL measured error bounds
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    Tested HLL accuracy: precision 12 estimates 100 distinct within 20%, 10k within 5%, 100k within 5%;
+    precision 14 estimates 1,000,000 within 2% (errorRate < 0.02; class comment says ~0.8% std error).
+    Every precision 8/10/12/14 keeps error < 10% over 50k; memory = 2^precision bytes (1 byte/bucket).
+  source: file/src/test/java/.../statistics/HyperLogLogSketchTest.java#testLargeDatasetAccuracy
+  tests: []
+
+- id: FILE-153
+  module: file
+  status: proposed
+  group: statistics
+  category: selectivity formulas
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    ColumnStatistics.getSelectivity pins: "=" → 1/distinct, "!=" → 1-1/distinct, IS NULL → nullCount/total,
+    IS NOT NULL → 1-that, "=" with null operand → 0.0, empty table → 0.0; numeric range </>/<=/>= linear-
+    interpolated over [min,max] (0.5 at midpoint), min==max → 0.5, null min/max or incompatible types → 0.3,
+    unknown operator → 0.1.
+  source: file/src/test/java/.../statistics/ColumnStatisticsDeepTest.java
+  tests: []
+
+- id: FILE-154
+  module: file
+  status: proposed
+  group: engine
+  category: engine equivalence (tested)
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for
+    CSV/JSON/Parquet/TSV scans, filters, GROUP BY, and cross-format joins through the full JDBC path. (The
+    concrete engine-invariance target behind FILE-009/012.)
+  source: file/src/test/java/.../rules/OptimizationRulesTest.java#testParquetAndDuckDBConsistentResults
+  tests: []
+
+- id: FILE-155
+  module: file
+  status: proposed
+  group: csv
+  category: explicit typed header
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    A typed CSV header ("EMPNO:int,NAME:string,SLACKER:boolean,...") drives column SQL types directly,
+    independent of inference (slacker "true" → getBoolean true). TIME stored as int millis-of-day
+    ("10:30:00"→37800000), DATE as int epoch-day, TIMESTAMP as long epoch millis.
+  source: file/src/test/java/.../format/csv/CsvTypeConverterTest.java
+  tests: []
+
+- id: FILE-156
+  module: file
+  status: proposed
+  group: csv
+  category: decimal & config clamping
+  priority: SHOULD
+  type: behavioral
+  seam: bytes
+  description: >
+    parseDecimal uses HALF_UP symmetric for negatives ("123.455"→123.46, "-123.455"→-123.46); precision
+    overflow ("12345" into (4,0), "1e+5") throws IllegalArgumentException. TypeInferenceConfig.fromMap clamps
+    samplingRate>1→1.0 and negative confidenceThreshold→0.0; nullEquivalents stored UPPERCASE.
+  source: file/src/test/java/.../core/CsvEnumeratorTest.java; format/csv/CsvTypeInferrerTest.java
+  tests: []
+
+- id: FILE-157
+  module: file
+  status: proposed
+  group: csv
+  category: empty & header-only sources
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: table
+  description: >
+    An empty source and a disabled config both return an EMPTY type list; a header-only CSV returns one
+    nullable VARCHAR ColumnTypeInfo per header column. Cross-connection timestamp reads return identical
+    epoch millis (no per-connection TZ drift). FileRowConverter parses Natty NL dates ("January 15, 2024").
+  source: file/src/test/java/.../format/csv/CsvTypeInferrerTest.java; CompareTimestampsTest.java; FileRowConverterFieldDefTest.java
+  tests: []
+
+- id: FILE-158
+  module: file
+  status: proposed
+  group: json
+  category: multi-table discovery defaults
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    jsonSearchPaths register one table per path (keyed by last segment); the wrapper/source table is NOT
+    registered; missing paths silently skipped; name collisions suffix "_1". Auto-discovery defaults
+    maxDiscoveryDepth=5 (root=depth 0), minArraySize=1 (inclusive), autoDiscover=false.
+  source: file/src/test/java/.../format/json/JsonMultiTableFactoryTest.java
+  tests: []
+
+- id: FILE-159
+  module: file
+  status: proposed
+  group: walking
+  category: glob semantics matrix
+  priority: MUST
+  type: behavioral
+  mode: read
+  topology: walking
+  seam: catalog
+  description: >
+    PathMatcher contract: "**" matches root+sub+nested, "**/*" matches sub+nested but NOT root, "*" matches
+    only root, "{*,**/*}" matches both. Recursive walk names nested tables by path joined with "__". maxDepth
+    and ignorePatterns operands are NOT implemented (tests removed). Directory symlinks ARE followed (non-Windows).
+  source: file/src/test/java/.../table/GlobPatternTest.java; feature/RecursiveDirectoryComprehensiveTest.java
+  tests: []
+
+- id: FILE-160
+  module: file
+  status: proposed
+  group: storage
+  category: provider edge contracts
+  priority: SHOULD
+  type: behavioral
+  seam: bytes
+  description: >
+    readRange beyond EOF returns a trimmed array (no padding/error). Local resolvePath normalizes ".."
+    and lets an absolute relative override the base; cleanupMacosMetadata removes ._*/.DS_Store/*.crc/*~/*.tmp.
+    StorageProvider default readRange/writeFile/etc throw UnsupportedOperationException naming the storageType;
+    static normalizePath repairs single-slash s3:/, s3a:/, hdfs:/ to double-slash.
+  source: file/src/test/java/.../storage/{LocalFileStorageProviderDeepTest,StorageProviderInterfaceCoverageTest}.java
+  tests: []
+
+- id: FILE-161
+  module: file
+  status: proposed
+  group: partitioning
+  category: partition detection
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    PartitionDetector: extractHivePartitions parses ordered key=value segments across levels (special chars
+    preserved), null when none. detectPartitionScheme returns Hive info only when ALL paths share the same
+    ordered column set (null for mixed/inconsistent). Directory partitions map positional dirs to names;
+    custom-regex mappings referencing a missing capture group are skipped, not thrown.
+  source: file/src/test/java/.../partition/PartitionDetectorTest.java
+  tests: []
+
+- id: FILE-162
+  module: file
+  status: proposed
+  group: storage/http
+  category: POST/GraphQL & mime override
+  priority: SHOULD
+  type: behavioral
+  seam: bytes
+  description: >
+    HttpStorageProvider supports method=POST with a request body (REST search / GraphQL); a configured
+    mimeType overrides the server Content-Type in getMetadata; a missing URL → exists false, openInputStream IOException.
+  source: file/src/test/java/.../storage/HttpStorageProviderTest.java
+  tests: []
+
+- id: FILE-163
+  module: file
+  status: proposed
+  group: write/iceberg
+  category: writer preconditions & evolution
+  priority: MUST
+  type: constraint
+  mode: write
+  seam: table
+  description: >
+    IcebergMaterializationWriter.initialize rejects null config (IAE), non-ICEBERG format (IAE), disabled
+    materialization (IOException); writeBatch before initialize throws IllegalStateException, empty batch → 0.
+    commitFromStaging over an empty dir is a no-op (warn). Closing+reopening with an added column preserves
+    prior rows; a replace-column expression writes only the derived column.
+  source: file/src/test/java/.../etl/IcebergMaterializationWriterTest.java; iceberg/IcebergTableWriterTest.java
+  tests: []
+
+- id: FILE-164
+  module: file
+  status: proposed
+  group: iceberg
+  category: metadata tables shape
+  priority: SHOULD
+  type: structural
+  mode: read
+  seam: table
+  description: >
+    IcebergMetadataTables.createMetadataTables returns exactly 5 ScannableTables: history (4 cols), snapshots
+    (6 cols), files, manifests, partitions; empty tables scan to 0 rows; a populated unpartitioned table yields
+    one partition row with record_count=2, file_count=1, .parquet paths.
+  source: file/src/test/java/.../iceberg/IcebergMetadataTablesTest.java
+  tests: []
+
+- id: FILE-165
+  module: file
+  status: proposed
+  group: partitioning
+  category: per-period completion isolation
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: catalog
+  description: >
+    IncrementalTracker keys completion per canonical period, so completing year 2025 never marks an
+    unprocessed year 2022 done (guards the cross-period false-skip bug). An empty partition above the published
+    high-water mark stays pending and is re-fetched; only periods at/below the frontier settle.
+  source: file/src/test/java/.../partition/{IncrementalTrackerTest,S3HivePipelineTrackerEmptyHwmTest}.java
+  tests: []
+
+- id: FILE-166
+  module: file
+  status: proposed
+  group: conversion
+  category: format routing
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    FileConversionManager routes docx/pptx/md/html/xml to document converters (requiresConversion true,
+    isDirectlyUsable false → extracted to JSON), while csv/json/parquet are directly usable (no conversion).
+  source: file/src/test/java/.../converters/DocumentConverterIntegrationTest.java
+  tests: []
+
+- id: FILE-167
+  module: file
+  status: proposed
+  group: concurrency
+  category: conversion at-least-once
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: bytes
+  description: >
+    Under 5 racing threads on one source, ConcurrentParquetCache serializes via the lock with the invariant
+    conversionCount >= 1 (a cache-hit fast path permits >1 physical conversion); all threads return a valid
+    existing file. schemaName scopes the lock key, not the cache path. Negative lock timeout throws immediately;
+    LockHandle.close is idempotent.
+  source: file/src/test/java/.../cache/{ConcurrentParquetCacheTest,SourceFileLockManagerDeepCoverageTest}.java
+  notes: NOT exactly-once — any "single physical conversion" requirement is wrong.
+  tests: []
+
+- id: FILE-168
+  module: file
+  status: proposed
+  group: jdbc
+  category: FileJdbcDriver parsing & precedence
+  priority: MUST
+  type: behavioral
+  seam: catalog
+  description: >
+    FileJdbcDriver: schema=file → schema named "files", default engine "parquet", storage_path
+    ${tmp}/calcite_file_storage, data_path ${user.dir}/data. Invalid/empty/float batch_size → default 2048 in
+    the URL path, but SKIPS the whole schema in the schema.<name>.* Properties path. Properties override URL;
+    legacy materialized_view.* takes final precedence.
+  source: file/src/test/java/.../FileJdbcDriverDeepCoverageTest.java
+  tests: []
+
+- id: FILE-169
+  module: file
+  status: proposed
+  group: constraints
+  category: declaration paths & iceberg
+  priority: SHOULD
+  type: structural
+  seam: catalog
+  description: >
+    PKs may be declared via top-level constraints OR partitionedTables.primaryKey, both surfacing through
+    getPrimaryKeys/getImportedKeys. fromConfig: composite PK → one bitset entry (all members), N unique keys →
+    N entries, no constraints → Statistics.UNKNOWN. Iceberg exposes keys only after setConstraintConfig() and
+    the PK column name case must match the schema exactly.
+  source: file/src/test/java/.../metadata/{ConstraintMetadataJdbcTest,TableConstraintsTest}.java; iceberg/IcebergTableConstraintTest.java
+  tests: []
+
+- id: FILE-170
+  module: file
+  status: proposed
+  group: vector-search
+  category: exact UDF results & null policy
+  priority: MUST
+  type: behavioral
+  seam: execution
+  description: >
+    COSINE_SIMILARITY identical=1.0/orthogonal=0.0/opposite=-1.0/zero-norm=0.0; COSINE_DISTANCE=1-sim;
+    EUCLIDEAN_DISTANCE("0,0","3,4")=5.0; DOT_PRODUCT("1,2,3","4,5,6")=32.0; VECTOR_NORM("3,4,0")=5.0; dimension
+    mismatch → IllegalArgumentException. Per-UDF null policy: cosine/dot/text/norm → 0.0, cosine-distance → 1.0,
+    euclidean → Double.MAX_VALUE, normalize → null. TEXT_SIMILARITY = case-insensitive Jaccard.
+  source: file/src/test/java/.../similarity/SimilarityFunctionsDeepTest.java
+  tests: []
+
+- id: FILE-171
+  module: file
+  status: proposed
+  group: table-naming
+  category: multi-table suffix rule
+  priority: MUST
+  type: behavioral
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    A SINGLE discovered table gets NO _Tn suffix; only multiple tables sharing a base name get _T1/_T2 (and the
+    unsuffixed file is then NOT produced). PPTX-extracted columns are lowercase; Markdown writes PascalCase
+    on-disk JSON filenames while excel/html/docx/pptx write lowercase snake_case — all normalizing to lowercase
+    snake_case SQL table names.
+  source: file/src/test/java/.../excel/ExcelNamingTest.java; pptx/PptxTableTest.java; markdown/MarkdownTableTest.java
+  tests: []
+
+- id: FILE-172
+  module: file
+  status: proposed
+  group: html
+  category: selector & header rules
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  cardinality: "1:N"
+  seam: json-set
+  description: >
+    HtmlToJsonConverter: CSS selector + index selects a specific table (out-of-bounds/no-match → empty list;
+    null selector → default conversion → largest table); tables with <th> use them as headers and skip the
+    first row, tables without <th> get col0/col1/... and keep the first row; <br> splits text lines.
+  source: file/src/test/java/.../converters/HtmlToJsonConverterTest.java
+  tests: []
+
+- id: FILE-173
+  module: file
+  status: proposed
+  group: config
+  category: Oracle lexical + case sensitivity
+  priority: SHOULD
+  type: behavioral
+  seam: catalog
+  description: >
+    With lex=ORACLE, unquotedCasing=TO_LOWER and column_name_casing=LOWER, quoted lowercase identifiers resolve
+    and information_schema/pg_catalog access is case-insensitive. With caseSensitive=true + UPPER casing, only
+    the correctly-cased quoted name resolves; a wrong-case quoted name fails not-found.
+  source: file/src/test/java/.../OracleLexicalSettingsTest.java; config/CasingTest.java#testCaseSensitiveTableAccess
+  tests: []

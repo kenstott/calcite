@@ -1,0 +1,5 @@
+# Splunk adapter — requirements ledger. Schema: README.md.
+#
+# Placeholder. Populated after the file and govdata methods are proven (see ../testing/plan.md).
+# IDs use the SPLUNK- prefix. Unit of work TBD (likely per SPL search-mode / connection-mode).
+[]

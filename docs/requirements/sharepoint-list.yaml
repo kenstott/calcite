@@ -1,0 +1,5 @@
+# SharePoint-List adapter — requirements ledger. Schema: README.md.
+#
+# Placeholder. Populated after the file and govdata methods are proven (see ../testing/plan.md).
+# IDs use the SPLIST- prefix. Unit of work TBD (likely per list-operation / auth-mode).
+[]
