@@ -19,9 +19,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# On MinIO (pre-prod), redirect all storage to MinIO via .env.preprod.
-_env_preprod="$SCRIPT_DIR/../../.env.preprod"
-if [ -f "$_env_preprod" ]; then set -a; source "$_env_preprod"; set +a; fi
+# Load credentials/config from .env.prod (storage points at MinIO directly there now;
+# the old .env.preprod redirect is retired). Needed for the PROD_* publish gate below.
+source "$SCRIPT_DIR/common.sh"
+load_env
 
 LOG_DIR="$SCRIPT_DIR/runs"
 ERROR_LOG="$LOG_DIR/errors.log"
@@ -146,9 +147,9 @@ run_window() {
 
 log_error "INFO: Perpetual runner started (PID $$), first window: $MODE"
 
-# On MinIO: spawn a background sync daemon that copies new files to R2 every 24h.
-# Runs out-of-band so ETL scheduling is never blocked by the sync.
-if [ -f "$_env_preprod" ]; then
+# When PROD_* publish creds are present, spawn a background sync daemon that copies new
+# files from local MinIO to R2 every 24h. Runs out-of-band so ETL is never blocked by it.
+if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   (
     while true; do
       sleep 86400

@@ -107,6 +107,25 @@ load_env() {
   export CALCITE_TRACKER_S3_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
 }
 
+# Configure an ad-hoc rclone remote named 'r2' from the PROD_* R2 credentials in
+# .env.prod (loaded by load_env). This replaces the old ".env.preprod must exist"
+# machine guard: any host that has the PROD_AWS_* publish creds can promote to R2,
+# and the R2 destination no longer depends on a hand-edited rclone.conf [r2] stanza.
+# Fails loudly (set -u :?) if a required credential is missing — never silently skips.
+configure_r2_remote() {
+  : "${PROD_AWS_ACCESS_KEY_ID:?PROD_AWS_ACCESS_KEY_ID not set in .env.prod — cannot publish to R2}"
+  : "${PROD_AWS_SECRET_ACCESS_KEY:?PROD_AWS_SECRET_ACCESS_KEY not set in .env.prod — cannot publish to R2}"
+  : "${PROD_AWS_ENDPOINT_OVERRIDE:?PROD_AWS_ENDPOINT_OVERRIDE not set in .env.prod — cannot publish to R2}"
+  export RCLONE_CONFIG_R2_TYPE=s3
+  export RCLONE_CONFIG_R2_PROVIDER=Cloudflare
+  export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$PROD_AWS_ACCESS_KEY_ID"
+  export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$PROD_AWS_SECRET_ACCESS_KEY"
+  export RCLONE_CONFIG_R2_ENDPOINT="$PROD_AWS_ENDPOINT_OVERRIDE"
+  # R2 ignores region but the S3 backend requires one; PROD_AWS_REGION is 'auto' in .env.prod.
+  export RCLONE_CONFIG_R2_REGION="${PROD_AWS_REGION:-auto}"
+  export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
+}
+
 # Resolve the govdata shadow JAR (fat JAR with all dependencies).
 # Override the default search path by setting GOVDATA_JAR to an explicit path,
 # e.g. when building from a worktree in parallel with production:

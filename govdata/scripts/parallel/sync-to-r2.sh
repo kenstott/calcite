@@ -8,7 +8,7 @@
 # copies only the new parquet data files and metadata files from each
 # incremental ETL run. Zero Class A ops for files already on R2.
 #
-# Runs automatically once per day from run-pool.sh when .env.preprod exists.
+# Runs automatically once per day from run-scheduled.sh when PROD_* publish creds are set.
 # Can also be run manually: govdata/scripts/parallel/sync-to-r2.sh [--dry-run]
 #
 set -euo pipefail
@@ -17,12 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-_env_preprod="$SCRIPT_DIR/../../.env.preprod"
-if [ ! -f "$_env_preprod" ]; then
-  echo "ERROR: .env.preprod not found" >&2
-  exit 1
-fi
-set -a; source "$_env_preprod"; set +a
+# R2 destination is built from the PROD_* creds in .env.prod (no .env.preprod, no rclone.conf).
+configure_r2_remote
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true

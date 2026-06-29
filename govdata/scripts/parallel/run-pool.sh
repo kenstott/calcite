@@ -20,8 +20,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
-_env_preprod="$SCRIPT_DIR/../../.env.preprod"
-if [ -f "$_env_preprod" ]; then set -a; source "$_env_preprod"; set +a; fi
 
 # Tee all output to a timestamped log file while preserving terminal output
 POOL_LOG_DIR="$SCRIPT_DIR/runs"

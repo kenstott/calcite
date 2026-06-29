@@ -19,12 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-_env_preprod="$SCRIPT_DIR/../../.env.preprod"
-if [ ! -f "$_env_preprod" ]; then
-  echo "ERROR: .env.preprod not found — promote-to-r2.sh must run on the MinIO machine" >&2
-  exit 1
-fi
-set -a; source "$_env_preprod"; set +a
+# R2 destination is built from the PROD_* creds in .env.prod (no .env.preprod, no rclone.conf).
+configure_r2_remote
 
 DRY_RUN=false
 SCHEMA_FILTER=""
