@@ -100,7 +100,7 @@
 
 - id: FILE-005
   module: file
-  status: accepted
+  status: complete
   group: csv
   category: Type inference
   priority: MUST
@@ -110,7 +110,8 @@
   seam: table
   description: With type inference disabled, every column is VARCHAR and values are preserved as raw text.
   supersedes: [ CsvTypeInferenceTest#testNoInferenceByDefault ]
-  tests: []
+  tests:
+    - file/CsvTypeInferenceTest#testNoInferenceByDefault
 
 - id: FILE-006
   module: file
@@ -133,7 +134,7 @@
 
 - id: FILE-007
   module: file
-  status: accepted
+  status: complete
   group: csv
   category: Null handling
   priority: SHOULD
@@ -145,7 +146,8 @@
     blankStringsAsNull controls whether a blank VARCHAR cell becomes SQL NULL (true) or "" (false);
     whitespace-only cells are preserved verbatim.
   supersedes: [ CsvTypeInferenceTest#testBlankStringsAsNullWithNoInference, CsvTypeInferenceTest#testBlankStringsPreserved ]
-  tests: []
+  tests:
+    - file/CsvTypeInferenceTest#testBlankStringsAsNullWithNoInference
 
 - id: FILE-008
   module: file
@@ -187,7 +189,7 @@
 
 - id: FILE-010
   module: file
-  status: proposed
+  status: complete
   group: json
   category: Value fidelity
   priority: MUST
@@ -199,7 +201,8 @@
     A flat JSON source round-trips to exact cell values and inferred types — the basis every complex
     format decomposes into.
   applies: { engines: [linq4j, parquet, arrow, duckdb], storagetypes: [local] }
-  tests: []
+  tests:
+    - file/FileAdapterTest#testJsonSalesEmps
 
 - id: FILE-011
   module: file
@@ -361,7 +364,7 @@
 
 - id: FILE-020
   module: file
-  status: proposed
+  status: complete
   group: xml
   category: Extraction (decomposition)
   priority: SHOULD
@@ -370,7 +373,8 @@
   cardinality: "1:N"
   seam: json-set
   description: XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set.
-  tests: []
+  tests:
+    - file/XmlToJsonConverterTest#testMultipleTablePatterns
 
 - id: FILE-021
   module: file
@@ -575,14 +579,15 @@
 
 - id: FILE-033
   module: file
-  status: proposed
+  status: complete
   group: partitioning
   category: Incremental tracking
   priority: SHOULD
   type: behavioral
   mode: read
   description: IncrementalTracker records processed partitions so a re-run only ingests new partitions (idempotent).
-  tests: []
+  tests:
+    - file/DuckDBPartitionStatusStoreTest#testFilterUnprocessed
 
 - id: FILE-034
   module: file
@@ -606,7 +611,7 @@
 
 - id: FILE-035
   module: file
-  status: proposed
+  status: complete
   group: compression
   category: Transparent decompression
   priority: SHOULD
@@ -614,7 +619,8 @@
   mode: read
   seam: bytes
   description: Compressed sources (gzip, etc.) decompress transparently; the table equals the uncompressed golden.
-  tests: []
+  tests:
+    - file/CompressedFileTest#testGzippedCsvFile
 
 - id: FILE-036
   module: file
@@ -828,7 +834,7 @@
 
 - id: FILE-048
   module: file
-  status: proposed
+  status: complete
   group: config
   category: name casing
   priority: MUST
@@ -838,7 +844,8 @@
     tableNameCasing/columnNameCasing ∈ {SMART_CASING (→snake_case, default), UPPER, LOWER, UNCHANGED};
     SMART_CASING maps e.g. CustomerOrders→customer_orders; UNCHANGED preserves original.
   source: file/docs/configuration-reference.md (Name Casing Strategies)
-  tests: []
+  tests:
+    - file/CasingTest#testDefaultSmartCasingBehavior
 
 - id: FILE-049
   module: file
@@ -856,7 +863,7 @@
 
 - id: FILE-050
   module: file
-  status: proposed
+  status: complete
   group: config
   category: schema name uniqueness
   priority: MUST
@@ -864,7 +871,8 @@
   seam: catalog
   description: Schema names are case-sensitive and unique within a connection; a duplicate throws IllegalArgumentException ("already exists in parent schema") at schema creation.
   source: file/docs/configuration-reference.md; file/docs/troubleshooting.md
-  tests: []
+  tests:
+    - file/MultipleSchemaTest#testDuplicateSchemaNames
 
 - id: FILE-051
   module: file
@@ -902,7 +910,7 @@
 
 - id: FILE-053
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: numeric promotion
   priority: SHOULD
@@ -910,7 +918,8 @@
   seam: catalog
   description: Whole numbers in 32-bit range → INTEGER, outside → BIGINT, decimals/scientific → DOUBLE.
   source: file/docs/csv-type-inference.md (Numeric)
-  tests: []
+  tests:
+    - file/CsvInferenceRequirementsTest#numericPromotion
 
 - id: FILE-054
   module: file
@@ -932,7 +941,7 @@
 
 - id: FILE-055
   module: file
-  status: proposed
+  status: in-progress
   group: csv
   category: null token set
   priority: MUST
@@ -942,7 +951,15 @@
     Recognized null tokens: empty, NULL/null/Null, NA, N/A, NONE/None, NIL/nil. With makeAllNullable=false a
     column becomes nullable when its null ratio exceeds nullableThreshold. (Refines FILE-003.)
   source: file/docs/csv-type-inference.md (Null Handling)
-  tests: []
+  notes: "RECODE: exact 6-token set + case-insensitive recognition + ACTUAL binary nullable rule
+    (any null token -> nullable) asserted. The nullableThreshold clause is dead code (C-32):
+    nullableThreshold is parsed/exposed but unwired; staged @Disabled. Kept in-progress until C-32
+    is resolved (wire the threshold, or reword to the binary rule)."
+  tests:
+    - file/CsvInferenceRequirementsTest#recognizedNullTokenSetIsExactlySixCanonicalTokens
+    - file/CsvInferenceRequirementsTest#everyDocumentedCaseVariantIsRecognizedAsNull
+    - file/CsvInferenceRequirementsTest#anyNullTokenMakesColumnNullableWhenMakeAllNullableFalse
+  since: 2026-06
 
 # ============================ format config & table naming =======================================
 
@@ -1042,7 +1059,7 @@
 
 - id: FILE-062
   module: file
-  status: proposed
+  status: complete
   group: yaml
   category: yaml flattening
   priority: SHOULD
@@ -1052,7 +1069,8 @@
   seam: table
   description: YAML nested keys flatten like JSON (profile.age→profile_age); list-of-records → rows.
   source: file/docs/supported-formats.md; file/docs/tabular-mode.md
-  tests: []
+  tests:
+    - file/YamlFileTest#testNestedYaml
 
 - id: FILE-063
   module: file
@@ -1469,7 +1487,7 @@
 
 - id: FILE-088
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: freshness skip gate
   priority: SHOULD
@@ -1481,13 +1499,14 @@
     etag/last_modified/version/checksum/size/count skip pre-download; hash skips only the commit. size/count are weak.
   source: file/docs/etl_dimension_features.md §4; file/docs/period_dimensions_design.md §8
   notes: PLANNED — freshness subsystem marked entirely missing in the design doc's gap analysis; verify before testing.
-  tests: []
+  tests:
+    - file/FreshnessSkipGateTest#testUnchangedTokenCausesSkip
 
 # ============================ period dimensions (mostly PLANNED) ================================
 
 - id: FILE-089
   module: file
-  status: proposed
+  status: complete
   group: period-dimensions
   category: calendar-correct providers
   priority: SHOULD
@@ -1499,11 +1518,12 @@
     descending, capped at the current open period; finer providers read coarser from context. week needs weekYear iso|calendar.
   source: file/docs/etl_dimension_features.md §1; file/docs/period_dimensions_design.md
   notes: PLANNED — design_status "not yet implemented".
-  tests: []
+  tests:
+    - file/CalendarPeriodProviderTest#daysCalendarCorrectLengths
 
 - id: FILE-090
   module: file
-  status: proposed
+  status: complete
   group: period-dimensions
   category: dataset_type semantics
   priority: SHOULD
@@ -1515,7 +1535,8 @@
     computed_delta upserts rows whose modified advanced by incrementalKeys; backfill_period sets fetch-window grain.
   source: file/docs/etl_dimension_features.md §3; file/docs/period_dimensions_design.md
   notes: PLANNED — dataset_type/backfill_period marked missing in gap analysis.
-  tests: []
+  tests:
+    - file/DatasetTypeTest#snapshotProcessesOnlyMostRecentCombination
 
 # ============================ raw cache ========================================================
 
@@ -1694,7 +1715,7 @@
 
 - id: FILE-100
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: value coercion & storage
   priority: MUST
@@ -1706,7 +1727,8 @@
     false/0/no/n (case-insensitive), throwing NumberFormatException otherwise. VARCHAR empties preserved.
   source: file/src/main/java/.../format/csv/CsvTypeConverter.java 185-335
   notes: CONTRADICTS-DOCS — boolean coercion accepts yes/y/no/n beyond the documented inference set.
-  tests: []
+  tests:
+    - file/CsvTypeConverterTest#testConvertBooleanTrue
 
 - id: FILE-101
   module: file
@@ -1828,7 +1850,7 @@
 
 - id: FILE-107
   module: file
-  status: proposed
+  status: complete
   group: json
   category: flattener semantics
   priority: MUST
@@ -1841,11 +1863,12 @@
     containing any Map are DROPPED entirely; beyond maxDepth a sub-object becomes its Java toString().
   source: file/src/main/java/.../format/json/JsonFlattener.java 28-103
   notes: BUG-SUSPECT — arrays-of-objects silently dropped; over-depth becomes non-JSON toString().
-  tests: []
+  tests:
+    - file/JsonFlattenerTest#testFlattenArrayOfObjectsReturnsNull
 
 - id: FILE-108
   module: file
-  status: proposed
+  status: complete
   group: table-naming
   category: identifier sanitization
   priority: MUST
@@ -1857,7 +1880,8 @@
     leading digit, returns literal "column" for null/empty.
   source: file/src/main/java/.../converters/ConverterUtils.java sanitizeIdentifier 173-203
   notes: boundary test — 3+ underscores collapse to __ collides with the FILE-060 multi-table separator.
-  tests: []
+  tests:
+    - file/ConverterUtilsTest#testSanitizeIdentifierPreservesDoubleUnderscore
 
 - id: FILE-109
   module: file
@@ -1919,7 +1943,7 @@
 
 - id: FILE-112
   module: file
-  status: proposed
+  status: complete
   group: config
   category: storage routing (createFromUrl)
   priority: MUST
@@ -1931,7 +1955,8 @@
     null/empty → fresh local; unknown scheme → IllegalArgumentException. Default providers cached per type.
   source: file/src/main/java/.../storage/StorageProviderFactory.java createFromUrl 36-87, createFromType 96-126
   notes: "RESOLVED C-06 (code-wrong): route s3:// and fall back to the AWS default credential chain (env/IAM/profile)."
-  tests: []
+  tests:
+    - file/StorageProviderFactoryCoverageTest#testS3Scheme
 
 - id: FILE-113
   module: file
@@ -2234,7 +2259,7 @@
 
 - id: FILE-130
   module: file
-  status: proposed
+  status: complete
   group: conversion
   category: staleness decision
   priority: MUST
@@ -2246,7 +2271,18 @@
     source.lastModified() <= parquet.lastModified() (strict source > parquet triggers convert; equal mtimes
     reuse); any IOException reading timestamps → convert. No tolerance window.
   source: file/src/main/java/.../format/parquet/ParquetConversionUtil.java needsConversion 228-271
-  tests: []
+  supersedes: [ format/parquet/ParquetConversionUtilDeepCoverageTest2#testNeedsConversionParquetNewer ]
+  notes: "RECODE: all branches of needsConversion(File,File) asserted hermetically with fixed-mtime
+    @TempDir files — cache-missing->convert, source>parquet->convert, equal->reuse (proves strict >,
+    not >=), parquet-newer->reuse, and timestamp-read-throws->convert (no silent reuse). Old class
+    retained (38 methods, shared)."
+  tests:
+    - file/ConverterUtilRequirementsTest#needsConversionWhenParquetCacheMissing
+    - file/ConverterUtilRequirementsTest#needsConversionWhenSourceStrictlyNewer
+    - file/ConverterUtilRequirementsTest#noConversionWhenMtimesEqual
+    - file/ConverterUtilRequirementsTest#noConversionWhenParquetStrictlyNewer
+    - file/ConverterUtilRequirementsTest#needsConversionWhenTimestampReadThrows
+  since: 2026-06
 
 - id: FILE-131
   module: file
@@ -2271,7 +2307,7 @@
 
 - id: FILE-132
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: lazy trigger & anti-thrash
   priority: MUST
@@ -2283,7 +2319,13 @@
     gates the interval BEFORE any mtime check, so a changed file within the interval is intentionally skipped;
     null interval = never refresh, null lastRefreshTime = always refresh on first call.
   source: file/src/main/java/.../refresh/AbstractRefreshableTable.java needsRefresh 54-66
-  tests: []
+  supersedes: [ refresh/AbstractRefreshableTableTest#testNeedsRefreshWithNullInterval ]
+  notes: "RECODE: needsRefresh() three branches (null-interval=never, null-lastRefresh=always, elapsed) via a concrete probe subclass; proves the gate consults no file state. Old class retained (shared with FILE-028, 20 methods)."
+  tests:
+    - file/RefreshLogicRequirementsTest#nullIntervalNeverRefreshes
+    - file/RefreshLogicRequirementsTest#nonNullIntervalAlwaysRefreshesOnFirstCall
+    - file/RefreshLogicRequirementsTest#intervalGatesBeforeAnyFileState
+  since: 2026-06
 
 - id: FILE-133
   module: file
@@ -2306,7 +2348,7 @@
 
 - id: FILE-134
   module: file
-  status: proposed
+  status: complete
   group: refresh
   category: interval parsing
   priority: SHOULD
@@ -2318,7 +2360,14 @@
     → null (no refresh). getEffectiveInterval prefers table-level over schema-level; tables have NO default
     interval (only ConversionFileWatcher defaults to 1 minute).
   source: file/src/main/java/.../refresh/RefreshInterval.java 43-99
-  tests: []
+  supersedes: [ refresh/RefreshIntervalTest ]
+  notes: "RECODE of RefreshIntervalTest -> exact-Duration golden over all units (singular/plural), ISO-8601, case/trim, unmatched->null, and getEffectiveInterval table>schema>null precedence. Old class archived to test-archive."
+  tests:
+    - file/RefreshLogicRequirementsTest#parseReturnsNullForNullEmptyOrUnmatched
+    - file/RefreshLogicRequirementsTest#parseHumanReadableYieldsExactDuration
+    - file/RefreshLogicRequirementsTest#parseIso8601YieldsExactDuration
+    - file/RefreshLogicRequirementsTest#getEffectiveIntervalPrefersTableThenSchemaElseNull
+  since: 2026-06
 
 - id: FILE-135
   module: file
@@ -2381,7 +2430,7 @@
 
 - id: FILE-138
   module: file
-  status: proposed
+  status: complete
   group: document-etl
   category: freshness fail-safe
   priority: MUST
@@ -2394,7 +2443,8 @@
     (ETAG/LAST_MODIFIED/SIZE/VERSION/CHECKSUM/COUNT/GRAPHQL) skip the pull; HASH skips only the commit;
     freshness OFF when config/type null/unparseable. watermarkVar set → incremental delta + Iceberg append.
   source: file/src/main/java/.../etl/FreshnessCheck.java 43-86; FreshnessConfig.java 42-198
-  tests: []
+  tests:
+    - file/FreshnessCheckTest#changedSemantics
 
 - id: FILE-139
   module: file
@@ -2438,7 +2488,7 @@
 
 - id: FILE-141
   module: file
-  status: proposed
+  status: complete
   group: partitioning
   category: incremental tracker keys
   priority: MUST
@@ -2450,11 +2500,12 @@
     absent slots; hasCanonicalPeriod gates per-period tracking, else per-combo. computeConfigHash hashes sorted
     dimension type/start/end/step/dataLag/values/sql; cleared sentinels written at year=0 and compared by as_of.
   source: file/src/main/java/.../partition/IncrementalTracker.java 352-622
-  tests: []
+  tests:
+    - file/IncrementalTrackerTest#testPeriodCompletionKeyYearOnlyNaFills
 
 - id: FILE-142
   module: file
-  status: proposed
+  status: complete
   group: partitioning
   category: empty vs complete (self-heal)
   priority: MUST
@@ -2467,7 +2518,8 @@
     recency horizon, else still pending (re-fetched) — letting a lagged source self-heal. Default degrades to
     terminal for trackers not modelling emptiness.
   source: file/src/main/java/.../partition/IncrementalTracker.java markProcessedEmpty 91-114
-  tests: []
+  tests:
+    - file/S3HivePipelineTrackerEmptyHwmTest#emptyAboveHighWaterMarkStaysPending
 
 - id: FILE-143
   module: file
@@ -2568,7 +2620,7 @@
 
 - id: FILE-148
   module: file
-  status: proposed
+  status: complete
   group: table-naming
   category: SmartCasing rules
   priority: MUST
@@ -2580,7 +2632,8 @@
     digit (TLS1→tls1) but does between two digits ("12"→1_2), and protects preserved terms via greedy
     longest-match at word boundaries. applyCasing sanitizes (hyphens→_) then applies the strategy; UNCHANGED is verbatim.
   source: file/src/main/java/.../util/SmartCasing.java toSnakeCase 263-373, applyCasing 631-650
-  tests: []
+  tests:
+    - file/SmartCasingTest#testNumberHandling
 
 - id: FILE-149
   module: file
@@ -2660,7 +2713,7 @@
 
 - id: FILE-153
   module: file
-  status: proposed
+  status: complete
   group: statistics
   category: selectivity formulas
   priority: MUST
@@ -2672,7 +2725,8 @@
     interpolated over [min,max] (0.5 at midpoint), min==max → 0.5, null min/max or incompatible types → 0.3,
     unknown operator → 0.1.
   source: file/src/test/java/.../statistics/ColumnStatisticsDeepTest.java
-  tests: []
+  tests:
+    - file/ColumnStatisticsDeepTest#testSelectivityEqualityWithDistinct
 
 - id: FILE-154
   module: file
@@ -2693,7 +2747,7 @@
 
 - id: FILE-155
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: explicit typed header
   priority: MUST
@@ -2705,7 +2759,8 @@
     independent of inference (slacker "true" → getBoolean true). TIME stored as int millis-of-day
     ("10:30:00"→37800000), DATE as int epoch-day, TIMESTAMP as long epoch millis.
   source: file/src/test/java/.../format/csv/CsvTypeConverterTest.java
-  tests: []
+  tests:
+    - file/CsvTypeConverterTest#testConvertTime
 
 - id: FILE-156
   module: file
@@ -2744,7 +2799,7 @@
 
 - id: FILE-158
   module: file
-  status: proposed
+  status: complete
   group: json
   category: multi-table discovery defaults
   priority: SHOULD
@@ -2757,11 +2812,12 @@
     registered; missing paths silently skipped; name collisions suffix "_1". Auto-discovery defaults
     maxDiscoveryDepth=5 (root=depth 0), minArraySize=1 (inclusive), autoDiscover=false.
   source: file/src/test/java/.../format/json/JsonMultiTableFactoryTest.java
-  tests: []
+  tests:
+    - file/JsonMultiTableFactoryTest#testNameConflictResolution
 
 - id: FILE-159
   module: file
-  status: proposed
+  status: complete
   group: walking
   category: glob semantics matrix
   priority: MUST
@@ -2774,11 +2830,12 @@
     only root, "{*,**/*}" matches both. Recursive walk names nested tables by path joined with "__". maxDepth
     and ignorePatterns operands are NOT implemented (tests removed). Directory symlinks ARE followed (non-Windows).
   source: file/src/test/java/.../table/GlobPatternTest.java; feature/RecursiveDirectoryComprehensiveTest.java
-  tests: []
+  tests:
+    - file/GlobPatternTest#testGlobPatterns
 
 - id: FILE-160
   module: file
-  status: proposed
+  status: complete
   group: storage
   category: provider edge contracts
   priority: SHOULD
@@ -2790,11 +2847,12 @@
     StorageProvider default readRange/writeFile/etc throw UnsupportedOperationException naming the storageType;
     static normalizePath repairs single-slash s3:/, s3a:/, hdfs:/ to double-slash.
   source: file/src/test/java/.../storage/{LocalFileStorageProviderDeepTest,StorageProviderInterfaceCoverageTest}.java
-  tests: []
+  tests:
+    - file/LocalFileStorageProviderDeepTest#testReadRangeBeyondFileLength
 
 - id: FILE-161
   module: file
-  status: proposed
+  status: complete
   group: partitioning
   category: partition detection
   priority: MUST
@@ -2806,7 +2864,8 @@
     ordered column set (null for mixed/inconsistent). Directory partitions map positional dirs to names;
     custom-regex mappings referencing a missing capture group are skipped, not thrown.
   source: file/src/test/java/.../partition/PartitionDetectorTest.java
-  tests: []
+  tests:
+    - file/PartitionDetectorTest#testDetectPartitionSchemeInconsistentColumns
 
 - id: FILE-162
   module: file
@@ -2911,7 +2970,7 @@
 
 - id: FILE-168
   module: file
-  status: proposed
+  status: complete
   group: jdbc
   category: FileJdbcDriver parsing & precedence
   priority: MUST
@@ -2923,7 +2982,8 @@
     the URL path, but SKIPS the whole schema in the schema.<name>.* Properties path. Properties override URL;
     legacy materialized_view.* takes final precedence.
   source: file/src/test/java/.../FileJdbcDriverDeepCoverageTest.java
-  tests: []
+  tests:
+    - file/FileJdbcDriverDeepCoverageTest#testParseConfigBatchSizeFloat
 
 - id: FILE-169
   module: file
@@ -2943,7 +3003,7 @@
 
 - id: FILE-170
   module: file
-  status: proposed
+  status: complete
   group: vector-search
   category: exact UDF results & null policy
   priority: MUST
@@ -2955,11 +3015,12 @@
     mismatch → IllegalArgumentException. Per-UDF null policy: cosine/dot/text/norm → 0.0, cosine-distance → 1.0,
     euclidean → Double.MAX_VALUE, normalize → null. TEXT_SIMILARITY = case-insensitive Jaccard.
   source: file/src/test/java/.../similarity/SimilarityFunctionsDeepTest.java
-  tests: []
+  tests:
+    - file/SimilarityFunctionsDeepTest#testCosineSimilarityIdenticalVectors
 
 - id: FILE-171
   module: file
-  status: proposed
+  status: complete
   group: table-naming
   category: multi-table suffix rule
   priority: MUST
@@ -2972,11 +3033,12 @@
     on-disk JSON filenames while excel/html/docx/pptx write lowercase snake_case — all normalizing to lowercase
     snake_case SQL table names.
   source: file/src/test/java/.../excel/ExcelNamingTest.java; pptx/PptxTableTest.java; markdown/MarkdownTableTest.java
-  tests: []
+  tests:
+    - file/ExcelNamingTest#testMultipleTablesWithSuffix
 
 - id: FILE-172
   module: file
-  status: proposed
+  status: complete
   group: html
   category: selector & header rules
   priority: SHOULD
@@ -2989,7 +3051,8 @@
     null selector → default conversion → largest table); tables with <th> use them as headers and skip the
     first row, tables without <th> get col0/col1/... and keep the first row; <br> splits text lines.
   source: file/src/test/java/.../converters/HtmlToJsonConverterTest.java
-  tests: []
+  tests:
+    - file/HtmlToJsonConverterTest#testConvertWithSelectorNoMatch
 
 - id: FILE-173
   module: file

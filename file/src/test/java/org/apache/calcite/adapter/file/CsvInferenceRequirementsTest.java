@@ -26,7 +26,11 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -128,6 +132,117 @@ public class CsvInferenceRequirementsTest {
     assertTrue(NullEquivalents.isNullRepresentation(""), "empty string is null");
     assertTrue(NullEquivalents.isNullRepresentation("   "), "whitespace-only is null");
     assertFalse(NullEquivalents.isNullRepresentation("data"), "real value is not null");
+  }
+
+  // ----------------------------------------------------------------------------------------------
+  // FILE-055 — refines FILE-003/098: assert the EXACT null-token set (not a contains() probe), the
+  // full set of documented case variants, and the ACTUAL nullable rule. The requirement's
+  // "nullable when null ratio exceeds nullableThreshold" clause is dead code (see C-32) and is staged
+  // @Disabled rather than asserted, since the code's real rule is binary (any null token -> nullable).
+  // ----------------------------------------------------------------------------------------------
+
+  @Test @Tag("FILE-055") void recognizedNullTokenSetIsExactlySixCanonicalTokens() {
+    assertEquals(new HashSet<>(Arrays.asList("NULL", "NA", "N/A", "NONE", "NIL", "")),
+        NullEquivalents.DEFAULT_NULL_EQUIVALENTS,
+        "the default null set is exactly these six canonical (upper-cased) tokens");
+    assertEquals(6, NullEquivalents.DEFAULT_NULL_EQUIVALENTS.size());
+  }
+
+  @Test @Tag("FILE-055") void everyDocumentedCaseVariantIsRecognizedAsNull() {
+    for (String t : new String[] {"", "  ", "NULL", "null", "Null", "NA", "N/A",
+        "NONE", "None", "NIL", "nil"}) {
+      assertTrue(NullEquivalents.isNullRepresentation(t), t + " must be a null token");
+    }
+    assertFalse(NullEquivalents.isNullRepresentation("data"));
+    assertFalse(NullEquivalents.isNullRepresentation("0"), "0 is a value, not a null token");
+    assertFalse(NullEquivalents.isNullRepresentation((String) null), "Java null is not a token match");
+  }
+
+  @Test @Tag("FILE-055") void anyNullTokenMakesColumnNullableWhenMakeAllNullableFalse(@TempDir Path dir)
+      throws Exception {
+    // makeAllNullable=false isolates the per-column nullable decision from the blanket flag.
+    TypeInferenceConfig noBlanketNull =
+        new TypeInferenceConfig(true, 1.0, 1000, 0.95, true, true, true, false, 0.0);
+
+    Path clean = Files.createTempFile(dir, "clean", ".csv");
+    Files.write(clean, "v\n1\n2\n3\n".getBytes(StandardCharsets.UTF_8));
+    ColumnTypeInfo noNulls =
+        CsvTypeInferrer.inferTypes(Sources.of(clean.toFile()), noBlanketNull, "UNCHANGED").get(0);
+    assertEquals(SqlTypeName.INTEGER, noNulls.inferredType);
+    assertFalse(noNulls.nullable, "no null tokens + makeAllNullable=false -> NOT nullable");
+
+    Path withNull = Files.createTempFile(dir, "withnull", ".csv");
+    Files.write(withNull, "v\n1\nNA\n3\n".getBytes(StandardCharsets.UTF_8));
+    ColumnTypeInfo oneNull =
+        CsvTypeInferrer.inferTypes(Sources.of(withNull.toFile()), noBlanketNull, "UNCHANGED").get(0);
+    assertEquals(SqlTypeName.INTEGER, oneNull.inferredType, "NA is a null token, column stays INTEGER");
+    assertTrue(oneNull.nullable, "a single null token (ratio 1/3) makes the column nullable");
+  }
+
+  @Test @Tag("FILE-055")
+  @Disabled("C-32: nullableThreshold is parsed/clamped/exposed by getter but has NO consumer in "
+      + "CsvTypeInferrer.determineType; the nullable decision is binary (nullValues>0 || "
+      + "makeAllNullable). The requirement's 'nullable when null ratio exceeds nullableThreshold' "
+      + "clause is unimplemented — pending code fix or requirement reword.")
+  void columnNullableOnlyWhenNullRatioExceedsThreshold_target() {
+    // INTENDED behavior (documented, NOT asserted as currently passing): with makeAllNullable=false
+    // and nullableThreshold=0.5, a column whose null ratio is below the threshold should remain NOT
+    // nullable, and only above it become nullable. The current code ignores the threshold entirely.
+    // No assertion of current (wrong) behavior is made here.
+  }
+
+  // ----------------------------------------------------------------------------------------------
+  // FILE-052 — inference-config defaults. TWO distinct "defaults" that legitimately differ:
+  //   * TypeInferenceConfig.defaultConfig() is a convenience constructor with enabled=TRUE;
+  //   * the SCHEMA/operand default routes through fromMap(...) which is DISABLED unless enabled:true,
+  //     so a schema with no csvTypeInference operand does NO inference -> columns stay VARCHAR.
+  // (The flat JDBC-URL aliases are NOT part of this requirement — tracked separately as the proposed
+  // feature FILE-174; the current JDBC path uses csvInferTypes/csvSamplingRate/... with no aliases.)
+  // ----------------------------------------------------------------------------------------------
+
+  @Test @Tag("FILE-052") void defaultConfigObjectIsEnabledWithExpectedDefaults() {
+    TypeInferenceConfig c = TypeInferenceConfig.defaultConfig();
+    assertTrue(c.isEnabled(), "the defaultConfig() convenience constructor is enabled");
+    assertEquals(0.1, c.getSamplingRate(), 0.0);
+    assertEquals(1000, c.getMaxSampleRows());
+    assertEquals(0.95, c.getConfidenceThreshold(), 0.0);
+    assertTrue(c.isInferDates());
+    assertTrue(c.isInferTimes());
+    assertTrue(c.isInferTimestamps());
+    assertTrue(c.isMakeAllNullable());
+    assertEquals(0.0, c.getNullableThreshold(), 0.0);
+  }
+
+  @Test @Tag("FILE-052") void schemaDefaultIsDisabledSoColumnsStayVarchar(@TempDir Path dir)
+      throws Exception {
+    // No operand -> fromMap(null) -> disabled, and blankStringsAsNull stays on.
+    TypeInferenceConfig none = TypeInferenceConfig.fromMap(null);
+    assertFalse(none.isEnabled(), "no csvTypeInference operand -> inference disabled");
+    assertTrue(none.isBlankStringsAsNull());
+    // An operand present but without enabled:true is still disabled (enabled is opt-in).
+    assertFalse(TypeInferenceConfig.fromMap(new HashMap<String, Object>()).isEnabled());
+    // Disabled inference returns NO column types -> the schema leaves every column VARCHAR.
+    Path f = Files.createTempFile(dir, "novary", ".csv");
+    Files.write(f, "v\n1\n2\n3\n".getBytes(StandardCharsets.UTF_8));
+    List<ColumnTypeInfo> r =
+        CsvTypeInferrer.inferTypes(Sources.of(f.toFile()), TypeInferenceConfig.disabled(), "UNCHANGED");
+    assertTrue(r.isEmpty(), "disabled inference emits no inferred types (all VARCHAR at the schema)");
+  }
+
+  @Test @Tag("FILE-052") void enabledFromMapAppliesPerFieldDefaults() {
+    Map<String, Object> m = new HashMap<String, Object>();
+    m.put("enabled", Boolean.TRUE);
+    TypeInferenceConfig c = TypeInferenceConfig.fromMap(m);
+    assertTrue(c.isEnabled());
+    assertEquals(0.1, c.getSamplingRate(), 0.0);
+    assertEquals(1000, c.getMaxSampleRows());
+    assertEquals(0.95, c.getConfidenceThreshold(), 0.0);
+    assertTrue(c.isInferDates());
+    assertTrue(c.isInferTimes());
+    assertTrue(c.isInferTimestamps());
+    assertTrue(c.isMakeAllNullable());
+    assertEquals(0.0, c.getNullableThreshold(), 0.0);
+    assertFalse(c.isBlankStringsAsNull(), "enabled path defaults blankStringsAsNull to false");
   }
 
   // ----------------------------------------------------------------------------------------------

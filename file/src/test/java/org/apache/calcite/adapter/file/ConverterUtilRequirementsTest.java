@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file;
 import org.apache.calcite.adapter.file.converters.ConverterUtils;
 import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
 import org.apache.calcite.adapter.file.execution.linq4j.CsvEnumerator;
+import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -45,6 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       at index 0), escaped-pipe preservation, and PascalCase on-disk JSON naming.</li>
  *   <li>FILE-156: {@link CsvEnumerator#parseDecimal} HALF_UP symmetric rounding and precision
  *       overflow.</li>
+ *   <li>FILE-130: {@link ParquetConversionUtil#needsConversion(File, File)} staleness decision —
+ *       convert iff the parquet cache is missing OR {@code source.lastModified() > parquet} (strict;
+ *       equal mtimes reuse), and any exception reading timestamps forces a convert. No tolerance
+ *       window. (RECODE of {@code ParquetConversionUtilDeepCoverageTest2}'s single newer-branch.)</li>
  * </ul>
  */
 @Tag("unit")
@@ -237,5 +242,74 @@ public class ConverterUtilRequirementsTest {
         () -> CsvEnumerator.parseDecimal(4, 0, "12345"));
     assertThrows(IllegalArgumentException.class,
         () -> CsvEnumerator.parseDecimal(4, 0, "-12345"));
+  }
+
+  // ============================================================ FILE-130 ======================
+  // ParquetConversionUtil.needsConversion(File source, File parquet): the parquet file IS the cache.
+  // Mtimes are set to fixed round-second literals so the >/== boundary is asserted exactly. Hermetic
+  // @TempDir; the exception branch uses a File whose lastModified() throws.
+
+  @Test @Tag("FILE-130") void needsConversionWhenParquetCacheMissing(@TempDir Path dir)
+      throws Exception {
+    File source = dir.resolve("data.csv").toFile();
+    Files.write(source.toPath(), "x\n1\n".getBytes(StandardCharsets.UTF_8));
+    File parquet = dir.resolve("data.parquet").toFile(); // never created
+    assertFalse(parquet.exists());
+    assertTrue(ParquetConversionUtil.needsConversion(source, parquet),
+        "a missing parquet cache must force conversion");
+  }
+
+  @Test @Tag("FILE-130") void needsConversionWhenSourceStrictlyNewer(@TempDir Path dir)
+      throws Exception {
+    File source = dir.resolve("data.csv").toFile();
+    File parquet = dir.resolve("data.parquet").toFile();
+    Files.write(source.toPath(), "x\n1\n".getBytes(StandardCharsets.UTF_8));
+    Files.write(parquet.toPath(), new byte[] {0});
+    assertTrue(source.setLastModified(2_000_000_000_000L));
+    assertTrue(parquet.setLastModified(1_000_000_000_000L));
+    assertTrue(ParquetConversionUtil.needsConversion(source, parquet),
+        "source strictly newer than parquet must force conversion");
+  }
+
+  @Test @Tag("FILE-130") void noConversionWhenMtimesEqual(@TempDir Path dir) throws Exception {
+    File source = dir.resolve("data.csv").toFile();
+    File parquet = dir.resolve("data.parquet").toFile();
+    Files.write(source.toPath(), "x\n1\n".getBytes(StandardCharsets.UTF_8));
+    Files.write(parquet.toPath(), new byte[] {0});
+    long t = 1_500_000_000_000L;
+    assertTrue(source.setLastModified(t));
+    assertTrue(parquet.setLastModified(t));
+    assertFalse(ParquetConversionUtil.needsConversion(source, parquet),
+        "equal mtimes reuse the cache (decision is strict >, not >=)");
+  }
+
+  @Test @Tag("FILE-130") void noConversionWhenParquetStrictlyNewer(@TempDir Path dir)
+      throws Exception {
+    File source = dir.resolve("data.csv").toFile();
+    File parquet = dir.resolve("data.parquet").toFile();
+    Files.write(source.toPath(), "x\n1\n".getBytes(StandardCharsets.UTF_8));
+    Files.write(parquet.toPath(), new byte[] {0});
+    assertTrue(source.setLastModified(1_000_000_000_000L));
+    assertTrue(parquet.setLastModified(2_000_000_000_000L));
+    assertFalse(ParquetConversionUtil.needsConversion(source, parquet),
+        "parquet newer than source reuses the cache");
+  }
+
+  @Test @Tag("FILE-130") void needsConversionWhenTimestampReadThrows(@TempDir Path dir)
+      throws Exception {
+    File source = dir.resolve("data.csv").toFile();
+    Files.write(source.toPath(), "x\n1\n".getBytes(StandardCharsets.UTF_8));
+    // A parquet "file" that exists but whose mtime read throws -> exception path -> convert.
+    File parquet = new File(dir.resolve("boom.parquet").toString()) {
+      @Override public boolean exists() {
+        return true;
+      }
+
+      @Override public long lastModified() {
+        throw new RuntimeException("mtime read failed");
+      }
+    };
+    assertTrue(ParquetConversionUtil.needsConversion(source, parquet),
+        "any exception reading timestamps must force conversion (no silent reuse)");
   }
 }

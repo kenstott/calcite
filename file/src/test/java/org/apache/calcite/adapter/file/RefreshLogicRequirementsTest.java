@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata.FileBaseline;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata.PartitionBaseline;
+import org.apache.calcite.adapter.file.refresh.AbstractRefreshableTable;
+import org.apache.calcite.adapter.file.refresh.RefreshInterval;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
@@ -26,6 +28,8 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -35,6 +39,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -51,6 +56,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>FILE-137: {@code MaterializedViewTable.materialize} is ONE-SHOT via
  * {@code materialized.compareAndSet(false,true)} with no staleness check — a second materialize is a
  * no-op within an instance.
+ *
+ * <p>FILE-134: {@code RefreshInterval.parse} accepts ISO-8601 (P/PT) and "&lt;n&gt; unit(s)"
+ * (case-insensitive, trimmed); null/empty/unmatched → null. {@code getEffectiveInterval} prefers the
+ * table-level interval over the schema-level one and yields null when neither parses — there is NO
+ * built-in table default. (RECODE of {@code refresh/RefreshIntervalTest} → exact-Duration golden.)
+ *
+ * <p>FILE-132: {@code AbstractRefreshableTable.needsRefresh} is the lazy refresh gate: a null
+ * interval never refreshes, a null lastRefreshTime always refreshes on first call, and otherwise it
+ * compares only the elapsed interval — it consults NO file state, so the interval gates before any
+ * mtime check. (RECODE strengthening {@code refresh/AbstractRefreshableTableTest}.)
  */
 @Tag("unit")
 public class RefreshLogicRequirementsTest {
@@ -268,5 +283,122 @@ public class RefreshLogicRequirementsTest {
     // any partially-written parquet, so a subsequent access retries cleanly. The current code sets the
     // flag before the work and never resets/cleans up on failure.
     // No assertion of current (wrong) behavior is made here.
+  }
+
+  // =============================================================================================
+  // FILE-134 — RefreshInterval.parse / getEffectiveInterval (pure, exact Duration golden)
+  // =============================================================================================
+
+  @Test @Tag("FILE-134")
+  void parseReturnsNullForNullEmptyOrUnmatched() {
+    assertNull(RefreshInterval.parse(null), "null input -> no refresh");
+    assertNull(RefreshInterval.parse(""), "empty input -> no refresh");
+    assertNull(RefreshInterval.parse("   "), "whitespace-only input -> no refresh");
+    assertNull(RefreshInterval.parse("5minutes"), "missing separator -> unmatched -> null");
+    assertNull(RefreshInterval.parse("5 fortnights"), "unsupported unit -> unmatched -> null");
+    assertNull(RefreshInterval.parse("soon"), "non-numeric -> unmatched -> null");
+    // Starts with P (ISO branch) but is not a valid Duration -> falls through -> unmatched -> null.
+    assertNull(RefreshInterval.parse("P1Y"), "period (not duration) falls through -> null");
+  }
+
+  @Test @Tag("FILE-134")
+  void parseHumanReadableYieldsExactDuration() {
+    assertEquals(Duration.ofSeconds(30), RefreshInterval.parse("30 seconds"));
+    assertEquals(Duration.ofSeconds(1), RefreshInterval.parse("1 second"));
+    assertEquals(Duration.ofMinutes(5), RefreshInterval.parse("5 minutes"));
+    assertEquals(Duration.ofMinutes(1), RefreshInterval.parse("1 minute"));
+    assertEquals(Duration.ofHours(2), RefreshInterval.parse("2 hours"));
+    assertEquals(Duration.ofHours(1), RefreshInterval.parse("1 hour"));
+    assertEquals(Duration.ofDays(3), RefreshInterval.parse("3 days"));
+    assertEquals(Duration.ofDays(1), RefreshInterval.parse("1 day"));
+    // Case-insensitive and trimmed.
+    assertEquals(Duration.ofMinutes(5), RefreshInterval.parse("5 MINUTES"));
+    assertEquals(Duration.ofMinutes(10), RefreshInterval.parse("  10 minutes  "));
+  }
+
+  @Test @Tag("FILE-134")
+  void parseIso8601YieldsExactDuration() {
+    assertEquals(Duration.ofSeconds(1), RefreshInterval.parse("PT1S"));
+    assertEquals(Duration.ofMinutes(5), RefreshInterval.parse("PT5M"));
+    assertEquals(Duration.ofHours(2), RefreshInterval.parse("PT2H"));
+    assertEquals(Duration.ofDays(2), RefreshInterval.parse("P2D"));
+  }
+
+  @Test @Tag("FILE-134")
+  void getEffectiveIntervalPrefersTableThenSchemaElseNull() {
+    // Table level wins when it parses.
+    assertEquals(Duration.ofHours(1),
+        RefreshInterval.getEffectiveInterval("1 hour", "1 day"));
+    // Null/empty/invalid table falls back to schema.
+    assertEquals(Duration.ofDays(1),
+        RefreshInterval.getEffectiveInterval(null, "1 day"));
+    assertEquals(Duration.ofHours(2),
+        RefreshInterval.getEffectiveInterval("", "2 hours"));
+    assertEquals(Duration.ofDays(1),
+        RefreshInterval.getEffectiveInterval("bogus", "1 day"));
+    // Neither parses -> no refresh: tables carry NO built-in default interval.
+    assertNull(RefreshInterval.getEffectiveInterval(null, null));
+    assertNull(RefreshInterval.getEffectiveInterval("bogus", "also-bogus"));
+  }
+
+  // =============================================================================================
+  // FILE-132 — AbstractRefreshableTable.needsRefresh lazy gate (interval before any file state)
+  // =============================================================================================
+  //
+  // A minimal concrete subclass exposes the three branches of the protected instance method. The
+  // lastRefreshTime field is protected, so the subclass sets it directly to drive the elapsed check.
+
+  /** Minimal concrete table to exercise the inherited needsRefresh() gate. */
+  private static final class ProbeRefreshableTable extends AbstractRefreshableTable {
+    ProbeRefreshableTable(@org.checkerframework.checker.nullness.qual.Nullable Duration interval) {
+      super("probe", interval);
+    }
+
+    void setLastRefreshTime(Instant t) {
+      this.lastRefreshTime = t;
+    }
+
+    @Override protected void doRefresh() {
+      // no-op: this test exercises only needsRefresh(), not the refresh body.
+    }
+
+    @Override public RefreshBehavior getRefreshBehavior() {
+      return RefreshBehavior.SINGLE_FILE;
+    }
+
+    @Override public org.apache.calcite.rel.type.RelDataType getRowType(
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
+      return typeFactory.builder()
+          .add("id", org.apache.calcite.sql.type.SqlTypeName.INTEGER)
+          .build();
+    }
+  }
+
+  @Test @Tag("FILE-132")
+  void nullIntervalNeverRefreshes() {
+    ProbeRefreshableTable t = new ProbeRefreshableTable(null);
+    assertFalse(t.needsRefresh(), "a null refresh interval means the table never refreshes");
+    // Even after a (hypothetical) prior refresh, a null interval still never refreshes.
+    t.setLastRefreshTime(Instant.now().minus(Duration.ofDays(365)));
+    assertFalse(t.needsRefresh(), "null interval gates out regardless of how long ago it last ran");
+  }
+
+  @Test @Tag("FILE-132")
+  void nonNullIntervalAlwaysRefreshesOnFirstCall() {
+    ProbeRefreshableTable t = new ProbeRefreshableTable(Duration.ofHours(1));
+    // lastRefreshTime is null on construction -> first call always refreshes.
+    assertTrue(t.needsRefresh(), "first access (null lastRefreshTime) always refreshes");
+  }
+
+  @Test @Tag("FILE-132")
+  void intervalGatesBeforeAnyFileState() {
+    ProbeRefreshableTable t = new ProbeRefreshableTable(Duration.ofHours(1));
+    // Within the interval: needsRefresh is false even though needsRefresh consults NO file/mtime.
+    t.setLastRefreshTime(Instant.now());
+    assertFalse(t.needsRefresh(),
+        "within the interval the gate returns false without ever checking file state");
+    // Beyond the interval: the elapsed check fires.
+    t.setLastRefreshTime(Instant.now().minus(Duration.ofHours(2)));
+    assertTrue(t.needsRefresh(), "once the interval has elapsed the table needs refresh");
   }
 }

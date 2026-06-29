@@ -29,15 +29,15 @@
 - {id: FILE-021, grade: WEAK, action: DONE, test: markdown/MarkdownTableTest#testMultipleTablesInMarkdown, note: "content via contains()"}
 - {id: FILE-034, grade: WEAK, action: PARTIAL, test: schema/SchemaEvolutionIntegrationTest#testCsvSchemaEvolution, note: "only columnCount>=3"}
 - {id: FILE-035, grade: STRONG, action: LINK, test: format/CompressedFileTest#testGzippedCsvFile}
-- {id: FILE-052, grade: STRONG, action: LINK, test: format/csv/CsvTypeInferrerTest#testDefaultConfigReturnsExpectedDefaults}
+- {id: FILE-052, grade: STRONG, action: RECODE, test: format/csv/CsvTypeInferrerTest#testDefaultConfigReturnsExpectedDefaults, note: "DEMOTE on golden-bar review (2026-06-29): asserts isEnabled()==true, contradicts default enabled=false; URL aliases untested"}
 - {id: FILE-053, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#numericPromotion}
 - {id: FILE-054, grade: PARTIAL, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest#timeAndSlashDateFormatsInfer (+FILE-097/006)"}
-- {id: FILE-055, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#defaultNullTokenSet}
+- {id: FILE-055, grade: PARTIAL, action: STAGED, note: "RECODEd -> CsvInferenceRequirementsTest (FILE-055): exact token set + binary nullable rule; nullableThreshold clause @Disabled (C-32, dead code)"}
 - {id: FILE-056, grade: PARTIAL, action: DONE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "nested-array child FK untested"}
 - {id: FILE-057, grade: NONE, action: REJECTED, note: "doc-only — excelConfig absent in source; requirement rejected"}
 - {id: FILE-058, grade: NONE, action: REJECTED, note: "doc-only — htmlConfig/crawlConfig absent in source; requirement rejected"}
 - {id: FILE-059, grade: NONE, action: REJECTED, note: "doc-only — xmlConfig absent in source; requirement rejected"}
-- {id: FILE-060, grade: STRONG, action: LINK, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning}
+- {id: FILE-060, grade: STRONG, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "DEMOTE on golden-bar review (2026-06-29): proves subdir __ joining only, not the lead embedded multi-table naming clause"}
 - {id: FILE-061, grade: PARTIAL, action: DONE, test: config/CasingTest#testDefaultSmartCasingBehavior, note: "hyphen->_ and nested path not pinned"}
 - {id: FILE-062, grade: STRONG, action: LINK, test: format/YamlFileTest#testNestedYaml}
 - {id: FILE-063, grade: PARTIAL, action: DONE, test: format/CompressedFileTest#testGzippedCsvFile, note: "only gz; bz2/xz/zip uncovered"}
@@ -71,18 +71,18 @@
 - {id: FILE-025, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "no include/exclude"}
 - {id: FILE-026, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "collision resolution untested"}
 - {id: FILE-027, grade: NONE, action: DONE, note: "WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFiles (complete)"}
-- {id: FILE-032, grade: STRONG, action: LINK, test: table/PartitionedTableTest#testHiveStylePartitionedTable}
+- {id: FILE-032, grade: STRONG, action: RECODE, test: table/PartitionedTableTest#testHiveStylePartitionedTable, note: "DEMOTE on golden-bar review (2026-06-29): only COUNT(*) + regex partition values; exact pruned result set not asserted"}
 - {id: FILE-033, grade: STRONG, action: LINK, test: partition/DuckDBPartitionStatusStoreTest#testFilterUnprocessed}
 - {id: FILE-045, grade: PARTIAL, action: DONE, test: FileSchemaStorageTypeCoverageTest#testLocalStorageTypeWithSourceDir, note: "precedence/forcing untested"}
 - {id: FILE-046, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-046)"}
 - {id: FILE-047, grade: NONE, action: WRITE, note: "operand default values"}
 - {id: FILE-048, grade: STRONG, action: LINK, test: config/CasingTest#testDefaultSmartCasingBehavior}
-- {id: FILE-049, grade: STRONG, action: LINK, test: config/EnvironmentVariableTest#testMissingVariableThrows}
+- {id: FILE-049, grade: STRONG, action: RECODE, test: config/EnvironmentVariableTest#testMissingVariableThrows, note: "DEMOTE on golden-bar review (2026-06-29): proves only undefined-throws; default fallback, resolution order, type conversion untested"}
 - {id: FILE-050, grade: STRONG, action: LINK, test: table/MultipleSchemaTest#testDuplicateSchemaNames}
 - {id: FILE-051, grade: NONE, action: DONE, note: "AperioDriverOperandTest#operandDefaults; URL-parse still pending"}
 - {id: FILE-064, grade: PARTIAL, action: DONE, test: storage/HDFSStorageProviderIntegrationTest#testRecursiveDirectoryListing, note: "auto-routing/auth untested; MiniDFS"}
 - {id: FILE-065, grade: WEAK, action: DONE, test: storage/S3MinioIntegrationCoverageTest#testConstructorWithMinioConfig, note: "live; region auto/creds untested"}
-- {id: FILE-066, grade: STRONG, action: LINK, test: storage/HttpStorageProviderAuthTest#testAuthPriority}
+- {id: FILE-066, grade: STRONG, action: RECODE, test: storage/HttpStorageProviderAuthTest#testAuthPriority, note: "DEMOTE on golden-bar review (2026-06-29): integration live HttpServer; only auth priority, not all auth types or retry policy"}
 - {id: FILE-067, grade: WEAK, action: DONE, test: storage/SftpStorageProviderCoverageTest#testParseSftpUriWithUserAndPassword, note: "key/hostkey/ftp untested"}
 - {id: FILE-068, grade: WEAK, action: RECODE, test: storage/sharepoint/SharePointLegacyAuthTest#testLegacyAuthentication, note: "live; only assertNotNull"}
 - {id: FILE-080, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-080)"}
@@ -92,14 +92,14 @@
 - {id: FILE-111, grade: PARTIAL, action: DONE, test: FileSchemaDeepCoverageTest3#testIsGlobPatternHttpUrl, note: "glob alias + bounded-depth not tied"}
 - {id: FILE-112, grade: STRONG, action: LINK, test: storage/StorageProviderFactoryCoverageTest#testS3Scheme}
 - {id: FILE-113, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-113)"}
-- {id: FILE-114, grade: STRONG, action: LINK, test: storage/HttpStorageProviderCoverageTest#testIsDirectoryAlwaysFalse}
+- {id: FILE-114, grade: STRONG, action: RECODE, test: storage/HttpStorageProviderCoverageTest#testIsDirectoryAlwaysFalse, note: "DEMOTE on golden-bar review (2026-06-29): only isDirectory-false fragment, not timeout/response-code/auth-precedence core"}
 - {id: FILE-115, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-115)"}
 - {id: FILE-116, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-116)"}
-- {id: FILE-117, grade: STRONG, action: LINK, test: storage/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists}
-- {id: FILE-118, grade: STRONG, action: LINK, test: storage/StorageProviderBaseCoverageTest#testHasChangedWithNullMetadata}
+- {id: FILE-117, grade: STRONG, action: RECODE, test: storage/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists, note: "DEMOTE on golden-bar review (2026-06-29): asserts empty list but resolved C-07 requires throw on missing path"}
+- {id: FILE-118, grade: STRONG, action: RECODE, test: storage/StorageProviderBaseCoverageTest#testHasChangedWithNullMetadata, note: "DEMOTE on golden-bar review (2026-06-29): only null-cached->changed slice, not size/etag/lastModified/IOException contract"}
 - {id: FILE-141, grade: STRONG, action: LINK, test: partition/IncrementalTrackerTest#testPeriodCompletionKeyYearOnlyNaFills}
 - {id: FILE-142, grade: STRONG, action: LINK, test: partition/S3HivePipelineTrackerEmptyHwmTest#emptyAboveHighWaterMarkStaysPending}
-- {id: FILE-146, grade: STRONG, action: LINK, test: FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles}
+- {id: FILE-146, grade: STRONG, action: RECODE, test: FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles, note: "DEMOTE on golden-bar review (2026-06-29): only schema name=files; snake_case params/defaults/Aperio-distinction untested"}
 - {id: FILE-147, grade: NONE, action: DONE, note: "AperioDriverOperandTest; varExpansion pins pre-C-14 behavior"}
 - {id: FILE-149, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-149)"}
 - {id: FILE-151, grade: PARTIAL, action: DONE, test: FileReaderExceptionTest#testIsException, note: "no throw-sites; SQLStates (C-11)"}
@@ -108,8 +108,8 @@
 - {id: FILE-161, grade: STRONG, action: LINK, test: partition/PartitionDetectorTest#testDetectPartitionSchemeInconsistentColumns}
 - {id: FILE-165, grade: WEAK, action: DONE, test: partition/S3HivePeriodMarkerTest#periodMarkedOnlyWhenAllCombosDone, note: "live MinIO gated"}
 - {id: FILE-168, grade: STRONG, action: LINK, test: FileJdbcDriverDeepCoverageTest#testParseConfigBatchSizeFloat}
-- {id: FILE-169, grade: STRONG, action: LINK, test: metadata/ConstraintMetadataJdbcTest#getPrimaryKeys_fromPartitionedTablesPrimaryKeyField}
-- {id: FILE-173, grade: STRONG, action: LINK, test: OracleLexicalSettingsTest#testCaseSensitivityDemo}
+- {id: FILE-169, grade: STRONG, action: RECODE, test: metadata/ConstraintMetadataJdbcTest#getPrimaryKeys_fromPartitionedTablesPrimaryKeyField, note: "DEMOTE on golden-bar review (2026-06-29): fixtures shell out to external duckdb CLI (ProcessBuilder); breaks hermetic bar"}
+- {id: FILE-173, grade: STRONG, action: RECODE, test: OracleLexicalSettingsTest#testCaseSensitivityDemo, note: "DEMOTE on golden-bar review (2026-06-29): information_schema checks use count>0 + OR-tolerant message match"}
 
 # ---- engine / optimization / statistics / vector ----
 - {id: FILE-037, grade: NONE, action: WRITE, note: "duckdb x storageType httpfs parity"}
@@ -127,8 +127,8 @@
 - {id: FILE-078, grade: WEAK, action: DONE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "only '<'; no pushed-vs-unpushed"}
 - {id: FILE-079, grade: WEAK, action: RECODE, test: metadata/ConstraintMetadataJdbcTest, note: "metadata only; elimination not run"}
 - {id: FILE-093, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-093)"}
-- {id: FILE-094, grade: STRONG, action: LINK, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityWithFloatArray}
-- {id: FILE-119, grade: STRONG, action: LINK, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine}
+- {id: FILE-094, grade: STRONG, action: RECODE, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityWithFloatArray, note: "DEMOTE on golden-bar review (2026-06-29): single float[] tolerance check; no cross-encoding equivalence or DuckDB pushdown"}
+- {id: FILE-119, grade: STRONG, action: RECODE, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine, note: "DEMOTE on golden-bar review (2026-06-29): pins constant parquet but resolved C-02 is duckdb-if-available; getDefaultEngine untested"}
 - {id: FILE-120, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-120)"}
 - {id: FILE-121, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-121)"}
 - {id: FILE-122, grade: WEAK, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarWithWhereClauseNotReplaced, note: "result-only; no VALUES/match-cond"}
@@ -144,7 +144,7 @@
 # ---- refresh / iceberg / write / conversion / concurrency / raw-cache / document-etl ----
 - {id: FILE-028, grade: PARTIAL, action: DONE, test: refresh/AbstractRefreshableTableTest#testIsFileModifiedAfterUpdate, note: "post-change serve not asserted"}
 - {id: FILE-029, grade: NONE, action: DONE, note: "RefreshIdempotenceTest#reingestionDoesNotRewriteParquetCache (complete)"}
-- {id: FILE-030, grade: STRONG, action: LINK, test: etl/ParquetMaterializationWriterTest#testWriteSingleBatchProducesParquetFiles}
+- {id: FILE-030, grade: STRONG, action: RECODE, test: etl/ParquetMaterializationWriterTest#testWriteSingleBatchProducesParquetFiles, note: "DEMOTE on golden-bar review (2026-06-29): integration-tagged DuckDB round-trip; only row/file counts, no value/type identity"}
 - {id: FILE-031, grade: WEAK, action: DONE, test: etl/IcebergMaterializationWriterTest#testIcebergWriteBatchAndCommit, note: "non-null only; no readback identity"}
 - {id: FILE-036, grade: WEAK, action: DONE, test: iceberg/CompactionRunnerCoverageTest#testMainWithLocalWarehouseAndCompaction, note: "no before/after result identity"}
 - {id: FILE-071, grade: PARTIAL, action: DONE, test: iceberg/IcebergTimeRangeTest#testTimeRangeIntegration, note: "HEAD/snapshotId/asOf not verified"}
@@ -154,9 +154,9 @@
 - {id: FILE-082, grade: WEAK, action: DONE, test: etl/HttpSourceCoverageTest#testConstructorWithResponseTransformer, note: "'[]' contract not asserted"}
 - {id: FILE-083, grade: PARTIAL, action: DONE, test: etl/DimensionTypeTest#testFromStringYearRange, note: "cartesian/window not verified"}
 - {id: FILE-084, grade: WEAK, action: DONE, test: partition/IncrementalTrackerTest#testNoopIsProcessedReturnsFalse, note: "S3 resumability untested"}
-- {id: FILE-085, grade: STRONG, action: LINK, test: etl/RowTransformerStreamingTest#transformersChainAndComposeFanOut}
+- {id: FILE-085, grade: STRONG, action: RECODE, test: etl/RowTransformerStreamingTest#transformersChainAndComposeFanOut, note: "DEMOTE on golden-bar review (2026-06-29): proves rowTransformer chaining only, not full hook order/error defaults/pagination"}
 - {id: FILE-086, grade: NONE, action: DONE, note: "FINDING: schema-level refreshInterval did not disable parquet cache; test @Disabled"}
-- {id: FILE-087, grade: STRONG, action: LINK, test: materialization/MaterializedViewTableTest#materializeOnlyOnce}
+- {id: FILE-087, grade: STRONG, action: RECODE, test: materialization/MaterializedViewTableTest#materializeOnlyOnce, note: "DEMOTE on golden-bar review (2026-06-29): integration-tagged; only mtime/size proxy, no exact output or optimizer rewrite"}
 - {id: FILE-088, grade: STRONG, action: LINK, test: etl/FreshnessSkipGateTest#testUnchangedTokenCausesSkip}
 - {id: FILE-089, grade: STRONG, action: LINK, test: etl/CalendarPeriodProviderTest#daysCalendarCorrectLengths}
 - {id: FILE-090, grade: STRONG, action: LINK, test: etl/DatasetTypeTest#snapshotProcessesOnlyMostRecentCombination}
@@ -165,11 +165,11 @@
 - {id: FILE-127, grade: PARTIAL, action: DONE, test: cache/ConcurrentParquetCacheTest#testConcurrentConversionSerializesAccess, note: "lock/atomic-move/remote not verified"}
 - {id: FILE-128, grade: WEAK, action: DONE, test: cache/SourceFileLockManagerTest#testMultipleReadLocks, note: "ref-count/timing/write-reject untested"}
 - {id: FILE-129, grade: WEAK, action: DONE, test: iceberg/CrossProcessCommitLockTest#differentTablesDoNotBlock, note: "lock-file path/keying not pinned"}
-- {id: FILE-130, grade: STRONG, action: LINK, test: format/parquet/ParquetConversionUtilDeepCoverageTest2#testNeedsConversionParquetNewer}
+- {id: FILE-130, grade: STRONG, action: DONE, note: "RECODEd -> ConverterUtilRequirementsTest (FILE-130): all needsConversion branches incl. equal-mtime + throw->convert"}
 - {id: FILE-131, grade: WEAK, action: DONE, test: metadata/ConversionMetadataTest#testRecordConversionWithParquetCacheFile, note: "preserve/glob-rule not asserted"}
-- {id: FILE-132, grade: STRONG, action: LINK, test: refresh/AbstractRefreshableTableTest#testNeedsRefreshWithNullInterval}
+- {id: FILE-132, grade: STRONG, action: DONE, note: "RECODEd -> RefreshLogicRequirementsTest (FILE-132): needsRefresh three branches via probe subclass"}
 - {id: FILE-133, grade: WEAK, action: DONE, test: refresh/ConversionFileWatcherTest#testWatchExcelFile, note: "no timer/mtime-advance/reconvert"}
-- {id: FILE-134, grade: STRONG, action: LINK, test: refresh/RefreshIntervalTest#testParseSeconds}
+- {id: FILE-134, grade: STRONG, action: DONE, note: "RECODEd -> RefreshLogicRequirementsTest (FILE-134): exact-Duration golden over units/ISO/precedence; RefreshIntervalTest archived"}
 - {id: FILE-135, grade: PARTIAL, action: DONE, test: refresh/RefreshablePartitionedParquetTableCoverageTest#testFilesChangedComparedToBaselineNullBaseline, note: "per-file priority/async not pinned (C-20)"}
 - {id: FILE-136, grade: WEAK, action: DONE, test: refresh/RefreshableParquetCacheTableCoverageTest#testConstructorWithExistingSourceFile, note: "delete/swap/notify untested"}
 - {id: FILE-137, grade: PARTIAL, action: DONE, test: materialization/MaterializedViewTableTest#materializeOnlyOnce, note: "failure-reset path untested (C-21)"}
@@ -179,9 +179,9 @@
 - {id: FILE-143, grade: WEAK, action: DONE, test: etl/HttpSourceDeepCoverageTest3#testHasValidRawCacheLocalExists, note: "no-TTL/cap-keying not verified (C-05)"}
 - {id: FILE-144, grade: PARTIAL, action: DONE, test: iceberg/IcebergTableWriterCoverageTest#testCommitDataFilesEmpty, note: "version-hint/orphan not asserted"}
 - {id: FILE-145, grade: WEAK, action: DONE, test: iceberg/IcebergEnumeratorTest#testSnapshotIdQuery, note: "precedence/stats-gap untested (C-22)"}
-- {id: FILE-163, grade: STRONG, action: LINK, test: etl/IcebergMaterializationWriterTest#testIcebergInitializeWithNullConfigThrows}
-- {id: FILE-164, grade: STRONG, action: LINK, test: iceberg/IcebergMetadataTablesTest#testCreateMetadataTablesReturnsAllExpectedTables}
-- {id: FILE-166, grade: STRONG, action: LINK, test: converters/FileConversionManagerTest#testRequiresConversionForDocx}
+- {id: FILE-163, grade: STRONG, action: RECODE, test: etl/IcebergMaterializationWriterTest#testIcebergInitializeWithNullConfigThrows, note: "DEMOTE on golden-bar review (2026-06-29): integration-tagged (Hadoop/Iceberg/DuckDB live deps)"}
+- {id: FILE-164, grade: STRONG, action: RECODE, test: iceberg/IcebergMetadataTablesTest#testCreateMetadataTablesReturnsAllExpectedTables, note: "DEMOTE on golden-bar review (2026-06-29): only size==5 + containsKey; column-count and populated-partition facts omitted"}
+- {id: FILE-166, grade: STRONG, action: RECODE, test: converters/FileConversionManagerTest#testRequiresConversionForDocx, note: "DEMOTE on golden-bar review (2026-06-29): only requiresConversion docx==true; isDirectlyUsable/extraction/direct-usable half untested"}
 - {id: FILE-167, grade: PARTIAL, action: DONE, test: cache/ConcurrentParquetCacheTest#testConcurrentConversionSerializesAccess, note: "atomicity/schema-scope not pinned"}
 - {id: FILE-125, grade: NONE, action: DONE, note: "ResolvedBugTargetsTest: @Disabled /tmp-marker guard (C-19)"}
 - {id: FILE-162, grade: PARTIAL, action: DONE, test: storage/HttpStorageProviderTest#testPostRequestWithBody, note: "POST/GraphQL covered; mimeType override not pinned"}
