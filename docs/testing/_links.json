@@ -1,9 +1,4 @@
 {
-  "FILE-036": ["file/IcebergCompactionEnumeratorRequirementsTest"],
-  "FILE-075": ["file/IcebergCompactionEnumeratorRequirementsTest"],
-  "FILE-145": ["file/IcebergCompactionEnumeratorRequirementsTest"],
-  "FILE-133": ["file/WatcherRawCacheRequirementsTest"],
-  "FILE-143": ["file/WatcherRawCacheRequirementsTest"],
-  "FILE-018": ["file/HtmlCrawlerHttpPostRequirementsTest"],
-  "FILE-162": ["file/HtmlCrawlerHttpPostRequirementsTest"]
+  "FILE-023": ["file/storage/S3StorageProviderIntegrationTest"],
+  "FILE-065": ["file/storage/S3StorageProviderIntegrationTest"]
 }

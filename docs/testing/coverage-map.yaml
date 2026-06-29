@@ -66,7 +66,7 @@
 
 # ---- storage / walking / config / jdbc / constraints ----
 - {id: FILE-022, grade: WEAK, action: DONE, test: storage/LocalFileStorageProviderTest#testListFilesRecursive, note: "loose boolean flags not catalog"}
-- {id: FILE-023, grade: WEAK, action: RECODE, test: storage/S3MinioIntegrationCoverageTest#testFullLifecycleWriteListReadDelete, note: "live MinIO"}
+- {id: FILE-023, grade: WEAK, action: DONE, test: storage/S3MinioIntegrationCoverageTest#testFullLifecycleWriteListReadDelete, note: "live MinIO"}
 - {id: FILE-024, grade: WEAK, action: RECODE, test: storage/StorageProviderIntegrationTest#testWriteReadDeleteLifecycle, note: "only local; remote providers untested"}
 - {id: FILE-025, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "no include/exclude"}
 - {id: FILE-026, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "collision resolution untested"}
@@ -81,7 +81,7 @@
 - {id: FILE-050, grade: STRONG, action: LINK, test: table/MultipleSchemaTest#testDuplicateSchemaNames}
 - {id: FILE-051, grade: NONE, action: DONE, note: "AperioDriverOperandTest#operandDefaults; URL-parse still pending"}
 - {id: FILE-064, grade: PARTIAL, action: RECODE, test: storage/HDFSStorageProviderIntegrationTest#testRecursiveDirectoryListing, note: "auto-routing/auth untested; MiniDFS"}
-- {id: FILE-065, grade: WEAK, action: RECODE, test: storage/S3MinioIntegrationCoverageTest#testConstructorWithMinioConfig, note: "live; region auto/creds untested"}
+- {id: FILE-065, grade: WEAK, action: DONE, test: storage/S3MinioIntegrationCoverageTest#testConstructorWithMinioConfig, note: "live; region auto/creds untested"}
 - {id: FILE-066, grade: STRONG, action: LINK, test: storage/HttpStorageProviderAuthTest#testAuthPriority}
 - {id: FILE-067, grade: WEAK, action: RECODE, test: storage/SftpStorageProviderCoverageTest#testParseSftpUriWithUserAndPassword, note: "key/hostkey/ftp untested"}
 - {id: FILE-068, grade: WEAK, action: RECODE, test: storage/sharepoint/SharePointLegacyAuthTest#testLegacyAuthentication, note: "live; only assertNotNull"}

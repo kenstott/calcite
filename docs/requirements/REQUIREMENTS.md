@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 91 complete, 9 in-progress, 68 proposed, 3 rejected)
+## file  (173: 2 accepted, 93 complete, 9 in-progress, 66 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -31,7 +31,7 @@
 | [.] | FILE-020 | SHOULD | behavioral | xml / Extraction (decomposition) | XmlTableScanner / XmlToJsonConverter emits JSON per detected table; catalog golden pins the set. | — |
 | [x] | FILE-021 | MAY | behavioral | markdown / Extraction (decomposition) | MarkdownTableScanner emits JSON per detected table; catalog golden pins the set. | file/TableExtractionRequirementsTest |
 | [x] | FILE-022 | MUST | behavioral | storage/local / Storage seam | LocalFileStorageProvider.listFiles returns the correct catalog (recursive enumeration) and openInputStream re… | file/CompressionStorageRequirementsTest |
-| [.] | FILE-023 | MUST | behavioral | storage/s3 / Storage seam | S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam. | — |
+| [x] | FILE-023 | MUST | behavioral | storage/s3 / Storage seam | S3StorageProvider listFiles catalog + openInputStream bytes, verified at the seam. | file/storage/S3StorageProviderIntegrationTest |
 | [.] | FILE-024 | SHOULD | behavioral | storage/remote / Storage seam | Remote providers (http, ftp, sftp, hdfs, sharepoint) each deliver correct bytes and (where listable) the corr… | — |
 | [x] | FILE-025 | MUST | behavioral | walking / Discovery | A directory/prefix walk discovers the correct file-set under recursion, glob and include/exclude rules; the d… | file/WalkingDiscoveryRequirementsTest |
 | [x] | FILE-026 | MUST | structural | walking / Table-set assembly | The discovered catalog assembles into a schema: table names derived from paths, partition columns recognized,… | file/WalkingDiscoveryRequirementsTest |
@@ -73,7 +73,7 @@
 | [.] | FILE-062 | SHOULD | behavioral | yaml / yaml flattening | YAML nested keys flatten like JSON (profile.age→profile_age); list-of-records → rows. | — |
 | [x] | FILE-063 | SHOULD | behavioral | compression / supported codecs | Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompre… | file/CompressionStorageRequirementsTest |
 | [.] | FILE-064 | SHOULD | behavioral | storage/hdfs / hdfs routing & auth | directory starting hdfs:// auto-routes to HDFS (recursive listing like local/S3); namenode from fs.defaultFS … | — |
-| [.] | FILE-065 | SHOULD | behavioral | storage/s3 / s3-compatible endpoints | S3 supports MinIO/Wasabi/R2 via custom endpoint + options.usePathStyleAccess=true; region may be "auto" (R2);… | — |
+| [x] | FILE-065 | SHOULD | behavioral | storage/s3 / s3-compatible endpoints | S3 supports MinIO/Wasabi/R2 via custom endpoint + options.usePathStyleAccess=true; region may be "auto" (R2);… | file/storage/S3StorageProviderIntegrationTest |
 | [.] | FILE-066 | SHOULD | behavioral | storage/http / http auth & error policy | HTTP auth types bearer/basic/apikey/oauth2; error handling is timeout (httpTimeout) + simple retry count (htt… | — |
 | [.] | FILE-067 | SHOULD | behavioral | storage/sftp / sftp/ftp auth & host-key | SFTP (port 22) password or SSH key (privateKeyPath + passphrase); host-key via options.strictHostKeyChecking … | — |
 | [.] | FILE-068 | MUST | behavioral | storage/sharepoint / sharepoint auth modes | storageType sharepoint supports oauth (clientId/secret/tenantId) and ntlm; client-secret auth requires legacy… | — |

@@ -106,6 +106,14 @@ dependencies {
     // Test dependencies for mock-based tests
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.apache.hadoop:hadoop-minicluster:3.3.6")
+    // Testcontainers for live-service storage integration tests (S3/MinIO, FTP, SFTP, ClickHouse).
+    // GenericContainer covers all images; these tests are @Tag("integration") and require a Docker daemon.
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    // Testcontainers 1.20.4 ships docker-java zerodep 3.4.0, whose unix-socket transport
+    // gets HTTP 400 from the Docker Desktop (WSL2) proxy on /info. The 3.5.x zerodep
+    // transport fixes the request framing the Desktop proxy requires. Test-scoped override.
+    testImplementation("com.github.docker-java:docker-java-transport-zerodep:3.5.3")
 
     annotationProcessor("org.immutables:value")
     compileOnly("org.immutables:value-annotations")
@@ -214,6 +222,34 @@ tasks.test {
         }
     }
     maxHeapSize = "2g"
+    // Forward Testcontainers/Docker connection env to the forked test JVM. Gradle does not
+    // propagate the launching environment to test workers by default, so Testcontainers
+    // integration tests cannot otherwise see a custom DOCKER_HOST (needed on Docker Desktop
+    // /WSL2 where the default unix socket is the CLI proxy). Only forwarded when set, so
+    // normal unit-test runs are unaffected.
+    listOf("DOCKER_HOST", "DOCKER_API_VERSION", "TESTCONTAINERS_RYUK_DISABLED",
+        "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE").forEach { name ->
+        System.getenv(name)?.let { environment(name, it) }
+    }
+    // Allow overriding the Docker host via -PdockerHost=tcp://... (more reliable than env,
+    // which Gradle does not always forward to test workers). Used for Testcontainers on
+    // Docker Desktop/WSL2 where the default unix socket is the CLI proxy, not the engine.
+    if (project.hasProperty("dockerHost")) {
+        val dh = project.property("dockerHost").toString()
+        environment("DOCKER_HOST", dh)
+        // Testcontainers' EnvironmentAndSystemPropertyClientProviderStrategy also reads
+        // DOCKER_HOST as a JVM system property, which Gradle reliably forwards to the worker.
+        systemProperty("DOCKER_HOST", dh)
+        environment("TESTCONTAINERS_RYUK_DISABLED", "true")
+        systemProperty("testcontainers.ryuk.disabled", "true")
+        // tc-java 1.20.4's docker-java defaults to API 1.32, which Docker Engine 25+ rejects
+        // (MinAPIVersion 1.40). Pin a supported version. docker-java reads the env var
+        // DOCKER_API_VERSION and the system property api.version.
+        val apiVer = if (project.hasProperty("dockerApiVersion"))
+            project.property("dockerApiVersion").toString() else "1.43"
+        environment("DOCKER_API_VERSION", apiVer)
+        systemProperty("api.version", apiVer)
+    }
     jvmArgs(
         "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED",
         "--add-opens=java.base/java.nio=org.apache.arrow.memory.netty,ALL-UNNAMED",
