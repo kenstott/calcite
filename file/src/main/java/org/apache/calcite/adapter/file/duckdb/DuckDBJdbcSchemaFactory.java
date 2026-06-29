@@ -496,22 +496,8 @@ public class DuckDBJdbcSchemaFactory {
               }
             }
 
-            // Exclude Iceberg metadata files from caching — they are mutable (updated on
-            // every ETL run) so caching them would hide new data until cache expiry.
-            // Parquet data files have immutable unique paths and are safe to cache.
             if (!isWin) {
-              String[] exclusions = {
-                  ".*\\.metadata\\.json$",       // Iceberg snapshot metadata
-                  ".*version-hint\\.text$",      // Iceberg current-version pointer
-                  ".*/metadata/[^/]+\\.avro$"    // Iceberg manifest and manifest-list files
-              };
-              for (String regex : exclusions) {
-                try (Statement excl = conn.createStatement()) {
-                  excl.execute("SELECT cache_httpfs_add_exclusion_regex('" + regex + "')");
-                } catch (SQLException e) {
-                  LOGGER.debug("Could not add cache_httpfs exclusion '{}': {}", regex, e.getMessage());
-                }
-              }
+              addIcebergCacheExclusions(conn);
             }
           }
           return conn;
@@ -1024,6 +1010,33 @@ public class DuckDBJdbcSchemaFactory {
       LOGGER.info("cache_httpfs persistent cache directory: {}", cacheDir);
     } catch (Exception e) {
       LOGGER.debug("Could not configure cache_httpfs: {}", e.getMessage());
+    }
+
+    // Register the metadata exclusions on THIS connection too. This is the setup connection
+    // that creates every Iceberg view (reading all the .metadata.json/version-hint/.avro files);
+    // without the exclusions here those mutable files get cached, which is the leak the startup
+    // purge then has to clean up. The DataSource's query connections add them separately.
+    addIcebergCacheExclusions(conn);
+  }
+
+  /**
+   * Registers cache_httpfs exclusion regexes so mutable Iceberg metadata is never cached. They
+   * are matched against the file path; Parquet data files (immutable, unique paths) are not
+   * matched and remain cached for performance. Must run before the connection reads any Iceberg
+   * metadata. Each add fails silently if cache_httpfs is not loaded.
+   */
+  private static void addIcebergCacheExclusions(Connection conn) {
+    String[] exclusions = {
+        ".*\\.metadata\\.json$",       // Iceberg snapshot metadata
+        ".*version-hint\\.text$",      // Iceberg current-version pointer
+        ".*/metadata/[^/]+\\.avro$"    // Iceberg manifest and manifest-list files
+    };
+    for (String regex : exclusions) {
+      try (Statement excl = conn.createStatement()) {
+        excl.execute("SELECT cache_httpfs_add_exclusion_regex('" + regex + "')");
+      } catch (SQLException e) {
+        LOGGER.debug("Could not add cache_httpfs exclusion '{}': {}", regex, e.getMessage());
+      }
     }
   }
 
