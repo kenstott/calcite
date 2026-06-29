@@ -40,6 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
 
@@ -1012,6 +1013,10 @@ public class DuckDBJdbcSchemaFactory {
       dir.mkdirs();
     }
 
+    // Self-heal: evict any mutable Iceberg metadata that leaked into the persistent cache
+    // before/around this run, so a stale snapshot pointer can never be served again.
+    purgeStaleIcebergMetadataFromCache(dir);
+
     // Apply settings; each fails silently if extension is not loaded
     try {
       conn.createStatement().execute(
@@ -1019,6 +1024,52 @@ public class DuckDBJdbcSchemaFactory {
       LOGGER.info("cache_httpfs persistent cache directory: {}", cacheDir);
     } catch (Exception e) {
       LOGGER.debug("Could not configure cache_httpfs: {}", e.getMessage());
+    }
+  }
+
+  /** cache_httpfs directories already purged of stale Iceberg metadata this JVM. */
+  private static final Set<String> PURGED_CACHE_DIRS = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Evicts cached mutable Iceberg metadata from the {@code cache_httpfs} directory so a stale
+   * snapshot pointer can never survive a restart.
+   *
+   * <p>{@code cache_httpfs} keys each entry by its origin filename
+   * ({@code <hash>-<filename>-<offset>-<length>}). Iceberg metadata is mutable — every ETL
+   * compaction rewrites {@code v<N>.metadata.json}, advances {@code version-hint.text}, and
+   * expires old {@code snap-*.avro} / {@code *-m<N>.avro} manifest files — while data is written
+   * only as immutable {@code .parquet}. Caching a {@code .metadata.json} therefore pins the
+   * reader to a snapshot that may already be deleted (its manifest list 404s), which is exactly
+   * what happened here. Matching {@code .metadata.json}, {@code version-hint.text}, and
+   * {@code .avro} (Iceberg's only non-Parquet payload) evicts precisely the mutable metadata and
+   * leaves the perf-critical Parquet cached.
+   *
+   * <p>The per-connection exclusion regexes keep new metadata out of the cache; this clears
+   * anything that leaked in before they took effect (e.g. older builds). Runs once per cache
+   * directory per JVM.
+   */
+  private static void purgeStaleIcebergMetadataFromCache(File cacheDir) {
+    if (cacheDir == null || !cacheDir.isDirectory()
+        || !PURGED_CACHE_DIRS.add(cacheDir.getAbsolutePath())) {
+      return;
+    }
+    File[] entries = cacheDir.listFiles();
+    if (entries == null) {
+      return;
+    }
+    int removed = 0;
+    for (File f : entries) {
+      String name = f.getName();
+      if (name.contains(".metadata.json") || name.contains("version-hint.text")
+          || name.contains(".avro")) {
+        if (f.delete()) {
+          removed++;
+        }
+      }
+    }
+    if (removed > 0) {
+      LOGGER.info("cache_httpfs: purged {} stale Iceberg metadata entries from {}",
+          removed, cacheDir.getAbsolutePath());
     }
   }
 
