@@ -41,7 +41,7 @@
 - {id: FILE-061, grade: PARTIAL, action: RECODE, test: config/CasingTest#testDefaultSmartCasingBehavior, note: "hyphen->_ and nested path not pinned"}
 - {id: FILE-062, grade: STRONG, action: LINK, test: format/YamlFileTest#testNestedYaml}
 - {id: FILE-063, grade: PARTIAL, action: RECODE, test: format/CompressedFileTest#testGzippedCsvFile, note: "only gz; bz2/xz/zip uncovered"}
-- {id: FILE-073, grade: PARTIAL, action: RECODE, test: schema/SchemaStrategyTest#testParquetDefaultStrategy, note: "defaults pinned; runtime behavior not"}
+- {id: FILE-073, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-073)"}
 - {id: FILE-096, grade: PARTIAL, action: RECODE, test: CsvInferenceRequirementsTest#allStringColumnIsVarchar, note: "threshold-promotion @Disabled (C-08)"}
 - {id: FILE-097, grade: PARTIAL, action: RECODE, test: CsvInferenceRequirementsTest#numericPromotion, note: "1e5 target @Disabled (C-09)"}
 - {id: FILE-098, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#defaultNullTokenSet}
@@ -59,7 +59,7 @@
 - {id: FILE-148, grade: STRONG, action: LINK, test: util/SmartCasingTest#testNumberHandling}
 - {id: FILE-155, grade: STRONG, action: LINK, test: format/csv/CsvTypeConverterTest#testConvertTime}
 - {id: FILE-156, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-156)"}
-- {id: FILE-157, grade: PARTIAL, action: RECODE, test: format/csv/CsvTypeInferrerTest#testInferTypesHeaderOnlyCsv, note: "NL date + cross-conn not covered"}
+- {id: FILE-157, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-157)"}
 - {id: FILE-158, grade: STRONG, action: LINK, test: format/json/JsonMultiTableFactoryTest#testNameConflictResolution}
 - {id: FILE-171, grade: STRONG, action: LINK, test: ExcelNamingTest#testMultipleTablesWithSuffix}
 - {id: FILE-172, grade: STRONG, action: LINK, test: converters/HtmlToJsonConverterTest#testConvertWithSelectorNoMatch}
@@ -85,8 +85,8 @@
 - {id: FILE-066, grade: STRONG, action: LINK, test: storage/HttpStorageProviderAuthTest#testAuthPriority}
 - {id: FILE-067, grade: WEAK, action: RECODE, test: storage/SftpStorageProviderCoverageTest#testParseSftpUriWithUserAndPassword, note: "key/hostkey/ftp untested"}
 - {id: FILE-068, grade: WEAK, action: RECODE, test: storage/sharepoint/SharePointLegacyAuthTest#testLegacyAuthentication, note: "live; only assertNotNull"}
-- {id: FILE-080, grade: PARTIAL, action: RECODE, test: metadata/TableConstraintsTest#testFromConfigWithCompositePrimaryKey, note: "positional FK + not-enforced untested"}
-- {id: FILE-081, grade: PARTIAL, action: RECODE, test: metadata/ConstraintMetadataJdbcTest#getImportedKeys_returnsConfiguredFkRelationship, note: "getIndexInfo/isKey untested"}
+- {id: FILE-080, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-080)"}
+- {id: FILE-081, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-081)"}
 - {id: FILE-095, grade: PARTIAL, action: RECODE, test: error/ErrorHandlingTest#testEmptyDirectory, note: "SQLStates untested (C-11 target)"}
 - {id: FILE-110, grade: PARTIAL, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testNonRecursiveModeOnlyFindsRootFiles, note: "string-true case; C-01 default-true target"}
 - {id: FILE-111, grade: PARTIAL, action: RECODE, test: FileSchemaDeepCoverageTest3#testIsGlobPatternHttpUrl, note: "glob alias + bounded-depth not tied"}
@@ -101,7 +101,7 @@
 - {id: FILE-142, grade: STRONG, action: LINK, test: partition/S3HivePipelineTrackerEmptyHwmTest#emptyAboveHighWaterMarkStaysPending}
 - {id: FILE-146, grade: STRONG, action: LINK, test: FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles}
 - {id: FILE-147, grade: NONE, action: DONE, note: "AperioDriverOperandTest; varExpansion pins pre-C-14 behavior"}
-- {id: FILE-149, grade: PARTIAL, action: RECODE, test: metadata/TableConstraintsTest#testPrimaryKeyColumnNotFound, note: "positional FK target untested (C-24)"}
+- {id: FILE-149, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-149)"}
 - {id: FILE-151, grade: PARTIAL, action: RECODE, test: FileReaderExceptionTest#testIsException, note: "no throw-sites; SQLStates (C-11)"}
 - {id: FILE-159, grade: STRONG, action: LINK, test: table/GlobPatternTest#testGlobPatterns}
 - {id: FILE-160, grade: STRONG, action: LINK, test: storage/LocalFileStorageProviderDeepTest#testReadRangeBeyondFileLength}
@@ -126,7 +126,7 @@
 - {id: FILE-077, grade: WEAK, action: RECODE, test: rules/SimpleHLLCountDistinctRuleTest#testCountDistinctRewrittenToHLL, note: "gate never toggled; sketch-used not proven"}
 - {id: FILE-078, grade: WEAK, action: RECODE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "only '<'; no pushed-vs-unpushed"}
 - {id: FILE-079, grade: WEAK, action: RECODE, test: metadata/ConstraintMetadataJdbcTest, note: "metadata only; elimination not run"}
-- {id: FILE-093, grade: PARTIAL, action: RECODE, test: similarity/SimilarityFunctionsDeepTest#testRegisterFunctionsDoesNotThrow, note: "full set/ranges not pinned"}
+- {id: FILE-093, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-093)"}
 - {id: FILE-094, grade: STRONG, action: LINK, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityWithFloatArray}
 - {id: FILE-119, grade: STRONG, action: LINK, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine}
 - {id: FILE-120, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-120)"}
@@ -135,7 +135,7 @@
 - {id: FILE-123, grade: WEAK, action: RECODE, test: rules/SimpleFileFilterPushdownRuleTest#testFilterEliminatedViaMinMaxStats, note: "thresholds via result-count only"}
 - {id: FILE-124, grade: NONE, action: WRITE, note: "deferred — needs plan-level Aggregate; do in the HLL rule-test RECODE (C-18)"}
 - {id: FILE-126, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-126)"}
-- {id: FILE-150, grade: PARTIAL, action: RECODE, test: similarity/SimilarityFunctionsDeepTest#testCosineSimilarityDimensionMismatch, note: "exactly-10/EMBED uncovered"}
+- {id: FILE-150, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-150)"}
 - {id: FILE-152, grade: WEAK, action: RECODE, test: statistics/HyperLogLogSketchTest#testLargeDatasetAccuracy, note: "statistical/loose (acceptable for HLL)"}
 - {id: FILE-153, grade: STRONG, action: LINK, test: statistics/ColumnStatisticsDeepTest#testSelectivityEqualityWithDistinct}
 - {id: FILE-154, grade: PARTIAL, action: RECODE, test: rules/OptimizationRulesTest#testParquetAndDuckDBConsistentResults, note: "only COUNT(*) one file; needs duckdb"}

@@ -1147,7 +1147,7 @@
 
 - id: FILE-073
   module: file
-  status: proposed
+  status: complete
   group: schema-evolution
   category: resolution strategy defaults
   priority: SHOULD
@@ -1159,7 +1159,9 @@
     LATEST_SCHEMA_WINS drops deleted fields and NULLs new columns for old data; UNION_ALL_COLUMNS keeps all.
     (Refines FILE-034.)
   source: file/docs/iceberg-integration.md (Schema Evolution)
-  tests: []
+  tests:
+    - file/CsvSchemaRequirementsTest (tagged FILE-073)
+  since: 2026-06
 
 - id: FILE-074
   module: file
@@ -1248,7 +1250,7 @@
 
 - id: FILE-080
   module: file
-  status: proposed
+  status: complete
   group: constraints
   category: declaration model
   priority: MUST
@@ -1259,11 +1261,13 @@
     matched by position not name), uniqueKeys. Metadata-only, NOT enforced on write (Parquet immutable) — inaccurate
     constraints can yield wrong results.
   source: file/docs/CONSTRAINTS.md
-  tests: []
+  tests:
+    - file/ConstraintRequirementsTest (tagged FILE-080)
+  since: 2026-06
 
 - id: FILE-081
   module: file
-  status: proposed
+  status: complete
   group: constraints
   category: jdbc/statistic exposure
   priority: MUST
@@ -1274,7 +1278,9 @@
     NON_UNIQUE=false for unique) and Calcite Statistic (getKeys/getReferentialConstraints/isKey) via
     metadata.TableConstraints.
   source: file/docs/CONSTRAINTS.md (JDBC Metadata)
-  tests: []
+  tests:
+    - file/ConstraintRequirementsTest (tagged FILE-081)
+  since: 2026-06
 
 # ============================ document / ETL pipeline ===========================================
 
@@ -1464,7 +1470,7 @@
 
 - id: FILE-093
   module: file
-  status: proposed
+  status: complete
   group: vector-search
   category: similarity UDFs
   priority: MUST
@@ -1476,7 +1482,9 @@
     VECTOR_NORM (→DOUBLE), NORMALIZE_VECTOR (→VARCHAR), VECTORS_SIMILAR(v1,v2,threshold=0.7)→BOOLEAN,
     TEXT_SIMILARITY (Jaccard); available on all engines.
   source: file/docs/vector-search.md
-  tests: []
+  tests:
+    - file/VectorFunctionRequirementsTest (tagged FILE-093)
+  since: 2026-06
 
 - id: FILE-094
   module: file
@@ -2449,7 +2457,7 @@
 
 - id: FILE-149
   module: file
-  status: proposed
+  status: complete
   group: constraints
   category: positional FK resolution
   priority: MUST
@@ -2461,11 +2469,13 @@
     POSITION not name); uniqueKeys are added as ADDITIONAL keys; validateForeignKeys drops FKs whose target table
     does not exist (warns). No constraints → Statistics.UNKNOWN.
   source: file/src/main/java/.../metadata/TableConstraints.java parsePrimaryKeys 161-203, parseForeignKeys 229-301
-  tests: []
+  tests:
+    - file/ConstraintRequirementsTest (tagged FILE-149)
+  since: 2026-06
 
 - id: FILE-150
   module: file
-  status: proposed
+  status: complete
   group: vector-search
   category: UDF semantics & encodings
   priority: MUST
@@ -2477,7 +2487,9 @@
     0.0 on null arg or zero norm, accepts string/[..]/(..)/float[]/double[]/List<Number>/Avro arrays, mismatched
     dims → IllegalArgumentException; VECTORS_SIMILAR threshold default 0.7; EUCLIDEAN null→Double.MAX_VALUE; EMBED→VARCHAR.
   source: file/src/main/java/.../similarity/SimilarityFunctions.java 41-473
-  tests: []
+  tests:
+    - file/VectorFunctionRequirementsTest (tagged FILE-150)
+  since: 2026-06
 
 - id: FILE-151
   module: file
@@ -2581,7 +2593,7 @@
 
 - id: FILE-157
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: empty & header-only sources
   priority: SHOULD
@@ -2593,7 +2605,9 @@
     nullable VARCHAR ColumnTypeInfo per header column. Cross-connection timestamp reads return identical
     epoch millis (no per-connection TZ drift). FileRowConverter parses Natty NL dates ("January 15, 2024").
   source: file/src/test/java/.../format/csv/CsvTypeInferrerTest.java; CompareTimestampsTest.java; FileRowConverterFieldDefTest.java
-  tests: []
+  tests:
+    - file/CsvSchemaRequirementsTest (tagged FILE-157)
+  since: 2026-06
 
 - id: FILE-158
   module: file

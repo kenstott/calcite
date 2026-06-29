@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 28 complete, 8 in-progress, 132 proposed, 3 rejected)
+## file  (173: 2 accepted, 35 complete, 8 in-progress, 125 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -81,15 +81,15 @@
 | [.] | FILE-070 | MUST | constraint | engine / write path is duckdb | JDBC query engines (DuckDB/Trino/ClickHouse/Spark) are read-only; ALL writes (materialization, partition reor… | — |
 | [.] | FILE-071 | MUST | behavioral | iceberg / time travel | No timeRange/snapshotId/asOfTimestamp → read latest snapshot (HEAD); snapshotId selects an exact snapshot; as… | — |
 | [.] | FILE-072 | MUST | behavioral | iceberg / snapshot isolation | Each query reads a single consistent snapshot; concurrent readers see a consistent snapshot; each write is an… | — |
-| [.] | FILE-073 | SHOULD | behavioral | schema-evolution / resolution strategy defaults | Schema resolution defaults: parquet LATEST_SCHEMA_WINS, csv RICHEST_FILE, json LATEST_FILE. LATEST_SCHEMA_WIN… | — |
+| [x] | FILE-073 | SHOULD | behavioral | schema-evolution / resolution strategy defaults | Schema resolution defaults: parquet LATEST_SCHEMA_WINS, csv RICHEST_FILE, json LATEST_FILE. LATEST_SCHEMA_WIN… | file/CsvSchemaRequirementsTest (tagged FILE-073) |
 | [.] | FILE-074 | MUST | constraint | iceberg / read-only limitation | Iceberg READ integration is read-only (no INSERT/UPDATE/DELETE); position/equality deletes unsupported; only … | — |
 | [.] | FILE-075 | SHOULD | behavioral | write/iceberg / inline compaction | materialize.iceberg.runCompaction (default false) compacts a partition when small-file count hits compactionM… | — |
 | [.] | FILE-076 | MUST | behavioral | optimization / count-star from metadata | COUNT(*) answered from Iceberg/Parquet-footer row counts (no scan), equal to a full-scan count, whenever the … | — |
 | [.] | FILE-077 | SHOULD | behavioral | optimization / HLL error bound & gate | APPROX_COUNT_DISTINCT (and intercepted COUNT(DISTINCT)) answered from HLL sketches built per ingestion (stati… | — |
 | [.] | FILE-078 | SHOULD | behavioral | optimization / pushdown operators | Filter pushdown (enableFilterPushdown, default on) pushes =,!=,<,>,<=,>=,IN,LIKE to storage; pushed results e… | — |
 | [.] | FILE-079 | SHOULD | behavioral | optimization / constraint-driven | Declared PK drives self-join/join elimination; FK drives join reordering and cardinality estimation; results … | — |
-| [.] | FILE-080 | MUST | constraint | constraints / declaration model | constraints block declares primaryKey (composite allowed), foreignKeys (columns/targetTable/targetColumns, ma… | — |
-| [.] | FILE-081 | MUST | structural | constraints / jdbc/statistic exposure | Constraints exposed via DatabaseMetaData (getPrimaryKeys KEY_SEQ order, getImportedKeys, getIndexInfo NON_UNI… | — |
+| [x] | FILE-080 | MUST | constraint | constraints / declaration model | constraints block declares primaryKey (composite allowed), foreignKeys (columns/targetTable/targetColumns, ma… | file/ConstraintRequirementsTest (tagged FILE-080) |
+| [x] | FILE-081 | MUST | structural | constraints / jdbc/statistic exposure | Constraints exposed via DatabaseMetaData (getPrimaryKeys KEY_SEQ order, getImportedKeys, getIndexInfo NON_UNI… | file/ConstraintRequirementsTest (tagged FILE-081) |
 | [.] | FILE-082 | MUST | behavioral | document-etl / ResponseTransformer contract | A ResponseTransformer(raw, RequestContext) MUST return a JSON array string whose object keys match the canoni… | — |
 | [.] | FILE-083 | MUST | behavioral | document-etl / dimension types & expansion | Dimension types list/range(inclusive,step1)/yearRange(dataLag,releaseMonth,excludeYears,min/max)/query/json_c… | — |
 | [.] | FILE-084 | MUST | behavioral | document-etl / resumability tracker | Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips … | — |
@@ -101,7 +101,7 @@
 | [.] | FILE-090 | SHOULD | behavioral | period-dimensions / dataset_type semantics | dataset_type ∈ {snapshot, delta(default), computed_delta}: snapshot overwrites only the open period (closed f… | — |
 | [.] | FILE-091 | SHOULD | behavioral | raw-cache / bundle archive & classification | At session end BundleArchiver scans cache/raw and classifies by size (default 1MB): small files concatenated … | — |
 | [.] | FILE-092 | MUST | behavioral | raw-cache / read-tier resolution | CacheResolver.resolve tries tier-1 local first, then merged index byte-range GET from .bin or full GET from .… | — |
-| [.] | FILE-093 | MUST | behavioral | vector-search / similarity UDFs | Every schema auto-registers COSINE_SIMILARITY (−1..1), COSINE_DISTANCE (0..2), EUCLIDEAN_DISTANCE, DOT_PRODUC… | — |
+| [x] | FILE-093 | MUST | behavioral | vector-search / similarity UDFs | Every schema auto-registers COSINE_SIMILARITY (−1..1), COSINE_DISTANCE (0..2), EUCLIDEAN_DISTANCE, DOT_PRODUC… | file/VectorFunctionRequirementsTest (tagged FILE-093) |
 | [.] | FILE-094 | SHOULD | behavioral | vector-search / input encodings & pushdown | Vector UDFs accept comma-strings, '[..]', '(..)', native float[]/double[]/int[], List<Number>, Avro arrays — … | — |
 | [.] | FILE-095 | SHOULD | constraint | error-handling / documented errors & SQLStates | Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) report… | — |
 | [~] | FILE-096 | MUST | behavioral | csv / type resolution order | CsvTypeInferrer.determineType forces VARCHAR if any sampled value is VARCHAR, else picks the most general typ… | file/CsvInferenceRequirementsTest#allNullColumnIsNullableVa… |
@@ -157,15 +157,15 @@
 | [.] | FILE-146 | MUST | behavioral | jdbc / second JDBC driver | A SECOND driver FileJdbcDriver accepts jdbc:calcite: URLs containing schema=file|materialized_view with snake… | — |
 | [~] | FILE-147 | MUST | behavioral | jdbc / AperioDriver defaults & var expansion | AperioDriver.buildOperand always emits lex=ORACLE, unquotedCasing=TO_LOWER, quotedCasing=UNCHANGED, table/col… | file/AperioDriverOperandTest#operandDefaults, file/AperioDr… |
 | [.] | FILE-148 | MUST | behavioral | table-naming / SmartCasing rules | SmartCasing.toSnakeCase lowercases an all-uppercase non-acronym without splitting (DEPTS→depts), applies a di… | — |
-| [.] | FILE-149 | MUST | structural | constraints / positional FK resolution | TableConstraints builds PK/unique bitsets from columnNames.indexOf, SILENTLY dropping unfound columns (and a … | — |
-| [.] | FILE-150 | MUST | behavioral | vector-search / UDF semantics & encodings | SimilarityFunctions registers exactly 10 UDFs (COSINE_SIMILARITY, SEMANTIC_SIMILARITY, EMBED, COSINE_DISTANCE… | — |
+| [x] | FILE-149 | MUST | structural | constraints / positional FK resolution | TableConstraints builds PK/unique bitsets from columnNames.indexOf, SILENTLY dropping unfound columns (and a … | file/ConstraintRequirementsTest (tagged FILE-149) |
+| [x] | FILE-150 | MUST | behavioral | vector-search / UDF semantics & encodings | SimilarityFunctions registers exactly 10 UDFs (COSINE_SIMILARITY, SEMANTIC_SIMILARITY, EMBED, COSINE_DISTANCE… | file/VectorFunctionRequirementsTest (tagged FILE-150) |
 | [.] | FILE-151 | MUST | structural | error-handling / FileReaderException has no SQLState | FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor … | — |
 | [.] | FILE-152 | MUST | behavioral | statistics / HLL measured error bounds | Tested HLL accuracy: precision 12 estimates 100 distinct within 20%, 10k within 5%, 100k within 5%; precision… | — |
 | [.] | FILE-153 | MUST | behavioral | statistics / selectivity formulas | ColumnStatistics.getSelectivity pins: "=" → 1/distinct, "!=" → 1-1/distinct, IS NULL → nullCount/total, IS NO… | — |
 | [.] | FILE-154 | MUST | behavioral | engine / engine equivalence (tested) | Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for CSV/JSON… | — |
 | [.] | FILE-155 | MUST | behavioral | csv / explicit typed header | A typed CSV header ("EMPNO:int,NAME:string,SLACKER:boolean,...") drives column SQL types directly, independen… | — |
 | [x] | FILE-156 | SHOULD | behavioral | csv / decimal & config clamping | parseDecimal uses HALF_UP symmetric for negatives ("123.455"→123.46, "-123.455"→-123.46); precision overflow … | file/ConverterUtilRequirementsTest (tagged FILE-156) |
-| [.] | FILE-157 | SHOULD | behavioral | csv / empty & header-only sources | An empty source and a disabled config both return an EMPTY type list; a header-only CSV returns one nullable … | — |
+| [x] | FILE-157 | SHOULD | behavioral | csv / empty & header-only sources | An empty source and a disabled config both return an EMPTY type list; a header-only CSV returns one nullable … | file/CsvSchemaRequirementsTest (tagged FILE-157) |
 | [.] | FILE-158 | SHOULD | behavioral | json / multi-table discovery defaults | jsonSearchPaths register one table per path (keyed by last segment); the wrapper/source table is NOT register… | — |
 | [.] | FILE-159 | MUST | behavioral | walking / glob semantics matrix | PathMatcher contract: "**" matches root+sub+nested, "**/*" matches sub+nested but NOT root, "*" matches only … | — |
 | [.] | FILE-160 | SHOULD | behavioral | storage / provider edge contracts | readRange beyond EOF returns a trimmed array (no padding/error). Local resolvePath normalizes ".." and lets a… | — |

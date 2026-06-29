@@ -1,13 +1,9 @@
 {
- "FILE-120": ["file/StatisticsRequirementsTest (tagged FILE-120)"],
- "FILE-121": ["file/StatisticsRequirementsTest (tagged FILE-121)"],
- "FILE-040": ["file/StatisticsRequirementsTest (tagged FILE-040)"],
- "FILE-126": ["file/StatisticsRequirementsTest (tagged FILE-126)"],
- "FILE-046": ["file/StorageProviderRequirementsTest (tagged FILE-046)"],
- "FILE-113": ["file/StorageProviderRequirementsTest (tagged FILE-113)"],
- "FILE-115": ["file/StorageProviderRequirementsTest (tagged FILE-115)"],
- "FILE-116": ["file/StorageProviderRequirementsTest (tagged FILE-116)"],
- "FILE-109": ["file/ConverterUtilRequirementsTest (tagged FILE-109)"],
- "FILE-105": ["file/ConverterUtilRequirementsTest (tagged FILE-105)"],
- "FILE-156": ["file/ConverterUtilRequirementsTest (tagged FILE-156)"]
+ "FILE-080": ["file/ConstraintRequirementsTest (tagged FILE-080)"],
+ "FILE-081": ["file/ConstraintRequirementsTest (tagged FILE-081)"],
+ "FILE-149": ["file/ConstraintRequirementsTest (tagged FILE-149)"],
+ "FILE-093": ["file/VectorFunctionRequirementsTest (tagged FILE-093)"],
+ "FILE-150": ["file/VectorFunctionRequirementsTest (tagged FILE-150)"],
+ "FILE-157": ["file/CsvSchemaRequirementsTest (tagged FILE-157)"],
+ "FILE-073": ["file/CsvSchemaRequirementsTest (tagged FILE-073)"]
 }
