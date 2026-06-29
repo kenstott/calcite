@@ -114,7 +114,7 @@
 
 - id: FILE-006
   module: file
-  status: accepted
+  status: complete
   group: csv
   category: Temporal inference
   priority: MUST
@@ -126,7 +126,10 @@
     Local, UTC and RFC datetime formats are inferred as TIMESTAMP / TIMESTAMP WITH TIME ZONE and
     round-trip to canonical values.
   supersedes: [ CsvTypeInferenceTest#testTimestampInference ]
-  tests: []
+  notes: "RECODE of the type-OR-tolerant JDBC test -> exact engine-independent inferrer types. Superseded test ready to archive."
+  tests:
+    - file/CsvInferenceRequirementsTest#timestampInferenceIsExact
+  since: 2026-06
 
 - id: FILE-007
   module: file
@@ -853,7 +856,7 @@
 
 - id: FILE-054
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: boolean & temporal tokens
   priority: SHOULD
@@ -863,7 +866,11 @@
     BOOLEAN matches {true,false,TRUE,FALSE,True,False,0,1}. Temporal detects DATE (yyyy-MM-dd, MM/dd/yyyy,
     dd/MM/yyyy), TIME (HH:mm:ss, h:mm a), TIMESTAMP for date-time, TIMESTAMP WITH TIME ZONE for RFC w/ tz.
   source: file/docs/csv-type-inference.md (Boolean, Temporal)
-  tests: []
+  notes: "BOOLEAN true/false via FILE-097; DATE MM/dd/yyyy + TIME via FILE-054; TIMESTAMP/TZ via FILE-006. Minor h:mm a / dd/MM forms not separately pinned."
+  tests:
+    - file/CsvInferenceRequirementsTest#timeAndSlashDateFormatsInfer
+    - file/CsvInferenceRequirementsTest#zeroOneAreIntegerNotBoolean
+  since: 2026-06
 
 - id: FILE-055
   module: file

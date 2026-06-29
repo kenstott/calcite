@@ -11,7 +11,7 @@
 - {id: FILE-003, grade: STRONG, action: LINK, test: CsvGoldenIngestTest#nullsAndEmpty_sentinelsCollapseToNull}
 - {id: FILE-004, grade: STRONG, action: LINK, test: CsvGoldenIngestTest#mixedTypes_reingestionIsIdempotent}
 - {id: FILE-005, grade: STRONG, action: LINK, test: CsvTypeInferenceTest#testNoInferenceByDefault}
-- {id: FILE-006, grade: WEAK, action: RECODE, test: CsvTypeInferenceTest#testTimestampInference, note: "type-OR tolerance; no canonical value pinned"}
+- {id: FILE-006, grade: WEAK, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest#timestampInferenceIsExact (exact types)"}
 - {id: FILE-007, grade: STRONG, action: LINK, test: CsvTypeInferenceTest#testBlankStringsAsNullWithNoInference}
 - {id: FILE-008, grade: NONE, action: DONE, note: "ResolvedBugTargetsTest: numeric-raise active + temporal @Disabled (C-16)"}
 - {id: FILE-009, grade: NONE, action: DONE, note: "EngineInvarianceTest#csvGoldenIsEngineInvariant (all 4 engines)"}
@@ -31,7 +31,7 @@
 - {id: FILE-035, grade: STRONG, action: LINK, test: format/CompressedFileTest#testGzippedCsvFile}
 - {id: FILE-052, grade: STRONG, action: LINK, test: format/csv/CsvTypeInferrerTest#testDefaultConfigReturnsExpectedDefaults}
 - {id: FILE-053, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#numericPromotion}
-- {id: FILE-054, grade: PARTIAL, action: RECODE, test: format/csv/CsvTypeInferrerTest#testInferTypesBooleanColumn, note: "MM/dd, TIME, TZ forms uncovered"}
+- {id: FILE-054, grade: PARTIAL, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest#timeAndSlashDateFormatsInfer (+FILE-097/006)"}
 - {id: FILE-055, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#defaultNullTokenSet}
 - {id: FILE-056, grade: PARTIAL, action: RECODE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "nested-array child FK untested"}
 - {id: FILE-057, grade: NONE, action: REJECTED, note: "doc-only — excelConfig absent in source; requirement rejected"}

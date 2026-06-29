@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 3 accepted, 13 complete, 8 in-progress, 146 proposed, 3 rejected)
+## file  (173: 2 accepted, 15 complete, 8 in-progress, 145 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -14,7 +14,7 @@
 | [x] | FILE-003 | MUST | behavioral | csv / Null handling | Textual null sentinels (NULL, NA, N/A, NONE, nil + case variants) in non-VARCHAR columns collapse to SQL NULL… | file/CsvGoldenIngestTest#nullsAndEmpty_sentinelsCollapseToN… |
 | [x] | FILE-004 | MUST | behavioral | csv / Idempotence | Re-ingesting identical CSV bytes into a persistent cache yields an identical materialized table. | file/CsvGoldenIngestTest#mixedTypes_reingestionIsIdempotent |
 | [ ] | FILE-005 | MUST | behavioral | csv / Type inference | With type inference disabled, every column is VARCHAR and values are preserved as raw text. | — |
-| [ ] | FILE-006 | MUST | behavioral | csv / Temporal inference | Local, UTC and RFC datetime formats are inferred as TIMESTAMP / TIMESTAMP WITH TIME ZONE and round-trip to ca… | — |
+| [x] | FILE-006 | MUST | behavioral | csv / Temporal inference | Local, UTC and RFC datetime formats are inferred as TIMESTAMP / TIMESTAMP WITH TIME ZONE and round-trip to ca… | file/CsvInferenceRequirementsTest#timestampInferenceIsExact |
 | [ ] | FILE-007 | SHOULD | behavioral | csv / Null handling | blankStringsAsNull controls whether a blank VARCHAR cell becomes SQL NULL (true) or "" (false); whitespace-on… | — |
 | [~] | FILE-008 | MUST | constraint | csv / Error handling | A non-null value violating an inferred column type must surface an error, not be silently coerced to NULL/def… | file/ResolvedBugTargetsTest#badNumericValueRaises, file/Res… |
 | [x] | FILE-009 | MUST | behavioral | csv / Engine invariance | The csv golden (FILE-001..004) holds identically across every applicable engine — same source, same table — r… | file/EngineInvarianceTest#csvGoldenIsEngineInvariant |
@@ -62,7 +62,7 @@
 | [~] | FILE-051 | MUST | behavioral | config / JDBC driver | AperioDriver (org.apache.calcite.adapter.file.AperioDriver) accepts jdbc:aperio:<path>[?param=...]; a bare pa… | file/AperioDriverOperandTest#operandDefaults |
 | [.] | FILE-052 | SHOULD | behavioral | csv / inference config defaults | csvTypeInference defaults: enabled=false, samplingRate=0.1, maxSampleRows=1000, confidenceThreshold=0.95, mak… | — |
 | [.] | FILE-053 | SHOULD | behavioral | csv / numeric promotion | Whole numbers in 32-bit range → INTEGER, outside → BIGINT, decimals/scientific → DOUBLE. | — |
-| [.] | FILE-054 | SHOULD | behavioral | csv / boolean & temporal tokens | BOOLEAN matches {true,false,TRUE,FALSE,True,False,0,1}. Temporal detects DATE (yyyy-MM-dd, MM/dd/yyyy, dd/MM/… | — |
+| [x] | FILE-054 | SHOULD | behavioral | csv / boolean & temporal tokens | BOOLEAN matches {true,false,TRUE,FALSE,True,False,0,1}. Temporal detects DATE (yyyy-MM-dd, MM/dd/yyyy, dd/MM/… | file/CsvInferenceRequirementsTest#timeAndSlashDateFormatsIn… |
 | [.] | FILE-055 | MUST | behavioral | csv / null token set | Recognized null tokens: empty, NULL/null/Null, NA, N/A, NONE/None, NIL/nil. With makeAllNullable=false a colu… | — |
 | [.] | FILE-056 | SHOULD | behavioral | json / multi-table jsonSearchPaths | jsonSearchPaths (JSONPath, e.g. $.data.users) yields one table per path; nested arrays become child tables wi… | — |
 | [-] | FILE-057 | SHOULD | structural | xlsx / excelConfig | excelConfig keys evaluateFormulas, skipEmptyRows, headerRowIndex (e.g. 0), and a `sheets` allow-list; each sh… | — |

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,6 +48,11 @@ public class CsvInferenceRequirementsTest {
     Path f = Files.createTempFile(dir, "infer", ".csv");
     Files.write(f, csv.getBytes(StandardCharsets.UTF_8));
     return CsvTypeInferrer.inferTypes(Sources.of(f.toFile()), CONF, "UNCHANGED");
+  }
+
+  private static List<ColumnTypeInfo> inferResource(String resource) throws Exception {
+    File f = new File(CsvInferenceRequirementsTest.class.getResource(resource).toURI());
+    return CsvTypeInferrer.inferTypes(Sources.of(f), CONF, "UNCHANGED");
   }
 
   // ----------------------------------------------------------------------------------------------
@@ -137,5 +143,28 @@ public class CsvInferenceRequirementsTest {
       assertEquals(a.get(i).inferredType, b.get(i).inferredType,
           "column " + i + " type stable across runs");
     }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+  // FILE-006 — temporal inference is EXACT and engine-independent (recode of the legacy
+  // type-OR-tolerant JDBC test): local datetimes -> TIMESTAMP, tz-carrying -> TIMESTAMP WITH LOCAL
+  // TIME ZONE.
+  // ----------------------------------------------------------------------------------------------
+
+  @Test @Tag("FILE-006") void timestampInferenceIsExact() throws Exception {
+    List<ColumnTypeInfo> t = inferResource("/csv-type-inference/timestamps.csv");
+    assertEquals(SqlTypeName.INTEGER, t.get(0).inferredType, "event_id");
+    assertEquals(SqlTypeName.VARCHAR, t.get(1).inferredType, "event_name");
+    assertEquals(SqlTypeName.TIMESTAMP, t.get(2).inferredType, "timestamp_local (no tz)");
+    assertEquals(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, t.get(3).inferredType, "timestamp_utc (Z)");
+    assertEquals(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, t.get(4).inferredType, "timestamp_rfc (RFC)");
+  }
+
+  // FILE-054 — TIME (HH:mm:ss) and slash-date (MM/dd/yyyy) token forms infer exactly.
+  @Test @Tag("FILE-054") void timeAndSlashDateFormatsInfer(@TempDir Path dir) throws Exception {
+    assertEquals(SqlTypeName.TIME, infer(dir, "t\n09:30:00\n10:45:30\n11:00:00\n").get(0).inferredType,
+        "HH:mm:ss -> TIME");
+    assertEquals(SqlTypeName.DATE, infer(dir, "d\n01/15/2024\n02/20/2024\n03/05/2024\n").get(0).inferredType,
+        "MM/dd/yyyy -> DATE");
   }
 }
