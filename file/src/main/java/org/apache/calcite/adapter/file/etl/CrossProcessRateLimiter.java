@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Generic host-local, cross-process rate limiter.
@@ -47,6 +48,17 @@ public final class CrossProcessRateLimiter {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(CrossProcessRateLimiter.class);
 
+  /**
+   * Per-key intra-JVM monitor. An OS {@link FileLock} is held on behalf of the entire JVM, not the
+   * acquiring thread, so a second thread in the same process that calls {@code channel.lock()} on
+   * the same file throws {@link java.nio.channels.OverlappingFileLockException} (a RuntimeException)
+   * rather than blocking. Serializing same-JVM callers on this monitor first means only one thread
+   * per process ever contends for the file lock, which is then left to do its real job: pacing
+   * across processes. Together they bound throughput across all threads AND processes on the host.
+   */
+  private static final ConcurrentHashMap<String, Object> KEY_MONITORS =
+      new ConcurrentHashMap<String, Object>();
+
   private CrossProcessRateLimiter() {
   }
 
@@ -68,15 +80,20 @@ public final class CrossProcessRateLimiter {
     }
     long now = System.currentTimeMillis();
     long slot;
+    Object monitor = KEY_MONITORS.computeIfAbsent(
+        key == null ? "default" : key, k -> new Object());
     try {
       Path file = stateFile(key);
       Files.createDirectories(file.getParent());
-      try (FileChannel channel = FileChannel.open(file,
-          StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-        try (FileLock lock = channel.lock()) {
-          long last = readLong(channel);
-          slot = Math.max(now, last + intervalMs);
-          writeLong(channel, slot);
+      // Serialize same-JVM callers before taking the OS file lock — see KEY_MONITORS.
+      synchronized (monitor) {
+        try (FileChannel channel = FileChannel.open(file,
+            StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+          try (FileLock lock = channel.lock()) {
+            long last = readLong(channel);
+            slot = Math.max(now, last + intervalMs);
+            writeLong(channel, slot);
+          }
         }
       }
     } catch (IOException e) {
@@ -86,7 +103,9 @@ public final class CrossProcessRateLimiter {
       sleepQuietly(intervalMs);
       return;
     }
-    sleepQuietly(slot - now);
+    // Recompute against current time: a thread that waited on the monitor has already burned part
+    // of the gap to its slot, so sleeping (slot - now) with the pre-wait timestamp would over-pace.
+    sleepQuietly(slot - System.currentTimeMillis());
   }
 
   private static long readLong(FileChannel channel) throws IOException {
