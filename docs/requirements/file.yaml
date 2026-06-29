@@ -1063,7 +1063,7 @@
 
 - id: FILE-064
   module: file
-  status: proposed
+  status: complete
   group: storage/hdfs
   category: hdfs routing & auth
   priority: SHOULD
@@ -1075,7 +1075,9 @@
     (core-site/hdfs-site on classpath); auth = Hadoop Simple (OS user) or Kerberos (auto when
     hadoop.security.authentication=kerberos). No adapter-level override.
   source: file/docs/storage-providers.md (HDFS)
-  tests: []
+  tests:
+    - file/storage/HDFSStorageProviderIntegrationTest
+  since: 2026-06
 
 - id: FILE-065
   module: file
@@ -1111,7 +1113,7 @@
 
 - id: FILE-067
   module: file
-  status: proposed
+  status: complete
   group: storage/sftp
   category: sftp/ftp auth & host-key
   priority: SHOULD
@@ -1122,7 +1124,9 @@
     SFTP (port 22) password or SSH key (privateKeyPath + passphrase); host-key via options.strictHostKeyChecking
     + knownHostsFile. FTP (port 21) passiveMode (default true), encoding (UTF-8).
   source: file/docs/storage-providers.md (FTP and SFTP)
-  tests: []
+  tests:
+    - file/storage/SftpFtpStorageProviderIntegrationTest
+  since: 2026-06
 
 - id: FILE-068
   module: file

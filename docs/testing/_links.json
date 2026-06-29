@@ -1,4 +1,4 @@
 {
-  "FILE-023": ["file/storage/S3StorageProviderIntegrationTest"],
-  "FILE-065": ["file/storage/S3StorageProviderIntegrationTest"]
+  "FILE-064": ["file/storage/HDFSStorageProviderIntegrationTest"],
+  "FILE-067": ["file/storage/SftpFtpStorageProviderIntegrationTest"]
 }

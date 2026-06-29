@@ -5,7 +5,7 @@
 **247 requirements across 4 adapters.**
 
 
-## file  (173: 2 accepted, 93 complete, 9 in-progress, 66 proposed, 3 rejected)
+## file  (173: 2 accepted, 95 complete, 9 in-progress, 64 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -72,10 +72,10 @@
 | [x] | FILE-061 | MUST | structural | table-naming / filename normalization | Table names derive from filename (no extension), lowercased, hyphens→underscores (PRODUCTS.JSON→products, use… | file/NamingUnionTrackerRequirementsTest |
 | [.] | FILE-062 | SHOULD | behavioral | yaml / yaml flattening | YAML nested keys flatten like JSON (profile.age→profile_age); list-of-records → rows. | — |
 | [x] | FILE-063 | SHOULD | behavioral | compression / supported codecs | Auto-detect+decompress gzip(.gz), bzip2(.bz2), xz(.xz), zip(.zip) by extension; compressionConfig maxUncompre… | file/CompressionStorageRequirementsTest |
-| [.] | FILE-064 | SHOULD | behavioral | storage/hdfs / hdfs routing & auth | directory starting hdfs:// auto-routes to HDFS (recursive listing like local/S3); namenode from fs.defaultFS … | — |
+| [x] | FILE-064 | SHOULD | behavioral | storage/hdfs / hdfs routing & auth | directory starting hdfs:// auto-routes to HDFS (recursive listing like local/S3); namenode from fs.defaultFS … | file/storage/HDFSStorageProviderIntegrationTest |
 | [x] | FILE-065 | SHOULD | behavioral | storage/s3 / s3-compatible endpoints | S3 supports MinIO/Wasabi/R2 via custom endpoint + options.usePathStyleAccess=true; region may be "auto" (R2);… | file/storage/S3StorageProviderIntegrationTest |
 | [.] | FILE-066 | SHOULD | behavioral | storage/http / http auth & error policy | HTTP auth types bearer/basic/apikey/oauth2; error handling is timeout (httpTimeout) + simple retry count (htt… | — |
-| [.] | FILE-067 | SHOULD | behavioral | storage/sftp / sftp/ftp auth & host-key | SFTP (port 22) password or SSH key (privateKeyPath + passphrase); host-key via options.strictHostKeyChecking … | — |
+| [x] | FILE-067 | SHOULD | behavioral | storage/sftp / sftp/ftp auth & host-key | SFTP (port 22) password or SSH key (privateKeyPath + passphrase); host-key via options.strictHostKeyChecking … | file/storage/SftpFtpStorageProviderIntegrationTest |
 | [.] | FILE-068 | MUST | behavioral | storage/sharepoint / sharepoint auth modes | storageType sharepoint supports oauth (clientId/secret/tenantId) and ntlm; client-secret auth requires legacy… | — |
 | [.] | FILE-069 | SHOULD | behavioral | engine / default selection | JDBC default engine duckdb (CALCITE_FILE_ENGINE_TYPE / queryEngine.type override). In-process guidance: PARQU… | — |
 | [.] | FILE-070 | MUST | constraint | engine / write path is duckdb | JDBC query engines (DuckDB/Trino/ClickHouse/Spark) are read-only; ALL writes (materialization, partition reor… | — |

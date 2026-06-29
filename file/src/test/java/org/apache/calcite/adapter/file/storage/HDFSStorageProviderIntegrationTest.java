@@ -23,9 +23,13 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -358,6 +362,142 @@ public class HDFSStorageProviderIntegrationTest {
     // Get new metadata - file shouldn't have changed compared to itself
     StorageProvider.FileMetadata newMetadata = storageProvider.getMetadata(testPath);
     assertFalse(storageProvider.hasChanged(testPath, newMetadata));
+  }
+
+  // -----------------------------------------------------------------------
+  // FILE-064: an hdfs:// directory routes to the HDFS provider via fs.defaultFS;
+  //           recursive catalog enumeration + byte-exact read, asserted at the seam.
+  //
+  // These tests build the provider from a Configuration whose fs.defaultFS is the
+  // running MiniDFSCluster namenode URI (NOT the (FileSystem, Configuration) test
+  // constructor), to prove the fs.defaultFS routing seam the way production resolves
+  // the namenode. NOTE: Hadoop Simple auth (OS user) is the default here; no Kerberos.
+  // -----------------------------------------------------------------------
+
+  /**
+   * Builds an {@link HDFSStorageProvider} whose namenode comes from {@code fs.defaultFS} set to
+   * the running cluster's URI. This is the routing seam FILE-064 asserts.
+   */
+  private HDFSStorageProvider createDefaultFsProvider() throws IOException {
+    Configuration providerConf = new Configuration();
+    providerConf.set("fs.defaultFS", hdfs.getUri().toString());
+    return new HDFSStorageProvider(providerConf);
+  }
+
+  /** Reads all bytes from a stream. */
+  private static byte[] readAll(InputStream is) throws IOException {
+    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+    byte[] tmp = new byte[4096];
+    int n;
+    while ((n = is.read(tmp)) != -1) {
+      buf.write(tmp, 0, n);
+    }
+    return buf.toByteArray();
+  }
+
+  /** Fully-qualifies an absolute HDFS path with the cluster namenode authority. */
+  private String qualify(String absolutePath) {
+    return hdfs.getUri().toString() + absolutePath;
+  }
+
+  /**
+   * Writes a known set of files (including some under nested HDFS prefixes) via the cluster
+   * filesystem, then asserts that {@link HDFSStorageProvider#listFiles} returns exactly that
+   * catalog under an {@code hdfs://} directory (recursive, flattened enumeration) and that
+   * {@link HDFSStorageProvider#openInputStream} returns the exact bytes of one file. The
+   * provider's namenode is resolved from {@code fs.defaultFS}.
+   */
+  @Tag("FILE-064")
+  @Tag("integration")
+  @Test public void listFilesReturnsRecursiveCatalogAndOpenInputStreamReturnsExactBytes()
+      throws IOException {
+    String base = "/file-064/catalog";
+
+    // Known fixture set: two at the root of the prefix, three under nested prefixes.
+    String rootA = base + "/root-a.csv";
+    String rootB = base + "/root-b.json";
+    String nested1 = base + "/sub1/nested-1.csv";
+    String nested2 = base + "/sub1/sub2/nested-2.csv";
+    String nested3 = base + "/sub3/nested-3.txt";
+
+    String knownContent = "id,name\n1,alice\n2,bob\n3,charlie\n";
+
+    // Write fixtures across nested HDFS paths via the cluster filesystem (mkdirs + create).
+    hdfs.mkdirs(new Path(base + "/sub1/sub2"));
+    hdfs.mkdirs(new Path(base + "/sub3"));
+    storageProvider.writeFile(rootA, knownContent.getBytes(StandardCharsets.UTF_8));
+    storageProvider.writeFile(rootB, "{\"k\":\"v\"}".getBytes(StandardCharsets.UTF_8));
+    storageProvider.writeFile(nested1, "n1\n".getBytes(StandardCharsets.UTF_8));
+    storageProvider.writeFile(nested2, "n2\n".getBytes(StandardCharsets.UTF_8));
+    storageProvider.writeFile(nested3, "n3\n".getBytes(StandardCharsets.UTF_8));
+
+    HDFSStorageProvider provider = createDefaultFsProvider();
+    try {
+      // The provider must route a directory starting hdfs:// through the namenode from
+      // fs.defaultFS. List recursively against the fully-qualified hdfs:// directory.
+      String hdfsDir = qualify(base);
+      List<StorageProvider.FileEntry> entries = provider.listFiles(hdfsDir, true);
+
+      Set<String> actualPaths = new HashSet<>();
+      for (StorageProvider.FileEntry entry : entries) {
+        assertFalse(entry.isDirectory(),
+            "recursive listing should not include directory entries: " + entry.getPath());
+        actualPaths.add(entry.getPath());
+      }
+
+      // Provider emits fully-qualified hdfs://host:port/... paths (FileStatus.toUri()).
+      Set<String> expectedPaths = new HashSet<>();
+      expectedPaths.add(qualify(rootA));
+      expectedPaths.add(qualify(rootB));
+      expectedPaths.add(qualify(nested1));
+      expectedPaths.add(qualify(nested2));
+      expectedPaths.add(qualify(nested3));
+
+      assertEquals(expectedPaths, actualPaths,
+          "recursive catalog set must match the written files exactly");
+
+      // Byte-for-byte read of one file, asserted at the provider seam.
+      byte[] expectedBytes = knownContent.getBytes(StandardCharsets.UTF_8);
+      try (InputStream is = provider.openInputStream(qualify(rootA))) {
+        byte[] actualBytes = readAll(is);
+        assertArrayEquals(expectedBytes, actualBytes,
+            "openInputStream must return the exact written bytes");
+      }
+    } finally {
+      provider.close();
+    }
+  }
+
+  /**
+   * Proves the routing seam directly: the provider built from {@code fs.defaultFS} resolves the
+   * MiniDFSCluster namenode (its underlying FileSystem URI equals the cluster URI), and an
+   * {@code hdfs://} file path it never saw before is readable through it.
+   */
+  @Tag("FILE-064")
+  @Tag("integration")
+  @Test public void providerResolvesNamenodeFromDefaultFsAndReadsHdfsUri() throws IOException {
+    String path = "/file-064/seam/only.txt";
+    String content = "namenode-from-default-fs\n";
+    storageProvider.writeFile(path, content.getBytes(StandardCharsets.UTF_8));
+
+    HDFSStorageProvider provider = createDefaultFsProvider();
+    try {
+      // The provider's filesystem was resolved from fs.defaultFS = the cluster namenode.
+      assertNotNull(provider.getFileSystem());
+      assertEquals(URI.create(hdfs.getUri().toString()), provider.getFileSystem().getUri(),
+          "provider namenode must come from fs.defaultFS (the cluster URI)");
+
+      String hdfsFile = qualify(path);
+      assertTrue(provider.exists(hdfsFile), "provider must see the hdfs:// fixture file");
+      assertFalse(provider.isDirectory(hdfsFile));
+
+      try (InputStream is = provider.openInputStream(hdfsFile)) {
+        assertEquals(content, new String(readAll(is), StandardCharsets.UTF_8),
+            "read through the fs.defaultFS-resolved provider must return exact bytes");
+      }
+    } finally {
+      provider.close();
+    }
   }
 
   /** Java 8 compatible stream copy (replacement for InputStream.transferTo). */
