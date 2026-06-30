@@ -895,16 +895,41 @@
 
 - id: FILE-052
   module: file
-  status: proposed
+  status: complete
   group: csv
   category: inference config defaults
   priority: SHOULD
   type: behavioral
   seam: catalog
   description: >
-    csvTypeInference defaults: enabled=false, samplingRate=0.1, maxSampleRows=1000, confidenceThreshold=0.95,
-    makeAllNullable=true, inferDates/Times/Timestamps=true; disabled (default) → all VARCHAR. Flat JDBC-URL aliases
-    csv_type_inference_enabled/_sampling_rate/_confidence are equivalent.
+    csvTypeInference defaults: samplingRate=0.1, maxSampleRows=1000, confidenceThreshold=0.95,
+    makeAllNullable=true, inferDates/Times/Timestamps=true. TWO defaults legitimately differ:
+    defaultConfig() is enabled=true, but the schema/operand path (fromMap) is DISABLED unless
+    enabled:true — so a schema with no csvTypeInference operand does no inference → all VARCHAR.
+    (Flat JDBC-URL aliases were moved to the proposed feature FILE-174; they do not exist today.)
+  source: file/docs/csv-type-inference.md
+  supersedes: [ format/csv/CsvTypeInferrerTest#testDefaultConfigReturnsExpectedDefaults ]
+  notes: "RECODE: pins defaultConfig() (enabled+per-field), the disabled schema default (empty list
+    → VARCHAR), and fromMap({enabled:true}) per-field defaults. Old class retained (multi-method)."
+  tests:
+    - file/CsvInferenceRequirementsTest#defaultConfigObjectIsEnabledWithExpectedDefaults
+    - file/CsvInferenceRequirementsTest#schemaDefaultIsDisabledSoColumnsStayVarchar
+    - file/CsvInferenceRequirementsTest#enabledFromMapAppliesPerFieldDefaults
+  since: 2026-06
+
+- id: FILE-174
+  module: file
+  status: proposed
+  group: config
+  category: inference config aliases
+  priority: MAY
+  type: behavioral
+  seam: catalog
+  description: >
+    PROPOSED FEATURE (not implemented): flat JDBC-URL aliases for the csvTypeInference operand, e.g.
+    csv_type_inference_enabled / _sampling_rate / _confidence, equivalent to the nested operand. Today
+    the JDBC path exposes only csvInferTypes/csvSamplingRate/csvMaxSampleRows/csvInferDates (AperioDriver)
+    and no confidence alias. Split out of FILE-052 (the requirement text overstated current behavior).
   source: file/docs/csv-type-inference.md
   tests: []
 
@@ -941,20 +966,23 @@
 
 - id: FILE-055
   module: file
-  status: in-progress
+  status: complete
   group: csv
   category: null token set
   priority: MUST
   type: behavioral
   seam: catalog
   description: >
-    Recognized null tokens: empty, NULL/null/Null, NA, N/A, NONE/None, NIL/nil. With makeAllNullable=false a
-    column becomes nullable when its null ratio exceeds nullableThreshold. (Refines FILE-003.)
+    Recognized null tokens: empty, NULL/null/Null, NA, N/A, NONE/None, NIL/nil (case-insensitive,
+    blank-covering). Nullability is ADVISORY metadata only — never enforced (parquet/duckdb treat all
+    columns nullable; the flag informs humans and the optimizer). With makeAllNullable=false a column is
+    flagged nullable iff it contains ≥1 null token (binary rule; the nullableThreshold knob is unwired —
+    C-32, slated for removal). (Refines FILE-003.)
   source: file/docs/csv-type-inference.md (Null Handling)
-  notes: "RECODE: exact 6-token set + case-insensitive recognition + ACTUAL binary nullable rule
-    (any null token -> nullable) asserted. The nullableThreshold clause is dead code (C-32):
-    nullableThreshold is parsed/exposed but unwired; staged @Disabled. Kept in-progress until C-32
-    is resolved (wire the threshold, or reword to the binary rule)."
+  notes: "RECODE: exact 6-token set + every documented case variant + the ACTUAL binary nullable rule
+    (any null token -> nullable) asserted. nullability is advisory (not enforced), so the binary rule
+    is the contract; the dead nullableThreshold path is documented as the @Disabled C-32 target and
+    flagged for field removal."
   tests:
     - file/CsvInferenceRequirementsTest#recognizedNullTokenSetIsExactlySixCanonicalTokens
     - file/CsvInferenceRequirementsTest#everyDocumentedCaseVariantIsRecognizedAsNull

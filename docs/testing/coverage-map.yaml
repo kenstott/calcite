@@ -29,10 +29,10 @@
 - {id: FILE-021, grade: WEAK, action: DONE, test: markdown/MarkdownTableTest#testMultipleTablesInMarkdown, note: "content via contains()"}
 - {id: FILE-034, grade: WEAK, action: PARTIAL, test: schema/SchemaEvolutionIntegrationTest#testCsvSchemaEvolution, note: "only columnCount>=3"}
 - {id: FILE-035, grade: STRONG, action: LINK, test: format/CompressedFileTest#testGzippedCsvFile}
-- {id: FILE-052, grade: STRONG, action: RECODE, test: format/csv/CsvTypeInferrerTest#testDefaultConfigReturnsExpectedDefaults, note: "DEMOTE on golden-bar review (2026-06-29): asserts isEnabled()==true, contradicts default enabled=false; URL aliases untested"}
+- {id: FILE-052, grade: PARTIAL, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest (FILE-052): defaultConfig + disabled-schema-default + fromMap per-field; flat aliases split to FILE-174 (proposed)"}
 - {id: FILE-053, grade: STRONG, action: LINK, test: CsvInferenceRequirementsTest#numericPromotion}
 - {id: FILE-054, grade: PARTIAL, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest#timeAndSlashDateFormatsInfer (+FILE-097/006)"}
-- {id: FILE-055, grade: PARTIAL, action: STAGED, note: "RECODEd -> CsvInferenceRequirementsTest (FILE-055): exact token set + binary nullable rule; nullableThreshold clause @Disabled (C-32, dead code)"}
+- {id: FILE-055, grade: PARTIAL, action: DONE, note: "RECODEd -> CsvInferenceRequirementsTest (FILE-055): exact token set + advisory binary nullable rule; nullableThreshold dead (C-32, slated for removal)"}
 - {id: FILE-056, grade: PARTIAL, action: DONE, test: json/JsonPathExtractionTest#testJsonPathExtraction, note: "nested-array child FK untested"}
 - {id: FILE-057, grade: NONE, action: REJECTED, note: "doc-only — excelConfig absent in source; requirement rejected"}
 - {id: FILE-058, grade: NONE, action: REJECTED, note: "doc-only — htmlConfig/crawlConfig absent in source; requirement rejected"}
