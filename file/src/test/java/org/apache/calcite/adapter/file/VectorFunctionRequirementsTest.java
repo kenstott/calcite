@@ -123,6 +123,33 @@ public class VectorFunctionRequirementsTest {
         "EMBED must emit a comma-separated VARCHAR with no delimiters");
   }
 
+  // ===== FILE-094: vector UDFs give equivalent results across input encodings =====
+
+  /**
+   * FILE-094: COSINE_SIMILARITY accepts the same logical vector in many encodings — comma-string,
+   * {@code [..]}, {@code (..)}, native {@code float[]/double[]/int[]}, and {@code List<Number>} — and
+   * yields an IDENTICAL result. Integer component values are used so every encoding widens to the
+   * exact same {@code double[]}, letting the cross-encoding assertions use delta 0.0.
+   *
+   * <p>(The pushdown half — COSINE_SIMILARITY/DISTANCE rewriting to DuckDB {@code array_cosine_*}, and
+   * embedding/HNSW being DuckDB-only — is an execution-engine concern verified at the DuckDB
+   * interaction seam, not at this pure-function seam.)
+   */
+  @Test @Tag("FILE-094")
+  void cosineSimilarityIsEquivalentAcrossInputEncodings() {
+    // Reference from the comma-string encoding: cos([1,2,3],[4,5,6]) = 32 / sqrt(14*77).
+    double ref = SimilarityFunctions.cosineSimilarity("1,2,3", "4,5,6");
+    assertEquals(0.9746318, ref, 1e-6, "cosine([1,2,3],[4,5,6]) = 32/sqrt(1078)");
+
+    // Every other supported encoding of the SAME vectors must give the exact same double.
+    assertEquals(ref, SimilarityFunctions.cosineSimilarity("[1,2,3]", "[4,5,6]"), 0.0, "bracketed string");
+    assertEquals(ref, SimilarityFunctions.cosineSimilarity("(1,2,3)", "(4,5,6)"), 0.0, "paren string");
+    assertEquals(ref, SimilarityFunctions.cosineSimilarity(new float[]{1, 2, 3}, new float[]{4, 5, 6}), 0.0, "float[]");
+    assertEquals(ref, SimilarityFunctions.cosineSimilarity(new double[]{1, 2, 3}, new double[]{4, 5, 6}), 0.0, "double[]");
+    assertEquals(ref, SimilarityFunctions.cosineSimilarity(new int[]{1, 2, 3}, new int[]{4, 5, 6}), 0.0, "int[]");
+    assertEquals(ref, SimilarityFunctions.cosineSimilarity(Arrays.asList(1, 2, 3), Arrays.asList(4, 5, 6)), 0.0, "List<Number>");
+  }
+
   /**
    * Reproduces {@code SimilarityFunctions.embedText}'s exact comma-join serialization so the
    * VARCHAR return-format contract can be pinned without invoking the live embedding server.

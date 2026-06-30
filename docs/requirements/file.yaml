@@ -1635,7 +1635,7 @@
 
 - id: FILE-094
   module: file
-  status: proposed
+  status: complete
   group: vector-search
   category: input encodings & pushdown
   priority: SHOULD
@@ -1647,8 +1647,15 @@
     equivalent results across encodings. On DuckDB, COSINE_SIMILARITY/DISTANCE push down to array_cosine_*;
     embedding/HNSW are DuckDB-only.
   source: file/docs/vector-search.md
-  notes: embedding generation PLANNED for non-DuckDB engines.
-  tests: []
+  supersedes: [ similarity/SimilarityFunctionsDeepTest#testCosineSimilarityWithFloatArray ]
+  notes: "RECODE: COSINE_SIMILARITY equivalence proven across comma-string / [..] / (..) / float[] /
+    double[] / int[] / List<Number> (every encoding equals the reference with delta 0.0). Avro arrays
+    not asserted (no Avro fixture). The pushdown-to-DuckDB array_cosine_* and embedding/HNSW DuckDB-only
+    clauses are execution-engine concerns for the DuckDB interaction seam (see FILE-037/044).
+    embedding generation PLANNED for non-DuckDB engines."
+  tests:
+    - file/VectorFunctionRequirementsTest#cosineSimilarityIsEquivalentAcrossInputEncodings
+  since: 2026-06
 
 # ============================ error handling ===================================================
 
