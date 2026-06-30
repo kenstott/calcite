@@ -71,7 +71,7 @@
 - {id: FILE-025, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "no include/exclude"}
 - {id: FILE-026, grade: PARTIAL, action: DONE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "collision resolution untested"}
 - {id: FILE-027, grade: NONE, action: DONE, note: "WalkingRediscoveryTest#reWalkReflectsAddedAndRemovedFiles (complete)"}
-- {id: FILE-032, grade: STRONG, action: RECODE, test: table/PartitionedTableTest#testHiveStylePartitionedTable, note: "DEMOTE on golden-bar review (2026-06-29): only COUNT(*) + regex partition values; exact pruned result set not asserted"}
+- {id: FILE-032, grade: STRONG, action: DONE, note: "RECODEd -> PartitionPruningRequirementsTest (FILE-032): exact pruned + full-scan rows, path-derived VARCHAR partition cols, no-match->0 rows"}
 - {id: FILE-033, grade: STRONG, action: LINK, test: partition/DuckDBPartitionStatusStoreTest#testFilterUnprocessed}
 - {id: FILE-045, grade: PARTIAL, action: DONE, test: FileSchemaStorageTypeCoverageTest#testLocalStorageTypeWithSourceDir, note: "precedence/forcing untested"}
 - {id: FILE-046, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-046)"}

@@ -565,7 +565,7 @@
 
 - id: FILE-032
   module: file
-  status: proposed
+  status: complete
   group: partitioning
   category: Partition pruning
   priority: SHOULD
@@ -575,7 +575,16 @@
   description: >
     Partition columns are derived from the path layout and a filtered query prunes to the correct
     partition set, values exact.
-  tests: []
+  supersedes: [ table/PartitionedTableTest#testHiveStylePartitionedTable ]
+  notes: "RECODE: hive year=YYYY/month=MM layout -> VARCHAR partition columns; a WHERE on the partition
+    column prunes to exactly the matching files, asserted on the FULL projected rows (partition + data
+    columns, exact values+types), the full 6-row unpruned scan, and a no-match value -> zero rows.
+    Parquet fixture written in-test (replaces the COUNT(*)+regex weak test)."
+  tests:
+    - file/PartitionPruningRequirementsTest#prunedFilterYieldsExactRowSet
+    - file/PartitionPruningRequirementsTest#unprunedFullScanReturnsExactRowSet
+    - file/PartitionPruningRequirementsTest#pruningSkipsAllPartitionsForNonexistentValue
+  since: 2026-06
 
 - id: FILE-033
   module: file
