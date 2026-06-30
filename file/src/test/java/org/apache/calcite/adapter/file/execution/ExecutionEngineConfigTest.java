@@ -176,8 +176,10 @@ public class ExecutionEngineConfigTest {
     assertEquals(64L * 1024 * 1024, ExecutionEngineConfig.DEFAULT_MEMORY_THRESHOLD);
   }
 
-  @Test public void testDefaultExecutionEngine() {
+  @Test @Tag("FILE-119") public void testDefaultExecutionEngine() {
     assertNotNull(ExecutionEngineConfig.DEFAULT_EXECUTION_ENGINE);
+    // FILE-119 pins the CURRENT default (parquet, no classpath detection). The duckdb-if-available
+    // change is C-02 — DEFERRED (a flip breaks ~100+ default-engine tests; see contradictions.md).
     assertEquals("parquet", ExecutionEngineConfig.DEFAULT_EXECUTION_ENGINE);
   }
 

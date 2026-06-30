@@ -17,10 +17,20 @@ Docs *true*, code *false* (and string `"true"` ignored).
 **Resolution:** Change code so `recursive` defaults to **true** (documented behavior is intended);
 fix the parser so a string `"true"` also enables it. (FILE-110)
 
-### C-02 — Default execution engine  → **CODE-WRONG**
+### C-02 — Default execution engine  → **CODE-WRONG** · **implementation DEFERRED (large blast radius)**
 Javadoc *DuckDB-if-available*, code *always parquet*.
 **Resolution:** Implement DuckDB-if-available detection (default to DuckDB when its driver is on the
 classpath, else parquet). (FILE-119)
+**ATTEMPTED & REVERTED 2026-06-30:** changed `getDefaultEngine()` to duckdb-if-available and ran the
+full `:file:test`. DuckDB is `testImplementation` (on the test classpath) and ~505/595 test files use
+the default engine, so the flip flipped the default to DuckDB across the suite. Fallout is **systemic
+and large**: with `default=duckdb` the adapter builds a `DuckDBJdbcSchema` instead of a `FileSchema`,
+breaking every test that inspects schema type / view enumeration / engine-type enums — a measurement
+run surfaced **359 failing methods** (some inflated by killing the run mid-flight, but the real
+assertion failures `PARQUET→DUCKDB`, `FileSchema→DuckDBJdbcSchema`, missing-views are numerous). This
+is a 100+-test migration, not a quick fix. **Deferred** — the flip is reverted; do it as a dedicated
+effort (migrate default-engine tests to set parquet explicitly, or a test-global parquet override).
+FILE-119 stays in-progress pinning the current parquet default.
 
 ### C-03 — HLL std error at precision 14  → **DOC/CODE reconcile (publish conservative)**
 Docs *~2%*, code/tests *~0.8%*.

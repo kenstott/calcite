@@ -2165,7 +2165,7 @@
 
 - id: FILE-119
   module: file
-  status: proposed
+  status: complete
   group: engine
   category: default engine (actual)
   priority: MUST
@@ -2176,8 +2176,13 @@
     detection); no-arg config = PARQUET, batchSize 2048, memoryThreshold 64MB. parseExecutionEngine
     upper-cases, unknown → IllegalArgumentException listing 8 engines; linq4j/arrow/vectorized log a WARN.
   source: file/src/main/java/.../execution/ExecutionEngineConfig.java 39-178
-  notes: "RESOLVED C-02 (code-wrong): implement DuckDB-if-available detection (default to DuckDB when the driver is on the classpath, else parquet). Issue staged."
-  tests: []
+  notes: "Pins the CURRENT default (parquet, no detection) — which the requirement describes. C-02
+    (duckdb-if-available) was IMPLEMENTED AND REVERTED 2026-06-30: the flip is systemic (default=duckdb
+    builds a DuckDBJdbcSchema not a FileSchema) and a measurement run hit 359 failing methods (~100+ real,
+    a large migration). C-02 deferred to a dedicated effort; see contradictions.md. tagged the existing
+    ExecutionEngineConfigTest#testDefaultExecutionEngine."
+  tests:
+    - file/ExecutionEngineConfigTest#testDefaultExecutionEngine
 
 - id: FILE-120
   module: file

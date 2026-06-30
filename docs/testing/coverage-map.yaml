@@ -128,7 +128,7 @@
 - {id: FILE-079, grade: WEAK, action: RECODE, test: metadata/ConstraintMetadataJdbcTest, note: "metadata only; elimination not run"}
 - {id: FILE-093, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-093)"}
 - {id: FILE-094, grade: PARTIAL, action: DONE, note: "RECODEd -> VectorFunctionRequirementsTest (FILE-094): COSINE_SIMILARITY equivalence across 7 encodings (delta 0.0); pushdown deferred to duckdb seam"}
-- {id: FILE-119, grade: STRONG, action: RECODE, test: execution/ExecutionEngineConfigTest#testDefaultExecutionEngine, note: "DEMOTE on golden-bar review (2026-06-29): pins constant parquet but resolved C-02 is duckdb-if-available; getDefaultEngine untested"}
+- {id: FILE-119, grade: STRONG, action: DONE, note: "Pins CURRENT parquet default (ExecutionEngineConfigTest#testDefaultExecutionEngine tagged FILE-119). C-02 duckdb-if-available implemented+reverted (359-method blast radius); deferred."}
 - {id: FILE-120, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-120)"}
 - {id: FILE-121, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-121)"}
 - {id: FILE-122, grade: WEAK, action: DONE, test: rules/CountStarStatisticsRuleTest#testCountStarWithWhereClauseNotReplaced, note: "result-only; no VALUES/match-cond"}
