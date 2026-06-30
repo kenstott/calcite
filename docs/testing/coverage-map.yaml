@@ -109,7 +109,7 @@
 - {id: FILE-165, grade: WEAK, action: DONE, test: partition/S3HivePeriodMarkerTest#periodMarkedOnlyWhenAllCombosDone, note: "live MinIO gated"}
 - {id: FILE-168, grade: STRONG, action: LINK, test: FileJdbcDriverDeepCoverageTest#testParseConfigBatchSizeFloat}
 - {id: FILE-169, grade: STRONG, action: RECODE, test: metadata/ConstraintMetadataJdbcTest#getPrimaryKeys_fromPartitionedTablesPrimaryKeyField, note: "DEMOTE on golden-bar review (2026-06-29): fixtures shell out to external duckdb CLI (ProcessBuilder); breaks hermetic bar"}
-- {id: FILE-173, grade: STRONG, action: RECODE, test: OracleLexicalSettingsTest#testCaseSensitivityDemo, note: "DEMOTE on golden-bar review (2026-06-29): information_schema checks use count>0 + OR-tolerant message match"}
+- {id: FILE-173, grade: WEAK, action: DONE, note: "RECODEd -> OracleLexicalRequirementsTest (FILE-173): exact rows + wrong-case not-found + info_schema case-insensitive (no count>0/OR)"}
 
 # ---- engine / optimization / statistics / vector ----
 - {id: FILE-037, grade: NONE, action: WRITE, note: "duckdb x storageType httpfs parity"}

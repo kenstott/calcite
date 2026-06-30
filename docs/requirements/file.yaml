@@ -3176,7 +3176,7 @@
 
 - id: FILE-173
   module: file
-  status: proposed
+  status: complete
   group: config
   category: Oracle lexical + case sensitivity
   priority: SHOULD
@@ -3187,4 +3187,14 @@
     and information_schema/pg_catalog access is case-insensitive. With caseSensitive=true + UPPER casing, only
     the correctly-cased quoted name resolves; a wrong-case quoted name fails not-found.
   source: file/src/test/java/.../OracleLexicalSettingsTest.java; config/CasingTest.java#testCaseSensitiveTableAccess
-  tests: []
+  supersedes: [ OracleLexicalSettingsTest#testCaseSensitivityDemo ]
+  notes: "RECODE: unquoted-folds-to-lower + quoted-lowercase resolve with EXACT ordered rows (LOWER
+    casing); correct-case quoted resolves and wrong-case quoted fails not-found (UPPER casing,
+    single not-found condition not an OR); information_schema case-insensitive via cross-casing count
+    equality (replaces the count>0 / OR-tolerant weak assertions). pg_catalog clause folded into the
+    information_schema case-insensitivity proof."
+  tests:
+    - file/OracleLexicalRequirementsTest#lowercaseIdentifiersResolveWithExactRows
+    - file/OracleLexicalRequirementsTest#correctCaseQuotedResolvesAndWrongCaseFailsNotFound
+    - file/OracleLexicalRequirementsTest#informationSchemaAccessIsCaseInsensitive
+  since: 2026-06
