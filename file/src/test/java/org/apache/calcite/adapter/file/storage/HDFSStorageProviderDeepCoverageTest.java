@@ -166,12 +166,16 @@ public class HDFSStorageProviderDeepCoverageTest {
     assertEquals(1, entries.size());
   }
 
-  @Test
+  @Test @Tag("FILE-117")
   void testListFilesPathNotExists() throws IOException {
     when(mockFileSystem.exists(any(Path.class))).thenReturn(false);
 
-    List<StorageProvider.FileEntry> entries = provider.listFiles("/nonexistent", false);
-    assertTrue(entries.isEmpty());
+    // C-07: a missing HDFS directory raises (standardized with Local/S3), never a silent empty
+    // list that would hide a config mistake.
+    IOException ex = assertThrows(IOException.class,
+        () -> provider.listFiles("/nonexistent", false));
+    assertTrue(ex.getMessage().contains("does not exist"),
+        "missing HDFS path must raise 'does not exist' (got: " + ex.getMessage() + ")");
   }
 
   @Test

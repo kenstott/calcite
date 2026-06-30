@@ -125,12 +125,13 @@ public class HDFSStorageProvider implements StorageProvider {
     Path hdfsPath = createHadoopPath(path);
     List<FileEntry> entries = new ArrayList<>();
 
-    try {
-      if (!hdfsFileSystem.exists(hdfsPath)) {
-        LOGGER.debug("Path does not exist: {}", hdfsPath);
-        return entries;
-      }
+    // C-07: a missing directory is an error (matches Local/S3), not a silent empty list that would
+    // hide a config mistake. Checked before the try so it is not re-wrapped as a generic list failure.
+    if (!hdfsFileSystem.exists(hdfsPath)) {
+      throw new IOException("Directory does not exist: " + path);
+    }
 
+    try {
       if (recursive) {
         // Use listFiles for recursive listing
         org.apache.hadoop.fs.RemoteIterator<org.apache.hadoop.fs.LocatedFileStatus> iterator =

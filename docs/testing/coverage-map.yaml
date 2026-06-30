@@ -95,7 +95,7 @@
 - {id: FILE-114, grade: PARTIAL, action: DONE, note: "RECODEd -> StorageProviderRequirementsTest (FILE-114): listFiles/isDirectory/cacheTtl + bearer>apiKey>basic auth precedence; timeouts/response-codes deferred to FILE-066 live seam"}
 - {id: FILE-115, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-115)"}
 - {id: FILE-116, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-116)"}
-- {id: FILE-117, grade: STRONG, action: RECODE, test: storage/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists, note: "DEMOTE on golden-bar review (2026-06-29): asserts empty list but resolved C-07 requires throw on missing path"}
+- {id: FILE-117, grade: PARTIAL, action: DONE, note: "C-07 IMPLEMENTED: HDFS listFiles throws on missing path; recoded HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists to assert throw (FILE-117)"}
 - {id: FILE-118, grade: PARTIAL, action: DONE, note: "RECODEd -> StorageProviderRequirementsTest (FILE-118): all hasChanged branches + strict 1000ms tolerance boundary via in-memory double"}
 - {id: FILE-141, grade: STRONG, action: LINK, test: partition/IncrementalTrackerTest#testPeriodCompletionKeyYearOnlyNaFills}
 - {id: FILE-142, grade: STRONG, action: LINK, test: partition/S3HivePipelineTrackerEmptyHwmTest#emptyAboveHighWaterMarkStaysPending}

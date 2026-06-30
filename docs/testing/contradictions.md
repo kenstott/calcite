@@ -47,6 +47,8 @@ IAM role / profile) when no explicit creds are given. (FILE-112)
 Local/S3 *throw*, HDFS *empty list*.
 **Resolution:** **Standardize on throw** — make HDFS throw too (a silent empty list hides config
 mistakes). (FILE-113, FILE-117)
+**IMPLEMENTED 2026-06-30:** `HDFSStorageProvider.listFiles` now throws `IOException "Directory does
+not exist"` on a missing path (FILE-117 golden green).
 
 ### C-08 — `confidenceThreshold` dead  → **CODE-WRONG**
 Documented but inert.

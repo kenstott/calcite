@@ -2112,19 +2112,24 @@
 
 - id: FILE-117
   module: file
-  status: proposed
+  status: complete
   group: storage/hdfs
   category: missing-path contract
   priority: MUST
   type: behavioral
   seam: catalog
   description: >
-    HDFSStorageProvider defaults fs.defaultFS to hdfs://localhost:9000; listFiles on a MISSING path returns
-    an EMPTY list (not an exception); recursive uses listFiles(path,true) files-only, non-recursive listStatus
-    includes dirs; delete is always recursive; modificationTime is the pseudo-ETag.
-  source: file/src/main/java/.../storage/HDFSStorageProvider.java 66-365
-  notes: "RESOLVED C-07 (code-wrong): standardize on throw — HDFS throws on a missing dir too."
-  tests: []
+    HDFSStorageProvider defaults fs.defaultFS to hdfs://localhost:9000; listFiles on a MISSING path THROWS
+    IOException "Directory does not exist" (standardized with Local/S3 — C-07 code fix); recursive uses
+    listFiles(path,true) files-only, non-recursive listStatus includes dirs; delete is always recursive;
+    modificationTime is the pseudo-ETag.
+  source: file/src/main/java/.../storage/HDFSStorageProvider.java listFiles 124-158
+  supersedes: [ storage/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists ]
+  notes: "C-07 IMPLEMENTED: HDFSStorageProvider.listFiles now throws IOException 'Directory does not
+    exist' on a missing path (was a silent empty list), matching Local/S3. The cited test was recoded
+    in place (Mockito mock FileSystem) to assert the throw and tagged FILE-117."
+  tests:
+    - file/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists
 
 - id: FILE-118
   module: file
