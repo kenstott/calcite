@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.converters.ConverterUtils;
+import org.apache.calcite.adapter.file.converters.FileConversionManager;
 import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
 import org.apache.calcite.adapter.file.execution.linq4j.CsvEnumerator;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
@@ -50,6 +51,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       convert iff the parquet cache is missing OR {@code source.lastModified() > parquet} (strict;
  *       equal mtimes reuse), and any exception reading timestamps forces a convert. No tolerance
  *       window. (RECODE of {@code ParquetConversionUtilDeepCoverageTest2}'s single newer-branch.)</li>
+ *   <li>FILE-166: {@link FileConversionManager#requiresConversion}/{@code isDirectlyUsable} format
+ *       routing — the requires-conversion set (xlsx/xls/html/htm/xml/md/docx/pptx) and the
+ *       directly-usable set (csv/tsv/json/parquet/arrow/yaml + .gz) pinned exhaustively and disjoint.</li>
  * </ul>
  */
 @Tag("unit")
@@ -311,5 +315,47 @@ public class ConverterUtilRequirementsTest {
     };
     assertTrue(ParquetConversionUtil.needsConversion(source, parquet),
         "any exception reading timestamps must force conversion (no silent reuse)");
+  }
+
+  // ============================================================ FILE-166 ======================
+  // FileConversionManager.requiresConversion / isDirectlyUsable — pure static format routing.
+  // The requires-conversion set and the directly-usable set are pinned exhaustively, proven disjoint,
+  // and an unknown extension falls into neither.
+
+  @Test @Tag("FILE-166") void requiresConversionSetIsExactlyDocumentFormats() {
+    for (String f : new String[] {
+        "a.xlsx", "a.xls", "a.html", "a.htm", "a.xml", "a.md", "a.docx", "a.pptx",
+        "A.DOCX", "deck.PPTX"}) {  // case-insensitive
+      assertTrue(FileConversionManager.requiresConversion(f), f + " must require conversion");
+      assertFalse(FileConversionManager.isDirectlyUsable(f),
+          f + " is a conversion format, not directly usable");
+    }
+  }
+
+  @Test @Tag("FILE-166") void directlyUsableSetIsExactlyDataFormats() {
+    for (String f : new String[] {
+        "a.csv", "a.csv.gz", "a.tsv", "a.tsv.gz", "a.json", "a.json.gz",
+        "a.parquet", "a.arrow", "a.yaml", "a.yml", "DATA.PARQUET"}) {  // case-insensitive
+      assertTrue(FileConversionManager.isDirectlyUsable(f), f + " must be directly usable");
+      assertFalse(FileConversionManager.requiresConversion(f),
+          f + " is directly usable, must not require conversion");
+    }
+  }
+
+  @Test @Tag("FILE-166") void csvJsonParquetAreDirectlyUsableNotConverted() {
+    // FILE-166 names csv/json/parquet specifically as the directly-usable half.
+    assertTrue(FileConversionManager.isDirectlyUsable("t.csv"));
+    assertTrue(FileConversionManager.isDirectlyUsable("t.json"));
+    assertTrue(FileConversionManager.isDirectlyUsable("t.parquet"));
+    assertFalse(FileConversionManager.requiresConversion("t.csv"));
+    assertFalse(FileConversionManager.requiresConversion("t.json"));
+    assertFalse(FileConversionManager.requiresConversion("t.parquet"));
+  }
+
+  @Test @Tag("FILE-166") void unknownExtensionIsNeitherConvertedNorDirectlyUsable() {
+    for (String f : new String[] {"notes.txt", "blob.bin", "archive.zip", "noext"}) {
+      assertFalse(FileConversionManager.requiresConversion(f), f + " is not a conversion format");
+      assertFalse(FileConversionManager.isDirectlyUsable(f), f + " is not a directly-usable format");
+    }
   }
 }

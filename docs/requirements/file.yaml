@@ -3007,7 +3007,7 @@
 
 - id: FILE-166
   module: file
-  status: proposed
+  status: complete
   group: conversion
   category: format routing
   priority: MUST
@@ -3016,8 +3016,17 @@
   description: >
     FileConversionManager routes docx/pptx/md/html/xml to document converters (requiresConversion true,
     isDirectlyUsable false → extracted to JSON), while csv/json/parquet are directly usable (no conversion).
-  source: file/src/test/java/.../converters/DocumentConverterIntegrationTest.java
-  tests: []
+  source: file/src/main/java/.../converters/FileConversionManager.java 340-361
+  supersedes: [ converters/FileConversionManagerTest#testRequiresConversionForDocx ]
+  notes: "RECODE: the full requires-conversion set (xlsx/xls/html/htm/xml/md/docx/pptx) and the full
+    directly-usable set (csv/tsv/json/parquet/arrow/yaml/yml + .gz) pinned exhaustively and proven
+    disjoint (case-insensitive); an unknown extension is in neither. Strengthens the single-docx weak test."
+  tests:
+    - file/ConverterUtilRequirementsTest#requiresConversionSetIsExactlyDocumentFormats
+    - file/ConverterUtilRequirementsTest#directlyUsableSetIsExactlyDataFormats
+    - file/ConverterUtilRequirementsTest#csvJsonParquetAreDirectlyUsableNotConverted
+    - file/ConverterUtilRequirementsTest#unknownExtensionIsNeitherConvertedNorDirectlyUsable
+  since: 2026-06
 
 - id: FILE-167
   module: file
