@@ -77,7 +77,7 @@
 - {id: FILE-046, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-046)"}
 - {id: FILE-047, grade: NONE, action: WRITE, note: "operand default values"}
 - {id: FILE-048, grade: STRONG, action: LINK, test: config/CasingTest#testDefaultSmartCasingBehavior}
-- {id: FILE-049, grade: STRONG, action: RECODE, test: config/EnvironmentVariableTest#testMissingVariableThrows, note: "DEMOTE on golden-bar review (2026-06-29): proves only undefined-throws; default fallback, resolution order, type conversion untested"}
+- {id: FILE-049, grade: STRONG, action: DONE, note: "RECODEd -> EnvVarSubstitutionRequirementsTest (FILE-049): exact map-subst + JSON type-convert + sysprop-overrides-env (C-33 reword)"}
 - {id: FILE-050, grade: STRONG, action: LINK, test: table/MultipleSchemaTest#testDuplicateSchemaNames}
 - {id: FILE-051, grade: NONE, action: DONE, note: "AperioDriverOperandTest#operandDefaults; URL-parse still pending"}
 - {id: FILE-064, grade: PARTIAL, action: DONE, test: storage/HDFSStorageProviderIntegrationTest#testRecursiveDirectoryListing, note: "auto-routing/auth untested; MiniDFS"}

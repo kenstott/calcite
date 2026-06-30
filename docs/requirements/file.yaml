@@ -858,7 +858,7 @@
 
 - id: FILE-049
   module: file
-  status: proposed
+  status: complete
   group: config
   category: env-var substitution
   priority: MUST
@@ -866,9 +866,20 @@
   seam: catalog
   description: >
     Operand values support ${VAR} (throws IllegalArgumentException if undefined) and ${VAR:default},
-    resolved env → system property → default → error; numeric/boolean strings are type-converted.
-  source: file/docs/api-reference.md; file/docs/configuration-reference.md; file/docs/troubleshooting.md
-  tests: []
+    resolved system property → env → default → error (system properties OVERRIDE env vars — C-33,
+    reworded from the original "env → system property"); standalone numeric/boolean ${VAR} JSON values
+    are type-converted (emitted unquoted).
+  source: core/src/main/java/org/apache/calcite/util/EnvironmentVariableSubstitutor.java 62-217
+  supersedes: [ config/EnvironmentVariableTest#testMissingVariableThrows ]
+  notes: "RECODE: exact map-substitution (value/default/value-beats-default/empty-default/multi-var/
+    undefined-throws), exact JSON type-conversion (number/boolean unquoted, string quoted), and the
+    sysprop-overrides-env order proven via the production substitute(String). C-33: the order is
+    sysprop>env (intentional, 'System properties take precedence'), not the doc's env>sysprop."
+  tests:
+    - file/EnvVarSubstitutionRequirementsTest#mapSubstituteResolvesDefaultsAndThrows
+    - file/EnvVarSubstitutionRequirementsTest#jsonSubstituteUnquotesNumbersAndBooleansKeepsStrings
+    - file/EnvVarSubstitutionRequirementsTest#systemPropertyOverridesEnvAndUndefinedThrows
+  since: 2026-06
 
 - id: FILE-050
   module: file
