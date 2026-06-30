@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
 import org.apache.calcite.adapter.file.converters.MultiTableExcelToJsonConverter;
+import org.apache.calcite.adapter.file.converters.XmlToJsonConverter;
 import org.apache.calcite.adapter.file.format.json.JsonMultiTableFactory;
 import org.apache.calcite.adapter.file.format.json.JsonSearchConfig;
 import org.apache.calcite.schema.Table;
@@ -364,5 +365,47 @@ public class TableExtractionRequirementsTest {
     assertTrue(nestedTables.containsKey("users"), "parent table from $.data.users");
     assertTrue(nestedTables.containsKey("orders"),
         "child table from the nested $.data.users[0].orders path");
+  }
+
+  // ============================================================ FILE-060 (naming) ===============
+
+  /**
+   * FILE-060: embedded multi-table sources name each emitted table {@code <base>__<tablename>} with
+   * the {@code __} (double-underscore) separator. Asserted exactly on the XML converter's emitted
+   * file-SET. (The other half of FILE-060 — a subdirectory crawl joining the relative path with
+   * {@code __}, e.g. {@code sales/2024/january → sales__2024__january} — is proven at the schema-walk
+   * seam by {@code NamingUnionTrackerRequirementsTest#filenameDerivesLowercasedSanitizedTableName}.)
+   */
+  @Test @Tag("FILE-060")
+  void embeddedMultiTableNamesUseDoubleUnderscoreSeparator(@TempDir Path root) throws Exception {
+    String xml =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<company>\n"
+        + "  <departments>\n"
+        + "    <department id=\"1\"><name>Engineering</name><budget>100000</budget></department>\n"
+        + "    <department id=\"2\"><name>Sales</name><budget>75000</budget></department>\n"
+        + "  </departments>\n"
+        + "  <employees>\n"
+        + "    <employee id=\"101\"><name>Alice</name><salary>80000</salary></employee>\n"
+        + "    <employee id=\"102\"><name>Bob</name><salary>65000</salary></employee>\n"
+        + "    <employee id=\"103\"><name>Carol</name><salary>90000</salary></employee>\n"
+        + "  </employees>\n"
+        + "</company>";
+    File xmlFile = root.resolve("company.xml").toFile();
+    Files.write(xmlFile.toPath(), xml.getBytes(StandardCharsets.UTF_8));
+    File outDir = Files.createDirectories(root.resolve("out")).toFile();
+
+    XmlToJsonConverter.convert(xmlFile, outDir, outDir);
+
+    // Base name "company" + each repeating element name, joined by "__".
+    Set<String> expected = new TreeSet<>();
+    expected.add("company__department.json");
+    expected.add("company__employee.json");
+    assertEquals(expected, tableJsonNames(outDir),
+        "embedded multi-table names must be <base>__<tablename> with the __ separator");
+
+    // Goldenness: each emitted table holds exactly its rows (2 departments, 3 employees).
+    assertEquals(2, readArray(outDir, "company__department.json").size(), "two departments");
+    assertEquals(3, readArray(outDir, "company__employee.json").size(), "three employees");
   }
 }

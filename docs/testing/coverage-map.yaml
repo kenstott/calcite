@@ -37,7 +37,7 @@
 - {id: FILE-057, grade: NONE, action: REJECTED, note: "doc-only — excelConfig absent in source; requirement rejected"}
 - {id: FILE-058, grade: NONE, action: REJECTED, note: "doc-only — htmlConfig/crawlConfig absent in source; requirement rejected"}
 - {id: FILE-059, grade: NONE, action: REJECTED, note: "doc-only — xmlConfig absent in source; requirement rejected"}
-- {id: FILE-060, grade: STRONG, action: RECODE, test: feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning, note: "DEMOTE on golden-bar review (2026-06-29): proves subdir __ joining only, not the lead embedded multi-table naming clause"}
+- {id: FILE-060, grade: PARTIAL, action: DONE, note: "RECODEd -> TableExtractionRequirementsTest (FILE-060): embedded <base>__<table> exact name-set; subdir __-join cross-linked to NamingUnionTracker"}
 - {id: FILE-061, grade: PARTIAL, action: DONE, test: config/CasingTest#testDefaultSmartCasingBehavior, note: "hyphen->_ and nested path not pinned"}
 - {id: FILE-062, grade: STRONG, action: LINK, test: format/YamlFileTest#testNestedYaml}
 - {id: FILE-063, grade: PARTIAL, action: DONE, test: format/CompressedFileTest#testGzippedCsvFile, note: "only gz; bz2/xz/zip uncovered"}

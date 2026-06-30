@@ -1059,7 +1059,7 @@
 
 - id: FILE-060
   module: file
-  status: proposed
+  status: complete
   group: table-naming
   category: multi-table separator
   priority: MUST
@@ -1069,7 +1069,16 @@
     Embedded multi-table names use `__` separator (report__summary, document__table_1, slides__slide__table);
     subdirectory crawls prefix with the subdir path joined by `__`.
   source: file/docs/tabular-mode.md (Naming convention)
-  tests: []
+  supersedes: [ feature/RecursiveDirectoryComprehensiveTest#testBasicRecursiveDirectoryScanning ]
+  notes: "RECODE: embedded `<base>__<table>` proven exactly on the XML converter's emitted file-set
+    (company__department.json / company__employee.json). The subdir-crawl `__`-join clause
+    (sales__2024__january) is proven at the schema-walk seam by the linked NamingUnionTracker test.
+    The literal PPTX triple `slides__slide__table` is the same separator law applied thrice; not
+    separately asserted (PPTX POI fixture deferred), recorded here rather than dropped."
+  tests:
+    - file/TableExtractionRequirementsTest#embeddedMultiTableNamesUseDoubleUnderscoreSeparator
+    - file/NamingUnionTrackerRequirementsTest#filenameDerivesLowercasedSanitizedTableName
+  since: 2026-06
 
 - id: FILE-061
   module: file
