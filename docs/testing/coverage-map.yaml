@@ -92,11 +92,11 @@
 - {id: FILE-111, grade: PARTIAL, action: DONE, test: FileSchemaDeepCoverageTest3#testIsGlobPatternHttpUrl, note: "glob alias + bounded-depth not tied"}
 - {id: FILE-112, grade: STRONG, action: LINK, test: storage/StorageProviderFactoryCoverageTest#testS3Scheme}
 - {id: FILE-113, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-113)"}
-- {id: FILE-114, grade: STRONG, action: RECODE, test: storage/HttpStorageProviderCoverageTest#testIsDirectoryAlwaysFalse, note: "DEMOTE on golden-bar review (2026-06-29): only isDirectory-false fragment, not timeout/response-code/auth-precedence core"}
+- {id: FILE-114, grade: PARTIAL, action: DONE, note: "RECODEd -> StorageProviderRequirementsTest (FILE-114): listFiles/isDirectory/cacheTtl + bearer>apiKey>basic auth precedence; timeouts/response-codes deferred to FILE-066 live seam"}
 - {id: FILE-115, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-115)"}
 - {id: FILE-116, grade: PARTIAL, action: DONE, note: "Wave1 agent-drafted recode (tagged FILE-116)"}
 - {id: FILE-117, grade: STRONG, action: RECODE, test: storage/HDFSStorageProviderDeepCoverageTest#testListFilesPathNotExists, note: "DEMOTE on golden-bar review (2026-06-29): asserts empty list but resolved C-07 requires throw on missing path"}
-- {id: FILE-118, grade: STRONG, action: RECODE, test: storage/StorageProviderBaseCoverageTest#testHasChangedWithNullMetadata, note: "DEMOTE on golden-bar review (2026-06-29): only null-cached->changed slice, not size/etag/lastModified/IOException contract"}
+- {id: FILE-118, grade: PARTIAL, action: DONE, note: "RECODEd -> StorageProviderRequirementsTest (FILE-118): all hasChanged branches + strict 1000ms tolerance boundary via in-memory double"}
 - {id: FILE-141, grade: STRONG, action: LINK, test: partition/IncrementalTrackerTest#testPeriodCompletionKeyYearOnlyNaFills}
 - {id: FILE-142, grade: STRONG, action: LINK, test: partition/S3HivePipelineTrackerEmptyHwmTest#emptyAboveHighWaterMarkStaysPending}
 - {id: FILE-146, grade: STRONG, action: RECODE, test: FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles, note: "DEMOTE on golden-bar review (2026-06-29): only schema name=files; snake_case params/defaults/Aperio-distinction untested"}

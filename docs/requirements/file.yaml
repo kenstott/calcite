@@ -2021,7 +2021,7 @@
 
 - id: FILE-114
   module: file
-  status: proposed
+  status: complete
   group: storage/http
   category: timeouts & response codes
   priority: MUST
@@ -2032,7 +2032,19 @@
     200/201/304 (else IOException "HTTP error code"), listFiles always UnsupportedOperationException,
     isDirectory always false; HttpConfig cacheTtl default 300000ms; auth precedence bearer>apiKey>basic.
   source: file/src/main/java/.../storage/HttpStorageProvider.java 150-507; HttpConfig.java 54-93
-  tests: []
+  supersedes: [ storage/HttpStorageProviderCoverageTest#testIsDirectoryAlwaysFalse ]
+  notes: "RECODE: listFiles-throws, isDirectory-false, cacheTtl default 300000, and the bearer>apiKey>basic
+    auth precedence (verified via a recording HttpURLConnection — the sun.net conn hides Authorization
+    from getRequestProperty). The hard-coded timeouts/User-Agent and the 200/201/304 accept-set need a
+    live request and are deferred to the HTTP live-service seam (FILE-066)."
+  tests:
+    - file/StorageProviderRequirementsTest#httpListFilesAlwaysUnsupported
+    - file/StorageProviderRequirementsTest#httpIsDirectoryAlwaysFalse
+    - file/StorageProviderRequirementsTest#httpConfigCacheTtlDefaults300000
+    - file/StorageProviderRequirementsTest#authBearerWinsOverApiKeyAndBasic
+    - file/StorageProviderRequirementsTest#authApiKeyWinsOverBasic
+    - file/StorageProviderRequirementsTest#authBasicWhenOnlyBasicPresent
+  since: 2026-06
 
 - id: FILE-115
   module: file
@@ -2088,7 +2100,7 @@
 
 - id: FILE-118
   module: file
-  status: proposed
+  status: complete
   group: storage
   category: hasChanged comparison
   priority: MUST
@@ -2099,7 +2111,22 @@
     lastModified with a 1000ms tolerance; any IOException → changed=true. (Shared change-detection primitive
     behind refresh/conversion.)
   source: file/src/main/java/.../storage/StorageProvider.java hasChanged 245-273
-  tests: []
+  supersedes: [ storage/StorageProviderBaseCoverageTest#testHasChangedWithNullMetadata ]
+  notes: "RECODE: all branches via an in-memory provider double with fixed epoch constants — null-cached,
+    size-before-etag, etag equal/differ, etag short-circuits lastModified, null-etag fall-through, the
+    strict 1000ms tolerance boundary (1000 unchanged / 1001 changed, both directions), and IOException
+    -> changed."
+  tests:
+    - file/StorageProviderRequirementsTest#nullCachedMetadataIsAlwaysChanged
+    - file/StorageProviderRequirementsTest#differingSizeIsChangedBeforeEtagCheck
+    - file/StorageProviderRequirementsTest#sameSizeSameEtagIsUnchanged
+    - file/StorageProviderRequirementsTest#differingEtagIsChanged
+    - file/StorageProviderRequirementsTest#etagWinsOverLastModifiedWhenBothPresent
+    - file/StorageProviderRequirementsTest#oneEtagNullFallsThroughToLastModified
+    - file/StorageProviderRequirementsTest#lastModifiedAtToleranceBoundaryIsUnchanged
+    - file/StorageProviderRequirementsTest#lastModifiedBeyondToleranceIsChangedBothDirections
+    - file/StorageProviderRequirementsTest#ioExceptionFromGetMetadataAssumesChanged
+  since: 2026-06
 
 # ===================================== engines / optimization / statistics ======================
 

@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.storage.FtpStorageProvider;
+import org.apache.calcite.adapter.file.storage.HttpConfig;
+import org.apache.calcite.adapter.file.storage.HttpStorageProvider;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.S3StorageProvider;
 import org.apache.calcite.adapter.file.storage.SftpStorageProvider;
@@ -24,11 +26,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +44,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,6 +60,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * SFTP {@code strictHostKeyChecking}, S3 region/path-style) is not exposed through a public
  * accessor, it is read directly from the declaring field/built client so the assertion remains
  * exact rather than degrading to a smoke test.
+ *
+ * <p>FILE-118: {@code StorageProvider.hasChanged} change-detection — null cached → changed; size,
+ * then ETag (when both present, short-circuiting), then lastModified with a strict 1000ms tolerance;
+ * any IOException → changed. Asserted against an in-memory provider double with fixed epoch constants.
+ *
+ * <p>FILE-114: {@code HttpStorageProvider} — listFiles always UnsupportedOperationException,
+ * isDirectory always false, {@code HttpConfig.cacheTtl} default 300000ms, and the bearer&gt;apiKey&gt;
+ * basic auth precedence (read back from the request properties applyAuth sets, no socket opened).
+ * The hard-coded timeouts/User-Agent and the 200/201/304 response-code accept-set are reachable only
+ * through a live request and are deferred to the HTTP live-service test (FILE-066 seam).
  */
 @Tag("unit")
 public class StorageProviderRequirementsTest {
@@ -273,5 +292,208 @@ public class StorageProviderRequirementsTest {
     assertNotNull(options, "built S3 client must carry S3ClientOptions");
     Method isPathStyle = options.getClass().getMethod("isPathStyleAccess");
     return (Boolean) isPathStyle.invoke(options);
+  }
+
+  // ============================================================ FILE-118 =====================
+  // StorageProvider.hasChanged: null cached -> changed; size, then ETag (both present, short-circuit),
+  // then lastModified with a strict 1000ms tolerance; IOException -> changed. Fixed epoch constants.
+
+  private static final long BASE = 1_700_000_000_000L;
+  private static final String PATH = "/test/file.csv";
+
+  /** In-memory provider whose getMetadata returns a caller-set "current" metadata (or throws). */
+  private static final class HasChangedProvider implements StorageProvider {
+    private StorageProvider.FileMetadata current;
+    private boolean throwOnGetMetadata;
+
+    @Override public StorageProvider.FileMetadata getMetadata(String path) throws IOException {
+      if (throwOnGetMetadata) {
+        throw new IOException("forced getMetadata failure");
+      }
+      return current;
+    }
+
+    @Override public List<StorageProvider.FileEntry> listFiles(String path, boolean recursive) {
+      return Collections.emptyList();
+    }
+
+    @Override public InputStream openInputStream(String path) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override public Reader openReader(String path) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override public boolean exists(String path) {
+      return true;
+    }
+
+    @Override public boolean isDirectory(String path) {
+      return false;
+    }
+
+    @Override public String getStorageType() {
+      return "test";
+    }
+
+    @Override public String resolvePath(String basePath, String relativePath) {
+      return basePath + "/" + relativePath;
+    }
+  }
+
+  private static StorageProvider.FileMetadata md(long size, long lastModified, String etag) {
+    return new StorageProvider.FileMetadata(PATH, size, lastModified, null, etag);
+  }
+
+  @Test @Tag("FILE-118") void nullCachedMetadataIsAlwaysChanged() throws IOException {
+    // Null cached returns before any getMetadata call (provider has no current set).
+    assertTrue(new HasChangedProvider().hasChanged(PATH, null),
+        "a null cached metadata must always be treated as changed");
+  }
+
+  @Test @Tag("FILE-118") void differingSizeIsChangedBeforeEtagCheck() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(200, BASE, "same");                 // identical etag, but size differs
+    assertTrue(p.hasChanged(PATH, md(100, BASE, "same")),
+        "a size difference is changed and is checked before the etag");
+  }
+
+  @Test @Tag("FILE-118") void sameSizeSameEtagIsUnchanged() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(100, BASE, "etag-same");
+    assertFalse(p.hasChanged(PATH, md(100, BASE, "etag-same")),
+        "equal size and equal etag is unchanged");
+  }
+
+  @Test @Tag("FILE-118") void differingEtagIsChanged() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(100, BASE, "etag-new");
+    assertTrue(p.hasChanged(PATH, md(100, BASE, "etag-old")),
+        "same size but different etag is changed");
+  }
+
+  @Test @Tag("FILE-118") void etagWinsOverLastModifiedWhenBothPresent() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(100, BASE + 10_000, "etag-same");   // 10s lastModified gap, far beyond tolerance
+    assertFalse(p.hasChanged(PATH, md(100, BASE, "etag-same")),
+        "equal etags short-circuit before lastModified, so a large mtime gap is ignored");
+  }
+
+  @Test @Tag("FILE-118") void oneEtagNullFallsThroughToLastModified() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(100, BASE, "etag-abc");
+    assertFalse(p.hasChanged(PATH, md(100, BASE, null)),
+        "a null etag on either side skips the etag block; equal lastModified is unchanged");
+  }
+
+  @Test @Tag("FILE-118") void lastModifiedAtToleranceBoundaryIsUnchanged() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(100, BASE, null);
+    // diff of exactly 1000ms is NOT changed (boundary is strict >).
+    assertFalse(p.hasChanged(PATH, md(100, BASE - 1000, null)),
+        "lastModified delta of exactly 1000ms is within tolerance (strict >)");
+  }
+
+  @Test @Tag("FILE-118") void lastModifiedBeyondToleranceIsChangedBothDirections() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.current = md(100, BASE, null);
+    assertTrue(p.hasChanged(PATH, md(100, BASE - 1001, null)),
+        "lastModified delta of 1001ms exceeds tolerance");
+    assertTrue(p.hasChanged(PATH, md(100, BASE + 1001, null)),
+        "Math.abs: a 1001ms delta in either direction exceeds tolerance");
+  }
+
+  @Test @Tag("FILE-118") void ioExceptionFromGetMetadataAssumesChanged() throws IOException {
+    HasChangedProvider p = new HasChangedProvider();
+    p.throwOnGetMetadata = true;
+    assertTrue(p.hasChanged(PATH, md(100, BASE, null)),
+        "an IOException reading current metadata is treated as changed");
+  }
+
+  // ============================================================ FILE-114 =====================
+  // HttpStorageProvider structural contract + auth precedence. Hermetic: no socket is opened —
+  // applyAuth only sets request properties, read back from a lazily-created (never connected) conn.
+
+  @Test @Tag("FILE-114") void httpListFilesAlwaysUnsupported() {
+    HttpStorageProvider p = new HttpStorageProvider();
+    UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class,
+        () -> p.listFiles("http://example.com/", true));
+    assertEquals("HTTP storage does not support directory listing", ex.getMessage());
+  }
+
+  @Test @Tag("FILE-114") void httpIsDirectoryAlwaysFalse() throws IOException {
+    HttpStorageProvider p = new HttpStorageProvider();
+    assertFalse(p.isDirectory("http://example.com/dir/"), "HTTP isDirectory is always false");
+    assertFalse(p.isDirectory("http://example.com/file.csv"));
+  }
+
+  @Test @Tag("FILE-114") void httpConfigCacheTtlDefaults300000() {
+    assertEquals(300000L, new HttpConfig.Builder().build().getCacheTtl(),
+        "HttpConfig cacheTtl must default to 300000ms");
+  }
+
+  /**
+   * Records request properties applyAuth sets. A real {@code sun.net} HttpURLConnection filters the
+   * {@code Authorization}/{@code Proxy-Authorization} headers out of getRequestProperty for security,
+   * so we capture the set calls directly to verify exactly what applyAuth applied.
+   */
+  private static final class RecordingConnection extends HttpURLConnection {
+    private final Map<String, String> props = new HashMap<String, String>();
+
+    RecordingConnection() throws Exception {
+      super(new URI("http://example.com/x").toURL());
+    }
+
+    @Override public void setRequestProperty(String key, String value) {
+      props.put(key, value);
+    }
+
+    @Override public String getRequestProperty(String key) {
+      return props.get(key);
+    }
+
+    @Override public void connect() { }
+
+    @Override public void disconnect() { }
+
+    @Override public boolean usingProxy() {
+      return false;
+    }
+  }
+
+  /** Invokes the private applyAuth on a recording conn (no socket) and returns it for readback. */
+  private static RecordingConnection applyAuthTo(HttpConfig config) throws Exception {
+    HttpStorageProvider p =
+        new HttpStorageProvider("GET", null, new HashMap<String, String>(), null, config);
+    RecordingConnection conn = new RecordingConnection();
+    Method m = HttpStorageProvider.class.getDeclaredMethod("applyAuth", HttpURLConnection.class);
+    m.setAccessible(true);
+    m.invoke(p, conn);
+    return conn;
+  }
+
+  @Test @Tag("FILE-114") void authBearerWinsOverApiKeyAndBasic() throws Exception {
+    HttpConfig config =
+        new HttpConfig.Builder().bearerToken("tok").apiKey("k").basicAuth("u", "pw").build();
+    HttpURLConnection conn = applyAuthTo(config);
+    assertEquals("Bearer tok", conn.getRequestProperty("Authorization"),
+        "bearer token wins over apiKey and basic");
+    assertNull(conn.getRequestProperty("X-API-Key"), "apiKey header must not be set when bearer wins");
+  }
+
+  @Test @Tag("FILE-114") void authApiKeyWinsOverBasic() throws Exception {
+    HttpConfig config = new HttpConfig.Builder().apiKey("k").basicAuth("u", "pw").build();
+    HttpURLConnection conn = applyAuthTo(config);
+    assertEquals("k", conn.getRequestProperty("X-API-Key"), "apiKey wins over basic");
+    assertNull(conn.getRequestProperty("Authorization"), "basic header must not be set when apiKey wins");
+  }
+
+  @Test @Tag("FILE-114") void authBasicWhenOnlyBasicPresent() throws Exception {
+    HttpConfig config = new HttpConfig.Builder().basicAuth("u", "pw").build();
+    HttpURLConnection conn = applyAuthTo(config);
+    String expected =
+        "Basic " + Base64.getEncoder().encodeToString("u:pw".getBytes(StandardCharsets.UTF_8));
+    assertEquals(expected, conn.getRequestProperty("Authorization"), "basic auth header");
   }
 }
