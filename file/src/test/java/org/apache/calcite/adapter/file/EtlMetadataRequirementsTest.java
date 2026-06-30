@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.etl.HooksConfig.HookErrorHandling;
+import org.apache.calcite.adapter.file.etl.HooksConfig.HookErrorHandling.ErrorAction;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
@@ -56,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       when re-conversion fails.</li>
  * </ul>
  */
+@Tag("unit")
 public class EtlMetadataRequirementsTest {
 
   @TempDir
@@ -288,5 +291,34 @@ public class EtlMetadataRequirementsTest {
     // parquet before invoking the conversion, so the on-disk file may be gone on the failure
     // path; the load-bearing invariant is that the parquetFile reference is unchanged.)
     assertEquals(existingCache, table.getParquetFile());
+  }
+
+  // ----------------------------------------------------------------- FILE-085 -----------------
+  // ETL hook error-handling defaults. The per-row order responseTransformer -> rowTransformers ->
+  // validators cannot be proven end-to-end because the validators stage is unwired (C-34), so this
+  // pins the documented error-policy defaults exactly, and the @Disabled target records the gap.
+
+  @Test @Tag("FILE-085") void hookErrorHandlingDefaultsAreFailSkipRowContinue() {
+    HookErrorHandling d = HookErrorHandling.defaults();
+    assertEquals(ErrorAction.FAIL, d.getResponseTransformerAction(), "responseTransformer default=fail");
+    assertEquals(ErrorAction.SKIP_ROW, d.getRowTransformerAction(), "rowTransformer default=skip_row");
+    assertEquals(ErrorAction.CONTINUE, d.getValidatorAction(), "validator default=continue");
+
+    // An empty hooks errorHandling map yields the same three defaults.
+    HookErrorHandling fm = HookErrorHandling.fromMap(new java.util.HashMap<String, Object>());
+    assertEquals(ErrorAction.FAIL, fm.getResponseTransformerAction());
+    assertEquals(ErrorAction.SKIP_ROW, fm.getRowTransformerAction());
+    assertEquals(ErrorAction.CONTINUE, fm.getValidatorAction());
+  }
+
+  @Test @Tag("FILE-085")
+  @org.junit.jupiter.api.Disabled("C-34: the validators stage is declared (HooksConfig.getValidators "
+      + "/ Validator.validate) but NEVER invoked in production code — the full per-row order "
+      + "responseTransformer -> rowTransformers -> validators and the validator drop|warn|fail actions "
+      + "cannot be proven until the stage is wired. Pagination streaming to Iceberg is integration.")
+  void fullHookOrderThroughValidators_target() {
+    // INTENDED (documented, NOT asserted as passing): per-row responseTransformer -> rowTransformers
+    // -> validators, validators applying drop|warn|fail. The validators stage has no call site, so no
+    // assertion of current behavior is made here.
   }
 }

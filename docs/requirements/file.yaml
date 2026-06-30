@@ -1492,7 +1492,7 @@
 
 - id: FILE-085
   module: file
-  status: proposed
+  status: in-progress
   group: document-etl
   category: hook order & error policy
   priority: MUST
@@ -1504,7 +1504,15 @@
     (drop|warn|fail). errorHandling defaults responseTransformer=fail, rowTransformer=skip_row, validator=continue.
     Pagination offset|cursor|page|csv_stream streams to Iceberg incrementally (no OOM).
   source: file/docs/document-etl.md (Hooks / Pagination)
-  tests: []
+  notes: "RECODE PARTIAL: error-handling defaults (fail/skip_row/continue) pinned exactly. The full
+    per-row order responseTransformer->rowTransformers->validators CANNOT be proven — the validators
+    stage is declared (HooksConfig.getValidators / Validator.validate) but NEVER invoked (C-34, dead
+    code); staged @Disabled. rowTransformer declaration-order is covered by
+    etl/RowTransformerStreamingTest. Pagination->Iceberg is an integration follow-up. Kept in-progress
+    until validators are wired. (Also added @Tag(unit) to EtlMetadataRequirementsTest so it runs in
+    the unit suite.)"
+  tests:
+    - file/EtlMetadataRequirementsTest#hookErrorHandlingDefaultsAreFailSkipRowContinue
 
 # ============================ refresh / freshness ==============================================
 

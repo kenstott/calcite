@@ -154,7 +154,7 @@
 - {id: FILE-082, grade: WEAK, action: DONE, test: etl/HttpSourceCoverageTest#testConstructorWithResponseTransformer, note: "'[]' contract not asserted"}
 - {id: FILE-083, grade: PARTIAL, action: DONE, test: etl/DimensionTypeTest#testFromStringYearRange, note: "cartesian/window not verified"}
 - {id: FILE-084, grade: WEAK, action: DONE, test: partition/IncrementalTrackerTest#testNoopIsProcessedReturnsFalse, note: "S3 resumability untested"}
-- {id: FILE-085, grade: STRONG, action: RECODE, test: etl/RowTransformerStreamingTest#transformersChainAndComposeFanOut, note: "DEMOTE on golden-bar review (2026-06-29): proves rowTransformer chaining only, not full hook order/error defaults/pagination"}
+- {id: FILE-085, grade: STRONG, action: STAGED, note: "RECODEd -> EtlMetadataRequirementsTest (FILE-085): error defaults exact; full order/validators @Disabled (C-34, validators unwired); pagination=integration"}
 - {id: FILE-086, grade: NONE, action: DONE, note: "FINDING: schema-level refreshInterval did not disable parquet cache; test @Disabled"}
 - {id: FILE-087, grade: STRONG, action: RECODE, test: materialization/MaterializedViewTableTest#materializeOnlyOnce, note: "DEMOTE on golden-bar review (2026-06-29): integration-tagged; only mtime/size proxy, no exact output or optimizer rewrite"}
 - {id: FILE-088, grade: STRONG, action: LINK, test: etl/FreshnessSkipGateTest#testUnchangedTokenCausesSkip}
