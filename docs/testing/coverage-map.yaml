@@ -180,7 +180,7 @@
 - {id: FILE-144, grade: PARTIAL, action: DONE, test: iceberg/IcebergTableWriterCoverageTest#testCommitDataFilesEmpty, note: "version-hint/orphan not asserted"}
 - {id: FILE-145, grade: WEAK, action: DONE, test: iceberg/IcebergEnumeratorTest#testSnapshotIdQuery, note: "precedence/stats-gap untested (C-22)"}
 - {id: FILE-163, grade: STRONG, action: RECODE, test: etl/IcebergMaterializationWriterTest#testIcebergInitializeWithNullConfigThrows, note: "DEMOTE on golden-bar review (2026-06-29): integration-tagged (Hadoop/Iceberg/DuckDB live deps)"}
-- {id: FILE-164, grade: STRONG, action: RECODE, test: iceberg/IcebergMetadataTablesTest#testCreateMetadataTablesReturnsAllExpectedTables, note: "DEMOTE on golden-bar review (2026-06-29): only size==5 + containsKey; column-count and populated-partition facts omitted"}
+- {id: FILE-164, grade: PARTIAL, action: DONE, note: "RECODEd -> IcebergMetadataRequirementsTest (FILE-164): exact 5-name set + ordered columns + empty 0-rows + populated counts"}
 - {id: FILE-166, grade: PARTIAL, action: DONE, note: "RECODEd -> ConverterUtilRequirementsTest (FILE-166): full requires-conversion + directly-usable sets, disjoint, case-insensitive"}
 - {id: FILE-167, grade: PARTIAL, action: DONE, test: cache/ConcurrentParquetCacheTest#testConcurrentConversionSerializesAccess, note: "atomicity/schema-scope not pinned"}
 - {id: FILE-125, grade: NONE, action: DONE, note: "ResolvedBugTargetsTest: @Disabled /tmp-marker guard (C-19)"}

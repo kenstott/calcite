@@ -3003,7 +3003,7 @@
 
 - id: FILE-164
   module: file
-  status: proposed
+  status: complete
   group: iceberg
   category: metadata tables shape
   priority: SHOULD
@@ -3014,8 +3014,18 @@
     IcebergMetadataTables.createMetadataTables returns exactly 5 ScannableTables: history (4 cols), snapshots
     (6 cols), files, manifests, partitions; empty tables scan to 0 rows; a populated unpartitioned table yields
     one partition row with record_count=2, file_count=1, .parquet paths.
-  source: file/src/test/java/.../iceberg/IcebergMetadataTablesTest.java
-  tests: []
+  source: file/src/main/java/.../iceberg/IcebergMetadataTables.java 44-322
+  supersedes: [ iceberg/IcebergMetadataTablesTest#testCreateMetadataTablesReturnsAllExpectedTables ]
+  notes: "RECODE: exact 5-name set (not containsKey), each table's EXACT ordered column list (history/
+    snapshots/files/manifests/partitions), empty-table scans -> 0 rows, and the populated unpartitioned
+    facts (partitions record_count=2/file_count=1, files record_count=2 + .parquet path). Hermetic local
+    HadoopCatalog under @TempDir; kept in a @Tag(unit) class (IcebergRequirementsTest is @Tag integration,
+    which would exclude it from the unit suite)."
+  tests:
+    - file/IcebergMetadataRequirementsTest#metadataTablesHaveExactNamesAndColumnLists
+    - file/IcebergMetadataRequirementsTest#emptyTableMetadataScansYieldZeroRows
+    - file/IcebergMetadataRequirementsTest#populatedUnpartitionedTableYieldsExactCounts
+  since: 2026-06
 
 - id: FILE-165
   module: file
