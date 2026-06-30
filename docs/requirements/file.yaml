@@ -2664,7 +2664,7 @@
 
 - id: FILE-146
   module: file
-  status: proposed
+  status: complete
   group: jdbc
   category: second JDBC driver
   priority: MUST
@@ -2676,8 +2676,18 @@
     storagePath=${java.io.tmpdir}/calcite_file_storage, dataPath=${user.dir}/data) — distinct from AperioDriver's
     jdbc:aperio: camelCase params.
   source: file/src/main/java/.../FileJdbcDriver.java parseConfiguration 151-276
-  notes: "RESOLVED C-12 (consolidate): make AperioDriver canonical; deprecate FileJdbcDriver; align to DuckDB-if-available."
-  tests: []
+  supersedes: [ FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles ]
+  notes: "RECODE: full snake_case param set each maps to its field, the injected defaults
+    (engine=parquet/batchSize=2048/tmpdir+user.dir paths), acceptsURL scope, and the AperioDriver
+    distinction (jdbc:aperio prefix + camelCase executionEngine, not snake_case engine). Pins CURRENT
+    behavior; RESOLVED C-12 (consolidate) is a future change — make AperioDriver canonical, deprecate
+    FileJdbcDriver, align to DuckDB-if-available. FILE-168 keeps the float-batch_size fallback."
+  tests:
+    - file/FileJdbcDriverRequirementsTest#snakeCaseParamsEachMapToTheirField
+    - file/FileJdbcDriverRequirementsTest#defaultsWhenOnlySchemaFile
+    - file/FileJdbcDriverRequirementsTest#acceptsCalciteSchemaFileUrlOnly
+    - file/FileJdbcDriverRequirementsTest#distinctFromAperioDriverByPrefixAndCamelCaseOperand
+  since: 2026-06
 
 - id: FILE-147
   module: file

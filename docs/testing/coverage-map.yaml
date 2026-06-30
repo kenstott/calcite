@@ -99,7 +99,7 @@
 - {id: FILE-118, grade: PARTIAL, action: DONE, note: "RECODEd -> StorageProviderRequirementsTest (FILE-118): all hasChanged branches + strict 1000ms tolerance boundary via in-memory double"}
 - {id: FILE-141, grade: STRONG, action: LINK, test: partition/IncrementalTrackerTest#testPeriodCompletionKeyYearOnlyNaFills}
 - {id: FILE-142, grade: STRONG, action: LINK, test: partition/S3HivePipelineTrackerEmptyHwmTest#emptyAboveHighWaterMarkStaysPending}
-- {id: FILE-146, grade: STRONG, action: RECODE, test: FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles, note: "DEMOTE on golden-bar review (2026-06-29): only schema name=files; snake_case params/defaults/Aperio-distinction untested"}
+- {id: FILE-146, grade: STRONG, action: DONE, note: "RECODEd -> FileJdbcDriverRequirementsTest (FILE-146): snake_case params + defaults + acceptsURL + AperioDriver distinction"}
 - {id: FILE-147, grade: NONE, action: DONE, note: "AperioDriverOperandTest; varExpansion pins pre-C-14 behavior"}
 - {id: FILE-149, grade: PARTIAL, action: DONE, note: "Wave2 agent-drafted recode (tagged FILE-149)"}
 - {id: FILE-151, grade: PARTIAL, action: DONE, test: FileReaderExceptionTest#testIsException, note: "no throw-sites; SQLStates (C-11)"}
