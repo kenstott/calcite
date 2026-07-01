@@ -3514,14 +3514,22 @@
     null-guarded for the zero-row case. Inert for every declared-column schema. (3) URI VERB (proposed):
     materialize=iceberg emits a SCHEMA-LEVEL materialize default {format:iceberg,warehousePath:
     <storage>/<schema>/iceberg} — the DRIVER PARSING half is DONE (AperioDriver.buildOperand,
-    AperioDriverOperandTest#materializeIcebergEmitsSchemaLevelDefault). The FileSchema CONSUMER is still
-    proposed and is net-new (research: no schema-wide materialize flag exists; IcebergMaterializationWriter
-    is invoked only from govdata ETL; partitionedTables+iceberg only READS an existing lake). To build:
-    FileSchemaFactory parses the `materialize` operand + plumbs it to FileSchema; FileSchema.getTableMap
-    (~L1766) iterates every discovered table and, when writable (rw=on), materializes it to Iceberg under
-    warehousePath via scan()->IcebergMaterializationWriter->commit() behind a freshness guard (skip when
-    the Iceberg table exists and the source is not newer), then serves the IcebergTable; rw=off never
-    builds, it just reads the lake. Gates FILE-188's emit. WHY ICEBERG not plain Parquet: atomic
+    AperioDriverOperandTest#materializeIcebergEmitsSchemaLevelDefault). The FileSchema CONSUMER is
+    proposed and net-new (research: no schema-wide materialize flag exists; IcebergMaterializationWriter
+    is invoked only from govdata ETL; partitionedTables+iceberg only READS an existing lake). FINALIZED
+    DESIGN: (a) FileSchemaFactory parses the `materialize` operand and calls a post-construction
+    FileSchema.setMaterializeConfig(config, writable) — a setter, NOT a new constructor param (FileSchema
+    has ~6 delegating overloads; getTableMap runs lazily after the factory, so a setter avoids the churn,
+    mirroring setEffectiveYearField). (b) A POST-PASS in getTableMap right after tableCache is built
+    (FileSchema.java:2279, before validateForeignKeyConstraints) transforms the finished map: for each
+    discovered file-table, scan()->IcebergMaterializationWriter->commit() then serve the IcebergTable
+    (same read path partitionedTables+iceberg uses ~L3000-3047). Post-pass over the final map, NOT the
+    many per-format discovery branches. REFRESH POLICY (user decision): writable (rw=on) =
+    freshness-guarded — build when the Iceberg table is missing OR a source file is newer than the last
+    materialization (store max source mtime in an Iceberg table property, compare); read-only (rw=off) =
+    never build, serve the existing lake, and metadata freshness is ALREADY handled by cache_httpfs
+    (FILE-189) excluding mutable Iceberg metadata from caching, so iceberg_scan re-reads the current
+    snapshot when the owner updates it. Gates FILE-188's emit. WHY ICEBERG not plain Parquet: atomic
     compaction (RewriteFiles.commit) + an authoritative metadata record — neither is safe on
     files-in-place."
   since: 2026-07
