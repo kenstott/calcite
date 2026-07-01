@@ -3512,8 +3512,16 @@
     that batch (rows merged with their partition values -> JSON -> DuckDB read_json_auto -> temp Parquet
     -> createTableFromParquet) or LOADS the table on a re-run; commit/compaction/maintenance/selfHeal are
     null-guarded for the zero-row case. Inert for every declared-column schema. (3) URI VERB (proposed):
-    materialize=iceberg must GENERATE the `materializations`/`partitionedTables` operand block per
-    discovered table pointed at storage; gates FILE-188's emit. WHY ICEBERG not plain Parquet: atomic
+    materialize=iceberg emits a SCHEMA-LEVEL materialize default {format:iceberg,warehousePath:
+    <storage>/<schema>/iceberg} — the DRIVER PARSING half is DONE (AperioDriver.buildOperand,
+    AperioDriverOperandTest#materializeIcebergEmitsSchemaLevelDefault). The FileSchema CONSUMER is still
+    proposed and is net-new (research: no schema-wide materialize flag exists; IcebergMaterializationWriter
+    is invoked only from govdata ETL; partitionedTables+iceberg only READS an existing lake). To build:
+    FileSchemaFactory parses the `materialize` operand + plumbs it to FileSchema; FileSchema.getTableMap
+    (~L1766) iterates every discovered table and, when writable (rw=on), materializes it to Iceberg under
+    warehousePath via scan()->IcebergMaterializationWriter->commit() behind a freshness guard (skip when
+    the Iceberg table exists and the source is not newer), then serves the IcebergTable; rw=off never
+    builds, it just reads the lake. Gates FILE-188's emit. WHY ICEBERG not plain Parquet: atomic
     compaction (RewriteFiles.commit) + an authoritative metadata record — neither is safe on
     files-in-place."
   since: 2026-07

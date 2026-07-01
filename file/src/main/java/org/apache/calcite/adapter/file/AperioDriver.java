@@ -163,8 +163,9 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
         // storage root (FILE-185): base for the local cache/tracker (and, with materialize, the lake).
         // Default ~/.aperio (per-user, persistent, local disk), namespaced by schema. '~' expands to the
         // home directory. An explicit baseDirectory param wins. (Was {cwd}/.aperio/{schema} in FileSchema.)
+        String baseDir;
         if (info.containsKey("baseDirectory")) {
-            operand.put("baseDirectory", info.getProperty("baseDirectory"));
+            baseDir = info.getProperty("baseDirectory");
         } else {
             String schemaName = info.getProperty("schema", "files");
             String storage = info.getProperty("storage");
@@ -173,7 +174,25 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
             } else if (storage.startsWith("~")) {
                 storage = System.getProperty("user.home") + storage.substring(1);
             }
-            operand.put("baseDirectory", storage + "/" + schemaName);
+            baseDir = storage + "/" + schemaName;
+        }
+        operand.put("baseDirectory", baseDir);
+
+        // materialize verb (FILE-186): materialize=iceberg turns "query files in place" into
+        // "build/refresh an Iceberg lake". Emits a SCHEMA-LEVEL materialize default that FileSchema
+        // applies to every discovered table; the warehouse lives under the storage root. With rw=off
+        // this becomes "read the existing lake" — FileSchema does not build when the connection is
+        // read-only, it just serves the Iceberg tables already materialized there.
+        String materialize = info.getProperty("materialize");
+        if (materialize != null && !materialize.isEmpty()) {
+            if (!"iceberg".equalsIgnoreCase(materialize)) {
+                throw new IllegalArgumentException(
+                    "Unsupported materialize target '" + materialize + "' — only 'iceberg' is supported");
+            }
+            Map<String, Object> materializeConfig = new HashMap<String, Object>();
+            materializeConfig.put("format", "iceberg");
+            materializeConfig.put("warehousePath", baseDir + "/iceberg");
+            operand.put("materialize", materializeConfig);
         }
 
         // Execution engine

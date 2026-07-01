@@ -19,7 +19,10 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * FILE-051 / FILE-147 — AperioDriver operand construction and variable expansion. buildOperand and
@@ -131,6 +134,37 @@ public class AperioDriverOperandTest {
         "non-default schema is carried");
     assertNull(AperioDriver.deriveConsumerUri(null, "files"),
         "no shared storage → nothing to share");
+  }
+
+  // ===== FILE-186: materialize verb =====
+
+  @Test @Tag("FILE-186") void materializeIcebergEmitsSchemaLevelDefault() throws Exception {
+    Properties info = new Properties();
+    info.setProperty("materialize", "iceberg");
+    info.setProperty("storage", "/lake");
+    info.setProperty("schema", "sales");
+    Map<String, Object> op = buildOperand("/data", info);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> m = (Map<String, Object>) op.get("materialize");
+    assertNotNull(m, "materialize=iceberg emits a schema-level materialize default (applied to all tables)");
+    assertEquals("iceberg", m.get("format"));
+    assertEquals("/lake/sales/iceberg", m.get("warehousePath"),
+        "the lake warehouse lives under the storage root, namespaced by schema");
+  }
+
+  @Test @Tag("FILE-186") void noMaterializeParamQueriesFilesInPlace() throws Exception {
+    Map<String, Object> op = buildOperand("/data", new Properties());
+    assertFalse(op.containsKey("materialize"),
+        "without materialize=, tables are queried in place — no lake is built");
+  }
+
+  @Test @Tag("FILE-186") void unsupportedMaterializeTargetFailsLoud() {
+    Properties info = new Properties();
+    info.setProperty("materialize", "delta");
+    java.lang.reflect.InvocationTargetException ex = assertThrows(
+        java.lang.reflect.InvocationTargetException.class, () -> buildOperand("/data", info));
+    assertTrue(ex.getCause() instanceof IllegalArgumentException,
+        "only 'iceberg' is supported today; other targets fail loud");
   }
 
   // ===== FILE-187: multiple directories via glob =====
