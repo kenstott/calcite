@@ -141,6 +141,41 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
             operand.put("directory", System.getProperty("user.dir"));
         }
 
+        // rw mode (FILE-184): governs whether this connection may write/materialize, expressed in the
+        // model as the tracker backend + autoDownload. Default 'on' (owner/build). rw=off is the
+        // consumer/distribution mode: a read-only tracker (writes throw) + autoDownload disabled, so a
+        // shared config cannot trigger ETL. rw=on selects the local DuckDB tracker — REQUIRED, because
+        // the tracker factory's default is fail-closed 'readonly' and would otherwise block materialize.
+        String rw = info.getProperty("rw", "on");
+        boolean readOnly = "off".equalsIgnoreCase(rw) || "false".equalsIgnoreCase(rw)
+            || "ro".equalsIgnoreCase(rw);
+        if (info.containsKey("trackerBackend")) {
+            operand.put("trackerBackend", info.getProperty("trackerBackend"));
+        } else {
+            operand.put("trackerBackend", readOnly ? "readonly" : "duckdb");
+        }
+        if (readOnly) {
+            operand.put("autoDownload", false);
+        } else {
+            addBoolIfPresent(info, "autoDownload", operand);
+        }
+
+        // storage root (FILE-185): base for the local cache/tracker (and, with materialize, the lake).
+        // Default ~/.aperio (per-user, persistent, local disk), namespaced by schema. '~' expands to the
+        // home directory. An explicit baseDirectory param wins. (Was {cwd}/.aperio/{schema} in FileSchema.)
+        if (info.containsKey("baseDirectory")) {
+            operand.put("baseDirectory", info.getProperty("baseDirectory"));
+        } else {
+            String schemaName = info.getProperty("schema", "files");
+            String storage = info.getProperty("storage");
+            if (storage == null || storage.isEmpty()) {
+                storage = System.getProperty("user.home") + "/.aperio";
+            } else if (storage.startsWith("~")) {
+                storage = System.getProperty("user.home") + storage.substring(1);
+            }
+            operand.put("baseDirectory", storage + "/" + schemaName);
+        }
+
         // Execution engine
         String engine =
             info.getProperty("executionEngine", System.getenv("APERIO_EXECUTION_ENGINE") != null
@@ -166,6 +201,11 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
         addBoolIfPresent(info, "recursive", operand);
         addBoolIfPresent(info, "multiTable", operand);
         addStringIfPresent(info, "directoryPattern", operand);
+        // FILE-187: forward `glob` too (FileSchemaFactory accepts both directoryPattern and glob). A
+        // Java-glob with brace expansion — e.g. glob={sales,orders}/**/*.csv, matched under the source
+        // directory — spans multiple directories into one flat schema, so no separate multi-dir plumbing
+        // is needed.
+        addStringIfPresent(info, "glob", operand);
 
         // SQL config
         operand.put("lex", info.getProperty("lex", "ORACLE"));
@@ -245,6 +285,23 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
         addIntFromEnv(info, "fetchSize", "APERIO_FETCH_SIZE", operand, "fetchSize");
 
         return expandEnvVars(operand);
+    }
+
+    /**
+     * FILE-188: derive the ready-to-share consumer URI for a lake at {@code storage} — the lake
+     * location pointed at read-only ({@code rw=off}). Distribution is then "share this URI": the
+     * consumer points directly at the lake and cannot write. Build params and credentials are dropped
+     * (creds ride on env, not the URI). Returns null when there is no shared storage to point at.
+     */
+    static String deriveConsumerUri(String storage, String schema) {
+        if (storage == null || storage.isEmpty()) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder("jdbc:aperio:").append(storage).append("?rw=off");
+        if (schema != null && !schema.isEmpty() && !"files".equals(schema)) {
+            sb.append("&schema=").append(schema);
+        }
+        return sb.toString();
     }
 
     // ── helper methods ────────────────────────────────────────────────────────

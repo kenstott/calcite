@@ -3424,7 +3424,7 @@
 
 - id: FILE-184
   module: file
-  status: proposed
+  status: complete
   group: aperio-uri
   category: rw mode
   priority: MUST
@@ -3432,18 +3432,22 @@
   mode: write
   seam: connection
   description: >
-    GAP. Add an `rw` URI param (rw=on|off) governing whether the connection may write/materialize, and
-    express it in the model: rw=off -> read-only model (trackerBackend=readonly per FILE-176 +
-    autoDownload=false), the consumer/distribution mode; rw=on -> writable model (local DuckDB tracker
-    per FILE-175, materialize permitted). rw is only meaningful once materialize/lake features are
-    engaged — a pure files-in-place read is inherently read-only. Wires the fail-closed tracker selection
-    (FILE-175/176) to the URI so distribution is "share the URI with rw=off".
-  source: (not yet implemented — AperioDriver.buildOperand has no rw)
+    An `rw` URI param (rw=on|off) governs whether the connection may write/materialize, expressed in the
+    model as: rw=off -> read-only model (trackerBackend=readonly per FILE-176 + autoDownload=false), the
+    consumer/distribution mode; rw=on (default) -> writable model (local DuckDB tracker per FILE-175 —
+    required, else the fail-closed default would block writes; materialize permitted). An explicit
+    trackerBackend param overrides. rw is only meaningful once materialize/lake features are engaged — a
+    pure files-in-place read is inherently read-only.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (buildOperand rw block)
+  tests:
+    - file/AperioDriverOperandTest#rwOffCompilesReadOnlyModel
+    - file/AperioDriverOperandTest#rwOnDefaultSelectsWritableDuckdbTracker
+    - file/AperioDriverOperandTest#explicitTrackerBackendWinsOverRw
   since: 2026-07
 
 - id: FILE-185
   module: file
-  status: proposed
+  status: complete
   group: aperio-uri
   category: storage root default
   priority: MUST
@@ -3451,13 +3455,17 @@
   mode: write
   seam: connection
   description: >
-    GAP. Add a `storage` URI param as the single root for materialized lake output, the local data/image
-    cache, and the tracker; default to ~/.aperio (per-user, persistent, local disk), namespaced by
-    schema/lake. The tracker location must stay local even when storage is a network mount (DuckDB/SQLite
-    file-locking is unreliable over NFS/SMB) — refuse/relocate a network-mount tracker path. Today the base
-    default is {cwd}/.aperio/{schema} and storage is scattered across spillDirectory / warehouse /
-    statisticsCache.
-  source: (not yet implemented)
+    A `storage` URI param sets the root (compiled to operand baseDirectory), default ~/.aperio (per-user,
+    persistent, local disk), namespaced by schema; '~' expands to the home dir and an explicit
+    baseDirectory param wins. (Was {cwd}/.aperio/{schema} in FileSchema.)
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (buildOperand storage block)
+  tests:
+    - file/AperioDriverOperandTest#storageDefaultsToHomeAperioNamespacedBySchema
+    - file/AperioDriverOperandTest#storageParamNamespacedBySchemaWithTildeExpansion
+    - file/AperioDriverOperandTest#explicitBaseDirectoryWinsOverStorage
+  notes: "Remaining: the 'keep tracker local when storage is a network mount' guard is not yet enforced
+    (portable network-mount detection); and, with materialize (FILE-186), storage should also drive the
+    lake/warehouse path, not just the local baseDirectory."
   since: 2026-07
 
 - id: FILE-186
@@ -3476,27 +3484,55 @@
     query path then reads the lake. With rw=off, materialize=iceberg means "read the existing lake at
     storage" (the consumer) — not a contradiction. Materialization is lazy per-table (on first access) so
     first use stays responsive. Today icebergEnabled is read-config only; there is no build verb.
-  source: (not yet implemented)
+    SCHEMA IS INFERRED FROM THE SOURCE, NOT DECLARED. Iceberg is only metadata over Parquet, and the
+    staged Parquet already carries authoritative column names + types (DuckDB writes it before the Iceberg
+    commit), so the materialize path must derive the Iceberg schema from that data — a bare
+    materialize=iceberg with zero column defs must work. `columns` becomes an OPTIONAL override layer
+    merged over the inferred base (comments/REMARKS, PK/FK constraints, computed `expression:` columns,
+    forced types, order/nullability) — never the sole source of truth. This also removes the
+    "schema drift -> drop and recreate" churn, since table schema and data both derive from the same
+    Parquet and cannot disagree.
+  source: (partially implemented — see IcebergCatalogManager.createTableFromParquet slice; the URI-level
+    materialize verb + materializations/partitionedTables block generator remain proposed)
+  notes: "Two layers. (1) INFERENCE (the enabler, being built): IcebergCatalogManager gains
+    createTableFromParquet(config,tableId,parquetPath,partitionColumns) — DuckDB DESCRIBE the staged
+    Parquet -> ColumnDef list -> Iceberg schema; IcebergMaterializationWriter.ensureTableExists uses it
+    when config columns are empty, which means table creation DEFERS from initialize() (no data yet) to
+    the first staged batch. (2) URI VERB (still proposed): FileSchemaFactory triggers materialization via
+    `materializations`/`partitionedTables` operand blocks (per-table iceberg config), not a schema-wide
+    flag, so materialize=iceberg must GENERATE that block per discovered table pointed at storage. Param
+    parsing is trivial; block generation + wiring is the work, and it gates FILE-188's emit."
   since: 2026-07
 
 - id: FILE-187
   module: file
-  status: proposed
+  status: complete
   group: aperio-uri
-  category: directories list
+  category: multiple directories via glob
   priority: SHOULD
   type: behavioral
   mode: read
   seam: connection
   description: >
-    GAP. Accept multiple source directories in the URI (a `directories` list) compiled to the file
-    schema's source set, not just the single `directory` supported today.
-  source: (not yet implemented)
+    Multiple source directories are expressed with a Java-glob, not a separate list: FileSchema resolves
+    directoryPattern/glob via NIO getPathMatcher("glob:...") matched under sourceDirectory, and Java glob
+    supports brace alternation + **, so glob={sales,orders}/**/*.csv spans several subdirectories of a
+    common root into one flat schema. The driver now forwards the `glob` param (in addition to
+    directoryPattern) so it reaches the operand.
+  source: >
+    file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (buildOperand glob passthrough);
+    file/src/main/java/org/apache/calcite/adapter/file/FileSchema.java (getFilesForProcessing;
+    getPathMatcher("glob:"+directoryPattern) ~L4593/4931)
+  tests:
+    - file/AperioDriverOperandTest#globParamForwardedForMultiDirectorySpanning
+  notes: "Spans SUBDIRECTORIES of a common source root via one glob (the flat single-schema shape
+    FILE-187 wanted). Arbitrary unrelated roots would need a common-ancestor sourceDirectory or a
+    separate mechanism; a comma-separated `directories` list was considered and rejected as redundant."
   since: 2026-07
 
 - id: FILE-188
   module: file
-  status: proposed
+  status: in-progress
   group: aperio-uri
   category: consumer uri emission
   priority: SHOULD
@@ -3504,31 +3540,40 @@
   mode: write
   seam: connection
   description: >
-    GAP. On a successful rw=on materialize, emit the ready-to-share consumer URI — the lake location
-    (storage) with rw=off — so distribution is "share this URI". For directory-derived schemas the
-    consumer URI points `directories` at the lake; for model-defined schemas it carries model + storage +
-    rw=off. Only emit/point when storage is shared/reachable (not a local ~/.aperio). Enforcement stays at
-    the storage layer (read-only mount/creds); rw=off is the safety default, not the security control.
-  source: (not yet implemented)
+    The consumer URI for a lake is derived by AperioDriver.deriveConsumerUri(storage, schema): the lake
+    location pointed at read-only (jdbc:aperio:<storage>?rw=off[&schema=...]), creds/build params dropped,
+    null when there is no shared storage. Distribution is then "share this URI"; enforcement stays at the
+    storage layer (read-only mount/creds), rw=off being the safety default not the security control.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (deriveConsumerUri)
+  tests:
+    - file/AperioDriverOperandTest#deriveConsumerUriPointsAtLakeReadOnly
+  notes: "Derivation is implemented + tested. Remaining: actually EMIT it on a successful rw=on
+    materialize (gated on FILE-186), and only when storage is shared/reachable (not a local ~/.aperio)."
   since: 2026-07
 
 - id: FILE-189
   module: file
-  status: in-progress
+  status: complete
   group: aperio-uri
-  category: local data-image cache default
+  category: persistent remote-read cache
   priority: SHOULD
   type: behavioral
   mode: read
-  seam: connection
+  seam: execution
   description: >
-    The DuckDB engine maintains a persisted local data cache as a DuckDB in-memory image: first read pulls
-    from the lake's parquet, thereafter reads are local-speed, warm restart restores the image, and it is
-    auto-refreshed (efficiently, via Iceberg snapshot-diff) so it never serves stale data; static data
-    caches once and never refreshes. URI-level GAP: cacheEnabled is opt-in (addBoolIfPresent) so the cache
-    is off by default — it should default ON so repeated querying of a lake over a slow/remote mount is
-    local-fast without the user knowing to enable it.
-  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (cacheEnabled/refreshInterval)
-  notes: "Confirm engine wiring in RefreshableParquetCacheTable / DuckDBJdbcSchemaFactory and whether the
-    image cache can default on safely; auto-refresh must be snapshot-diff-driven to stay cheap."
+    The DuckDB query engine loads the cache_httpfs community extension by default (non-Windows; WSL
+    included) and points it at a PERSISTENT cache directory (~/.aperio/.duckdb_httpfs_cache) that survives
+    process restarts. So reading a remote (http/s3) lake pulls each parquet from source on first read and
+    serves it from the local cache thereafter — local-speed repeat queries and blazing warm restarts, with
+    no operand to enable. Freshness is by IMMUTABILITY, not a refresh policy: Iceberg data files never
+    change (so caching them is always correct), and cache_httpfs exclusion regexes keep mutable Iceberg
+    metadata OUT of the cache so every query re-reads the latest snapshot pointer. Static data caches once
+    and never re-fetches.
+  source: >
+    file/src/main/java/org/apache/calcite/adapter/file/duckdb/DuckDBJdbcSchemaFactory.java
+    (loadQueryExtensions cache_httpfs; configureCacheHttpfs; cache_httpfs_add_exclusion_regex)
+  notes: "Corrects an earlier wrong finding: the data cache is ALWAYS on (cache_httpfs), not gated by the
+    operand `cacheEnabled` — that operand is HTTP-auth/ETL response caching (HttpConfig), a different
+    cache. Caveats: cache_httpfs is http/s3 only (a local/SMB mount is already 'local' to DuckDB so this
+    cache does not apply there) and is unavailable on native Windows (WSL is fine)."
   since: 2026-07
