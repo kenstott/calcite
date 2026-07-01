@@ -128,15 +128,11 @@ public class PipelineTrackerFactoryDeepTest {
 
   @Test void testCreateFromOperandNullBackend() {
     Map<String, Object> operand = new HashMap<>();
-    // No trackerBackend -> falls to env or default
-    // Default is duckdb which may fail in test
-    try {
-      PipelineTracker tracker = PipelineTrackerFactory.createFromOperand(operand, "/tmp/test");
-      assertNotNull(tracker);
-    } catch (Exception e) {
-      // DuckDB may not be available
-      assertTrue(e.getMessage() != null);
-    }
+    // No trackerBackend -> falls to env or the fail-closed read-only default.
+    // (Assumes CALCITE_TRACKER_BACKEND is unset in the test environment.)
+    PipelineTracker tracker = PipelineTrackerFactory.createFromOperand(operand, "/tmp/test");
+    assertNotNull(tracker);
+    assertTrue(tracker instanceof ReadOnlyPipelineTracker);
   }
 
   // ===== create(baseDirectory) - simple form =====

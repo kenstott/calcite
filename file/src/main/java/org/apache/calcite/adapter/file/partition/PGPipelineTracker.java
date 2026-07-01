@@ -172,8 +172,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setString(3, phase);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.error("Error clearing state for {}/{}/{}: {}",
-          sourceKey, tableName, phase, e.getMessage());
+      throw new RuntimeException("PG tracker write failed (markCleared) for "
+          + sourceKey + "/" + tableName + "/" + phase + ": " + e.getMessage(), e);
     }
   }
 
@@ -239,8 +239,10 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setLong(9, now);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.error("Error upserting state for {}/{}/{}: {}",
-          sourceKey, tableName, phase, e.getMessage());
+      // Fail loud: a tracker write that does not persist means ETL would write data without
+      // recording completion state (silent idempotence loss / endless reprocessing). Refuse.
+      throw new RuntimeException("PG tracker write failed (upsertState) for "
+          + sourceKey + "/" + tableName + "/" + phase + ": " + e.getMessage(), e);
     }
   }
 
@@ -356,7 +358,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setString(1, alternateName);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.error("Error invalidating all for {}: {}", alternateName, e.getMessage());
+      throw new RuntimeException("PG tracker write failed (invalidateAll) for "
+          + alternateName + ": " + e.getMessage(), e);
     }
   }
 
@@ -430,7 +433,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setLong(3, now);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.error("Error marking table completion for {}: {}", pipelineName, e.getMessage());
+      throw new RuntimeException("PG tracker write failed (markTableComplete) for "
+          + pipelineName + ": " + e.getMessage(), e);
     }
   }
 
@@ -451,7 +455,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setLong(5, now);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.error("Error marking table completion for {}: {}", pipelineName, e.getMessage());
+      throw new RuntimeException("PG tracker write failed (markTableComplete) for "
+          + pipelineName + ": " + e.getMessage(), e);
     }
   }
 
@@ -476,7 +481,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setLong(6, now);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.error("Error marking table completion for {}: {}", pipelineName, e.getMessage());
+      throw new RuntimeException("PG tracker write failed (markTableComplete) for "
+          + pipelineName + ": " + e.getMessage(), e);
     }
   }
 
@@ -511,7 +517,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setString(1, pipelineName);
       stmt.executeUpdate();
     } catch (SQLException e) {
-      LOGGER.debug("Error invalidating table completion for {}: {}", pipelineName, e.getMessage());
+      throw new RuntimeException("PG tracker write failed (invalidateTableCompletion) for "
+          + pipelineName + ": " + e.getMessage(), e);
     }
   }
 
@@ -527,7 +534,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         LOGGER.info("Cleared {} table_completion entries", completionDeleted);
       }
     } catch (SQLException e) {
-      LOGGER.error("Error clearing pipeline tracker state: {}", e.getMessage());
+      throw new RuntimeException("PG tracker write failed (clearAllCompletions): "
+          + e.getMessage(), e);
     }
   }
 

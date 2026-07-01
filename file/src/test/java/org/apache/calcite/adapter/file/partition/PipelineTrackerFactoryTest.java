@@ -56,21 +56,24 @@ public class PipelineTrackerFactoryTest {
     assertTrue(tracker instanceof DuckDBPartitionStatusStore);
   }
 
-  @Test void testCreateDefaultTracker() {
-    // Null backend should default to duckdb
+  @Test void testCreateDefaultTrackerIsReadOnly() {
+    // Null backend must fail closed to a read-only tracker, NOT a writable DuckDB.
+    // (Assumes CALCITE_TRACKER_BACKEND is unset in the test environment.)
     PipelineTracker tracker = PipelineTrackerFactory.create(
         null, tempDir.toString(), Collections.<String, String>emptyMap());
 
     assertNotNull(tracker);
-    assertTrue(tracker instanceof DuckDBPartitionStatusStore);
+    assertTrue(tracker instanceof ReadOnlyPipelineTracker);
+    // Reads report untracked; writes throw rather than silently corrupting state.
+    assertTrue(!tracker.isComplete("k", "t", "p"));
+    assertThrows(IllegalStateException.class,
+        () -> tracker.markComplete("k", "t", "p", 1));
   }
 
-  @Test void testCreateUnknownBackendFallsToDuckDB() {
-    PipelineTracker tracker = PipelineTrackerFactory.create(
-        "unknown_backend", tempDir.toString(), Collections.<String, String>emptyMap());
-
-    assertNotNull(tracker);
-    assertTrue(tracker instanceof DuckDBPartitionStatusStore);
+  @Test void testCreateUnknownBackendThrows() {
+    // An unrecognized backend is a hard error — never a silent fallback to a writable store.
+    assertThrows(IllegalArgumentException.class, () -> PipelineTrackerFactory.create(
+        "unknown_backend", tempDir.toString(), Collections.<String, String>emptyMap()));
   }
 
   @Test void testCreateWithBaseDirectoryShortcut() {

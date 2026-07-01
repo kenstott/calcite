@@ -72,11 +72,7 @@ run_patents_model() {
         "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}",
         "region": "${AWS_REGION:-us-east-1}"
       },
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}"
-      }
+      $(tracker_operand_json)
     }
   }]
 }

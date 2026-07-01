@@ -153,6 +153,13 @@ partitionedTables:
 
     materialize:
       format: iceberg
+      # Partition the Iceberg table by the year/month fetch dimensions (added as columns by the
+      # materializer even though they are not in the source rows — same mechanism econ_reference uses
+      # for `type`). Without this the table is unpartitioned (flat data files), so Phase 1.5 self-heal
+      # cannot reconstruct completed periods from Iceberg metadata and every run reprocesses all
+      # months on an empty tracker. (FILE-178)
+      partition:
+        columns: [year, month]
       output:
         pattern: "year={year}/month={month}/"
 

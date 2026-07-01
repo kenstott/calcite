@@ -1483,8 +1483,11 @@
   mode: write
   seam: execution
   description: >
-    Per-batch completion tracked in S3 (${CALCITE_TRACKER_S3_BUCKET}/year=*/source_key=<table>/); a re-run skips
-    `complete` batches and re-runs non-complete/error. Backend via CALCITE_TRACKER_BACKEND=s3. (Idempotence/resume.)
+    Per-batch completion is tracked in a pluggable PipelineTracker backend; a re-run skips
+    `complete` batches and re-runs non-complete/error (idempotence/resume). Backend is selected via
+    operand `trackerBackend` / env `CALCITE_TRACKER_BACKEND`: `pg`/`postgres` (multi-writer, the
+    concurrent-pool backend), `duckdb` (single-writer, explicit opt-in), `s3` (hive-partitioned
+    parquet, legacy), `noop`, or `readonly` (the fail-closed default — see FILE-175).
   source: file/docs/document-etl.md (Resumability)
   tests:
     - file/EtlTrackerRequirementsTest
@@ -1513,6 +1516,105 @@
     the unit suite.)"
   tests:
     - file/EtlMetadataRequirementsTest#hookErrorHandlingDefaultsAreFailSkipRowContinue
+
+- id: FILE-175
+  module: file
+  status: complete
+  group: document-etl
+  category: tracker backend selection
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    PipelineTrackerFactory resolves the backend from operand `trackerBackend`, then env
+    `CALCITE_TRACKER_BACKEND`, then a fail-closed default of `readonly`. A writable tracker must be
+    explicitly configured: with none, reads still work but writes are refused (FILE-176), so an ETL
+    run launched without a configured store cannot silently corrupt resume state. An unrecognized
+    backend is a hard error — NEVER a silent fallback to a writable store (No-Fallback rule).
+  source: file/src/main/java/org/apache/calcite/adapter/file/partition/PipelineTrackerFactory.java
+  tests:
+    - file/partition/PipelineTrackerFactoryTest#testCreateDefaultTrackerIsReadOnly
+    - file/partition/PipelineTrackerFactoryTest#testCreateUnknownBackendThrows
+  since: 2026-06
+
+- id: FILE-176
+  module: file
+  status: complete
+  group: document-etl
+  category: read-only tracker
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    ReadOnlyPipelineTracker reports every read as "untracked" (like NOOP, so pure-query paths work
+    with zero config) but throws IllegalStateException on every mutator. It is deliberately distinct
+    from NOOP_PIPELINE, which silently swallows writes: for an ETL run a silent no-op write means data
+    is written with no completion state recorded (silent idempotence loss), so the read-only default
+    must fail loud on write instead.
+  source: file/src/main/java/org/apache/calcite/adapter/file/partition/ReadOnlyPipelineTracker.java
+  tests:
+    - file/partition/PipelineTrackerFactoryTest#testCreateDefaultTrackerIsReadOnly
+  since: 2026-06
+
+- id: FILE-177
+  module: file
+  status: complete
+  group: document-etl
+  category: tracker write durability
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    PGPipelineTracker write paths (upsertState, markTableComplete/WithConfig/WithSourceWatermark,
+    markCleared, invalidateAll, invalidateTableCompletion, clearAllCompletions) throw on SQLException
+    rather than logging-and-swallowing, so a tracker that cannot persist fails the run loudly instead
+    of letting ETL write data without recording completion state. (Exposed by a live run where the
+    swallow masked a missing JDBC driver / SCRAM-incompatible driver.)
+  source: file/src/main/java/org/apache/calcite/adapter/file/partition/PGPipelineTracker.java
+  tests:
+    - file/partition/PGPipelineTrackerCoverageTest#testUpsertStateThrowsOnSQLException
+    - file/partition/PGPipelineTrackerCoverageTest#testMarkTableCompleteThrowsOnSQLException
+    - file/partition/PGPipelineTrackerCoverageTest#testMarkClearedThrowsOnSQLException
+    - file/partition/PGPipelineTrackerCoverageTest#testInvalidateAllThrowsOnSQLException
+    - file/partition/PGPipelineTrackerCoverageTest#testInvalidateTableCompletionThrowsOnSQLException
+    - file/partition/PGPipelineTrackerCoverageTest#testClearAllCompletionsThrowsOnSQLException
+  since: 2026-06
+
+- id: FILE-178
+  module: file
+  status: complete
+  group: document-etl
+  category: tracker self-heal from data
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    Phase 1.5 self-heal (rebuildCacheFromIceberg) reconstructs tracker completion state from data
+    already committed to Iceberg, so an empty/cutover tracker rebuilds from existing parquet instead
+    of reprocessing. It relies on getExistingPartitions reading partition values from the Iceberg
+    partition spec, so the table MUST be partitioned by materialize.partition.columns. Verified for
+    standard tables (econ_reference against empty PG rebuilt 7 tables, 0 reprocessed). ROOT CAUSE of
+    the fedregister gap: fr_documents had no materialize.partition block, so its Iceberg table was
+    unpartitioned (spec fields []) with flat data files and no year/month columns — getExistingPartitions
+    returned empty and self-heal reconstructed 0. (batchPartitionColumns is write-batching, not the
+    partition spec — a fallback using it was wrong and was reverted.) FIX: declare
+    materialize.partition.columns:[year,month] on fr_documents so the materializer adds year/month as
+    partition columns (same mechanism econ_reference uses for `type`) and the table becomes partitioned
+    → standard self-heal applies. Requires a purge + repartitioned rebuild of the existing flat table.
+  source: govdata/src/main/resources/fedregister/fedregister-schema.yaml (fr_documents materialize.partition)
+  tests:
+    - file/EtlTrackerRequirementsTest
+  notes: "VERIFIED live: after adding materialize.partition:[year,month], purged fr_documents and
+    rebuilt → table is now partitioned (spec fields [year,month], data under year=2026/month=N/).
+    Empty-tracker rerun then self-healed: 'Found 6 existing partition combinations' → 'Self-healing:
+    Rebuilding cache from 6 existing Iceberg partitions' → Phase 2 reused 6-of-12, Phase 5 processed
+    only the 6 empty future months. PG: 6 complete (self-healed) + 6 empty. Before the fix the same
+    run reprocessed all 12. EtlPipeline batchPartitionColumns fallback was reverted (wrong mechanism)."
+  since: 2026-06
 
 # ============================ refresh / freshness ==============================================
 

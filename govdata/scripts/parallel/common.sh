@@ -55,6 +55,17 @@ load_env() {
     local _saved_parquet_dir="${GOVDATA_PARQUET_DIR:-}"
     local _saved_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET:-}"
     local _saved_raw_cache="${ETL_LOCAL_RAW_CACHE:-}"
+    # Tracker backend + PG creds: a caller opting into the Postgres tracker
+    # (CALCITE_TRACKER_BACKEND=pg GOVDATA_TRACKER_PG_URL=... run-pool.sh ...) must win over
+    # .env.prod's hardcoded CALCITE_TRACKER_BACKEND=s3 — otherwise the opt-in is silently ignored.
+    local _pre_tracker_backend="${CALCITE_TRACKER_BACKEND+set}"
+    local _pre_pg_url="${GOVDATA_TRACKER_PG_URL+set}"
+    local _pre_pg_user="${GOVDATA_TRACKER_PG_USER+set}"
+    local _pre_pg_pass="${GOVDATA_TRACKER_PG_PASSWORD+set}"
+    local _saved_tracker_backend="${CALCITE_TRACKER_BACKEND:-}"
+    local _saved_pg_url="${GOVDATA_TRACKER_PG_URL:-}"
+    local _saved_pg_user="${GOVDATA_TRACKER_PG_USER:-}"
+    local _saved_pg_pass="${GOVDATA_TRACKER_PG_PASSWORD:-}"
 
     set -a
     # shellcheck disable=SC1090
@@ -75,6 +86,10 @@ load_env() {
     # ETL_LOCAL_RAW_CACHE: .env.prod hardcodes /tmp; preserve a caller/overlay override
     # (e.g. .env.preprod's durable ext4 path) so worker staging survives reboots/crashes.
     [ "${_pre_raw_cache}" = "set" ] && export ETL_LOCAL_RAW_CACHE="$_saved_raw_cache"
+    [ "${_pre_tracker_backend}" = "set" ] && export CALCITE_TRACKER_BACKEND="$_saved_tracker_backend"
+    [ "${_pre_pg_url}" = "set" ] && export GOVDATA_TRACKER_PG_URL="$_saved_pg_url"
+    [ "${_pre_pg_user}" = "set" ] && export GOVDATA_TRACKER_PG_USER="$_saved_pg_user"
+    [ "${_pre_pg_pass}" = "set" ] && export GOVDATA_TRACKER_PG_PASSWORD="$_saved_pg_pass"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
@@ -105,6 +120,33 @@ load_env() {
   # Default tracker to s3 for parallel operation
   export CALCITE_TRACKER_BACKEND="${CALCITE_TRACKER_BACKEND:-s3}"
   export CALCITE_TRACKER_S3_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
+  # Postgres tracker (opt-in: set CALCITE_TRACKER_BACKEND=pg). Empty by default so the
+  # s3 path is byte-for-byte unchanged. Staged cutover example:
+  #   CALCITE_TRACKER_BACKEND=pg GOVDATA_TRACKER_PG_URL=jdbc:postgresql://localhost:5432/govdata \
+  #   GOVDATA_TRACKER_PG_USER=govdata GOVDATA_TRACKER_PG_PASSWORD=govdata \
+  #   bash scripts/parallel/run-pool.sh --schema fec daily
+  export GOVDATA_TRACKER_PG_URL="${GOVDATA_TRACKER_PG_URL:-}"
+  export GOVDATA_TRACKER_PG_USER="${GOVDATA_TRACKER_PG_USER:-}"
+  export GOVDATA_TRACKER_PG_PASSWORD="${GOVDATA_TRACKER_PG_PASSWORD:-}"
+}
+
+# Emit the JSON operand fragment for the tracker backend, read from the CURRENT environment
+# (so a late override such as the DQ tracker bucket in run-pool.sh is honored). The default
+# is the s3 block — identical to the historical hardcoded value — so existing runs are
+# unchanged. Setting CALCITE_TRACKER_BACKEND=pg switches to the multi-writer Postgres block.
+# Emitted WITHOUT a trailing comma; callers append the comma in the heredoc.
+tracker_operand_json() {
+  case "${CALCITE_TRACKER_BACKEND:-s3}" in
+    pg|postgres)
+      printf '"trackerBackend": "%s", "trackerConfig": { "jdbcUrl": "%s", "user": "%s", "password": "%s" }' \
+        "${CALCITE_TRACKER_BACKEND}" "${GOVDATA_TRACKER_PG_URL:-}" \
+        "${GOVDATA_TRACKER_PG_USER:-}" "${GOVDATA_TRACKER_PG_PASSWORD:-}"
+      ;;
+    *)
+      printf '"trackerBackend": "%s", "trackerConfig": { "bucket": "%s", "endpoint": "%s" }' \
+        "${CALCITE_TRACKER_BACKEND:-s3}" "${CALCITE_TRACKER_S3_BUCKET:-}" "${AWS_ENDPOINT_OVERRIDE:-}"
+      ;;
+  esac
 }
 
 # Configure an ad-hoc rclone remote named 'r2' from the PROD_* R2 credentials in
@@ -178,11 +220,7 @@ generate_sec_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -217,11 +255,7 @@ generate_prices_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -253,8 +287,7 @@ generate_nonsec_model() {
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-        "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        $(tracker_operand_json),
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -274,8 +307,7 @@ generate_nonsec_model() {
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-        "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        $(tracker_operand_json),
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -294,8 +326,7 @@ generate_nonsec_model() {
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-        "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        $(tracker_operand_json),
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -314,8 +345,7 @@ generate_nonsec_model() {
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-        "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        $(tracker_operand_json),
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -334,8 +364,7 @@ generate_nonsec_model() {
         "autoDownload": true,
         "directory": "${GOVDATA_PARQUET_DIR}",
         "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-        "trackerBackend": "s3",
-        "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+        $(tracker_operand_json),
         "s3Config": {
           "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
           "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -370,11 +399,7 @@ generate_sec_primary_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -415,11 +440,7 @@ generate_sec_reprocess_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -456,11 +477,7 @@ generate_sec_chunks_backfill_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -494,11 +511,7 @@ generate_sec_secondary_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -643,8 +656,7 @@ generate_single_schema_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": { "bucket": "${CALCITE_TRACKER_S3_BUCKET}", "endpoint": "${AWS_ENDPOINT_OVERRIDE}" },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -705,11 +717,7 @@ generate_ref_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -761,11 +769,7 @@ generate_fec_model() {
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",${start_year_json}${end_year_json}${force_tables_json}
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -1043,8 +1047,8 @@ build_inline_model() {
     extra_json=",${extra_operand}"
   fi
 
-  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s","trackerBackend":"s3","trackerConfig":{"bucket":"${CALCITE_TRACKER_S3_BUCKET}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"},"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \
-    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$extra_json"
+  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \
+    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json"
 }
 
 # Run the ETL with a given model file

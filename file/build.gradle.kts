@@ -29,6 +29,12 @@ dependencies {
     api("org.checkerframework:checker-qual")
 
     implementation("com.google.guava:guava")
+    // PostgreSQL JDBC driver for PGPipelineTracker (the multi-writer tracker backend).
+    // runtimeOnly: loaded reflectively via DriverManager, only needed when trackerBackend=pg.
+    // Pinned to a modern version (NOT the BOM's ancient 9.3-1102-jdbc41, which predates
+    // SCRAM-SHA-256 and fails against PG 14+ with "authentication type 10 is not supported").
+    // Must be bundled in the govdata shadow jar or the pg backend fails with "No suitable driver".
+    runtimeOnly("org.postgresql:postgresql:42.7.4")
     implementation("com.joestelmach:natty")
     implementation("com.opencsv:opencsv:5.7.1")
     implementation("org.apache.calcite.avatica:avatica-core")

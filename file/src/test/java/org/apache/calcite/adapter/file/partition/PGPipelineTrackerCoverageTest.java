@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
@@ -178,12 +179,12 @@ class PGPipelineTrackerCoverageTest {
     verify(pstmt).setString(3, "download");
   }
 
-  @Test void testMarkClearedHandlesSQLException() throws Exception {
+  @Test void testMarkClearedThrowsOnSQLException() throws Exception {
     when(mockConnection.prepareStatement(anyString()))
         .thenThrow(new SQLException("connection lost"));
 
-    // Should not throw
-    tracker.markCleared("src1", "table1", "download");
+    // Fail loud: a tracker write that cannot persist must not be silently swallowed.
+    assertThrows(RuntimeException.class, () -> tracker.markCleared("src1", "table1", "download"));
   }
 
   // ===== getCompletedTables =====
@@ -483,12 +484,12 @@ class PGPipelineTrackerCoverageTest {
     verify(pstmt).executeUpdate();
   }
 
-  @Test void testInvalidateAllHandlesSQLException() throws Exception {
+  @Test void testInvalidateAllThrowsOnSQLException() throws Exception {
     when(mockConnection.prepareStatement(anyString()))
         .thenThrow(new SQLException("connection lost"));
 
-    // Should not throw
-    tracker.invalidateAll("alt1");
+    // Fail loud: a tracker write that cannot persist must not be silently swallowed.
+    assertThrows(RuntimeException.class, () -> tracker.invalidateAll("alt1"));
   }
 
   // ===== filterUnprocessed =====
@@ -580,12 +581,12 @@ class PGPipelineTrackerCoverageTest {
     verify(pstmt).executeUpdate();
   }
 
-  @Test void testMarkTableCompleteHandlesSQLException() throws Exception {
+  @Test void testMarkTableCompleteThrowsOnSQLException() throws Exception {
     when(mockConnection.prepareStatement(anyString()))
         .thenThrow(new SQLException("connection lost"));
 
-    // Should not throw
-    tracker.markTableComplete("pipeline1", "sig123");
+    // Fail loud: a tracker write that cannot persist must not be silently swallowed.
+    assertThrows(RuntimeException.class, () -> tracker.markTableComplete("pipeline1", "sig123"));
   }
 
   // ===== markTableCompleteWithConfig =====
@@ -674,12 +675,12 @@ class PGPipelineTrackerCoverageTest {
     verify(pstmt).executeUpdate();
   }
 
-  @Test void testInvalidateTableCompletionHandlesSQLException() throws Exception {
+  @Test void testInvalidateTableCompletionThrowsOnSQLException() throws Exception {
     when(mockConnection.prepareStatement(anyString()))
         .thenThrow(new SQLException("connection lost"));
 
-    // Should not throw
-    tracker.invalidateTableCompletion("pipeline1");
+    // Fail loud: a tracker write that cannot persist must not be silently swallowed.
+    assertThrows(RuntimeException.class, () -> tracker.invalidateTableCompletion("pipeline1"));
   }
 
   // ===== clearAllCompletions =====
@@ -697,13 +698,13 @@ class PGPipelineTrackerCoverageTest {
     verify(stmt2).executeUpdate(anyString());
   }
 
-  @Test void testClearAllCompletionsHandlesSQLException() throws Exception {
+  @Test void testClearAllCompletionsThrowsOnSQLException() throws Exception {
     Statement stmt = mock(Statement.class);
     when(mockConnection.createStatement()).thenReturn(stmt);
     when(stmt.executeUpdate(anyString())).thenThrow(new SQLException("error"));
 
-    // Should not throw
-    tracker.clearAllCompletions();
+    // Fail loud: a tracker write that cannot persist must not be silently swallowed.
+    assertThrows(RuntimeException.class, () -> tracker.clearAllCompletions());
   }
 
   // ===== close =====
@@ -849,11 +850,11 @@ class PGPipelineTrackerCoverageTest {
     verify(pstmt).setString(8, null);
   }
 
-  @Test void testUpsertStateHandlesSQLException() throws Exception {
+  @Test void testUpsertStateThrowsOnSQLException() throws Exception {
     when(mockConnection.prepareStatement(anyString()))
         .thenThrow(new SQLException("connection lost"));
 
-    // Should not throw
-    tracker.markComplete("src1", "table1", "download", 100);
+    // Fail loud: a tracker write that cannot persist must not be silently swallowed.
+    assertThrows(RuntimeException.class, () -> tracker.markComplete("src1", "table1", "download", 100));
   }
 }

@@ -21,21 +21,30 @@ import java.util.Map;
  *
  * <p>Supports the following backends:
  * <ul>
- *   <li>{@code duckdb} (default) - Local DuckDB-based tracking via
- *       {@link DuckDBPartitionStatusStore}</li>
- *   <li>{@code s3} - S3 hive-partitioned append-only parquet via
- *       {@link S3HivePipelineTracker}</li>
+ *   <li>{@code readonly} (default) - Reads report "untracked"; any write throws
+ *       (via {@link ReadOnlyPipelineTracker}). This is the fail-closed default:
+ *       a tracked write requires an explicitly configured backend, so a run
+ *       launched without one cannot silently corrupt resume state.</li>
  *   <li>{@code pg} / {@code postgres} - PostgreSQL-based tracking via
- *       {@link PGPipelineTracker}</li>
- *   <li>{@code noop} - No tracking (forces full rebuild every time)</li>
+ *       {@link PGPipelineTracker}. The multi-writer store for the concurrent pool.</li>
+ *   <li>{@code duckdb} - Local DuckDB-based tracking via
+ *       {@link DuckDBPartitionStatusStore}. Single-writer; explicit opt-in only.</li>
+ *   <li>{@code s3} - S3 hive-partitioned append-only parquet via
+ *       {@link S3HivePipelineTracker} (legacy).</li>
+ *   <li>{@code noop} - No tracking, writes silently swallowed (forces full
+ *       rebuild every time). Distinct from {@code readonly}, which throws on write.</li>
  * </ul>
  *
  * <p>Backend selection can be configured via:
  * <ol>
- *   <li>Schema operand: {@code "trackerBackend": "s3"}</li>
- *   <li>Environment variable: {@code CALCITE_TRACKER_BACKEND=s3}</li>
- *   <li>Default: {@code "duckdb"}</li>
+ *   <li>Schema operand: {@code "trackerBackend": "pg"}</li>
+ *   <li>Environment variable: {@code CALCITE_TRACKER_BACKEND=pg}</li>
+ *   <li>Default: {@code "readonly"} (fail closed — no writable backend, no writes)</li>
  * </ol>
+ *
+ * <p>An unrecognized backend is a hard error, not a silent fallback to a writable
+ * store: misconfiguration must fail loudly rather than quietly start tracking
+ * somewhere unexpected.
  */
 public final class PipelineTrackerFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(PipelineTrackerFactory.class);
@@ -63,6 +72,10 @@ public final class PipelineTrackerFactory {
         resolvedBackend, baseDirectory);
 
     switch (resolvedBackend) {
+    case "readonly":
+    case "read-only":
+      return new ReadOnlyPipelineTracker();
+
     case "duckdb":
       return DuckDBPartitionStatusStore.getInstance(baseDirectory);
 
@@ -77,8 +90,10 @@ public final class PipelineTrackerFactory {
       return PipelineTracker.NOOP_PIPELINE;
 
     default:
-      LOGGER.warn("Unknown tracker backend '{}', falling back to duckdb", resolvedBackend);
-      return DuckDBPartitionStatusStore.getInstance(baseDirectory);
+      throw new IllegalArgumentException(
+          "Unknown tracker backend '" + resolvedBackend + "'. Valid backends: "
+          + "readonly (default), pg/postgres, duckdb, s3, noop. Writes require an explicitly "
+          + "configured writable backend; an unknown value is never silently treated as writable.");
     }
   }
 
@@ -142,7 +157,9 @@ public final class PipelineTrackerFactory {
     if (envBackend != null && !envBackend.isEmpty()) {
       return envBackend.toLowerCase();
     }
-    return "duckdb";
+    // Fail closed: with no backend configured anywhere, hand back a read-only tracker
+    // rather than a writable local DuckDB. ETL must opt in to a writable backend.
+    return "readonly";
   }
 
   @SuppressWarnings("UnusedVariable")

@@ -91,11 +91,7 @@ run_cyber_model() {
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema}",
       "autoDownload": true,
-      "trackerBackend": "s3",
-      "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
-      },
+      $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",

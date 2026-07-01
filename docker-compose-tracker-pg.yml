@@ -1,0 +1,54 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Local multi-writer Postgres for the pipeline tracker (the writable backend the
+# concurrent ETL pool requires; the in-process default is read-only and refuses
+# writes). Data lives on an ext4 BIND MOUNT under $HOME — NOT a /mnt/c Windows
+# path — because Postgres fsync on a 9p/Windows mount is slow and lock-fragile
+# under WSL (same reason the Gradle caches live on ext4).
+#
+# Usage (from WSL):
+#   mkdir -p "${HOME}/pgdata"
+#   docker compose -f docker-compose-tracker-pg.yml up -d
+#
+# Wire into a schema model operand:
+#   "trackerBackend": "pg",
+#   "trackerConfig": { "jdbcUrl": "jdbc:postgresql://localhost:5432/govdata",
+#                       "user": "govdata", "password": "govdata" }
+#
+version: '3.8'
+
+services:
+  tracker-pg:
+    image: postgres:16
+    container_name: calcite-tracker-pg
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: govdata
+      POSTGRES_USER: govdata
+      POSTGRES_PASSWORD: govdata
+      # initdb data dir under the mount; keeps the bind-mount root clean.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      # True bind mount to a local ext4 path inside WSL.
+      - ${HOME}/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U govdata -d govdata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
