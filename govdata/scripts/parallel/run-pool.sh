@@ -301,6 +301,17 @@ fi
 # and never blocks the pool.
 compact_trackers_first() {
   local seen=" " slot schema model log_file compacted=0 failed=0 jar _cy
+  # Compaction merges tiny S3 marker files; it is meaningless for the Postgres backend (a real DB
+  # with upserts — no marker files). EtlRunner --compact-only already no-ops for pg, but only after
+  # spawning one JVM per schema. Skip the whole serial sweep so a pg pool run does not waste ~1 JVM
+  # startup per schema on every launch. Also disables the per-worker pre-ETL compaction.
+  case "${CALCITE_TRACKER_BACKEND:-s3}" in
+    pg|postgres)
+      log_info "Pre-pool tracker compaction: skipped (tracker backend '${CALCITE_TRACKER_BACKEND}' has no marker files)"
+      export GOVDATA_DQ_SKIP_PRECOMPACT=true
+      return 0
+      ;;
+  esac
   jar=$(resolve_classpath)
   _cy=$(date +%Y)
   # In a DQ context (run-all-dq sourced .env.dq) the plain model build does not point the tracker

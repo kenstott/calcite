@@ -442,6 +442,14 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # any failure (mktemp/model-gen/EtlRunner) is non-fatal. $1 is a phase label for the log.
   _compact_tracker() {
     local _phase="$1"
+    # Compaction merges tiny S3 marker files; the Postgres backend has none, so skip it (otherwise
+    # a JVM spawns just to have EtlRunner --compact-only no-op for pg).
+    case "${CALCITE_TRACKER_BACKEND:-s3}" in
+      pg|postgres)
+        log_info "$WORKER_ID: tracker compaction skipped (${_phase}-ETL; backend '${CALCITE_TRACKER_BACKEND}' has no marker files)"
+        return 0
+        ;;
+    esac
     local _compact_model
     _compact_model="$(mktemp "/tmp/dq-compact-${SCHEMA}-XXXXXX.json" 2>/dev/null)" || _compact_model=""
     if [ -n "$_compact_model" ] && generate_single_schema_model "$SCHEMA" "$_compact_model"; then
