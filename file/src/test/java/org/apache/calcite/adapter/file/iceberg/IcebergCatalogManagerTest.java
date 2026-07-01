@@ -24,7 +24,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +114,44 @@ public class IcebergCatalogManagerTest {
     Table directTable = IcebergCatalogManager.loadTable(directConfig, tablePath);
     assertNotNull(directTable);
     assertEquals(tablePath, directTable.location());
+  }
+
+  @Test public void testCreateTableFromParquetInfersSchema() throws Exception {
+    String warehousePath = tempDir.resolve("warehouse").toString();
+    String parquet = tempDir.resolve("data.parquet").toString().replace('\\', '/');
+
+    // Write a parquet with a known mixed-type schema via DuckDB — the "source" to infer from.
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+         Statement st = conn.createStatement()) {
+      st.execute("COPY (SELECT 1::INTEGER AS id, 'a'::VARCHAR AS name, 3.5::DOUBLE AS amount, "
+          + "true::BOOLEAN AS active, DATE '2026-01-01' AS d, 2026::INTEGER AS year) "
+          + "TO '" + parquet + "' (FORMAT PARQUET)");
+    }
+
+    Map<String, Object> config = new HashMap<>();
+    config.put("catalog", "hadoop");
+    config.put("catalogType", "hadoop");
+    config.put("warehousePath", warehousePath);
+
+    // No declared columns — schema is inferred straight from the parquet footer.
+    Table table = IcebergCatalogManager.createTableFromParquet(
+        config, "inferred_tbl", parquet, Collections.singletonList("year"));
+
+    Map<String, Types.NestedField> byName = new HashMap<>();
+    for (Types.NestedField f : table.schema().columns()) {
+      byName.put(f.name(), f);
+    }
+    assertEquals(6, byName.size(), "all parquet columns inferred");
+    assertEquals(Types.IntegerType.get(), byName.get("id").type());
+    assertEquals(Types.StringType.get(), byName.get("name").type());
+    assertEquals(Types.DoubleType.get(), byName.get("amount").type());
+    assertEquals(Types.BooleanType.get(), byName.get("active").type());
+    assertEquals(Types.DateType.get(), byName.get("d").type());
+    assertEquals(Types.IntegerType.get(), byName.get("year").type());
+
+    // year is carried through as the identity partition column.
+    assertEquals(1, table.spec().fields().size());
+    assertEquals("year", table.spec().fields().get(0).name());
   }
 
   @Test public void testCatalogCaching() {

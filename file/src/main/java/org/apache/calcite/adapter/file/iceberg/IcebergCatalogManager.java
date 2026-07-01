@@ -26,9 +26,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -415,6 +421,125 @@ public class IcebergCatalogManager {
       case "TEXT":
       default:
         return Types.StringType.get();
+    }
+  }
+
+  /**
+   * Creates a new Iceberg table whose schema is INFERRED from a Parquet file rather than declared.
+   *
+   * <p>Iceberg is only metadata over Parquet: the file's footer already carries authoritative column
+   * names and types, so a materialize with no declared {@code columns} can derive the table schema
+   * directly from the staged data. The schema is read with a DuckDB
+   * {@code DESCRIBE SELECT * FROM read_parquet(...)}, each DuckDB type normalized to the canonical
+   * type string understood by {@link #mapToIcebergType(String)}, then delegated to
+   * {@link #createTableFromColumns}. When {@code columns} ARE declared the caller should keep using
+   * {@link #createTableFromColumns} — declared columns are an override layer, not replaced by this.
+   *
+   * @param config The catalog configuration
+   * @param tableId The table identifier
+   * @param parquetPath Absolute path (or read_parquet-compatible URI) of the file to introspect
+   * @param partitionColumns Partition column names in order (may be empty)
+   * @return The created table
+   */
+  public static Table createTableFromParquet(Map<String, Object> config, String tableId,
+      String parquetPath, List<String> partitionColumns) {
+    List<ColumnDef> columns = describeParquet(parquetPath);
+    if (columns.isEmpty()) {
+      throw new IllegalStateException(
+          "Cannot infer Iceberg schema: DESCRIBE returned no columns for parquet: " + parquetPath);
+    }
+    LOGGER.info("Inferred {} columns from parquet {} for table {}",
+        columns.size(), parquetPath, tableId);
+    return createTableFromColumns(config, tableId, columns, partitionColumns);
+  }
+
+  /**
+   * Reads the column names and types of a Parquet file via DuckDB {@code DESCRIBE} and maps each
+   * DuckDB type to the canonical type string understood by {@link #mapToIcebergType(String)}.
+   */
+  private static List<ColumnDef> describeParquet(String parquetPath) {
+    List<ColumnDef> columns = new ArrayList<ColumnDef>();
+    String escaped = parquetPath.replace("'", "''");
+    String sql = "DESCRIBE SELECT * FROM read_parquet('" + escaped + "')";
+    try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        columns.add(
+            new ColumnDef(rs.getString("column_name"),
+            duckdbTypeToCanonical(rs.getString("column_type"))));
+      }
+    } catch (SQLException e) {
+      throw new IllegalStateException(
+          "Failed to infer schema from parquet '" + parquetPath + "': " + e.getMessage(), e);
+    }
+    return columns;
+  }
+
+  /**
+   * Maps a DuckDB {@code DESCRIBE} type name to the canonical type string understood by
+   * {@link #mapToIcebergType(String)}. Fails loud on an unrecognized type rather than silently
+   * defaulting to VARCHAR, so an unhandled Parquet type is surfaced and mapped deliberately.
+   */
+  private static String duckdbTypeToCanonical(String duckType) {
+    if (duckType == null) {
+      throw new IllegalStateException("DuckDB DESCRIBE returned a null column type");
+    }
+    String t = duckType.trim().toUpperCase(Locale.ROOT);
+    // List types: "INTEGER[]" -> array<INTEGER> (mapToIcebergType recurses on the element)
+    if (t.endsWith("[]")) {
+      return "array<" + duckdbTypeToCanonical(t.substring(0, t.length() - 2)) + ">";
+    }
+    // DECIMAL(p,s) -> DECIMAL (mapToIcebergType applies fixed precision/scale)
+    if (t.startsWith("DECIMAL")) {
+      return "DECIMAL";
+    }
+    switch (t) {
+      case "BOOLEAN":
+        return "BOOLEAN";
+      case "TINYINT":
+      case "SMALLINT":
+      case "INTEGER":
+      case "UTINYINT":
+      case "USMALLINT":
+        return "INTEGER";
+      case "BIGINT":
+      case "UINTEGER":
+        return "BIGINT";
+      case "HUGEINT":
+      case "UBIGINT":
+        return "DECIMAL";
+      case "FLOAT":
+      case "REAL":
+        return "FLOAT";
+      case "DOUBLE":
+        return "DOUBLE";
+      case "VARCHAR":
+      case "CHAR":
+      case "BPCHAR":
+      case "TEXT":
+      case "STRING":
+      case "UUID":
+        return "VARCHAR";
+      case "BLOB":
+      case "BYTEA":
+      case "BINARY":
+        return "BINARY";
+      case "DATE":
+        return "DATE";
+      case "TIMESTAMP":
+      case "TIMESTAMP_NS":
+      case "TIMESTAMP_MS":
+      case "TIMESTAMP_S":
+      case "DATETIME":
+        return "TIMESTAMP";
+      case "TIMESTAMP WITH TIME ZONE":
+      case "TIMESTAMPTZ":
+        return "TIMESTAMPTZ";
+      default:
+        throw new IllegalStateException(
+            "Unsupported DuckDB type for Iceberg schema inference: '" + duckType
+            + "'. Add an explicit mapping in duckdbTypeToCanonical.");
     }
   }
 

@@ -3492,16 +3492,24 @@
     forced types, order/nullability) — never the sole source of truth. This also removes the
     "schema drift -> drop and recreate" churn, since table schema and data both derive from the same
     Parquet and cannot disagree.
-  source: (partially implemented — see IcebergCatalogManager.createTableFromParquet slice; the URI-level
-    materialize verb + materializations/partitionedTables block generator remain proposed)
-  notes: "Two layers. (1) INFERENCE (the enabler, being built): IcebergCatalogManager gains
-    createTableFromParquet(config,tableId,parquetPath,partitionColumns) — DuckDB DESCRIBE the staged
-    Parquet -> ColumnDef list -> Iceberg schema; IcebergMaterializationWriter.ensureTableExists uses it
-    when config columns are empty, which means table creation DEFERS from initialize() (no data yet) to
-    the first staged batch. (2) URI VERB (still proposed): FileSchemaFactory triggers materialization via
-    `materializations`/`partitionedTables` operand blocks (per-table iceberg config), not a schema-wide
-    flag, so materialize=iceberg must GENERATE that block per discovered table pointed at storage. Param
-    parsing is trivial; block generation + wiring is the work, and it gates FILE-188's emit."
+  source: >
+    file/src/main/java/org/apache/calcite/adapter/file/iceberg/IcebergCatalogManager.java
+    (createTableFromParquet + describeParquet + duckdbTypeToCanonical — the inference slice, DONE);
+    the ensureTableExists wiring + URI-level materialize verb remain proposed
+  tests:
+    - file/IcebergCatalogManagerTest#testCreateTableFromParquetInfersSchema
+  notes: "Three layers. (1) INFERENCE PRIMITIVE (DONE, tested): IcebergCatalogManager.
+    createTableFromParquet(config,tableId,parquetPath,partitionColumns) — DuckDB DESCRIBE the Parquet ->
+    ColumnDef list (duckdbTypeToCanonical, fail-loud on unknown types) -> createTableFromColumns ->
+    Iceberg table via HadoopCatalog (kept for later REST/multi-writer). Reads stay catalog-service-free
+    via HadoopTables.load(path). (2) WIRING (proposed): IcebergMaterializationWriter.ensureTableExists
+    creates the table in initialize() BEFORE any data, and tableWriter.writeRecords needs the schema to
+    stage the Parquet — chicken-and-egg. So a bare (columns-empty) materialize must DEFER table creation
+    to the first staged batch, then call createTableFromParquet. Guarded behind expectedColumns.isEmpty()
+    it is inert for every existing schema (all declare columns). (3) URI VERB (proposed): materialize=
+    iceberg must GENERATE the `materializations`/`partitionedTables` operand block per discovered table
+    pointed at storage; gates FILE-188's emit. WHY ICEBERG not plain Parquet: atomic compaction
+    (RewriteFiles.commit) + an authoritative metadata record — neither is safe on files-in-place."
   since: 2026-07
 
 - id: FILE-187
