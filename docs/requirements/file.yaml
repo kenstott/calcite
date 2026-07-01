@@ -3339,3 +3339,196 @@
     - file/OracleLexicalRequirementsTest#correctCaseQuotedResolvesAndWrongCaseFailsNotFound
     - file/OracleLexicalRequirementsTest#informationSchemaAccessIsCaseInsensitive
   since: 2026-06
+
+# ===================== aperio driver — URI semantics & their model expression ==================
+# The AperioDriver is a thin URI->model compiler: it parses a jdbc:aperio: URL into a Calcite inline
+# model targeting FileSchemaFactory. These pin the URI grammar, its mapping to the model operand, and
+# the defaults. FILE-180..183 are the current driver contract; FILE-184..189 are the target semantics
+# (the write/distribution half) — designed in the tracker/aperio thread but not yet built.
+
+- id: FILE-180
+  module: file
+  status: complete
+  group: aperio-uri
+  category: uri -> model compilation
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    AperioDriver accepts jdbc:aperio:<path>[?k=v&...], splits path from query params, and compiles an
+    inline Calcite model with one custom schema whose factory is FileSchemaFactory and whose operand is
+    built from the params, then delegates to jdbc:calcite:model=inline:. The form jdbc:aperio:model=<file>
+    passes through to a full Calcite model file — the escape hatch for the long tail, so the URI never has
+    to grow to express everything the model can.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java
+  tests:
+    - file/AperioDriverOperandTest
+  since: 2026-07
+
+- id: FILE-181
+  module: file
+  status: complete
+  group: aperio-uri
+  category: files-in-place default
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    With no materialize/iceberg opt-in, the URI compiles to a plain directory read (files-in-place): the
+    query path reads the source files directly and engages no tracker, no ETL, no lake. Iceberg /
+    materialization is opt-in only. This is the low-friction default — point at a directory, query it.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java
+  tests:
+    - file/AperioDriverOperandTest
+  since: 2026-07
+
+- id: FILE-182
+  module: file
+  status: complete
+  group: aperio-uri
+  category: secrets via env not uri
+  priority: MUST
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    Credentials/endpoints (AWS_* keys/region, HTTP auth token, etc.) are read from environment
+    variables, never carried as URI params; ${VAR} placeholders in operand values expand from env then
+    system properties. This keeps the URI a safe, shareable artifact — it can be distributed without
+    leaking secrets into logs/history.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (buildOperand, expandEnvVars)
+  tests:
+    - file/AperioDriverOperandTest
+  since: 2026-07
+
+- id: FILE-183
+  module: file
+  status: complete
+  group: aperio-uri
+  category: engine and sql defaults
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    The compiled model defaults executionEngine=duckdb and the project SQL conventions (lex=ORACLE,
+    unquotedCasing=TO_LOWER, tableNameCasing=columnNameCasing=SMART_CASING), each overridable via the
+    matching URI param. Remote storage (storageType=s3|http + storageConfig from env), icebergEnabled
+    read-config, and refreshInterval/cacheEnabled are also expressed as params.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java
+  tests:
+    - file/AperioDriverOperandTest
+  since: 2026-07
+
+- id: FILE-184
+  module: file
+  status: proposed
+  group: aperio-uri
+  category: rw mode
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: connection
+  description: >
+    GAP. Add an `rw` URI param (rw=on|off) governing whether the connection may write/materialize, and
+    express it in the model: rw=off -> read-only model (trackerBackend=readonly per FILE-176 +
+    autoDownload=false), the consumer/distribution mode; rw=on -> writable model (local DuckDB tracker
+    per FILE-175, materialize permitted). rw is only meaningful once materialize/lake features are
+    engaged — a pure files-in-place read is inherently read-only. Wires the fail-closed tracker selection
+    (FILE-175/176) to the URI so distribution is "share the URI with rw=off".
+  source: (not yet implemented — AperioDriver.buildOperand has no rw)
+  since: 2026-07
+
+- id: FILE-185
+  module: file
+  status: proposed
+  group: aperio-uri
+  category: storage root default
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: connection
+  description: >
+    GAP. Add a `storage` URI param as the single root for materialized lake output, the local data/image
+    cache, and the tracker; default to ~/.aperio (per-user, persistent, local disk), namespaced by
+    schema/lake. The tracker location must stay local even when storage is a network mount (DuckDB/SQLite
+    file-locking is unreliable over NFS/SMB) — refuse/relocate a network-mount tracker path. Today the base
+    default is {cwd}/.aperio/{schema} and storage is scattered across spillDirectory / warehouse /
+    statisticsCache.
+  source: (not yet implemented)
+  since: 2026-07
+
+- id: FILE-186
+  module: file
+  status: proposed
+  group: aperio-uri
+  category: materialize verb
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: connection
+  description: >
+    GAP. Add a `materialize=iceberg` param that turns the URI from "query files in place" into
+    "build/refresh an Iceberg lake": with rw=on, source files under `directories` are materialized to
+    Iceberg tables under `storage` (engaging the tracker + Phase 1.5 self-heal, FILE-084/178), and the
+    query path then reads the lake. With rw=off, materialize=iceberg means "read the existing lake at
+    storage" (the consumer) — not a contradiction. Materialization is lazy per-table (on first access) so
+    first use stays responsive. Today icebergEnabled is read-config only; there is no build verb.
+  source: (not yet implemented)
+  since: 2026-07
+
+- id: FILE-187
+  module: file
+  status: proposed
+  group: aperio-uri
+  category: directories list
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    GAP. Accept multiple source directories in the URI (a `directories` list) compiled to the file
+    schema's source set, not just the single `directory` supported today.
+  source: (not yet implemented)
+  since: 2026-07
+
+- id: FILE-188
+  module: file
+  status: proposed
+  group: aperio-uri
+  category: consumer uri emission
+  priority: SHOULD
+  type: behavioral
+  mode: write
+  seam: connection
+  description: >
+    GAP. On a successful rw=on materialize, emit the ready-to-share consumer URI — the lake location
+    (storage) with rw=off — so distribution is "share this URI". For directory-derived schemas the
+    consumer URI points `directories` at the lake; for model-defined schemas it carries model + storage +
+    rw=off. Only emit/point when storage is shared/reachable (not a local ~/.aperio). Enforcement stays at
+    the storage layer (read-only mount/creds); rw=off is the safety default, not the security control.
+  source: (not yet implemented)
+  since: 2026-07
+
+- id: FILE-189
+  module: file
+  status: in-progress
+  group: aperio-uri
+  category: local data-image cache default
+  priority: SHOULD
+  type: behavioral
+  mode: read
+  seam: connection
+  description: >
+    The DuckDB engine maintains a persisted local data cache as a DuckDB in-memory image: first read pulls
+    from the lake's parquet, thereafter reads are local-speed, warm restart restores the image, and it is
+    auto-refreshed (efficiently, via Iceberg snapshot-diff) so it never serves stale data; static data
+    caches once and never refreshes. URI-level GAP: cacheEnabled is opt-in (addBoolIfPresent) so the cache
+    is off by default — it should default ON so repeated querying of a lake over a slow/remote mount is
+    local-fast without the user knowing to enable it.
+  source: file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (cacheEnabled/refreshInterval)
+  notes: "Confirm engine wiring in RefreshableParquetCacheTable / DuckDBJdbcSchemaFactory and whether the
+    image cache can default on safely; auto-refresh must be snapshot-diff-driven to stay cheap."
+  since: 2026-07
