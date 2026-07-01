@@ -39,11 +39,15 @@ if [ -z "$TIMEOUT_CMD" ]; then
   exit 1
 fi
 
-# Resolve JAR — prefer GOVDATA_JAR env override, then standard name, then sih-govdata
+# Resolve JAR — mirror common.sh's find_jar order so this and the workers agree:
+# GOVDATA_JAR override, then the staged unversioned sih-govdata.jar (the build-jar
+# skill's source of truth), then the standard name, then a versioned SNAPSHOT.
 if [ -z "${GOVDATA_JAR:-}" ]; then
+  STAGED_JAR=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata.jar" 2>/dev/null | head -1)
   STANDARD_JAR=$(find "$GOVDATA_ROOT/build/libs" -name "calcite-govdata-*-all.jar" 2>/dev/null | head -1)
   SIH_JAR=$(find "$GOVDATA_ROOT/build/libs" -name "sih-govdata-*-SNAPSHOT.jar" 2>/dev/null | head -1)
-  if [ -n "$STANDARD_JAR" ]; then export GOVDATA_JAR="$STANDARD_JAR"
+  if [ -n "$STAGED_JAR" ]; then export GOVDATA_JAR="$STAGED_JAR"
+  elif [ -n "$STANDARD_JAR" ]; then export GOVDATA_JAR="$STANDARD_JAR"
   elif [ -n "$SIH_JAR" ]; then export GOVDATA_JAR="$SIH_JAR"; fi
 fi
 
@@ -97,18 +101,15 @@ fi
 
 run_window() {
   local mode="$1"
+  local fill_mode="${2:-}"   # when the primary mode finishes early, spend the rest of the window on this mode
   local window_log="$LOG_DIR/scheduled-${mode}-$(date '+%Y%m%d-%H%M%S').log"
   local window_end=$(( $(date +%s) + WINDOW_SECS ))
   local attempt=0
-
-  if [ "$mode" = "historical" ]; then
-    export GOVDATA_START_YEAR=2010
-  else
-    unset GOVDATA_START_YEAR 2>/dev/null || true
-  fi
+  local current="$mode"      # mode currently running; may switch to fill_mode after an early finish
 
   {
     echo "[$(ts)] === Starting $mode window (until $(fmt_epoch "$window_end")) ==="
+    [ -n "$fill_mode" ] && echo "[$(ts)] early-finish fill mode: $fill_mode"
     [ -n "${GOVDATA_JAR:-}" ] && echo "[$(ts)] JAR: $GOVDATA_JAR"
   } | tee -a "$window_log"
 
@@ -117,24 +118,41 @@ run_window() {
     local remaining=$(( window_end - now ))
     [ "$remaining" -le 60 ] && break   # < 1 min left in window — done
 
+    # Historical backfills from 2010; daily uses the default (recent) start year.
+    # Re-evaluated each iteration because $current can switch to the fill mode mid-window.
+    if [ "$current" = "historical" ]; then
+      export GOVDATA_START_YEAR=2010
+    else
+      unset GOVDATA_START_YEAR 2>/dev/null || true
+    fi
+
     attempt=$(( attempt + 1 ))
-    echo "[$(ts)] $mode attempt $attempt (${remaining}s remaining in window)" >> "$window_log"
+    echo "[$(ts)] $current attempt $attempt (${remaining}s remaining in window)" >> "$window_log"
 
     set +e
-    "$TIMEOUT_CMD" "$remaining" "$SCRIPT_DIR/run-pool.sh" "$mode" >> "$window_log" 2>&1 &
+    "$TIMEOUT_CMD" "$remaining" "$SCRIPT_DIR/run-pool.sh" "$current" >> "$window_log" 2>&1 &
     ACTIVE_POOL_PID=$!
     wait "$ACTIVE_POOL_PID"
     EXIT_CODE=$?
     ACTIVE_POOL_PID=""
     set -e
 
-    if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 143 ]; then
-      # 0 = pool completed all schemas; 143 = SIGTERM from timeout (window elapsed)
-      echo "[$(ts)] $mode pool ended normally (exit $EXIT_CODE)" >> "$window_log"
+    if [ "$EXIT_CODE" -eq 0 ]; then
+      # Pool completed all schemas for the current mode before the window elapsed.
+      echo "[$(ts)] $current pool completed all schemas (exit 0)" >> "$window_log"
+      if [ -n "$fill_mode" ] && [ "$current" != "$fill_mode" ]; then
+        echo "[$(ts)] $current finished early — filling remaining window with $fill_mode" | tee -a "$window_log"
+        current="$fill_mode"
+        continue
+      fi
+      break
+    elif [ "$EXIT_CODE" -eq 143 ]; then
+      # SIGTERM from timeout — the window elapsed.
+      echo "[$(ts)] $current pool ended on window timeout (exit 143)" >> "$window_log"
       break
     else
       # Crash / OOM — log to error log and restart within remaining window time
-      log_error "ERROR: $mode pool exited with code $EXIT_CODE (attempt $attempt) — restarting in ${RESTART_DELAY}s"
+      log_error "ERROR: $current pool exited with code $EXIT_CODE (attempt $attempt) — restarting in ${RESTART_DELAY}s"
       echo "[$(ts)] ERROR: pool exit $EXIT_CODE — restarting; see $ERROR_LOG" >> "$window_log"
       sleep "$RESTART_DELAY"
     fi
@@ -164,6 +182,12 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
 fi
 
 while true; do
-  run_window "$MODE"
+  if [ "$MODE" = "daily" ]; then
+    # Daily runs for at most 12h; if it finishes all schemas early, use the
+    # remaining window time for historical backfill rather than ending early.
+    run_window "$MODE" historical
+  else
+    run_window "$MODE"
+  fi
   if [ "$MODE" = "historical" ]; then MODE="daily"; else MODE="historical"; fi
 done
