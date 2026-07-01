@@ -116,6 +116,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private Map<String, Object> catalogConfig;
   private Table table;
   private IcebergTableWriter tableWriter;
+  /**
+   * When no columns are declared (FILE-186), Iceberg table creation is deferred to the first staged
+   * batch so the schema can be inferred from the data itself. {@link #table}/{@link #tableWriter}
+   * stay null until then; these hold what the deferred create needs.
+   */
+  private boolean deferSchemaInference;
+  private String deferredTargetTableId;
+  private List<String> deferredPartitionColumns;
   private long totalRowsWritten;
   private int totalFilesWritten;
   private boolean initialized;
@@ -262,9 +270,22 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       throw new IllegalArgumentException("Target table ID is required for Iceberg format");
     }
 
-    // Ensure table exists
-    this.table = ensureTableExists(targetTableId);
-    this.tableWriter = new IcebergTableWriter(table, storageProvider);
+    // Ensure table exists. With no declared columns (FILE-186), the Iceberg schema is inferred from
+    // the data — but writeRecords needs the schema to stage the parquet, so creation must defer to the
+    // first batch. Declared columns keep the eager, config-driven path below.
+    List<ColumnConfig> declaredColumns = config.getColumns();
+    if (declaredColumns == null || declaredColumns.isEmpty()) {
+      this.deferSchemaInference = true;
+      this.deferredTargetTableId = targetTableId;
+      this.deferredPartitionColumns = (partConfig != null && partConfig.getColumns() != null)
+          ? new ArrayList<String>(partConfig.getColumns())
+          : new ArrayList<String>();
+      LOGGER.info("No declared columns for {} — deferring Iceberg table creation to infer the schema "
+          + "from the first batch", targetTableId);
+    } else {
+      this.table = ensureTableExists(targetTableId);
+      this.tableWriter = new IcebergTableWriter(table, storageProvider);
+    }
 
     LOGGER.info("Initialized IcebergMaterializationWriter: table={}, warehouse={}",
         targetTableId, warehousePath);
@@ -869,6 +890,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     Map<String, String> partVars = partitionVarsMap.get(partitionKey);
     int rowCount = rows.size();
 
+    // Deferred-schema materialize (FILE-186): first flush infers the schema and creates the table.
+    ensureTableCreated(rows, partVars);
+
     org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(rows, partVars);
     if (dataFile != null) {
       pendingDataFiles.add(dataFile);
@@ -885,6 +909,94 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Intermediate commit to bound memory: commit pending data files when threshold exceeded
     if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD) {
       intermediateCommit();
+    }
+  }
+
+  /**
+   * Lazily creates the Iceberg table for a deferred-schema materialize (FILE-186) using the first
+   * batch's data to infer the schema. No-op once the table exists (declared-column path, or a prior
+   * flush already created it). On a re-run where the table already exists in the catalog, the existing
+   * table is loaded rather than recreated — its schema is authoritative.
+   */
+  private synchronized void ensureTableCreated(List<Map<String, Object>> sampleRows,
+      Map<String, String> partitionValues) throws IOException {
+    if (table != null) {
+      return;
+    }
+    if (!deferSchemaInference) {
+      throw new IllegalStateException(
+          "Iceberg table was not initialized for " + deferredTargetTableId);
+    }
+    try {
+      if (IcebergCatalogManager.tableExists(catalogConfig, deferredTargetTableId)) {
+        this.table = IcebergCatalogManager.loadTable(catalogConfig, deferredTargetTableId);
+        LOGGER.info("Loaded existing Iceberg table {} (deferred-schema re-run)",
+            deferredTargetTableId);
+      } else {
+        this.table = inferTableFromRows(sampleRows, partitionValues,
+            deferredTargetTableId, deferredPartitionColumns);
+        LOGGER.info("Created Iceberg table {} with schema inferred from the first batch ({} rows)",
+            deferredTargetTableId, sampleRows.size());
+      }
+      this.tableWriter = new IcebergTableWriter(table, storageProvider);
+      this.deferSchemaInference = false;
+    } catch (IOException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new IOException("Failed to infer schema and create Iceberg table "
+          + deferredTargetTableId, e);
+    }
+  }
+
+  /**
+   * Infers an Iceberg table schema from a sample of rows and creates the table. The rows (merged with
+   * their partition values so identity partition columns are present) are written to a temporary
+   * Parquet via DuckDB — whose footer then carries authoritative column names and types — and
+   * {@link IcebergCatalogManager#createTableFromParquet} reads that footer.
+   */
+  private Table inferTableFromRows(List<Map<String, Object>> sampleRows,
+      Map<String, String> partitionValues, String targetTableId, List<String> partitionColumns)
+      throws Exception {
+    if (sampleRows == null || sampleRows.isEmpty()) {
+      throw new IllegalStateException(
+          "Cannot infer schema for " + targetTableId + ": first batch is empty");
+    }
+    // Merge partition values into each sample row so inferred columns include the partition columns
+    // (writeRecords pulls those from partitionValues, so they must exist in the schema).
+    List<Map<String, Object>> sample = new ArrayList<Map<String, Object>>(sampleRows.size());
+    for (Map<String, Object> row : sampleRows) {
+      Map<String, Object> merged = new LinkedHashMap<String, Object>(row);
+      if (partitionValues != null) {
+        for (Map.Entry<String, String> pv : partitionValues.entrySet()) {
+          if (!merged.containsKey(pv.getKey())) {
+            merged.put(pv.getKey(), pv.getValue());
+          }
+        }
+      }
+      sample.add(merged);
+    }
+
+    java.io.File tmpJson = java.io.File.createTempFile("iceberg-infer-", ".json");
+    java.io.File tmpParquet = java.io.File.createTempFile("iceberg-infer-", ".parquet");
+    tmpJson.deleteOnExit();
+    tmpParquet.deleteOnExit();
+    try {
+      java.nio.file.Files.write(tmpJson.toPath(),
+          MAPPER.writeValueAsString(sample).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      String jsonPath = tmpJson.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
+      String parquetPath = tmpParquet.getAbsolutePath().replace("\\", "/");
+      // DuckDB infers column types from the sample and writes a parquet whose footer carries them.
+      try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+           Statement stmt = conn.createStatement()) {
+        stmt.execute("COPY (SELECT * FROM read_json_auto('" + jsonPath + "')) TO '"
+            + parquetPath.replace("'", "''") + "' (FORMAT PARQUET)");
+      }
+      return IcebergCatalogManager.createTableFromParquet(catalogConfig, targetTableId,
+          parquetPath, partitionColumns != null ? partitionColumns
+          : java.util.Collections.<String>emptyList());
+    } finally {
+      tmpJson.delete();
+      tmpParquet.delete();
     }
   }
 
@@ -1930,9 +2042,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
 
-    // Run compaction if configured - consolidates many small files into fewer large files
+    // Run compaction if configured - consolidates many small files into fewer large files.
+    // tableWriter stays null for a deferred-schema materialize that received zero rows (nothing to
+    // create the table from, nothing to compact).
     MaterializeConfig.IcebergConfig icebergConfig = config.getIceberg();
-    if (icebergConfig != null && icebergConfig.isRunCompaction()) {
+    if (tableWriter != null && icebergConfig != null && icebergConfig.isRunCompaction()) {
       long targetSize = icebergConfig.getCompactionTargetFileSizeBytes();
       int minFiles = icebergConfig.getCompactionMinFiles();
       long smallSize = icebergConfig.getCompactionSmallFileSizeBytes();
@@ -1949,7 +2063,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Run maintenance if configured
-    if (icebergConfig != null && icebergConfig.isRunMaintenance()) {
+    if (tableWriter != null && icebergConfig != null && icebergConfig.isRunMaintenance()) {
       int retentionDays = icebergConfig.getSnapshotRetentionDays();
       LOGGER.info("Running Iceberg maintenance with {}d snapshot retention", retentionDays);
       tableWriter.runMaintenance(retentionDays, 1);
@@ -2016,6 +2130,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   public long selfHealPartition(Map<String, String> partitionVariables) throws IOException {
     if (!initialized) {
+      return 0;
+    }
+    if (tableWriter == null) {
+      // Deferred-schema materialize that has not yet written a batch — no table to heal against.
       return 0;
     }
     List<org.apache.iceberg.DataFile> orphaned = tableWriter.findOrphanedDataFiles(partitionVariables);

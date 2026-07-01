@@ -39,6 +39,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -170,6 +171,56 @@ public class IcebergMaterializationWriterTest {
 
     assertEquals(2, writer.getTotalRowsWritten(),
         "Should have written 2 rows across partitions");
+  }
+
+  @Test public void testDeferredSchemaInferenceFromFirstBatch() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_infer");
+    warehouseDir.mkdirs();
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    // No declared columns — the schema must be inferred from the first batch (FILE-186).
+    MaterializeConfig config =
+        buildIcebergConfig(warehouseDir, "test_infer_table",
+            Collections.<ColumnConfig>emptyList(), Collections.<String>emptyList());
+
+    writer.initialize(config);
+    // Deferred: the table is NOT created until data arrives.
+    assertNull(writer.getTableLocation(),
+        "table creation is deferred until the first batch when no columns are declared");
+
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    for (int i = 0; i < 3; i++) {
+      Map<String, Object> row = new HashMap<String, Object>();
+      row.put("id", i);
+      row.put("name", "item_" + i);
+      row.put("amount", 3.5);
+      row.put("active", true);
+      rows.add(row);
+    }
+
+    writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+
+    assertEquals(3, writer.getTotalRowsWritten(), "all rows written");
+    String loc = writer.getTableLocation();
+    assertNotNull(loc, "table created once the first batch arrived");
+
+    // Load the table and verify the schema was inferred from the data (JSON numbers -> BIGINT,
+    // decimals -> DOUBLE, booleans -> BOOLEAN, strings -> VARCHAR).
+    org.apache.iceberg.Table table =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(loc);
+    Map<String, org.apache.iceberg.types.Type> byName =
+        new HashMap<String, org.apache.iceberg.types.Type>();
+    for (org.apache.iceberg.types.Types.NestedField f : table.schema().columns()) {
+      byName.put(f.name(), f.type());
+    }
+    assertEquals(4, byName.size(), "all data columns inferred");
+    assertEquals(org.apache.iceberg.types.Types.LongType.get(), byName.get("id"));
+    assertEquals(org.apache.iceberg.types.Types.StringType.get(), byName.get("name"));
+    assertEquals(org.apache.iceberg.types.Types.DoubleType.get(), byName.get("amount"));
+    assertEquals(org.apache.iceberg.types.Types.BooleanType.get(), byName.get("active"));
   }
 
   @Test public void testIcebergInitializeRequiresIcebergFormat() throws Exception {
