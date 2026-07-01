@@ -1616,6 +1616,27 @@
     run reprocessed all 12. EtlPipeline batchPartitionColumns fallback was reverted (wrong mechanism)."
   since: 2026-06
 
+- id: FILE-179
+  module: file
+  status: complete
+  group: document-etl
+  category: tracker environment isolation
+  priority: MUST
+  type: behavioral
+  mode: write
+  seam: execution
+  description: >
+    The Postgres tracker isolates dq from prod by the parquet bucket: PipelineTrackerFactory derives a
+    namespace from the operand `directory` (the parquet dir) and PGPipelineTracker maps it to a PG
+    schema (CREATE SCHEMA IF NOT EXISTS + search_path), sanitized to a safe identifier. So a prod run
+    (bucket govdata-parquet-v1 → schema govdata_parquet_v1) and a dq run (govdata-parquet-v1-dq →
+    govdata_parquet_v1_dq) never share tracker state, even against one PG database. No namespace →
+    default (public) schema.
+  source: file/src/main/java/org/apache/calcite/adapter/file/partition/PGPipelineTracker.java
+  tests:
+    - file/partition/PGPipelineTrackerCoverageTest#testNamespaceSanitizedFromParquetBucket
+  since: 2026-06
+
 # ============================ refresh / freshness ==============================================
 
 - id: FILE-086

@@ -143,6 +143,13 @@ public final class PipelineTrackerFactory {
     if (dataSource instanceof String && !((String) dataSource).isEmpty()) {
       config.put("schema", (String) dataSource);
     }
+    // PG tracker namespace = the parquet bucket/directory, so dq and prod (which use different
+    // parquet buckets) get isolated tracker schemas in one database. Consumed only by the pg
+    // backend (mapped to a PG schema); ignored by the others.
+    Object directory = operand.get("directory");
+    if (directory instanceof String && !((String) directory).isEmpty()) {
+      config.put("namespace", (String) directory);
+    }
     return create(backend, baseDirectory, config);
   }
 
@@ -201,7 +208,8 @@ public final class PipelineTrackerFactory {
       if (password == null) {
         password = System.getenv("CALCITE_TRACKER_PG_PASSWORD");
       }
-      return new PGPipelineTracker(jdbcUrl, user, password);
+      // Isolate dq vs prod by the parquet bucket: the tracker lives in a PG schema derived from it.
+      return new PGPipelineTracker(jdbcUrl, user, password, config.get("namespace"));
     } catch (Exception e) {
       LOGGER.error("Failed to create PG tracker: {}", e.getMessage());
       throw new RuntimeException("Failed to create PG tracker", e);

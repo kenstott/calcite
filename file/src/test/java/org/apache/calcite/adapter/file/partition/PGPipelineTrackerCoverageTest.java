@@ -83,6 +83,22 @@ class PGPipelineTrackerCoverageTest {
     // Don't call close() on tracker as it would try to close our mock
   }
 
+  // ===== namespace (dq/prod isolation by parquet bucket) =====
+
+  @Test void testNamespaceSanitizedFromParquetBucket() throws Exception {
+    // The parquet bucket/dir becomes a safe PG schema so dq and prod never mix.
+    PGPipelineTracker prod =
+        new PGPipelineTracker("jdbc:mock://x", null, null, "s3://govdata-parquet-v1");
+    PGPipelineTracker dq =
+        new PGPipelineTracker("jdbc:mock://x", null, null, "s3://govdata-parquet-v1-dq");
+    Field ns = PGPipelineTracker.class.getDeclaredField("namespace");
+    ns.setAccessible(true);
+    assertEquals("govdata_parquet_v1", ns.get(prod));
+    assertEquals("govdata_parquet_v1_dq", ns.get(dq));
+    // Blank/absent namespace falls back to the default (public) schema.
+    assertNull(ns.get(new PGPipelineTracker("jdbc:mock://x", null, null, null)));
+  }
+
   // ===== isComplete =====
 
   @Test void testIsCompleteReturnsTrueWhenComplete() throws Exception {

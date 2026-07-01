@@ -68,14 +68,41 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
   private final String jdbcUrl;
   private final String user;
   private final String password;
+  /** PG schema the tracker tables live in — derived from the parquet bucket so dq and prod
+   *  (different buckets) get isolated tracker namespaces in one database. Null = default (public). */
+  private final String namespace;
   private Connection connection;
   private final Object connectionLock = new Object();
   private boolean initialized;
 
   public PGPipelineTracker(String jdbcUrl, String user, String password) {
+    this(jdbcUrl, user, password, null);
+  }
+
+  public PGPipelineTracker(String jdbcUrl, String user, String password, String namespace) {
     this.jdbcUrl = jdbcUrl;
     this.user = user;
     this.password = password;
+    this.namespace = sanitizeNamespace(namespace);
+  }
+
+  /**
+   * Reduce a parquet-bucket-derived namespace to a safe unquoted PG identifier
+   * ([a-z0-9_]); returns null for null/blank so the tracker falls back to the
+   * default (public) schema.
+   */
+  private static String sanitizeNamespace(String raw) {
+    if (raw == null) {
+      return null;
+    }
+    String s = raw;
+    int scheme = s.indexOf("://");   // strip s3://, file://, etc. so the schema name is just the bucket
+    if (scheme >= 0) {
+      s = s.substring(scheme + 3);
+    }
+    s = s.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", "_")
+        .replaceAll("^_+|_+$", "");
+    return s.isEmpty() ? null : s;
   }
 
   private Connection getConnection() throws SQLException {
@@ -87,7 +114,15 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
           connection = DriverManager.getConnection(jdbcUrl);
         }
         connection.setAutoCommit(true);
-        LOGGER.debug("Opened PostgreSQL connection for pipeline tracker");
+        // Scope every (re)connection to the parquet-bucket schema so dq and prod never mix.
+        // Set on each open (search_path is connection state) and create it up front.
+        if (namespace != null) {
+          try (Statement stmt = connection.createStatement()) {
+            stmt.execute("CREATE SCHEMA IF NOT EXISTS \"" + namespace + "\"");
+            stmt.execute("SET search_path TO \"" + namespace + "\"");
+          }
+        }
+        LOGGER.debug("Opened PostgreSQL connection for pipeline tracker (namespace={})", namespace);
       }
       if (!initialized) {
         initializeSchema();
