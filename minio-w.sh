@@ -30,7 +30,8 @@ ROOT_USER="${MINIO_ROOT_USER:-admin}"
 ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-password123}"
 IMAGE="${MINIO_IMAGE:-minio/minio}"
 # A bucket that must exist in DATA_DIR for the data to be considered "really there".
-GUARD_BUCKET="${MINIO_GUARD_BUCKET:-govdata-tracker-v1}"
+# Uses the parquet data bucket (the tracker buckets were retired after the Postgres cutover).
+GUARD_BUCKET="${MINIO_GUARD_BUCKET:-govdata-parquet-v1}"
 
 COMPRESS_EXTENSIONS="${MINIO_COMPRESSION_EXTENSIONS:-.txt,.csv,.tsv,.json,.xml,.xbrl,.xsd,.html,.log,.parquet}"
 COMPRESS_MIME_TYPES="${MINIO_COMPRESSION_MIME_TYPES:-text/*,application/xml,application/json,application/xbrl+xml,application/octet-stream}"
@@ -71,12 +72,18 @@ up() {
     echo "       Check that ${DATA_DIR} is mounted, then re-run." >&2
     exit 1
   fi
-  local size
-  size=$(docker exec "$NAME" du -sh /data 2>/dev/null | awk '{print $1}')
+  # MinIO is already up and serving at this point (guards passed above).
   echo "minio up:"
   echo "  API      http://localhost:${API_PORT}"
   echo "  Console  http://localhost:${CONSOLE_PORT}   (user: ${ROOT_USER})"
-  echo "  /data    ${size:-?}  (bind: ${DATA_DIR})"
+  echo "  bind     ${DATA_DIR}"
+  # The store is large (~150 GB), so du walks the whole tree and can take SEVERAL MINUTES.
+  # This is only an informational total — MinIO is already usable above, so it is safe to
+  # Ctrl-C here. `|| true` keeps `set -e` from treating an interrupted du as a fatal error.
+  echo "  computing /data size (large store — may take several minutes; Ctrl-C to skip)…"
+  local size
+  size=$(docker exec "$NAME" du -sh /data 2>/dev/null | awk '{print $1}') || true
+  echo "  /data    ${size:-?}"
 }
 
 down() {
