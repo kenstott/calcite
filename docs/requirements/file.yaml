@@ -3530,11 +3530,17 @@
     IcebergMaterializationWriter (columns-less -> deferred inference) -> commit -> served as an
     IcebergTable, AND recorded in conversionMetadata as ICEBERG_PARQUET so the DuckDB engine routes to
     iceberg_scan (Calcite/parquet engines scan the IcebergTable directly). REFRESH (user decision):
-    writable rebuilds when the Iceberg table is missing or the source SIGNATURE changed (schema-wide sig
-    over source path+size+mtime, stored as the 'aperio.source.signature' Iceberg table property — coarse:
-    any source change rebuilds all tables; refine to per-table later); read-only never builds, serves the
-    existing lake, and metadata freshness is handled by cache_httpfs (FILE-189) excluding mutable Iceberg
-    metadata so iceberg_scan re-reads the current snapshot. Unblocks FILE-188's emit. WHY ICEBERG not
+    writable rebuilds a table only when its own Iceberg table is missing or THAT table's source file
+    changed — PER-TABLE freshness (each discovered table is mapped to its source file by basename, and
+    the file's size+mtime signature is stored as the 'aperio.source.signature' Iceberg table property;
+    changing one CSV rebuilds only that table, proven by AperioMaterializeIcebergTest#
+    perTableFreshnessRebuildsOnlyChangedTable comparing per-table Iceberg file listings). read-only
+    never builds, serves the existing lake, and metadata freshness is handled by cache_httpfs (FILE-189)
+    excluding mutable Iceberg metadata so iceberg_scan re-reads the current snapshot. CAVEAT: mutating a
+    source within a single live JVM can serve stale rows on the immediate rebuild because the underlying
+    CSV->parquet cache + cache_httpfs treat derived data files as immutable; a fresh process/connection
+    is always correct (the freshness SCOPING — which table rebuilds — is unaffected). Unblocks FILE-188's
+    emit. WHY ICEBERG not
     plain Parquet: atomic compaction (RewriteFiles.commit) + an authoritative metadata record — neither
     is safe on files-in-place."
   since: 2026-07

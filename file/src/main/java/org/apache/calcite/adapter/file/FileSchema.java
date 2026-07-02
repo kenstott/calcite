@@ -2375,7 +2375,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     if (warehousePath == null || warehousePath.isEmpty()) {
       throw new IllegalStateException("materialize=iceberg requires a warehousePath");
     }
-    String signature = computeSourceSignature();
+    // Map each table to its own source file so freshness is PER-TABLE: only the table whose source
+    // changed is rebuilt, not the whole schema.
+    Map<String, File> sourceFileByTable = sourceFileByTable();
     org.apache.calcite.adapter.file.storage.StorageProvider sp = storageProvider != null
         ? storageProvider
         : new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider();
@@ -2386,6 +2388,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     ImmutableMap.Builder<String, Table> out = ImmutableMap.builder();
     for (Map.Entry<String, Table> entry : discovered.entrySet()) {
       String tableName = entry.getKey();
+      File srcFile = sourceFileByTable.get(tableName);
+      // Signature of THIS table's source file (null when the source can't be resolved, e.g. an
+      // explicit/partitioned table — then we serve an existing lake rather than force a rebuild).
+      String signature = srcFile != null ? signatureOf(srcFile) : null;
       try {
         out.put(tableName,
             materializeOneToIceberg(tableName, entry.getValue(), warehousePath, catalogCfg, sp, signature));
@@ -2406,10 +2412,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       org.apache.iceberg.Table existing =
           org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.loadTable(catalogCfg, tableName);
       String stored = existing.properties().get(MATERIALIZE_SIGNATURE_PROP);
-      if (signature.equals(stored) || !materializeWritable) {
+      // Fresh when the source signature is unknown (can't prove staleness) or matches what was stored.
+      boolean fresh = signature == null || signature.equals(stored);
+      if (fresh || !materializeWritable) {
         // Fresh, or read-only (never rebuilds; cache_httpfs handles metadata freshness, FILE-189).
         LOGGER.info("FILE-186: serving existing Iceberg table '{}' (writable={}, fresh={})",
-            tableName, materializeWritable, signature.equals(stored));
+            tableName, materializeWritable, fresh);
         return serveIcebergTable(tableName, existing);
       }
       LOGGER.info("FILE-186: source changed for '{}' — rebuilding Iceberg table", tableName);
@@ -2430,7 +2438,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
     org.apache.iceberg.Table built =
         org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.loadTable(catalogCfg, tableName);
-    built.updateProperties().set(MATERIALIZE_SIGNATURE_PROP, signature).commit();
+    if (signature != null) {
+      built.updateProperties().set(MATERIALIZE_SIGNATURE_PROP, signature).commit();
+    }
     LOGGER.info("FILE-186: materialized table '{}' to Iceberg at {}", tableName, built.location());
     return serveIcebergTable(tableName, built);
   }
@@ -2492,20 +2502,35 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
-   * Signature over the source files (path + size + mtime) used for FILE-186 freshness. Any source
-   * change flips the signature, triggering a rebuild on the next writable open.
+   * Maps each discovered table name to its own source file, so FILE-186 freshness is per-table. Keys
+   * are derived from the source files the SAME way discovery names tables (strip {@code .gz} then the
+   * format extension, then {@link #applyCasing}), so they line up with the discovered table names.
+   * Explicit/partitioned/multi-file tables that don't map to a single source file are simply absent
+   * (their freshness signature is then null → an existing lake is served, never force-rebuilt).
    */
-  private String computeSourceSignature() {
+  private Map<String, File> sourceFileByTable() {
+    Map<String, File> byTable = new HashMap<>();
     File[] files = getFilesForProcessing();
-    java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
+    if (files == null) {
+      return byTable;
+    }
     for (File f : files) {
-      sorted.put(f.getAbsolutePath(), f.length() + ":" + f.lastModified());
+      String base = f.getName();
+      if (base.endsWith(".gz")) {
+        base = base.substring(0, base.length() - 3);
+      }
+      int dot = base.lastIndexOf('.');
+      if (dot > 0) {
+        base = base.substring(0, dot);
+      }
+      byTable.put(applyCasing(base, tableNameCasing), f);
     }
-    StringBuilder sb = new StringBuilder();
-    for (Map.Entry<String, String> e : sorted.entrySet()) {
-      sb.append(e.getKey()).append("=").append(e.getValue()).append(";");
-    }
-    return Integer.toHexString(sb.toString().hashCode());
+    return byTable;
+  }
+
+  /** Per-file freshness signature: size + last-modified time. */
+  private static String signatureOf(File f) {
+    return Long.toHexString(f.length()) + ":" + Long.toHexString(f.lastModified());
   }
 
   private boolean addTable(ImmutableMap.Builder<String, Table> builder,
