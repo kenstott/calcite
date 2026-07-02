@@ -185,7 +185,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: jolts_dataelements
@@ -250,7 +250,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: bls_geographies
@@ -327,7 +327,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: naics_sectors
@@ -381,7 +381,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
   # --- REFERENCE NIPA TABLES ---
   - name: nipa_tables
@@ -489,7 +489,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: regional_linecodes
@@ -722,7 +722,7 @@ partitionedTables:
         batchPartitionColumns: [tablename]
         incrementalKeys: [tablename]
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
   # --- REFERENCE FRED SERIES ---
   - name: fred_series
@@ -861,7 +861,7 @@ partitionedTables:
         batchPartitionColumns: [category]
         incrementalKeys: [category]
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
 
 
 # ============================================================================

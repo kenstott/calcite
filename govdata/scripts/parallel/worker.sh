@@ -234,7 +234,14 @@ case "$SCHEMA" in
         CURRENT_MONTH=$(date +%m)
         EXTRA="\"currentMonth\":\"${CURRENT_MONTH}\""
         ;;
-      *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        # Backfill a single year (2025) or an inclusive range (2020-2023). No currentMonth —
+        # a range is pure backfill; the daily refresh signal belongs only to the daily mode.
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        EXTRA=""
+        ;;
+      *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     case "$SCHEMA" in
       census) EXTRA="${EXTRA:+${EXTRA},}\"enabledSources\":[\"acs\"]" ;;
@@ -266,7 +273,11 @@ case "$SCHEMA" in
         export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
         export GOVDATA_END_YEAR=""
         ;;
-      *) echo "geo: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "geo: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     run_etl_inline "$(build_inline_model geo '"enabledSources":["tiger","hud"]')" "$WORKER_ID"
     ;;
@@ -284,7 +295,8 @@ case "$SCHEMA" in
     case "$MODE" in
       historical) export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}" ;;
       daily)      export GOVDATA_START_YEAR="$INCREMENTAL_YEAR" ;;
-      *) echo "fec: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]) export GOVDATA_START_YEAR="${MODE%-*}"; export GOVDATA_END_YEAR="${MODE#*-}" ;;
+      *) echo "fec: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     run_etl_inline "$(build_inline_model fec)" "$WORKER_ID"
     ;;
@@ -304,7 +316,12 @@ case "$SCHEMA" in
         CURRENT_MONTH=$(date +%m)
         EXTRA="\"currentMonth\":\"${CURRENT_MONTH}\""
         ;;
-      *) echo "fedregister: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        EXTRA=""
+        ;;
+      *) echo "fedregister: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     run_etl_inline "$(build_inline_model fedregister "$EXTRA")" "$WORKER_ID"
     ;;
@@ -351,7 +368,11 @@ case "$SCHEMA" in
         export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
         export GOVDATA_END_YEAR=""
         ;;
-      *) echo "cftc: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "cftc: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     run_etl_inline "$(build_inline_model cftc)" "$WORKER_ID"
     ;;

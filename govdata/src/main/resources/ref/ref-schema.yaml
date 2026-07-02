@@ -227,7 +227,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -300,7 +300,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -376,7 +376,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -486,7 +486,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 7
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5

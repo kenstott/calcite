@@ -95,7 +95,13 @@ case "$MODE" in
   #     locations, cpc) carry a QUARTER dimension (current release token). They have no
   #     year, so they ride the daily pass: when the quarter rolls over, the token re-keys
   #     the cache → the new dump is sourced and a new quarter partition is appended.
-  historical)
+  historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+    # A bare year (2025) or range (2020-2023) narrows the backfill to that span so patents
+    # advances with the year-major front; plain 'historical' = full 2010..current-1 backfill.
+    if [ "$MODE" != "historical" ]; then
+      export GOVDATA_START_YEAR="${MODE%-*}"
+      INCREMENTAL_YEAR=$(( ${MODE#*-} + 1 ))
+    fi
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
     run_patents_model "patents-historical-grants" \
@@ -157,7 +163,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: historical, daily" >&2
+    echo "Unknown mode: $MODE. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2
     exit 1
     ;;
 esac

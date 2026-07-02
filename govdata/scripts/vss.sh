@@ -18,11 +18,15 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-VSS_DB="${VSS_DB:-/root/calcite/govdata/build/.aperio/vss/chunks_vss.duckdb}"
+# Derive paths from the script location (mirrors vss-gpu-runner.sh) instead of a
+# hardcoded /root — this script runs on the ETL box, whose user is not root, so
+# /root/... was unwritable (mkdir: Permission denied) and failed every run.
+GOVDATA_HOME="${GOVDATA_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+VSS_DB="${VSS_DB:-$GOVDATA_HOME/build/.aperio/vss/chunks_vss.duckdb}"
 
 # Load environment
-if [ -f /root/calcite/govdata/.env.prod ]; then
-    source /root/calcite/govdata/.env.prod
+if [ -f "$GOVDATA_HOME/.env.prod" ]; then
+    source "$GOVDATA_HOME/.env.prod"
 fi
 
 case "$1" in

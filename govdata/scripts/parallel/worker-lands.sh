@@ -87,7 +87,13 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
 case "$MODE" in
 
-  historical)
+  historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+    # A bare year (2025) or range (2020-2023) narrows the backfill to that span so lands
+    # advances with the year-major front; plain 'historical' = full 2010..current-1 backfill.
+    if [ "$MODE" != "historical" ]; then
+      export GOVDATA_START_YEAR="${MODE%-*}"
+      INCREMENTAL_YEAR=$(( ${MODE#*-} + 1 ))
+    fi
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
     # Static reference tables — no year dimension, include in historical pass
@@ -151,7 +157,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: historical, daily" >&2
+    echo "Unknown mode: $MODE. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2
     exit 1
     ;;
 esac

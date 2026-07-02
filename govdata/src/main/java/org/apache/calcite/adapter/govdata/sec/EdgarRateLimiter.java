@@ -33,7 +33,10 @@ public final class EdgarRateLimiter {
 
   /** Shared budget key for all sec.gov traffic (matches DocumentSource's registrable-domain key). */
   public static final String SEC_KEY = "sec.gov";
-  private static final long DEFAULT_INTERVAL_MS = 100L;
+  // 125ms = 8 req/s: headroom below SEC's 10 req/s per-IP ceiling (100ms left no margin for
+  // slot-claim-to-send jitter and tripped SEC's escalating IP block). Matches sec-schema.yaml's
+  // edgarRateLimitMs default and the file-layer DocumentSource default so all SEC paths agree.
+  private static final long DEFAULT_INTERVAL_MS = 125L;
 
   private EdgarRateLimiter() {
   }

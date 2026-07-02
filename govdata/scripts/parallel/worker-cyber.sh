@@ -111,12 +111,22 @@ ENDJSON
 
 case "$MODE" in
 
-  historical|daily)
-    # Only two modes. The year window (historical = full backfill, daily = current) is set by
-    # the caller via GOVDATA_START_YEAR / GOVDATA_RUN_MODE. There is no "initial" load and no
-    # per-cadence (weekly/hourly/static) modes: every table self-manages first-load-vs-
-    # incremental and its own refresh cadence from its dataset_type / freshness / releaseWindow
-    # config, so both modes simply run ALL of the schema's tables (empty enabledTables = all).
+  historical)
+    # Backfill: only the NVD publish-dated tables have a year axis. vulnerabilities /
+    # vulnerability_cwes window over pub year/quarter (GOVDATA_START_YEAR-bounded), so a
+    # historical run genuinely backfills them. Everything else in cyber is a current-snapshot
+    # or delta feed with no history to backfill — the catalog/IOC/ATT&CK tables would just
+    # re-pull the current dump (redundant with daily), and threat_pulses' historical `replace`
+    # would clobber the version history daily accumulates via `append`. So historical scopes
+    # cyber_vuln to just those two tables and skips cyber_threat entirely (it is daily-only).
+    if should_run "cyber_vuln"; then
+      run_cyber_model "cyber_vuln" "vuln-$MODE" '"vulnerabilities","vulnerability_cwes"'
+    fi
+    ;;
+
+  daily)
+    # Refresh: run every table. Each self-manages first-load-vs-incremental and its own
+    # cadence from its dataset_type / freshness / releaseWindow config (empty enabledTables = all).
     if should_run "cyber_vuln"; then
       run_cyber_model "cyber_vuln" "vuln-$MODE" ''
     fi

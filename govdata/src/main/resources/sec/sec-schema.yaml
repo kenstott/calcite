@@ -31,7 +31,10 @@ schemaName: "${SCHEMA_NAME:sec}"
 stockPriceSource: "${STOCK_PRICE_SOURCE:stooq}"
 submissionsTtlHours: "${SEC_SUBMISSIONS_TTL_HOURS:24}"
 alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
-edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:100}"
+# 125ms = 8 req/s: headroom below SEC's 10 req/s per-IP ceiling. 100ms (exactly 10/s) left
+# no margin for slot-claim-to-send jitter across concurrent worker JVMs, which tripped SEC's
+# escalating IP block (a burst → minutes of blanket 429s). Matches the file DocumentSource default.
+edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:125}"
 cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 # Periodic table commit: flush + materialize to Iceberg every N accessions so a worker
 # killed mid-run (large years have ~293k accessions) still leaves queryable tables.

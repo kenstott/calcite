@@ -129,11 +129,12 @@ queue=()
 # skips it.
 COMPACT_FIRST=1
 
-# Helper: append all historical SEC primary year slots (current year down to 2010)
+# Helper: append historical SEC primary year slots (current year - 1 down to 2010).
+# The current year is daily's slot — historical backfills completed years only, so
+# the two never collide on the same year demarcation.
 _add_sec_primary_years() {
   local cy
   cy=$(date +%Y)
-  queue+=("sec_primary:${cy}")
   local y=$((cy - 1))
   while [ "$y" -ge 2010 ]; do
     queue+=("sec_primary:${y}")
@@ -141,11 +142,10 @@ _add_sec_primary_years() {
   done
 }
 
-# Helper: append all historical SEC secondary year slots
+# Helper: append historical SEC secondary year slots (current year - 1 down to 2010).
 _add_sec_secondary_years() {
   local cy
   cy=$(date +%Y)
-  queue+=("sec_secondary:${cy}")
   local y=$((cy - 1))
   while [ "$y" -ge 2010 ]; do
     queue+=("sec_secondary:${y}")
@@ -153,11 +153,10 @@ _add_sec_secondary_years() {
   done
 }
 
-# Helper: append all historical SEC 13F year slots (separate parse-heavy slot)
+# Helper: append historical SEC 13F year slots (separate parse-heavy slot; current year - 1 down to 2010).
 _add_sec_13f_years() {
   local cy
   cy=$(date +%Y)
-  queue+=("sec_13f:${cy}")
   local y=$((cy - 1))
   while [ "$y" -ge 2010 ]; do
     queue+=("sec_13f:${y}")
@@ -185,14 +184,31 @@ for arg in "$@"; do
 
     historical)
       # Initial/backfill workers — run once on the ingest device.
+      # Year-major: process every year-partitioned schema for one year (start=end=Y),
+      # newest completed year down to 2010, before moving to the older year — so a full
+      # year's data lands together instead of one schema's whole range at a time.
       export GOVDATA_RUN_MODE="historical"
-      _add_sec_primary_years
-      queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
-      _add_sec_secondary_years
-      _add_sec_13f_years
-      queue+=(sec_prices:historical ref:historical fec:historical fedregister:historical)
-      queue+=(cyber_vuln:historical cyber_threat:historical health:historical edu:historical energy:historical)
-      queue+=(patents:historical lands:historical cftc:historical)
+      _cy=$(date +%Y)
+      # Specialty schemas that don't partition by calendar year — run once.
+      # Daily-only schemas are intentionally NOT here — they run only in the daily window:
+      #   • ref, econ_reference — current-snapshot reference; no point-in-time history to backfill,
+      #     freshness-gated in their YAML so daily re-ingests only when the source changed.
+      #   • sec_prices — single bulk feed + top-up; its worker ignores mode and always loads the
+      #     full range, so a historical slot would just duplicate the daily run.
+      # cyber_threat is NOT here — all its tables are current-snapshot/delta feeds with no year
+      # axis (daily-only). cyber_vuln:historical backfills only its NVD publish-dated tables in a
+      # single windowed pass (NVD resolver spans the full pub-year range), so it isn't sliced
+      # per-year here; per-year cyber would need worker-cyber.sh to accept a year (follow-up).
+      queue+=(cyber_vuln:historical)
+      # Year loop (current year is daily's slot, so start at cy-1).
+      _y=$((_cy - 1))
+      while [ "$_y" -ge 2010 ]; do
+        queue+=("sec_primary:${_y}" "sec_secondary:${_y}" "sec_13f:${_y}")
+        queue+=("econ:${_y}" "census:${_y}" "geo:${_y}" "crime:${_y}" "weather:${_y}" "energy:${_y}")
+        queue+=("fec:${_y}" "fedregister:${_y}" "cftc:${_y}")
+        queue+=("health:${_y}" "edu:${_y}" "patents:${_y}" "lands:${_y}")
+        _y=$((_y - 1))
+      done
       ;;
 
     dq)
@@ -838,17 +854,24 @@ if [ "$failed_count" -gt 0 ]; then
 fi
 
 # ── Embeddings (daily only) ───────────────────────────────────────────────────
+# Best-effort post-ETL step. A failure here must NOT poison the pool exit code
+# (same guarantee vss-gpu-runner.sh already makes for missing config): otherwise
+# run-scheduled.sh reads the non-zero exit as an ETL crash and restarts daily
+# forever instead of moving on to the historical fill. Log loudly, never abort.
 if $RUN_EMBEDDINGS; then
   VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
   CURRENT_YEAR=$(date +%Y)
   export VSS_YEARS="${VSS_YEARS:-$CURRENT_YEAR}"
   log_info "Embeddings: refreshing year(s) $VSS_YEARS"
   if [ -f "$VSS_DIR/vss-gpu-runner.sh" ]; then
-    bash "$VSS_DIR/vss-gpu-runner.sh"
+    bash "$VSS_DIR/vss-gpu-runner.sh" || log_info "WARNING: vss-gpu-runner failed (non-fatal) — embeddings skipped"
   fi
   if [ -f "$VSS_DIR/vss.sh" ]; then
-    bash "$VSS_DIR/vss.sh" refresh "$VSS_YEARS"
-    bash "$VSS_DIR/vss.sh" upload
+    if bash "$VSS_DIR/vss.sh" refresh "$VSS_YEARS"; then
+      bash "$VSS_DIR/vss.sh" upload || log_info "WARNING: vss upload failed (non-fatal)"
+    else
+      log_info "WARNING: vss refresh failed (non-fatal) — skipping upload"
+    fi
   fi
   log_info "Embeddings: complete"
 fi

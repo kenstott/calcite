@@ -164,7 +164,13 @@ case "$MODE" in
 
   # historical → full backfill load over GOVDATA_START_YEAR..INCREMENTAL_YEAR-1 (all tables)
   # daily      → current-year annual cadence + current-cycle biennial cadence
-  historical)
+  historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+    # A bare year (2025) or range (2020-2023) narrows the backfill to that span so edu
+    # advances with the year-major front; plain 'historical' = full 2010..current-1 backfill.
+    if [ "$MODE" != "historical" ]; then
+      export GOVDATA_START_YEAR="${MODE%-*}"
+      INCREMENTAL_YEAR=$(( ${MODE#*-} + 1 ))
+    fi
     run_historical_cadence
     ;;
 
@@ -174,7 +180,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: historical, daily" >&2
+    echo "Unknown mode: $MODE. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2
     exit 1
     ;;
 esac
