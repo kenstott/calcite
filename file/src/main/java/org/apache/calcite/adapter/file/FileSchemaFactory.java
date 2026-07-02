@@ -481,6 +481,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     @SuppressWarnings("unchecked") List<Map<String, Object>> partitionedTables =
         (List<Map<String, Object>>) operand.get("partitionedTables");
 
+    // Schema-level materialize default (FILE-186): materialize=iceberg builds an Iceberg lake from
+    // every discovered table. Writability comes from the tracker backend — rw=off sets trackerBackend
+    // 'readonly' (a read-only consumer serves the lake but never builds it).
+    @SuppressWarnings("unchecked") Map<String, Object> materializeConfig =
+        (Map<String, Object>) operand.get("materialize");
+    boolean materializeWritable = !"readonly".equals(operand.get("trackerBackend"));
+
     // Get table constraints configuration
     @SuppressWarnings("unchecked") Map<String, Map<String, Object>> operandTableConstraints =
         (Map<String, Map<String, Object>>) operand.get("tableConstraints");
@@ -725,6 +732,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
+      if (materializeConfig != null) {
+        fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
+      }
+
       // Let DuckDB read CSV/TSV/JSON directly (read_csv_auto/read_json_auto) instead of converting
       // them to Parquet via Hadoop, which cannot run on the JDK 25 that Trino requires. Opt-in via
       // the "duckdbNativeFormats" operand (set by the Trino file connector); off by default so
@@ -867,6 +878,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
+      if (materializeConfig != null) {
+        fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
+      }
+
       // Set constraint metadata on FileSchema if available
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for ClickHouse", constraintsToPass.size());
@@ -960,6 +975,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+
+      if (materializeConfig != null) {
+        fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
+      }
 
       // Set constraint metadata on FileSchema if available
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
@@ -1055,6 +1074,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
+      if (materializeConfig != null) {
+        fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
+      }
+
       // Set constraint metadata on FileSchema if available
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Setting {} constraint configs on FileSchema for Spark", constraintsToPass.size());
@@ -1143,6 +1166,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
         columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+
+    if (materializeConfig != null) {
+      fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
+    }
 
     // Pass constraint metadata to FileSchema BEFORE table discovery
     // This ensures tables are created with constraint configuration available

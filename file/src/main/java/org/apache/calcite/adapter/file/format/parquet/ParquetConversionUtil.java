@@ -349,8 +349,29 @@ public class ParquetConversionUtil {
     }
 
     // Create a minimal DataContext for scanning
-    final java.util.concurrent.atomic.AtomicBoolean cancelFlag = new java.util.concurrent.atomic.AtomicBoolean(false);
-    org.apache.calcite.DataContext dataContext = new org.apache.calcite.DataContext() {
+    org.apache.calcite.DataContext dataContext = minimalDataContext();
+
+    // Get the row type to understand the schema
+    JavaTypeFactory typeFactory = (JavaTypeFactory) dataContext.getTypeFactory();
+    org.apache.calcite.rel.type.RelDataType rowType = table.getRowType(typeFactory);
+
+    // Scan the table directly
+    org.apache.calcite.linq4j.Enumerable<Object[]> enumerable = scannableTable.scan(dataContext);
+
+    // Convert to Parquet using direct writer
+    convertEnumerableToParquetDirect(enumerable, rowType, targetFile, typeFactory, blankStringsAsNull);
+
+    return true;
+  }
+
+  /**
+   * Minimal {@link org.apache.calcite.DataContext} for direct table scanning — no root schema, a
+   * fresh type factory, and a cancel flag.
+   */
+  private static org.apache.calcite.DataContext minimalDataContext() {
+    final java.util.concurrent.atomic.AtomicBoolean cancelFlag =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+    return new org.apache.calcite.DataContext() {
       @Override public SchemaPlus getRootSchema() { return null; }
       @Override public JavaTypeFactory getTypeFactory() {
         return new org.apache.calcite.jdbc.JavaTypeFactoryImpl();
@@ -366,18 +387,32 @@ public class ParquetConversionUtil {
         return null;
       }
     };
+  }
 
-    // Get the row type to understand the schema
-    JavaTypeFactory typeFactory = (JavaTypeFactory) dataContext.getTypeFactory();
-    org.apache.calcite.rel.type.RelDataType rowType = table.getRowType(typeFactory);
-
-    // Scan the table directly
-    org.apache.calcite.linq4j.Enumerable<Object[]> enumerable = scannableTable.scan(dataContext);
-
-    // Convert to Parquet using direct writer
-    convertEnumerableToParquetDirect(enumerable, rowType, targetFile, typeFactory, blankStringsAsNull);
-
-    return true;
+  /**
+   * Scans any file-adapter {@link Table} to its rows, handling both {@link ScannableTable} and
+   * {@link org.apache.calcite.schema.TranslatableTable} (via {@link TranslatableTableAdapter}).
+   * Shared by Parquet conversion and Iceberg materialization so both read a discovered table the
+   * same way. Throws if the table supports neither interface.
+   *
+   * @param table the table to scan
+   * @param schemaName schema name (used by the translatable adapter)
+   * @return an enumerable of positional rows matching {@code table.getRowType()}
+   */
+  public static org.apache.calcite.linq4j.Enumerable<Object[]> scanTableRows(Table table,
+      String schemaName) {
+    org.apache.calcite.schema.ScannableTable scannable;
+    if (table instanceof org.apache.calcite.schema.ScannableTable) {
+      scannable = (org.apache.calcite.schema.ScannableTable) table;
+    } else if (table instanceof org.apache.calcite.schema.TranslatableTable) {
+      scannable = new TranslatableTableAdapter(
+          (org.apache.calcite.schema.TranslatableTable) table, schemaName);
+    } else {
+      throw new IllegalArgumentException(
+          "Table is neither ScannableTable nor TranslatableTable, cannot scan: "
+          + table.getClass().getName());
+    }
+    return scannable.scan(minimalDataContext());
   }
 
   /**

@@ -218,6 +218,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private final CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig;
   private final @Nullable String comment;
   private final @Nullable String canonicalSchemaName;  // Canonical name for .aperio directory (e.g., "econ" vs user-assigned "ECON")
+  // Schema-level materialize default (FILE-186), set post-construction by FileSchemaFactory. When
+  // present, getTableMap materializes every discovered table to Iceberg under warehousePath. Not a
+  // constructor param — FileSchema has many delegating overloads and getTableMap runs lazily after
+  // the factory finishes, so a setter (mirroring the writer's setEffectiveYearField) avoids churn.
+  private @Nullable Map<String, Object> materializeConfig;
+  private boolean materializeWritable;
+  /** Iceberg table property holding the source signature used for FILE-186 freshness checks. */
+  private static final String MATERIALIZE_SIGNATURE_PROP = "aperio.source.signature";
   // Cache directories use schema name for stable, predictable paths
 
   // Track refreshable tables for periodic refresh (needed for DUCKDB)
@@ -1689,6 +1697,20 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     return functionMultimap;
   }
 
+  /**
+   * Sets the schema-level materialize default (FILE-186), called by FileSchemaFactory after
+   * construction. When set to an iceberg config, {@link #getTableMap()} materializes every discovered
+   * table to Iceberg under the config's warehousePath.
+   *
+   * @param materializeConfig e.g. {format:iceberg, warehousePath:...}, or null for query-in-place
+   * @param writable whether this connection may build the lake (rw=on); when false, existing Iceberg
+   *     tables are served but nothing is built
+   */
+  public void setMaterializeConfig(@Nullable Map<String, Object> materializeConfig, boolean writable) {
+    this.materializeConfig = materializeConfig;
+    this.materializeWritable = writable;
+  }
+
   @Override protected synchronized Map<String, Table> getTableMap() {
     try {
       // Use cached tables if already computed
@@ -2278,6 +2300,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       newBuilder.putAll(previewTables);
       tableCache = newBuilder.build();
 
+      // FILE-186: schema-level materialize=iceberg — replace each discovered table with its
+      // Iceberg-materialized form (build when writable + stale, else serve the existing lake).
+      if (materializeConfig != null) {
+        tableCache = materializeTablesToIceberg(tableCache);
+      }
+
       // Debug: Log final table cache contents
       LOGGER.info("=== FINAL TABLE CACHE ===");
       LOGGER.info("Final tableCache count: {}", tableCache.size());
@@ -2328,6 +2356,156 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       e.printStackTrace();
       return ImmutableMap.of();
     }
+  }
+
+  /**
+   * FILE-186: materialize every discovered table to Iceberg under the configured warehouse, then
+   * serve the Iceberg-backed table. Freshness-guarded: a table is (re)built only when writable and
+   * the Iceberg table is missing or the source signature changed; otherwise the existing lake is
+   * served. Read-only connections never build — they serve what exists, or fall back to querying the
+   * source in place when the lake has no such table yet (metadata freshness on reads is handled by
+   * cache_httpfs excluding mutable Iceberg metadata, FILE-189).
+   */
+  private Map<String, Table> materializeTablesToIceberg(Map<String, Table> discovered) {
+    Object fmt = materializeConfig.get("format");
+    if (!"iceberg".equals(fmt)) {
+      throw new IllegalStateException("Unsupported materialize format '" + fmt + "' (only 'iceberg')");
+    }
+    String warehousePath = (String) materializeConfig.get("warehousePath");
+    if (warehousePath == null || warehousePath.isEmpty()) {
+      throw new IllegalStateException("materialize=iceberg requires a warehousePath");
+    }
+    String signature = computeSourceSignature();
+    org.apache.calcite.adapter.file.storage.StorageProvider sp = storageProvider != null
+        ? storageProvider
+        : new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider();
+    Map<String, Object> catalogCfg = new HashMap<>();
+    catalogCfg.put("catalog", "hadoop");
+    catalogCfg.put("warehousePath", warehousePath);
+
+    ImmutableMap.Builder<String, Table> out = ImmutableMap.builder();
+    for (Map.Entry<String, Table> entry : discovered.entrySet()) {
+      String tableName = entry.getKey();
+      try {
+        out.put(tableName,
+            materializeOneToIceberg(tableName, entry.getValue(), warehousePath, catalogCfg, sp, signature));
+      } catch (Exception e) {
+        throw new RuntimeException("FILE-186: failed to materialize table '" + tableName
+            + "' to Iceberg under " + warehousePath, e);
+      }
+    }
+    return out.build();
+  }
+
+  private Table materializeOneToIceberg(String tableName, Table sourceTable, String warehousePath,
+      Map<String, Object> catalogCfg, org.apache.calcite.adapter.file.storage.StorageProvider sp,
+      String signature) throws Exception {
+    boolean exists =
+        org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.tableExists(catalogCfg, tableName);
+    if (exists) {
+      org.apache.iceberg.Table existing =
+          org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.loadTable(catalogCfg, tableName);
+      String stored = existing.properties().get(MATERIALIZE_SIGNATURE_PROP);
+      if (signature.equals(stored) || !materializeWritable) {
+        // Fresh, or read-only (never rebuilds; cache_httpfs handles metadata freshness, FILE-189).
+        LOGGER.info("FILE-186: serving existing Iceberg table '{}' (writable={}, fresh={})",
+            tableName, materializeWritable, signature.equals(stored));
+        return serveIcebergTable(tableName, existing);
+      }
+      LOGGER.info("FILE-186: source changed for '{}' — rebuilding Iceberg table", tableName);
+      org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.dropTable(catalogCfg, tableName, true);
+    } else if (!materializeWritable) {
+      LOGGER.info("FILE-186: read-only and no Iceberg table '{}' at {} — querying files in place",
+          tableName, warehousePath);
+      return sourceTable;
+    }
+
+    // Build (writable, missing or stale). Columns-less config -> deferred inference derives the schema.
+    buildIcebergTable(tableName, sourceTable, warehousePath, sp);
+    if (!org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.tableExists(catalogCfg, tableName)) {
+      // Source produced no rows — nothing materialized; query the source in place.
+      LOGGER.warn("FILE-186: table '{}' produced no rows — nothing materialized, querying in place",
+          tableName);
+      return sourceTable;
+    }
+    org.apache.iceberg.Table built =
+        org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager.loadTable(catalogCfg, tableName);
+    built.updateProperties().set(MATERIALIZE_SIGNATURE_PROP, signature).commit();
+    LOGGER.info("FILE-186: materialized table '{}' to Iceberg at {}", tableName, built.location());
+    return serveIcebergTable(tableName, built);
+  }
+
+  private void buildIcebergTable(String tableName, Table sourceTable, String warehousePath,
+      org.apache.calcite.adapter.file.storage.StorageProvider sp) throws Exception {
+    org.apache.calcite.adapter.file.etl.MaterializeConfig cfg =
+        org.apache.calcite.adapter.file.etl.MaterializeConfig.builder()
+            .enabled(true)
+            .format(org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG)
+            .name(tableName)
+            .targetTableId(tableName)
+            .output(org.apache.calcite.adapter.file.etl.MaterializeOutputConfig.builder().build())
+            .iceberg(org.apache.calcite.adapter.file.etl.MaterializeConfig.IcebergConfig.builder()
+                .catalogType(org.apache.calcite.adapter.file.etl.MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
+                .warehousePath(warehousePath)
+                .namespace("default")
+                .build())
+            .build();
+    org.apache.calcite.adapter.file.etl.MaterializationWriter writer =
+        org.apache.calcite.adapter.file.etl.MaterializationWriterFactory.create(
+            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath);
+    try {
+      writer.initialize(cfg);
+      writer.writeBatch(scanTableAsMaps(sourceTable), java.util.Collections.<String, String>emptyMap());
+      writer.commit();
+    } finally {
+      writer.close();
+    }
+  }
+
+  private java.util.Iterator<Map<String, Object>> scanTableAsMaps(Table sourceTable) {
+    org.apache.calcite.jdbc.JavaTypeFactoryImpl typeFactory =
+        new org.apache.calcite.jdbc.JavaTypeFactoryImpl();
+    List<String> fieldNames = sourceTable.getRowType(typeFactory).getFieldNames();
+    org.apache.calcite.linq4j.Enumerable<Object[]> rows =
+        org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil.scanTableRows(
+            sourceTable, name);
+    List<Map<String, Object>> maps = new ArrayList<>();
+    for (Object[] row : rows) {
+      Map<String, Object> m = new java.util.LinkedHashMap<>();
+      for (int i = 0; i < fieldNames.size() && i < row.length; i++) {
+        m.put(fieldNames.get(i), row[i]);
+      }
+      maps.add(m);
+    }
+    return maps.iterator();
+  }
+
+  private Table serveIcebergTable(String tableName, org.apache.iceberg.Table icebergTable) {
+    // Register in conversion metadata as ICEBERG_PARQUET so the DuckDB engine routes queries to
+    // iceberg_scan (the Calcite/parquet engines scan the returned IcebergTable directly). FILE-186.
+    if (conversionMetadata != null) {
+      conversionMetadata.updateMaterializationInfo(
+          tableName, icebergTable.location(), "ICEBERG_PARQUET", null);
+    }
+    return new org.apache.calcite.adapter.file.iceberg.IcebergTable(
+        icebergTable, Sources.of(sourceDirectory));
+  }
+
+  /**
+   * Signature over the source files (path + size + mtime) used for FILE-186 freshness. Any source
+   * change flips the signature, triggering a rebuild on the next writable open.
+   */
+  private String computeSourceSignature() {
+    File[] files = getFilesForProcessing();
+    java.util.TreeMap<String, String> sorted = new java.util.TreeMap<>();
+    for (File f : files) {
+      sorted.put(f.getAbsolutePath(), f.length() + ":" + f.lastModified());
+    }
+    StringBuilder sb = new StringBuilder();
+    for (Map.Entry<String, String> e : sorted.entrySet()) {
+      sb.append(e.getKey()).append("=").append(e.getValue()).append(";");
+    }
+    return Integer.toHexString(sb.toString().hashCode());
   }
 
   private boolean addTable(ImmutableMap.Builder<String, Table> builder,

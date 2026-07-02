@@ -3470,7 +3470,7 @@
 
 - id: FILE-186
   module: file
-  status: in-progress
+  status: complete
   group: aperio-uri
   category: materialize verb
   priority: MUST
@@ -3497,10 +3497,17 @@
     (createTableFromParquet + describeParquet + duckdbTypeToCanonical — inference primitive, DONE);
     file/src/main/java/org/apache/calcite/adapter/file/etl/IcebergMaterializationWriter.java
     (deferSchemaInference + ensureTableCreated + inferTableFromRows — deferred create wiring, DONE);
-    the URI-level materialize verb remains proposed
+    file/src/main/java/org/apache/calcite/adapter/file/AperioDriver.java (materialize verb parsing);
+    file/src/main/java/org/apache/calcite/adapter/file/FileSchemaFactory.java (parse + setMaterializeConfig);
+    file/src/main/java/org/apache/calcite/adapter/file/FileSchema.java (getTableMap post-pass +
+    materializeTablesToIceberg + conversionMetadata ICEBERG_PARQUET recording for the DuckDB engine);
+    file/src/main/java/org/apache/calcite/adapter/file/format/parquet/ParquetConversionUtil.java
+    (public scanTableRows) — CONSUMER DONE
   tests:
     - file/IcebergCatalogManagerTest#testCreateTableFromParquetInfersSchema
     - file/IcebergMaterializationWriterTest#testDeferredSchemaInferenceFromFirstBatch
+    - file/AperioDriverOperandTest#materializeIcebergEmitsSchemaLevelDefault
+    - file/AperioMaterializeIcebergTest#materializeIcebergBuildsLakeAndServesIt
   notes: "Three layers. (1) INFERENCE PRIMITIVE (DONE, tested): IcebergCatalogManager.
     createTableFromParquet(config,tableId,parquetPath,partitionColumns) — DuckDB DESCRIBE the Parquet ->
     ColumnDef list (duckdbTypeToCanonical, fail-loud on unknown types) -> createTableFromColumns ->
@@ -3511,27 +3518,25 @@
     chicken-and-egg). The first flushPartition calls ensureTableCreated, which infers the schema from
     that batch (rows merged with their partition values -> JSON -> DuckDB read_json_auto -> temp Parquet
     -> createTableFromParquet) or LOADS the table on a re-run; commit/compaction/maintenance/selfHeal are
-    null-guarded for the zero-row case. Inert for every declared-column schema. (3) URI VERB (proposed):
+    null-guarded for the zero-row case. Inert for every declared-column schema. (3) URI VERB (DONE):
     materialize=iceberg emits a SCHEMA-LEVEL materialize default {format:iceberg,warehousePath:
-    <storage>/<schema>/iceberg} — the DRIVER PARSING half is DONE (AperioDriver.buildOperand,
-    AperioDriverOperandTest#materializeIcebergEmitsSchemaLevelDefault). The FileSchema CONSUMER is
-    proposed and net-new (research: no schema-wide materialize flag exists; IcebergMaterializationWriter
-    is invoked only from govdata ETL; partitionedTables+iceberg only READS an existing lake). FINALIZED
-    DESIGN: (a) FileSchemaFactory parses the `materialize` operand and calls a post-construction
-    FileSchema.setMaterializeConfig(config, writable) — a setter, NOT a new constructor param (FileSchema
-    has ~6 delegating overloads; getTableMap runs lazily after the factory, so a setter avoids the churn,
-    mirroring setEffectiveYearField). (b) A POST-PASS in getTableMap right after tableCache is built
-    (FileSchema.java:2279, before validateForeignKeyConstraints) transforms the finished map: for each
-    discovered file-table, scan()->IcebergMaterializationWriter->commit() then serve the IcebergTable
-    (same read path partitionedTables+iceberg uses ~L3000-3047). Post-pass over the final map, NOT the
-    many per-format discovery branches. REFRESH POLICY (user decision): writable (rw=on) =
-    freshness-guarded — build when the Iceberg table is missing OR a source file is newer than the last
-    materialization (store max source mtime in an Iceberg table property, compare); read-only (rw=off) =
-    never build, serve the existing lake, and metadata freshness is ALREADY handled by cache_httpfs
-    (FILE-189) excluding mutable Iceberg metadata from caching, so iceberg_scan re-reads the current
-    snapshot when the owner updates it. Gates FILE-188's emit. WHY ICEBERG not plain Parquet: atomic
-    compaction (RewriteFiles.commit) + an authoritative metadata record — neither is safe on
-    files-in-place."
+    <storage>/<schema>/iceberg} (AperioDriver.buildOperand). CONSUMER, verified end-to-end by
+    AperioMaterializeIcebergTest on the DEFAULT duckdb engine (CSV dir -> lake -> query served from
+    Iceberg; reconnect idempotent): (a) FileSchemaFactory parses the `materialize` operand and calls the
+    post-construction FileSchema.setMaterializeConfig(config, writable) — a setter (not a constructor
+    param; FileSchema has ~6 delegating overloads and getTableMap runs lazily after the factory), wired
+    into all engine branches. (b) getTableMap post-pass (FileSchema.java ~L2279) transforms the finished
+    map: each discovered file-table is scanned (ParquetConversionUtil.scanTableRows) ->
+    IcebergMaterializationWriter (columns-less -> deferred inference) -> commit -> served as an
+    IcebergTable, AND recorded in conversionMetadata as ICEBERG_PARQUET so the DuckDB engine routes to
+    iceberg_scan (Calcite/parquet engines scan the IcebergTable directly). REFRESH (user decision):
+    writable rebuilds when the Iceberg table is missing or the source SIGNATURE changed (schema-wide sig
+    over source path+size+mtime, stored as the 'aperio.source.signature' Iceberg table property — coarse:
+    any source change rebuilds all tables; refine to per-table later); read-only never builds, serves the
+    existing lake, and metadata freshness is handled by cache_httpfs (FILE-189) excluding mutable Iceberg
+    metadata so iceberg_scan re-reads the current snapshot. Unblocks FILE-188's emit. WHY ICEBERG not
+    plain Parquet: atomic compaction (RewriteFiles.commit) + an authoritative metadata record — neither
+    is safe on files-in-place."
   since: 2026-07
 
 - id: FILE-187
