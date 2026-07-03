@@ -2,11 +2,11 @@
 #
 # sync-to-r2.sh — copy new Iceberg files from MinIO to R2.
 #
-# Uses rclone copy --update which skips files that already exist on R2
-# with an equal or newer modification time. Since Iceberg is append-only
-# (new snapshots only add new files, never modify existing ones), this
-# copies only the new parquet data files and metadata files from each
-# incremental ETL run. Zero Class A ops for files already on R2.
+# rclone copy skips files already on R2 with matching size+modtime. Since
+# Iceberg is append-only (new snapshots only add files, never modify existing
+# ones), a --max-age window bounded by the last-sync sentinel copies only the
+# new parquet data + metadata files from each incremental ETL run, with zero
+# LIST/GET (Class A/B) ops on R2.
 #
 # Runs automatically once per day from run-scheduled.sh when PROD_* publish creds are set.
 # Can also be run manually: govdata/scripts/parallel/sync-to-r2.sh [--dry-run]
@@ -27,23 +27,34 @@ MINIO_REMOTE="${GOVDATA_RCLONE_REMOTE:-minio}"
 R2_REMOTE="r2"
 SYNC_STAMP="${HOME}/.r2-last-sync"
 
-# Compute --min-age from the local sentinel so we only look at source
-# modification times — no LIST or GET ops on R2 at all.
+# Bound the copy set by source modification time via --max-age so we never
+# LIST or GET on R2. --max-age selects files *younger* than the window, i.e.
+# everything written since the last sync (Iceberg is append-only, so that is
+# exactly the new snapshot files).
 _now=$(date +%s)
-_last=$(cat "$SYNC_STAMP" 2>/dev/null || echo 0)
-_elapsed=$(( _now - _last ))
-# Add 60s buffer so files written right at the sentinel boundary aren't missed.
-_age=$(( _elapsed > 60 ? _elapsed - 60 : 0 ))
 
+# Only the parquet data bucket is published. The old S3 tracker bucket
+# (govdata-tracker-v1) is deprecated — pipeline state now lives in Postgres —
+# so it no longer exists on the source and must not be synced.
 BUCKETS=(
   "govdata-parquet-v1"
-  "govdata-tracker-v1"
 )
 
-_flags="--min-age ${_age}s --transfers 16 --stats 60s"
+_flags="--transfers 16 --stats 60s"
+if [ -f "$SYNC_STAMP" ]; then
+  _last=$(cat "$SYNC_STAMP")
+  _elapsed=$(( _now - _last ))
+  # Add 60s buffer so files written right at the previous boundary aren't missed.
+  _age=$(( _elapsed + 60 ))
+  _flags="--max-age ${_age}s $_flags"
+  log_info "sync-to-r2: incremental — files newer than ${_age}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
+else
+  # First run: no sentinel exists yet, so copy the full backlog. rclone copy
+  # already skips files present on R2 with matching size+modtime, so a later
+  # cold start (e.g. sentinel deleted) re-transfers nothing.
+  log_info "sync-to-r2: cold start (no sentinel) — full copy ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
+fi
 $DRY_RUN && _flags="$_flags --dry-run"
-
-log_info "sync-to-r2: syncing files newer than ${_age}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 
 for bucket in "${BUCKETS[@]}"; do
   log_info "sync-to-r2: $bucket"
