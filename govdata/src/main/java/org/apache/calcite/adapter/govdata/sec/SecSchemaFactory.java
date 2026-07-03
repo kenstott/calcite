@@ -740,6 +740,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         LOGGER.debug("Saved SEC cache manifest to {}", this.secOperatingDirectory);
       }
 
+    } catch (EdgarIndexUnavailableException e) {
+      // Fail loud (option A): propagate a rate-limited/incomplete index past the otherwise
+      // non-fatal SEC download handler so the run fails and the year is retried (not a "0m" success).
+      throw e;
     } catch (Exception e) {
       LOGGER.error("Error in downloadSecData", e);
       LOGGER.warn("Failed to download SEC data: " + e.getMessage());
@@ -849,15 +853,27 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           Set<String> indexCikFilter = (!indexAllFilers && !ciks.isEmpty())
               ? new HashSet<String>(ciks) : null;
 
-          // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns)
-          FilingIndexProvider indexCache = null;
-          try {
-            indexCache = new EdgarFullIndexCache(
-                storageProvider, this.secCacheDirectory, startYear, endYear, indexCikFilter);
-          } catch (Exception e) {
-            LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
-                e.getMessage());
-          }
+          // Create index cache for fast CIK enumeration (skips per-CIK API calls on reruns).
+          //
+          // Option A (active): a rate-limited/incomplete EDGAR index throws
+          // EdgarIndexUnavailableException, which propagates to FAIL the run so the pool re-runs
+          // the year cleanly — rather than ingesting nothing and marking it complete (the "0m"
+          // false success). indexCache is therefore always non-null past this point, which makes
+          // the per-CIK fallback branches below (indexCache == null / non-EdgarFullIndexCache)
+          // unreachable.
+          //
+          // Option B (retained as dead code — may return to it): the prior behavior caught any
+          // init failure here and fell back to the slower per-CIK API path. Superseded by Option A:
+          //   FilingIndexProvider indexCache = null;
+          //   try {
+          //     indexCache = new EdgarFullIndexCache(
+          //         storageProvider, this.secCacheDirectory, startYear, endYear, indexCikFilter);
+          //   } catch (Exception e) {
+          //     LOGGER.warn("Failed to initialize EDGAR full-index cache, falling back to per-CIK API: {}",
+          //         e.getMessage());
+          //   }
+          FilingIndexProvider indexCache = new EdgarFullIndexCache(
+              storageProvider, this.secCacheDirectory, startYear, endYear, indexCikFilter);
 
           // Bulk-preload tracker state so getActiveCiks can filter in-memory
           if (indexCache != null && cache != null) {
@@ -1073,6 +1089,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       return result;
 
+    } catch (EdgarIndexUnavailableException e) {
+      // Fail loud (option A): a rate-limited/incomplete EDGAR index must fail the run so the pool
+      // re-runs the year — do NOT downgrade it to a logged DocumentETLResult failure (which the
+      // callers treat as non-fatal, producing the "0m" false success). Propagate past this
+      // deliberately non-fatal catch.
+      throw e;
     } catch (Exception e) {
       LOGGER.error("Document ETL failed: {}", e.getMessage(), e);
       List<String> errors = new ArrayList<String>();

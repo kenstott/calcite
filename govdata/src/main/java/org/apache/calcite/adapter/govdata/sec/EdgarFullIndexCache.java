@@ -113,6 +113,7 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
 
     int totalFilings = 0;
     int quartersLoaded = 0;
+    List<String> failedQuarters = new ArrayList<String>();
 
     for (int year = startYear; year <= endYear; year++) {
       for (int quarter = 1; quarter <= 4; quarter++) {
@@ -130,13 +131,30 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
             totalFilings += parsed;
             quartersLoaded++;
           }
+          // indexContent == null is a legitimate 404 (that quarter has no index) — not a failure.
         } catch (IOException e) {
+          // A non-404 failure (429/5xx/network, after downloadIndex's own retries) is a TRANSIENT
+          // load failure, NOT "no filings this quarter". Record it — see the fail-fast below.
+          failedQuarters.add(year + "Q" + quarter);
           LOGGER.warn("Failed to load index for {}Q{}: {}", year, quarter, e.getMessage());
         }
       }
     }
 
     LOGGER.info("Loaded {} filings from {} quarterly indexes", totalFilings, quartersLoaded);
+
+    // Fail loud — never report a false empty. If any non-future quarter could not be loaded, the
+    // index is incomplete. Returning a partial/empty cache would make downstream treat the year as
+    // "0 accessions -> done", ingesting nothing while marking it complete (the "0m" false success).
+    // Throw so the run exits non-zero and the pool re-runs the year cleanly. A 404 (genuinely no
+    // index) is excluded above, so this fires only on real transient errors.
+    if (!failedQuarters.isEmpty()) {
+      throw new EdgarIndexUnavailableException(
+          "EDGAR full-index incomplete for years " + startYear + "-" + endYear + ": "
+          + failedQuarters.size() + " quarter(s) failed to load " + failedQuarters
+          + " (transient HTTP error after retries). Failing rather than treating a partial index "
+          + "as complete; the year will be retried.");
+    }
   }
 
   @Override public CacheDecision checkCik(String cik, int year, List<String> filingTypes,
@@ -409,34 +427,57 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
   }
 
   private String downloadIndex(String url) throws IOException {
-    // SEC rate limit: 10 requests/sec per IP — host-wide shared budget
-    EdgarRateLimiter.acquire();
+    // A 429/503 means we still tripped SEC's per-IP limiter (jitter/concurrency at the ceiling)
+    // — retry with backoff before giving up, so a transient throttle doesn't blank out a whole
+    // quarter's index. Each attempt re-acquires the host-wide shared rate budget.
+    int maxAttempts = 4;
+    IOException lastError = null;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      EdgarRateLimiter.acquire();
 
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", USER_AGENT);
-    conn.setRequestProperty("Accept", "text/plain");
-    conn.setConnectTimeout(60000);
-    conn.setReadTimeout(120000);
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setRequestMethod("GET");
+      conn.setRequestProperty("User-Agent", USER_AGENT);
+      conn.setRequestProperty("Accept", "text/plain");
+      conn.setConnectTimeout(60000);
+      conn.setReadTimeout(120000);
 
-    int responseCode = conn.getResponseCode();
-    if (responseCode == 404) {
-      LOGGER.debug("Index not found (404): {}", url);
-      return null;
-    }
-    if (responseCode != 200) {
-      throw new IOException("HTTP " + responseCode + " from " + url);
-    }
-
-    try (InputStream is = conn.getInputStream();
-         ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      byte[] buf = new byte[8192];
-      int n;
-      while ((n = is.read(buf)) != -1) {
-        baos.write(buf, 0, n);
+      int responseCode = conn.getResponseCode();
+      if (responseCode == 404) {
+        LOGGER.debug("Index not found (404): {}", url);
+        return null;
       }
-      return baos.toString(StandardCharsets.UTF_8.name());
+      if (responseCode == 200) {
+        try (InputStream is = conn.getInputStream();
+             ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+          byte[] buf = new byte[8192];
+          int n;
+          while ((n = is.read(buf)) != -1) {
+            baos.write(buf, 0, n);
+          }
+          return baos.toString(StandardCharsets.UTF_8.name());
+        }
+      }
+      if (responseCode != 429 && responseCode != 503) {
+        // Non-retryable HTTP error — fail immediately.
+        throw new IOException("HTTP " + responseCode + " from " + url);
+      }
+      // Retryable throttle / transient unavailability: back off and try again.
+      lastError = new IOException("HTTP " + responseCode + " from " + url);
+      if (attempt < maxAttempts) {
+        long backoffMs = 1000L * (1L << (attempt - 1));  // 1s, 2s, 4s
+        LOGGER.warn("HTTP {} from {} (attempt {}/{}), backing off {}ms",
+            responseCode, url, attempt, maxAttempts, backoffMs);
+        try {
+          Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while backing off for " + url, ie);
+        }
+      }
     }
+    throw lastError != null ? lastError
+        : new IOException("Failed to load " + url + " after " + maxAttempts + " attempts");
   }
 
   /**
