@@ -127,9 +127,12 @@ public class EtlPipeline {
   private String deltaBoundValue;
 
   /**
-   * Per-unit freshness tokens captured during this run, keyed by {@code pipeline::unitKey}.
-   * Persisted to the tracker only after a clean commit (no failed batches), mirroring the
-   * pipeline-level token persistence, so a partial run never caches a skip-forever token.
+   * Per-unit freshness tokens for units SUCCESSFULLY written this run, keyed by
+   * {@code pipeline::unitKey}. A unit's token is added only after its write returns (see
+   * {@link #processSingleBatch}), so a unit that throws never records one. Persisted to the
+   * tracker after {@code writer.commit()} succeeds — independent of whether other units in a
+   * fan-out failed — so one failing unit cannot discard the tokens of the units that committed
+   * cleanly (which would force those units to re-materialize every run).
    */
   private final Map<String, String> pendingUnitFreshnessTokens =
       new ConcurrentHashMap<String, String>();
@@ -1511,15 +1514,20 @@ public class EtlPipeline {
           LOGGER.info("Pipeline '{}': persisted freshness token after clean commit: {}",
               pipelineName, probedFreshnessToken);
         }
-        // Persist per-period freshness tokens captured this run so the next run can skip
-        // unchanged periods. Same clean-commit guard as the pipeline-level token above.
-        if (!pendingUnitFreshnessTokens.isEmpty()) {
-          for (Map.Entry<String, String> entry : pendingUnitFreshnessTokens.entrySet()) {
-            incrementalTracker.putFreshnessToken(entry.getKey(), entry.getValue());
-          }
-          LOGGER.info("Pipeline '{}': persisted {} per-period freshness tokens after clean commit",
-              pipelineName, pendingUnitFreshnessTokens.size());
+      }
+      // Persist per-unit freshness tokens for the units actually written this run, independent of
+      // whether OTHER units in a fan-out failed. Each token here was recorded only after that
+      // unit's write returned (see processSingleBatch), and reaching this point means writer.commit()
+      // above succeeded — so those writes are durable. NOT gated on the whole-table clean commit:
+      // a single failing unit (e.g. one FIA state's HEAD timeout) must not discard the tokens of the
+      // ~50 states that committed cleanly, which otherwise forces a full re-materialize of every
+      // state on the next run.
+      if (!pendingUnitFreshnessTokens.isEmpty()) {
+        for (Map.Entry<String, String> entry : pendingUnitFreshnessTokens.entrySet()) {
+          incrementalTracker.putFreshnessToken(entry.getKey(), entry.getValue());
         }
+        LOGGER.info("Pipeline '{}': persisted {} per-unit freshness tokens (committed units)",
+            pipelineName, pendingUnitFreshnessTokens.size());
       }
       // Per-period markers: mark each period whose full combo set is now processed,
       // even if OTHER periods in this table failed — markCompletedPeriods self-guards
@@ -1861,6 +1869,13 @@ public class EtlPipeline {
     // For null backfill_period the FetchUnit holds the raw combo — enrichment is a no-op.
     Map<String, String> variables = fetchUnit.getFetchVariables();
 
+    // Freshness token captured for THIS unit by the gate below. Published to
+    // pendingUnitFreshnessTokens only at this method's successful return (after the write), so a
+    // unit whose fetch/transform/write throws never records a token — it re-processes next run
+    // rather than skipping unwritten data.
+    String capturedFreshnessUnitKey = null;
+    String capturedFreshnessToken = null;
+
     // Per-period freshness gate: probe this unit's templated source and skip the fetch+write when
     // it is unchanged since the last clean commit. Returning 0 leaves the unit's existing Iceberg
     // partition untouched (replacePartitions only rewrites the partitions we actually fetch), so
@@ -1884,7 +1899,9 @@ public class EtlPipeline {
           return 0;
         }
         if (currentToken != null) {
-          pendingUnitFreshnessTokens.put(unitKey, currentToken);
+          // Defer recording until the write succeeds (see the successful return below).
+          capturedFreshnessUnitKey = unitKey;
+          capturedFreshnessToken = currentToken;
         }
       } catch (Exception e) {
         LOGGER.warn("Pipeline '{}': per-period freshness probe failed for unit {} ({}), "
@@ -2080,6 +2097,13 @@ public class EtlPipeline {
             LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
                 finalHashFreshnessToken, pipelineName);
           }
+        }
+
+        // The write for this unit succeeded. Record its freshness token so the post-commit
+        // persist can skip this unit next run. Only reached on success — a throwing unit never
+        // records a token, and the whole-table commit below makes this write durable.
+        if (capturedFreshnessToken != null) {
+          pendingUnitFreshnessTokens.put(capturedFreshnessUnitKey, capturedFreshnessToken);
         }
 
         LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
