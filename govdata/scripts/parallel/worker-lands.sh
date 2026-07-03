@@ -23,7 +23,7 @@ load_env
 
 MODE="${1:-}"
 if [ -z "$MODE" ]; then
-  echo "Usage: $0 <historical|daily> [--force]" >&2
+  echo "Usage: $0 <historical|daily|once|YEAR|YEAR-YEAR> [--force]" >&2
   exit 1
 fi
 
@@ -87,35 +87,57 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
 case "$MODE" in
 
+  once)
+    # Non-period tables — NO year dimension, ingested exactly once over the full range regardless
+    # of the year-major front. Static reference tables + the USDA FIA per-state tables
+    # (forest_inventory, forest_metrics, fia_* — inventory_year is a COLUMN, not a fetch/partition
+    # dimension; the download is the full {state}_CSV.zip archive). Slicing these per-year makes
+    # every year slot re-download all ~51 state archives (FL alone 261MB), so the pool emits a
+    # single 'lands:once' for them instead of one per year. The year-partitioned tables are handled
+    # by the bare-year slots below.
+    START=${GOVDATA_START_YEAR:-2010}
+    END=$((INCREMENTAL_YEAR - 1))
+    run_lands_model "lands-once-static" \
+      '"national_forests", "nps_units", "blm_field_offices"' "$START" "$END"
+    run_lands_model "lands-once-inventory" \
+      '"forest_inventory"' "$START" "$END"
+    run_lands_model "lands-once-metrics" \
+      '"forest_metrics"' "$START" "$END"
+    run_lands_model "lands-once-fia" \
+      '"fia_plots", "fia_seedlings", "fia_invasives", "fia_down_woody_debris", "fia_pop_evaluations", "fia_tree_grm"' \
+      "$START" "$END"
+    ;;
+
   historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
-    # A bare year (2025) or range (2020-2023) narrows the backfill to that span so lands
-    # advances with the year-major front; plain 'historical' = full 2010..current-1 backfill.
+    # Year-partitioned tables (timber_sales, nps_visitation, onrr_revenues) — advance with the
+    # year-major front. A bare year (2025) or range (2020-2023) narrows to that span; the pool's
+    # per-year slots use this path and deliberately skip the non-period tables (see 'once' above).
+    # Plain 'historical' ALSO ingests the non-period tables, so a manual `lands:historical` and the
+    # `all` alias remain a complete backfill.
     if [ "$MODE" != "historical" ]; then
       export GOVDATA_START_YEAR="${MODE%-*}"
       INCREMENTAL_YEAR=$(( ${MODE#*-} + 1 ))
     fi
     START=${GOVDATA_START_YEAR:-2010}
     END=$((INCREMENTAL_YEAR - 1))
-    # Static reference tables — no year dimension, include in historical pass
-    run_lands_model "lands-historical-static" \
-      '"national_forests", "nps_units", "blm_field_offices"' "$START" "$END"
-    # Time-series tables — full historical range
     run_lands_model "lands-historical-timber" \
       '"timber_sales"' "$START" "$END"
-    run_lands_model "lands-historical-inventory" \
-      '"forest_inventory"' "$START" "$END"
-    run_lands_model "lands-historical-metrics" \
-      '"forest_metrics"' "$START" "$END"
     run_lands_model "lands-historical-visitation" \
       '"nps_visitation"' "$START" "$END"
     run_lands_model "lands-historical-revenues" \
       '"onrr_revenues"' "$START" "$END"
-    # USDA FIA tables — per-state fan-out (non-period; inventory_year is a column, not a
-    # dimension). Required by lands_dq.sql. One model so each FIA table is ingested exactly once;
-    # without this (and with enabledTables now honored) they would not be produced at all.
-    run_lands_model "lands-historical-fia" \
-      '"fia_plots", "fia_seedlings", "fia_invasives", "fia_down_woody_debris", "fia_pop_evaluations", "fia_tree_grm"' \
-      "$START" "$END"
+    if [ "$MODE" = "historical" ]; then
+      # Full manual/`all` backfill: also do the non-period tables (the per-year pool slots do not).
+      run_lands_model "lands-historical-static" \
+        '"national_forests", "nps_units", "blm_field_offices"' "$START" "$END"
+      run_lands_model "lands-historical-inventory" \
+        '"forest_inventory"' "$START" "$END"
+      run_lands_model "lands-historical-metrics" \
+        '"forest_metrics"' "$START" "$END"
+      run_lands_model "lands-historical-fia" \
+        '"fia_plots", "fia_seedlings", "fia_invasives", "fia_down_woody_debris", "fia_pop_evaluations", "fia_tree_grm"' \
+        "$START" "$END"
+    fi
     ;;
 
   daily)
@@ -157,7 +179,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2
+    echo "Unknown mode: $MODE. Valid modes: historical, daily, once (non-period FIA/static tables), a year (2025), or a range (2020-2023)" >&2
     exit 1
     ;;
 esac

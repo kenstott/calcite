@@ -1955,52 +1955,78 @@ public class EtlPipeline {
       data = fetchDataChain(config, dataSource, variables, pipelineName, processedCount);
     }
 
-    // computed_delta: filter rows to only those whose modifiedField advanced since the
-    // last stored high-water mark.  The HWM is stored via the freshness-token slot
-    // so it persists across runs without a new tracker abstraction.
-    // NOTE: this materialises the iterator into memory when computed_delta is active
-    // so we can capture max(modifiedField) before writing. For very large payloads
-    // this is a deliberate trade-off (the whole dump is being pulled anyway).
+    // computed_delta: STREAM the pull, emitting only rows whose modifiedField advanced past the
+    // stored high-water mark and tracking the new max(modifiedField) as a side effect. O(1)
+    // memory — the full dump is never materialised (a 3M+ row snapshot like GLEIF would OOM).
+    // The new HWM and the seen/changed counts are only final once the write has drained the
+    // iterator, so they are read back and persisted AFTER the write (mirrors the hash gate above).
     final String computedDeltaHwmKey = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
-    String newComputedDeltaHwm = null; // set below if computed_delta active + rows filtered
+    final String[] computedDeltaHwm = {null};      // max(modifiedField) once `data` is drained
+    final long[] computedDeltaCounts = {0L, 0L};   // [seen, emitted]
+    boolean computedDeltaStreaming = false;
     if ("computed_delta".equals(config.getDatasetType())) {
-      String modifiedField = config.getModifiedField();
-      String prevHwm = incrementalTracker.getFreshnessToken(computedDeltaHwmKey);
+      final String modifiedField = config.getModifiedField();
+      final String prevHwm = incrementalTracker.getFreshnessToken(computedDeltaHwmKey);
       LOGGER.info("computed_delta: modifiedField={}, prevHwm={}", modifiedField, prevHwm);
 
       if (modifiedField != null && !modifiedField.isEmpty()) {
-        // Materialise the full pull, filter to changed rows, track new HWM
-        List<Map<String, Object>> allRows = new ArrayList<Map<String, Object>>();
-        while (data.hasNext()) {
-          allRows.add(data.next());
-        }
-        List<Map<String, Object>> changedRows = new ArrayList<Map<String, Object>>();
-        String maxSeen = prevHwm;
-        for (Map<String, Object> row : allRows) {
-          Object modVal = row.get(modifiedField);
-          String modStr = modVal == null ? null : String.valueOf(modVal);
-          // Track max modified using type-aware comparison
-          if (modStr != null && (maxSeen == null || compareModifiedValues(modStr, maxSeen) > 0)) {
-            maxSeen = modStr;
+        computedDeltaStreaming = true;
+        computedDeltaHwm[0] = prevHwm;
+        final Iterator<Map<String, Object>> upstream = data;
+        // Look-ahead filter: advances past unchanged rows (updating the HWM for every row it sees)
+        // until it finds one to emit, so the write pulls only changed rows without buffering.
+        data = new Iterator<Map<String, Object>>() {
+          private Map<String, Object> nextRow;
+          private boolean staged;
+
+          @Override public boolean hasNext() {
+            if (staged) {
+              return nextRow != null;
+            }
+            while (upstream.hasNext()) {
+              Map<String, Object> row = upstream.next();
+              computedDeltaCounts[0]++;
+              Object modVal = row.get(modifiedField);
+              String modStr = modVal == null ? null : String.valueOf(modVal);
+              // Track max(modifiedField) over EVERY row (type-aware), even ones we drop.
+              if (modStr != null && (computedDeltaHwm[0] == null
+                  || compareModifiedValues(modStr, computedDeltaHwm[0]) > 0)) {
+                computedDeltaHwm[0] = modStr;
+              }
+              // Emit on first run (no prior HWM), when the row carries no modified value, or when
+              // it advanced past the prior HWM.
+              if (prevHwm == null || modStr == null
+                  || compareModifiedValues(modStr, prevHwm) > 0) {
+                computedDeltaCounts[1]++;
+                nextRow = row;
+                staged = true;
+                return true;
+              }
+            }
+            nextRow = null;
+            staged = true;
+            return false;
           }
-          // Include row if modified is newer than prevHwm (or if this is first run)
-          if (prevHwm == null || modStr == null || compareModifiedValues(modStr, prevHwm) > 0) {
-            changedRows.add(row);
+
+          @Override public Map<String, Object> next() {
+            if (!staged && !hasNext()) {
+              throw new java.util.NoSuchElementException();
+            }
+            Map<String, Object> row = nextRow;
+            nextRow = null;
+            staged = false;
+            return row;
           }
-        }
-        LOGGER.info("computed_delta: {} of {} rows changed (maxModified={})",
-            changedRows.size(), allRows.size(), maxSeen);
-        data = changedRows.iterator();
-        newComputedDeltaHwm = maxSeen; // will be persisted after the write
+        };
       } else {
-        // No modifiedField configured: write all rows (full-upsert fallback)
+        // No modifiedField configured: write all rows (full-upsert fallback), still streaming.
         LOGGER.info("computed_delta: no modifiedField configured — writing all rows (full upsert)");
       }
     }
 
     // Serialize all writer and tracker operations to prevent concurrent DuckDB access.
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
-    final String finalNewComputedDeltaHwm = newComputedDeltaHwm;
+    final boolean finalComputedDeltaStreaming = computedDeltaStreaming;
     final String finalHashFreshnessToken = hashFreshnessToken;
     // The write consumes `data`, which on a hash-CHANGED run is the re-fetched chain (not
     // sourceChain). Close that chain after the write; sourceChain is closed too (idempotent,
@@ -2037,11 +2063,16 @@ public class EtlPipeline {
           } else {
             markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           }
-          // Persist computed_delta HWM after a successful write
-          if (finalNewComputedDeltaHwm != null) {
-            incrementalTracker.putFreshnessToken(computedDeltaHwmKey, finalNewComputedDeltaHwm);
-            LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
-                finalNewComputedDeltaHwm, pipelineName);
+          // Persist computed_delta HWM after a successful write. The streaming filter has now
+          // drained `data`, so the holder carries max(modifiedField) over the whole pull.
+          if (finalComputedDeltaStreaming) {
+            LOGGER.info("computed_delta: {} of {} rows changed (maxModified={})",
+                computedDeltaCounts[1], computedDeltaCounts[0], computedDeltaHwm[0]);
+            if (computedDeltaHwm[0] != null) {
+              incrementalTracker.putFreshnessToken(computedDeltaHwmKey, computedDeltaHwm[0]);
+              LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
+                  computedDeltaHwm[0], pipelineName);
+            }
           }
           // Persist hash freshness token after a successful write
           if (finalHashFreshnessToken != null) {

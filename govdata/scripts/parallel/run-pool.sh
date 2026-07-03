@@ -200,6 +200,11 @@ for arg in "$@"; do
       # single windowed pass (NVD resolver spans the full pub-year range), so it isn't sliced
       # per-year here; per-year cyber would need worker-cyber.sh to accept a year (follow-up).
       queue+=(cyber_vuln:historical)
+      # lands has NO year axis for its FIA/static tables — the download is the full {state}_CSV.zip
+      # archive (inventory_year is a column). Slicing those per-year re-downloads all ~51 state
+      # archives on every year slot, so ingest them ONCE here; the per-year lands:${_y} slots below
+      # cover only its year-partitioned tables (timber_sales, nps_visitation, onrr_revenues).
+      queue+=(lands:once)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do

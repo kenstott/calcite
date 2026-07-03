@@ -1218,6 +1218,30 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return null;
     }
 
+    // Nullary date/time functions → current UTC value, as an ISO-8601 string that coerces cleanly
+    // to a DATE/TIMESTAMP column downstream. DuckDB evaluates these natively on the primary path;
+    // handling them here keeps the Java fallback consistent instead of letting them fall through to
+    // the bare-field pattern and null out. The SQL keyword constants (CURRENT_DATE /
+    // CURRENT_TIMESTAMP) match without parens; the function forms require parens so a plain column
+    // named e.g. "today" is still treated as a field reference.
+    String dateFn = expr.trim();
+    boolean dateFnParens = dateFn.endsWith("()");
+    if (dateFnParens) {
+      dateFn = dateFn.substring(0, dateFn.length() - 2).trim();
+    }
+    if (dateFn.equalsIgnoreCase("CURRENT_DATE")
+        || (dateFnParens && (dateFn.equalsIgnoreCase("today")
+            || dateFn.equalsIgnoreCase("curdate")
+            || dateFn.equalsIgnoreCase("current_date")))) {
+      return java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
+    }
+    if (dateFn.equalsIgnoreCase("CURRENT_TIMESTAMP")
+        || (dateFnParens && (dateFn.equalsIgnoreCase("now")
+            || dateFn.equalsIgnoreCase("getdate")
+            || dateFn.equalsIgnoreCase("current_timestamp")))) {
+      return java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).toString();
+    }
+
     // Pattern: src."FIELDNAME" or src.FIELDNAME (with src. prefix)
     Pattern srcFieldPattern =
         Pattern.compile("^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");

@@ -109,8 +109,16 @@ partitionedTables:
   # GLEIF ENTITIES — Full LEI registry from bulk CSV download
   # ==========================================================================
   - name: gleif_entities
+    # Full point-in-time GLEIF golden copy that ALREADY carries a per-record updated_at
+    # (last_update = Registration.LastUpdateDate). computed_delta keeps only the rows whose
+    # last_update advanced past the stored high-water mark and APPENDS them (materialize
+    # overwritePartitions: false below), so each publish adds just the changed LEIs instead of
+    # rewriting all ~3.2M rows — and last_update becomes the queryable history axis (group by it
+    # for point-in-time / trend queries; "current" = latest last_update per lei). No synthesized
+    # column: the source's own last_update is both the change key and the time axis.
+    dataset_type: computed_delta
     freshness:
-      type: last_modified
+      type: last_modified   # pre-download gate: skip the ~450MB pull entirely when the golden copy file is unchanged
     pattern: "type=gleif_entities.parquet"
     partitions:
       style: hive
@@ -199,6 +207,10 @@ partitionedTables:
       url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/lei2/latest.csv"
       method: GET
       extractPattern: "*.csv"
+      # computed_delta change key: only rows whose last_update exceeds the stored high-water mark
+      # are kept and appended. last_update is the source's own Registration.LastUpdateDate.
+      incremental:
+        dateField: last_update
       response:
         format: csv
       rateLimit:
@@ -225,7 +237,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         batchPartitionColumns: [type]
-        overwritePartitions: true
+        overwritePartitions: false   # APPEND the computed_delta rows; replace-partition would drop all prior LEI history
         runMaintenance: true
         snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
         runCompaction: true
@@ -337,6 +349,15 @@ partitionedTables:
         type: string
         nullable: true
         comment: Company name as registered with SEC
+      # Point-in-time source with NO per-record updated_at: a computed column stamps the ingest
+      # date (UTC today) so every snapshot carries its own history axis (group by as_of).
+      # CURRENT_DATE is evaluated by DuckDB in the materialize SELECT and by the Java fallback
+      # evaluator (IcebergMaterializationWriter.evaluateExpression date-function support).
+      - name: as_of
+        type: date
+        nullable: false
+        expression: 'CURRENT_DATE'
+        comment: Ingest date this snapshot was materialized (UTC today; group by for history)
 
     source:
       type: http
@@ -366,14 +387,17 @@ partitionedTables:
       output:
         pattern: ""
       partition:
-        columns: [type]
+        columns: [type, as_of]
       options:
         compression: snappy
         batchSize: 50000
         stagingMode: local
       iceberg:
         catalogType: hadoop
-        batchPartitionColumns: [type]
+        batchPartitionColumns: [type, as_of]
+        # as_of is a partition key, so replace-partitions is scoped to today's snapshot: a re-run
+        # the same day replaces only as_of=today (idempotent), while prior days' partitions are
+        # preserved — the table accumulates a per-day history keyed by as_of.
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
@@ -519,7 +543,7 @@ constraints:
         targetColumns: [cik]
 
   sec_company_tickers:
-    primaryKey: [type, cik]
+    primaryKey: [type, as_of, cik]   # per-day snapshots: cik is unique within an as_of, not across
 
   figi_instruments:
     primaryKey: [type, figi]

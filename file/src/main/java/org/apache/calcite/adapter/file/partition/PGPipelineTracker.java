@@ -574,6 +574,44 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  // ===== Freshness Token =====
+
+  /** Reserved source_key for freshness token rows — kept out of the 'incremental' phase so it
+   *  never collides with per-combo completion/empty queries (all of which filter phase). */
+  private static final String FRESHNESS_SOURCE_KEY = "_freshness";
+  /** Reserved phase for freshness token rows; the token itself is stored in the {@code state} column. */
+  private static final String FRESHNESS_PHASE = "freshness_token";
+
+  @Override public String getFreshnessToken(String pipelineName) {
+    String sql = "SELECT state FROM pipeline_tracker "
+        + "WHERE source_key = ? AND table_name = ? AND phase = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, FRESHNESS_SOURCE_KEY);
+      stmt.setString(2, pipelineName);
+      stmt.setString(3, FRESHNESS_PHASE);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getString("state");
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error getting freshness token for {}: {}", pipelineName, e.getMessage());
+    }
+    return null;
+  }
+
+  @Override public void putFreshnessToken(String pipelineName, String token) {
+    if (token == null) {
+      return;
+    }
+    // Reuse the pipeline_tracker upsert: token lives in the 'state' column keyed by
+    // (_freshness, pipelineName, freshness_token). Fails loud like every other tracker write —
+    // a dropped freshness token means the next run re-fetches/re-materializes unconditionally.
+    upsertState(FRESHNESS_SOURCE_KEY, pipelineName, FRESHNESS_PHASE,
+        token, 0, null, null, null);
+    LOGGER.debug("Stored freshness token for '{}': {}", pipelineName, token);
+  }
+
   // ===== Utility Methods =====
 
   private String flattenKeyValues(Map<String, String> keyValues) {
