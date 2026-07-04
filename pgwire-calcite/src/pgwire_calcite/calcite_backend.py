@@ -140,7 +140,11 @@ class CalciteBackend:
         stream: bool = False,
     ) -> QueryResult:
         del role_id, params  # params already substituted upstream (server._substitute_params)
-        calcite_sql = transpile_pg_to_calcite(sql, json_enabled=("json" in self._extensions))
+        calcite_sql = transpile_pg_to_calcite(
+            sql,
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
         if self._conn is None:
             raise RuntimeError("Calcite connection is not open")

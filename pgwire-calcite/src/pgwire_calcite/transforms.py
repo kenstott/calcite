@@ -27,7 +27,42 @@ Reject loudly (clear message, client sees a normal ErrorResponse):
 
 from __future__ import annotations
 
+import re
+
 from sqlglot import exp
+
+# --- pgvector surface (PGW-047): operators -> vector-distance UDF calls ---------
+#
+# sqlglot can't reliably parse <=> / <#>, so we rewrite the operators at the text
+# level (before parse) into VEC_* UDF calls (registered via the Calcite model) and
+# convert pgvector string literals '[..]' to ARRAY[..]. Operand forms cover the
+# documented pgvector usage: column, param ($N), ARRAY[...], and '[...]' literal.
+_VEC_OPD = r"(ARRAY\[[^\]]*\]|'\[[^\]]*\]'|\$\d+|[A-Za-z_][\w.]*)"
+
+
+def _vec_operand(s: str) -> str:
+    s = s.strip()
+    if s.startswith("'[") and s.endswith("]'"):
+        return "ARRAY[" + s[2:-2] + "]"  # '[1,2,3]' -> ARRAY[1,2,3]
+    return s
+
+
+def rewrite_vector_ops(sql: str) -> str:
+    """Rewrite pgvector operators to VEC_* UDF calls (only when the surface is on)."""
+    def _sub(op: str, fn: str, neg: bool = False) -> None:
+        nonlocal sql
+        pat = re.compile(_VEC_OPD + r"\s*" + re.escape(op) + r"\s*" + _VEC_OPD)
+
+        def repl(m):
+            call = f"{fn}({_vec_operand(m.group(1))}, {_vec_operand(m.group(2))})"
+            return f"(- {call})" if neg else call
+
+        sql = pat.sub(repl, sql)
+
+    _sub("<=>", "VEC_COS")  # cosine distance
+    _sub("<#>", "VEC_IP", neg=True)  # negative inner product (pgvector ordering)
+    _sub("<->", "VEC_L2")  # L2 / Euclidean
+    return sql
 
 
 class UnsupportedConstruct(ValueError):

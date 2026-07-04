@@ -42,7 +42,7 @@ class ExtensionSurface:
 REGISTRY: Dict[str, ExtensionSurface] = {
     "json": ExtensionSurface("json", "1.0", "JSON operators -> Calcite JSON_VALUE/JSON_QUERY", True),
     "postgis": ExtensionSurface("postgis", "3.0", "ST_* -> Calcite spatial (fun=spatial)", True),
-    "vector": ExtensionSurface("vector", "0.7", "pgvector ops -> DuckDB array distance", False),
+    "vector": ExtensionSurface("vector", "0.7", "pgvector <->/<=>/<#> -> VEC_* distance UDFs", True),
     "pg_trgm": ExtensionSurface("pg_trgm", "1.6", "trigram similarity", False),
 }
 

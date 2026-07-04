@@ -395,10 +395,14 @@ loudly rather than mistranslating.
 > Calcite's `spatial` function library to the connection `fun`; ST_ names already
 > match PostGIS so they pass through transpile — verified `ST_Distance`/`ST_Contains`
 > on real Calcite (JTS on the classpath) and over the wire (`ST_Distance(...)` → 5).
-> **Follow-ons (advertised, not yet lowering operators):** `vector`/pgvector
-> (distance ops → the file adapter's DuckDB engine, PGW-047) and `pg_trgm`/compat
-> fns (PGW-050). Registered so the surface/OID plumbing is in place; their
-> operators stay loud rejects until lowered (no faked capability).
+> **pgvector (PGW-047): DONE + tested.** `--extension vector` rewrites `<->`/`<=>`/`<#>`
+> to `VEC_L2`/`VEC_COS`/`VEC_IP` distance UDFs (a small Java UDF built by
+> `packaging/build-udf.sh` → `vendor/jars/pgwire-vecdist.jar`, registered via the
+> model's `functions`); pgvector `'[..]'` literals become `ARRAY[..]` (a dialect
+> array-rendering fix landed too). Verified: distances (L2=5, cosine=1, neg-IP=-11),
+> **similarity search** (`ORDER BY emb <-> query` → nearest-first), and over the wire.
+> **Follow-on:** `pg_trgm`/compat fns (PGW-050) — registered, operators stay loud
+> rejects until lowered (no faked capability).
 
 ---
 

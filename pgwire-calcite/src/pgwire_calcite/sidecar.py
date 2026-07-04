@@ -223,8 +223,12 @@ class BridgeBackend:
         self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
     ) -> QueryResult:
         del role_id, params, stream  # params substituted upstream; always streams
-        # PG-only rejects happen here (PGW-018); JSON surface honored (PGW-049).
-        calcite_sql = transpile_pg_to_calcite(sql, json_enabled=("json" in self._extensions))
+        # PG-only rejects happen here (PGW-018); JSON/vector surfaces honored.
+        calcite_sql = transpile_pg_to_calcite(
+            sql,
+            json_enabled=("json" in self._extensions),
+            vector_enabled=("vector" in self._extensions),
+        )
         sock = self._connect_with_retry()
         w, r = sock.makefile("wb"), sock.makefile("rb")
         write_frame(w, calcite_sql.encode("utf-8"))

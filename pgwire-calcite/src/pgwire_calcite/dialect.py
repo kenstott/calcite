@@ -36,6 +36,10 @@ class Calcite(Oracle):
     """sqlglot dialect for Apache Calcite (Lex.ORACLE, standard-SQL types)."""
 
     class Generator(Oracle.Generator):
+        def array_sql(self, expression) -> str:
+            # Calcite wants ARRAY[a, b, c] (bracket form); Oracle renders ARRAY(...).
+            return "ARRAY[" + self.expressions(expression, flat=True) + "]"
+
         # Undo Oracle-specific type spellings; Calcite uses standard SQL names.
         TYPE_MAPPING = {
             **Oracle.Generator.TYPE_MAPPING,
@@ -57,13 +61,18 @@ class Calcite(Oracle):
         }
 
 
-def transpile_pg_to_calcite(sql: str, json_enabled: bool = False) -> str:
+def transpile_pg_to_calcite(
+    sql: str, json_enabled: bool = False, vector_enabled: bool = False
+) -> str:
     """Transpile one PostgreSQL statement to Calcite SQL.
 
     Raises ``UnsupportedConstruct`` for PG-only constructs with no safe mapping
     (PGW-018); never silently mistranslates. ``json_enabled`` turns on the JSON
-    extension surface (PGW-049): ``->``/``->>`` become JSON_QUERY/JSON_VALUE.
+    surface (``->``/``->>`` -> JSON_QUERY/JSON_VALUE, PGW-049); ``vector_enabled``
+    turns on the pgvector surface (``<->``/``<=>``/``<#>`` -> VEC_* UDFs, PGW-047).
     """
+    if vector_enabled:
+        sql = transforms.rewrite_vector_ops(sql)
     tree = parse_one(sql, read="postgres")
     tree = transforms.apply(tree, json_enabled=json_enabled)
     return tree.sql(dialect=Calcite)

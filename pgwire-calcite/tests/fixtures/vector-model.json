@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "defaultSchema": "SALES",
+  "schemas": [
+    {
+      "name": "SALES",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+      "operand": {
+        "directory": "filedata",
+        "ephemeralCache": true,
+        "executionEngine": "linq4j"
+      },
+      "functions": [
+        { "name": "VEC_L2", "className": "pgwire.vec.VecDist", "methodName": "l2" },
+        { "name": "VEC_IP", "className": "pgwire.vec.VecDist", "methodName": "innerProduct" },
+        { "name": "VEC_COS", "className": "pgwire.vec.VecDist", "methodName": "cosineDistance" }
+      ]
+    }
+  ]
+}
