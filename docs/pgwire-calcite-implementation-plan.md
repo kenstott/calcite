@@ -401,8 +401,13 @@ loudly rather than mistranslating.
 > model's `functions`); pgvector `'[..]'` literals become `ARRAY[..]` (a dialect
 > array-rendering fix landed too). Verified: distances (L2=5, cosine=1, neg-IP=-11),
 > **similarity search** (`ORDER BY emb <-> query` → nearest-first), and over the wire.
-> **Follow-on:** `pg_trgm`/compat fns (PGW-050) — registered, operators stay loud
-> rejects until lowered (no faked capability).
+> **pg_trgm / compat (PGW-050): DONE + tested.** `similarity()`/`word_similarity()`
+> (trigram) and `digest()` (md5/sha1/sha256/sha512) as UDFs (`CompatFunctions`),
+> registered via the model and passing through transpile as normal function calls;
+> `digest` matches Python hashlib. pg_trgm's `%` operator is intentionally NOT
+> rewritten (ambiguous with numeric modulo) — the unambiguous `similarity()` form
+> is supported instead. **All five Phase-8 surfaces (mechanism, json, postgis,
+> vector, pg_trgm) are now implemented and tested.**
 
 ---
 
