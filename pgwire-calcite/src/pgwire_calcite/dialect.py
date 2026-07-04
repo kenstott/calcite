@@ -57,14 +57,15 @@ class Calcite(Oracle):
         }
 
 
-def transpile_pg_to_calcite(sql: str) -> str:
+def transpile_pg_to_calcite(sql: str, json_enabled: bool = False) -> str:
     """Transpile one PostgreSQL statement to Calcite SQL.
 
     Raises ``UnsupportedConstruct`` for PG-only constructs with no safe mapping
-    (PGW-018); never silently mistranslates.
+    (PGW-018); never silently mistranslates. ``json_enabled`` turns on the JSON
+    extension surface (PGW-049): ``->``/``->>`` become JSON_QUERY/JSON_VALUE.
     """
     tree = parse_one(sql, read="postgres")
-    tree = transforms.apply(tree)
+    tree = transforms.apply(tree, json_enabled=json_enabled)
     return tree.sql(dialect=Calcite)
 
 

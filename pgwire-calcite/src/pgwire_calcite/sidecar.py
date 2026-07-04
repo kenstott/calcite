@@ -143,9 +143,11 @@ class BridgeBackend:
         timeout: float = 120.0,
         connect_retries: int = 3,
         connect_backoff: float = 0.2,
+        extensions=None,
     ) -> None:
         self._host = host
         self._port = port
+        self._extensions = set(extensions or ())
         self._timeout = timeout
         self._retries = connect_retries
         self._backoff = connect_backoff
@@ -186,7 +188,8 @@ class BridgeBackend:
         self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
     ) -> QueryResult:
         del role_id, params, stream  # params substituted upstream; always streams
-        calcite_sql = transpile_pg_to_calcite(sql)  # PG-only rejects happen here (PGW-018)
+        # PG-only rejects happen here (PGW-018); JSON surface honored (PGW-049).
+        calcite_sql = transpile_pg_to_calcite(sql, json_enabled=("json" in self._extensions))
         sock = self._connect_with_retry()
         w, r = sock.makefile("wb"), sock.makefile("rb")
         write_frame(w, calcite_sql.encode("utf-8"))

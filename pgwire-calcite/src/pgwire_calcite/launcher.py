@@ -86,7 +86,7 @@ def serve(
     return srv
 
 
-def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcite_child: str | None = None):
+def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcite_child: str | None = None, extensions=None):
     """Construct the execution backend.
 
     - 'stub'    (Phase 0) fixed responses;
@@ -108,12 +108,13 @@ def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcit
             fun=jdbc.get("fun", "standard"),
             default_schema=jdbc.get("schema"),
             extra_props=jdbc.get("extra_props") or {},
+            extensions=extensions,
         )
     if kind == "bridge":
         from pgwire_calcite.sidecar import BridgeBackend
 
         host, _, port = (calcite_child or "127.0.0.1:5533").partition(":")
-        return BridgeBackend(host=host or "127.0.0.1", port=int(port or 5533))
+        return BridgeBackend(host=host or "127.0.0.1", port=int(port or 5533), extensions=extensions)
     raise ValueError(f"unknown backend {kind!r}")
 
 
@@ -155,6 +156,12 @@ def main(argv: list | None = None) -> int:
     parser.add_argument("--tls-cert", default=None)
     parser.add_argument("--tls-key", default=None)
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument(
+        "--extension",
+        action="append",
+        default=[],
+        help="enable a PG extension surface (repeatable), e.g. json (Phase 8)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -176,7 +183,12 @@ def main(argv: list | None = None) -> int:
         name, value = spec.split("=", 1)
         extra_props[name] = value
     jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
-    backend = build_backend(args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child)
+    from pgwire_calcite.extensions import resolve as _resolve_ext
+
+    enabled_ext = _resolve_ext(args.extension)
+    backend = build_backend(
+        args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child, extensions=enabled_ext
+    )
     auth_provider = None
     if args.auth in ("trust", "local", "scram"):
         from pgwire_calcite.auth import AccountStore, LocalAccountsProvider, TrustProvider

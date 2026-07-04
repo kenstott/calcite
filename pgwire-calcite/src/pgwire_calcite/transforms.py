@@ -63,11 +63,36 @@ def _reject(reason: str) -> None:
     )
 
 
-def apply(tree: exp.Expression) -> exp.Expression:
+def _convert_json_ops(tree: exp.Expression) -> None:
+    """Map PG JSON operators to Calcite (JSON extension surface, PGW-049).
+
+    ``data->>'k'`` -> ``JSON_VALUE(data, 'lax $.k')`` (scalar text)
+    ``data->'k'``  -> ``JSON_QUERY(data, 'lax $.k')`` (json subtree)
+    """
+    scalar_t = getattr(exp, "JSONExtractScalar", None)
+    extract_t = getattr(exp, "JSONExtract", None)
+    types = tuple(t for t in (scalar_t, extract_t) if t is not None)
+    if not types:
+        return
+    for node in list(tree.find_all(*types)):
+        col = node.this
+        keys = [str(k.this) for k in node.find_all(exp.JSONPathKey)]
+        if not keys:
+            continue
+        path = "lax $" + "".join(f".{k}" for k in keys)
+        fn = "JSON_VALUE" if (scalar_t and isinstance(node, scalar_t)) else "JSON_QUERY"
+        node.replace(exp.func(fn, col, exp.Literal.string(path)))
+
+
+def apply(tree: exp.Expression, json_enabled: bool = False) -> exp.Expression:
     """Apply conversions and reject-rules to a parsed PG AST. Returns the AST.
 
-    Raises ``UnsupportedConstruct`` on any reject-listed construct.
+    Raises ``UnsupportedConstruct`` on any reject-listed construct. When the JSON
+    extension surface is enabled (PGW-049), ``->``/``->>`` are converted instead
+    of rejected.
     """
+    if json_enabled:
+        _convert_json_ops(tree)
     # DISTINCT ON — sqlglot models it as exp.Distinct with an ``on`` arg.
     for distinct in tree.find_all(exp.Distinct):
         if distinct.args.get("on") is not None:

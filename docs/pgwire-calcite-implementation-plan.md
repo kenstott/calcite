@@ -382,6 +382,19 @@ loudly rather than mistranslating.
 
 **Closes:** PGW-046, PGW-047, PGW-048, PGW-049, PGW-050.
 
+> **Status.** **Mechanism (PGW-046) + JSON surface (PGW-049): DONE + tested.**
+> `extensions.py` is the opt-in registry (`--extension json`); it advertises
+> enabled surfaces for a `pg_extension` probe. The **JSON surface** converts
+> `->`/`->>` to Calcite `JSON_QUERY`/`JSON_VALUE` in the transform layer when
+> enabled, and rejects them loudly when not (convert-or-reject, PGW-018) — verified
+> transpiling AND executing on real Calcite over the wire (`'{"a":42}'->>'a'` →
+> `42`). **Follow-ons (advertised, not yet lowering operators):** `postgis`
+> (ST_* → Calcite spatial via `fun=spatial`, PGW-048) and `vector`/pgvector
+> (distance ops → the file adapter's DuckDB engine, PGW-047), plus `pg_trgm`/
+> compat fns (PGW-050). They are registered so the surface/OID plumbing is in
+> place; enabling their operators is incremental work on the same mechanism, and
+> until then those operators stay loud rejects (no faked capability).
+
 ---
 
 ## Requirement → phase coverage matrix
