@@ -131,6 +131,12 @@ The dialect firewall (PGW-016/17) + catalog intercept let pgwire-calcite present
 - **PGW-049** A **JSON operator** surface SHOULD map PG `->`, `->>`, `#>`, `#>>` to Calcite `JSON_VALUE`/`JSON_QUERY`, converting today's PGW-018 rejections into supported operations where a faithful mapping exists.
 - **PGW-050** Additional **compatibility-function** surfaces (e.g. `pg_trgm` `similarity()`/`%`, `gen_random_uuid()`, `pgcrypto` `digest()`) MAY be provided as opt-in modules mapped to Calcite UDFs or the DuckDB engine.
 
+### 4.10 Scaling & federation (design note)
+- **Scale-out model.** Multiple pgwire-calcite instances MAY run behind a load balancer (stateless, sticky-session; reinforced by the Phase-5 recyclable-child model). This scales **concurrency and availability** (more simultaneous clients/queries, failover), NOT single-query latency.
+- **No intra-query MPP.** Each query runs in one Calcite JVM (Enumerable engine + adapter pushdown + the file adapter's in-process DuckDB engine for vectorized single-node parallelism). There is no coordinator/worker fan-out of a single query — that is the deliberate D2 tradeoff (reject Trino on the front door in exchange for no engine hop + dialect ownership).
+- **RDB choke point.** A non-scale-out RDB federation target caps the throughput of work **pushed down to it**; it is not a bottleneck for cross-source federation work (joins/aggregates) that Calcite performs in-JVM. Relax with RDB read replicas or by materializing hot slices into the file/parquet layer.
+- **MPP escape hatch (out of front door).** If single-query MPP is genuinely needed, get it as a **backend/execution choice** — make Trino a Calcite execution engine for the heavy sources (the file adapter's `TrinoJdbcSchemaFactory`, or trino-calcite) — while the pgwire front door stays direct-to-Calcite. This keeps D2 intact: pgwire is never *routed through* Trino; Trino is only an optional downstream executor. Massive-single-query MPP was never the intent of this server.
+
 ---
 
 ## 5. Reuse vs. net-new
