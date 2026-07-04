@@ -32,6 +32,58 @@ tasks.withType<JavaCompile>().configureEach {
     options.release.set(25)
 }
 
+// ─── Maven publishing (GitHub Packages + Maven Central) ──────────────────────
+// Published as io.simpleishard:trino-cloudops so JVM consumers can depend on the
+// connector via Maven. The deployable Trino plugin zip (trinoPlugin task) is a
+// separate GitHub-release asset — see .github/workflows/publish-trino.yml.
+publishing {
+    publications {
+        create<MavenPublication>("trinoCloudops") {
+            groupId    = "io.simpleishard"
+            artifactId = "trino-cloudops"
+            version    = (project.findProperty("releaseVersion") as String?
+                ?: project.version.toString().replace("-SNAPSHOT", ""))
+                .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
+
+            from(components["java"])
+
+            pom {
+                name.set("Trino Cloud Ops Connector")
+                description.set("Trino connector for the Apache Calcite cloud-ops adapter")
+                url.set("https://github.com/kenstott/calcite")
+                licenses {
+                    license {
+                        name.set("Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("kenstott")
+                        name.set("Ken Stott")
+                        email.set("kennethstott@gmail.com")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:git://github.com/kenstott/calcite.git")
+                    developerConnection.set("scm:git:ssh://github.com/kenstott/calcite.git")
+                    url.set("https://github.com/kenstott/calcite")
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url  = uri("https://maven.pkg.github.com/kenstott/calcite")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
+                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.token") as String?
+            }
+        }
+    }
+}
+
 tasks.matching {
     val n = it.name.lowercase()
     n.contains("forbidden") || n.contains("jandex") || n.contains("autostyle")

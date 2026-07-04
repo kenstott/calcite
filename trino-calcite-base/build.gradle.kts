@@ -42,6 +42,57 @@ tasks.withType<JavaCompile>().configureEach {
     options.release.set(25)
 }
 
+// ─── Maven publishing (GitHub Packages + Maven Central) ──────────────────────
+// Published as io.simpleishard:trino-calcite-base so the connector modules — and
+// any downstream JVM consumer — can depend on this shared library via Maven.
+publishing {
+    publications {
+        create<MavenPublication>("trinoCalciteBase") {
+            groupId    = "io.simpleishard"
+            artifactId = "trino-calcite-base"
+            version    = (project.findProperty("releaseVersion") as String?
+                ?: project.version.toString().replace("-SNAPSHOT", ""))
+                .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
+
+            from(components["java"])
+
+            pom {
+                name.set("Trino Calcite Connector Base")
+                description.set("Shared JDBC-framework library for Trino connectors backed by the Apache Calcite driver")
+                url.set("https://github.com/kenstott/calcite")
+                licenses {
+                    license {
+                        name.set("Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("kenstott")
+                        name.set("Ken Stott")
+                        email.set("kennethstott@gmail.com")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:git://github.com/kenstott/calcite.git")
+                    developerConnection.set("scm:git:ssh://github.com/kenstott/calcite.git")
+                    url.set("https://github.com/kenstott/calcite")
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url  = uri("https://maven.pkg.github.com/kenstott/calcite")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
+                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.token") as String?
+            }
+        }
+    }
+}
+
 // Opt out of the legacy code-quality gates the root build applies to every Java module. Their
 // bytecode tooling (forbiddenapis/jandex use an older ASM) cannot parse Java 25 class files, and
 // the autostyle ruleset targets the Calcite source conventions, not Trino-style code.
