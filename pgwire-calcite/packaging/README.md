@@ -5,15 +5,31 @@ Delivery is **per-OS installers** (Windows / macOS / Linux) — not Docker (PGW-
 jars, and provision offline on first run (PGW-026/027). Nothing is fetched from
 the network at install time (PGW-029).
 
-> **What this repo provides vs. what needs your machines/credentials.**
+## Primary delivery: package managers + tarballs (NO signing needed)
+
+This is a **driver/CLI-server tool for technical users**, so the primary delivery
+is package managers + tarballs, which are **not Gatekeeper/SmartScreen quarantined**
+and therefore need **no OS code-signing** (PGW-030/031 revised):
+
+- **macOS / Linux — Homebrew tap:** `brew install kenstott/tap/pgwire-calcite`
+  (formula: `packaging/homebrew/pgwire-calcite.rb`). Brew-installed CLIs are not
+  Gatekeeper-quarantined — no Apple Developer account / notarization required.
+- **Windows — Scoop bucket:** `scoop install pgwire-calcite`
+  (manifest: `packaging/scoop/pgwire-calcite.json`). Scoop needs no Authenticode
+  signing and is not SmartScreen-quarantined.
+- **All — per-OS/arch tarball** GitHub release (`packaging/pack.sh`) + a one-line
+  `curl | sh` install. Terminal installs aren't quarantined either.
+
+Signed double-clickable **DMG/MSI is an OPTIONAL add-on** for non-technical
+browser-download users only; its (credentialed) runbook is at the end.
+
+> **What this repo provides vs. what needs your machines.**
 > Buildable + committed here: the fail-loud airgap config (`airgap.py`, tested),
-> the cross-platform **wheelhouse builder** (`build-wheelhouse.sh`) and pinned
-> `requirements.lock`, and this runbook. **Requires your hardware/credentials
-> (cannot be produced or verified from this Linux dev box):** building the per-OS
-> installers on each target OS, and **macOS notarization + Windows Authenticode
-> signing** (PGW-031) — those steps are scripted below but must run on your
-> machines with your signing identities. This is an execution boundary, not a
-> code gap.
+> the cross-platform **wheelhouse builder** (`build-wheelhouse.sh`) + pinned
+> `requirements.lock`, the **tarball packer** (`pack.sh`), and the **Homebrew /
+> Scoop** manifests — none of which need signing credentials. Still requires your
+> hardware for the final assembly on each OS (bundling that OS's JRE/CPython) and,
+> ONLY if you also ship signed DMG/MSI, your Apple/Windows signing identities.
 
 ## Layout of a shipped artifact (per OS/arch variant)
 

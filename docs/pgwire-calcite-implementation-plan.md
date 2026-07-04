@@ -304,7 +304,18 @@ exercising rarely-used paths. macOS notarization + Windows signing verified on r
 
 **Closes:** PGW-025, PGW-026, PGW-027, PGW-028, PGW-029, PGW-030, PGW-031.
 
----
+> **Status (delivery simplified — signing blocker removed).** Since this is a
+> driver/CLI-server for technical users, delivery is **package managers + tarballs**
+> (Homebrew tap, Scoop bucket, `curl | sh`), which are NOT Gatekeeper/SmartScreen
+> quarantined and need **no OS code-signing** (PGW-030/031 revised). Committed +
+> buildable here with no credentials: `airgap.py` (fail-loud no-autofetch, PGW-029,
+> tested), `build-wheelhouse.sh` + `requirements.lock` (PGW-027/028), `pack.sh`
+> (tarball), and the Homebrew formula + Scoop manifest (PGW-030). **Remaining (your
+> hardware, not credentials):** final per-OS assembly bundling that OS's JRE +
+> standalone CPython (build must run on each target OS), the offline-install CI
+> job on a disconnected runner, and a thin Java launcher shim if PGW-025's exact
+> "Java top-level" is desired (the supervision logic already exists in Python).
+> Signed DMG/MSI is now an explicit **optional** add-on only.
 
 ## Phase 7 — Containment hardening, corpus gating & deferred Phase-2 items
 

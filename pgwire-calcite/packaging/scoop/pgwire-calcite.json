@@ -1,0 +1,23 @@
+{
+  "//": "Scoop manifest for pgwire-calcite (Windows). Scoop requires NO Authenticode signing and is not SmartScreen-quarantined (PGW-031 revised). Publish in a bucket; then: scoop install pgwire-calcite. Replace version + hash at release.",
+  "version": "VERSION",
+  "description": "PostgreSQL wire-protocol server backed by Apache Calcite",
+  "homepage": "https://github.com/kenstott/calcite",
+  "license": "BUSL-1.1",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/kenstott/calcite/releases/download/pgwire-v#VERSION#/pgwire-calcite-#VERSION#-windows-x86_64.tar.gz",
+      "hash": "REPLACE_WINDOWS_X86_64_SHA256",
+      "extract_dir": "pgwire-calcite-#VERSION#-windows-x86_64"
+    }
+  },
+  "bin": [["bin\\pgwire-calcite.cmd", "pgwire-calcite"]],
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/kenstott/calcite/releases/download/pgwire-v$version/pgwire-calcite-$version-windows-x86_64.tar.gz"
+      }
+    }
+  }
+}
