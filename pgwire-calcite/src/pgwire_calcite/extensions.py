@@ -16,11 +16,12 @@ DuckDB engine — or rejects them explicitly (convert-or-reject-loudly, PGW-018)
 Surfaces are opt-in per deployment; nothing here claims a capability it does not
 implement (e.g. no vector-index acceleration).
 
-Implemented: **json** (PGW-049) — ``->``/``->>`` -> Calcite JSON_QUERY/JSON_VALUE,
-wired in transforms.py / dialect.py. Registered-but-follow-on: **postgis**
-(ST_* -> Calcite spatial, needs ``fun=spatial``) and **vector** (pgvector ops ->
-the file adapter's DuckDB engine). Advertising a follow-on surface here does NOT
-enable operators it can't yet lower — that stays a loud reject.
+Implemented: **json** (PGW-049) — ``->``/``->>`` -> Calcite JSON_QUERY/JSON_VALUE;
+**postgis** (PGW-048) — ``ST_*`` -> Calcite spatial (the surface adds ``spatial``
+to the connection's ``fun``; ST_ names already match, so they pass through
+transpile). Registered-but-follow-on: **vector** (pgvector ops -> the file
+adapter's DuckDB engine). Advertising a follow-on surface here does NOT enable
+operators it can't yet lower — that stays a loud reject.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ class ExtensionSurface:
 #: Known surfaces. Enable per deployment; only ``implemented`` ones lower operators.
 REGISTRY: Dict[str, ExtensionSurface] = {
     "json": ExtensionSurface("json", "1.0", "JSON operators -> Calcite JSON_VALUE/JSON_QUERY", True),
-    "postgis": ExtensionSurface("postgis", "3.0", "ST_* -> Calcite spatial (fun=spatial)", False),
+    "postgis": ExtensionSurface("postgis", "3.0", "ST_* -> Calcite spatial (fun=spatial)", True),
     "vector": ExtensionSurface("vector", "0.7", "pgvector ops -> DuckDB array distance", False),
     "pg_trgm": ExtensionSurface("pg_trgm", "1.6", "trigram similarity", False),
 }

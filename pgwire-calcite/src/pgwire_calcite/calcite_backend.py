@@ -59,6 +59,10 @@ class CalciteBackend:
         self._classpath = resolve_classpath(classpath)
         self._lex = lex
         self._fun = fun
+        # PostGIS surface (PGW-048): add Calcite's spatial function library so ST_*
+        # resolve. Function names already match PostGIS; only `fun` needs spatial.
+        if "postgis" in self._extensions and "spatial" not in (self._fun or "").lower():
+            self._fun = f"{self._fun},spatial" if self._fun else "spatial"
         self._default_schema = default_schema
         self._extra_props = dict(extra_props or {})
         self._jvm_args = list(jvm_args or [])

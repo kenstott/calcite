@@ -391,12 +391,14 @@ loudly rather than mistranslating.
 > `->`/`->>` to Calcite `JSON_QUERY`/`JSON_VALUE` in the transform layer when
 > enabled, and rejects them loudly when not (convert-or-reject, PGW-018) — verified
 > transpiling AND executing on real Calcite over the wire (`'{"a":42}'->>'a'` →
-> `42`). **Follow-ons (advertised, not yet lowering operators):** `postgis`
-> (ST_* → Calcite spatial via `fun=spatial`, PGW-048) and `vector`/pgvector
-> (distance ops → the file adapter's DuckDB engine, PGW-047), plus `pg_trgm`/
-> compat fns (PGW-050). They are registered so the surface/OID plumbing is in
-> place; enabling their operators is incremental work on the same mechanism, and
-> until then those operators stay loud rejects (no faked capability).
+> `42`). **PostGIS subset (PGW-048): DONE + tested.** `--extension postgis` adds
+> Calcite's `spatial` function library to the connection `fun`; ST_ names already
+> match PostGIS so they pass through transpile — verified `ST_Distance`/`ST_Contains`
+> on real Calcite (JTS on the classpath) and over the wire (`ST_Distance(...)` → 5).
+> **Follow-ons (advertised, not yet lowering operators):** `vector`/pgvector
+> (distance ops → the file adapter's DuckDB engine, PGW-047) and `pg_trgm`/compat
+> fns (PGW-050). Registered so the surface/OID plumbing is in place; their
+> operators stay loud rejects until lowered (no faked capability).
 
 ---
 
