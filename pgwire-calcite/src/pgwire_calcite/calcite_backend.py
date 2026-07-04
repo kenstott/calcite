@@ -51,6 +51,7 @@ class CalciteBackend:
         default_schema: Optional[str] = None,
         extra_props: Optional[dict] = None,
         jvm_args: Optional[List[str]] = None,
+        batch_size: int = 1024,
     ) -> None:
         self._model_path = model_path
         self._classpath = resolve_classpath(classpath)
@@ -59,6 +60,7 @@ class CalciteBackend:
         self._default_schema = default_schema
         self._extra_props = dict(extra_props or {})
         self._jvm_args = list(jvm_args or [])
+        self._batch_size = int(batch_size)
         self._conn = None
         self._lock = threading.RLock()
         self._Types = None
@@ -67,11 +69,17 @@ class CalciteBackend:
 
     # --- lifecycle ------------------------------------------------------------
 
+    #: Required for Arrow off-heap memory on Java 17+ (arrow-jdbc / arrow-memory).
+    _ARROW_ADD_OPENS = "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
+
     def _start_jvm(self) -> None:
         import jpype
 
         if not jpype.isJVMStarted():
-            jpype.startJVM(*self._jvm_args, classpath=self._classpath, convertStrings=True)
+            args = list(self._jvm_args)
+            if not any("java.base/java.nio" in a for a in args):
+                args.append(self._ARROW_ADD_OPENS)
+            jpype.startJVM(*args, classpath=self._classpath, convertStrings=True)
             log.info("[CALCITE] JVM started with %d classpath entries", len(self._classpath))
 
     def _connect(self) -> None:
@@ -118,13 +126,30 @@ class CalciteBackend:
 
     # --- execution ------------------------------------------------------------
 
-    def execute_sql(self, sql: str, role_id: str, params: Optional[list] = None) -> QueryResult:
+    def execute_sql(
+        self,
+        sql: str,
+        role_id: str,
+        params: Optional[list] = None,
+        stream: bool = False,
+    ) -> QueryResult:
         del role_id, params  # params already substituted upstream (server._substitute_params)
         calcite_sql = transpile_pg_to_calcite(sql)
         log.debug("[CALCITE] PG=%r -> CALCITE=%r", sql[:200], calcite_sql[:200])
+        if self._conn is None:
+            raise RuntimeError("Calcite connection is not open")
+        if stream:
+            # Arrow batch-streaming path (PGW-019/020/022): the generator holds
+            # the lock + JVM/Arrow resources and releases them when exhausted or
+            # closed (client disconnect / LIMIT-few cancels the query).
+            from pgwire_calcite import arrow_bridge
+
+            names, labels, rows = arrow_bridge.stream_query(
+                self._conn, self._lock, calcite_sql, self._batch_size
+            )
+            return QueryResult(rows=rows, column_names=names, column_types=labels)
+        # Materialized path (direct/programmatic use, tests): typed JDBC row reads.
         with self._lock:
-            if self._conn is None:
-                raise RuntimeError("Calcite connection is not open")
             stmt = self._conn.createStatement()
             try:
                 has_rs = bool(stmt.execute(calcite_sql))

@@ -1,3 +1,5 @@
 # Keep this subtree LF-only across the mixed Windows/WSL checkout so the
 # copied-verbatim sources (and their canary lines) stay byte-faithful.
 * text=auto eol=lf
+# Vendored jars are binary — never apply text/eol normalization.
+*.jar binary

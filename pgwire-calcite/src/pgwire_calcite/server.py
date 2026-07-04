@@ -250,8 +250,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
                 return CalciteQueryResult(result, stripped)
 
         # Non-catalog execution seam: Phase 0 StubBackend -> Phase 1 CalciteBackend.
+        # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
+        # backends that don't stream ignore the flag and materialize.
         try:
-            result = _state.backend.execute_sql(stripped, self.role_id, params)
+            result = _state.backend.execute_sql(stripped, self.role_id, params, stream=True)
         except PermissionError as exc:
             raise PermissionError(str(exc)) from exc
         except Exception as exc:

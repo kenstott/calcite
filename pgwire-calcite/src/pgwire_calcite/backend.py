@@ -36,7 +36,9 @@ from pgwire_calcite.types import QueryResult
 class Backend(Protocol):
     """Contract the wire server executes non-catalog statements against."""
 
-    def execute_sql(self, sql: str, role_id: str, params: Optional[list] = None) -> QueryResult:
+    def execute_sql(
+        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+    ) -> QueryResult:
         ...
 
     def ready(self) -> bool:
@@ -68,8 +70,10 @@ class StubBackend:
     def ready(self) -> bool:
         return True
 
-    def execute_sql(self, sql: str, role_id: str, params: Optional[list] = None) -> QueryResult:
-        del role_id, params
+    def execute_sql(
+        self, sql: str, role_id: str, params: Optional[list] = None, stream: bool = False
+    ) -> QueryResult:
+        del role_id, params, stream  # stub is always materialized
         stripped = sql.strip().rstrip(";").strip()
         if _SELECT_ONE_RE.match(sql):
             return QueryResult(rows=[(1,)], column_names=["?column?"], column_types=["INTEGER"])

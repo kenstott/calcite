@@ -38,13 +38,23 @@ class ClasspathError(RuntimeError):
     """Raised when the Calcite classpath cannot be resolved. Never swallowed."""
 
 
+def _vendored_jars() -> List[str]:
+    """Jars bundled with pgwire-calcite (e.g. arrow-jdbc, absent from the Calcite
+    build). Always prepended so they are present for airgapped installs (Phase 6)."""
+    jar_dir = _project_root() / "vendor" / "jars"
+    if not jar_dir.is_dir():
+        return []
+    return [str(p) for p in sorted(jar_dir.glob("*.jar"))]
+
+
 def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
+    vendored = _vendored_jars()
     if explicit:
-        return _validate(list(explicit), source="explicit argument")
+        return _validate(vendored + list(explicit), source="explicit argument")
 
     env = os.environ.get("PGWIRE_CALCITE_CLASSPATH")
     if env:
-        return _validate(env.split(os.pathsep), source="PGWIRE_CALCITE_CLASSPATH")
+        return _validate(vendored + env.split(os.pathsep), source="PGWIRE_CALCITE_CLASSPATH")
 
     file_env = os.environ.get("PGWIRE_CALCITE_CLASSPATH_FILE")
     candidates = []
@@ -59,7 +69,7 @@ def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
             if not text:
                 continue
             entries = [e for e in text.replace("\n", os.pathsep).split(os.pathsep) if e.strip()]
-            return _validate(entries, source=str(path))
+            return _validate(vendored + entries, source=str(path))
 
     raise ClasspathError(
         "No Calcite classpath resolved. Set PGWIRE_CALCITE_CLASSPATH, or "
