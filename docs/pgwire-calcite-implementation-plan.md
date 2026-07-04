@@ -322,8 +322,10 @@ exercising rarely-used paths. macOS notarization + Windows signing verified on r
 > runs the suite. The offline-install *mechanism* was proven locally
 > (`--no-index --find-links` install + `SELECT 1`); the complete per-OS wheelhouse
 > install is verified by the release job. `build-wheelhouse.sh` fixed to use
-> `pip download` (uv has no `download`). **Only remaining:** an optional signed
-> DMG/MSI (needs your Apple/Windows identities) — not needed for the pkg-manager path.
+> `pip download` (uv has no `download`). **Signed DMG/MSI is a dropped non-goal**
+> (PGW-031) — the package-manager / `curl|sh` path is not quarantined, so there is
+> no signing step. **Phase 6 is complete** (first CI run is a `git push` away for
+> live verification of the runner steps).
 
 ## Phase 7 — Containment hardening, corpus gating & deferred Phase-2 items
 

@@ -92,25 +92,13 @@ shade/ServiceLoader fragility).
    provision from the bundle and run the suite **including rarely-used paths**;
    assert `pgwire_calcite.airgap.assert_offline_ready` on the catalog DuckDB.
 
-## Signing / notarization — REQUIRES YOUR CREDENTIALS (PGW-031)
+## Signing / notarization — NON-GOAL (PGW-031)
 
-These commands are the runbook; they must run on your machines with your identities.
-
-- **macOS** (Developer ID + notarization):
-  ```
-  codesign --deep --force --options runtime \
-    --sign "Developer ID Application: <YOU>" pgwire-calcite-macos-arm64/natives/*.dylib
-  xcrun notarytool submit pgwire-calcite-macos-arm64.zip \
-    --apple-id <APPLE_ID> --team-id <TEAM> --password <APP_SPECIFIC_PW> --wait
-  xcrun stapler staple pgwire-calcite-macos-arm64.pkg
-  ```
-- **Windows** (Authenticode, Gatekeeper/SmartScreen):
-  ```
-  signtool sign /fd SHA256 /tr <RFC3161_TSA> /td SHA256 \
-    /f <YOUR.pfx> /p <PW> pgwire-calcite-windows-x86_64\bin\pgwire-calcite.exe
-  ```
-- **Linux**: no OS signing; ensure wheels match the glibc baseline (manylinux2014;
-  musllinux if Alpine is a target) (PGW-031).
+There is no OS code-signing, notarization, or signed DMG/MSI step. Delivery is via
+package manager / `curl | sh` / tarball, which is **not** Gatekeeper/SmartScreen
+quarantined, so no signing identities are required. The only platform concern that
+remains: Linux wheels must match the glibc baseline (manylinux2014; musllinux if
+Alpine is a target).
 
 ## Design note: Java supervisor vs. the current Python supervisor
 

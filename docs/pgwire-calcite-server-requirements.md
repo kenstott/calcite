@@ -100,7 +100,7 @@ DuckDB / DBeaver / DataGrip / psql
 - **PGW-028** Cross-platform wheel fetching MUST be done at build time (per-target `--platform`/uv), pinned to one CPython version/ABI, with a lockfile for reproducibility.
 - **PGW-029** All autoload/autofetch MUST be disabled and fail loud: DuckDB `autoinstall_known_extensions`/`autoload_known_extensions` off with any needed extensions bundled; no pip/JVM network fallback. The offline install MUST be verified in CI **including rarely-used code paths**.
 - **PGW-030** Preferred delivery is **per-OS/arch tarballs + package-manager distribution** (Homebrew tap for macOS/Linux, Scoop bucket for Windows), each ~150 MB (own variant only) over a universal ~600 MB–1 GB artifact. Total ~1 GB is accepted; it is the airgap tax (the rarely-used tail must be resident because it cannot be fetched later). *Rationale (revised):* this is a driver/CLI-server tool for technical users; package-manager / `curl | sh` installs are NOT Gatekeeper/SmartScreen-quarantined, so they avoid the signing pipeline. Signed double-clickable installers (DMG/MSI) are an **optional** later add for non-technical browser-download distribution only.
-- **PGW-031** Because the primary delivery path (package manager / terminal install) is not quarantined, OS code-signing/notarization is **OPTIONAL** — required only IF signed browser-download DMG/MSI artifacts are also shipped (then: macOS Developer-ID + notarization; Windows Authenticode). Linux wheels MUST still match the target glibc baseline (manylinux tag; musllinux if Alpine is targeted). Native libs SHOULD carry correct rpath/loader config regardless.
+- **PGW-031** Delivery is via package manager / `curl | sh` / tarball, which is not Gatekeeper/SmartScreen-quarantined, so **OS code-signing, notarization, and signed DMG/MSI installers are a NON-GOAL** (dropped). What still matters: Linux wheels MUST match the target glibc baseline (manylinux tag; musllinux if Alpine is targeted), and native libs SHOULD carry correct rpath/loader config.
 
 ### 4.6 Process model, lifecycle & reliability
 - **PGW-032** The deployable is **long-running / always-on**; cold start is a one-time launch cost and is not a design concern. Warm reuse (kept-warm Calcite connection, compiled-plan cache, connection pooling, JIT) SHOULD be exploited.
@@ -159,6 +159,7 @@ The dialect firewall (PGW-016/17) + catalog intercept let pgwire-calcite present
 - DDL reverse-engineering (`pg_get_constraintdef`/`viewdef`/`indexdef` stay stubbed).
 - Real transaction isolation / rollback.
 - Avatica or ODBC integration.
+- **Signed DMG/MSI installers / OS code-signing & notarization** (delivery is via package manager / `curl | sh` / tarball, which is not quarantined — see PGW-031).
 - Inventing/overlaying constraints the underlying adapter does not declare.
 - Modifications to calcite-core.
 
