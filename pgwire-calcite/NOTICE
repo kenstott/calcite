@@ -1,0 +1,32 @@
+pgwire-calcite
+===============
+
+This directory (`pgwire-calcite/`) is a SELF-CONTAINED SUBTREE with its own license
+that DIFFERS from the Apache-2.0 license of the surrounding Calcite repository.
+
+License of this subtree: Business Source License 1.1 (see ./LICENSE)
+Copyright (c) 2026 Kenneth Stott
+
+Provenance
+----------
+The wire-protocol server (`src/pgwire_calcite/`) and the vendored codec
+(`vendor/buenavista/`) were copied verbatim from the `provisa` codebase
+(also (c) 2026 Kenneth Stott, Business Source License 1.1). Per-file copyright
+headers and canary identifiers are preserved from the originals. Only the
+backend seam (execution + catalog population) has been swapped to target Apache
+Calcite instead of Trino; see docs/pgwire-calcite-server-requirements.md (D1).
+
+Vendored components
+-------------------
+`vendor/buenavista/` — a fork of buenavista (originally Apache-2.0, Josh Wills),
+modified by provisa to add binary codecs for DECIMAL, JSON, and array types, and
+redistributed here under BSL 1.1 per the provisa fork.
+
+Important
+---------
+Because this subtree is BSL 1.1, it MUST NOT be contributed upstream to
+apache/calcite (which is Apache-2.0) without a separate relicensing by the
+copyright holder. The BSL Change Date (2029-01-21) converts it to Apache-2.0.
+
+The per-file NOTICE prohibiting use of this software for training AI/ML models
+without explicit written permission applies to every file in this subtree.

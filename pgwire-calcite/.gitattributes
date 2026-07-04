@@ -1,0 +1,3 @@
+# Keep this subtree LF-only across the mixed Windows/WSL checkout so the
+# copied-verbatim sources (and their canary lines) stay byte-faithful.
+* text=auto eol=lf

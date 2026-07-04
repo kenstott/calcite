@@ -1,0 +1,12 @@
+{
+  "client": "psql",
+  "phase": "query",
+  "sql": "SELECT 1",
+  "captured": true,
+  "expect": {
+    "answered_by": "backend",
+    "min_phase": 0,
+    "columns": ["?column?"],
+    "rows": [["1"]]
+  }
+}

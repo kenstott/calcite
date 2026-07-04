@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Kenneth Stott
+# Licensed under the Business Source License 1.1 (see ./LICENSE and ./NOTICE).
+[project]
+name = "pgwire-calcite"
+version = "0.0.0"
+description = "PostgreSQL wire-protocol server backed by Apache Calcite (copy of provisa/pgwire with a Calcite backend)"
+requires-python = ">=3.12"
+# Phase 0 deps only. Arrow/pyarrow (Phase 3) and the JVM bridge (Phase 3) are
+# added in their phases. duckdb is required by the catalog intercept, which is
+# copied-but-unwired until Phase 2 — kept here so the module imports cleanly.
+dependencies = [
+    "buenavista",
+    "sqlglot",
+    "python-dateutil",
+    "duckdb",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "psycopg[binary]",
+]
+
+[project.scripts]
+pgwire-calcite = "pgwire_calcite.launcher:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pgwire_calcite*"]
+
+# Resolve the vendored buenavista fork from the local path, not PyPI.
+[tool.uv.sources]
+buenavista = { path = "vendor/buenavista", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
