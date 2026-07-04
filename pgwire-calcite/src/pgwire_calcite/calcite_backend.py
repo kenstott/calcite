@@ -167,7 +167,7 @@ class CalciteBackend:
         type_names: List[str] = []
         jdbc_types: List[int] = []
         for i in range(1, ncols + 1):
-            names.append(str(md.getColumnLabel(i)))
+            names.append(normalize.pg_column_label(str(md.getColumnLabel(i))))
             type_names.append(str(md.getColumnTypeName(i)))
             jdbc_types.append(int(md.getColumnType(i)))
         duck_labels = [normalize.duckdb_label(t) for t in type_names]

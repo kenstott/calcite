@@ -134,3 +134,12 @@ def pg_oid(sql_type: str) -> int:
 
 def pg_typname(sql_type: str) -> str:
     return type_mapping(sql_type).pg_typname
+
+
+_EXPR_LABEL_RE = re.compile(r"^EXPR\$\d+$")
+
+
+def pg_column_label(label: str) -> str:
+    """Map Calcite's auto-generated expression labels (``EXPR$0``) to the
+    PostgreSQL convention (``?column?``), so PG-wire clients see familiar names."""
+    return "?column?" if _EXPR_LABEL_RE.match(label or "") else label

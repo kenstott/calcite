@@ -338,6 +338,22 @@ containment properties have explicit passing tests; `ctid` parallel scans verifi
 
 **Closes:** PGW-040, PGW-023 (`ctid` slice completes the requirement).
 
+> **Status.** **Containment (PGW-040) + corpus gate (PGW-041): DONE + tested.**
+> `corpus_gate.py` replays the client corpus against a running server and fails
+> loud on any regression — and it earned its keep immediately, catching a real
+> PG-compat gap (Calcite's `EXPR$0` vs PostgreSQL's `?column?` for unnamed
+> expressions), now fixed via `normalize.pg_column_label` on both result paths.
+> Containment is asserted as an explicit property: a dialect-firewall reject and a
+> Calcite execution error each surface cleanly and the session keeps working
+> (blast radius bounded). **`ctid` parallel scans (PGW-023 slice): deferred as a
+> performance optimization, not correctness.** DuckDB reads correctly via a single
+> binary-COPY stream (verified Phase 4); it only parallelizes when the server
+> advertises `ctid`-range scans, which we don't — so reads stay correct. Emulating
+> Postgres `ctid` (which Calcite has no equivalent for) for *parallel* streams
+> requires deterministic row-range partitioning; done naively it returns duplicate
+> rows, so it is intentionally left as a future optimization rather than shipped
+> unsafe.
+
 ---
 
 ## Phase 8 — Extension surfaces (optional, post-core)

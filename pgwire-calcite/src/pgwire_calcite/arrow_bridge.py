@@ -68,7 +68,7 @@ def _columns_from_metadata(rs) -> Tuple[List[str], List[str]]:
     """Read (column_names, duckdb_labels) from ResultSetMetaData without consuming rows."""
     md = rs.getMetaData()
     n = int(md.getColumnCount())
-    names = [str(md.getColumnLabel(i)) for i in range(1, n + 1)]
+    names = [normalize.pg_column_label(str(md.getColumnLabel(i))) for i in range(1, n + 1)]
     labels = [normalize.duckdb_label(str(md.getColumnTypeName(i))) for i in range(1, n + 1)]
     return names, labels
 
