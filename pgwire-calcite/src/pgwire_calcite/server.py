@@ -253,6 +253,14 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
                 )
                 return CalciteQueryResult(result, stripped)
 
+        # Per-role authorization (PGW-045): reject out-of-grant relations before
+        # execution — enforced on the same grants that filter discovery.
+        _grants = getattr(_state, "authz_grants", None)
+        if _grants is not None:
+            from pgwire_calcite.authz import enforce_query
+
+            enforce_query(_grants, self.role_id or "", stripped)
+
         # Non-catalog execution seam: Phase 0 StubBackend -> Phase 1 CalciteBackend.
         # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
         # backends that don't stream ignore the flag and materialize.
@@ -353,6 +361,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self.send_authentication_ok()
                 self.handle_post_auth(ctx)
                 return ctx
+            # SASL SCRAM-SHA-256 wire exchange (PGW-043): no password on the wire.
+            if _prov is not None and getattr(_prov, "wire_mechanism", None) == "SCRAM-SHA-256":
+                self._scram = None  # per-connection SCRAM exchange state
+                self.send_authentication_sasl(["SCRAM-SHA-256"])
+                return ctx
             self.send_auth_request(ctx)
             return ctx
         else:
@@ -363,6 +376,52 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         self.wfile.write(struct.pack("!cii", ServerResponse.AUTHENTICATION_REQUEST, 8, 3))
         self.wfile.flush()
 
+    # --- SASL SCRAM-SHA-256 (PGW-043) ----------------------------------------
+
+    def _send_auth_msg(self, code: int, data: bytes = b"") -> None:
+        body = struct.pack("!i", code) + data
+        self.wfile.write(struct.pack("!ci", ServerResponse.AUTHENTICATION_REQUEST, len(body) + 4))
+        self.wfile.write(body)
+        self.wfile.flush()
+
+    def send_authentication_sasl(self, mechanisms) -> None:
+        data = b"".join(m.encode("utf-8") + b"\x00" for m in mechanisms) + b"\x00"
+        self._send_auth_msg(10, data)  # AuthenticationSASL
+
+    def _handle_sasl(self, ctx: BVContext, payload: bytes, provider) -> None:
+        username = ctx.params.get("user", "")
+        if getattr(self, "_scram", None) is None:
+            # SASLInitialResponse: mechanism cstring + int32 len + client-first-message
+            idx = payload.index(0)
+            rest = payload[idx + 1 :]
+            (cflen,) = struct.unpack("!i", rest[:4])
+            body = rest[4:] if cflen < 0 else rest[4 : 4 + cflen]
+            client_first = body.decode("utf-8")
+            verifier = provider.get_verifier(username)
+            if verifier is None:
+                self._send_pg_error(
+                    "FATAL", "28P01", f'password authentication failed for user "{username}"'
+                )
+                return
+            from pgwire_calcite.scram import ScramServerExchange
+
+            self._scram = ScramServerExchange(verifier)
+            server_first = self._scram.server_first(client_first)
+            self._send_auth_msg(11, server_first.encode("utf-8"))  # SASLContinue
+            return
+        # SASLResponse: client-final-message
+        client_final = payload.rstrip(b"\x00").decode("utf-8")
+        ok, server_final = self._scram.verify_final(client_final)
+        if not ok:
+            self._send_pg_error(
+                "FATAL", "28P01", f'password authentication failed for user "{username}"'
+            )
+            return
+        self._send_auth_msg(12, (server_final or "").encode("utf-8"))  # SASLFinal
+        ctx.session.role_id = username  # type: ignore[attr-defined]
+        self.send_authentication_ok()
+        self.handle_post_auth(ctx)
+
     def handle_md5_password(self, ctx: BVContext, payload: bytes) -> None:
         password = payload.decode("utf-8").rstrip("\x00")
         username = ctx.params.get("user", "")
@@ -372,6 +431,12 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         _state = _m.state
         if _state is None:
             self._send_pg_error("FATAL", "28P01", "Server state not initialized")
+            return
+
+        # SASL SCRAM-SHA-256 exchange (PGW-043): the 'p' message carries SASL data.
+        _prov0 = getattr(_state, "auth_provider", None)
+        if _prov0 is not None and getattr(_prov0, "wire_mechanism", None) == "SCRAM-SHA-256":
+            self._handle_sasl(ctx, payload, _prov0)
             return
 
         # Pluggable provider path (Phase 5b): the provider verifies the password

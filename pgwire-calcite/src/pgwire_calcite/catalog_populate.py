@@ -158,7 +158,14 @@ def populate_state(conn, state, role_id: str = "") -> None:
     Enables the intercept (``state.catalog_enabled = True``) once populated.
     """
     ctx, column_types = build_context(conn)
-    state.contexts = SharedContexts(ctx)
+    grants = getattr(state, "authz_grants", None)
+    if grants is not None:
+        # Per-role filtered discovery (PGW-045): each role sees only granted objects.
+        from pgwire_calcite.authz import AuthzContexts
+
+        state.contexts = AuthzContexts(ctx, grants)
+    else:
+        state.contexts = SharedContexts(ctx)
     state.schema_build_cache = {"column_types": column_types, "tables": [], "domains": []}
     # Leave state.roles empty: catalog._populate_pg_roles_and_database adds the
     # connected role plus the standard PG system roles. Per-role role modelling

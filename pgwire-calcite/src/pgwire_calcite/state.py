@@ -60,6 +60,9 @@ class ServerState:
     #: trust (no password) if provider.requires_password is False, else the provider
     #: verifies the cleartext password (pgwire_calcite.auth.AuthProvider).
     auth_provider: object = None
+    #: Per-role authorization grants (Phase 5b, PGW-045). When set, discovery is
+    #: filtered per role and non-catalog queries are enforced. None = no authz.
+    authz_grants: object = None
     #: Catalog model consumed by catalog.py: contexts.get(role_id) -> CompilationContext,
     #: and schema_build_cache = {"column_types": {...}, "tables": [], "domains": []}.
     #: Populated from Calcite metadata (Phase 2); None until then.

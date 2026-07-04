@@ -261,10 +261,18 @@ granted tables in discovery **and** is denied on direct access to a non-granted 
 > pluggable `AuthProvider`, SCRAM-SHA-256 verifiers at rest (PBKDF2, stdlib — no plaintext, no new
 > deps), a JSON `AccountStore`, a `pgwire-calcite-users add/rm/list` CLI, and wire integration
 > (trust connects with no challenge; local verifies the cleartext password against the stored
-> verifier). 7 tests + end-to-end accept/reject over the wire. Closes PGW-042 and the at-rest half of
-> PGW-043. **Remaining:** the full SASL **SCRAM wire exchange** (vs. today's cleartext-verify),
-> **OIDC/Firebase token** verification (PGW-044 — needs a JWKS/RSA crypto dependency), and **per-role
-> authorization** (PGW-045 — catalog visibility filtering + query-time enforcement, hooks into Phase 2).
+> verifier). 7 tests + end-to-end accept/reject over the wire.
+>
+> **Phase 5b: DONE (all four, PGW-042/043/044/045).** Added since:
+> - **SASL SCRAM-SHA-256 wire exchange** (`scram.py`, RFC 5802/7677): the server drives the SASL
+>   messages from the at-rest verifier — no password on the wire. Proven with a self-contained SCRAM
+>   client AND a **real psql** SCRAM handshake (accept/reject). Completes PGW-043.
+> - **OIDC/Firebase token-as-password** (`auth.OidcProvider`, optional `[oidc]` extra = PyJWT+crypto):
+>   verifies an RS256 ID token's signature + iss/aud/exp against a PEM/JWKS/jwks_url; issuer-generic.
+>   6 tests (valid + expired/wrong-aud/wrong-iss/bad-sig + over-the-wire). Closes PGW-044.
+> - **Per-role authorization** (`authz.py`): a per-role *filtered* CompilationContext feeds the catalog
+>   (discovery shows only granted objects) and non-catalog queries are enforced on the same grants
+>   (out-of-grant → 42501) — both paths by construction. 5 tests. Closes PGW-045.
 
 ---
 

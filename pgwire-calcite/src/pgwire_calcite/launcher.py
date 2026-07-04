@@ -65,11 +65,15 @@ def serve(
     keyfile: str | None = None,
     backend=None,
     auth_provider=None,
+    authz_grants=None,
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking)."""
     server_mod.state = build_state(backend=backend, auth=auth, users=users)
     if auth_provider is not None:
         server_mod.state.auth_provider = auth_provider
+    # Set authz grants before catalog population so discovery is filtered per role.
+    if authz_grants is not None:
+        server_mod.state.authz_grants = authz_grants
     # Populate the catalog intercept from Calcite metadata (PGW-012) when the
     # backend exposes an embedded connection. StubBackend has none -> skipped.
     conn = getattr(backend, "connection", None)
@@ -135,9 +139,11 @@ def main(argv: list | None = None) -> int:
         metavar="NAME=VALUE",
         help="extra Calcite JDBC connection property (repeatable)",
     )
-    parser.add_argument("--auth", choices=["none", "simple", "trust", "local"], default="none")
     parser.add_argument(
-        "--auth-store", default=None, help="accounts JSON path for --auth local (Phase 5b)"
+        "--auth", choices=["none", "simple", "trust", "local", "scram"], default="none"
+    )
+    parser.add_argument(
+        "--auth-store", default=None, help="accounts JSON path for --auth local/scram (Phase 5b)"
     )
     parser.add_argument(
         "--user",
@@ -172,10 +178,16 @@ def main(argv: list | None = None) -> int:
     jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
     backend = build_backend(args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child)
     auth_provider = None
-    if args.auth in ("trust", "local"):
-        from pgwire_calcite.auth import build_provider
+    if args.auth in ("trust", "local", "scram"):
+        from pgwire_calcite.auth import AccountStore, LocalAccountsProvider, TrustProvider
 
-        auth_provider = build_provider(args.auth, args.auth_store)
+        if args.auth == "trust":
+            auth_provider = TrustProvider()
+        else:
+            if not args.auth_store:
+                parser.error(f"--auth {args.auth} requires --auth-store")
+            store = AccountStore(args.auth_store)
+            auth_provider = LocalAccountsProvider(store, scram_wire=(args.auth == "scram"))
     srv = serve(
         host=args.host,
         port=args.port,

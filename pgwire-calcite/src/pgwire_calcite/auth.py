@@ -111,6 +111,9 @@ class AccountStore:
         v = self._accounts.get(username)
         return bool(v and v.verify(password))
 
+    def get_verifier(self, username: str) -> Optional[ScramVerifier]:
+        return self._accounts.get(username)
+
 
 class AuthProvider:
     """Contract: authenticate a (username, password) -> role_id, or None."""
@@ -123,6 +126,11 @@ class AuthProvider:
     @property
     def requires_password(self) -> bool:
         return True
+
+    @property
+    def wire_mechanism(self) -> Optional[str]:
+        """Wire auth mechanism: None (trust), 'cleartext', or 'SCRAM-SHA-256'."""
+        return "cleartext"
 
 
 class TrustProvider(AuthProvider):
@@ -138,24 +146,109 @@ class TrustProvider(AuthProvider):
     def requires_password(self) -> bool:
         return False
 
+    @property
+    def wire_mechanism(self) -> Optional[str]:
+        return None
+
 
 class LocalAccountsProvider(AuthProvider):
-    """Persisted accounts verified against SCRAM-SHA-256 verifiers at rest."""
+    """Persisted accounts verified against SCRAM-SHA-256 verifiers at rest.
+
+    ``scram_wire=True`` selects the full SASL SCRAM-SHA-256 wire exchange (no
+    password ever on the wire); otherwise the client sends the cleartext password
+    (over TLS/localhost) and it is verified against the stored verifier.
+    """
 
     name = "local"
 
-    def __init__(self, store: AccountStore) -> None:
+    def __init__(self, store: AccountStore, scram_wire: bool = False) -> None:
         self._store = store
+        self._scram_wire = scram_wire
 
     def authenticate(self, username: str, password: str) -> Optional[str]:
         return username if self._store.verify(username, password) else None
 
+    def get_verifier(self, username: str):
+        return self._store.get_verifier(username)
 
-def build_provider(kind: str, store_path: Optional[str] = None) -> AuthProvider:
+    @property
+    def wire_mechanism(self) -> Optional[str]:
+        return "SCRAM-SHA-256" if self._scram_wire else "cleartext"
+
+
+class OidcProvider(AuthProvider):
+    """Token-as-password: the client sends an OIDC ID token (JWT) as the password;
+    we verify signature + iss/aud/exp against the issuer's key (PGW-044).
+
+    Issuer-generic (Firebase/Auth0/Google/Entra): configure ``issuer`` + ``audience``
+    and a key source — a static PEM ``public_key``, a static ``jwks`` dict, or a
+    ``jwks_url`` (fetched + cached). The authenticated role is the ``username_claim``
+    (default ``sub``). JWT libs are imported lazily so airgap builds without OIDC
+    still load.
+    """
+
+    name = "oidc"
+
+    def __init__(
+        self,
+        issuer: str,
+        audience: str,
+        public_key: Optional[str] = None,
+        jwks: Optional[dict] = None,
+        jwks_url: Optional[str] = None,
+        username_claim: str = "sub",
+        algorithms=("RS256",),
+    ) -> None:
+        self._issuer = issuer
+        self._audience = audience
+        self._public_key = public_key
+        self._jwks = jwks
+        self._jwks_url = jwks_url
+        self._username_claim = username_claim
+        self._algorithms = list(algorithms)
+        self._jwks_client = None
+
+    def _key_for(self, token: str):
+        import jwt
+
+        if self._public_key is not None:
+            return self._public_key
+        if self._jwks is not None:
+            kid = jwt.get_unverified_header(token).get("kid")
+            keys = self._jwks.get("keys", [])
+            for k in keys:
+                if k.get("kid") == kid or len(keys) == 1:
+                    return jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(k))
+            raise ValueError("no matching JWKS key for token kid")
+        if self._jwks_url is not None:
+            if self._jwks_client is None:
+                self._jwks_client = jwt.PyJWKClient(self._jwks_url)
+            return self._jwks_client.get_signing_key_from_jwt(token).key
+        raise ValueError("OidcProvider needs a public_key, jwks, or jwks_url")
+
+    def authenticate(self, username: str, password: str) -> Optional[str]:
+        import jwt
+
+        try:
+            claims = jwt.decode(
+                password,
+                self._key_for(password),
+                algorithms=self._algorithms,
+                audience=self._audience,
+                issuer=self._issuer,
+            )
+        except Exception:
+            return None
+        return str(claims.get(self._username_claim) or username or "")
+
+
+def build_provider(kind: str, store_path: Optional[str] = None, **kwargs) -> AuthProvider:
     if kind == "trust" or kind == "none":
         return TrustProvider()
     if kind == "local":
         if not store_path:
             raise ValueError("--auth local requires an accounts store path")
         return LocalAccountsProvider(AccountStore(pathlib.Path(store_path)))
+    if kind == "oidc":
+        return OidcProvider(**kwargs)
     raise ValueError(f"unknown auth provider {kind!r}")

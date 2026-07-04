@@ -22,6 +22,11 @@ dev = [
     "pytest",
     "psycopg[binary]",
 ]
+# OIDC/Firebase token auth (Phase 5b, PGW-044). Optional so the base airgap
+# footprint doesn't carry the RSA crypto stack unless OIDC is enabled.
+oidc = [
+    "pyjwt[crypto]",
+]
 
 [project.scripts]
 pgwire-calcite = "pgwire_calcite.launcher:main"
