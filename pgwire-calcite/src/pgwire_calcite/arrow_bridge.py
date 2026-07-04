@@ -73,19 +73,20 @@ def _columns_from_metadata(rs) -> Tuple[List[str], List[str]]:
     return names, labels
 
 
-def stream_query(
+def stream_ipc_batches(
     conn,
     lock,
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
-) -> Tuple[List[str], List[str], Iterator[tuple]]:
-    """Execute ``sql`` and return (column_names, duckdb_labels, row_generator).
+) -> Tuple[List[str], List[str], Iterator[bytes]]:
+    """Execute ``sql``; return (column_names, duckdb_labels, ipc_batch_generator).
 
-    The generator holds ``lock`` and the JVM/Arrow resources for its lifetime and
-    releases them in ``finally`` (normal completion, early stop, or error).
+    Each yielded item is a self-contained Arrow IPC stream for one batch (schema +
+    one record batch). The generator holds ``lock`` and the JVM/Arrow resources for
+    its lifetime and releases them in ``finally`` (completion, early stop, error).
+    This is the shared core: the in-process rows path (``stream_query``) and the
+    Calcite-child socket bridge both consume it.
     """
-    import pyarrow as pa
-
     C = _ArrowClasses.get()
     lock.acquire()
     acquired = True
@@ -107,26 +108,20 @@ def stream_query(
         )
         iterator = C["JdbcToArrow"].sqlToArrowVectorIterator(rs, config)
     except BaseException:
-        # Failed before streaming started — clean up and release the lock now.
         _cleanup(stmt, allocator)
         if acquired:
             lock.release()
         raise
 
-    def _row_gen() -> Iterator[tuple]:
+    def _ipc_gen() -> Iterator[bytes]:
         nonlocal acquired
         try:
             while bool(iterator.hasNext()):
                 root = iterator.next()
                 try:
-                    ipc = _root_to_ipc_bytes(C, root)
+                    yield _root_to_ipc_bytes(C, root)
                 finally:
                     root.close()  # release this batch's off-heap buffers promptly
-                table = pa.ipc.open_stream(ipc).read_all()
-                # Column-major -> row tuples, one batch in memory at a time.
-                pydata = [col.to_pylist() for col in table.columns]
-                for r in range(table.num_rows):
-                    yield tuple(col[r] for col in pydata)
         finally:
             try:
                 iterator.close()
@@ -137,7 +132,29 @@ def stream_query(
                 acquired = False
                 lock.release()
 
-    return names, labels, _row_gen()
+    return names, labels, _ipc_gen()
+
+
+def rows_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[tuple]:
+    """Decode a stream of per-batch Arrow IPC bytes into Python row tuples."""
+    import pyarrow as pa
+
+    for ipc in ipc_batches:
+        table = pa.ipc.open_stream(ipc).read_all()
+        pydata = [col.to_pylist() for col in table.columns]
+        for r in range(table.num_rows):
+            yield tuple(col[r] for col in pydata)
+
+
+def stream_query(
+    conn,
+    lock,
+    sql: str,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> Tuple[List[str], List[str], Iterator[tuple]]:
+    """Execute ``sql`` and return (column_names, duckdb_labels, row_generator)."""
+    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size)
+    return names, labels, rows_from_ipc(ipc)
 
 
 def _root_to_ipc_bytes(C, root) -> bytes:

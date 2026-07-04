@@ -82,12 +82,15 @@ def serve(
     return srv
 
 
-def build_backend(kind: str, model: str | None, jdbc: dict | None = None):
-    """Construct the execution backend. 'stub' (Phase 0) or 'calcite' (Phase 1).
+def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcite_child: str | None = None):
+    """Construct the execution backend.
 
-    ``jdbc`` mirrors the Calcite/Avatica JDBC connection properties (lex, fun,
-    schema, and arbitrary extra props) so the CLI surface matches what a driver
-    user already knows.
+    - 'stub'    (Phase 0) fixed responses;
+    - 'calcite' (Phase 1) in-process JPype;
+    - 'bridge'  (Phase 5) talk to a separate Calcite JVM child over the socket
+                bridge (``calcite_child`` = "host:port").
+
+    ``jdbc`` mirrors the Calcite/Avatica JDBC connection properties.
     """
     if kind == "stub":
         return StubBackend()
@@ -102,6 +105,11 @@ def build_backend(kind: str, model: str | None, jdbc: dict | None = None):
             default_schema=jdbc.get("schema"),
             extra_props=jdbc.get("extra_props") or {},
         )
+    if kind == "bridge":
+        from pgwire_calcite.sidecar import BridgeBackend
+
+        host, _, port = (calcite_child or "127.0.0.1:5533").partition(":")
+        return BridgeBackend(host=host or "127.0.0.1", port=int(port or 5533))
     raise ValueError(f"unknown backend {kind!r}")
 
 
@@ -109,8 +117,13 @@ def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pgwire-calcite", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5433)
-    parser.add_argument("--backend", choices=["stub", "calcite"], default="stub")
+    parser.add_argument("--backend", choices=["stub", "calcite", "bridge"], default="stub")
     parser.add_argument("--model", default=None, help="Calcite model JSON path (--backend calcite)")
+    parser.add_argument(
+        "--calcite-child",
+        default="127.0.0.1:5533",
+        help="host:port of the Calcite JVM child (--backend bridge)",
+    )
     # JDBC-mirroring options (same surface as the Calcite/Avatica driver).
     parser.add_argument("--lex", default="ORACLE", help="Calcite lexer policy (JDBC 'lex')")
     parser.add_argument("--fun", default="standard", help="Calcite function library (JDBC 'fun')")
@@ -157,7 +170,7 @@ def main(argv: list | None = None) -> int:
         name, value = spec.split("=", 1)
         extra_props[name] = value
     jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
-    backend = build_backend(args.backend, args.model, jdbc=jdbc)
+    backend = build_backend(args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child)
     auth_provider = None
     if args.auth in ("trust", "local"):
         from pgwire_calcite.auth import build_provider

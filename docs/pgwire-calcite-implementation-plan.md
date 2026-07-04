@@ -219,6 +219,17 @@ zero leaked fds/queries over N hours.
 > distinct, larger rearchitecture of the (working, verified) in-process execution path; the supervisor
 > is built to drive it. PGW-039 (per-request native-memory release) is satisfied on the Arrow path
 > (Phase 3) and the catalog's per-request DuckDB close (Phase 2).
+>
+> **Topology: DONE.** `sidecar.py` + `calcite_child.py` implement the two-process split: Calcite runs
+> in a **separate recyclable child** (`python -m pgwire_calcite.calcite_child`, its own JVM/heap),
+> serving an Arrow-IPC socket bridge; the pgwire process uses `BridgeBackend` (transpiles PG→Calcite
+> on the Python side per D4, so PG-only rejects happen before the child; streams Arrow IPC back).
+> `BridgeBackend` dials per query, so recycling Calcite fails only in-flight — idle sessions survive
+> and the next query reconnects to the fresh child (**PGW-037**); `ready()` readiness-gates on the
+> socket. Verified by 9 tests incl. a large streamed result over the socket, reconnect-after-recycle,
+> and a **real two-process** spawn (child in its own JVM). Closes the topology half of PGW-033 + PGW-037.
+> **Follow-on:** catalog population over the bridge (the child would proxy JDBC metadata; the
+> in-process backend already does PGW-012) — a protocol extension, not a blocker for query execution.
 
 ---
 
