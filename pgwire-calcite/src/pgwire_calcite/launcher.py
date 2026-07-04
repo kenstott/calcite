@@ -67,6 +67,13 @@ def serve(
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking)."""
     server_mod.state = build_state(backend=backend, auth=auth, users=users)
+    # Populate the catalog intercept from Calcite metadata (PGW-012) when the
+    # backend exposes an embedded connection. StubBackend has none -> skipped.
+    conn = getattr(backend, "connection", None)
+    if conn is not None:
+        from pgwire_calcite.catalog_populate import populate_state
+
+        populate_state(conn, server_mod.state)
     ssl_ctx = _build_ssl_ctx(certfile, keyfile)
     srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx)
     return srv

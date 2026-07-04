@@ -18,31 +18,15 @@ resolved (never silently passes).
 
 from __future__ import annotations
 
-import pathlib
 import time
 
 import pytest
 
 from pgwire_calcite import launcher
-from pgwire_calcite.classpath import ClasspathError, resolve_classpath
 
 from test_phase0_wire import MiniPgClient, _free_port
 
-FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
-MODEL = str(FIXTURES / "file-model.json")
-
-
-@pytest.fixture(scope="session")
-def calcite_backend():
-    try:
-        resolve_classpath()
-    except ClasspathError as exc:
-        pytest.skip(f"Calcite classpath unavailable: {exc}")
-    from pgwire_calcite.calcite_backend import CalciteBackend
-
-    backend = CalciteBackend(model_path=MODEL, jvm_args=["-Xmx1g"])
-    yield backend
-    backend.close()
+# calcite_backend fixture is provided by conftest.py (shared, session-scoped).
 
 
 def test_select_one(calcite_backend):

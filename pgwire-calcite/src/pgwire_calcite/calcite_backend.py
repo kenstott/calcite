@@ -101,6 +101,11 @@ class CalciteBackend:
         self._conn = DriverManager.getConnection("jdbc:calcite:", props)
         log.info("[CALCITE] connected (model=%s, lex=%s)", self._model_path, self._lex)
 
+    @property
+    def connection(self):
+        """The embedded java.sql.Connection (used by catalog_populate, Phase 2)."""
+        return self._conn
+
     def ready(self) -> bool:
         with self._lock:
             return self._conn is not None and not bool(self._conn.isClosed())

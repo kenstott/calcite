@@ -50,12 +50,17 @@ class ServerState:
     schema_registry: SchemaRegistry = field(default_factory=SchemaRegistry)
     auth_config: Dict[str, object] = field(default_factory=lambda: {"provider": "none"})
     auth_middleware_active: bool = False
-    #: Phase 0: the copied catalog intercept is not yet wired to Calcite metadata.
-    #: Flipped on in Phase 2 once populate-from-Calcite lands.
+    #: Flipped on by catalog_populate.populate_state once the intercept is wired
+    #: to Calcite metadata (Phase 2).
     catalog_enabled: bool = False
     #: role_id -> plaintext password, for the "simple" cleartext provider.
     users: Dict[str, str] = field(default_factory=dict)
     roles: Dict[str, object] = field(default_factory=dict)
+    #: Catalog model consumed by catalog.py: contexts.get(role_id) -> CompilationContext,
+    #: and schema_build_cache = {"column_types": {...}, "tables": [], "domains": []}.
+    #: Populated from Calcite metadata (Phase 2); None until then.
+    contexts: object = None
+    schema_build_cache: object = None
 
     def check_password(self, username: str, password: str) -> bool:
         """Cleartext-password check for provider='simple'. No silent default."""

@@ -1,0 +1,10 @@
+{
+  "client": "dbeaver",
+  "phase": "introspect",
+  "sql": "SELECT c.relname, a.attname, a.attnum, a.attnotnull FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid WHERE n.nspname = 'SALES' AND a.attnum > 0 ORDER BY c.relname, a.attnum",
+  "captured": true,
+  "expect": {
+    "answered_by": "catalog",
+    "min_phase": 2
+  }
+}

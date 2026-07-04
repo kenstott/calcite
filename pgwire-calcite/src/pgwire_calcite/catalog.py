@@ -1102,7 +1102,7 @@ def _parse_typeinfo_oids(sql: str) -> list[int] | None:
 
 
 def _handle_typeinfo_tree(oids: list[int]):
-    from provisa.executor.trino import QueryResult
+    from pgwire_calcite.types import QueryResult
 
     rows = []
     for oid in oids:
@@ -1137,7 +1137,7 @@ def _handle_typeinfo_tree(oids: list[int]):
 
 
 _KNOWN_SETTINGS = {
-    "server_version": "14.0.provisa",
+    "server_version": "14.0",
     "server_version_num": "140000",
     "server_encoding": "UTF8",
     "client_encoding": "UTF8",
@@ -1295,8 +1295,8 @@ class CatalogIndex:  # REQ-532
 
 def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-363
     """Build the CatalogIndex once. All populate functions read from it — nothing recomputes."""
-    from provisa.compiler.naming import domain_to_sql_name, apply_sql_name
-    from provisa.compiler.sql_gen import semantic_table_name
+    from pgwire_calcite.compiler.naming import domain_to_sql_name, apply_sql_name
+    from pgwire_calcite.compiler.sql_gen import semantic_table_name
 
     idx = CatalogIndex()
     if not ctx:
@@ -1320,7 +1320,7 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
         if tm.table_id in seen_table_ids:
             continue
         seen_table_ids.add(tm.table_id)
-        cat = "provisa"
+        cat = "calcite"
         raw_schema = tm.domain_id or tm.schema_name or "public"
         sch = domain_to_sql_name(raw_schema)
         tname = semantic_table_name(tm)
@@ -1357,7 +1357,7 @@ def _populate_is_schemata(db, idx: CatalogIndex) -> None:
     seen_schemas: set[tuple] = {(c, s) for c, s, *_ in idx.tables}
     if seen_schemas:
         db.executemany(
-            "INSERT INTO _is_schemata VALUES (?,?,'provisa',NULL,NULL,NULL,NULL)",
+            "INSERT INTO _is_schemata VALUES (?,?,'calcite',NULL,NULL,NULL,NULL)",
             list(seen_schemas),
         )
 
@@ -1396,7 +1396,7 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
         generation_expression VARCHAR, is_updatable VARCHAR)""")
     col_rows = []
     for toid, col_name, col_type, is_nullable, ordinal in idx.all_cols:
-        c, s, t = idx.toid_to_table.get(toid, ("provisa", "public", ""))
+        c, s, t = idx.toid_to_table.get(toid, ("calcite", "public", ""))
         pg_type = _trino_to_pg_name(col_type)
         null_str = "YES" if is_nullable else "NO"
         col_rows.append(
@@ -1600,7 +1600,7 @@ def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | Non
 def _populate_pg_description(
     db, idx: CatalogIndex, raw_tables: list, raw_domains: list | None = None
 ) -> None:
-    from provisa.compiler.naming import domain_to_sql_name
+    from pgwire_calcite.compiler.naming import domain_to_sql_name
 
     tid_desc: dict[int, str] = {}
     tid_col_desc: dict[int, dict[str, str]] = {}
@@ -2089,14 +2089,14 @@ def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
         datconnlimit INTEGER, datfrozenxid INTEGER, datminmxid INTEGER,
         dattablespace INTEGER, datcollate VARCHAR, datctype VARCHAR, datacl VARCHAR)""")
     db.execute(
-        "INSERT INTO _pg_database VALUES (16384,'provisa',10,6,'c',FALSE,TRUE,-1,726,1,1663,'en_US.UTF-8','en_US.UTF-8',NULL)"
+        "INSERT INTO _pg_database VALUES (16384,'calcite',10,6,'c',FALSE,TRUE,-1,726,1,1663,'en_US.UTF-8','en_US.UTF-8',NULL)"
     )
 
 
 _PG_SETTINGS_ROWS: list[tuple] = [
     (
         "server_version",
-        "14.0.provisa",
+        "14.0",
         None,
         "Preset Options",
         "Shows the server version.",
@@ -2107,8 +2107,8 @@ _PG_SETTINGS_ROWS: list[tuple] = [
         None,
         None,
         None,
-        "14.0.provisa",
-        "14.0.provisa",
+        "14.0",
+        "14.0",
         None,
         None,
         False,
@@ -2307,7 +2307,7 @@ def _populate_pg_tables_and_am(db, idx: CatalogIndex) -> None:
         hastriggers BOOLEAN, rowsecurity BOOLEAN)""")
     if idx.tables:
         db.executemany(
-            "INSERT INTO _pg_tables VALUES (?,?,'provisa',NULL,FALSE,FALSE,FALSE,FALSE)",
+            "INSERT INTO _pg_tables VALUES (?,?,'calcite',NULL,FALSE,FALSE,FALSE,FALSE)",
             [(row[1], row[2]) for row in idx.tables],
         )
     db.execute("""CREATE TABLE _pg_am (
@@ -2331,7 +2331,7 @@ def _build_pk_constraint_rows(
     idx: CatalogIndex,
     con_oid_start: int,
 ) -> tuple[list[tuple], int]:
-    from provisa.compiler.sql_gen import semantic_table_name
+    from pgwire_calcite.compiler.sql_gen import semantic_table_name
 
     rows: list[tuple] = []
     con_oid = con_oid_start
@@ -2386,7 +2386,7 @@ def _build_fk_constraint_rows(
     idx: CatalogIndex,
     con_oid_start: int,
 ) -> tuple[list[tuple], int]:
-    from provisa.compiler.sql_gen import semantic_table_name
+    from pgwire_calcite.compiler.sql_gen import semantic_table_name
 
     rows: list[tuple] = []
     con_oid = con_oid_start
@@ -2414,7 +2414,7 @@ def _build_fk_constraint_rows(
             or jm.source_expr is not None
             or jm.source_column.startswith("__")
         )
-        from provisa.compiler.naming import apply_sql_name
+        from pgwire_calcite.compiler.naming import apply_sql_name
 
         src_col_sql = apply_sql_name(jm.source_column)
         tgt_col_sql = apply_sql_name(jm.target_column)
@@ -2507,12 +2507,12 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         conns_oid_v: int = con_row[2]
         contype_v: str = con_row[3]
         conrelid_v: int = con_row[7]
-        c_v, c_sch_v, c_tname_v = idx.toid_to_table.get(conrelid_v, ("provisa", "public", ""))
+        c_v, c_sch_v, c_tname_v = idx.toid_to_table.get(conrelid_v, ("calcite", "public", ""))
         con_schema_v = oid_to_ns.get(conns_oid_v, "public")
         ctype_str = "PRIMARY KEY" if contype_v == "p" else "FOREIGN KEY"
         is_tc_rows.append(
             (
-                "provisa",
+                "calcite",
                 con_schema_v,
                 conname_v,
                 c_v,
@@ -2532,7 +2532,7 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
             if col_name_v:
                 is_kcu_rows.append(
                     (
-                        "provisa",
+                        "calcite",
                         con_schema_v,
                         conname_v,
                         c_v,
@@ -2717,7 +2717,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                     base = base.where("nspname NOT IN ('pg_catalog', 'information_schema')")
                 return exp.Subquery(this=base)
             if "pg_get_userbyid" in fn or "pg_get_role_name" in fn:
-                return exp.Literal.string("provisa")
+                return exp.Literal.string("calcite")
             if fn.startswith("pg_get_") or "pg_tablespace_location" in fn:
                 return exp.null()
             if "pg_encoding_to_char" in fn:
@@ -2805,7 +2805,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if fn in ("current_user", "session_user"):
                 return exp.Literal.string(role_id)
             if fn in ("current_database",):
-                return exp.Literal.string("provisa")
+                return exp.Literal.string("calcite")
             if fn == "version":
                 return exp.Literal.string("PostgreSQL 14.0 on Provisa")
             if "set_config" in fn:
@@ -2817,7 +2817,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
         if type(node).__name__ == "CurrentUser":
             return exp.Literal.string(role_id)
         if type(node).__name__ == "CurrentDatabase":
-            return exp.Literal.string("provisa")
+            return exp.Literal.string("calcite")
         if type(node).__name__ == "CurrentSchema":
             return exp.Literal.string("public")
         if isinstance(node, exp.Dot):
@@ -2911,7 +2911,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
 
 def _handle_show(sql: str):
     """Answer SHOW commands without DuckDB."""
-    from provisa.executor.trino import QueryResult
+    from pgwire_calcite.types import QueryResult
 
     normalized = sql.strip().rstrip(";")
     if re.match(r"^\s*SHOW\s+TRANSACTION\s+ISOLATION\s+LEVEL\s*$", normalized, re.IGNORECASE):
@@ -2928,13 +2928,13 @@ def _handle_show(sql: str):
 
 
 def _handle_scalar(sql: str, role_id: str):
-    from provisa.executor.trino import QueryResult
+    from pgwire_calcite.types import QueryResult
 
     s = sql.strip().lower()
     if "current_user" in s or "session_user" in s:
         return QueryResult(rows=[(role_id,)], column_names=["current_user"])
     if "current_database" in s:
-        return QueryResult(rows=[("provisa",)], column_names=["current_database"])
+        return QueryResult(rows=[("calcite",)], column_names=["current_database"])
     if "version()" in s:
         return QueryResult(rows=[("PostgreSQL 14.0 on Provisa",)], column_names=["version"])
     if "current_schema()" in s:
@@ -2946,7 +2946,7 @@ def _handle_scalar(sql: str, role_id: str):
 
 def _handle_current_setting(sql: str):
     """Answer SELECT current_setting(...) [+ set_config(...)] without DuckDB."""
-    from provisa.executor.trino import QueryResult
+    from pgwire_calcite.types import QueryResult
 
     lower = sql.lower()
     if "current_setting" not in lower:
@@ -2977,7 +2977,7 @@ def _handle_current_setting(sql: str):
 
 def answer(sql: str, role_id: str, state):  # REQ-532
     """Return a synthetic QueryResult for intercepted catalog/SET/SHOW queries."""
-    from provisa.executor.trino import QueryResult
+    from pgwire_calcite.types import QueryResult
 
     stripped = sql.strip().rstrip(";")
 
@@ -2998,7 +2998,7 @@ def answer(sql: str, role_id: str, state):  # REQ-532
             return result
 
     if "set_config" in stripped.lower() and "current_setting" not in stripped.lower():
-        from provisa.executor.trino import QueryResult
+        from pgwire_calcite.types import QueryResult
 
         return QueryResult(rows=[("on",)], column_names=["set_config"], column_types=["VARCHAR"])
 
