@@ -8,3 +8,6 @@ uv.lock
 # scripts/print-calcite-classpath.gradle.
 calcite-classpath.txt
 .calcite-classpath.txt
+build/
+dist/
+*.whl

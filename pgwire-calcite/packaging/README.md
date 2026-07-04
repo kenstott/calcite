@@ -23,13 +23,28 @@ and therefore need **no OS code-signing** (PGW-030/031 revised):
 Signed double-clickable **DMG/MSI is an OPTIONAL add-on** for non-technical
 browser-download users only; its (credentialed) runbook is at the end.
 
-> **What this repo provides vs. what needs your machines.**
-> Buildable + committed here: the fail-loud airgap config (`airgap.py`, tested),
-> the cross-platform **wheelhouse builder** (`build-wheelhouse.sh`) + pinned
-> `requirements.lock`, the **tarball packer** (`pack.sh`), and the **Homebrew /
-> Scoop** manifests — none of which need signing credentials. Still requires your
-> hardware for the final assembly on each OS (bundling that OS's JRE/CPython) and,
-> ONLY if you also ship signed DMG/MSI, your Apple/Windows signing identities.
+## CI does the per-OS builds — no hardware of yours needed
+
+Per-OS assembly runs on **GitHub-hosted runners** (macOS + Windows + Linux), so
+you don't need those machines:
+
+- **`.github/workflows/pgwire-calcite-ci.yml`** — runs the full test suite (builds
+  the Calcite classpath + UDF jar, installs, `pytest`).
+- **`.github/workflows/pgwire-calcite-release.yml`** — builds the Calcite jars once
+  (pure Java, cross-platform), then a **matrix** job per OS/arch stages a
+  standalone CPython (`uv python`, = python-build-standalone), installs the app +
+  deps into a bundled venv (airgap-ready), jlinks a minimal JRE, assembles the
+  bundle, tars + sha256s it, uploads artifacts, and attaches them to the release.
+
+The only step still gated on secrets is the **optional** signed DMG/MSI (Apple /
+Windows signing identities) — not needed for the package-manager / `curl|sh`
+delivery above.
+
+> **What this repo provides vs. what needs credentials.**
+> Buildable + committed: fail-loud airgap config (`airgap.py`, tested), wheelhouse
+> builder (`build-wheelhouse.sh`) + pinned `requirements.lock`, tarball packer
+> (`pack.sh`), Homebrew/Scoop manifests, and the **GitHub Actions** that build the
+> per-OS bundles. Needs credentials ONLY for optional signed DMG/MSI.
 
 ## Layout of a shipped artifact (per OS/arch variant)
 

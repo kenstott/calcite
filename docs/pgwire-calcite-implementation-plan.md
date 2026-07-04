@@ -313,12 +313,17 @@ exercising rarely-used paths. macOS notarization + Windows signing verified on r
 > quarantined and need **no OS code-signing** (PGW-030/031 revised). Committed +
 > buildable here with no credentials: `airgap.py` (fail-loud no-autofetch, PGW-029,
 > tested), `build-wheelhouse.sh` + `requirements.lock` (PGW-027/028), `pack.sh`
-> (tarball), and the Homebrew formula + Scoop manifest (PGW-030). **Remaining (your
-> hardware, not credentials):** final per-OS assembly bundling that OS's JRE +
-> standalone CPython (build must run on each target OS), the offline-install CI
-> job on a disconnected runner, and a thin Java launcher shim if PGW-025's exact
-> "Java top-level" is desired (the supervision logic already exists in Python).
-> Signed DMG/MSI is now an explicit **optional** add-on only.
+> (tarball), and the Homebrew formula + Scoop manifest (PGW-030). **Per-OS builds
+> now run in CI (no hardware of yours needed):** `.github/workflows/pgwire-calcite-
+> release.yml` builds the Calcite jars once (pure Java) then a **matrix** job on
+> macOS/Windows/Linux GitHub runners stages standalone CPython (`uv python`),
+> installs into a bundled airgap-ready venv, jlinks a minimal JRE, assembles +
+> tars + sha256s the bundle, and attaches it to the release; `pgwire-calcite-ci.yml`
+> runs the suite. The offline-install *mechanism* was proven locally
+> (`--no-index --find-links` install + `SELECT 1`); the complete per-OS wheelhouse
+> install is verified by the release job. `build-wheelhouse.sh` fixed to use
+> `pip download` (uv has no `download`). **Only remaining:** an optional signed
+> DMG/MSI (needs your Apple/Windows identities) — not needed for the pkg-manager path.
 
 ## Phase 7 — Containment hardening, corpus gating & deferred Phase-2 items
 

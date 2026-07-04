@@ -1,0 +1,127 @@
+# pgwire-calcite release — build airgapped per-OS/arch bundles on GitHub-hosted
+# runners (macOS + Windows + Linux) and attach the tarballs to the release.
+# No signing needed (package-manager / curl|sh delivery is not quarantined); a
+# signed DMG/MSI path can be added later behind repo secrets (PGW-030/031).
+name: pgwire-calcite release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "release version (e.g. 0.1.0)"
+        required: true
+  release:
+    types: [created]
+
+env:
+  PY_VERSION: "3.12"
+
+jobs:
+  # Calcite jars are pure Java -> build ONCE and share across all OS variants.
+  jars:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build module jars + resolve runtime classpath
+        run: |
+          ./gradlew :file:jar :core:jar :linq4j:jar --no-daemon --console=plain -q
+          ./gradlew :file:pgwPrintCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          mkdir -p out/jars
+          # copy every real .jar on the runtime classpath
+          for j in $(tr ':' '\n' < /tmp/pgw-file-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # the file module's own output is a classes dir on the cp -> use its built jar
+          cp -n file/build/libs/*.jar out/jars/ 2>/dev/null || true
+          echo "bundled $(ls out/jars | wc -l) jars"
+      - name: Build vector/compat UDF jar
+        working-directory: pgwire-calcite
+        run: bash packaging/build-udf.sh
+      - run: cp pgwire-calcite/vendor/jars/*.jar out/jars/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calcite-jars
+          path: out/jars
+
+  bundle:
+    needs: jars
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, variant: linux-x86_64 }
+          - { os: macos-14, variant: macos-arm64 }
+          - { os: macos-13, variant: macos-x86_64 }
+          - { os: windows-latest, variant: windows-x86_64 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: calcite-jars
+          path: bundle/jars
+
+      - name: Stage standalone CPython + install deps (airgap-ready venv)
+        working-directory: pgwire-calcite
+        run: |
+          uv python install ${PY_VERSION}        # python-build-standalone
+          uv venv --python ${PY_VERSION} ../bundle/cpython
+          # install the app + deps into the bundled venv (batteries included; no runtime net)
+          uv pip install --python ../bundle/cpython ./vendor/buenavista ".[oidc]"
+
+      - name: Minimal bundled JRE (jlink)
+        run: |
+          "$JAVA_HOME/bin/jlink" --add-modules java.base,java.sql,java.naming,java.management,jdk.unsupported \
+            --strip-debug --no-header-files --no-man-pages --compress=2 --output bundle/jre
+
+      - name: Stage model + launcher
+        working-directory: pgwire-calcite
+        run: |
+          mkdir -p ../bundle/model ../bundle/bin
+          cp tests/fixtures/file-model.json ../bundle/model/ 2>/dev/null || true
+          cat > ../bundle/bin/pgwire-calcite <<'SH'
+          #!/usr/bin/env bash
+          HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+          export JAVA_HOME="$HERE/jre"
+          export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
+          ls "$HERE"/jars/*.jar | paste -sd: - > "$HERE/jars.classpath"
+          exec "$HERE/cpython/bin/python" -m pgwire_calcite.launcher "$@"
+          SH
+          chmod +x ../bundle/bin/pgwire-calcite
+
+      - name: Pack tarball + sha256
+        run: |
+          VER="${{ github.event.inputs.version || github.ref_name }}"
+          name="pgwire-calcite-${VER}-${{ matrix.variant }}"
+          mv bundle "$name"
+          tar -czf "${name}.tar.gz" "$name"
+          (command -v sha256sum && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
+            | awk '{print $1}' > "${name}.tar.gz.sha256"
+          echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.variant }}
+          path: |
+            pgwire-calcite-*-${{ matrix.variant }}.tar.gz
+            pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            pgwire-calcite-*-${{ matrix.variant }}.tar.gz
+            pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
