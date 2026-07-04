@@ -116,6 +116,13 @@ DuckDB / DBeaver / DataGrip / psql
 - **PGW-040** Calcite failures MUST be contained, not solved: process isolation + supervised restart (PGW-033/34), the Arrow bridge bounding blast radius, and the sqlglot dialect firewall (PGW-016/17) keeping client discovery insulated from Calcite's dialect internals.
 - **PGW-041** A **pinned Calcite version** MUST be maintained together with a **regression corpus of the actual query/introspection patterns** the target clients (DuckDB/DBeaver/DataGrip) emit. Calcite upgrades are gated on that corpus — community fixes are adopted on our schedule, verified against our paths, not adopted blindly.
 
+### 4.8 Authentication & authorization (added post-planning; scheduled Phase 5b)
+The server binds localhost, so **trust** remains the correct single-user default; the providers below are opt-in via `--auth` and compose behind ONE pluggable provider interface.
+- **PGW-042** Auth MUST be a **pluggable provider interface** carried on the server state, selected at launch (`trust` | `local` | `oidc`). `trust` (localhost, no password) is the default. This supersedes provisa's fixed trust/simple wiring while keeping it as the `trust`/cleartext baseline (PGW-007).
+- **PGW-043** A **local-accounts** provider MUST support persisted user accounts with **SCRAM-SHA-256** verifiers at rest (no cleartext password stored or required on the wire, secure without TLS), plus a CLI to add/remove/list users. SCRAM-SHA-256 MUST be offered as a wire auth mechanism (all target clients support it).
+- **PGW-044** An **external-token** provider MUST accept an **OIDC ID token (JWT) presented as the password** and verify it against the issuer's JWKS (signature, `exp`, `aud`, `iss`). It MUST be issuer-generic (Firebase, Auth0, Google, Entra, …) via configured issuer URL + audience; Firebase is one such issuer, not a bespoke integration.
+- **PGW-045** **Per-role authorization** MUST map an authenticated account to Calcite **schema/table visibility**: the catalog intercept (PGW-012) MUST filter discovery to the role's allowed objects, and query execution MUST reject access to objects outside the role's grant — enforced in both discovery and execution by construction (same spirit as PGW-016). AuthZ is larger than authN; it lands in Phase 5b with hooks into the Phase 2 catalog.
+
 ---
 
 ## 5. Reuse vs. net-new

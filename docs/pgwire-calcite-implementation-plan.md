@@ -191,6 +191,32 @@ zero leaked fds/queries over N hours.
 
 ---
 
+## Phase 5b — Authentication & authorization providers
+
+**Goal:** Replace the carried-over trust/cleartext auth with a pluggable provider interface:
+persisted local accounts (SCRAM-SHA-256), external OIDC/Firebase token auth, and per-role
+schema/table visibility. Off the DuckDB/query critical path, so it follows the supervisor phase.
+
+**Work**
+- Pluggable **auth provider interface** on the server state, selected by `--auth {trust,local,oidc}`;
+  `trust` stays the localhost default (PGW-042). Refactors Phase-0's `state`-carried trust/cleartext
+  into the formal interface.
+- **Local accounts** provider: persisted store with **SCRAM-SHA-256** verifiers at rest + wire-level
+  SCRAM-SHA-256 mechanism (secure without TLS) + `pgwire-calcite users add/rm/list` CLI (PGW-043).
+- **External-token** provider: OIDC ID token (JWT) as password, verified against issuer JWKS
+  (signature/`exp`/`aud`/`iss`); issuer-generic — Firebase/Auth0/Google/Entra (PGW-044).
+- **Per-role authorization** (PGW-045): map account → allowed Calcite schemas/tables; the Phase-2
+  catalog intercept filters discovery to the role's objects, and execution rejects out-of-grant
+  access — enforced in both discovery and execution (hooks back into Phase 2).
+
+**Exit gate:** local account authenticates via SCRAM (verified with psql/DBeaver, no TLS); an OIDC
+token authenticates and an expired/wrong-audience token is rejected; a restricted role sees only its
+granted tables in discovery **and** is denied on direct access to a non-granted table.
+
+**Closes:** PGW-042, PGW-043, PGW-044, PGW-045.
+
+---
+
 ## Phase 6 — Airgapped desktop packaging & delivery
 
 **Goal:** Ship as an **OS-agnostic Java desktop app** with fully airgapped first-run provisioning —
@@ -254,6 +280,7 @@ containment properties have explicit passing tests; `ctid` parallel scans verifi
 | 3 | PGW-019, 020, 022, 023 (portal), 024 |
 | 4 | PGW-005, 021 |
 | 5 | PGW-032, 033, 034, 035, 036, 037, 038, 039 |
+| 5b | PGW-042, 043, 044, 045 (auth/authz; added post-planning) |
 | 6 | PGW-025, 026, 027, 028, 029, 030, 031 |
 | 7 | PGW-040, 041 (ongoing gate), 023 (`ctid`) |
 
