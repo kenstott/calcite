@@ -71,18 +71,17 @@ class MiniPgClient:
             body += k.encode() + b"\x00" + v.encode() + b"\x00"
         body += b"\x00"
         self._send(b"", body)
-        # Expect AuthenticationCleartextPassword (code 3), then send password.
-        mtype, payload = self._recv_msg()
-        assert mtype == "R", f"expected AuthenticationRequest, got {mtype!r}"
-        (auth_code,) = struct.unpack("!i", payload[:4])
-        assert auth_code == 3, f"expected cleartext-password auth (3), got {auth_code}"
-        self._send(b"p", (password or "").encode() + b"\x00")
-        # Drain until ReadyForQuery, collecting ParameterStatus + auth result.
+        # Handle both auth flows: trust mode sends AuthenticationOk (code 0)
+        # directly; the 'simple' provider sends AuthenticationCleartextPassword
+        # (code 3), to which we reply with the password. Drain until ReadyForQuery.
         while True:
             mtype, payload = self._recv_msg()
             if mtype == "R":
                 (code,) = struct.unpack("!i", payload[:4])
-                assert code == 0, f"authentication failed, auth code {code}"
+                if code == 3:  # cleartext-password challenge
+                    self._send(b"p", (password or "").encode() + b"\x00")
+                elif code != 0:
+                    raise ConnectionError(f"unexpected auth code {code}")
             elif mtype == "S":
                 key, _, val = payload.partition(b"\x00")
                 self.params[key.decode()] = val.rstrip(b"\x00").decode()

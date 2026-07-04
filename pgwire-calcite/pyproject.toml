@@ -13,6 +13,7 @@ dependencies = [
     "sqlglot",
     "python-dateutil",
     "duckdb",
+    "jpype1",
 ]
 
 [project.optional-dependencies]

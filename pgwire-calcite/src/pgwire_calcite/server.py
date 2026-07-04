@@ -330,6 +330,16 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 "[PGWIRE] connect params: %s", {k: v for k, v in params.items() if k != "password"}
             )
             ctx = BVContext(conn.create_session(), None, params)
+            # Trust mode (auth='none'): authenticate immediately with no password
+            # challenge, so a plain `psql host=… user=… dbname=…` connects like
+            # any client. Only the 'simple' provider issues a cleartext challenge.
+            _st = state
+            _provider = (_st.auth_config or {}).get("provider", "none") if _st else "none"
+            if _provider == "none" or (_st is not None and not _st.auth_middleware_active):
+                ctx.session.role_id = params.get("user", "")  # type: ignore[attr-defined]
+                self.send_authentication_ok()
+                self.handle_post_auth(ctx)
+                return ctx
             self.send_auth_request(ctx)
             return ctx
         else:

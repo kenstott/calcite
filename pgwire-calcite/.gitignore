@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 uv.lock
+# Machine-specific Calcite runtime classpath (absolute paths); regenerate with
+# scripts/print-calcite-classpath.gradle.
+calcite-classpath.txt
+.calcite-classpath.txt

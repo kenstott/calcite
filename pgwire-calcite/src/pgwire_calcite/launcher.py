@@ -72,10 +72,46 @@ def serve(
     return srv
 
 
+def build_backend(kind: str, model: str | None, jdbc: dict | None = None):
+    """Construct the execution backend. 'stub' (Phase 0) or 'calcite' (Phase 1).
+
+    ``jdbc`` mirrors the Calcite/Avatica JDBC connection properties (lex, fun,
+    schema, and arbitrary extra props) so the CLI surface matches what a driver
+    user already knows.
+    """
+    if kind == "stub":
+        return StubBackend()
+    if kind == "calcite":
+        from pgwire_calcite.calcite_backend import CalciteBackend
+
+        jdbc = jdbc or {}
+        return CalciteBackend(
+            model_path=model,
+            lex=jdbc.get("lex", "ORACLE"),
+            fun=jdbc.get("fun", "standard"),
+            default_schema=jdbc.get("schema"),
+            extra_props=jdbc.get("extra_props") or {},
+        )
+    raise ValueError(f"unknown backend {kind!r}")
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pgwire-calcite", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5433)
+    parser.add_argument("--backend", choices=["stub", "calcite"], default="stub")
+    parser.add_argument("--model", default=None, help="Calcite model JSON path (--backend calcite)")
+    # JDBC-mirroring options (same surface as the Calcite/Avatica driver).
+    parser.add_argument("--lex", default="ORACLE", help="Calcite lexer policy (JDBC 'lex')")
+    parser.add_argument("--fun", default="standard", help="Calcite function library (JDBC 'fun')")
+    parser.add_argument("--schema", default=None, help="default schema (JDBC 'schema')")
+    parser.add_argument(
+        "--jdbc-prop",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="extra Calcite JDBC connection property (repeatable)",
+    )
     parser.add_argument("--auth", choices=["none", "simple"], default="none")
     parser.add_argument(
         "--user",
@@ -101,6 +137,14 @@ def main(argv: list | None = None) -> int:
         name, password = spec.split(":", 1)
         users[name] = password
 
+    extra_props: dict = {}
+    for spec in args.jdbc_prop:
+        if "=" not in spec:
+            parser.error(f"--jdbc-prop expects NAME=VALUE, got {spec!r}")
+        name, value = spec.split("=", 1)
+        extra_props[name] = value
+    jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
+    backend = build_backend(args.backend, args.model, jdbc=jdbc)
     srv = serve(
         host=args.host,
         port=args.port,
@@ -108,9 +152,11 @@ def main(argv: list | None = None) -> int:
         users=users,
         certfile=args.tls_cert,
         keyfile=args.tls_key,
+        backend=backend,
     )
     log.info(
-        "pgwire-calcite (Phase 0, StubBackend) listening on %s:%d — Ctrl-C to stop",
+        "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
+        args.backend,
         args.host,
         args.port,
     )

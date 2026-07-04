@@ -1,0 +1,13 @@
+allprojects {
+  tasks.register("pgwPrintCp") {
+    doLast {
+      def c = configurations.findByName("runtimeClasspath")
+      if (c != null) {
+        new File("/tmp/pgw-file-cp.txt").text = c.asPath
+        println "WROTE /tmp/pgw-file-cp.txt (" + c.files.size() + " entries)"
+      } else {
+        println "NO runtimeClasspath for " + project.path
+      }
+    }
+  }
+}
