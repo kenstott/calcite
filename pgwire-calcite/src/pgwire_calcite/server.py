@@ -115,13 +115,17 @@ _DUCKDB_TYPE_TO_BVTYPE: dict[str, BVType] = {
     "TIMESTAMP": BVType.TIMESTAMP,
     "DATE": BVType.DATE,
     "TIME": BVType.TIME,
+    # int4 (OID 23) must map to the 4-byte BVType so the binary encoding width
+    # matches the catalog's reported OID — required for binary COPY / DuckDB
+    # (PGW-016/021). SMALLINT/TINYINT also fit int4's 4-byte format safely.
+    "INTEGER": BVType.INTEGER,
+    "SMALLINT": BVType.INTEGER,
+    "TINYINT": BVType.INTEGER,
 }
+# Wider/unsigned integer types map to 8-byte int8.
 _DUCKDB_INT_TYPES = {
-    "INTEGER",
     "BIGINT",
     "HUGEINT",
-    "SMALLINT",
-    "TINYINT",
     "UBIGINT",
     "UINTEGER",
     "USMALLINT",
@@ -395,13 +399,23 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         if ba[0] == ord("P"):
             portal = ba[1 : len(ba) - 1].decode("utf-8")
             stmt_name = ctx.portals.get(portal, (None,))[0] if portal in ctx.portals else None
-            if stmt_name is not None and not ctx.stmts.get(stmt_name, ("x",))[0].strip():
+            portal_sql = ctx.stmts.get(stmt_name, ("",))[0] if stmt_name is not None else ""
+            if stmt_name is not None and not portal_sql.strip():
+                self.send_no_data()
+                return
+            # COPY TO STDOUT has no RowDescription — its rows arrive as CopyData at
+            # Execute. Describe must return NoData, not run the COPY as a query.
+            if portal_sql and _COPY_RE.match(portal_sql):
                 self.send_no_data()
                 return
         elif ba[0] == ord("S"):
             stmt = ba[1 : len(ba) - 1].decode("utf-8")
             sql = ctx.stmts[stmt][0]
             if not sql.strip():
+                self.send_paramter_description([])
+                self.send_no_data()
+                return
+            if _COPY_RE.match(sql):
                 self.send_paramter_description([])
                 self.send_no_data()
                 return
@@ -436,8 +450,25 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         portal_idx = ba.index(0)
         portal = ba[:portal_idx].decode("utf-8")
         stmt_name = ctx.portals.get(portal, (None,))[0] if portal in ctx.portals else None
-        if stmt_name is not None and not ctx.stmts.get(stmt_name, ("x",))[0].strip():
+        sql = ctx.stmts.get(stmt_name, ("",))[0] if stmt_name is not None else ""
+        if stmt_name is not None and not sql.strip():
             self.wfile.write(struct.pack("!ci", ServerResponse.EMPTY_QUERY_RESPONSE, 4))
+            return
+        # COPY ... TO STDOUT via the extended protocol (DuckDB's read path): the
+        # simple-query COPY branch is in handle_query; do the same here so the
+        # portal streams a CopyOut/CopyData/CopyDone response, not a RowDescription.
+        if sql and _COPY_RE.match(sql):
+            from pgwire_calcite.binary_copy import BinaryCopyHandler
+
+            try:
+                nrows = BinaryCopyHandler(self).handle(ctx, sql)  # type: ignore[arg-type]
+                self.send_command_complete(f"COPY {nrows}\x00")
+            except PermissionError as exc:
+                self._send_pg_error("ERROR", "42501", str(exc))
+                ctx.mark_error()
+            except Exception as exc:
+                self._send_pg_error("ERROR", "0A000", str(exc))
+                ctx.mark_error()
             return
         super().handle_execute(ctx, payload)
 
@@ -452,10 +483,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
 
         for stmt in stmts:
             if _COPY_RE.match(stmt):
-                from pgwire_calcite.copy_handler import CopyHandler
+                from pgwire_calcite.binary_copy import BinaryCopyHandler
 
                 try:
-                    nrows = CopyHandler(self).handle(ctx, stmt)  # type: ignore[arg-type]
+                    nrows = BinaryCopyHandler(self).handle(ctx, stmt)  # type: ignore[arg-type]
                     self.send_command_complete(f"COPY {nrows}\x00")
                 except PermissionError as exc:
                     self._send_pg_error("ERROR", "42501", str(exc))

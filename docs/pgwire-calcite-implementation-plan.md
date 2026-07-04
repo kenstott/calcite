@@ -152,6 +152,24 @@ Calcite table (numeric, text, temporal, null-bearing). Text-protocol fallback al
 
 **Closes:** PGW-005, PGW-021.
 
+> **Findings from the Phase-3 spike.** A first DuckDB `ATTACH` attempt surfaced that DuckDB's attach
+> handshake issues `pg_catalog` probes the intercept doesn't yet answer (e.g.
+> `TO_REGCLASS('duckdb_secrets')` → must return NULL). Each needs one catalog rewriter branch
+> (PGW-014 pattern), discovered by replaying DuckDB's attach traffic into the corpus. A GIL/thread
+> fault also appeared — but *only on the error path* when that probe fell through to Calcite and raised
+> mid-teardown; all other JVM calls on handler threads are stable across the suite. So supporting the
+> probe (and tearing down cleanly) resolves the storm; Phase 4 is **not** blocked on the Phase-5
+> sidecar (the sidecar remains the eventual isolation/robustness story, not a prerequisite here).
+>
+> **Status.** `to_regclass` intercepted; DuckDB `ATTACH` succeeds and shuts down clean. Binary COPY is
+> implemented (`binary_copy.py`) over both simple and extended protocols (DuckDB reads via extended),
+> reusing the Phase-3 Arrow stream; the emitted PGCOPY stream is asserted **spec-exact byte-for-byte**
+> (header/flags/tuples/trailer) and the int4 width/OID consistency bug (PGW-016: `INTEGER`→4-byte
+> `BVType.INTEGER`, was 8-byte) is fixed. **Open:** DuckDB's binary-COPY *reader* still rejects the
+> (spec-valid) stream with "invalid header" for a client-side reason not yet isolated — the end-to-end
+> DuckDB read is the user's manual validation; the server side is verified. Text-protocol read is the
+> documented fallback (PGW-005).
+
 ---
 
 ## Phase 5 — Supervisor, recyclable children & lifecycle decoupling

@@ -1213,6 +1213,13 @@ _SCALAR_NAMES = frozenset(
         "current_schema",
         "version",
         "pg_backend_pid",
+        # DuckDB's ATTACH handshake probes these regclass/regtype lookups; we own
+        # no such objects, so they are intercepted and answered NULL (PGW-014).
+        "to_regclass",
+        "to_regtype",
+        "to_regproc",
+        "to_regprocedure",
+        "to_regnamespace",
     }
 )
 
@@ -3018,6 +3025,13 @@ def answer(sql: str, role_id: str, state):  # REQ-532
         # pg_get_keywords() is a SRF — rewriter turns it into scalar NULL, breaking FROM clause.
         # DBeaver uses it only for SQL autocomplete keyword exclusion; return empty string.
         return QueryResult(rows=[(None,)], column_names=["string_agg"], column_types=["VARCHAR"])
+
+    # to_regclass/to_regtype/... : object-existence probes (DuckDB ATTACH handshake
+    # asks e.g. to_regclass('duckdb_secrets')). We own no such objects -> NULL, so
+    # the probe never falls through to Calcite (PGW-014). Bare SELECT to_reg*(...).
+    _reg_m = re.match(r"^\s*SELECT\s+(to_reg\w+)\s*\(", stripped, re.IGNORECASE)
+    if _reg_m:
+        return QueryResult(rows=[(None,)], column_names=[_reg_m.group(1).lower()], column_types=["VARCHAR"])
 
     rewritten = stripped
     db = None
