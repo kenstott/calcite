@@ -228,8 +228,11 @@ zero leaked fds/queries over N hours.
 > and the next query reconnects to the fresh child (**PGW-037**); `ready()` readiness-gates on the
 > socket. Verified by 9 tests incl. a large streamed result over the socket, reconnect-after-recycle,
 > and a **real two-process** spawn (child in its own JVM). Closes the topology half of PGW-033 + PGW-037.
-> **Follow-on:** catalog population over the bridge (the child would proxy JDBC metadata; the
-> in-process backend already does PGW-012) — a protocol extension, not a blocker for query execution.
+> **Catalog over the bridge: DONE.** The child answers a reserved `CATALOG_REQUEST` by serializing its
+> catalog model (build_context → JSON); `BridgeBackend.fetch_catalog` deserializes it and the launcher
+> installs it onto the state, so discovery (information_schema/pg_catalog) works in the sidecar
+> topology too — verified end-to-end (introspection over the bridge returns the file-adapter tables).
+> PGW-012 now holds on both the in-process and sidecar backends.
 
 ---
 

@@ -152,12 +152,12 @@ def build_context(conn) -> tuple:
     return ctx, column_types
 
 
-def populate_state(conn, state, role_id: str = "") -> None:
-    """Introspect Calcite and install the catalog model onto ``state`` (PGW-012).
+def install_catalog(state, ctx: CompilationContext, column_types) -> None:
+    """Install a catalog model (from JDBC or the bridge) onto ``state`` (PGW-012).
 
-    Enables the intercept (``state.catalog_enabled = True``) once populated.
+    Enables the intercept once populated. Leaves ``state.roles`` empty: the catalog
+    adds the connected role + standard PG roles; per-role modelling is authz (5b).
     """
-    ctx, column_types = build_context(conn)
     grants = getattr(state, "authz_grants", None)
     if grants is not None:
         # Per-role filtered discovery (PGW-045): each role sees only granted objects.
@@ -167,7 +167,70 @@ def populate_state(conn, state, role_id: str = "") -> None:
     else:
         state.contexts = SharedContexts(ctx)
     state.schema_build_cache = {"column_types": column_types, "tables": [], "domains": []}
-    # Leave state.roles empty: catalog._populate_pg_roles_and_database adds the
-    # connected role plus the standard PG system roles. Per-role role modelling
-    # arrives with authz (Phase 5b, PGW-045).
     state.catalog_enabled = True
+
+
+def populate_state(conn, state, role_id: str = "") -> None:
+    """Introspect Calcite via JDBC and install the catalog onto ``state`` (PGW-012)."""
+    ctx, column_types = build_context(conn)
+    install_catalog(state, ctx, column_types)
+
+
+# --- Bridge serialization (Phase 5 topology: catalog over the socket) ---------
+
+
+def serialize_catalog(ctx: CompilationContext, column_types) -> dict:
+    """Serialize the catalog model to JSON so the Calcite child can ship it to the
+    pgwire process over the bridge (the child owns the JDBC connection)."""
+
+    def tm(t):
+        return {
+            "table_id": t.table_id,
+            "catalog_name": t.catalog_name,
+            "schema_name": t.schema_name,
+            "table_name": t.table_name,
+            "type_name": t.type_name,
+            "domain_id": t.domain_id,
+        }
+
+    def cm(c):
+        return {"column_name": c.column_name, "data_type": c.data_type, "is_nullable": c.is_nullable}
+
+    return {
+        "tables": {tn: tm(t) for tn, t in ctx.tables.items()},
+        "pk_columns": {str(tid): cols for tid, cols in ctx.pk_columns.items()},
+        "joins": [
+            {
+                "src_type": k[0],
+                "field": k[1],
+                "source_column": j.source_column,
+                "target_column": j.target_column,
+                "target_type": j.target.type_name,
+                "cardinality": j.cardinality,
+            }
+            for k, j in ctx.joins.items()
+        ],
+        "column_types": {str(tid): [cm(c) for c in cols] for tid, cols in column_types.items()},
+    }
+
+
+def deserialize_catalog(d: dict):
+    """Rebuild (CompilationContext, column_types) from serialize_catalog()."""
+    tables = {tn: TableMeta(**t) for tn, t in d["tables"].items()}
+    pk = {int(tid): cols for tid, cols in d["pk_columns"].items()}
+    joins = {}
+    for j in d["joins"]:
+        target = tables.get(j["target_type"])
+        if target is None:
+            continue
+        joins[(j["src_type"], j["field"])] = JoinMeta(
+            source_column=j["source_column"],
+            target_column=j["target_column"],
+            target=target,
+            cardinality=j["cardinality"],
+        )
+    ctx = CompilationContext(tables=tables, pk_columns=pk, joins=joins)
+    column_types = {
+        int(tid): [ColumnMeta(**c) for c in cols] for tid, cols in d["column_types"].items()
+    }
+    return ctx, column_types

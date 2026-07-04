@@ -74,13 +74,22 @@ def serve(
     # Set authz grants before catalog population so discovery is filtered per role.
     if authz_grants is not None:
         server_mod.state.authz_grants = authz_grants
-    # Populate the catalog intercept from Calcite metadata (PGW-012) when the
-    # backend exposes an embedded connection. StubBackend has none -> skipped.
+    # Populate the catalog intercept from Calcite metadata (PGW-012). In-process
+    # backends expose a JDBC connection; the bridge backend fetches the catalog
+    # from the Calcite child over the socket. StubBackend has neither -> skipped.
     conn = getattr(backend, "connection", None)
     if conn is not None:
         from pgwire_calcite.catalog_populate import populate_state
 
         populate_state(conn, server_mod.state)
+    elif hasattr(backend, "fetch_catalog"):
+        from pgwire_calcite.catalog_populate import install_catalog
+
+        try:
+            ctx, column_types = backend.fetch_catalog()
+            install_catalog(server_mod.state, ctx, column_types)
+        except Exception as exc:  # child not ready / no metadata -> serve without catalog
+            log.warning("catalog over bridge unavailable: %s", exc)
     ssl_ctx = _build_ssl_ctx(certfile, keyfile)
     srv = server_mod.start_pgwire_server(host, port, ssl_ctx=ssl_ctx)
     return srv

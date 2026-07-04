@@ -154,6 +154,39 @@ def test_real_calcite_child_subprocess():
             proc.kill()
 
 
+def test_catalog_over_bridge(child):
+    """PGW-012 over the sidecar: the Calcite child ships its catalog model to the
+    pgwire process, so discovery works in the bridge topology."""
+    port, _ = child
+    backend = BridgeBackend(port=port)
+    # direct fetch of the serialized catalog
+    ctx, column_types = backend.fetch_catalog()
+    names = {tm.table_name for tm in ctx.tables.values()}
+    assert "emps" in names and "depts" in names
+    assert any(column_types.values())  # columns came across too
+
+    # end-to-end: serve pgwire over the bridge; launcher populates the catalog
+    wport = _free_port()
+    srv = launcher.serve(host="127.0.0.1", port=wport, auth="none", backend=backend)
+    import pgwire_calcite.server as server_mod
+
+    assert server_mod.state.catalog_enabled, "catalog should be populated over the bridge"
+    time.sleep(0.1)
+    try:
+        c = MiniPgClient("127.0.0.1", wport)
+        try:
+            r = c.query(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_name"
+            )
+            assert r["error"] is None, r["error"]
+            assert [row[0] for row in r["rows"]] == ["depts", "emps"]
+        finally:
+            c.close()
+    finally:
+        srv.shutdown()
+
+
 def test_pgwire_over_bridge_end_to_end(child):
     port, _ = child
     backend = BridgeBackend(port=port)

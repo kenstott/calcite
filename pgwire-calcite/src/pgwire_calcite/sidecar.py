@@ -50,6 +50,9 @@ log = logging.getLogger(__name__)
 _STATUS_OK = b"\x00"
 _STATUS_ERR = b"\x01"
 
+#: Reserved request that asks the child for its catalog model (not real SQL).
+CATALOG_REQUEST = "\x00__PGWIRE_CATALOG__"
+
 
 def _read_exact(reader, n: int) -> Optional[bytes]:
     buf = b""
@@ -92,6 +95,15 @@ class _ChildHandler(socketserver.StreamRequestHandler):
                 if sql == "":  # liveness ping — do not touch Calcite
                     self.wfile.write(_STATUS_OK)
                     write_frame(self.wfile, b'{"names": [], "labels": []}')
+                    write_frame(self.wfile, b"")
+                    self.wfile.flush()
+                    continue
+                if sql == CATALOG_REQUEST:  # ship the catalog model (PGW-012 over bridge)
+                    from pgwire_calcite.catalog_populate import build_context, serialize_catalog
+
+                    ctx, column_types = build_context(backend.connection)
+                    self.wfile.write(_STATUS_OK)
+                    write_frame(self.wfile, json.dumps(serialize_catalog(ctx, column_types)).encode())
                     write_frame(self.wfile, b"")
                     self.wfile.flush()
                     continue
@@ -181,6 +193,29 @@ class BridgeBackend:
             return status == _STATUS_OK
         except OSError:
             return False
+        finally:
+            sock.close()
+
+    def fetch_catalog(self):
+        """Ask the Calcite child for its catalog model (PGW-012 over the bridge).
+
+        Returns (CompilationContext, column_types) that the launcher installs onto
+        the server state so discovery works in the sidecar topology.
+        """
+        from pgwire_calcite.catalog_populate import deserialize_catalog
+
+        sock = self._connect_with_retry()
+        w, r = sock.makefile("wb"), sock.makefile("rb")
+        try:
+            write_frame(w, CATALOG_REQUEST.encode("utf-8"))
+            w.flush()
+            status = _read_exact(r, 1)
+            if status != _STATUS_OK:
+                msg = read_frame(r) or b""
+                raise RuntimeError("calcite child catalog error: " + msg.decode("utf-8", "replace"))
+            data = read_frame(r) or b"{}"
+            read_frame(r)  # terminator
+            return deserialize_catalog(json.loads(data.decode("utf-8")))
         finally:
             sock.close()
 
