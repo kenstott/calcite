@@ -53,9 +53,13 @@ class ServerState:
     #: Flipped on by catalog_populate.populate_state once the intercept is wired
     #: to Calcite metadata (Phase 2).
     catalog_enabled: bool = False
-    #: role_id -> plaintext password, for the "simple" cleartext provider.
+    #: role_id -> plaintext password, for the legacy "simple" cleartext provider.
     users: Dict[str, str] = field(default_factory=dict)
     roles: Dict[str, object] = field(default_factory=dict)
+    #: Pluggable auth provider (Phase 5b). When set it supersedes auth_config/users:
+    #: trust (no password) if provider.requires_password is False, else the provider
+    #: verifies the cleartext password (pgwire_calcite.auth.AuthProvider).
+    auth_provider: object = None
     #: Catalog model consumed by catalog.py: contexts.get(role_id) -> CompilationContext,
     #: and schema_build_cache = {"column_types": {...}, "tables": [], "domains": []}.
     #: Populated from Calcite metadata (Phase 2); None until then.

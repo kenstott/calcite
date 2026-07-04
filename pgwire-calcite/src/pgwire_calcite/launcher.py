@@ -64,9 +64,12 @@ def serve(
     certfile: str | None = None,
     keyfile: str | None = None,
     backend=None,
+    auth_provider=None,
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking)."""
     server_mod.state = build_state(backend=backend, auth=auth, users=users)
+    if auth_provider is not None:
+        server_mod.state.auth_provider = auth_provider
     # Populate the catalog intercept from Calcite metadata (PGW-012) when the
     # backend exposes an embedded connection. StubBackend has none -> skipped.
     conn = getattr(backend, "connection", None)
@@ -119,7 +122,10 @@ def main(argv: list | None = None) -> int:
         metavar="NAME=VALUE",
         help="extra Calcite JDBC connection property (repeatable)",
     )
-    parser.add_argument("--auth", choices=["none", "simple"], default="none")
+    parser.add_argument("--auth", choices=["none", "simple", "trust", "local"], default="none")
+    parser.add_argument(
+        "--auth-store", default=None, help="accounts JSON path for --auth local (Phase 5b)"
+    )
     parser.add_argument(
         "--user",
         action="append",
@@ -152,14 +158,20 @@ def main(argv: list | None = None) -> int:
         extra_props[name] = value
     jdbc = {"lex": args.lex, "fun": args.fun, "schema": args.schema, "extra_props": extra_props}
     backend = build_backend(args.backend, args.model, jdbc=jdbc)
+    auth_provider = None
+    if args.auth in ("trust", "local"):
+        from pgwire_calcite.auth import build_provider
+
+        auth_provider = build_provider(args.auth, args.auth_store)
     srv = serve(
         host=args.host,
         port=args.port,
-        auth=args.auth,
+        auth=args.auth if args.auth in ("none", "simple") else "none",
         users=users,
         certfile=args.tls_cert,
         keyfile=args.tls_key,
         backend=backend,
+        auth_provider=auth_provider,
     )
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
@@ -173,6 +185,33 @@ def main(argv: list | None = None) -> int:
     except KeyboardInterrupt:
         log.info("shutting down")
         srv.shutdown()
+    return 0
+
+
+def users_main(argv: list | None = None) -> int:
+    """`pgwire-calcite-users` — manage local accounts (SCRAM-SHA-256, Phase 5b)."""
+    from pgwire_calcite.auth import AccountStore
+
+    parser = argparse.ArgumentParser(prog="pgwire-calcite-users")
+    parser.add_argument("--store", required=True, help="accounts JSON path")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    p_add = sub.add_parser("add")
+    p_add.add_argument("username")
+    p_add.add_argument("password")
+    p_rm = sub.add_parser("rm")
+    p_rm.add_argument("username")
+    sub.add_parser("list")
+    args = parser.parse_args(argv)
+
+    store = AccountStore(args.store)
+    if args.cmd == "add":
+        store.add(args.username, args.password)
+        print(f"added {args.username}")
+    elif args.cmd == "rm":
+        print(f"removed {args.username}" if store.remove(args.username) else f"no such user {args.username}")
+    elif args.cmd == "list":
+        for u in store.list_users():
+            print(u)
     return 0
 
 

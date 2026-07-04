@@ -25,6 +25,7 @@ dev = [
 
 [project.scripts]
 pgwire-calcite = "pgwire_calcite.launcher:main"
+pgwire-calcite-users = "pgwire_calcite.launcher:users_main"
 
 [build-system]
 requires = ["setuptools>=68"]

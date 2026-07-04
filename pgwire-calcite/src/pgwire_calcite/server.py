@@ -336,13 +336,20 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 "[PGWIRE] connect params: %s", {k: v for k, v in params.items() if k != "password"}
             )
             ctx = BVContext(conn.create_session(), None, params)
-            # Trust mode (auth='none'): authenticate immediately with no password
-            # challenge, so a plain `psql host=… user=… dbname=…` connects like
-            # any client. Only the 'simple' provider issues a cleartext challenge.
+            # Trust mode: authenticate immediately with no password challenge, so a
+            # plain `psql host=… user=… dbname=…` connects like any client. A
+            # pluggable provider (Phase 5b) decides via requires_password; else the
+            # legacy auth_config/'simple' path applies.
             _st = state
-            _provider = (_st.auth_config or {}).get("provider", "none") if _st else "none"
-            if _provider == "none" or (_st is not None and not _st.auth_middleware_active):
-                ctx.session.role_id = params.get("user", "")  # type: ignore[attr-defined]
+            _prov = getattr(_st, "auth_provider", None) if _st else None
+            if _prov is not None:
+                trust = not _prov.requires_password
+            else:
+                _provider = (_st.auth_config or {}).get("provider", "none") if _st else "none"
+                trust = _provider == "none" or (_st is not None and not _st.auth_middleware_active)
+            if trust:
+                role = _prov.authenticate(params.get("user", ""), "") if _prov is not None else params.get("user", "")
+                ctx.session.role_id = role  # type: ignore[attr-defined]
                 self.send_authentication_ok()
                 self.handle_post_auth(ctx)
                 return ctx
@@ -365,6 +372,21 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         _state = _m.state
         if _state is None:
             self._send_pg_error("FATAL", "28P01", "Server state not initialized")
+            return
+
+        # Pluggable provider path (Phase 5b): the provider verifies the password
+        # (e.g. LocalAccountsProvider against SCRAM-SHA-256 verifiers at rest).
+        _prov = getattr(_state, "auth_provider", None)
+        if _prov is not None:
+            role = _prov.authenticate(username, password)
+            if role is None:
+                self._send_pg_error(
+                    "FATAL", "28P01", f'password authentication failed for user "{username}"'
+                )
+                return
+            ctx.session.role_id = role  # type: ignore[attr-defined]
+            self.send_authentication_ok()
+            self.handle_post_auth(ctx)
             return
 
         provider = (_state.auth_config or {}).get("provider", "none")

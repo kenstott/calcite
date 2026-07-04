@@ -246,6 +246,15 @@ granted tables in discovery **and** is denied on direct access to a non-granted 
 
 **Closes:** PGW-042, PGW-043, PGW-044, PGW-045.
 
+> **Status.** Provider interface + `trust` + **local accounts** are done and tested (`auth.py`): a
+> pluggable `AuthProvider`, SCRAM-SHA-256 verifiers at rest (PBKDF2, stdlib — no plaintext, no new
+> deps), a JSON `AccountStore`, a `pgwire-calcite-users add/rm/list` CLI, and wire integration
+> (trust connects with no challenge; local verifies the cleartext password against the stored
+> verifier). 7 tests + end-to-end accept/reject over the wire. Closes PGW-042 and the at-rest half of
+> PGW-043. **Remaining:** the full SASL **SCRAM wire exchange** (vs. today's cleartext-verify),
+> **OIDC/Firebase token** verification (PGW-044 — needs a JWKS/RSA crypto dependency), and **per-role
+> authorization** (PGW-045 — catalog visibility filtering + query-time enforcement, hooks into Phase 2).
+
 ---
 
 ## Phase 6 — Airgapped desktop packaging & delivery
