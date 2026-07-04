@@ -143,6 +143,12 @@ def build_context(conn) -> tuple:
                 cardinality="many-to-one",
             )
 
+    # PGW-012 canonical source: read keys/referential constraints from Calcite's
+    # Statistic API (adapter-agnostic — file TableConstraints, govdata YAML, etc.),
+    # in addition to JDBC metadata above. Defensive: any adapter that exposes no
+    # Statistic keys (e.g. the CSV file adapter) simply contributes nothing.
+    _enrich_keys_from_statistic(conn, ctx, by_qualified)
+
     log.info(
         "[CATALOG] populated %d tables, %d with PKs, %d FKs from Calcite metadata",
         len(ctx.tables),
@@ -150,6 +156,72 @@ def build_context(conn) -> tuple:
         len(ctx.joins),
     )
     return ctx, column_types
+
+
+def _enrich_keys_from_statistic(conn, ctx: CompilationContext, by_qualified) -> None:
+    """Add PKs/FKs from Calcite ``Statistic.getKeys()``/``getReferentialConstraints()``
+    (PGW-012). Fully guarded — unusable/absent statistics contribute nothing."""
+    import jpype
+
+    try:
+        cc = conn.unwrap(jpype.JClass("org.apache.calcite.jdbc.CalciteConnection"))
+        tf = cc.getTypeFactory()
+        root = cc.getRootSchema()
+    except Exception:
+        return
+
+    def _fields(table):
+        return [str(f) for f in table.getRowType(tf).getFieldNames()]
+
+    for schema_name in list(root.getSubSchemaNames()):
+        if str(schema_name).lower() in _SYSTEM_SCHEMAS:
+            continue
+        sub = root.getSubSchema(schema_name)
+        if sub is None:
+            continue
+        for table_name in list(sub.getTableNames()):
+            tm = by_qualified.get((str(schema_name), str(table_name)))
+            if tm is None:
+                continue
+            table = sub.getTable(table_name)
+            try:
+                stat = table.getStatistic()
+                fields = _fields(table)
+            except Exception:
+                continue
+            # Primary key: first unique key from getKeys().
+            try:
+                keys = stat.getKeys()
+            except Exception:
+                keys = None
+            if keys is not None and len(keys) > 0 and tm.table_id not in ctx.pk_columns:
+                try:
+                    cols = [fields[int(i)] for i in keys[0].toList()]
+                    if cols:
+                        ctx.pk_columns[tm.table_id] = cols
+                except Exception:
+                    pass
+            # Referential (foreign) constraints.
+            try:
+                refs = stat.getReferentialConstraints()
+            except Exception:
+                refs = None
+            for rc in list(refs) if refs else []:
+                try:
+                    tq = [str(x) for x in rc.getTargetQualifiedName()]
+                    tgt = by_qualified.get((tq[-2], tq[-1])) if len(tq) >= 2 else None
+                    if tgt is None:
+                        continue
+                    tfields = _fields(root.getSubSchema(tq[-2]).getTable(tq[-1]))
+                    for pair in list(rc.getColumnPairs()):
+                        sc = fields[int(pair.source)]
+                        tc = tfields[int(pair.target)]
+                        ctx.joins[(tm.type_name, sc)] = JoinMeta(
+                            source_column=sc, target_column=tc, target=tgt,
+                            cardinality="many-to-one",
+                        )
+                except Exception:
+                    continue
 
 
 def install_catalog(state, ctx: CompilationContext, column_types) -> None:

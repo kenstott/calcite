@@ -38,14 +38,18 @@ jobs:
           # the file module's own output is a classes dir on the cp -> use its built jar
           cp -n file/build/libs/*.jar out/jars/ 2>/dev/null || true
           echo "bundled $(ls out/jars | wc -l) jars"
-      - name: Build vector/compat UDF jar
+      - name: Build vector/compat UDF jar + Java launcher
         working-directory: pgwire-calcite
-        run: bash packaging/build-udf.sh
-      - run: cp pgwire-calcite/vendor/jars/*.jar out/jars/
+        run: |
+          bash packaging/build-udf.sh
+          bash packaging/build-launcher.sh
+      - run: |
+          cp pgwire-calcite/vendor/jars/*.jar out/jars/
+          cp pgwire-calcite/packaging/pgwire-launcher.jar out/
       - uses: actions/upload-artifact@v4
         with:
           name: calcite-jars
-          path: out/jars
+          path: out
 
   bundle:
     needs: jars
@@ -71,7 +75,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: calcite-jars
-          path: bundle/jars
+          path: bundle    # -> bundle/jars/*.jar and bundle/pgwire-launcher.jar
 
       - name: Stage standalone CPython + install deps (airgap-ready venv)
         working-directory: pgwire-calcite
@@ -91,13 +95,15 @@ jobs:
         run: |
           mkdir -p ../bundle/model ../bundle/bin
           cp tests/fixtures/file-model.json ../bundle/model/ 2>/dev/null || true
+          # Entry is the Java launcher (PGW-025), which starts the bundled CPython.
           cat > ../bundle/bin/pgwire-calcite <<'SH'
           #!/usr/bin/env bash
           HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-          export JAVA_HOME="$HERE/jre"
-          export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
           ls "$HERE"/jars/*.jar | paste -sd: - > "$HERE/jars.classpath"
-          exec "$HERE/cpython/bin/python" -m pgwire_calcite.launcher "$@"
+          export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
+          exec "$HERE/jre/bin/java" \
+            "-Dpgwire.python=$HERE/cpython/bin/python" \
+            -jar "$HERE/pgwire-launcher.jar" "$@"
           SH
           chmod +x ../bundle/bin/pgwire-calcite
 

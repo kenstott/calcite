@@ -77,6 +77,12 @@ class CalciteBackend:
 
     #: Required for Arrow off-heap memory on Java 17+ (arrow-jdbc / arrow-memory).
     _ARROW_ADD_OPENS = "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
+    #: Bound Calcite's planner/metadata caches (PGW-039) so long-running JVMs don't
+    #: grow unbounded. These have defaults, but we pin them explicitly.
+    _CACHE_BOUNDS = (
+        "-Dcalcite.metadata.handler.cache.maximum.size=1000",
+        "-Dcalcite.bindable.cache.maxSize=1000",
+    )
 
     def _start_jvm(self) -> None:
         import jpype
@@ -85,6 +91,10 @@ class CalciteBackend:
             args = list(self._jvm_args)
             if not any("java.base/java.nio" in a for a in args):
                 args.append(self._ARROW_ADD_OPENS)
+            for prop in self._CACHE_BOUNDS:
+                key = prop.split("=", 1)[0]
+                if not any(a.startswith(key) for a in args):
+                    args.append(prop)
             jpype.startJVM(*args, classpath=self._classpath, convertStrings=True)
             log.info("[CALCITE] JVM started with %d classpath entries", len(self._classpath))
 

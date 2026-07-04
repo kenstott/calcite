@@ -457,3 +457,32 @@ PGW-041 is established in Phase 0 and enforced as an ongoing gate in Phase 7. Ph
   query path is proven.
 - **Corpus (Phase 0) gates every later phase.** It is both the acceptance oracle for Phases 2–4 and
   the D1 drift-mitigation asset (shared probe/regression corpus, not shared code).
+
+## Audit remediation (requirements gap-closure)
+
+A full audit of the code/tests against PGW-001…050 surfaced one functional gap and several
+test-coverage gaps; all are now closed:
+
+- **PGW-006 / PGW-012 — keys → `pg_constraint` → ER diagrams (functional).** The catalog PK/FK
+  rendering (copied from provisa) had never been exercised *with keys*. Added `test_phase2_constraints`
+  driving a synthetic key-bearing catalog → verifies `pg_constraint` emits PK (`p`) rows and the FK
+  (`f`) row DBeaver/DataGrip read to draw a relationship line (`emps → depts`), and stays empty when
+  keyless (PGW-013). Also added PGW-012's canonical **`Statistic.getKeys()`/`getReferentialConstraints()`**
+  reading (`_enrich_keys_from_statistic`, unwraps `CalciteConnection`) so any adapter that populates
+  Statistic surfaces keys. (Empirically, the file *CSV* adapter exposes no Statistic keys even with
+  `tableConstraints`, so it correctly reports empty — an adapter limitation, not ours.)
+- **PGW-007 TLS** — `test_tls_connection` (self-signed cert, SSL handshake, `SELECT 1`).
+- **PGW-003 multi-statement simple query** — `test_multi_statement_simple_query` (`SELECT 1; SELECT 2`).
+- **PGW-002 / PGW-023 portal suspension** — `test_portal_suspension_row_limit` (`Execute` max_rows=3 on
+  a 10-row result → 3 rows + `PortalSuspended`).
+- **PGW-022 client disconnect** — `test_client_disconnect_mid_request_survives` (abrupt drop; server
+  still serves a fresh client).
+- **PGW-039 bounded caches** — Calcite metadata/bindable cache sizes pinned via JVM `-D` properties in
+  `CalciteBackend._start_jvm` (atop `-Xmx`, per-request DuckDB/Arrow release, and Phase-5 RSS recycle).
+- **PGW-025 top-level Java app** — `packaging/launcher/Launcher.java` (+ `build-launcher.sh` →
+  `pgwire-launcher.jar`): a thin Java entry that starts the bundled CPython launcher/supervisor;
+  wired into the release bundle. `test_java_launcher_starts_python` verifies `java -jar … --help`
+  execs the Python. Supervision stays in Python (one implementation).
+
+Only non-code items remain: the CI workflows must *run* on a `git push` (valid YAML, not yet executed
+on GitHub), and real DBeaver/DataGrip GUI validation is the maintainer's manual step (by design).

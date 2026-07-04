@@ -11,3 +11,5 @@ calcite-classpath.txt
 build/
 dist/
 *.whl
+classes/
+packaging/pgwire-launcher.jar

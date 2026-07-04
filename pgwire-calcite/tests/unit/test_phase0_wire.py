@@ -18,6 +18,7 @@ the test has no client-library dependency and exercises the wire bytes directly.
 from __future__ import annotations
 
 import socket
+import ssl
 import struct
 import threading
 import time
@@ -38,8 +39,20 @@ def _free_port() -> int:
 class MiniPgClient:
     """Minimal PostgreSQL v3 simple-query client (enough for Phase 0 assertions)."""
 
-    def __init__(self, host: str, port: int, user: str = "tester", password: str | None = None):
+    def __init__(
+        self, host: str, port: int, user: str = "tester", password: str | None = None,
+        use_ssl: bool = False,
+    ):
         self.sock = socket.create_connection((host, port), timeout=5)
+        if use_ssl:
+            # PostgreSQL SSLRequest: length 8, code 80877103; server replies 'S' to proceed.
+            self.sock.sendall(struct.pack("!ii", 8, 80877103))
+            if self.sock.recv(1) != b"S":
+                raise ConnectionError("server declined SSL")
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            self.sock = ctx.wrap_socket(self.sock, server_hostname=host)
         self.params: dict[str, str] = {}
         self._startup(user, password)
 
