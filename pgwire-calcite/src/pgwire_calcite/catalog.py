@@ -2594,7 +2594,10 @@ def _fetch_row_counts(ctx, idx: CatalogIndex, trino_conn) -> dict[int, float]:
 def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     import duckdb
 
+    from pgwire_calcite.airgap import configure_duckdb
+
     db = duckdb.connect(":memory:")
+    configure_duckdb(db)  # PGW-029: no extension autoinstall/autoload, fail loud
     db.execute("CREATE MACRO pg_backend_pid() AS 0")
     db.execute("CREATE MACRO age(x) AS 0")
     db.execute("CREATE MACRO quote_ident(x) AS '\"' || replace(x, '\"', '\"\"') || '\"'")
