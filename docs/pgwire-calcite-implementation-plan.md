@@ -270,6 +270,34 @@ containment properties have explicit passing tests; `ctid` parallel scans verifi
 
 ---
 
+## Phase 8 — Extension surfaces (optional, post-core)
+
+**Goal:** Present popular PostgreSQL **extension surfaces** so pgwire-calcite looks like a
+Postgres-with-superpowers to existing tooling — vector/semantic search, spatial, JSON — backed by
+Calcite functions/adapters or the file adapter's DuckDB engine. Reuses the Phase-1/2 machinery
+(transform layer + catalog + normalization); adds no new core.
+
+**Work**
+- **Pluggable surface mechanism** (PGW-046): each surface advertises in `pg_extension`, declares its
+  types/OIDs in normalize.py, and maps operators/functions in the transform layer to a Calcite
+  function, adapter, or the DuckDB engine — convert-or-reject-loudly, no faked capability.
+- **pgvector surface** (PGW-047): `vector` type + `<->`/`<=>`/`<#>` and `ORDER BY emb <-> $1`,
+  lowered to DuckDB array-distance; no index-acceleration claims.
+- **PostGIS subset** (PGW-048): `geometry`/`geography` + core `ST_*` mapped to Calcite spatial
+  (`fun=spatial`).
+- **JSON operators** (PGW-049): `->`/`->>`/`#>` → Calcite `JSON_VALUE`/`JSON_QUERY` (converts
+  Phase-1 rejects to support).
+- **Compatibility functions** (PGW-050): opt-in `pg_trgm`/`gen_random_uuid`/`pgcrypto` modules.
+
+**Exit gate:** with a surface enabled, its `pg_extension` row is discoverable; a representative query
+(`ORDER BY emb <-> $1` for pgvector; `ST_DWithin(...)` for PostGIS; `data->>'k'` for JSON) executes
+with correct results through the wire; a not-implemented operator in an enabled surface rejects
+loudly rather than mistranslating.
+
+**Closes:** PGW-046, PGW-047, PGW-048, PGW-049, PGW-050.
+
+---
+
 ## Requirement → phase coverage matrix
 
 | Phase | Requirements closed |
@@ -283,10 +311,12 @@ containment properties have explicit passing tests; `ctid` parallel scans verifi
 | 5b | PGW-042, 043, 044, 045 (auth/authz; added post-planning) |
 | 6 | PGW-025, 026, 027, 028, 029, 030, 031 |
 | 7 | PGW-040, 041 (ongoing gate), 023 (`ctid`) |
+| 8 | PGW-046, 047, 048, 049, 050 (extension surfaces; optional, added post-planning) |
 
-All 41 requirements (PGW-001…041) are assigned. PGW-016 spans Phases 1–2 by design (one module,
+All 50 requirements (PGW-001…050) are assigned. PGW-016 spans Phases 1–2 by design (one module,
 two consumers); PGW-023 spans Phases 3 and 7 (portal-suspension now, `ctid` parallel scans deferred);
-PGW-041 is established in Phase 0 and enforced as an ongoing gate in Phase 7.
+PGW-041 is established in Phase 0 and enforced as an ongoing gate in Phase 7. Phases 5b (auth) and 8
+(extension surfaces) were added post-planning; Phase 8 is optional/opt-in.
 
 ## Critical-path & sequencing notes
 

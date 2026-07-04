@@ -123,6 +123,14 @@ The server binds localhost, so **trust** remains the correct single-user default
 - **PGW-044** An **external-token** provider MUST accept an **OIDC ID token (JWT) presented as the password** and verify it against the issuer's JWKS (signature, `exp`, `aud`, `iss`). It MUST be issuer-generic (Firebase, Auth0, Google, Entra, …) via configured issuer URL + audience; Firebase is one such issuer, not a bespoke integration.
 - **PGW-045** **Per-role authorization** MUST map an authenticated account to Calcite **schema/table visibility**: the catalog intercept (PGW-012) MUST filter discovery to the role's allowed objects, and query execution MUST reject access to objects outside the role's grant — enforced in both discovery and execution by construction (same spirit as PGW-016). AuthZ is larger than authN; it lands in Phase 5b with hooks into the Phase 2 catalog.
 
+### 4.9 Extension surfaces (added post-planning; scheduled Phase 8)
+The dialect firewall (PGW-016/17) + catalog intercept let pgwire-calcite present popular PostgreSQL **extension surfaces** backed by Calcite functions/adapters or the file adapter's DuckDB execution engine — turning the translation layer from a defensive cost into a feature. Every surface follows convert-or-reject-loudly (PGW-018): the advertised surface MUST NOT claim a capability (e.g. index acceleration) it does not implement.
+- **PGW-046** Extension surfaces MUST be a **pluggable mechanism**: each surface (a) advertises itself in `pg_extension` so clients see it "installed", (b) declares its types/OIDs in the single normalization module (PGW-016), and (c) maps its operators/functions in the transform layer to a Calcite function, a Calcite adapter, or the DuckDB engine — or rejects them explicitly. Surfaces are opt-in per deployment.
+- **PGW-047** A **pgvector-compatible** surface SHOULD provide a `vector` type and the distance operators `<->` (L2), `<=>` (cosine), `<#>` (inner product), including `ORDER BY emb <-> $1` similarity search, lowered to the DuckDB engine's array-distance functions. It MUST NOT advertise ivfflat/hnsw index acceleration it does not provide.
+- **PGW-048** A **PostGIS-subset** surface SHOULD map `geometry`/`geography` and a core set of `ST_*` functions (`ST_Distance`, `ST_Contains`, `ST_DWithin`, `ST_Intersects`, `&&`) to Calcite's native spatial library (`fun=spatial`), advertised as `postgis`.
+- **PGW-049** A **JSON operator** surface SHOULD map PG `->`, `->>`, `#>`, `#>>` to Calcite `JSON_VALUE`/`JSON_QUERY`, converting today's PGW-018 rejections into supported operations where a faithful mapping exists.
+- **PGW-050** Additional **compatibility-function** surfaces (e.g. `pg_trgm` `similarity()`/`%`, `gen_random_uuid()`, `pgcrypto` `digest()`) MAY be provided as opt-in modules mapped to Calcite UDFs or the DuckDB engine.
+
 ---
 
 ## 5. Reuse vs. net-new
