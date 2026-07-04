@@ -20,13 +20,13 @@ dependencies {
 }
 
 // ─── Maven publishing (GitHub Packages) ──────────────────────────────────────
-// Published as io.askamerica:calcite-driver-base so downstream driver modules
+// Published as ai.askamerica:calcite-driver-base so downstream driver modules
 // can depend on it without pulling in the full Apache Calcite source tree.
 
 publishing {
     publications {
         create<MavenPublication>("driverBase") {
-            groupId    = "io.askamerica"
+            groupId    = "ai.askamerica"
             artifactId = "calcite-driver-base"
             version    = project.version.toString().replace("-SNAPSHOT", "")
                 .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
