@@ -208,6 +208,18 @@ zero leaked fds/queries over N hours.
 
 **Closes:** PGW-032, PGW-033, PGW-034, PGW-035, PGW-036, PGW-037, PGW-038, PGW-039.
 
+> **Status.** The **supervisor reliability core is done and tested** (`supervisor.py`): auto-restart
+> with exponential backoff, a crash-loop circuit breaker that fails loud, proactive RSS-threshold
+> recycle (via `/proc`, no new deps), liveness-probe restart, readiness gating, and graceful drain vs.
+> abrupt restart — driven by a `tick()` loop with an injectable clock (8 tests incl. a real
+> memory-hog subprocess recycle). It closes PGW-034/035/036/038 and the supervisor half of PGW-033.
+> **Remaining:** the two-child *topology* — running Calcite as a **separate recyclable JVM child** with
+> an Arrow bridge (vs. today's in-process JPype) and the pgwire↔Calcite **lifecycle decoupling**
+> (PGW-037: recycle Calcite without dropping idle sessions; readiness-gated reconnect). That is a
+> distinct, larger rearchitecture of the (working, verified) in-process execution path; the supervisor
+> is built to drive it. PGW-039 (per-request native-memory release) is satisfied on the Arrow path
+> (Phase 3) and the catalog's per-request DuckDB close (Phase 2).
+
 ---
 
 ## Phase 5b — Authentication & authorization providers
