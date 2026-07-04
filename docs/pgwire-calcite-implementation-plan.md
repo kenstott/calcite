@@ -355,14 +355,18 @@ containment properties have explicit passing tests; `ctid` parallel scans verifi
 > expressions), now fixed via `normalize.pg_column_label` on both result paths.
 > Containment is asserted as an explicit property: a dialect-firewall reject and a
 > Calcite execution error each surface cleanly and the session keeps working
-> (blast radius bounded). **`ctid` parallel scans (PGW-023 slice): deferred as a
-> performance optimization, not correctness.** DuckDB reads correctly via a single
-> binary-COPY stream (verified Phase 4); it only parallelizes when the server
-> advertises `ctid`-range scans, which we don't — so reads stay correct. Emulating
-> Postgres `ctid` (which Calcite has no equivalent for) for *parallel* streams
-> requires deterministic row-range partitioning; done naively it returns duplicate
-> rows, so it is intentionally left as a future optimization rather than shipped
-> unsafe.
+> (blast radius bounded). **`ctid` parallel scans (PGW-023): investigated →
+> resolved as a NON-GOAL, on technical grounds.** Observed behaviour: DuckDB reads
+> our tables in a single stream because we report `relpages`/`reltuples` ≈ 0, so it
+> never elects to parallelize (verified — single query, no `ctid` predicate). And
+> emulating it would be counterproductive: DuckDB's ctid parallelism splits a table
+> by *physical page range* for cheap disjoint reads, but Calcite adapters have no
+> physical row address, so honoring a `ctid` range needs a
+> `ROW_NUMBER() OVER (ORDER BY …)` partition — each "parallel" stream then scans +
+> sorts the *whole* table (N× the work, worse than one stream), and getting the
+> mapping wrong silently duplicates/drops rows. So single-stream binary COPY (fast,
+> correct) is the right answer; real large-scan parallelism belongs to a pushed-down
+> spilling engine (DuckDB/Trino execution engine), not emulated `ctid`.
 
 ---
 
@@ -434,7 +438,8 @@ loudly rather than mistranslating.
 | 8 | PGW-046, 047, 048, 049, 050 (extension surfaces; optional, added post-planning) |
 
 All 50 requirements (PGW-001…050) are assigned. PGW-016 spans Phases 1–2 by design (one module,
-two consumers); PGW-023 spans Phases 3 and 7 (portal-suspension now, `ctid` parallel scans deferred);
+two consumers); PGW-023 is portal-suspension (Phase 3) — its `ctid`-parallel-scan clause was
+investigated and resolved as a **non-goal** (architecturally counterproductive over Calcite; see Phase 7);
 PGW-041 is established in Phase 0 and enforced as an ongoing gate in Phase 7. Phases 5b (auth) and 8
 (extension surfaces) were added post-planning; Phase 8 is optional/opt-in.
 

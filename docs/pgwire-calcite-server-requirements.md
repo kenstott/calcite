@@ -90,7 +90,7 @@ DuckDB / DBeaver / DataGrip / psql
 - **PGW-020** The result path MUST be **Arrow-batch streaming** (batch iterator, backpressure via the socket), NOT a materialized list. Never buffer a whole result at any hop.
 - **PGW-021** Server-side `COPY … TO STDOUT` MUST support **binary** format (Arrow batch → pg binary `CopyData`) for DuckDB's default read path. (Text/csv exists today; binary is net-new.)
 - **PGW-022** Long-running scans MUST propagate **cancel/close**: a client disconnect or `LIMIT`-few must cancel the Calcite query and release buffers — no leaked running queries.
-- **PGW-023** Client-driven paging MUST be supported via portal suspension (`Execute` row-limit) and (Phase 2) DuckDB's `ctid` ranges. Server-internal keyset paging is a fallback only for known-materializing engines with a usable key. Blocking operators (sort/aggregate/join) that materialize in Calcite's Enumerable engine SHOULD be pushed down to a spilling engine (e.g. the file adapter's DuckDB execution engine) rather than paged.
+- **PGW-023** Client-driven paging MUST be supported via portal suspension (`Execute` row-limit). Blocking operators (sort/aggregate/join) that materialize in Calcite's Enumerable engine SHOULD be pushed down to a spilling engine (e.g. the file adapter's DuckDB execution engine) rather than paged. **`ctid` parallel scans are a non-goal** (revised): DuckDB's ctid parallelism splits a table by *physical page range* and reads disjoint chunks cheaply, but Calcite adapters expose no physical row address — honoring a `ctid` range would require a `ROW_NUMBER() OVER (ORDER BY …)` partition, forcing every "parallel" stream to scan+sort the whole table (N× the work — strictly worse than the single stream). The server therefore reports `relpages`/`reltuples` ≈ 0 so DuckDB never elects to parallelize and uses a single, correct binary-COPY stream; genuine large-scan parallelism belongs to a pushed-down spilling engine, not emulated `ctid`.
 - **PGW-024** The server MUST faithfully expose each adapter's capabilities and MUST NOT paper over bad adapter design. Where an adapter materializes and offers no pushdown/key, the memory cost is surfaced, not hidden — it becomes the end user's problem.
 
 ### 4.5 Packaging & delivery
@@ -160,6 +160,7 @@ The dialect firewall (PGW-016/17) + catalog intercept let pgwire-calcite present
 - Real transaction isolation / rollback.
 - Avatica or ODBC integration.
 - **Signed DMG/MSI installers / OS code-signing & notarization** (delivery is via package manager / `curl | sh` / tarball, which is not quarantined — see PGW-031).
+- **`ctid` parallel scans** (DuckDB physical-page parallelism has no meaningful analogue over Calcite's address-less adapters — emulation is counterproductive; see PGW-023).
 - Inventing/overlaying constraints the underlying adapter does not declare.
 - Modifications to calcite-core.
 
