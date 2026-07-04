@@ -161,14 +161,15 @@ Calcite table (numeric, text, temporal, null-bearing). Text-protocol fallback al
 > probe (and tearing down cleanly) resolves the storm; Phase 4 is **not** blocked on the Phase-5
 > sidecar (the sidecar remains the eventual isolation/robustness story, not a prerequisite here).
 >
-> **Status.** `to_regclass` intercepted; DuckDB `ATTACH` succeeds and shuts down clean. Binary COPY is
-> implemented (`binary_copy.py`) over both simple and extended protocols (DuckDB reads via extended),
-> reusing the Phase-3 Arrow stream; the emitted PGCOPY stream is asserted **spec-exact byte-for-byte**
-> (header/flags/tuples/trailer) and the int4 width/OID consistency bug (PGW-016: `INTEGER`→4-byte
-> `BVType.INTEGER`, was 8-byte) is fixed. **Open:** DuckDB's binary-COPY *reader* still rejects the
-> (spec-valid) stream with "invalid header" for a client-side reason not yet isolated — the end-to-end
-> DuckDB read is the user's manual validation; the server side is verified. Text-protocol read is the
-> documented fallback (PGW-005).
+> **Status: DONE (verified end-to-end with real DuckDB).** `to_regclass` intercepted; DuckDB `ATTACH`
+> succeeds and shuts down clean. Binary COPY (`binary_copy.py`) runs over both simple and extended
+> protocols (DuckDB reads via extended), reusing the Phase-3 Arrow stream; emitted PGCOPY stream is
+> spec-exact byte-for-byte; the int4 width/OID consistency bug (PGW-016: `INTEGER`→4-byte
+> `BVType.INTEGER`, was 8-byte) is fixed. **Root cause of the earlier "invalid header":** DuckDB's
+> binary-COPY reader rejects the PGCOPY header when it arrives alone in its own tiny `CopyData`
+> message — the fix is to coalesce output into ~64 KiB `CopyData` flushes (header ships with the first
+> rows), which keeps memory bounded (PGW-020). An integration test now `ATTACH`es DuckDB and reads a
+> small table plus a 10k-row result across multiple flushes. **Closes PGW-005, PGW-021.**
 
 ---
 

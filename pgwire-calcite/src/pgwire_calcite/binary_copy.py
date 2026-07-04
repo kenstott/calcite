@@ -36,6 +36,10 @@ log = logging.getLogger(__name__)
 _COPY_BINARY_HEADER = b"PGCOPY\n\xff\r\n\x00" + struct.pack("!ii", 0, 0)
 _COPY_BINARY_TRAILER = struct.pack("!h", -1)
 
+#: Coalesce binary-COPY output into CopyData messages of at least this size, so the
+#: PGCOPY header never ships alone (DuckDB rejects that) while memory stays bounded.
+_COPY_FLUSH_BYTES = 65536
+
 # FORMAT value may be a bare word or quoted (DuckDB sends FORMAT "binary").
 _FMT = r"(?:\(\s*FORMAT\s+[\"']?(?P<fmt>\w+)[\"']?\s*\)|WITH\s+(?P<wbin>BINARY))?"
 _COPY_TO_RE = re.compile(
@@ -128,10 +132,21 @@ class BinaryCopyHandler:
 
         self._send_copy_out_response(binary=(fmt == "binary"), ncols=ncols)
         if fmt == "binary":
+            # Flush the binary COPY in threshold-sized CopyData messages. DuckDB's
+            # binary reader rejects the PGCOPY header when it arrives alone in its
+            # own tiny CopyData message, so we coalesce the header with following
+            # rows and flush at ~64 KiB — still bounded memory (PGW-020), not a
+            # full-result buffer.
+            buf = bytearray()
             chunks = 0
             for chunk in encode_binary_copy(result):
-                self._send_copy_data(chunk)
+                buf += chunk
                 chunks += 1
+                if len(buf) >= _COPY_FLUSH_BYTES:
+                    self._send_copy_data(bytes(buf))
+                    buf.clear()
+            if buf:
+                self._send_copy_data(bytes(buf))
             nrows = max(0, chunks - 2)  # exclude the header and trailer chunks
         else:
             nrows = self._send_text_copy(result)

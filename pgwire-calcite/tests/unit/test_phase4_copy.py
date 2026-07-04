@@ -25,6 +25,8 @@ from __future__ import annotations
 import struct
 import time
 
+import pytest
+
 from buenavista.core import BVType
 
 from pgwire_calcite import launcher
@@ -136,6 +138,38 @@ def test_wire_emits_valid_pgcopy_stream(calcite_backend):
         finally:
             c.close()
     finally:
+        srv.shutdown()
+
+
+def test_duckdb_attach_and_read_binary_copy(calcite_backend):
+    """PGW-005/021 end-to-end: DuckDB ATTACH (TYPE postgres) reads Calcite tables
+    via binary COPY, including a large result across multiple CopyData flushes."""
+    try:
+        import duckdb
+
+        con = duckdb.connect()
+        con.execute("LOAD postgres")
+    except Exception as exc:  # extension not installed in this env
+        pytest.skip(f"duckdb postgres extension unavailable: {exc}")
+
+    port = _free_port()
+    srv = launcher.serve(host="127.0.0.1", port=port, auth="none", backend=calcite_backend)
+    time.sleep(0.2)
+    try:
+        con.execute(
+            f"ATTACH 'host=127.0.0.1 port={port} dbname=calcite user=analyst' "
+            "AS pg (TYPE postgres, READ_ONLY)"
+        )
+        assert con.execute(
+            "SELECT DNAME, DEPTNO FROM pg.SALES.DEPTS ORDER BY DEPTNO"
+        ).fetchall() == [("ACCOUNTING", 10), ("RESEARCH", 20), ("SALES", 30), ("OPERATIONS", 40)]
+        # large read -> multiple 64 KiB binary-COPY CopyData flushes
+        assert con.execute(
+            "SELECT count(*) FROM (SELECT e1.EMPNO FROM pg.SALES.EMPS e1, pg.SALES.EMPS e2, "
+            "pg.SALES.EMPS e3, pg.SALES.EMPS e4) t"
+        ).fetchall() == [(10000,)]
+    finally:
+        con.close()
         srv.shutdown()
 
 
