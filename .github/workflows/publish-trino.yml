@@ -1,0 +1,223 @@
+# Publish the Trino connectors on an engine-v<version> release.
+#
+#   * Maven artifacts (io.simpleishard:trino-*)      -> GitHub Packages + Maven Central
+#   * Deployable Trino plugin zips (trino-*-plugin)   -> attached as GitHub-release assets
+#
+# The Maven jar is what JVM consumers depend on; the plugin zip is the directory-of-jars an
+# operator unzips into <trino>/plugin/<name>/. trino-calcite-base is a shared library (jar only,
+# no plugin zip). Central uploads are publishingType=AUTOMATIC — mirrors publish-govdata.yml.
+name: publish-trino
+
+on:
+  push:
+    tags:
+      - 'engine-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "release version (e.g. 0.27.0)"
+        required: true
+
+jobs:
+  # ── Maven artifacts: GitHub Packages + Maven Central ────────────────────────
+  maven:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { module: trino-calcite-base, pub: TrinoCalciteBase, artifact: trino-calcite-base }
+          - { module: trino-calcite,      pub: TrinoCalcite,      artifact: trino-calcite }
+          - { module: trino-cloudops,     pub: TrinoCloudops,     artifact: trino-cloudops }
+          - { module: trino-file,         pub: TrinoFile,         artifact: trino-file }
+          - { module: trino-sharepoint,   pub: TrinoSharepoint,   artifact: trino-sharepoint }
+          - { module: trino-splunk,       pub: TrinoSplunk,       artifact: trino-splunk }
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gradle runs on JDK 21 (the whole Calcite build compiles cleanly there, as the other
+      # publish workflows prove); JDK 25 is installed too so Gradle's toolchain detection can
+      # compile the Trino modules (languageVersion 25). JAVA_HOME is the last listed -> 21.
+      - name: Set up JDKs (25 for the Trino toolchain, 21 for Gradle)
+        uses: actions/setup-java@v4
+        with:
+          java-version: |
+            25
+            21
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#engine-v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Publishing ${{ matrix.artifact }} version: ${VERSION}"
+
+      - name: Build jar
+        run: ./gradlew :${{ matrix.module }}:jar --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Packages
+        run: |
+          OUTPUT=$(./gradlew :${{ matrix.module }}:publish${{ matrix.pub }}PublicationToGitHubPackagesRepository \
+            --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }} 2>&1) && echo "$OUTPUT" && exit 0
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "status code 409"; then
+            echo "409 Conflict: artifact already exists in GitHub Packages — treating as success"
+            exit 0
+          fi
+          exit 1
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+      - name: Generate POM
+        run: |
+          ./gradlew :${{ matrix.module }}:generatePomFileFor${{ matrix.pub }}Publication \
+            --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Maven Central bundle
+        env:
+          GPG_KEY_ID:     ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          VERSION:        ${{ steps.version.outputs.version }}
+          GROUP_ID:       io.simpleishard
+          ARTIFACT_ID:    ${{ matrix.artifact }}
+          MODULE:         ${{ matrix.module }}
+          PUB:            ${{ matrix.pub }}
+        run: |
+          GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
+          BUNDLE_DIR="bundle/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
+          mkdir -p "$BUNDLE_DIR"
+
+          # Root convention sets archivesName = "calcite-<module>", so the jar is calcite-<module>-<ver>.jar
+          JAR=$(find "${MODULE}/build/libs" -name "calcite-${MODULE}-*.jar" | grep -v sources | grep -v javadoc | head -1)
+          POM=$(find "${MODULE}/build/publications/${PUB}" -name "*.xml" | head -1)
+
+          if [ -z "$JAR" ] || [ -z "$POM" ]; then
+            echo "ERROR: could not locate jar ($JAR) or pom ($POM) for ${MODULE}"
+            exit 1
+          fi
+
+          cp "$JAR" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar"
+          cp "$POM" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom"
+
+          # Minimal sources and javadoc JARs (required by Central; content is not validated)
+          echo "Sources: ${ARTIFACT_ID} ${VERSION}" > /tmp/placeholder.txt
+          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" -C /tmp placeholder.txt
+          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
+
+          for f in \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" \
+            "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
+          do
+            if [ -n "$GPG_PASSPHRASE" ]; then
+              gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+                --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+            else
+              gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+            fi
+            md5sum  "$f" | awk '{print $1}' > "${f}.md5"
+            sha1sum "$f" | awk '{print $1}' > "${f}.sha1"
+          done
+
+          (cd bundle && zip -r "../${ARTIFACT_ID}-bundle.zip" .)
+          echo "Bundle: $(du -sh ${ARTIFACT_ID}-bundle.zip | cut -f1)"
+
+      - name: Upload to Sonatype Central Portal
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          ARTIFACT_ID:       ${{ matrix.artifact }}
+          VERSION:           ${{ steps.version.outputs.version }}
+        run: |
+          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
+            -H "Authorization: Bearer ${AUTH}" \
+            -H "Accept: application/json" \
+            -F "bundle=@${ARTIFACT_ID}-bundle.zip;type=application/zip" \
+            -F "name=${ARTIFACT_ID}-${VERSION}" \
+            -F "publishingType=AUTOMATIC")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Response ($HTTP_CODE): $BODY"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "ERROR: Maven Central upload failed for ${ARTIFACT_ID}"
+            exit 1
+          fi
+
+  # ── Deployable plugin zips: attach to the engine-v release ──────────────────
+  plugin-zips:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [trino-calcite, trino-cloudops, trino-file, trino-sharepoint, trino-splunk]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDKs (25 for the Trino toolchain, 21 for Gradle)
+        uses: actions/setup-java@v4
+        with:
+          java-version: |
+            25
+            21
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#engine-v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build plugin zip
+        run: ./gradlew :${{ matrix.module }}:trinoPlugin --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach plugin zip to the engine-v release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG:      ${{ github.ref_name }}
+          MODULE:   ${{ matrix.module }}
+        run: |
+          ZIP=$(find "${MODULE}/build/distributions" -name "${MODULE}-plugin-*.zip" | head -1)
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: no plugin zip produced for ${MODULE}"
+            exit 1
+          fi
+          echo "Uploading $ZIP to release ${TAG}"
+          gh release upload "${TAG}" "$ZIP" --clobber

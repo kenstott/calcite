@@ -134,7 +134,7 @@ tasks.shadowJar {
 // so Maven/Gradle users can pull it without downloading from GitHub Releases.
 //
 //   <dependency>
-//     <groupId>io.askamerica</groupId>
+//     <groupId>ai.askamerica</groupId>
 //     <artifactId>askamerica-engine</artifactId>
 //     <version>VERSION</version>
 //   </dependency>
