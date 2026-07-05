@@ -71,4 +71,8 @@ jobs:
           gh workflow run "Publish GovData Driver" \
             --repo "${{ github.repository }}" \
             --ref "refs/tags/${ENGINE_TAG}"
+          gh workflow run "publish-trino" \
+            --repo "${{ github.repository }}" \
+            --ref "refs/tags/${ENGINE_TAG}" \
+            --field version="${BARE}"
           echo "Dispatched release workflows on ${ENGINE_TAG}"
