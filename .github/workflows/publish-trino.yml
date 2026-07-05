@@ -110,7 +110,9 @@ jobs:
           # shadowJar sets archiveBaseName = artifactId (classifier ""), so the fat jar is <artifact>-<ver>.jar
           # (distinct from the thin calcite-<module>-<ver>.jar the root convention would produce).
           JAR=$(find "${MODULE}/build/libs" -name "${ARTIFACT_ID}-*.jar" | grep -v sources | grep -v javadoc | head -1)
-          POM=$(find "${MODULE}/build/publications/${PUB}" -name "*.xml" | head -1)
+          # Gradle writes the POM under build/publications/<publicationName>/ where the name is the
+          # lowercase-first publication id (e.g. "trinoCalcite"), not the capitalized task form in ${PUB}.
+          POM=$(find "${MODULE}/build/publications" -name "pom-default.xml" | head -1)
 
           if [ -z "$JAR" ] || [ -z "$POM" ]; then
             echo "ERROR: could not locate jar ($JAR) or pom ($POM) for ${MODULE}"

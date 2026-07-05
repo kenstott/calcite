@@ -201,6 +201,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: [jar, test]
     strategy:
+      # One platform's installer failure (e.g. macOS notarization when Apple certs are absent)
+      # must not cancel the others or block the release.
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -316,6 +319,12 @@ jobs:
 
       - name: Notarize and staple PKG (macOS only)
         if: matrix.os == 'macos-latest'
+        # Non-fatal: notarization requires a Developer ID Installer cert + valid app-specific
+        # password. Signed/notarized installers are not a release requirement — an unsigned PKG
+        # still installs (right-click → Open, or `xattr -dr com.apple.quarantine`). Do not block
+        # the release on it. To enable real notarization, provide the Developer ID Installer cert
+        # in APPLE_CERT_P12_BASE64 and a valid APPLE_NOTARYTOOL_PASSWORD/TEAM_ID.
+        continue-on-error: true
         env:
           APPLE_NOTARYTOOL_APPLE_ID: ${{ secrets.APPLE_NOTARYTOOL_APPLE_ID }}
           APPLE_NOTARYTOOL_PASSWORD: ${{ secrets.APPLE_NOTARYTOOL_PASSWORD }}
@@ -687,11 +696,11 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | macOS    | `AskAmerica MCP-*.dmg` |
+            | macOS    | `AskAmerica-MCP-*.pkg` |
             | Linux    | `askamerica-mcp_*.deb` |
             | Windows  | `AskAmerica MCP-*.msi` |
 
-            **macOS:** Double-click the `.dmg`, drag AskAmerica MCP to Applications, then open it to enter your API key.
+            **macOS:** Double-click the `.pkg` and follow the installer (installs to Applications), then open AskAmerica MCP to enter your API key. Unsigned build: if Gatekeeper blocks it, right-click → Open, or run `xattr -dr com.apple.quarantine` on the app.
             **Linux:** `sudo dpkg -i askamerica-mcp_*.deb`, then run `askamerica-mcp` to configure.
             **Windows:** Double-click the `.msi`, then open AskAmerica MCP from the Start Menu to configure.
 
