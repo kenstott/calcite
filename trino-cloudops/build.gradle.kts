@@ -20,6 +20,24 @@
 // the CloudOps JDBC driver plus friendly catalog properties (azure.*, aws.*, gcp.*, cache.*). See
 // trino-calcite for the toolchain rationale.
 
+plugins {
+    id("com.github.johnrengelman.shadow")
+}
+
+// Publish a self-contained shadow jar as the Maven artifact: the connector depends on the fork's
+// :core (available only as 1.42.0-SNAPSHOT), so a thin POM cannot be resolved by consumers. A fat
+// jar yields a dependency-less POM — the pattern govdata/askamerica already use. The deployable
+// Trino plugin zip (trinoPlugin) is unaffected and stays the directory-of-jars format.
+tasks.shadowJar {
+    archiveBaseName.set("trino-cloudops")
+    archiveClassifier.set("")
+    mergeServiceFiles()
+    isZip64 = true
+    exclude("META-INF/*.SF")
+    exclude("META-INF/*.DSA")
+    exclude("META-INF/*.RSA")
+}
+
 val trinoVersion = providers.gradleProperty("trino.version").get()
 
 java {
@@ -45,7 +63,7 @@ publishing {
                 ?: project.version.toString().replace("-SNAPSHOT", ""))
                 .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
 
-            from(components["java"])
+            artifact(tasks["shadowJar"])
 
             pom {
                 name.set("Trino Cloud Ops Connector")

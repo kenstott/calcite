@@ -22,6 +22,24 @@
 // run unchanged on the Trino JVM. A Trino plugin must be built against the exact SPI version of
 // the server it deploys into; the version is pinned by `trino.version` in gradle.properties.
 
+plugins {
+    id("com.github.johnrengelman.shadow")
+}
+
+// Publish a self-contained shadow jar as the Maven artifact: the connector depends on the fork's
+// :core/:file (available only as 1.42.0-SNAPSHOT), so a thin POM cannot be resolved by consumers. A
+// fat jar yields a dependency-less POM — the pattern govdata/askamerica already use. The deployable
+// Trino plugin zip (trinoPlugin) is unaffected and stays the directory-of-jars format.
+tasks.shadowJar {
+    archiveBaseName.set("trino-calcite")
+    archiveClassifier.set("")
+    mergeServiceFiles()
+    isZip64 = true
+    exclude("META-INF/*.SF")
+    exclude("META-INF/*.DSA")
+    exclude("META-INF/*.RSA")
+}
+
 val trinoVersion = providers.gradleProperty("trino.version").get()
 
 java {
@@ -48,7 +66,7 @@ publishing {
                 ?: project.version.toString().replace("-SNAPSHOT", ""))
                 .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
 
-            from(components["java"])
+            artifact(tasks["shadowJar"])
 
             pom {
                 name.set("Trino Calcite Connector")

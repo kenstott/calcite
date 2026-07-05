@@ -63,8 +63,8 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Publishing ${{ matrix.artifact }} version: ${VERSION}"
 
-      - name: Build jar
-        run: ./gradlew :${{ matrix.module }}:jar --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
+      - name: Build shadow JAR
+        run: ./gradlew :${{ matrix.module }}:shadowJar --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,8 +107,9 @@ jobs:
           BUNDLE_DIR="bundle/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
           mkdir -p "$BUNDLE_DIR"
 
-          # Root convention sets archivesName = "calcite-<module>", so the jar is calcite-<module>-<ver>.jar
-          JAR=$(find "${MODULE}/build/libs" -name "calcite-${MODULE}-*.jar" | grep -v sources | grep -v javadoc | head -1)
+          # shadowJar sets archiveBaseName = artifactId (classifier ""), so the fat jar is <artifact>-<ver>.jar
+          # (distinct from the thin calcite-<module>-<ver>.jar the root convention would produce).
+          JAR=$(find "${MODULE}/build/libs" -name "${ARTIFACT_ID}-*.jar" | grep -v sources | grep -v javadoc | head -1)
           POM=$(find "${MODULE}/build/publications/${PUB}" -name "*.xml" | head -1)
 
           if [ -z "$JAR" ] || [ -z "$POM" ]; then
@@ -168,56 +169,6 @@ jobs:
             exit 1
           fi
 
-  # ── Deployable plugin zips: attach to the engine-v release ──────────────────
-  plugin-zips:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        module: [trino-calcite, trino-cloudops, trino-file, trino-sharepoint, trino-splunk]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDKs (25 for the Trino toolchain, 21 for Gradle)
-        uses: actions/setup-java@v4
-        with:
-          java-version: |
-            25
-            21
-          distribution: temurin
-
-      - uses: gradle/actions/setup-gradle@v3
-
-      - name: Determine version
-        id: version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#engine-v}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Build plugin zip
-        run: ./gradlew :${{ matrix.module }}:trinoPlugin --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Attach plugin zip to the engine-v release
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG:      ${{ github.ref_name }}
-          MODULE:   ${{ matrix.module }}
-        run: |
-          ZIP=$(find "${MODULE}/build/distributions" -name "${MODULE}-plugin-*.zip" | head -1)
-          if [ -z "$ZIP" ]; then
-            echo "ERROR: no plugin zip produced for ${MODULE}"
-            exit 1
-          fi
-          echo "Uploading $ZIP to release ${TAG}"
-          gh release upload "${TAG}" "$ZIP" --clobber
+  # Note: the deployable Trino plugin zips are built and attached to the engine-v release by the
+  # AskAmerica Engine workflow (its trino-plugins + release jobs), so this workflow publishes only
+  # the Maven artifacts and does not touch the release object.
