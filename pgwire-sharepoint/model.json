@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "defaultSchema": "SHAREPOINT",
+  "schemas": [
+    {
+      "name": "SHAREPOINT",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.sharepoint.SharePointListSchemaFactory",
+      "operand": {
+        "siteUrl": "https://YOUR-TENANT.sharepoint.com/sites/YOUR-SITE",
+        "tenantId": "YOUR_AZURE_TENANT_ID",
+        "clientId": "YOUR_APP_CLIENT_ID",
+        "clientSecret": "YOUR_APP_CLIENT_SECRET"
+      }
+    }
+  ]
+}

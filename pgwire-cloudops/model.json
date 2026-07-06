@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "defaultSchema": "CLOUDOPS",
+  "schemas": [
+    {
+      "name": "CLOUDOPS",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.ops.CloudOpsSchemaFactory",
+      "operand": {
+        "providers": "azure,aws,gcp"
+      }
+    }
+  ]
+}

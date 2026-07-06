@@ -1,0 +1,151 @@
+# pgwire-<adapter> releases — airgapped per-OS bundles that expose a single Calcite adapter
+# (file / sharepoint / splunk / cloudops) over the PostgreSQL wire protocol. Each is the generic
+# pgwire-calcite server (shared) bundled with that adapter's runtime jars + its model.json + a
+# launcher that starts the calcite backend against that model. Mirrors pgwire-calcite-release.yml.
+name: pgwire-adapters release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "release version (e.g. 0.28.0)"
+        required: true
+  release:
+    types: [created]
+
+env:
+  PY_VERSION: "3.12"
+
+jobs:
+  # Per-adapter: build the adapter module jar + its full runtime classpath, plus the shared
+  # pgwire UDF + Java launcher jars. Built once per adapter and shared across OS variants.
+  jars:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter:
+          - { name: file,       module: file }
+          - { name: sharepoint, module: sharepoint-list }
+          - { name: splunk,     module: splunk }
+          - { name: cloudops,   module: cloud-ops }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build adapter jars + resolve runtime classpath
+        run: |
+          ./gradlew :${{ matrix.adapter.module }}:jar :core:jar :linq4j:jar \
+            --no-daemon --console=plain -q
+          ./gradlew :${{ matrix.adapter.module }}:pgwPrintCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          mkdir -p out/jars
+          # every real .jar on the adapter's runtime classpath
+          for j in $(tr ':' '\n' < /tmp/pgw-file-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # the adapter module's own output is a classes dir on the cp -> use its built jar
+          cp -n ${{ matrix.adapter.module }}/build/libs/*.jar out/jars/ 2>/dev/null || true
+          echo "bundled $(ls out/jars | wc -l) jars for ${{ matrix.adapter.name }}"
+      - name: Build vector/compat UDF jar + Java launcher (shared)
+        working-directory: pgwire-calcite
+        run: |
+          bash packaging/build-udf.sh
+          bash packaging/build-launcher.sh
+      - run: |
+          cp pgwire-calcite/vendor/jars/*.jar out/jars/
+          cp pgwire-calcite/packaging/pgwire-launcher.jar out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-jars-${{ matrix.adapter.name }}
+          path: out
+
+  bundle:
+    needs: jars
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter:
+          - { name: file,       module: file }
+          - { name: sharepoint, module: sharepoint-list }
+          - { name: splunk,     module: splunk }
+          - { name: cloudops,   module: cloud-ops }
+        os:
+          - { runner: ubuntu-latest, variant: linux-x86_64 }
+          - { runner: macos-14,      variant: macos-arm64 }
+          - { runner: windows-latest, variant: windows-x86_64 }
+    runs-on: ${{ matrix.os.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: adapter-jars-${{ matrix.adapter.name }}
+          path: bundle    # -> bundle/jars/*.jar and bundle/pgwire-launcher.jar
+
+      - name: Stage standalone CPython + install the shared pgwire server (airgap-ready venv)
+        working-directory: pgwire-calcite
+        run: |
+          uv python install ${PY_VERSION}
+          uv venv --python ${PY_VERSION} ../bundle/cpython
+          uv pip install --python ../bundle/cpython ./vendor/buenavista ".[oidc]"
+
+      - name: Minimal bundled JRE (jlink)
+        run: |
+          "$JAVA_HOME/bin/jlink" --add-modules java.base,java.sql,java.naming,java.management,jdk.unsupported \
+            --strip-debug --no-header-files --no-man-pages --compress=2 --output bundle/jre
+
+      - name: Stage adapter model + launcher
+        run: |
+          mkdir -p bundle/model bundle/bin
+          cp "pgwire-${{ matrix.adapter.name }}/model.json" bundle/model/model.json
+          # Adapter-specific entry: starts the calcite backend against this adapter's model. Extra
+          # args (e.g. --port, --auth) are appended after and win.
+          cat > "bundle/bin/pgwire-${{ matrix.adapter.name }}" <<'SH'
+          #!/usr/bin/env bash
+          HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+          ls "$HERE"/jars/*.jar | paste -sd: - > "$HERE/jars.classpath"
+          export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
+          exec "$HERE/jre/bin/java" \
+            "-Dpgwire.python=$HERE/cpython/bin/python" \
+            -jar "$HERE/pgwire-launcher.jar" \
+            --backend calcite --model "$HERE/model/model.json" "$@"
+          SH
+          chmod +x "bundle/bin/pgwire-${{ matrix.adapter.name }}"
+
+      - name: Pack tarball + sha256
+        run: |
+          VER="${{ github.event.inputs.version || github.ref_name }}"
+          VER="${VER#engine-v}"
+          name="pgwire-${{ matrix.adapter.name }}-${VER}-${{ matrix.os.variant }}"
+          mv bundle "$name"
+          tar -czf "${name}.tar.gz" "$name"
+          (command -v sha256sum && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
+            | awk '{print $1}' > "${name}.tar.gz.sha256"
+          echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.adapter.name }}-${{ matrix.os.variant }}
+          path: |
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256
+
+      - name: Attach to release
+        # On a release event softprops infers the release; on workflow_dispatch (used because a
+        # release created by GITHUB_TOKEN does not emit a release event) target engine-v<version>.
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}
+          files: |
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz
+            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256

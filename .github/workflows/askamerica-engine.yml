@@ -729,4 +729,5 @@ jobs:
           BARE="${{ github.ref_name }}"
           BARE="${BARE#engine-v}"
           gh workflow run "pgwire-calcite release" --ref main --field version="${BARE}"
-          echo "Dispatched pgwire-calcite release for version ${BARE}"
+          gh workflow run "pgwire-adapters release" --ref main --field version="${BARE}"
+          echo "Dispatched pgwire-calcite + pgwire-adapters releases for version ${BARE}"

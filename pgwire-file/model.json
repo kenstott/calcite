@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "FILES",
+  "schemas": [
+    {
+      "name": "FILES",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
+      "operand": {
+        "directory": "data",
+        "recursive": true,
+        "executionEngine": "duckdb"
+      }
+    }
+  ]
+}

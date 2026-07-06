@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "defaultSchema": "SPLUNK",
+  "schemas": [
+    {
+      "name": "SPLUNK",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.splunk.SplunkSchemaFactory",
+      "operand": {
+        "url": "https://YOUR-SPLUNK-HOST:8089",
+        "token": "YOUR_SPLUNK_TOKEN",
+        "disableSslValidation": false
+      }
+    }
+  ]
+}
