@@ -41,18 +41,26 @@ BUCKETS=(
 )
 
 _flags="--transfers 16 --stats 60s"
-if [ -f "$SYNC_STAMP" ]; then
-  _last=$(cat "$SYNC_STAMP")
+# Read the sentinel and validate it holds a positive-integer epoch before trusting
+# it as an incremental boundary. A missing, empty, or corrupt sentinel must fall
+# through to a full cold-start copy — never be treated as a boundary. (An empty
+# file passed the old `[ -f ]` guard and only worked by luck: `$(( _now - "" ))`
+# degrades to a ~now-second window ≈ full copy. A non-numeric value would make the
+# arithmetic below throw and, under `set -e`, abort the entire sync.)
+_last=""
+[ -f "$SYNC_STAMP" ] && _last=$(cat "$SYNC_STAMP" 2>/dev/null)
+if [[ "$_last" =~ ^[0-9]+$ ]]; then
   _elapsed=$(( _now - _last ))
   # Add 60s buffer so files written right at the previous boundary aren't missed.
   _age=$(( _elapsed + 60 ))
   _flags="--max-age ${_age}s $_flags"
   log_info "sync-to-r2: incremental — files newer than ${_age}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 else
-  # First run: no sentinel exists yet, so copy the full backlog. rclone copy
-  # already skips files present on R2 with matching size+modtime, so a later
-  # cold start (e.g. sentinel deleted) re-transfers nothing.
-  log_info "sync-to-r2: cold start (no sentinel) — full copy ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
+  # First run (or missing/empty/corrupt sentinel): copy the full backlog. rclone
+  # copy already skips files present on R2 with matching size+modtime, so a cold
+  # start re-transfers nothing that is already there.
+  [ -n "$_last" ] && log_info "sync-to-r2: WARNING — ignoring non-numeric sentinel ('$_last'); treating as cold start"
+  log_info "sync-to-r2: cold start (no valid sentinel) — full copy ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 fi
 $DRY_RUN && _flags="$_flags --dry-run"
 

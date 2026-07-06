@@ -32,6 +32,13 @@ GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WINDOW_SECS=43200   # 12 hours per mode
 RESTART_DELAY=30    # seconds to wait after a crash before restarting
 
+# Concurrency throttle passed to run-pool.sh's -j. run-pool otherwise admits
+# workers up to the memory budget alone (MAX_WORKERS=99), which lets ~6 JVMs pound
+# a single MinIO node at once and drives the 503 SlowDown / "reduce your request
+# rate" / read-timeout storm. Capping concurrent workers caps the aggregate S3
+# request rate at the source. Tunable via env; raise once MinIO stops throttling.
+POOL_MAX_WORKERS="${POOL_MAX_WORKERS:-4}"
+
 # Locate timeout command (Linux: timeout; macOS with coreutils: gtimeout)
 TIMEOUT_CMD="$(command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true)"
 if [ -z "$TIMEOUT_CMD" ]; then
@@ -110,6 +117,7 @@ run_window() {
   {
     echo "[$(ts)] === Starting $mode window (until $(fmt_epoch "$window_end")) ==="
     [ -n "$fill_mode" ] && echo "[$(ts)] early-finish fill mode: $fill_mode"
+    echo "[$(ts)] concurrency cap: -j $POOL_MAX_WORKERS (POOL_MAX_WORKERS)"
     [ -n "${GOVDATA_JAR:-}" ] && echo "[$(ts)] JAR: $GOVDATA_JAR"
   } | tee -a "$window_log"
 
@@ -130,7 +138,7 @@ run_window() {
     echo "[$(ts)] $current attempt $attempt (${remaining}s remaining in window)" >> "$window_log"
 
     set +e
-    "$TIMEOUT_CMD" "$remaining" "$SCRIPT_DIR/run-pool.sh" "$current" >> "$window_log" 2>&1 &
+    "$TIMEOUT_CMD" "$remaining" "$SCRIPT_DIR/run-pool.sh" -j "$POOL_MAX_WORKERS" "$current" >> "$window_log" 2>&1 &
     ACTIVE_POOL_PID=$!
     wait "$ACTIVE_POOL_PID"
     EXIT_CODE=$?
