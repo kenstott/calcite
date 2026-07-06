@@ -59,7 +59,6 @@ jobs:
         include:
           - { os: ubuntu-latest, variant: linux-x86_64 }
           - { os: macos-14, variant: macos-arm64 }
-          - { os: macos-13, variant: macos-x86_64 }
           - { os: windows-latest, variant: windows-x86_64 }
     runs-on: ${{ matrix.os }}
     defaults:
