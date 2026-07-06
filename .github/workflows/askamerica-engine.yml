@@ -628,6 +628,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
+      actions: write   # needed to dispatch the pgwire release workflows below
 
     steps:
       - name: Download JAR
@@ -728,6 +729,6 @@ jobs:
         run: |
           BARE="${{ github.ref_name }}"
           BARE="${BARE#engine-v}"
-          gh workflow run "pgwire-calcite release" --ref main --field version="${BARE}"
-          gh workflow run "pgwire-adapters release" --ref main --field version="${BARE}"
+          gh workflow run "pgwire-calcite release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
+          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
           echo "Dispatched pgwire-calcite + pgwire-adapters releases for version ${BARE}"
