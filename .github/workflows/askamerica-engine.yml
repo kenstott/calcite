@@ -718,3 +718,15 @@ jobs:
           files: release-assets/**/*
           draft: false
           prerelease: false
+
+      # The pgwire-calcite installers attach on a release event, but a release created above by
+      # GITHUB_TOKEN does not emit one. Dispatch that workflow explicitly now that the release
+      # object exists so its per-OS tarballs attach to this engine-v<version> release.
+      - name: Dispatch pgwire-calcite release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BARE="${{ github.ref_name }}"
+          BARE="${BARE#engine-v}"
+          gh workflow run "pgwire-calcite release" --ref main --field version="${BARE}"
+          echo "Dispatched pgwire-calcite release for version ${BARE}"

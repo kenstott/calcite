@@ -125,9 +125,12 @@ jobs:
             pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
 
       - name: Attach to release
-        if: github.event_name == 'release'
+        # On a release event softprops infers the release; on workflow_dispatch (used because a
+        # release created by GITHUB_TOKEN does not emit a release event) target engine-v<version>.
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}
           files: |
             pgwire-calcite-*-${{ matrix.variant }}.tar.gz
             pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
