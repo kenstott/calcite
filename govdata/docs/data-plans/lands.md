@@ -133,12 +133,13 @@ volume, and carbon stock estimates.
 | ownership_class | VARCHAR | National Forest / Other Federal / State / Private |
 | basal_area_sqft | DOUBLE | Basal area per acre (tree diameter proxy) |
 
-> **Known limitation (2026):** The FIA DataMart `fullreport` endpoint requires a
-> `wc` (evaluation group) parameter in `{statecd}{year}` format (e.g., `12024` for
-> Alabama 2024). The current ETL passes `wc={year}` only, which the API rejects with
-> an HTML error page, producing 0 rows. DQ checks T1 (row count) and T2 (coverage)
-> are downgraded to `warn` pending a redesign of the `FiaDatamartTransformer` to
-> iterate all 50 state codes per year. Tracked in `DQ-ISSUES.md`.
+> **Resolved (2026):** The FIA DataMart `fullreport` query API (which required a
+> `wc={statecd}{year}` evaluation-group parameter the ETL did not build) has been
+> dropped. `FiaDatamartTransformer` now downloads the per-state bulk archive
+> `https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip` and parses `{state}_COND.csv`
+> directly, with per-state fan-out driven by the `state` dimension in the schema YAML.
+> DQ T1/T2 run at normal severity (the `warn` downgrade was removed); Lands DQ PASSes
+> with ≈30,255 rows.
 
 ---
 
@@ -362,6 +363,6 @@ All lands tables use the shared `GOVDATA_*` globals — no schema-specific env v
 
 | Issue | Table | Status |
 |---|---|---|
-| FIA API requires `wc={statecd}{year}` — current ETL passes only `wc={year}` | `forest_inventory` | DQ T1/T2 downgraded to `warn`; redesign needed |
+| FIA API required `wc={statecd}{year}` — ETL passed only `wc={year}` (0 rows) | `forest_inventory` | Resolved — switched to per-state bulk `{state}_CSV.zip` + `COND.csv`; DQ PASS at normal severity |
 | `timber_sales` now sources harvest *activities*, not sale contracts; some analytical uses need contract-level data | `timber_sales` | Accepted — no public FACTS contract endpoint available |
 | `nps_units` lacks `county_fips` — gateway-county joins require a separate crosswalk | `nps_units` | Accepted — no county column in ArcGIS Online NPS boundary service |

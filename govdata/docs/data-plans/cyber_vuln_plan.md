@@ -1,7 +1,11 @@
 # cyber_vuln Refresh Architecture Plan
 
-**Status:** design agreed; not yet implemented.
-**Date:** 2026-06-06.
+**Status:** implemented and running. Phases 1, 2, and 5 shipped as designed; Phase 4 shipped
+with one deviation (static ecosystem list instead of a custom resolver); Phase 3 was solved
+by a different route than the plan text (see the per-phase status in §7). Two intentional
+deviations remain documented rather than reopened: MITRE CVE refs were dropped from scope,
+and OSV uses a static `type: list` ecosystem dimension.
+**Date:** 2026-06-06 (design); status updated 2026-07-07 after code audit.
 **Goal:** make every cyber_vuln table refresh correctly after initial load, using one
 clean `dataset_type` + freshness per source, with history via Iceberg snapshots.
 
@@ -143,43 +147,42 @@ application/feed paths (UA spoofing fails — TLS/JA3 fingerprinting). Only stat
 
 ## 7. Implementation phases (ordered)
 
-**Status (2026-06-06): all 8 tables now carry refresh config + `overwritePartitions`, and the
-code changes are in (govdata compiles clean; 8 new unit cases pass; YAML parses). NOT yet run
-end-to-end — a live per-table ETL rebuild is the remaining gate. Phase 2 changed during
-implementation: junctions stay materialized because a Calcite schema view cannot split a
-delimited string (no `string_split`; `UNNEST` needs a real array), so `vulnerability_cwes` /
-`kev_cwes` were given their parents' refresh config instead of becoming views.**
+**Status (audited 2026-07-07): shipped and running.** All 8 tables carry refresh config +
+`overwritePartitions`. Per-phase outcome below.
 
-**Phase 1 — config-only wins (no transformer work):**
+**Phase 1 — config-only wins — DONE.**
 1. `cwe_catalog`: `dataset_type: snapshot`, `freshness: {type: last_modified}`,
-   `iceberg.overwritePartitions: true`, drop CURRENT_* dims (keep `type`),
-   `snapshotRetentionDays`.
+   `iceberg.overwritePartitions: true`, CURRENT_* dims dropped (only `type`). ✔
 2. `kev_catalog`: `dataset_type: snapshot`, `freshness: {type: etag}`,
-   `iceberg.overwritePartitions: true`.
-3. `vulnerabilities`: `dataset_type: delta`, `backfill_period: quarterly`, add
-   `year`+`quarter` dims, `params` for `pubStartDate`/`pubEndDate`, partition
-   `[type, year, month]` via `effectiveYearField/MonthField: published`,
-   `iceberg.overwritePartitions: true`.
+   `iceberg.overwritePartitions: true`. ✔
+3. `vulnerabilities`: `year`+`quarter` partition, `pubStartDate`/`pubEndDate` params,
+   `overwritePartitions: true`. ✔ **Deviation:** quarterly windowing is driven by a custom
+   `NvdPublishedWindowDimensionResolver` (emitting window pairs, rows routed via computed
+   `pub_year`/`pub_month`) rather than the planned `backfill_period: quarterly` — a more
+   capable design. CURRENT_* pseudo-dims removed (asserted by `NvdPublishedWindowResolverTest`).
 
-**Phase 2 — junctions → views:**
-4. Delete `vulnerability_cwes` and `kev_cwes` as ETL tables; re-add as views (`UNNEST`).
-   Re-point dependent enrichment views.
+**Phase 2 — junctions — DONE (revised).** `vulnerability_cwes` / `kev_cwes` stay materialized
+ETL tables carrying their parents' refresh config — **not** views, because a Calcite schema
+view cannot split a delimited string (no `string_split`; `UNNEST` needs a real array). This
+is the outcome, not a gap.
 
-**Phase 3 — split multi-source `vuln_cross_refs`:**
-5. New raw `ghsa_advisories` (GitHub GraphQL); optional `mitre_cve_refs`.
-6. Re-define `vuln_cross_refs` as a UNION/JOIN view.
+**Phase 3 — split multi-source `vuln_cross_refs` — SUPERSEDED.** No `ghsa_advisories` /
+`mitre_cve_refs` tables were created and `vuln_cross_refs` is not a UNION view. Instead the
+"no multi-source transformer" principle was met by narrowing `vuln_cross_refs` to a **single**
+GHSA source (framework cursor pagination + delta-append) with a `vuln_cross_refs_unique` dedup
+view. **Accepted deviation:** MITRE CVE references were dropped from scope (GHSA-only cross-refs).
 
-**Phase 4 — OSV fan-out:**
-7. Custom `DimensionResolver` sourcing the ecosystem list; `source.url` templates
-   `/{ecosystem}/all.zip`; partition `[type, ecosystem]`, `overwritePartitions`; shrink
-   `OsvResponseTransformer` to one ecosystem.
+**Phase 4 — OSV fan-out — DONE, one deviation.** Partition `[type, ecosystem]`,
+`overwritePartitions`, per-ecosystem `etag` freshness, and a one-ecosystem
+`OsvResponseTransformer` all shipped; the old `CYBER_OSV_ECOSYSTEMS` env loop is gone.
+**Accepted deviation:** the ecosystem list is a static `type: list` dimension in YAML, not a
+custom `DimensionResolver` that sources the list dynamically.
 
-**Phase 5 — advisories on CSAF:**
-8. Re-point `advisories` source to `cisagov/CSAF` (tarball backfill + `changes.csv` custom
-   provider); rewrite `CisaAdvisoryResponseTransformer` for CSAF 2.0.
-
-**Per phase:** rebuild + a refresh test (backfill, then prove a new current-period record
-AND a revision both land in the correct partition without duplicates).
+**Phase 5 — advisories on CSAF — DONE.** `advisories` source repointed to `cisagov/CSAF`;
+`CsafAdvisoryDimensionResolver` reads `index.txt`/`changes.csv`; `CisaAdvisoryResponseTransformer`
+parses CSAF 2.0 JSON (no HTML scrape / PDF fallback — the old `PdfAdvisoryExtractor` has been
+deleted). **Deviation:** per-file fetch via `raw.githubusercontent.com` rather than the planned
+codeload tarball backfill — functionally equivalent.
 
 ---
 

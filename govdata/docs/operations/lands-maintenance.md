@@ -112,18 +112,20 @@ Pass `--force` to bypass all window checks and run every table regardless of tod
 
 ## Troubleshooting
 
-### `forest_inventory` — 0 rows, HTML error from FIA API
+### `forest_inventory` — 0 rows
 
-The FIA DataMart `fullreport` endpoint requires a `wc` (evaluation group) parameter in
-`{statecd}{year}` format — e.g., `12024` for Alabama's 2024 inventory. The current ETL
-passes `wc={year}` only, which causes the API to return an HTML error page.
+**Resolved (2026).** The table no longer uses the FIA DataMart `fullreport` query API
+(which required a `wc={statecd}{year}` evaluation-group parameter the ETL did not build).
+`FiaDatamartTransformer` now downloads the per-state bulk archive
+`https://apps.fs.usda.gov/fia/datamart/CSV/{state}_CSV.zip`, parses `{state}_COND.csv`
+directly (filtered to `COND_STATUS_CD = 1`), and aggregates a `CONDPROP_UNADJ`-weighted
+`BALIVE` average by `(INVYR, forest_type_group, ownership_class)`. Per-state fan-out is
+driven declaratively by the `state` dimension in `lands-schema.yaml`; each transformer
+invocation handles one state. DQ T1/T2 run at normal (error) severity — the prior `warn`
+downgrade has been removed. Latest DQ status: Lands PASS, `forest_inventory` ≈ 30,255 rows.
 
-**Workaround:** DQ checks T1 (row count) and T2 (coverage) for `forest_inventory` are
-downgraded to `warn`. The table will remain empty until `FiaDatamartTransformer` is
-redesigned to iterate all 50 state codes × year combinations. See `DQ-ISSUES.md`.
-
-**Impact:** Low — forest inventory data is not on any critical query path. Use
-`econ.bls_employment` (NAICS 113) as an alternative proxy for forestry sector activity.
+If the table returns 0 rows again, check that the `{state}_CSV.zip` archive downloaded
+and that `{state}_COND.csv` is present inside it (etag freshness gates the re-fetch).
 
 ### `national_forests` — 0 rows or field not found
 
