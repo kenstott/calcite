@@ -1049,7 +1049,7 @@ public class IcebergMaterializer {
             newFilePaths.size(), year, config.getFileChunkSize(), startChunkIndex);
         processWithFileChunkingToIceberg(config, conn, table, newFilePaths,
             partitionValues, typedPartitionFilter, newAccessions,
-            startChunkIndex, checkpointPath);
+            startChunkIndex, checkpointPath, excludeAccessions);
       } else {
         // Fall back to glob-based processing
         if (excludeAccessions != null && excludeAccessions.size() > 100) {
@@ -1217,13 +1217,19 @@ public class IcebergMaterializer {
   /**
    * Processes source files in explicit chunks to avoid full glob scans over 100k+ files.
    * Each DuckDB query targets at most {@code config.getFileChunkSize()} files via
-   * {@code read_parquet(ARRAY[...])}, eliminating the need for LIMIT/OFFSET paging
-   * and the NOT EXISTS exclusion filter (files are pre-filtered before this method).
+   * {@code read_parquet(ARRAY[...])}, eliminating the need for LIMIT/OFFSET paging.
+   *
+   * <p>Rows are still filtered against {@code excludeAccessions} (accessions already
+   * committed to Iceberg). The file pre-filter ({@code getNewSourceFilePaths}) is a
+   * best-effort optimization that can mis-classify an already-materialized file as new
+   * when a source accession's identity does not reconcile with the committed
+   * {@code accession_number}; without this row-level backstop those rows re-append on
+   * every run, producing deterministic duplication.
    */
   private void processWithFileChunkingToIceberg(MaterializationConfig config, Connection conn,
       Table table, List<String> newFilePaths, Map<String, String> partitionValues,
       Map<String, Object> typedPartitionFilter, Set<String> newAccessions,
-      int startChunkIndex, String checkpointPath)
+      int startChunkIndex, String checkpointPath, Set<String> excludeAccessions)
       throws SQLException, IOException {
 
     int fileChunkSize = config.getFileChunkSize();
@@ -1238,6 +1244,12 @@ public class IcebergMaterializer {
     long processedRows = 0;
     long totalStartTime = System.currentTimeMillis();
     String accessionCol = config.getAccessionColumn();
+    // Materialize the committed-accession exclusion set once for the NOT EXISTS backstop
+    // applied in buildSelectSqlForFileList (see method javadoc). Only large sets use the
+    // temp table; small sets are inlined as NOT IN and need no table.
+    if (excludeAccessions != null && excludeAccessions.size() > 100) {
+      createExclusionTempTable(conn, accessionCol, excludeAccessions);
+    }
     // Track accessions committed in this run to prevent cross-chunk duplicates when
     // staging files have been regenerated and the same accession spans multiple files.
     Set<String> committedInThisRun = new HashSet<String>();
@@ -1249,7 +1261,7 @@ public class IcebergMaterializer {
         continue;
       }
       List<String> chunk = newFilePaths.subList(i, Math.min(i + fileChunkSize, totalFiles));
-      String sql = buildSelectSqlForFileList(config, chunk);
+      String sql = buildSelectSqlForFileList(config, chunk, excludeAccessions);
       LOGGER.info("File chunk {}/{}: querying {} files", chunkNum, totalChunks, chunk.size());
 
       long chunkStart = System.currentTimeMillis();
@@ -1408,10 +1420,14 @@ public class IcebergMaterializer {
 
   /**
    * Builds a SELECT SQL using an explicit file list ({@code read_parquet(ARRAY[...])})
-   * instead of a glob pattern. No LIMIT/OFFSET or NOT EXISTS needed — the file list is
-   * pre-filtered to only new files.
+   * instead of a glob pattern, so no LIMIT/OFFSET paging is needed. It STILL applies the
+   * {@code excludeAccessions} filter (NOT EXISTS / NOT IN): the file list is only
+   * best-effort pre-filtered by {@code getNewSourceFilePaths}, which can mis-classify an
+   * already-materialized file as new, so this row-level filter is the backstop that
+   * prevents committed accessions from re-appending on every run.
    */
-  private String buildSelectSqlForFileList(MaterializationConfig config, List<String> filePaths) {
+  private String buildSelectSqlForFileList(MaterializationConfig config, List<String> filePaths,
+      Set<String> excludeAccessions) {
     StringBuilder sql = new StringBuilder();
     Map<String, String> computedCols = config.getComputedColumns();
     // DISTINCT removes exact-duplicate rows that arise when staging writes the same filing more
@@ -1443,8 +1459,35 @@ public class IcebergMaterializer {
     }
     sql.append("], hive_partitioning=true, union_by_name=true)");
 
+    boolean hasWhere = false;
     if (config.getRowFilter() != null && !config.getRowFilter().isEmpty()) {
       sql.append(" WHERE ").append(config.getRowFilter());
+      hasWhere = true;
+    }
+
+    // Row-level backstop: exclude accessions already committed to Iceberg, mirroring
+    // buildSelectSql. The file pre-filter (getNewSourceFilePaths) is best-effort and can
+    // pass an already-materialized file when a source accession's identity does not
+    // reconcile with the committed accession_number; without this filter those rows
+    // re-append on every run (deterministic duplication).
+    if (excludeAccessions != null && !excludeAccessions.isEmpty()) {
+      sql.append(hasWhere ? " AND " : " WHERE ");
+      if (excludeAccessions.size() > 100) {
+        // Anti-join against the _exclusions temp table (created by the caller).
+        sql.append("NOT EXISTS (SELECT 1 FROM _exclusions e WHERE e.accession = ")
+            .append(config.getAccessionColumn()).append(")");
+      } else {
+        sql.append(config.getAccessionColumn()).append(" NOT IN (");
+        boolean first = true;
+        for (String accession : excludeAccessions) {
+          if (!first) {
+            sql.append(", ");
+          }
+          sql.append("'").append(accession).append("'");
+          first = false;
+        }
+        sql.append(")");
+      }
     }
 
     return sql.toString();
