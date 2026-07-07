@@ -806,6 +806,47 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return;
     }
 
+    // General per-row partitioning: any Iceberg partition column whose value is NOT supplied by the
+    // batch's partition variables (i.e. it is not a dimension) must be derived per-row from the
+    // row's same-named field. Without this, every row collapses into a single "<col>=null"
+    // partition — a flat table unqueryable by that column (e.g. cyber_threat.ioc_urls put all
+    // 77k rows into first_seen=null). This is the date/string analogue of the effectiveYearField
+    // per-row fan-out above; year-partitioned tables return earlier and never reach this.
+    List<String> perRowPartitionCols = new ArrayList<String>();
+    for (String pc : icebergPartitionColumns) {
+      if (!resolvedVars.containsKey(pc)) {
+        perRowPartitionCols.add(pc);
+      }
+    }
+    if (!perRowPartitionCols.isEmpty()) {
+      Map<String, List<Map<String, Object>>> byPartition =
+          new LinkedHashMap<String, List<Map<String, Object>>>();
+      Map<String, Map<String, String>> byPartitionVars =
+          new LinkedHashMap<String, Map<String, String>>();
+      for (Map<String, Object> row : rows) {
+        Map<String, String> rowVars = new LinkedHashMap<String, String>(resolvedVars);
+        StringBuilder keyBuilder = new StringBuilder();
+        for (String pc : perRowPartitionCols) {
+          Object val = getValueCaseInsensitive(row, pc);
+          String sval = val != null ? String.valueOf(val) : null;
+          rowVars.put(pc, sval);
+          keyBuilder.append(pc).append('=').append(sval).append('|');
+        }
+        String key = keyBuilder.toString();
+        List<Map<String, Object>> group = byPartition.get(key);
+        if (group == null) {
+          group = new ArrayList<Map<String, Object>>();
+          byPartition.put(key, group);
+          byPartitionVars.put(key, rowVars);
+        }
+        group.add(row);
+      }
+      for (Map.Entry<String, List<Map<String, Object>>> entry : byPartition.entrySet()) {
+        processBatchPartition(entry.getValue(), byPartitionVars.get(entry.getKey()));
+      }
+      return;
+    }
+
     processBatchPartition(rows, resolvedVars);
   }
 
