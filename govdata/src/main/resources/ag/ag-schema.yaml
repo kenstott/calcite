@@ -1,0 +1,866 @@
+# ============================================================================
+# U.S. Agriculture Schema (AG)
+# ============================================================================
+# Data Sources (USDA):
+#   - NASS QuickStats REST API  (crop production, livestock inventory) — API key
+#   - ERS Farm Income & Wealth  (bulk CSV)                            — no key
+#   - RMA Summary of Business   (bulk pipe-delimited txt)             — no key
+#   - FSA program payments                                            — (follow-on)
+#
+# Design: each ETL table mirrors exactly one upstream source (tall). Wide/pivot
+# reshaping and cross-source joins are done as SQL views, never in Java.
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:ag}"
+dataLagYears: 1
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  USDA agricultural economics: crop production and livestock inventory (NASS
+  QuickStats), farm income and wealth (ERS), and crop insurance experience
+  (RMA Summary of Business). County- and state-level, joinable to geo.counties /
+  geo.states via state_fips_code + county_code, to disasters (drought/storm) for
+  yield-impact analysis, and to econ.fred_indicators for commodity-price context.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  # NASS QuickStats partition columns (both NASS tables partition by year only;
+  # agg_level_desc and state_alpha are request fan-out dimensions, not partitions).
+  nass_partitions: &nass_partitions
+    style: hive
+    columnDefinitions:
+      - name: type
+        type: VARCHAR
+      - name: year
+        type: INTEGER
+
+  # Canonical NASS QuickStats output columns (shared by crop + livestock; NASS
+  # returns a uniform record shape across sectors). Emitted by NassQuickStatsTransformer.
+  nass_columns: &nass_columns
+    - name: year
+      type: integer
+      source: year
+      nullable: false
+      comment: Data year (partition column)
+    - name: source_desc
+      type: string
+      source: source_desc
+      nullable: true
+      comment: "Program source: CENSUS (5-yearly, county-dense) or SURVEY (annual)"
+    - name: sector_desc
+      type: string
+      source: sector_desc
+      nullable: true
+      comment: "NASS sector (CROPS or ANIMALS & PRODUCTS)"
+    - name: group_desc
+      type: string
+      source: group_desc
+      nullable: true
+      comment: Commodity group (e.g. FIELD CROPS, LIVESTOCK, POULTRY)
+    - name: commodity_desc
+      type: string
+      source: commodity_desc
+      nullable: true
+      comment: Commodity (CORN, SOYBEANS, CATTLE, HOGS, ...)
+    - name: class_desc
+      type: string
+      source: class_desc
+      nullable: true
+      comment: Commodity class (e.g. ALL CLASSES, GRAIN)
+    - name: prodn_practice_desc
+      type: string
+      source: prodn_practice_desc
+      nullable: true
+      comment: Production practice (e.g. ALL PRODUCTION PRACTICES, IRRIGATED)
+    - name: util_practice_desc
+      type: string
+      source: util_practice_desc
+      nullable: true
+      comment: Utilization practice (e.g. GRAIN, SILAGE)
+    - name: statisticcat_desc
+      type: string
+      source: statisticcat_desc
+      nullable: true
+      comment: "Statistic category (PRODUCTION, AREA HARVESTED, AREA PLANTED, YIELD, INVENTORY)"
+    - name: domain_desc
+      type: string
+      source: domain_desc
+      nullable: true
+      comment: Domain (TOTAL or a breakdown dimension)
+    - name: domaincat_desc
+      type: string
+      source: domaincat_desc
+      nullable: true
+      comment: Domain category value
+    - name: short_desc
+      type: string
+      source: short_desc
+      nullable: true
+      comment: Full data-item description (the NASS "short_desc")
+    - name: unit_desc
+      type: string
+      source: unit_desc
+      nullable: true
+      comment: Unit of the value (BU, LB, TONS, HEAD, ACRES, ...)
+    - name: agg_level_desc
+      type: string
+      source: agg_level_desc
+      nullable: true
+      comment: Geographic aggregation level (COUNTY or STATE)
+    - name: state_alpha
+      type: string
+      source: state_alpha
+      nullable: true
+      comment: USPS state abbreviation
+    - name: state_fips_code
+      type: string
+      source: state_fips_code
+      nullable: true
+      comment: 2-digit state FIPS code (FK to geo.states.state_fips)
+    - name: state_ansi
+      type: string
+      source: state_ansi
+      nullable: true
+      comment: State ANSI code
+    - name: state_name
+      type: string
+      source: state_name
+      nullable: true
+      comment: State name
+    - name: asd_code
+      type: string
+      source: asd_code
+      nullable: true
+      comment: Agricultural statistics district code
+    - name: asd_desc
+      type: string
+      source: asd_desc
+      nullable: true
+      comment: Agricultural statistics district name
+    - name: county_ansi
+      type: string
+      source: county_ansi
+      nullable: true
+      comment: County ANSI code
+    - name: county_code
+      type: string
+      source: county_code
+      nullable: true
+      comment: 3-digit county FIPS code within state
+    - name: county_fips
+      type: string
+      source: county_fips
+      nullable: true
+      comment: 5-digit county FIPS (state+county, derived) — FK to geo.counties.county_fips
+    - name: county_name
+      type: string
+      source: county_name
+      nullable: true
+      comment: County name (empty for state-level rows)
+    - name: value
+      type: double
+      source: value
+      nullable: true
+      comment: Numeric statistic value (null when NASS suppressed it; see value_flag)
+    - name: value_flag
+      type: string
+      source: value_flag
+      nullable: true
+      comment: "NASS suppression marker when value is null: (D) disclosure, (Z) rounds to zero, (X), (NA)"
+    - name: cv_pct
+      type: double
+      source: cv_pct
+      nullable: true
+      comment: Coefficient of variation (%) of the estimate, when published
+    - name: freq_desc
+      type: string
+      source: freq_desc
+      nullable: true
+      comment: Frequency (ANNUAL, ...)
+    - name: reference_period_desc
+      type: string
+      source: reference_period_desc
+      nullable: true
+      comment: Reference period (YEAR, MARKETING YEAR, ...)
+    - name: load_time
+      type: string
+      source: load_time
+      nullable: true
+      comment: NASS record load timestamp
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # Annual USDA data publishes early the following year; iterate publish year and
+  # fetch data year = publish - 1 via {effective_year}. Earliest NASS digital record ~1997.
+  ag_year_range: &ag_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 1
+
+  # NASS geographic aggregation levels ingested (county + state; national totals
+  # are derivable and out of scope for the county/state fan-out).
+  nass_agg_levels: &nass_agg_levels
+    type: list
+    values: ["COUNTY", "STATE"]
+
+  # Every NASS state_alpha value except US (national). Fanning out by state keeps
+  # each (agg_level, state, year) request well under the QuickStats 50,000-row cap.
+  nass_states: &nass_states
+    type: list
+    values: ["AK","AL","AR","AS","AZ","CA","CO","CT","DE","EN","FL","GA","GU","HI",
+             "IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MP",
+             "MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","OT",
+             "PA","PN","PR","RI","SC","SD","TN","TX","UT","VA","VI","VT","WA","WI",
+             "WV","WY"]
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # NASS_CROP_PRODUCTION — annual crop statistics by county/state (NASS QuickStats)
+  # ---------------------------------------------------------------------------
+  # sector=CROPS + group=FIELD CROPS keeps census-year county chunks < 50k rows
+  # (verified: worst case census-year TX county FIELD CROPS = 25,154). Tall: one
+  # row per commodity x data-item x geography x year (PRODUCTION, AREA HARVESTED,
+  # AREA PLANTED, YIELD all present as distinct statisticcat_desc rows).
+  - name: nass_crop_production
+    pattern: "type=nass_crop_production/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS QuickStats field-crop statistics (production, area planted, area
+      harvested, yield) by county and state. Tall layout — filter statisticcat_desc
+      for a specific measure and unit_desc for its unit. Joins to geo.counties via
+      state_fips_code+county_code and to disasters drought/storm tables by county+year.
+
+    dimensions:
+      type:
+        - nass_crop_production
+      agg_level_desc: *nass_agg_levels
+      state_alpha: *nass_states
+      year: *ag_year_range
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "CROPS"
+        group_desc: "FIELD CROPS"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{effective_year}"
+      response:
+        format: json
+        # NassQuickStatsTransformer extracts the top-level `data` array and
+        # treats an `error` body (e.g. exceeds limit=50000) as a hard failure.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_crop_production/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: &nass_iceberg
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # NASS_LIVESTOCK_INVENTORY — animal & poultry inventory by county/state
+  # ---------------------------------------------------------------------------
+  - name: nass_livestock_inventory
+    pattern: "type=nass_livestock_inventory/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS QuickStats livestock and poultry inventory (head counts) by county
+      and state — cattle, hogs, sheep, chickens, turkeys, etc. Tall layout; use
+      commodity_desc + class_desc for a specific animal class and unit_desc for the
+      unit (HEAD). Joins to geo.counties and to census rural demographics.
+
+    dimensions:
+      type:
+        - nass_livestock_inventory
+      agg_level_desc: *nass_agg_levels
+      state_alpha: *nass_states
+      year: *ag_year_range
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "ANIMALS & PRODUCTS"
+        statisticcat_desc: "INVENTORY"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{effective_year}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_livestock_inventory/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
+  # RMA_CROP_INSURANCE — Summary of Business, state/county/crop with coverage level
+  # ---------------------------------------------------------------------------
+  # One bulk pipe-delimited zip per year (sobcov_{year}.zip, stable URL, 1989+).
+  # Streamed by RmaSummaryOfBusinessTransformer (no per-request cap; ~150k rows/yr).
+  - name: rma_crop_insurance
+    pattern: "type=rma_crop_insurance/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA RMA Summary of Business — crop insurance experience by state, county,
+      crop, insurance plan, coverage category, delivery type, and coverage level.
+      Policies, acres, liability, premium, subsidy, indemnity, and loss ratio.
+      Joins to geo.counties via county_fips and to disasters storm/drought tables
+      by county+year for loss attribution.
+
+    dimensions:
+      type:
+        - rma_crop_insurance
+      year: *ag_year_range
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Commodity (crop insurance) year — partition column
+      - name: state_fips
+        type: string
+        source: state_fips
+        nullable: true
+        comment: 2-digit state FIPS (FK to geo.states.state_fips)
+      - name: state_abbr
+        type: string
+        source: state_abbr
+        nullable: true
+        comment: USPS state abbreviation
+      - name: county_code
+        type: string
+        source: county_code
+        nullable: true
+        comment: 3-digit county code within state
+      - name: county_fips
+        type: string
+        source: county_fips
+        nullable: true
+        comment: 5-digit county FIPS (state+county, derived) — FK to geo.counties.county_fips
+      - name: county_name
+        type: string
+        source: county_name
+        nullable: true
+        comment: County name
+      - name: commodity_code
+        type: string
+        source: commodity_code
+        nullable: true
+        comment: RMA commodity code
+      - name: commodity_name
+        type: string
+        source: commodity_name
+        nullable: true
+        comment: Insured crop name
+      - name: insurance_plan_code
+        type: string
+        source: insurance_plan_code
+        nullable: true
+        comment: Insurance plan code
+      - name: insurance_plan_abbr
+        type: string
+        source: insurance_plan_abbr
+        nullable: true
+        comment: Insurance plan abbreviation (YP, APH, RP, ...)
+      - name: coverage_category
+        type: string
+        source: coverage_category
+        nullable: true
+        comment: "Coverage category (A=Buyup, C=CAT, E=Existing, L=Limited)"
+      - name: delivery_type
+        type: string
+        source: delivery_type
+        nullable: true
+        comment: Delivery type (RCAT/RBUP/FCAT/FBUP)
+      - name: coverage_level
+        type: double
+        source: coverage_level
+        nullable: true
+        comment: Coverage level as a decimal fraction (e.g. 0.65)
+      - name: policies_sold_count
+        type: long
+        source: policies_sold_count
+        nullable: true
+        comment: Number of policies sold
+      - name: policies_earning_prem_count
+        type: long
+        source: policies_earning_prem_count
+        nullable: true
+        comment: Policies earning premium
+      - name: policies_indemnified_count
+        type: long
+        source: policies_indemnified_count
+        nullable: true
+        comment: Policies indemnified
+      - name: units_earning_prem_count
+        type: long
+        source: units_earning_prem_count
+        nullable: true
+        comment: Insured units earning premium
+      - name: units_indemnified_count
+        type: long
+        source: units_indemnified_count
+        nullable: true
+        comment: Insured units indemnified
+      - name: quantity_type
+        type: string
+        source: quantity_type
+        nullable: true
+        comment: Unit of net_reported_quantity (Acres, Tons, Pounds, ...)
+      - name: net_reported_quantity
+        type: double
+        source: net_reported_quantity
+        nullable: true
+        comment: Net reported quantity (in quantity_type units; the net reporting level)
+      - name: endorsed_companion_acres
+        type: double
+        source: endorsed_companion_acres
+        nullable: true
+        comment: Endorsed/companion acres
+      - name: liability_amount
+        type: double
+        source: liability_amount
+        nullable: true
+        comment: Total liability (USD)
+      - name: total_premium_amount
+        type: double
+        source: total_premium_amount
+        nullable: true
+        comment: Total premium (USD)
+      - name: subsidy_amount
+        type: double
+        source: subsidy_amount
+        nullable: true
+        comment: Federal premium subsidy (USD)
+      - name: state_private_subsidy
+        type: double
+        source: state_private_subsidy
+        nullable: true
+        comment: State/private subsidy (USD)
+      - name: additional_subsidy
+        type: double
+        source: additional_subsidy
+        nullable: true
+        comment: Additional subsidy (USD)
+      - name: efa_premium_discount
+        type: double
+        source: efa_premium_discount
+        nullable: true
+        comment: EFA premium discount (USD)
+      - name: indemnity_amount
+        type: double
+        source: indemnity_amount
+        nullable: true
+        comment: Indemnity paid (USD; signed)
+      - name: loss_ratio
+        type: double
+        source: loss_ratio
+        nullable: true
+        comment: Loss ratio (indemnity / total premium)
+
+    source:
+      type: http
+      url: "https://pubfs-rma.fpac.usda.gov/pub/Web_Data_Files/Summary_of_Business/state_county_crop/sobcov_{effective_year}.zip"
+      method: GET
+      response:
+        format: json  # ignored: RmaSummaryOfBusinessTransformer streams the zip itself
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.RmaSummaryOfBusinessTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=rma_crop_insurance/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
+  # ERS_FARM_INCOME — USDA ERS Farm Income and Wealth Statistics (bulk CSV)
+  # ---------------------------------------------------------------------------
+  # One cumulative CSV carries all years; single fetch, partitioned by row year.
+  # source.url is the LANDING PAGE — ErsFarmIncomeProvider scrapes it for the
+  # current rotating /media/.../release.zip, then streams the latin-1 CSV.
+  - name: ers_farm_income
+    pattern: "type=ers_farm_income/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA ERS Farm Income and Wealth Statistics by state and US total: cash
+      receipts, government payments, production expenses, net farm income, and
+      balance-sheet items. Tall — one row per year x state x variable. Values are
+      generally thousands of USD (see unit_desc; some rows are Percent/Ratio/per
+      farm). Joins to geo.states via the state USPS abbreviation.
+
+    dimensions:
+      type:
+        - ers_farm_income
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Data year (partition column); most recent 1-2 years are ERS forecasts
+      - name: state
+        type: string
+        source: state
+        nullable: true
+        comment: "USPS state abbreviation, or 'US' for the national total (FK to geo.states.state_abbr)"
+      - name: artificial_key
+        type: string
+        source: artificial_key
+        nullable: true
+        comment: ERS stable series code embedding state + variable
+      - name: variable_description_total
+        type: string
+        source: variable_description_total
+        nullable: true
+        comment: Full variable label (category + subcategory)
+      - name: category
+        type: string
+        source: category
+        nullable: true
+        comment: Variable category (VariableDescriptionPart1)
+      - name: subcategory
+        type: string
+        source: subcategory
+        nullable: true
+        comment: Variable subcategory (VariableDescriptionPart2)
+      - name: amount
+        type: double
+        source: amount
+        nullable: true
+        comment: Value in the units named by unit_desc (usually thousands of USD; can be negative)
+      - name: unit_desc
+        type: string
+        source: unit_desc
+        nullable: true
+        comment: "Units: $1,000 (dominant), Percent, Ratio, $1,000 per farm, 1,000 acres"
+      - name: publication_date
+        type: string
+        source: publication_date
+        nullable: true
+        comment: ERS release stamp (e.g. "Data as of February 5, 2026.")
+      - name: source
+        type: string
+        source: source
+        nullable: true
+        comment: ERS attribution string
+      - name: gdp_deflator
+        type: double
+        source: gdp_deflator
+        nullable: true
+        comment: GDP chain-type deflator for the row's year (for nominal->real conversion)
+
+    source:
+      type: http
+      url: "https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics/data-files-us-and-state-level-farm-income-and-wealth-statistics"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.ErsFarmIncomeProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ers_farm_income/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
+  # FSA_COMMODITY_PAYMENTS — FSA program/conservation payments by county
+  # ---------------------------------------------------------------------------
+  # FSA EFOIA Name-and-Address xlsx, ~6 state-range files per disbursement-year
+  # vintage. FsaCommodityPaymentsProvider scrapes the landing page for the
+  # vintage, resolves node pages to xlsx, reads via POI, and aggregates per
+  # county x program x program-year. One fetch per disbursement year.
+  - name: fsa_commodity_payments
+    pattern: "type=fsa_commodity_payments/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA FSA program and conservation payments aggregated by county, program,
+      and program year (ARC-CO, PLC, CRP, LFP, ERP, DMC, etc.). payments is the
+      summed disbursement (USD); farms is a distinct-payee count (proxy — FSA
+      files carry no farm/operation id). No commodity dimension exists (program
+      is the finest grain). year is the disbursement (vintage) year; program_year
+      is the crop/program year and differs. Joins to geo.counties via county_fips.
+
+    dimensions:
+      type:
+        - fsa_commodity_payments
+      year: *ag_year_range
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Disbursement (vintage) year — partition column
+      - name: program_year
+        type: string
+        source: program_year
+        nullable: true
+        comment: Crop/program year the payment applies to (differs from disbursement year)
+      - name: state_fips
+        type: string
+        source: state_fips
+        nullable: true
+        comment: 2-digit state FIPS (FSA state code; FK to geo.states.state_fips)
+      - name: county_fips
+        type: string
+        source: county_fips
+        nullable: true
+        comment: 5-digit county FIPS (state+county FSA code) — FK to geo.counties.county_fips
+      - name: program_code
+        type: string
+        source: program_code
+        nullable: true
+        comment: FSA accounting program code
+      - name: program_description
+        type: string
+        source: program_description
+        nullable: true
+        comment: FSA accounting program description (ARC-County, PLC, CRP, LFP, ...)
+      - name: payments
+        type: double
+        source: payments
+        nullable: true
+        comment: Summed disbursement amount (USD) for the county/program/program-year
+      - name: farms
+        type: int
+        source: farms
+        nullable: true
+        comment: Distinct payee count (proxy for number of farms/operations)
+
+    source:
+      type: http
+      url: "https://www.fsa.usda.gov/tools/informational/freedom-information-act-foia/electronic-reading-room/frequently-requested/payment-files"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.FsaCommodityPaymentsProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=fsa_commodity_payments/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# The ag tables each mirror a distinct USDA source and share no parent/child
+# dimension, so there are no intra-schema foreign keys. All cross-table linkage
+# is via the shared geo spatial keys (state/county FIPS), declared as inter-schema
+# FKs below. Joins to econ.fred_indicators (commodity prices) and the future
+# disasters schema are semantic (commodity name, not a shared key) and are not
+# declared as constraints.
+
+constraints:
+
+  nass_crop_production:
+    # Uniqueness = program source x geography x full data-item (short_desc) x
+    # domain category x reference period x year.
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - county_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  rma_crop_insurance:
+    # One row per state x county x crop x plan x coverage category x delivery type
+    # x coverage level, per commodity year.
+    primaryKey:
+      - year
+      - state_fips
+      - county_fips
+      - commodity_code
+      - insurance_plan_code
+      - coverage_category
+      - delivery_type
+      - coverage_level
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: RMA state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties
+
+  ers_farm_income:
+    # PK is (year, artificial_key) — ERS artificial_key already encodes state+variable
+    # and is unique per year. Natural alternate key (year, state,
+    # variable_description_total) is not declared: the constraints format supports
+    # only primaryKey + foreignKeys.
+    primaryKey:
+      - type
+      - year
+      - artificial_key
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: ERS state USPS abbreviation to geo.states (excludes the 'US' national total)
+
+  fsa_commodity_payments:
+    # One aggregated row per disbursement year x program year x county x program.
+    primaryKey:
+      - type
+      - year
+      - program_year
+      - county_fips
+      - program_code
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: FSA state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: 5-digit county FIPS to geo.counties
+
+  nass_livestock_inventory:
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - county_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)

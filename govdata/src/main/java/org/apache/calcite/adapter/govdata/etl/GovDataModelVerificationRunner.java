@@ -83,6 +83,7 @@ public final class GovDataModelVerificationRunner {
     SCHEMA_YAML.put("patents", "/patents/patents-schema.yaml");
     SCHEMA_YAML.put("lands", "/lands/lands-schema.yaml");
     SCHEMA_YAML.put("cftc", "/cftc/cftc-schema.yaml");
+    SCHEMA_YAML.put("ag", "/ag/ag-schema.yaml");
     KNOWN_SCHEMAS.addAll(SCHEMA_YAML.keySet());
   }
 

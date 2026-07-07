@@ -19,6 +19,7 @@ import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.govdata.ag.AgSchemaFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
 import org.apache.calcite.adapter.govdata.cyber.CyberSchemaFactory;
@@ -483,11 +484,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "derivatives":
         return new CftcSchemaFactory();
 
+      case "ag":
+      case "agriculture":
+      case "usda":
+        return new AgSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands, cftc");
+            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands, cftc, ag");
     }
   }
 
