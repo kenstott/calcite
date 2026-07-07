@@ -139,6 +139,11 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
       result.put(STRING_FIELDS[i][1], getTextValue(record, STRING_FIELDS[i][0]));
     }
 
+    // Derive a 5-digit county FIPS (state 2 + county 3, zero-padded) for a clean
+    // FK to geo.counties.county_fips; null unless both parts are present.
+    result.put("county_fips", countyFips(getTextValue(record, "state_fips_code"),
+        getTextValue(record, "county_code")));
+
     // Value -> value (numeric string or null) + value_flag (suppression marker)
     String rawValue = getTextValue(record, "Value");
     String flag = suppressionMarker(rawValue);
@@ -155,6 +160,28 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
     result.put("cv_pct", suppressionMarker(rawCv) != null ? null : normalizeNumeric(rawCv));
 
     return result;
+  }
+
+  /**
+   * Builds a 5-digit county FIPS from the 2-digit state FIPS and 3-digit county
+   * code, zero-padded. Returns null unless both parts are present and numeric-ish.
+   */
+  private String countyFips(String stateFips, String countyCode) {
+    if (stateFips == null || countyCode == null) {
+      return null;
+    }
+    String st = stateFips.trim();
+    String co = countyCode.trim();
+    if (st.isEmpty() || co.isEmpty()) {
+      return null;
+    }
+    while (st.length() < 2) {
+      st = "0" + st;
+    }
+    while (co.length() < 3) {
+      co = "0" + co;
+    }
+    return st + co;
   }
 
   /**

@@ -43,6 +43,10 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
       "nass_livestock_inventory"
   ));
 
+  private static final Set<String> RMA_TABLES = new HashSet<>(Arrays.asList(
+      "rma_crop_insurance"
+  ));
+
   @Override
   public String getSchemaResourceName() {
     return "/ag/ag-schema.yaml";
@@ -61,6 +65,10 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
 
     for (final String tableName : NASS_TABLES) {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "nass", enabledSources));
+    }
+
+    for (final String tableName : RMA_TABLES) {
+      builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "rma", enabledSources));
     }
 
     LOGGER.debug("Configured AG schema hooks: enabledSources={}",

@@ -150,7 +150,12 @@ column_templates:
       type: string
       source: county_code
       nullable: true
-      comment: 3-digit county FIPS code within state (FK to geo.counties)
+      comment: 3-digit county FIPS code within state
+    - name: county_fips
+      type: string
+      source: county_fips
+      nullable: true
+      comment: 5-digit county FIPS (state+county, derived) — FK to geo.counties.county_fips
     - name: county_name
       type: string
       source: county_name
@@ -357,3 +362,279 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg: *nass_iceberg
+
+  # ---------------------------------------------------------------------------
+  # RMA_CROP_INSURANCE — Summary of Business, state/county/crop with coverage level
+  # ---------------------------------------------------------------------------
+  # One bulk pipe-delimited zip per year (sobcov_{year}.zip, stable URL, 1989+).
+  # Streamed by RmaSummaryOfBusinessTransformer (no per-request cap; ~150k rows/yr).
+  - name: rma_crop_insurance
+    pattern: "type=rma_crop_insurance/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA RMA Summary of Business — crop insurance experience by state, county,
+      crop, insurance plan, coverage category, delivery type, and coverage level.
+      Policies, acres, liability, premium, subsidy, indemnity, and loss ratio.
+      Joins to geo.counties via county_fips and to disasters storm/drought tables
+      by county+year for loss attribution.
+
+    dimensions:
+      type:
+        - rma_crop_insurance
+      year: *ag_year_range
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Commodity (crop insurance) year — partition column
+      - name: state_fips
+        type: string
+        source: state_fips
+        nullable: true
+        comment: 2-digit state FIPS (FK to geo.states.state_fips)
+      - name: state_abbr
+        type: string
+        source: state_abbr
+        nullable: true
+        comment: USPS state abbreviation
+      - name: county_code
+        type: string
+        source: county_code
+        nullable: true
+        comment: 3-digit county code within state
+      - name: county_fips
+        type: string
+        source: county_fips
+        nullable: true
+        comment: 5-digit county FIPS (state+county, derived) — FK to geo.counties.county_fips
+      - name: county_name
+        type: string
+        source: county_name
+        nullable: true
+        comment: County name
+      - name: commodity_code
+        type: string
+        source: commodity_code
+        nullable: true
+        comment: RMA commodity code
+      - name: commodity_name
+        type: string
+        source: commodity_name
+        nullable: true
+        comment: Insured crop name
+      - name: insurance_plan_code
+        type: string
+        source: insurance_plan_code
+        nullable: true
+        comment: Insurance plan code
+      - name: insurance_plan_abbr
+        type: string
+        source: insurance_plan_abbr
+        nullable: true
+        comment: Insurance plan abbreviation (YP, APH, RP, ...)
+      - name: coverage_category
+        type: string
+        source: coverage_category
+        nullable: true
+        comment: "Coverage category (A=Buyup, C=CAT, E=Existing, L=Limited)"
+      - name: delivery_type
+        type: string
+        source: delivery_type
+        nullable: true
+        comment: Delivery type (RCAT/RBUP/FCAT/FBUP)
+      - name: coverage_level
+        type: double
+        source: coverage_level
+        nullable: true
+        comment: Coverage level as a decimal fraction (e.g. 0.65)
+      - name: policies_sold_count
+        type: long
+        source: policies_sold_count
+        nullable: true
+        comment: Number of policies sold
+      - name: policies_earning_prem_count
+        type: long
+        source: policies_earning_prem_count
+        nullable: true
+        comment: Policies earning premium
+      - name: policies_indemnified_count
+        type: long
+        source: policies_indemnified_count
+        nullable: true
+        comment: Policies indemnified
+      - name: units_earning_prem_count
+        type: long
+        source: units_earning_prem_count
+        nullable: true
+        comment: Insured units earning premium
+      - name: units_indemnified_count
+        type: long
+        source: units_indemnified_count
+        nullable: true
+        comment: Insured units indemnified
+      - name: quantity_type
+        type: string
+        source: quantity_type
+        nullable: true
+        comment: Unit of net_reported_quantity (Acres, Tons, Pounds, ...)
+      - name: net_reported_quantity
+        type: double
+        source: net_reported_quantity
+        nullable: true
+        comment: Net reported quantity (in quantity_type units; the net reporting level)
+      - name: endorsed_companion_acres
+        type: double
+        source: endorsed_companion_acres
+        nullable: true
+        comment: Endorsed/companion acres
+      - name: liability_amount
+        type: double
+        source: liability_amount
+        nullable: true
+        comment: Total liability (USD)
+      - name: total_premium_amount
+        type: double
+        source: total_premium_amount
+        nullable: true
+        comment: Total premium (USD)
+      - name: subsidy_amount
+        type: double
+        source: subsidy_amount
+        nullable: true
+        comment: Federal premium subsidy (USD)
+      - name: state_private_subsidy
+        type: double
+        source: state_private_subsidy
+        nullable: true
+        comment: State/private subsidy (USD)
+      - name: additional_subsidy
+        type: double
+        source: additional_subsidy
+        nullable: true
+        comment: Additional subsidy (USD)
+      - name: efa_premium_discount
+        type: double
+        source: efa_premium_discount
+        nullable: true
+        comment: EFA premium discount (USD)
+      - name: indemnity_amount
+        type: double
+        source: indemnity_amount
+        nullable: true
+        comment: Indemnity paid (USD; signed)
+      - name: loss_ratio
+        type: double
+        source: loss_ratio
+        nullable: true
+        comment: Loss ratio (indemnity / total premium)
+
+    source:
+      type: http
+      url: "https://pubfs-rma.fpac.usda.gov/pub/Web_Data_Files/Summary_of_Business/state_county_crop/sobcov_{effective_year}.zip"
+      method: GET
+      response:
+        format: json  # ignored: RmaSummaryOfBusinessTransformer streams the zip itself
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.RmaSummaryOfBusinessTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=rma_crop_insurance/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# The ag tables each mirror a distinct USDA source and share no parent/child
+# dimension, so there are no intra-schema foreign keys. All cross-table linkage
+# is via the shared geo spatial keys (state/county FIPS), declared as inter-schema
+# FKs below. Joins to econ.fred_indicators (commodity prices) and the future
+# disasters schema are semantic (commodity name, not a shared key) and are not
+# declared as constraints.
+
+constraints:
+
+  nass_crop_production:
+    # Uniqueness = program source x geography x full data-item (short_desc) x
+    # domain category x reference period x year.
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - county_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  rma_crop_insurance:
+    # One row per state x county x crop x plan x coverage category x delivery type
+    # x coverage level, per commodity year.
+    primaryKey:
+      - year
+      - state_fips
+      - county_fips
+      - commodity_code
+      - insurance_plan_code
+      - coverage_category
+      - delivery_type
+      - coverage_level
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: RMA state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties
+
+  nass_livestock_inventory:
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - county_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
