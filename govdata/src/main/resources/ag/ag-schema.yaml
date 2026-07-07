@@ -1,0 +1,359 @@
+# ============================================================================
+# U.S. Agriculture Schema (AG)
+# ============================================================================
+# Data Sources (USDA):
+#   - NASS QuickStats REST API  (crop production, livestock inventory) — API key
+#   - ERS Farm Income & Wealth  (bulk CSV)                            — no key
+#   - RMA Summary of Business   (bulk pipe-delimited txt)             — no key
+#   - FSA program payments                                            — (follow-on)
+#
+# Design: each ETL table mirrors exactly one upstream source (tall). Wide/pivot
+# reshaping and cross-source joins are done as SQL views, never in Java.
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:ag}"
+dataLagYears: 1
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  USDA agricultural economics: crop production and livestock inventory (NASS
+  QuickStats), farm income and wealth (ERS), and crop insurance experience
+  (RMA Summary of Business). County- and state-level, joinable to geo.counties /
+  geo.states via state_fips_code + county_code, to disasters (drought/storm) for
+  yield-impact analysis, and to econ.fred_indicators for commodity-price context.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  # NASS QuickStats partition columns (both NASS tables partition by year only;
+  # agg_level_desc and state_alpha are request fan-out dimensions, not partitions).
+  nass_partitions: &nass_partitions
+    style: hive
+    columnDefinitions:
+      - name: type
+        type: VARCHAR
+      - name: year
+        type: INTEGER
+
+  # Canonical NASS QuickStats output columns (shared by crop + livestock; NASS
+  # returns a uniform record shape across sectors). Emitted by NassQuickStatsTransformer.
+  nass_columns: &nass_columns
+    - name: year
+      type: integer
+      source: year
+      nullable: false
+      comment: Data year (partition column)
+    - name: source_desc
+      type: string
+      source: source_desc
+      nullable: true
+      comment: "Program source: CENSUS (5-yearly, county-dense) or SURVEY (annual)"
+    - name: sector_desc
+      type: string
+      source: sector_desc
+      nullable: true
+      comment: "NASS sector (CROPS or ANIMALS & PRODUCTS)"
+    - name: group_desc
+      type: string
+      source: group_desc
+      nullable: true
+      comment: Commodity group (e.g. FIELD CROPS, LIVESTOCK, POULTRY)
+    - name: commodity_desc
+      type: string
+      source: commodity_desc
+      nullable: true
+      comment: Commodity (CORN, SOYBEANS, CATTLE, HOGS, ...)
+    - name: class_desc
+      type: string
+      source: class_desc
+      nullable: true
+      comment: Commodity class (e.g. ALL CLASSES, GRAIN)
+    - name: prodn_practice_desc
+      type: string
+      source: prodn_practice_desc
+      nullable: true
+      comment: Production practice (e.g. ALL PRODUCTION PRACTICES, IRRIGATED)
+    - name: util_practice_desc
+      type: string
+      source: util_practice_desc
+      nullable: true
+      comment: Utilization practice (e.g. GRAIN, SILAGE)
+    - name: statisticcat_desc
+      type: string
+      source: statisticcat_desc
+      nullable: true
+      comment: "Statistic category (PRODUCTION, AREA HARVESTED, AREA PLANTED, YIELD, INVENTORY)"
+    - name: domain_desc
+      type: string
+      source: domain_desc
+      nullable: true
+      comment: Domain (TOTAL or a breakdown dimension)
+    - name: domaincat_desc
+      type: string
+      source: domaincat_desc
+      nullable: true
+      comment: Domain category value
+    - name: short_desc
+      type: string
+      source: short_desc
+      nullable: true
+      comment: Full data-item description (the NASS "short_desc")
+    - name: unit_desc
+      type: string
+      source: unit_desc
+      nullable: true
+      comment: Unit of the value (BU, LB, TONS, HEAD, ACRES, ...)
+    - name: agg_level_desc
+      type: string
+      source: agg_level_desc
+      nullable: true
+      comment: Geographic aggregation level (COUNTY or STATE)
+    - name: state_alpha
+      type: string
+      source: state_alpha
+      nullable: true
+      comment: USPS state abbreviation
+    - name: state_fips_code
+      type: string
+      source: state_fips_code
+      nullable: true
+      comment: 2-digit state FIPS code (FK to geo.states.state_fips)
+    - name: state_ansi
+      type: string
+      source: state_ansi
+      nullable: true
+      comment: State ANSI code
+    - name: state_name
+      type: string
+      source: state_name
+      nullable: true
+      comment: State name
+    - name: asd_code
+      type: string
+      source: asd_code
+      nullable: true
+      comment: Agricultural statistics district code
+    - name: asd_desc
+      type: string
+      source: asd_desc
+      nullable: true
+      comment: Agricultural statistics district name
+    - name: county_ansi
+      type: string
+      source: county_ansi
+      nullable: true
+      comment: County ANSI code
+    - name: county_code
+      type: string
+      source: county_code
+      nullable: true
+      comment: 3-digit county FIPS code within state (FK to geo.counties)
+    - name: county_name
+      type: string
+      source: county_name
+      nullable: true
+      comment: County name (empty for state-level rows)
+    - name: value
+      type: double
+      source: value
+      nullable: true
+      comment: Numeric statistic value (null when NASS suppressed it; see value_flag)
+    - name: value_flag
+      type: string
+      source: value_flag
+      nullable: true
+      comment: "NASS suppression marker when value is null: (D) disclosure, (Z) rounds to zero, (X), (NA)"
+    - name: cv_pct
+      type: double
+      source: cv_pct
+      nullable: true
+      comment: Coefficient of variation (%) of the estimate, when published
+    - name: freq_desc
+      type: string
+      source: freq_desc
+      nullable: true
+      comment: Frequency (ANNUAL, ...)
+    - name: reference_period_desc
+      type: string
+      source: reference_period_desc
+      nullable: true
+      comment: Reference period (YEAR, MARKETING YEAR, ...)
+    - name: load_time
+      type: string
+      source: load_time
+      nullable: true
+      comment: NASS record load timestamp
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # Annual USDA data publishes early the following year; iterate publish year and
+  # fetch data year = publish - 1 via {effective_year}. Earliest NASS digital record ~1997.
+  ag_year_range: &ag_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 1
+
+  # NASS geographic aggregation levels ingested (county + state; national totals
+  # are derivable and out of scope for the county/state fan-out).
+  nass_agg_levels: &nass_agg_levels
+    type: list
+    values: ["COUNTY", "STATE"]
+
+  # Every NASS state_alpha value except US (national). Fanning out by state keeps
+  # each (agg_level, state, year) request well under the QuickStats 50,000-row cap.
+  nass_states: &nass_states
+    type: list
+    values: ["AK","AL","AR","AS","AZ","CA","CO","CT","DE","EN","FL","GA","GU","HI",
+             "IA","ID","IL","IN","KS","KY","LA","MA","MD","ME","MI","MN","MO","MP",
+             "MS","MT","NC","ND","NE","NH","NJ","NM","NV","NY","OH","OK","OR","OT",
+             "PA","PN","PR","RI","SC","SD","TN","TX","UT","VA","VI","VT","WA","WI",
+             "WV","WY"]
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # NASS_CROP_PRODUCTION — annual crop statistics by county/state (NASS QuickStats)
+  # ---------------------------------------------------------------------------
+  # sector=CROPS + group=FIELD CROPS keeps census-year county chunks < 50k rows
+  # (verified: worst case census-year TX county FIELD CROPS = 25,154). Tall: one
+  # row per commodity x data-item x geography x year (PRODUCTION, AREA HARVESTED,
+  # AREA PLANTED, YIELD all present as distinct statisticcat_desc rows).
+  - name: nass_crop_production
+    pattern: "type=nass_crop_production/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS QuickStats field-crop statistics (production, area planted, area
+      harvested, yield) by county and state. Tall layout — filter statisticcat_desc
+      for a specific measure and unit_desc for its unit. Joins to geo.counties via
+      state_fips_code+county_code and to disasters drought/storm tables by county+year.
+
+    dimensions:
+      type:
+        - nass_crop_production
+      agg_level_desc: *nass_agg_levels
+      state_alpha: *nass_states
+      year: *ag_year_range
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "CROPS"
+        group_desc: "FIELD CROPS"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{effective_year}"
+      response:
+        format: json
+        # NassQuickStatsTransformer extracts the top-level `data` array and
+        # treats an `error` body (e.g. exceeds limit=50000) as a hard failure.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_crop_production/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: &nass_iceberg
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # NASS_LIVESTOCK_INVENTORY — animal & poultry inventory by county/state
+  # ---------------------------------------------------------------------------
+  - name: nass_livestock_inventory
+    pattern: "type=nass_livestock_inventory/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA NASS QuickStats livestock and poultry inventory (head counts) by county
+      and state — cattle, hogs, sheep, chickens, turkeys, etc. Tall layout; use
+      commodity_desc + class_desc for a specific animal class and unit_desc for the
+      unit (HEAD). Joins to geo.counties and to census rural demographics.
+
+    dimensions:
+      type:
+        - nass_livestock_inventory
+      agg_level_desc: *nass_agg_levels
+      state_alpha: *nass_states
+      year: *ag_year_range
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "ANIMALS & PRODUCTS"
+        statisticcat_desc: "INVENTORY"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{effective_year}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_livestock_inventory/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
