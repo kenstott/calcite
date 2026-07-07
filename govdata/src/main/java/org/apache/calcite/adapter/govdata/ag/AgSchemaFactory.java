@@ -51,6 +51,10 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
       "ers_farm_income"
   ));
 
+  private static final Set<String> FSA_TABLES = new HashSet<>(Arrays.asList(
+      "fsa_commodity_payments"
+  ));
+
   @Override
   public String getSchemaResourceName() {
     return "/ag/ag-schema.yaml";
@@ -77,6 +81,10 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
 
     for (final String tableName : ERS_TABLES) {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "ers", enabledSources));
+    }
+
+    for (final String tableName : FSA_TABLES) {
+      builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "fsa", enabledSources));
     }
 
     LOGGER.debug("Configured AG schema hooks: enabledSources={}",

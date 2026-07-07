@@ -655,6 +655,96 @@ partitionedTables:
         stagingMode: local
       iceberg: *nass_iceberg
 
+  # ---------------------------------------------------------------------------
+  # FSA_COMMODITY_PAYMENTS — FSA program/conservation payments by county
+  # ---------------------------------------------------------------------------
+  # FSA EFOIA Name-and-Address xlsx, ~6 state-range files per disbursement-year
+  # vintage. FsaCommodityPaymentsProvider scrapes the landing page for the
+  # vintage, resolves node pages to xlsx, reads via POI, and aggregates per
+  # county x program x program-year. One fetch per disbursement year.
+  - name: fsa_commodity_payments
+    pattern: "type=fsa_commodity_payments/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA FSA program and conservation payments aggregated by county, program,
+      and program year (ARC-CO, PLC, CRP, LFP, ERP, DMC, etc.). payments is the
+      summed disbursement (USD); farms is a distinct-payee count (proxy — FSA
+      files carry no farm/operation id). No commodity dimension exists (program
+      is the finest grain). year is the disbursement (vintage) year; program_year
+      is the crop/program year and differs. Joins to geo.counties via county_fips.
+
+    dimensions:
+      type:
+        - fsa_commodity_payments
+      year: *ag_year_range
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Disbursement (vintage) year — partition column
+      - name: program_year
+        type: string
+        source: program_year
+        nullable: true
+        comment: Crop/program year the payment applies to (differs from disbursement year)
+      - name: state_fips
+        type: string
+        source: state_fips
+        nullable: true
+        comment: 2-digit state FIPS (FSA state code; FK to geo.states.state_fips)
+      - name: county_fips
+        type: string
+        source: county_fips
+        nullable: true
+        comment: 5-digit county FIPS (state+county FSA code) — FK to geo.counties.county_fips
+      - name: program_code
+        type: string
+        source: program_code
+        nullable: true
+        comment: FSA accounting program code
+      - name: program_description
+        type: string
+        source: program_description
+        nullable: true
+        comment: FSA accounting program description (ARC-County, PLC, CRP, LFP, ...)
+      - name: payments
+        type: double
+        source: payments
+        nullable: true
+        comment: Summed disbursement amount (USD) for the county/program/program-year
+      - name: farms
+        type: int
+        source: farms
+        nullable: true
+        comment: Distinct payee count (proxy for number of farms/operations)
+
+    source:
+      type: http
+      url: "https://www.fsa.usda.gov/tools/informational/freedom-information-act-foia/electronic-reading-room/frequently-requested/payment-files"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.FsaCommodityPaymentsProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=fsa_commodity_payments/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -731,6 +821,26 @@ constraints:
         targetTable: states
         targetColumns: [state_abbr]
         comment: ERS state USPS abbreviation to geo.states (excludes the 'US' national total)
+
+  fsa_commodity_payments:
+    # One aggregated row per disbursement year x program year x county x program.
+    primaryKey:
+      - type
+      - year
+      - program_year
+      - county_fips
+      - program_code
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+        comment: FSA state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: 5-digit county FIPS to geo.counties
 
   nass_livestock_inventory:
     primaryKey:
