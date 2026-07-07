@@ -4102,6 +4102,209 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- FOREIGN DIRECT INVESTMENT (BEA MNE dataset) ---
+  # Two request profiles over the same BEA "MNE" dataset, sharing one output
+  # schema (FdiDataTransformer) and one tall shape:
+  #   * fdi_direct_investment (DI)   - SeriesID=all, default ownership
+  #   * fdi_activities        (AMNE) - SeriesID=all, OwnershipLevel=0,
+  #                                     NonbankAffiliatesOnly=0
+  # Each is iterated over direction (inward/outward) x classification
+  # (Country/Industry) x year. See views fdi_data (tall union) and
+  # fdi_by_country (wide pivot).
+  - name: fdi_direct_investment
+    pattern: "type=fdi_direct_investment/direction=*/classification=*/year=*/fdi_direct_investment.parquet"
+    partitions:
+      style: hive
+      columnDefinitions: &fdi_partition_columns
+        - name: type
+          type: VARCHAR
+        - name: direction
+          type: VARCHAR
+        - name: classification
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      BEA Direct Investment (DI) statistics from the Multinational Enterprises
+      (MNE) dataset. Balance-of-payments direct investment: position (stock),
+      income, financial transactions, equity, debt instruments, and reinvested
+      earnings. Inward (foreign investment in the U.S.) and outward (U.S.
+      investment abroad), by partner country or by industry. Tall layout: one
+      row per statistic (series_id) x area/industry (row_code) x year.
+    columns: &fdi_columns
+      - name: series_id
+        type: string
+        source: series_id
+        nullable: true
+        comment: BEA MNE series identifier (e.g. 30=U.S. position abroad, 22=foreign position in U.S., 27=direct investment income)
+      - name: series_name
+        type: string
+        source: series_name
+        nullable: true
+        comment: Human-readable statistic name
+      - name: row_code
+        type: string
+        source: row_code
+        nullable: true
+        comment: Country or industry code (matches the classification partition)
+      - name: row_label
+        type: string
+        source: row_label
+        nullable: true
+        comment: Country or industry name
+      - name: column_code
+        type: string
+        source: column_code
+        nullable: true
+        comment: Statistic sub-breakdown code
+      - name: column_label
+        type: string
+        source: column_label
+        nullable: true
+        comment: Statistic sub-breakdown name
+      - name: data_value
+        type: double
+        source: data_value
+        nullable: true
+        comment: Statistic value in the units given by table_scale (null when BEA suppressed the value)
+      - name: table_scale
+        type: string
+        source: table_scale
+        nullable: true
+        comment: Units for data_value (e.g. 'Millions of Dollars', 'Thousands of Employees')
+      - name: time_period
+        type: string
+        source: time_period
+        nullable: true
+        comment: Data year (YYYY)
+
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "MNE"
+        DirectionOfInvestment: "{direction}"
+        Classification: "{classification}"
+        Year: "{effective_year}"
+        SeriesID: "all"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        # dataPath omitted: FdiDataTransformer extracts BEAAPI.Results.Data
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FdiDataTransformer"
+
+    dimensions:
+      type:
+        - fdi_direct_investment
+      direction: &fdi_directions
+        - inward   # foreign direct investment in the United States
+        - outward  # U.S. direct investment abroad
+      classification: &fdi_classifications
+        - Country
+        - Industry
+      year: *year_range_from_2000
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=fdi_direct_investment/direction=*/classification=*/year=*/"
+      partition:
+        columns: [type, direction, classification, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: &fdi_iceberg
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: fdi_activities
+    pattern: "type=fdi_activities/direction=*/classification=*/year=*/fdi_activities.parquet"
+    partitions:
+      style: hive
+      columnDefinitions: *fdi_partition_columns
+    comment: >
+      BEA Activities of Multinational Enterprises (AMNE) statistics from the
+      MNE dataset, majority-owned affiliates (bank and nonbank). Operations of
+      U.S. affiliates of foreign firms (inward) and foreign affiliates of U.S.
+      firms (outward): employment, total sales, total assets, value added, net
+      income, capital expenditures, R&D expenditures, and affiliate trade in
+      goods. By partner country or by industry. Same tall layout as
+      fdi_direct_investment; note table_scale mixes dollars and headcounts.
+    columns: *fdi_columns
+
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "MNE"
+        DirectionOfInvestment: "{direction}"
+        Classification: "{classification}"
+        OwnershipLevel: "0"          # majority-owned affiliates
+        NonbankAffiliatesOnly: "0"   # both bank and nonbank affiliates
+        Year: "{effective_year}"
+        SeriesID: "all"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FdiDataTransformer"
+
+    dimensions:
+      type:
+        - fdi_activities
+      direction: *fdi_directions
+      classification: *fdi_classifications
+      year: *year_range_from_2000
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=fdi_activities/direction=*/classification=*/year=*/"
+      partition:
+        columns: [type, direction, classification, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *fdi_iceberg
+
   # --- GDP STATISTICS ---
   - name: gdp_statistics
     pattern: "type=gdp_statistics/frequency=*/year=*/gdp_statistics.parquet"
@@ -4786,6 +4989,24 @@ constraints:
       - frequency
       - year
 
+  fdi_direct_investment:
+    primaryKey:
+      - type
+      - direction
+      - classification
+      - year
+      - series_id
+      - row_code
+
+  fdi_activities:
+    primaryKey:
+      - type
+      - direction
+      - classification
+      - year
+      - series_id
+      - row_code
+
 tables:
   - name: fred_indicators_enriched
     type: view
@@ -4942,3 +5163,57 @@ views:
       LEFT JOIN jolts_state j
         ON w.state_fips = j.state_fips AND w.year = j.year
       LEFT JOIN "geo"."states" gs ON w.state_fips = gs.state_fips
+
+  - name: fdi_data
+    comment: >
+      Unified tall view over the two BEA MNE foreign-direct-investment tables:
+      fdi_direct_investment (stat_type='DI' — position, income, financial
+      transactions) and fdi_activities (stat_type='AMNE' — employment, sales,
+      assets, value added). One row per stat_type x direction x classification
+      x year x series_id x row_code. data_value is expressed in the units named
+      by table_scale (dollars for financial series, thousands of employees for
+      employment). Use fdi_by_country for a country-level wide pivot.
+    sql: >
+      SELECT 'DI' AS stat_type, direction, classification, year, series_id,
+             series_name, row_code, row_label, column_code, column_label,
+             data_value, table_scale, time_period
+      FROM fdi_direct_investment
+      UNION ALL
+      SELECT 'AMNE' AS stat_type, direction, classification, year, series_id,
+             series_name, row_code, row_label, column_code, column_label,
+             data_value, table_scale, time_period
+      FROM fdi_activities
+
+  - name: fdi_by_country
+    comment: >
+      Country-level wide pivot of BEA foreign direct investment: one row per
+      direction (inward/outward) x partner country x year, with the headline DI
+      and AMNE statistics as columns. Position and income are historical-cost
+      balance-of-payments direct investment; employment/sales/assets/value_added
+      are majority-owned affiliate activities. Dollar figures are in millions;
+      employment is in thousands of employees. Each source series is a single
+      country row (verified), so the MAX pivot is a lossless reshape.
+    sql: >
+      SELECT
+        direction,
+        year,
+        row_code  AS country_code,
+        row_label AS country,
+        MAX(CASE WHEN series_id IN ('30','22') THEN data_value END) AS position_usd_million,
+        MAX(CASE WHEN series_id = '27' THEN data_value END)         AS income_usd_million,
+        MAX(CASE WHEN series_id IN ('31','23') THEN data_value END) AS financial_flows_usd_million,
+        MAX(CASE WHEN series_id = '25' THEN data_value END)         AS reinvested_earnings_usd_million,
+        MAX(CASE WHEN series_id = '8'  THEN data_value END)         AS employment_thousands,
+        MAX(CASE WHEN series_id = '4'  THEN data_value END)         AS sales_usd_million,
+        MAX(CASE WHEN series_id = '1'  THEN data_value END)         AS assets_usd_million,
+        MAX(CASE WHEN series_id = '6'  THEN data_value END)         AS value_added_usd_million,
+        MAX(CASE WHEN series_id = '5'  THEN data_value END)         AS net_income_usd_million,
+        MAX(CASE WHEN series_id = '14' THEN data_value END)         AS rd_expenditures_usd_million
+      FROM (
+        SELECT direction, year, series_id, row_code, row_label, data_value
+        FROM fdi_direct_investment WHERE classification = 'Country'
+        UNION ALL
+        SELECT direction, year, series_id, row_code, row_label, data_value
+        FROM fdi_activities WHERE classification = 'Country'
+      ) t
+      GROUP BY direction, year, row_code, row_label

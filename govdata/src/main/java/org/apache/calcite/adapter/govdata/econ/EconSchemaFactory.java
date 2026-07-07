@@ -61,6 +61,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Set<String> BEA_TABLES =
       new HashSet<>(
           Arrays.asList("national_accounts", "regional_income", "ita_data", "gdp_statistics", "industry_gdp",
+      // Foreign direct investment (BEA MNE dataset): DI position/income and AMNE activities
+      "fdi_direct_investment", "fdi_activities",
       // Bulk download tables (using ZIP files instead of per-API-call approach)
       "state_personal_income", "state_gdp", "state_quarterly_income",
       "state_quarterly_gdp", "state_consumption"));
