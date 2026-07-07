@@ -510,6 +510,7 @@ partitionedTables:
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2013
         maxYear: 2024         # latest administered NAEP assessment (2024); bump when a newer cycle publishes. (NaepYearsDimensionResolver was unusable: GetAdhocData.aspx has no type=Years endpoint — returns 400.)
+        excludeYears: [2014, 2016, 2018, 2020, 2021, 2023]  # no NAEP main (grade 4/8 RED/MAT) assessment: biennial odd 2013-2019, then even 2022/2024 (2020/2021 COVID gap). Don't request them; skipOn:[400] remains a safety net for future gaps.
       grade:
         - "4"
         - "8"
@@ -652,6 +653,7 @@ partitionedTables:
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2013
         maxYear: 2024         # latest administered NAEP assessment (2024); bump when a newer cycle publishes. (NaepYearsDimensionResolver was unusable: GetAdhocData.aspx has no type=Years endpoint — returns 400.)
+        excludeYears: [2014, 2016, 2018, 2020, 2021, 2023]  # no NAEP main (grade 4/8 RED/MAT) assessment: biennial odd 2013-2019, then even 2022/2024 (2020/2021 COVID gap). Don't request them; skipOn:[400] remains a safety net for future gaps.
       grade:
         - "4"
         - "8"
