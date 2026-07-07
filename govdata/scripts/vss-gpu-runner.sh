@@ -498,6 +498,18 @@ except Exception as e:
 #------------------------------------------------------------------------------
 
 main() {
+    # ── RETIRED ────────────────────────────────────────────────────────────────
+    # Remote-Vultr embedding is retired: embeddings now run LOCALLY on CPU via
+    # vss-local.sh (the model is tiny; work is per-year incremental). This script
+    # is preserved as the basis for a future GPU backend but is dormant by default,
+    # so neither run-pool.sh nor the sec-schema gpu_embeddings postProcess hook can
+    # provision a Vultr box. Exit 0 (not an error) so onFailure=warn hooks stay quiet.
+    # Force the old remote path with VSS_ALLOW_GPU_RUNNER=1.
+    if [ "${VSS_ALLOW_GPU_RUNNER:-0}" != "1" ]; then
+        echo "vss-gpu-runner.sh is RETIRED — embeddings run locally via vss-local.sh."
+        echo "Set VSS_ALLOW_GPU_RUNNER=1 to force the legacy remote-Vultr path."
+        exit 0
+    fi
     echo "=============================================="
     echo "VSS GPU Runner"
     echo "=============================================="

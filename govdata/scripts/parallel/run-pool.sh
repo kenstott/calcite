@@ -859,24 +859,24 @@ if [ "$failed_count" -gt 0 ]; then
 fi
 
 # ── Embeddings (daily only) ───────────────────────────────────────────────────
-# Best-effort post-ETL step. A failure here must NOT poison the pool exit code
-# (same guarantee vss-gpu-runner.sh already makes for missing config): otherwise
-# run-scheduled.sh reads the non-zero exit as an ETL crash and restarts daily
-# forever instead of moving on to the historical fill. Log loudly, never abort.
+# Best-effort post-ETL step, now LOCAL + CPU (vss-local.sh) — the Vultr remote path
+# (vss-gpu-runner.sh) is retired. A failure here must NOT poison the pool exit code:
+# otherwise run-scheduled.sh reads the non-zero exit as an ETL crash and restarts
+# daily forever instead of moving on to the historical fill. Log loudly, never abort.
 if $RUN_EMBEDDINGS; then
   VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
   CURRENT_YEAR=$(date +%Y)
   export VSS_YEARS="${VSS_YEARS:-$CURRENT_YEAR}"
-  log_info "Embeddings: refreshing year(s) $VSS_YEARS"
-  if [ -f "$VSS_DIR/vss-gpu-runner.sh" ]; then
-    bash "$VSS_DIR/vss-gpu-runner.sh" || log_info "WARNING: vss-gpu-runner failed (non-fatal) — embeddings skipped"
-  fi
-  if [ -f "$VSS_DIR/vss.sh" ]; then
-    if bash "$VSS_DIR/vss.sh" refresh "$VSS_YEARS"; then
-      bash "$VSS_DIR/vss.sh" upload || log_info "WARNING: vss upload failed (non-fatal)"
-    else
-      log_info "WARNING: vss refresh failed (non-fatal) — skipping upload"
-    fi
+  log_info "Embeddings (local CPU): year(s) $VSS_YEARS"
+  if [ -f "$VSS_DIR/vss-local.sh" ]; then
+    for _vy in $VSS_YEARS; do
+      bash "$VSS_DIR/vss-local.sh" year "$_vy" \
+        || log_info "WARNING: vss-local year $_vy failed (non-fatal)"
+    done
+    bash "$VSS_DIR/vss-local.sh" publish \
+      || log_info "WARNING: vss-local publish failed (non-fatal) — cache not updated"
+  else
+    log_info "WARNING: vss-local.sh not found — embeddings skipped"
   fi
   log_info "Embeddings: complete"
 fi
