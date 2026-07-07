@@ -42,11 +42,15 @@
 #
 # Usage:
 #   data_purge.sh --schema <schema> --tables <t1,t2,...> \
-#                 [--env prod|dq] [--raw] [--dry-run]
+#                 [--env prod|dq] [--remote <rclone-remote>] [--raw] [--dry-run]
 #
-# --env prod (default): targets R2 prod buckets via rclone remote `r2:`.
-# --env dq:             targets MinIO DQ buckets via the rclone remote named in
-#                       $GOVDATA_DQ_RCLONE_REMOTE (typically `minio`).
+# --env selects the BUCKET-NAME set; --remote (optional) overrides the object-store ENDPOINT
+# (rclone remote) independently, so the two can be mixed:
+# --env prod (default): prod bucket names (govdata-parquet-v1 / -tracker-v1); remote defaults to r2.
+# --env dq:             DQ bucket names (GOVDATA_DQ_*); remote defaults to $GOVDATA_DQ_RCLONE_REMOTE.
+# --remote <name>:      force the rclone remote, e.g. `--env prod --remote minio` purges the prod
+#                       bucket names on a local MinIO endpoint (the store used when .env.prod points
+#                       AWS_ENDPOINT_OVERRIDE at localhost).
 #
 set -euo pipefail
 
@@ -58,6 +62,7 @@ SCHEMA=""
 TABLES_CSV=""
 DRY_RUN=false
 ENV_NAME="prod"
+REMOTE_OVERRIDE=""
 PURGE_RAW=false
 RAW_CACHE_DIR="${ETL_RAW_CACHE_DIR:-/tmp/etl-raw-cache}"
 
@@ -67,6 +72,7 @@ while [[ $# -gt 0 ]]; do
     --tables)  TABLES_CSV="$2"; shift 2 ;;
     --table)   TABLES_CSV="$2"; shift 2 ;;  # alias for single table
     --env)     ENV_NAME="$2";   shift 2 ;;
+    --remote)  REMOTE_OVERRIDE="$2"; shift 2 ;;  # override the rclone remote independent of --env
     --raw)     PURGE_RAW=true;  shift   ;;
     --dry-run) DRY_RUN=true;    shift   ;;
     *) echo "Unknown argument: $1"; exit 1 ;;
@@ -75,14 +81,20 @@ done
 
 if [[ -z "$SCHEMA" || -z "$TABLES_CSV" ]]; then
   cat <<EOF
-Usage: data_purge.sh --schema <schema> --tables <t1,t2,...> [--env prod|dq] [--raw] [--dry-run]
+Usage: data_purge.sh --schema <schema> --tables <t1,t2,...> [--env prod|dq] [--remote <rclone-remote>] [--raw] [--dry-run]
 
 Examples:
   data_purge.sh --schema patents --tables patent_claims,patent_summaries --env dq
   data_purge.sh --schema lands   --tables national_forests --env dq --raw
   data_purge.sh --schema fec     --tables committee_contributions --dry-run
+  data_purge.sh --schema edu     --tables ccd_schools --env prod --remote minio
 
 Flags:
+  --remote  Override the rclone remote (the object-store endpoint) independent of the bucket-name
+            set chosen by --env. Defaults: --env prod -> r2, --env dq -> \$GOVDATA_DQ_RCLONE_REMOTE.
+            Use e.g. `--env prod --remote minio` to purge the PROD bucket names on a LOCAL MinIO
+            endpoint (the store a deployment reads/writes when .env.prod points AWS_ENDPOINT_OVERRIDE
+            at localhost). The DuckDB tracker read follows AWS_ENDPOINT_OVERRIDE from the sourced env.
   --raw     Also purge the raw HTTP cache for each table: the object store at
             <raw bucket>/<schema>/<table> (GOVDATA_RAW_DIR, default
             s3://govdata-raw-v1, via the env's rclone remote) plus the local
@@ -141,6 +153,19 @@ else
   PARQUET_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
   TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
   RCLONE_REMOTE="r2"
+fi
+
+# --remote decouples the object-store endpoint from the bucket-name set chosen by --env. The
+# rclone deletes target RCLONE_REMOTE while the DuckDB tracker read targets AWS_ENDPOINT_OVERRIDE
+# (from the sourced env). e.g. `--env prod --remote minio` purges the prod bucket NAMES
+# (govdata-parquet-v1 / govdata-tracker-v1) on a LOCAL MinIO endpoint — the store this deployment
+# actually reads/writes when .env.prod points AWS_ENDPOINT_OVERRIDE at localhost.
+if [[ -n "$REMOTE_OVERRIDE" ]]; then
+  RCLONE_REMOTE="$REMOTE_OVERRIDE"
+fi
+if ! rclone listremotes 2>/dev/null | grep -qx "${RCLONE_REMOTE}:"; then
+  echo "Error: rclone remote '${RCLONE_REMOTE}:' is not configured (rclone listremotes)."
+  exit 1
 fi
 
 s3_to_rclone() {
