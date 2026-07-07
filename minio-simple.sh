@@ -1,1 +1,0 @@
-docker run -d --name minio -p 9002:9000 -p 9003:9001 -v /Volumes/main/docker-volumes/minio:/data -e MINIO_ROOT_USER=admin -e MINIO_ROOT_PASSWORD=password123 minio/minio server /data --console-address ":9001"

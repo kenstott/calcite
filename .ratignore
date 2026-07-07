@@ -91,10 +91,7 @@ CLAUDE-TROUBLESHOOTING.ref
 .env.*
 .conversions.json.*
 ARCHITECTURE_SUMMARY.txt
-CYBER_SCHEMA_PLAN.md
-GOVDATA_ANALYSIS_INDEX.md
 GOVDATA_ETL_ARCHITECTURE.md
-MINIO-SETUP.md
 djia-production-README.md
 djia-production-verification.sql
 test-*.sql
