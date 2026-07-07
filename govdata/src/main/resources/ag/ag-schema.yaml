@@ -555,6 +555,106 @@ partitionedTables:
         stagingMode: local
       iceberg: *nass_iceberg
 
+  # ---------------------------------------------------------------------------
+  # ERS_FARM_INCOME — USDA ERS Farm Income and Wealth Statistics (bulk CSV)
+  # ---------------------------------------------------------------------------
+  # One cumulative CSV carries all years; single fetch, partitioned by row year.
+  # source.url is the LANDING PAGE — ErsFarmIncomeProvider scrapes it for the
+  # current rotating /media/.../release.zip, then streams the latin-1 CSV.
+  - name: ers_farm_income
+    pattern: "type=ers_farm_income/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA ERS Farm Income and Wealth Statistics by state and US total: cash
+      receipts, government payments, production expenses, net farm income, and
+      balance-sheet items. Tall — one row per year x state x variable. Values are
+      generally thousands of USD (see unit_desc; some rows are Percent/Ratio/per
+      farm). Joins to geo.states via the state USPS abbreviation.
+
+    dimensions:
+      type:
+        - ers_farm_income
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Data year (partition column); most recent 1-2 years are ERS forecasts
+      - name: state
+        type: string
+        source: state
+        nullable: true
+        comment: "USPS state abbreviation, or 'US' for the national total (FK to geo.states.state_abbr)"
+      - name: artificial_key
+        type: string
+        source: artificial_key
+        nullable: true
+        comment: ERS stable series code embedding state + variable
+      - name: variable_description_total
+        type: string
+        source: variable_description_total
+        nullable: true
+        comment: Full variable label (category + subcategory)
+      - name: category
+        type: string
+        source: category
+        nullable: true
+        comment: Variable category (VariableDescriptionPart1)
+      - name: subcategory
+        type: string
+        source: subcategory
+        nullable: true
+        comment: Variable subcategory (VariableDescriptionPart2)
+      - name: amount
+        type: double
+        source: amount
+        nullable: true
+        comment: Value in the units named by unit_desc (usually thousands of USD; can be negative)
+      - name: unit_desc
+        type: string
+        source: unit_desc
+        nullable: true
+        comment: "Units: $1,000 (dominant), Percent, Ratio, $1,000 per farm, 1,000 acres"
+      - name: publication_date
+        type: string
+        source: publication_date
+        nullable: true
+        comment: ERS release stamp (e.g. "Data as of February 5, 2026.")
+      - name: source
+        type: string
+        source: source
+        nullable: true
+        comment: ERS attribution string
+      - name: gdp_deflator
+        type: double
+        source: gdp_deflator
+        nullable: true
+        comment: GDP chain-type deflator for the row's year (for nominal->real conversion)
+
+    source:
+      type: http
+      url: "https://www.ers.usda.gov/data-products/farm-income-and-wealth-statistics/data-files-us-and-state-level-farm-income-and-wealth-statistics"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.ErsFarmIncomeProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ers_farm_income/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg: *nass_iceberg
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -615,6 +715,22 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Derived 5-digit county FIPS to geo.counties
+
+  ers_farm_income:
+    # PK is (year, artificial_key) — ERS artificial_key already encodes state+variable
+    # and is unique per year. Natural alternate key (year, state,
+    # variable_description_total) is not declared: the constraints format supports
+    # only primaryKey + foreignKeys.
+    primaryKey:
+      - type
+      - year
+      - artificial_key
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_abbr]
+        comment: ERS state USPS abbreviation to geo.states (excludes the 'US' national total)
 
   nass_livestock_inventory:
     primaryKey:
