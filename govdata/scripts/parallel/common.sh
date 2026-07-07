@@ -940,6 +940,13 @@ get_heap_config() {
       # Large dimension expansion (type × year × state × offense × ori).
       # Peak 1780MB → 3g (1.2g headroom); was 4g.
       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+    ag)
+      # FSA loads full 36MB xlsx workbooks into POI + holds distinct-payee dedup
+      # sets for a whole disbursement-year vintage; RMA streams ~150k rows/yr.
+      case "$_mode" in
+        historical) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;
+        *)          _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
+      esac ;;
     *)
       _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
   esac

@@ -42,6 +42,7 @@
 #   patents <historical|daily>
 #   lands   <historical|daily>
 #   cftc    <historical|daily>
+#   ag      <historical|daily>   — USDA NASS/ERS/RMA/FSA
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,7 +56,7 @@ if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "Usage: $0 <schema> <mode>" >&2
   echo "  Schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
   echo "           weather, ref, fec, fedregister, econ_reference," >&2
-  echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands" >&2
+  echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag" >&2
   exit 1
 fi
 
@@ -377,11 +378,35 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model cftc)" "$WORKER_ID"
     ;;
 
+  # ── USDA agriculture (NASS, ERS, RMA, FSA) — annual, year-range ───────────
+  # NASS crop/livestock, RMA crop insurance, and FSA payments carry a year
+  # dimension (dataLag=1); ERS farm income is a single cumulative fetch that
+  # partitions by row year and ignores the range. NASS digital record starts ~1997.
+
+  ag)
+    case "$MODE" in
+      historical)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
+        export GOVDATA_END_YEAR=""
+        ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "ag: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    run_etl_inline "$(build_inline_model ag)" "$WORKER_ID"
+    ;;
+
   *)
     echo "Unknown schema: $SCHEMA" >&2
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
-    echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc" >&2
+    echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag" >&2
     exit 1
     ;;
 esac

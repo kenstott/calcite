@@ -108,10 +108,10 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
-  echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)"
+  echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
   echo "    dq-rebuild — full ETL re-ingest + DQ for all 17 DQ schemas (memory-managed)"
   exit 1
 fi
@@ -179,6 +179,7 @@ for arg in "$@"; do
       queue+=(edu:historical edu:daily)
       queue+=(energy:historical energy:daily)
       queue+=(patents:historical patents:daily lands:historical lands:daily cftc:historical cftc:daily)
+      queue+=(ag:historical ag:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -205,6 +206,10 @@ for arg in "$@"; do
       # archives on every year slot, so ingest them ONCE here; the per-year lands:${_y} slots below
       # cover only its year-partitioned tables (timber_sales, nps_visitation, onrr_revenues).
       queue+=(lands:once)
+      # ag runs as a single historical slot (not year-sliced): ers_farm_income is a
+      # no-year full-CSV fetch that would re-download on every per-year slot; the
+      # NASS/RMA/FSA year-partitioned tables backfill their full range in one pass.
+      queue+=(ag:historical)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -270,6 +275,7 @@ for arg in "$@"; do
         edu:daily
         energy:daily
         patents:daily lands:daily cftc:daily
+        ag:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
