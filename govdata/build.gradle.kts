@@ -257,7 +257,10 @@ tasks.register("downloadDuckDbExtensions") {
         val duckdbVersion = "1.4.4"
         val extensionsDir = file("src/main/resources/duckdb/extensions")
         val platforms = listOf("linux_amd64", "osx_amd64", "osx_arm64", "windows_amd64")
-        val extensions = listOf("spatial", "httpfs", "iceberg", "h3", "excel", "fts", "zipfs", "quackformers", "parquet")
+        // NOTE: only core-repo extensions belong here. zipfs is a community extension (served from
+        // community-extensions.duckdb.org, not extensions.duckdb.org) so it 404s here and is not
+        // bundled; the Stooq bulk path extracts entries to disk and reads them without zipfs.
+        val extensions = listOf("spatial", "httpfs", "iceberg", "h3", "excel", "fts", "quackformers", "parquet")
         val baseUrl = "http://extensions.duckdb.org/v$duckdbVersion"
 
         println("Downloading DuckDB $duckdbVersion extensions for ${platforms.size} platforms...")
