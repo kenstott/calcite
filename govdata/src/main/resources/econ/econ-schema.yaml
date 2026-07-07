@@ -4790,20 +4790,20 @@ constraints:
 tables:
   - name: fred_indicators_enriched
     type: view
-    sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity, c.category_name, c.source_name FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators i JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.fred_series c ON i.series = c.series"
+    sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators i JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.fred_series c ON i.series = c.series"
     comment: Enriched fred_indicator observations with metadata such as series names, units, frequency, or others.
 
   - name: national_accounts_enriched
     type: view
-    sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.Description AS table_description, r.section, r.section_name, r.family, r.metric, r.table_number FROM ${ECON_SCHEMA_NAME:econ}.national_accounts na LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables r ON na.table_id = r.TableName"
+    sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.description AS table_description, r.section FROM ${ECON_SCHEMA_NAME:econ}.national_accounts na LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables r ON na.table_id = r.table_name"
     comment: >
-      National accounts (NIPA) data enriched with table metadata and section categorization. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA), section (1-8), section_name (e.g., 'domestic_product_income', 'foreign_transactions'), family (table family within section), metric (metric type code), table_number (standard BEA format like '1.1.5'). Enables semantic queries by economic category without manual joins.
+      National accounts (NIPA) data enriched with table metadata and section categorization. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA), section (1-8 NIPA section from the nipa_tables partition). Enables semantic queries by economic category without manual joins. (The nipa_tables reference catalog exposes only table_name/description/section from the BEA API, so section_name/family/metric/table_number are not available.)
 
   - name: regional_income_enriched
     type: view
-    sql: "SELECT ri.*, rlc.Description AS line_code_description, rlc.table_prefix, rlc.data_category, rlc.geography_level, rlc.frequency AS table_frequency FROM ${ECON_SCHEMA_NAME:econ}.regional_income ri LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.regional_linecodes rlc ON ri.tablename = rlc.TableName AND ri.line_code = rlc.LineCode"
+    sql: "SELECT ri.*, rlc.\"desc\" AS line_code_description FROM ${ECON_SCHEMA_NAME:econ}.regional_income ri LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.regional_linecodes rlc ON ri.tablename = rlc.tablename AND ri.line_code = rlc.key"
     comment: >
-      Regional income data enriched with LineCode descriptions and table metadata from the reference catalog. Columns include all regional_income fields plus line_code_description (what the line code represents), table_prefix (SA/SQ/CA for State Annual/Quarterly, County/MSA Annual), data_category (INC/GDP/etc), geography_level (state/county/msa), table_frequency (annual/quarterly). Enables semantic queries without needing to know specific LineCode values.
+      Regional income data enriched with LineCode descriptions from the reference catalog. Columns include all regional_income fields plus line_code_description (what the BEA line code represents). Enables semantic queries without needing to know specific LineCode values. (The regional_linecodes reference catalog exposes only key/desc from the BEA API, so table_prefix/data_category/geography_level/table_frequency are not available.)
 
   - name: interest_rate_spreads
     type: view
@@ -4831,7 +4831,7 @@ tables:
 
   - name: trade_balance_summary
     type: view
-    sql: "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN value ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN value ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN value ELSE 0 END) AS net_trade_balance FROM ${ECON_SCHEMA_NAME:econ}.trade_statistics GROUP BY year, quarter, line_description"
+    sql: "SELECT year, quarter, line_description, SUM(CASE WHEN trade_type = 'exports' THEN TRY_CAST(value AS DOUBLE) ELSE 0 END) AS total_exports, SUM(CASE WHEN trade_type = 'imports' THEN TRY_CAST(value AS DOUBLE) ELSE 0 END) AS total_imports, SUM(CASE WHEN trade_type = 'trade_balance' THEN TRY_CAST(value AS DOUBLE) ELSE 0 END) AS net_trade_balance FROM ${ECON_SCHEMA_NAME:econ}.trade_statistics GROUP BY year, quarter, line_description"
     comment: >
       U.S. international trade balance aggregated by category from BEA. Columns: year (calendar year), quarter (Q1-Q4 for quarterly data, NULL for annual), line_description (trade category such as 'Goods', 'Services', 'Foods feeds and beverages', etc.), total_exports (sum of exports in millions USD), total_imports (sum of imports in millions USD), net_trade_balance (exports minus imports, negative indicates trade deficit). Derived from BEA NIPA Table 4.2.5B (Foreign Transactions section), enables analysis of trade composition, bilateral balances, and sectoral trade patterns. Critical for understanding U.S. competitiveness, currency impacts, and GDP contribution from net exports.
 
@@ -4840,12 +4840,6 @@ tables:
     sql: "SELECT tablename AS table_id, line_number, line_description, series_code, year, time_period, CASE WHEN time_period LIKE '%Q%' THEN CAST(SUBSTRING(time_period, LENGTH(time_period), 1) AS INTEGER) ELSE NULL END AS quarter, value, units, frequency, CASE WHEN LOWER(line_description) LIKE '%export%' THEN 'exports' WHEN LOWER(line_description) LIKE '%import%' THEN 'imports' ELSE 'trade_balance' END AS trade_type FROM ${ECON_SCHEMA_NAME:econ}.national_accounts WHERE tablename = 'T40205B'"
     comment: >
       U.S. international trade statistics from BEA NIPA Table 4.2.5B (Foreign Transactions section). Provides detailed breakdown of exports and imports of goods and services with computed columns: quarter (1-4 extracted from time_period for quarterly data, NULL for annual), trade_type (exports/imports/trade_balance derived from line_description). This is a convenience view filtering national_accounts for trade-specific data. For enriched version with section metadata, query national_accounts_enriched WHERE table_id = 'T40205B'.
-
-  - name: state_gdp
-    type: view
-    sql: "SELECT geo_fips_set AS geo_fips, GeoName AS geo_name, tablename, line_code, year, CL_UNIT AS metric, DataValue AS value, UNIT_MULT AS units FROM ${ECON_SCHEMA_NAME:econ}.regional_income WHERE tablename LIKE 'SAGDP%'"
-    comment: >
-      State-level GDP statistics from BEA Regional Economic Accounts (SAGDP tables). This is a convenience view filtering regional_income to just the State Annual GDP tables (SAGDP1-SAGDP11). Columns: geo_fips (2-digit state FIPS code), geo_name (state name), tablename (specific SAGDP table), line_code (BEA line code), year, metric (GDP component description), value (GDP value), units (unit multiplier). For quarterly state GDP, filter regional_income for SQGDP* tables.
 
   - name: real_gdp_growth
     type: view
