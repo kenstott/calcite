@@ -114,6 +114,25 @@ public interface IncrementalTracker {
   }
 
   /**
+   * Marks a combination as a SUSPECT empty result: the fetch scanned rows ({@code scanned > 0}) but
+   * wrote none — the pipeline's own transform/filter destroyed every row, which is almost always a
+   * mapping/filter bug (e.g. a yearField type mismatch, or a transformer returning {@code []}), not
+   * a genuinely-empty source. Recorded as a distinct, greppable state carrying the scanned/filtered
+   * counts and a reason, so it is not conflated with a benign {@code empty} (which would loop
+   * silently forever). Non-fatal — the run continues.
+   *
+   * <p>The default degrades to {@link #markProcessedEmpty} for trackers that don't model it.
+   *
+   * @param scanned  rows read from the source before transform/filter
+   * @param filtered rows dropped by the pipeline (scanned minus written), or -1 if unknown
+   * @param reason   short diagnostic (e.g. "year-filter dropped all rows", "transform wrote 0")
+   */
+  default void markProcessedSuspectEmpty(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long scanned, long filtered, String reason) {
+    markProcessedEmpty(alternateName, sourceTable, keyValues);
+  }
+
+  /**
    * Gets all processed key value combinations for an alternate partition.
    *
    * @param alternateName The alternate partition name

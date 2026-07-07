@@ -60,6 +60,11 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
    *  table high-water mark on read. See {@link S3HivePipelineTracker} for the rationale. */
   private static final String STATE_EMPTY = "empty";
 
+  /** Marker state for a SUSPECT empty fetch: rows were scanned but the pipeline's transform/filter
+   *  wrote none (almost always a mapping/filter bug). Distinct from {@link #STATE_EMPTY} so it is
+   *  visible/greppable and not silently conflated with a genuinely-empty source. */
+  private static final String STATE_SUSPECT_EMPTY = "suspect_empty";
+
   /** Years back an empty period stays pending when no later period has data. Override with the
    *  {@code govdata.tracker.emptyRecencyHorizonYears} system property. */
   private static final int EMPTY_RECENCY_HORIZON_YEARS =
@@ -326,6 +331,16 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     // mark and promotes it to 'complete' only once it is settled.
     upsertState(flattenKeyValues(keyValues), alternateName, "incremental",
         STATE_EMPTY, 0, null, null, null);
+  }
+
+  @Override public void markProcessedSuspectEmpty(String alternateName, String sourceTable,
+      Map<String, String> keyValues, long scanned, long filtered, String reason) {
+    // Distinct, greppable state carrying diagnostics in error_message. Non-terminal like 'empty'
+    // (a later genuine publication can still re-run it), but never conflated with a benign empty.
+    String diagnostics = "suspect_empty: scanned=" + scanned + " filtered=" + filtered
+        + " written=0" + (reason != null && !reason.isEmpty() ? "; " + reason : "");
+    upsertState(flattenKeyValues(keyValues), alternateName, "incremental",
+        STATE_SUSPECT_EMPTY, 0, null, null, diagnostics);
   }
 
   /** Empty (zero-row) markers for a table, as unflattened key maps. */

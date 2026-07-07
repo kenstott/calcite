@@ -1754,9 +1754,19 @@ public class EtlPipeline {
     };
 
     if (!filtered.hasNext()) {
-      LOGGER.info("No rows to write after year filtering (total scanned: {})", counts[0]);
-      // Genuine empty result — mark 'empty' so a not-yet-published period is re-fetched later.
-      tracker.markProcessedEmpty(pipelineName, pipelineName, urlVariables);
+      if (counts[0] > 0) {
+        // Rows were scanned but the year filter dropped every one — a suspect empty (e.g. a
+        // yearField type/format mismatch), not a genuinely-empty source. Flag it distinctly so it
+        // surfaces instead of silently looping as a benign 'empty'.
+        LOGGER.warn("Year filter dropped all {} scanned rows for '{}' (filtered={}) — marking "
+            + "suspect_empty", counts[0], pipelineName, counts[1]);
+        tracker.markProcessedSuspectEmpty(pipelineName, pipelineName, urlVariables,
+            counts[0], counts[1], "year-filter dropped all rows");
+      } else {
+        LOGGER.info("No rows to write after year filtering (total scanned: {})", counts[0]);
+        // Genuine empty result — mark 'empty' so a not-yet-published period is re-fetched later.
+        tracker.markProcessedEmpty(pipelineName, pipelineName, urlVariables);
+      }
       return 0;
     }
 
@@ -1927,8 +1937,12 @@ public class EtlPipeline {
     // Fetch data via the (re-runnable) source chain — the expensive network I/O. The
     // hash-freshness branch below drains this once to compute a streaming hash, then re-fetches
     // from the now-warm raw cache for the write, so a large dataset is never held in memory.
+    // Rows read from the source before any transform/filter, populated by fetchDataChain as the
+    // chain is drained. Lets the "0 written" branch below tell a genuine empty (scanned == 0) from
+    // a SUSPECT empty (scanned > 0 — a transform/filter dropped every row).
+    final long[] scannedRows = {0L};
     Iterator<Map<String, Object>> data =
-        fetchDataChain(config, dataSource, variables, pipelineName, processedCount);
+        fetchDataChain(config, dataSource, variables, pipelineName, processedCount, scannedRows);
     // Hold the source-chain head so its underlying stream is released after the write even when
     // dqRowLimit stops iteration before EOF (otherwise the S3 InputStream leaks one connection per
     // fetch-unit). The hash/computed_delta branches below fully drain it first (self-close).
@@ -1969,7 +1983,9 @@ public class EtlPipeline {
       hashFreshnessToken = currentHash;
       // Re-fetch for the write — the chain above was drained to hash it. The raw HTTP response
       // is cached after the first pull, so this re-parses from the warm cache (no second download).
-      data = fetchDataChain(config, dataSource, variables, pipelineName, processedCount);
+      // Reset the scanned counter so it reflects the chain actually written (not the hash pass).
+      scannedRows[0] = 0L;
+      data = fetchDataChain(config, dataSource, variables, pipelineName, processedCount, scannedRows);
     }
 
     // computed_delta: STREAM the pull, emitting only rows whose modifiedField advanced past the
@@ -2072,11 +2088,21 @@ public class EtlPipeline {
           } else {
             batchRows = writer.writeBatch(data, variables);
           }
-          // A successful fetch that wrote zero rows is a genuine empty result — mark it
-          // 'empty' (not terminal 'complete') so a period the source has not published yet
-          // is re-fetched on later runs until it appears (see PipelineTracker high-water mark).
+          // Zero rows written: distinguish a GENUINE empty (source returned nothing — scanned == 0;
+          // e.g. a period not yet published) from a SUSPECT empty (source returned rows but a
+          // transform/filter dropped every one — scanned > 0). The genuine case is marked 'empty'
+          // (not terminal 'complete') so later runs re-fetch until the period appears; the suspect
+          // case is flagged so it surfaces as a design/coding error rather than silently swallowed.
           if (batchRows == 0) {
-            markCombosEmpty(fetchUnit, config, pipelineName);
+            if (scannedRows[0] > 0) {
+              LOGGER.warn("Pipeline '{}' batch {}: SUSPECT empty — source returned {} rows but 0 "
+                  + "were written (a row transformer or filter dropped every row)",
+                  pipelineName, processedCount, scannedRows[0]);
+              markCombosSuspectEmpty(fetchUnit, config, pipelineName, scannedRows[0],
+                  "all source rows dropped before write");
+            } else {
+              markCombosEmpty(fetchUnit, config, pipelineName);
+            }
           } else {
             markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           }
@@ -2124,7 +2150,7 @@ public class EtlPipeline {
    */
   private Iterator<Map<String, Object>> fetchDataChain(EtlPipelineConfig config,
       DataSource dataSource, Map<String, String> variables, String pipelineName,
-      int processedCount) throws IOException {
+      int processedCount, long[] scannedOut) throws IOException {
     Iterator<Map<String, Object>> data = null;
     if (dataProvider != null) {
       data = dataProvider.fetch(config, variables);
@@ -2140,6 +2166,27 @@ public class EtlPipeline {
         variables.put(deltaBoundVar, deltaBoundValue);
       }
       data = dataSource.fetch(variables);
+    }
+    // Count rows read from the source BEFORE any transform/filter, so the caller can distinguish a
+    // genuine empty (scanned == 0 — the source really returned nothing) from a SUSPECT empty
+    // (scanned > 0 but 0 rows written — a row transformer or downstream filter destroyed every
+    // row, which is the "no run should legitimately return zero rows" design/coding error). The
+    // wrapper preserves close() so the underlying (stream-backed) source is still released.
+    if (data != null && scannedOut != null) {
+      final Iterator<Map<String, Object>> counted = data;
+      data = new CloseableRowIterator() {
+        @Override public boolean hasNext() {
+          return counted.hasNext();
+        }
+        @Override public Map<String, Object> next() {
+          Map<String, Object> row = counted.next();
+          scannedOut[0]++;
+          return row;
+        }
+        @Override public void close() {
+          closeQuietly(counted);
+        }
+      };
     }
     // Apply configured row transformers as a streaming one-to-many flat-map so every downstream
     // stage (hashing, computed_delta, write) sees transformed rows. Memory stays bounded — only
@@ -2223,6 +2270,22 @@ public class EtlPipeline {
     for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
       Map<String, String> markKey = enrichWithPeriodBounds(combo, backfillPeriod);
       incrementalTracker.markProcessedEmpty(pipelineName, pipelineName, markKey);
+    }
+  }
+
+  /**
+   * Marks every fine combo in the {@link FetchUnit} as a SUSPECT empty: the source returned
+   * {@code scanned} rows but a transform/filter dropped every one before the write. Unlike a
+   * genuine empty, this is a probable design/coding error (the "no run should legitimately return
+   * zero rows" invariant), so the tracker records it distinctly with diagnostics for triage.
+   */
+  private void markCombosSuspectEmpty(FetchUnit fetchUnit, EtlPipelineConfig config,
+      String pipelineName, long scanned, String reason) {
+    String backfillPeriod = config.getBackfillPeriod();
+    for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
+      Map<String, String> markKey = enrichWithPeriodBounds(combo, backfillPeriod);
+      incrementalTracker.markProcessedSuspectEmpty(pipelineName, pipelineName, markKey,
+          scanned, 0L, reason);
     }
   }
 
