@@ -4925,20 +4925,25 @@ views:
 
   - name: state_economic_snapshot
     comment: >
-      State-level economic snapshot joining BLS state wages and JOLTS state labor
-      market data, enriched with geographic identifiers. One row per state+year+
-      wage_series+jolts_series — filter on series codes to select specific indicators.
-      Use state_fips to join with geo.states, census, or health schemas.
+      State-level economic snapshot joining BLS QCEW state wages and JOLTS state labor
+      market data, enriched with geographic identifiers. QCEW carries no "series" — a
+      state/year has multiple rows keyed by own_code (0=all, 5=private) and industry_code
+      (10=total); filter those to select a specific wage aggregate. One row per
+      state+year+own_code+industry_code+jolts_series. Use state_fips to join with
+      geo.states, census, or health schemas.
     sql: >
       SELECT
         w.state_fips,
         gs.state_name,
         gs.state_abbr,
         w.year,
-        w.series          AS wage_series,
-        TRY_CAST(w.value AS DOUBLE) AS wage_value,
-        w.periodName      AS period,
-        j.series          AS jolts_series,
+        w.own_code,
+        w.industry_code,
+        w.annual_avg_wkly_wage AS avg_weekly_wage,
+        w.annual_avg_emplvl    AS avg_employment,
+        w.total_annual_wages,
+        j.series               AS jolts_series,
+        j.metric_type          AS jolts_metric,
         TRY_CAST(j.value AS DOUBLE) AS jolts_value
       FROM state_wages w
       LEFT JOIN jolts_state j
