@@ -727,14 +727,31 @@ public class EtlPipeline {
       // Wire per-row effective year/month fields from dimension config into Iceberg writer.
       if (writer instanceof IcebergMaterializationWriter) {
         IcebergMaterializationWriter icebergWriter = (IcebergMaterializationWriter) writer;
+        boolean effectiveYearWired = false;
         if (config.getDimensions() != null) {
           for (DimensionConfig dimConfig : config.getDimensions().values()) {
             if (dimConfig.getEffectiveYearField() != null) {
               icebergWriter.setEffectiveYearField(dimConfig.getEffectiveYearField());
+              effectiveYearWired = true;
             }
             if (dimConfig.getEffectiveMonthField() != null) {
               icebergWriter.setEffectiveMonthField(dimConfig.getEffectiveMonthField());
             }
+          }
+        }
+        // Bulk responsePartitioning tables have NO year *dimension*: a single all-years response is
+        // meant to be split into per-year Iceberg partitions purely by each row's year field. Without
+        // wiring that field, every row falls into one empty partition key and the table is written
+        // UNPARTITIONED — a later `year =` predicate then prunes to no files and returns zero rows
+        // (empty joins/views, e.g. edu.district_charter_profile over ccd_schools). Fan by the row
+        // field mapped to the "year" partition column, mirroring the dimension-iterated path.
+        HttpSourceConfig srcCfg = config.getSource();
+        if (!effectiveYearWired && srcCfg != null && srcCfg.hasResponsePartitioning()) {
+          String yearRowField = srcCfg.getResponsePartitioning().getFields().get("year");
+          if (yearRowField != null && !yearRowField.isEmpty()) {
+            icebergWriter.setEffectiveYearField(yearRowField);
+            LOGGER.info("Wired effectiveYearField='{}' from responsePartitioning so bulk table '{}' "
+                + "partitions by year", yearRowField, config.getName());
           }
         }
       }
