@@ -199,8 +199,8 @@ public class StooqDownloader {
     if (bulkProxy != null) {
       try {
         String stockPricesDir = storageProvider.resolvePath(basePath, "stock_prices");
-        String bulkMaxDate = bulkProxy.ingestAllToStockPrices(
-            stockPricesDir, CikRegistry.getTickerToCikMap(), startYear);
+        // cik is resolved point-in-time from filing_metadata inside the bulk proxy (no cik map needed).
+        String bulkMaxDate = bulkProxy.ingestAllToStockPrices(stockPricesDir, startYear);
         LOGGER.info("Bulk ingest done (max date {})", bulkMaxDate);
         if (topUpDownloader != null && bulkMaxDate != null && !bulkMaxDate.isEmpty()) {
           try {

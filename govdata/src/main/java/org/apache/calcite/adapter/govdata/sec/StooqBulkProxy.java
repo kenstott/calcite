@@ -13,11 +13,11 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
+import org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -48,7 +48,7 @@ import java.util.zip.ZipFile;
  * <ul>
  *   <li>Lazy download: Downloads from S3 on first use, caches locally</li>
  *   <li>Index scan: Builds a ticker → zip entry path map once</li>
- *   <li>DuckDB zipfs: Queries via DuckDB's zipfs:// extension for performance</li>
+ *   <li>DuckDB read_csv: Extracts the matched entry to a local temp file and reads it directly</li>
  *   <li>Fallback: Returns empty list if ticker not found; caller then tries Stooq API</li>
  * </ul>
  */
@@ -72,7 +72,7 @@ public class StooqBulkProxy {
   public StooqBulkProxy(String bulkZipS3Path, String localCacheDir,
                         StorageProvider storageProvider) {
     this.bulkZipS3Path = bulkZipS3Path;
-    // The bulk zip is downloaded, unzipped and queried via DuckDB's zipfs extension, all of
+    // The bulk zip is downloaded, unzipped and read via DuckDB read_csv, all of
     // which require a real local file. When the configured cache dir is an object-store URI
     // (e.g. s3://govdata-raw-v1/sec/sec/stock_price_seed) map it to a local temp path so the
     // download does not create a literal "s3:/" directory under the working dir.
@@ -225,8 +225,13 @@ public class StooqBulkProxy {
   }
 
   /**
-   * Queries a CSV file inside the zip via DuckDB's zipfs extension.
+   * Queries a single CSV entry inside the bulk zip via DuckDB.
    * Converts the bulk CSV format (angle-bracket headers, YYYYMMDD dates) to StockPriceRecord list.
+   *
+   * <p>The entry is extracted to a real local temp file and read via {@code read_csv}, rather than
+   * DuckDB's {@code zipfs} extension. zipfs is a community extension that is not available in the
+   * core DuckDB repo we bundle for air-gapped operation, and its glob/read is unreliable across
+   * DuckDB builds (see {@link #ingestAllToStockPrices}).
    */
   private List<StooqDownloader.StockPriceRecord> queryZipEntryViaDuckDB(String zipEntryPath) throws IOException {
     if (localZipPath == null) {
@@ -235,14 +240,21 @@ public class StooqBulkProxy {
 
     List<StooqDownloader.StockPriceRecord> records = new ArrayList<>();
 
-    try {
-      // Get DuckDB connection with zipfs extension already loaded
+    // Extract the single CSV entry to a real local file so DuckDB's read_csv can read it directly.
+    Path tempCsv = Files.createTempFile(Paths.get(localCacheDir), "stooq_entry_", ".txt");
+    try (ZipFile zip = new ZipFile(localZipPath)) {
+      ZipEntry entry = zip.getEntry(zipEntryPath);
+      if (entry == null) {
+        throw new IOException("Zip entry not found: " + zipEntryPath);
+      }
+      try (InputStream in = zip.getInputStream(entry)) {
+        Files.copy(in, tempCsv, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      }
+
       Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
 
-      // Build the zipfs URL: zipfs:///absolute/path/to/d_us_txt.zip/data/daily/us/...
-      String zipfsUrl = String.format("zipfs://%s/%s", localZipPath, zipEntryPath);
-
-      // Query format: read the CSV, parse columns, convert date format from YYYYMMDD to YYYY-MM-DD
+      // Read the CSV, parse columns, convert date format from YYYYMMDD to YYYY-MM-DD. The bulk
+      // files use angle-bracket header names, declared via the shared BULK_CSV_COLUMNS spec.
       String query = String.format(
           "SELECT "
           + "strftime(strptime(\"<DATE>\"::VARCHAR, '%%Y%%m%%d'), '%%Y-%%m-%%d') AS date, "
@@ -251,11 +263,8 @@ public class StooqBulkProxy {
           + "TRY_CAST(\"<LOW>\" AS DOUBLE) AS low, "
           + "TRY_CAST(\"<CLOSE>\" AS DOUBLE) AS close, "
           + "TRY_CAST(\"<VOL>\" AS BIGINT) AS volume "
-          + "FROM read_csv('%s', header=true, auto_detect=false, "
-          + "columns={TICKER: VARCHAR, PER: VARCHAR, DATE: VARCHAR, TIME: VARCHAR, "
-          + "OPEN: VARCHAR, HIGH: VARCHAR, LOW: VARCHAR, CLOSE: VARCHAR, "
-          + "VOL: VARCHAR, OPENINT: VARCHAR})",
-          zipfsUrl);
+          + "FROM read_csv('%s', header=true, auto_detect=false, " + BULK_CSV_COLUMNS + ")",
+          tempCsv.toAbsolutePath());
 
       try (Statement stmt = conn.createStatement();
            ResultSet rs = stmt.executeQuery(query)) {
@@ -281,6 +290,8 @@ public class StooqBulkProxy {
     } catch (Exception e) {
       LOGGER.warn("Error querying bulk zip entry {}: {}", zipEntryPath, e.getMessage());
       throw new IOException("Failed to query bulk zip entry: " + e.getMessage(), e);
+    } finally {
+      Files.deleteIfExists(tempCsv);
     }
   }
 
@@ -298,19 +309,18 @@ public class StooqBulkProxy {
    *
    * @return the max trading date present (YYYY-MM-DD), for the caller's top-up gap, or "" if none
    */
-  public String ingestAllToStockPrices(String stockPricesDir, Map<String, String> tickerToCik,
-      int startYear) throws IOException {
+  public String ingestAllToStockPrices(String stockPricesDir, int startYear) throws IOException {
     // Write to a staging sibling of the table location so the file-passthrough materializer can
     // move the parquet into Iceberg without a recursive walk hitting the table's own metadata.
     String stagingDir = stockPricesDir + "__staging";
-
-    // Freshness gate: the bulk zip is the same object every run unless a newer snapshot is staged.
-    // When its S3 size is unchanged since the last successful ingest AND the stock_prices table
-    // still holds data, skip the expensive DuckDB COPY (the ~23M-row extract+transform) and reuse
-    // the recorded max trading date. The data-existence check defeats the dq-rebuild skip-forever
-    // trap: a rebuild that clears the table directory forces a full re-ingest even if the marker
-    // survives. The marker is a sibling of the table location: "<remoteSize>|<maxDate>".
     String markerPath = stockPricesDir + "__bulk.marker";
+    // filing_metadata is the sibling of stock_prices; it is the source of the point-in-time
+    // (ticker -> cik) tenure joined into every price row (input 2 alongside the bulk zip).
+    String secDir = stockPricesDir.substring(0, stockPricesDir.lastIndexOf('/'));
+    // Read via iceberg_scan (atomic snapshot) rather than a raw parquet glob — the pool may compact
+    // filing_metadata concurrently, and a glob transiently sees deleted/mid-rewrite files.
+    String filingMetadataTable = secDir + "/filing_metadata";
+
     long remoteSize = -1L;
     try {
       remoteSize = storageProvider.getMetadata(bulkZipS3Path).getSize();
@@ -318,56 +328,83 @@ public class StooqBulkProxy {
       LOGGER.warn("Could not read S3 metadata for {} to gate bulk ingest; proceeding with full "
           + "ingest: {}", bulkZipS3Path, e.getMessage());
     }
-    if (remoteSize > 0L) {
-      String marker = readMarker(markerPath);
-      if (marker != null) {
-        int sep = marker.indexOf('|');
-        if (sep > 0) {
-          long markedSize = -1L;
-          try {
-            markedSize = Long.parseLong(marker.substring(0, sep).trim());
-          } catch (NumberFormatException nfe) {
-            markedSize = -1L;  // unreadable marker → fall through to full ingest
-          }
-          String markedMaxDate = marker.substring(sep + 1);
-          if (markedSize == remoteSize && stockPricesHasData(stockPricesDir)) {
-            LOGGER.info("Bulk zip unchanged ({} bytes) and stock_prices already materialized — "
-                + "skipping bulk ingest; reusing max date {}", remoteSize, markedMaxDate);
-            return markedMaxDate;
-          }
-        }
-      }
-    }
 
-    ensureLocalZip();
-
-    // zipfs glob is unreliable across DuckDB builds; extract to local disk and read_csv real files.
-    Path extractDir = Paths.get(localCacheDir, "extracted");
-    deleteDir(extractDir);
-    extractZip(extractDir);
-
-    // Write the ticker -> cik map as a CSV for the DuckDB LEFT JOIN.
-    Path cikCsv = Paths.get(localCacheDir, "ticker_cik.csv");
-    try (BufferedWriter w = Files.newBufferedWriter(cikCsv, StandardCharsets.UTF_8)) {
-      w.write("ticker,cik\n");
-      for (Map.Entry<String, String> e : tickerToCik.entrySet()) {
-        if (e.getKey() != null && e.getValue() != null) {
-          w.write(e.getKey().toUpperCase() + "," + e.getValue() + "\n");
-        }
-      }
-    }
-
-    String glob = extractDir.toAbsolutePath() + "/data/daily/us/**/*.txt";
-    String srcCsv = "read_csv('" + glob + "', header=true, auto_detect=false, " + BULK_CSV_COLUMNS + ")";
     String maxDate = "";
-    try {
-      Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
+    long fmCount = 0L;  // filing_metadata row count — the freshness fingerprint of input 2.
+    try (Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider)) {
+      // getDuckDBConnection's default extension set omits iceberg; load the bundled one so
+      // iceberg_scan can read filing_metadata's current snapshot atomically.
+      try (Statement extStmt = conn.createStatement()) {
+        extStmt.execute("LOAD '" + DuckDbExtensionInstaller.getLocalExtensionPath("iceberg") + "'");
+      }
+      // Point-in-time (ticker -> cik) tenure from filing_metadata: the [first, last]
+      // period_of_report each cik reported under a ticker. A price row is later stamped with the
+      // cik whose window contains its trade date (correct-or-null — the LEFT JOIN yields '' for a
+      // date no filer covered). This is input 2 of the COPY; its row count is the freshness
+      // fingerprint (fmCount). iceberg_scan reads filing_metadata's committed snapshot atomically
+      // (immune to concurrent compaction). No fallback: if filing_metadata is absent (sec filings
+      // not yet ingested) this throws and the bulk fails loudly — cik enrichment is a hard
+      // dependency on filing_metadata, and an all-null fallback would ship wrong data silently.
+      // Orchestration must ingest sec filings before stock_prices. acceptance_datetime is
+      // unpopulated in filing_metadata, so period_of_report is the tenure date.
+      try (Statement tStmt = conn.createStatement()) {
+        tStmt.execute(
+            "CREATE OR REPLACE TEMP TABLE ticker_cik_tenure AS "
+            + "SELECT upper(trim(ticker)) AS ticker, cik, "
+            + "  min(TRY_CAST(period_of_report AS DATE)) AS from_date, "
+            + "  max(TRY_CAST(period_of_report AS DATE)) AS to_date "
+            + "FROM iceberg_scan('" + filingMetadataTable + "', allow_moved_paths = true) "
+            + "WHERE ticker IS NOT NULL AND ticker <> '' AND cik IS NOT NULL "
+            + "  AND TRY_CAST(period_of_report AS DATE) IS NOT NULL "
+            + "GROUP BY upper(trim(ticker)), cik");
+      }
+
+      // Tenure fingerprint (own Statement — a closed ResultSet closes its Statement in DuckDB JDBC,
+      // so this must not share the Statement used for the COPY below).
+      try (Statement cStmt = conn.createStatement();
+          ResultSet rs = cStmt.executeQuery("SELECT COUNT(*) FROM ticker_cik_tenure")) {
+        if (rs.next()) {
+          fmCount = rs.getLong(1);
+        }
+      }
+
+      // Composite freshness gate. Skip the ~23M-row COPY only when the zip size AND the tenure
+      // fingerprint are both unchanged and the table still holds data. The data-existence check
+      // defeats the dq-rebuild skip-forever trap. Marker: "<zipSize>|<fmCount>|<maxDate>"; a stale
+      // 2-field marker fails the parse and re-ingests.
+      if (remoteSize > 0L) {
+        String marker = readMarker(markerPath);
+        String[] parts = marker != null ? marker.split("\\|", 3) : null;
+        if (parts != null && parts.length == 3) {
+          try {
+            long markedSize = Long.parseLong(parts[0].trim());
+            long markedFm = Long.parseLong(parts[1].trim());
+            if (markedSize == remoteSize && markedFm == fmCount && stockPricesHasData(stockPricesDir)) {
+              LOGGER.info("Bulk zip ({} bytes) and cik tenure ({} rows) both unchanged and "
+                  + "stock_prices already materialized — skipping bulk ingest; reusing max date {}",
+                  remoteSize, fmCount, parts[2]);
+              return parts[2];
+            }
+          } catch (NumberFormatException nfe) {
+            // stale/old-format marker → fall through to a full ingest
+          }
+        }
+      }
+
+      ensureLocalZip();
+      // zipfs glob is unreliable across DuckDB builds; extract to local disk and read_csv real files.
+      Path extractDir = Paths.get(localCacheDir, "extracted");
+      deleteDir(extractDir);
+      extractZip(extractDir);
       try (Statement stmt = conn.createStatement()) {
         stmt.execute("SET preserve_insertion_order=false");
-        // cik resolved via LEFT JOIN on the de-suffixed, uppercased ticker; adjusted_close=close
-        // (Stooq bulk is already split-adjusted). Partition by year only to keep the file count low.
+        String glob = extractDir.toAbsolutePath() + "/data/daily/us/**/*.txt";
+        String srcCsv = "read_csv('" + glob + "', header=true, auto_detect=false, " + BULK_CSV_COLUMNS + ")";
+        // Range-join every price row to the tenure windows that contain its trade date, then keep
+        // exactly one (the latest-starting window — the most-recently-active filer at that date) via
+        // QUALIFY. adjusted_close=close (Stooq bulk is already split-adjusted). Partition by year.
         String copySql = "COPY ( SELECT "
-            + "COALESCE(m.cik, '') AS cik, "
+            + "COALESCE(tn.cik, '') AS cik, "
             + "t.\"<TICKER>\" AS ticker, "
             + "strftime(strptime(t.\"<DATE>\", '%Y%m%d'), '%Y-%m-%d') AS date, "
             + "TRY_CAST(t.\"<OPEN>\" AS DOUBLE) AS open, "
@@ -378,12 +415,15 @@ public class StooqBulkProxy {
             + "TRY_CAST(t.\"<CLOSE>\" AS DOUBLE) AS adjusted_close, "
             + "CAST(t.\"<DATE>\"[1:4] AS INTEGER) AS year "
             + "FROM " + srcCsv + " t "
-            + "LEFT JOIN read_csv('" + cikCsv.toAbsolutePath() + "', header=true, auto_detect=true) m "
-            + "  ON upper(replace(t.\"<TICKER>\", '.US', '')) = m.ticker "
-            + "WHERE t.\"<DATE>\" >= '" + startYear + "0101' ) "
+            + "LEFT JOIN ticker_cik_tenure tn "
+            + "  ON upper(replace(t.\"<TICKER>\", '.US', '')) = tn.ticker "
+            + "  AND strptime(t.\"<DATE>\", '%Y%m%d') BETWEEN tn.from_date AND tn.to_date "
+            + "WHERE t.\"<DATE>\" >= '" + startYear + "0101' "
+            + "QUALIFY ROW_NUMBER() OVER ("
+            + "  PARTITION BY t.\"<TICKER>\", t.\"<DATE>\" ORDER BY tn.from_date DESC NULLS LAST) = 1 ) "
             + "TO '" + stagingDir + "' (FORMAT PARQUET, PARTITION_BY (year), OVERWRITE_OR_IGNORE)";
-        LOGGER.info("Bulk-ingesting all tickers from {} into {} (year-partitioned staging)",
-            localZipPath, stagingDir);
+        LOGGER.info("Bulk-ingesting all tickers from {} into {} (year-partitioned staging; "
+            + "point-in-time cik from filing_metadata, {} tenure rows)", localZipPath, stagingDir, fmCount);
         long t0 = System.currentTimeMillis();
         stmt.execute(copySql);
         LOGGER.info("Bulk stock-price ingest wrote {} in {}ms", stagingDir,
@@ -396,17 +436,15 @@ public class StooqBulkProxy {
           }
         }
       } finally {
-        conn.close();
+        deleteDir(extractDir);
       }
     } catch (Exception e) {
       throw new IOException("Bulk stock-price ingest failed: " + e.getMessage(), e);
-    } finally {
-      deleteDir(extractDir);
     }
     LOGGER.info("Bulk stock-price ingest complete, max date = {}", maxDate);
-    // Record the ingested zip size + max date so an unchanged next run can skip the COPY.
+    // Record zip size + filing_metadata fingerprint + max date so an unchanged next run can skip.
     if (remoteSize > 0L) {
-      writeMarker(markerPath, remoteSize + "|" + maxDate);
+      writeMarker(markerPath, remoteSize + "|" + fmCount + "|" + maxDate);
     }
     return maxDate;
   }
