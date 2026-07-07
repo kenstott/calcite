@@ -2713,16 +2713,15 @@ partitionedTables:
         - "UNRATE"
         - "U6RATE"
         - "PAYEMS"
-        - "CES0000000001"
-        - "LNS14000000"
-        - "LNS11300000"
+        - "CIVPART"       # Labor force participation (FRED id; replaced invalid BLS LNS11300000).
+                          # BLS CES0000000001/LNS14000000 dropped — PAYEMS/UNRATE are the FRED equivalents.
         - "ICSA"
         - "CCSA"
         - "AWHMAN"
         # Inflation
         - "CPIAUCSL"
-        - "CUUR0000SA0"
-        - "CUUR0000SA0L1E"
+        - "CPIAUCNS"      # CPI all items, not seasonally adjusted (FRED id; replaced invalid BLS CUUR0000SA0)
+        - "CPILFESL"      # Core CPI ex food & energy, SA (FRED id; replaced invalid BLS CUUR0000SA0L1E)
         - "WPUFD49207"
         - "PCEPI"
         - "PCEPILFE"
