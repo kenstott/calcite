@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -176,9 +177,46 @@ public final class GovDataUtils {
       @SuppressWarnings("unchecked")
       Map<String, Map<String, Object>> constraints =
           (Map<String, Map<String, Object>>) schema.get("constraints");
-      return constraints != null ? constraints : Collections.emptyMap();
+      if (constraints == null) {
+        return Collections.emptyMap();
+      }
+      // Resolve ${VAR:default} placeholders (e.g. FK targetSchema "${GEO_SCHEMA_NAME:geo}") that
+      // the YAML parser leaves literal. Without this, a cross-schema FK targets a non-existent
+      // '${GEO_SCHEMA_NAME:geo}.states', is dropped by FileSchema's FK validation, and the
+      // cross-schema views that depend on it (e.g. econ.state_economic_snapshot) fail to resolve.
+      resolveConstraintVariables(constraints);
+      return constraints;
     } catch (IOException e) {
       throw new RuntimeException("Error loading " + schemaResourceName, e);
+    }
+  }
+
+  /**
+   * Recursively resolves {@code ${VAR:default}} placeholders in every String value of a nested
+   * config structure (Maps and Lists), in place, via {@link VariableResolver#resolveEnvVars}.
+   */
+  @SuppressWarnings("unchecked")
+  private static void resolveConstraintVariables(Object node) {
+    if (node instanceof Map) {
+      Map<String, Object> map = (Map<String, Object>) node;
+      for (Map.Entry<String, Object> entry : map.entrySet()) {
+        Object value = entry.getValue();
+        if (value instanceof String) {
+          entry.setValue(VariableResolver.resolveEnvVars((String) value));
+        } else {
+          resolveConstraintVariables(value);
+        }
+      }
+    } else if (node instanceof List) {
+      List<Object> list = (List<Object>) node;
+      for (int i = 0; i < list.size(); i++) {
+        Object value = list.get(i);
+        if (value instanceof String) {
+          list.set(i, VariableResolver.resolveEnvVars((String) value));
+        } else {
+          resolveConstraintVariables(value);
+        }
+      }
     }
   }
 
