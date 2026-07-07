@@ -1277,12 +1277,14 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://nces.ed.gov/ipeds/datacenter/data/C{year}_A.zip"
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year, so the
+      # request URL/extract must use it to actually fetch the latest published vintage.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/C{effective_year}_A.zip"
       method: GET
       response:
         format: csv
-        extractPattern: "?{year}_a_??.csv"
-        extractPatternFallback: "?{year}_a.csv"
+        extractPattern: "?{effective_year}_a_??.csv"
+        extractPatternFallback: "?{effective_year}_a.csv"
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 2
@@ -1299,6 +1301,10 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2010
+        # IPEDS completions latest FINAL vintage is C2023 (has the _RV revised file the primary
+        # extractPattern matches, full ~9.3MB). C2024 exists but is provisional (~4.7MB, base file
+        # only, no _RV) and transforms to 0 rows. Lag 3 targets the latest complete vintage.
+        dataLag: 3
 
     materialize:
       enabled: true
@@ -1307,6 +1313,8 @@ partitionedTables:
         pattern: ""
       partition:
         columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
       options:
         compression: snappy
       iceberg:
@@ -1531,10 +1539,17 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2015
+        # IPEDS finance (F{yy1}{yy2}_{form}.zip) publishes ~3 years in arrears (probed 2026-07:
+        # latest available is F2223 = FY2022-23 / eff_year 2023; F2324 → HTTP 404). Lag 3.
+        # NOTE: fiscal_yy1/yy2 are custom-resolved by IpedsFinancialsDimensionResolver — verify
+        # empirically that it derives them from the lagged (effective) year after this change.
+        dataLag: 3
       fiscal_yy1:
         type: custom
+        dataLag: 3   # IpedsFinancialsDimensionResolver derives F{yy1}{yy2} from (year - dataLag)
       fiscal_yy2:
         type: custom
+        dataLag: 3
       form_type:
         - F1A
         - F2
@@ -1547,6 +1562,8 @@ partitionedTables:
         pattern: ""
       partition:
         columns: [year, form_type]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
       options:
         compression: snappy
       iceberg:

@@ -40,11 +40,16 @@ public class IpedsFinancialsDimensionResolver implements DimensionResolver {
     } catch (NumberFormatException e) {
       return Collections.emptyList();
     }
+    // dataLag shifts the publish (iteration) year to the latest published vintage. effective_year
+    // is injected AFTER custom-dimension resolution, so it is not yet in context here — read the
+    // lag from this dimension's own config and derive the vintage year directly.
+    int lag = config.getDataLag() != null ? config.getDataLag() : 0;
+    int vintageYear = year - lag;
     switch (dimensionName) {
     case "fiscal_yy1":
-      return Collections.singletonList(String.format("%02d", (year - 1) % 100));
+      return Collections.singletonList(String.format("%02d", (vintageYear - 1) % 100));
     case "fiscal_yy2":
-      return Collections.singletonList(String.format("%02d", year % 100));
+      return Collections.singletonList(String.format("%02d", vintageYear % 100));
     default:
       return Collections.emptyList();
     }

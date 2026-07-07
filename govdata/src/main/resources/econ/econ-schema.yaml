@@ -4225,6 +4225,10 @@ partitionedTables:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2000}"
         end: current
+        # BEA GDP-by-industry publishes the current year in arrears (tracker frontier = 2025;
+        # 2026 not yet released). Request param Year already uses {effective_year}, so a 1-year
+        # lag caps the request at the latest published vintage instead of fetching an empty 2026.
+        dataLag: 1
     partitions:
       style: hive
       columnDefinitions:

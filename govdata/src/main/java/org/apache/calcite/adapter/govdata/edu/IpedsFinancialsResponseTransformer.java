@@ -166,7 +166,13 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
     String formType = context.getDimensionValues().get("form_type");
-    String yearStr = context.getDimensionValues().get("year");
+    // Emit the vintage (effective) year so the injected `year` column matches the effective_year
+    // partition path (valueSource). effective_year = year - dataLag, injected before transform;
+    // fall back to the raw dimension year when no lag is configured.
+    String yearStr = context.getDimensionValues().get("effective_year");
+    if (yearStr == null || yearStr.isEmpty()) {
+      yearStr = context.getDimensionValues().get("year");
+    }
     Map<String, String> columnMap = columnMapFor(formType);
     int isProvisional = isProvisional(yearStr) ? 1 : 0;
 

@@ -1461,8 +1461,8 @@ partitionedTables:
       rawCache:
         enabled: true
       incremental:
-        sinceYear: "${GOVDATA_START_YEAR:}"
-        untilYear: "${GOVDATA_END_YEAR:}"
+        sinceYear: "{effective_year}"
+        untilYear: "{effective_year}"
         filterParam: "$where"
         yearField: "year"
         quoteValues: false
@@ -1477,7 +1477,8 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: current
-        dataLag: 1
+        # BRFSS publishes ~2 years in arrears (probed 2026: latest vintage = 2024).
+        dataLag: 2
 
     materialize:
       enabled: true
