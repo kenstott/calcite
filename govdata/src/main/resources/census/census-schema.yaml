@@ -113,7 +113,10 @@ dimension_values:
   acs_year_range: &acs_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    minYear: 2009          # ACS 5-year feed began 2009 (informational; below the 2010 default floor)
+    minYear: 2011          # 2010 5-year is 404 on the current api.census.gov/data/{year}/acs/acs5
+                           # path for every ACS table (older 2010 vintage lived at a different path),
+                           # so floor the shared 5-year anchor at 2011. Per-table minYear overrides
+                           # below raise this further where a variable was added after 2011.
     dataLag: 2
     releaseMonth: 12
 
@@ -484,8 +487,8 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        minYear: 2012
-        dataLag: 2
+        minYear: 2014          # B15003 (educational attainment) undefined in ACS 5-year before 2014
+        dataLag: 2             # (2012/2013 still error "unknown variable B15003_001E"; first complete 2014)
         releaseMonth: 12
       geography: *all_geographies
 
@@ -569,7 +572,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2013  # B23025 (employment status) undefined in ACS 5-year before 2013
       geography: *all_geographies
 
     columns:
@@ -1066,7 +1071,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2014  # B27001 (health insurance) undefined in ACS 5-year before 2014
       geography: *all_geographies
 
     columns:
@@ -1226,7 +1233,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2014  # B18101 (disability) undefined in ACS 5-year before 2014
       geography: *all_geographies
 
     columns:
@@ -1381,7 +1390,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # B07001 (migration) undefined in ACS 5-year before 2012
       geography: *all_geographies
 
     columns:
@@ -1663,7 +1674,7 @@ partitionedTables:
         - acs
       year:
         <<: *acs_year_range
-        start: 2017  # B28002 (internet subscriptions) first available in ACS 2017
+        minYear: 2019  # B28002 (internet subscriptions) undefined in ACS 5-year before 2019 (2017/2018 error)
       geography: *all_geographies
 
     columns:
@@ -2104,7 +2115,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # B19083 (Gini index) undefined in ACS 5-year before 2012
       geography: *all_geographies
 
     columns:
