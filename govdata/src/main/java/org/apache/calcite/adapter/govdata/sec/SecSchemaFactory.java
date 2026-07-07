@@ -1067,20 +1067,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               0, 0, 0, new ArrayList<String>(), new ArrayList<String>(), 0);
         }
 
-        // Download stock prices via Stooq (separate from EDGAR filings)
-        Object fetchStockPricesObj = operand.get("fetchStockPrices");
-        boolean fetchStockPrices = fetchStockPricesObj != null
-            && Boolean.parseBoolean(fetchStockPricesObj.toString());
-        if (fetchStockPrices) {
-          LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
-              ciks.size(), startYear, endYear);
-          // Pass the already-computed govdataParquetDir to avoid null from getGovDataParquetDir()
-          downloadStockPrices(govdataParquetDir, ciks, startYear, endYear);
-        }
       } else {
-        LOGGER.info("No CIKs configured - skipping download, running materialization only");
+        LOGGER.info("No CIKs configured - skipping filing download, running materialization only");
         result = new DocumentETLProcessor.DocumentETLResult(
             0, 0, 0, new ArrayList<String>(), new ArrayList<String>(), 0);
+      }
+
+      // Download stock prices via Stooq — separate from EDGAR filings. The full-market bulk pass
+      // is cik-independent (it ingests every ticker in the Stooq zip; cik is enrichment only), so
+      // it must run even when no CIKs were configured for filings (e.g. the sec_prices worker).
+      Object fetchStockPricesObj = operand.get("fetchStockPrices");
+      boolean fetchStockPrices = fetchStockPricesObj != null
+          && Boolean.parseBoolean(fetchStockPricesObj.toString());
+      if (fetchStockPrices) {
+        LOGGER.info("Downloading stock prices via Stooq for {} CIKs, years {}-{}",
+            ciks.size(), startYear, endYear);
+        // Pass the already-computed govdataParquetDir to avoid null from getGovDataParquetDir()
+        downloadStockPrices(govdataParquetDir, ciks, startYear, endYear);
       }
 
       // Always run materialization — even with empty CIKs or no new documents,
@@ -3734,8 +3737,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
       String basePath = govdataParquetDir;
 
+      // The cik-scoped daily-cache check vacuously returns "cached" when no CIKs are configured,
+      // which would wrongly skip the cik-independent full-market bulk. When a bulk zip is set, rely
+      // on StooqBulkProxy's own freshness gate (zip-size marker) instead of this cik-based check.
+      String bulkZipCacheCheck = getEnvOrOperand("BULK_STOCK_PRICE_ZIP", "bulkStockPriceZip");
+      boolean bulkConfiguredCacheCheck = bulkZipCacheCheck != null && !bulkZipCacheCheck.isEmpty();
       // Check if stock prices are already cached and up-to-date (daily refresh)
-      if (areStockPricesCached(basePath, ciks, startYear, endYear)) {
+      if (!bulkConfiguredCacheCheck && areStockPricesCached(basePath, ciks, startYear, endYear)) {
         LOGGER.info("Stock prices already cached and up-to-date, skipping download");
         return;
       }
@@ -3780,7 +3788,14 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       LOGGER.info("Starting stock price download with basePath={}", basePath);
 
-      if (!tickerCikPairs.isEmpty()) {
+      // stock_prices is a full-market table: when a bulk Stooq zip is configured the bulk pass
+      // ingests EVERY ticker in the zip (cik is enrichment only, empty when the ticker has no SEC
+      // filer), so it must run even with no cik-derived tickerCikPairs. tickerCikPairs then scopes
+      // only the Alpha Vantage current-price top-up for SEC filers.
+      String bulkZipS3Path = getEnvOrOperand("BULK_STOCK_PRICE_ZIP", "bulkStockPriceZip");
+      boolean bulkConfigured = bulkZipS3Path != null && !bulkZipS3Path.isEmpty();
+
+      if (!tickerCikPairs.isEmpty() || bulkConfigured) {
         // Stock price source from the model operand (stockPriceSource, declared in the
         // schema YAML as ${STOCK_PRICE_SOURCE:stooq}); default Stooq.
         String stockPriceSource = currentOperand != null
@@ -3806,9 +3821,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             downloader.setCacheManifest(cacheManifest);
           }
 
-          // Set up bulk proxy if configured
-          String bulkZipS3Path = getEnvOrOperand("BULK_STOCK_PRICE_ZIP", "bulkStockPriceZip");
-          if (bulkZipS3Path != null && !bulkZipS3Path.isEmpty()) {
+          // Set up bulk proxy if configured (bulkZipS3Path / bulkConfigured resolved above)
+          if (bulkConfigured) {
             String cacheDir = getEnvOrOperand("BULK_STOCK_PRICE_CACHE_DIR", "bulkStockPriceZipCacheDir");
             if (cacheDir == null || cacheDir.isEmpty()) {
               cacheDir = secCacheDirectory + "/stock_price_seed";

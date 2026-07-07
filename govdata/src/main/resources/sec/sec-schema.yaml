@@ -29,6 +29,10 @@ schemaName: "${SCHEMA_NAME:sec}"
 # (an orchestration model/script can override any of them). Read in code via the
 # operand / ModelOperand, never System.getenv.
 stockPriceSource: "${STOCK_PRICE_SOURCE:stooq}"
+# S3 path to the bulk Stooq daily-US zip. When set, the stock_prices bulk pass ingests EVERY
+# ticker in the zip (full-market, cik-independent); the per-filer Alpha Vantage top-up is scoped
+# by ciks. Default points at the local bulk bucket; override with BULK_STOCK_PRICE_ZIP.
+bulkStockPriceZip: "${BULK_STOCK_PRICE_ZIP:s3://stock-price-bulk/d_us_txt.zip}"
 submissionsTtlHours: "${SEC_SUBMISSIONS_TTL_HOURS:24}"
 alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
 # 125ms = 8 req/s: headroom below SEC's 10 req/s per-IP ceiling. 100ms (exactly 10/s) left
