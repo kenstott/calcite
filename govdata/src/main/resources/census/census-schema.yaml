@@ -133,15 +133,17 @@ dimension_values:
     releaseMonth: 9
 
   # --- Year Range for Decennial Census (every 10 years from 2000) ---
-  # Stepped cadence anchored at 2000: emits 2000, 2010, 2020, ... capped at
-  # currentYear - dataLag. dataLag=2 (census published ~2 years after the
-  # census year), so 2030 won't be fetched until 2032.
+  # Stepped cadence anchored at 2000: emits census (vintage) years 2000, 2010, 2020, ...
+  # The `year` axis IS the vintage — what users query and what the tables partition on.
+  # dataLag: 0 so effective_year == year == vintage (no publish-lag shift); a census not yet
+  # published (e.g. 2030 before ~2032) fast-fails HTTP 404, handled by skipOn:[404] on each
+  # decennial source. (Previously dataLag:2 stored the 2020 census under year=2018.)
   decennial_years: &decennial_years
     type: yearRange
     start: 2000            # cadence anchor (feed-began): aligns the decennial step at 2000/2010/2020
     minYear: "${GOVDATA_START_YEAR:2010}"   # global demarcation clamp (daily → current year)
     step: 10
-    dataLag: 2
+    dataLag: 0             # vintage-axis: partition year = census year, not census year - lag
 
   # --- Geography Levels ---
   state_geography: &state_geography
@@ -772,6 +774,7 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
+        skipOn: [404]          # a not-yet-published decennial (e.g. 2030 before ~2032) 404s; skip, don't fail
       rawCache:
         enabled: true
 
@@ -2244,6 +2247,7 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
+        skipOn: [404]          # a not-yet-published decennial (e.g. 2030 before ~2032) 404s; skip, don't fail
       rawCache:
         enabled: true
 
@@ -2609,15 +2613,18 @@ partitionedTables:
     dimensions:
       type:
         - ecn
-      # QUINQUENNIAL stepped cadence (like decennial_years step:10): emits only
-      # 2017, 2022, 2027, ... — no off-census-year 404s.
+      # QUINQUENNIAL stepped cadence: emits census (vintage) years 2017, 2022, 2027, ...
+      # The `year` axis IS the vintage — the year users query and the table partitions on.
+      # dataLag: 0 so effective_year == year == vintage (no publish-lag shift); a census edition
+      # not yet published (e.g. 2027 before ~2030) fast-fails HTTP 404, handled by skipOn:[404]
+      # on the source. (Previously dataLag:3 stored the 2022 census under year=2019.)
       year:
         type: yearRange
         start: 2017            # cadence anchor (feed-began): quinquennial step 2017/2022/2027
         minYear: "${GOVDATA_START_YEAR:2010}"   # global demarcation clamp (daily → current year)
         step: 5
         end: "${GOVDATA_END_YEAR:current}"
-        dataLag: 3
+        dataLag: 0             # vintage-axis: partition year = census year, not census year - lag
         descending: true
       geography: *all_geographies
       # Dynamic NAICS variable resolved based on year - uses hooks.dimensionResolver
@@ -2663,6 +2670,7 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
+        skipOn: [404]          # a not-yet-published census edition (e.g. 2027 before ~2030) 404s; skip, don't fail
       rawCache:
         enabled: true
 
