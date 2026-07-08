@@ -49,7 +49,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -67,44 +66,22 @@ import java.util.concurrent.TimeUnit;
 public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
 
-  /**
-   * Per-table commit serialization. Every table-mutating commit (append, replace-partitions,
-   * delete, snapshot expiry, and compaction rewrite) on a given table runs under this lock, so no
-   * two commits to the same table ever overlap within the JVM. The Hadoop/filesystem Iceberg
-   * catalog tracks the current table via a non-atomic {@code version-hint.text} pointer and is not
-   * safe under concurrent commits: interleaving a partition replace with the compaction's
-   * expire-snapshots + orphan deletion can leave the live snapshot referencing physically-deleted
-   * data files (a dangling ref that 404s on read). Keyed by {@link Table#location()} so all
-   * writer instances for the same table share one lock. Cross-process writers are already
-   * sequential (daily then historical), so a JVM-wide lock fully serializes per-table commits.
-   */
-  private static final ConcurrentHashMap<String, Object> COMMIT_LOCKS =
-      new ConcurrentHashMap<String, Object>();
-
   private final Table table;
   private final StorageProvider storageProvider;
 
-  /** The serialization monitor for commits to this writer's table. */
-  private Object commitLock() {
-    return COMMIT_LOCKS.computeIfAbsent(table.location(), new java.util.function.Function<String, Object>() {
-      @Override public Object apply(String k) {
-        return new Object();
-      }
-    });
-  }
-
   /**
-   * Runs a table-mutating commit under both serialization layers: the in-JVM
-   * per-table monitor (serializes threads in this process) and the host-local
-   * {@link CrossProcessCommitLock} (serializes the parallel writer processes on
-   * this device). One committer per table per host. See {@link CrossProcessCommitLock}.
+   * Runs a table-mutating operation under both serialization layers — the in-JVM per-table monitor
+   * and the host-local {@link CrossProcessCommitLock} — so at most one mutator touches a given table
+   * per host. Every commit (append, replace-partitions, delete, snapshot expiry, compaction rewrite)
+   * AND every non-transactional file mutation (orphan-file deletion) runs under it. The
+   * Hadoop/filesystem catalog tracks the current table via a non-atomic {@code version-hint.text}
+   * pointer and is unsafe under concurrent mutation: interleaving a commit with the compaction's
+   * expire-snapshots + orphan deletion can leave the live snapshot referencing a physically-deleted
+   * data file (a dangling ref that 404s on read). Keyed by {@link Table#location()} so all writer
+   * instances and processes for the same table share one lock.
    */
   private void underCommitLock(Runnable commitBody) {
-    synchronized (commitLock()) {
-      try (CrossProcessCommitLock.Handle xlock = CrossProcessCommitLock.acquire(table.location())) {
-        commitBody.run();
-      }
-    }
+    CrossProcessCommitLock.runExclusive(table.location(), commitBody);
   }
 
   /**
@@ -916,19 +893,40 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Removes orphan data files not referenced by any snapshot.
+   * Removes orphan data files under the per-table commit lock, against freshly-refreshed metadata.
    *
-   * <p>This implements orphan file cleanup using the core Iceberg API:
-   * <ol>
-   *   <li>Collect all data file paths referenced by any snapshot</li>
-   *   <li>List all parquet files in the table's data directory</li>
-   *   <li>Delete files that are not referenced and older than the threshold</li>
-   * </ol>
+   * <p>Orphan cleanup diffs the physical data directory against the set of files referenced by any
+   * snapshot and raw-deletes the difference — a non-transactional delete that Iceberg's optimistic
+   * concurrency does NOT guard. It must therefore hold the same lock as commits and read the current
+   * committed metadata: otherwise a sibling writer's just-committed data file is absent from this
+   * process's stale in-memory snapshot view and is deleted as a false orphan, leaving the live
+   * snapshot pointing at a deleted file (a dangling ref that 404s on read). Holding the lock across
+   * the whole scan+delete also blocks concurrent commits from adding a new file mid-scan, which is
+   * what makes the 0ms threshold used right after compaction safe.
    *
    * @param olderThanMillis Only delete orphans older than this timestamp
    * @return Number of orphan files removed
    */
   private int removeOrphanFiles(long olderThanMillis) {
+    final int[] deleted = new int[1];
+    underCommitLock(() -> {
+      table.refresh();
+      deleted[0] = removeOrphanFilesLocked(olderThanMillis);
+    });
+    return deleted[0];
+  }
+
+  /**
+   * Body of {@link #removeOrphanFiles(long)}; must be called while holding the per-table commit lock
+   * and after {@link Table#refresh()}. See that method for why.
+   *
+   * <ol>
+   *   <li>Collect all data file paths referenced by any snapshot</li>
+   *   <li>List all parquet files in the table's data directory</li>
+   *   <li>Delete files that are not referenced and older than the threshold</li>
+   * </ol>
+   */
+  private int removeOrphanFilesLocked(long olderThanMillis) {
     // Collect all data files referenced by ANY snapshot (including ancestors)
     Set<String> referencedFiles = new HashSet<>();
 

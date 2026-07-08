@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
@@ -411,6 +412,37 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * <p>If the table exists but is missing expected data columns (e.g., only has
    * partition columns from a previous buggy run), it will be dropped and recreated.
    */
+  /**
+   * Returns a human-readable reason the committed table schema no longer matches the configured
+   * columns (drift), or {@code null} if the schema is fine. Drift means the table is missing an
+   * expected data column, or its total column count differs from the expected merged set (data
+   * columns plus synthetic partition columns not already present in the source data).
+   */
+  private String schemaDriftReason(Table existingTable,
+      List<ColumnConfig> columnConfigs,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    Set<String> existingColumnNames = new HashSet<String>();
+    for (org.apache.iceberg.types.Types.NestedField field : existingTable.schema().columns()) {
+      existingColumnNames.add(field.name());
+    }
+    Set<String> missingDataColumns = new HashSet<String>();
+    for (ColumnConfig colConfig : columnConfigs != null ? columnConfigs
+        : Collections.<ColumnConfig>emptyList()) {
+      if (!existingColumnNames.contains(colConfig.getName())) {
+        missingDataColumns.add(colConfig.getName());
+      }
+    }
+    if (!missingDataColumns.isEmpty()) {
+      return "missing " + missingDataColumns.size() + " data columns: " + missingDataColumns;
+    }
+    // expectedColumns.size() is the merged set, avoiding double-counting shared columns.
+    if (existingColumnNames.size() != expectedColumns.size()) {
+      return "schema drift (existing=" + existingColumnNames.size()
+          + " columns, expected=" + expectedColumns.size() + ")";
+    }
+    return null;
+  }
+
   private Table ensureTableExists(String targetTableId) {
     // Build expected columns from config
     List<IcebergCatalogManager.ColumnDef> expectedColumns =
@@ -511,42 +543,41 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (IcebergCatalogManager.tableExists(catalogConfig, targetTableId)) {
       Table existingTable = IcebergCatalogManager.loadTable(catalogConfig, targetTableId);
 
-      // Check if existing table has all expected data columns
-      // This handles the case where a previous run only created partition columns
-      Set<String> existingColumnNames = new HashSet<String>();
-      for (org.apache.iceberg.types.Types.NestedField field : existingTable.schema().columns()) {
-        existingColumnNames.add(field.name());
-      }
-
-      // Find missing columns (excluding partition columns which are always present)
-      Set<String> missingDataColumns = new HashSet<String>();
-      for (ColumnConfig colConfig : columnConfigs != null ? columnConfigs
-          : Collections.<ColumnConfig>emptyList()) {
-        if (!existingColumnNames.contains(colConfig.getName())) {
-          missingDataColumns.add(colConfig.getName());
-        }
-      }
-
-      // Also detect extra columns (schema drift) — existing table has more columns than expected
-      // Use expectedColumns.size() which is the merged set (data columns + synthetic partition
-      // columns not already in source data), avoiding double-counting shared columns like state_abbr
-      boolean hasExtraColumns = existingColumnNames.size() != expectedColumns.size();
-
-      if (!missingDataColumns.isEmpty() || hasExtraColumns) {
-        if (!missingDataColumns.isEmpty()) {
-          LOGGER.warn("Existing Iceberg table '{}' is missing {} data columns: {}. "
-              + "Dropping and recreating table.",
-              targetTableId, missingDataColumns.size(), missingDataColumns);
-        } else {
-          LOGGER.warn("Existing Iceberg table '{}' has schema drift "
-              + "(existing={} columns, expected={}). Dropping and recreating table.",
-              targetTableId, existingColumnNames.size(), expectedColumns.size());
-        }
-        IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
-      } else {
+      // Check whether the existing table matches the expected columns. This handles the case where
+      // a previous run only created partition columns, or the configured schema has changed.
+      String driftReason = schemaDriftReason(existingTable, columnConfigs, expectedColumns);
+      if (driftReason == null) {
         LOGGER.debug("Loading existing Iceberg table: {} (schema OK)", targetTableId);
         return existingTable;
       }
+
+      // Schema drift → drop + recreate. This physically purges the table, so it MUST run under the
+      // per-table commit lock: an unlocked purge can race a sibling writer that is mid-append (or
+      // another process that also observed drift), which is how a table gets left completely empty.
+      // After taking the lock we re-check against freshly-loaded metadata, so if a sibling already
+      // dropped+recreated the table we reuse its result instead of purging good data a second time.
+      final Table[] result = new Table[1];
+      CrossProcessCommitLock.runExclusive(existingTable.location(), () -> {
+        Table current = IcebergCatalogManager.tableExists(catalogConfig, targetTableId)
+            ? IcebergCatalogManager.loadTable(catalogConfig, targetTableId)
+            : null;
+        String reason = current == null ? null
+            : schemaDriftReason(current, columnConfigs, expectedColumns);
+        if (current != null && reason == null) {
+          LOGGER.debug("Iceberg table '{}' schema OK after acquiring lock "
+              + "(recreated by a sibling)", targetTableId);
+          result[0] = current;
+          return;
+        }
+        LOGGER.warn("Iceberg table '{}' {}. Dropping and recreating table.",
+            targetTableId, current == null ? "no longer exists" : "has " + reason);
+        if (current != null) {
+          IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
+        }
+        result[0] = IcebergCatalogManager.createTableFromColumns(
+            catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
+      });
+      return result[0];
     }
 
     // Create new table

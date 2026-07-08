@@ -69,6 +69,36 @@ public final class CrossProcessCommitLock {
   private static final ConcurrentHashMap<String, Holder> HOLDERS =
       new ConcurrentHashMap<String, Holder>();
 
+  /** Per-table in-JVM monitors, composed with the OS file lock by {@link #runExclusive}. */
+  private static final ConcurrentHashMap<String, Object> JVM_MONITORS =
+      new ConcurrentHashMap<String, Object>();
+
+  /**
+   * Runs {@code body} under both serialization layers for one table: the in-JVM per-table monitor
+   * (serializes threads within this process) and the host-local OS file lock (serializes the
+   * parallel writer processes on this device) — "one mutator per table per host". The OS file lock
+   * alone cannot serialize threads in a single JVM, because a second {@link FileChannel#lock()} on
+   * the same file from the same JVM throws {@link OverlappingFileLockException}; the monitor must be
+   * held first. Use this for every operation that mutates a table's files or metadata outside a
+   * single Iceberg transaction: commits, snapshot expiry, orphan-file deletion, and drop/recreate.
+   *
+   * @param tableLocation the Iceberg table location (lock identity)
+   * @param body the exclusive operation to run
+   */
+  public static void runExclusive(String tableLocation, Runnable body) {
+    Object monitor = JVM_MONITORS.computeIfAbsent(tableLocation,
+        new java.util.function.Function<String, Object>() {
+          @Override public Object apply(String k) {
+            return new Object();
+          }
+        });
+    synchronized (monitor) {
+      try (Handle xlock = acquire(tableLocation)) {
+        body.run();
+      }
+    }
+  }
+
   /**
    * Acquires the cross-process commit lock for the given table location,
    * blocking until it is available. Reentrant within the same JVM for the same
