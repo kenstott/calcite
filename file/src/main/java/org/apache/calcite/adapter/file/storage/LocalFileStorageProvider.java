@@ -209,11 +209,28 @@ public class LocalFileStorageProvider implements StorageProvider {
       Files.createDirectories(parentDir);
     }
 
-    // Write the file, creating or overwriting as needed
-    Files.write(filePath, content,
-        StandardOpenOption.CREATE,
-        StandardOpenOption.TRUNCATE_EXISTING,
-        StandardOpenOption.WRITE);
+    // Write atomically: a plain TRUNCATE_EXISTING write leaves a window where a concurrent
+    // reader sees an empty/partial file. Small control files (notably Iceberg version-hint.text)
+    // are read by other processes at any time, so we write to a sibling temp file and rename it
+    // into place. The rename is a single filesystem operation, so readers observe either the old
+    // content or the fully-written new content, never an intermediate state.
+    Path tempFile = Files.createTempFile(filePath.getParent(),
+        "." + filePath.getFileName().toString(), ".tmp");
+    try {
+      Files.write(tempFile, content,
+          StandardOpenOption.TRUNCATE_EXISTING,
+          StandardOpenOption.WRITE);
+      try {
+        Files.move(tempFile, filePath,
+            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+      } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+        // Filesystem cannot guarantee an atomic rename (e.g. some network mounts); fall back to a
+        // plain replacing move, which still narrows the window versus an in-place truncate-write.
+        Files.move(tempFile, filePath, StandardCopyOption.REPLACE_EXISTING);
+      }
+    } finally {
+      Files.deleteIfExists(tempFile);
+    }
   }
 
   @Override public void writeFile(String path, InputStream content) throws IOException {

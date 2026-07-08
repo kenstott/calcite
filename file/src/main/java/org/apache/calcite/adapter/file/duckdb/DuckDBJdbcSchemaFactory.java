@@ -1290,10 +1290,15 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
       }
 
-      // Enable version guessing for tables without version-hint file
+      // Enable version guessing for tables without a version-hint file. Use SET GLOBAL: this
+      // setupConn only creates the views, while client queries run on separate connections
+      // (see getConnection() below) that share the same in-process DuckDB database. A
+      // connection-scoped SET would not reach them, so a table read mid-commit (version-hint
+      // momentarily absent during initial table creation) fails with "no version-hint could be
+      // found". SET GLOBAL applies database-wide so every query connection inherits it.
       try {
-        conn.createStatement().execute("SET unsafe_enable_version_guessing = true");
-        LOGGER.debug("Iceberg version guessing enabled");
+        conn.createStatement().execute("SET GLOBAL unsafe_enable_version_guessing = true");
+        LOGGER.debug("Iceberg version guessing enabled globally");
       } catch (SQLException e) {
         LOGGER.debug("Failed to enable version guessing: {}", e.getMessage());
       }
