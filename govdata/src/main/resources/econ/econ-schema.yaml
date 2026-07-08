@@ -4807,6 +4807,12 @@ partitionedTables:
       # with ~321k HS-6 rows/month, time= -> 204).
       url: "https://api.census.gov/data/timeseries/intltrade/exports/hs?get=CTY_CODE,CTY_NAME,E_COMMODITY,ALL_VAL_MO,QTY_1_MO,UNIT_QY1&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
       method: GET
+      # Serial fetch: each monthly response is large (~321k HS-6 rows).
+      # CensusResponseTransformer streams the 2-D table so a single month no
+      # longer materializes the full node tree, but running months concurrently
+      # still multiplies peak heap. Pin to 1 so only one month is resident at a
+      # time (this table inherits the global calcite.etl.threads otherwise).
+      parallel: 1
       response:
         format: json
       rateLimit:
@@ -4925,6 +4931,12 @@ partitionedTables:
       # live 2026-07-08: YEAR/MONTH -> 200 with ~213k HS-6 rows/month including GEN_CIF_MO.
       url: "https://api.census.gov/data/timeseries/intltrade/imports/hs?get=CTY_CODE,CTY_NAME,I_COMMODITY,GEN_VAL_MO,GEN_CIF_MO,GEN_QY1_MO,UNIT_QY1&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
       method: GET
+      # Serial fetch: each monthly response is large (~213k HS-6 rows).
+      # CensusResponseTransformer streams the 2-D table so a single month no
+      # longer materializes the full node tree, but running months concurrently
+      # still multiplies peak heap. Pin to 1 so only one month is resident at a
+      # time (this table inherits the global calcite.etl.threads otherwise).
+      parallel: 1
       response:
         format: json
       rateLimit:
@@ -5065,6 +5077,13 @@ partitionedTables:
       # state-detail rows/month.
       url: "https://api.census.gov/data/timeseries/intltrade/exports/statehs?get=STATE,CTY_CODE,CTY_NAME,E_COMMODITY,E_COMMODITY_SDESC,ALL_VAL_MO,VES_VAL_MO,AIR_VAL_MO,CNT_VAL_MO&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
       method: GET
+      # Serial fetch: this is the largest econ response (~2.1M HS-6 state-detail
+      # rows/month). CensusResponseTransformer streams the 2-D table so a single
+      # month no longer materializes the full node tree, but running months
+      # concurrently still multiplies peak heap — the OOM that took out
+      # worker-econ-daily. Pin to 1 so only one month is resident at a time
+      # (this table inherits the global calcite.etl.threads otherwise).
+      parallel: 1
       response:
         format: json
       rateLimit:

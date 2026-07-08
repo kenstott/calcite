@@ -13,15 +13,21 @@ package org.apache.calcite.adapter.govdata.geo;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Transforms U.S. Census Bureau API responses.
@@ -71,6 +77,13 @@ import java.util.Iterator;
  *   <li>Returns empty array for no-data responses</li>
  * </ul>
  *
+ * <p><b>Memory:</b> the 2-D data-API table — by far the largest shape (the
+ * intltrade {@code statehs}/{@code hs} timeseries returns ~2M rows per month) —
+ * is transformed by <i>streaming</i>: a {@link JsonParser} reads the input row by
+ * row and a {@link JsonGenerator} writes the output objects directly, so the full
+ * parsed node tree and the rebuilt object array are never held in memory at once.
+ * Only the small error/wrapper/object-array shapes fall back to a full tree parse.
+ *
  * @see ResponseTransformer
  * @see RequestContext
  */
@@ -97,6 +110,37 @@ public class CensusResponseTransformer implements ResponseTransformer {
     }
 
     try {
+      // Peek at the leading tokens to detect the large 2-D table shape without
+      // materialising the whole document. Only this shape is streamed; every
+      // other shape (errors, wrapper objects, already-object arrays) is small
+      // for these endpoints and handled via a full tree parse below.
+      JsonFactory factory = MAPPER.getFactory();
+      boolean isTable = false;
+      boolean isArray = false;
+      boolean emptyArray = false;
+      JsonParser peek = factory.createParser(response);
+      try {
+        if (peek.nextToken() == JsonToken.START_ARRAY) {
+          isArray = true;
+          JsonToken second = peek.nextToken();
+          if (second == JsonToken.START_ARRAY) {
+            isTable = true;
+          } else if (second == JsonToken.END_ARRAY) {
+            emptyArray = true;
+          }
+        }
+      } finally {
+        peek.close();
+      }
+
+      if (isTable) {
+        return streamTableToObjects(response, context);
+      }
+      if (emptyArray) {
+        LOGGER.debug("Census: Empty array for {}", context.getUrl());
+        return "[]";
+      }
+
       JsonNode root = MAPPER.readTree(response);
 
       // Check for error object
@@ -104,8 +148,9 @@ public class CensusResponseTransformer implements ResponseTransformer {
         return handleError(root.path("error").asText(), context);
       }
 
-      // Check for array response
-      if (root.isArray()) {
+      // Non-table array (array of strings/objects — e.g. an error string or an
+      // already-object array)
+      if (isArray || root.isArray()) {
         return handleArrayResponse(root, context);
       }
 
@@ -177,10 +222,12 @@ public class CensusResponseTransformer implements ResponseTransformer {
   }
 
   /**
-   * Handles an array response from Census API.
+   * Handles a non-table array response from Census API.
    *
-   * <p>Census data API returns a 2D array where the first row is headers.
-   * This method converts it to an array of objects.
+   * <p>The large 2-D table shape (headers row + data rows) is intercepted and
+   * streamed in {@link #transform}; by the time this method is reached the array's
+   * first element is known not to be an array. It is either an error string or an
+   * already-object array, both of which are small.
    *
    * @param root The parsed JSON array node
    * @param context Request context for logging
@@ -201,18 +248,13 @@ public class CensusResponseTransformer implements ResponseTransformer {
       }
     }
 
-    // Check if this is a 2D array (headers + data rows)
-    if (first.isArray()) {
-      return convertTableToObjects(root, context);
-    }
-
-    // Already an array of objects
+    // Already an array of objects (or non-error scalars)
     LOGGER.debug("Census: Extracted {} records", root.size());
     return root.toString();
   }
 
   /**
-   * Converts Census 2D table format to array of objects.
+   * Streams the Census 2-D table format to an array of objects.
    *
    * <p>Input format:
    * <pre>{@code
@@ -231,29 +273,76 @@ public class CensusResponseTransformer implements ResponseTransformer {
    * ]
    * }</pre>
    *
-   * @param table The 2D array node
-   * @param context Request context for logging
+   * <p>The header row is buffered (a handful of column names); data rows are read
+   * and written one at a time, so the millions of rows a monthly trade fetch
+   * returns are never all resident as parsed nodes.
+   *
+   * @param response The raw JSON response
+   * @param context Request context (supplies the {@code naics_var} rename)
    * @return JSON array string of objects
    */
-  private String convertTableToObjects(JsonNode table, RequestContext context) {
-    if (table.size() < 2) {
-      // Only headers, no data
-      LOGGER.debug("Census: Table has only headers, no data for {}", context.getUrl());
-      return "[]";
+  private String streamTableToObjects(String response, RequestContext context)
+      throws IOException {
+    JsonFactory factory = MAPPER.getFactory();
+    StringWriter out = new StringWriter();
+    String[] headers;
+    int rowCount = 0;
+
+    JsonParser parser = factory.createParser(response);
+    JsonGenerator gen = factory.createGenerator(out);
+    try {
+      parser.nextToken();  // START_ARRAY (outer table)
+      parser.nextToken();  // START_ARRAY (header row)
+      gen.writeStartArray();
+
+      headers = readHeaderRow(parser, context);
+
+      // Remaining inner arrays are data rows.
+      JsonToken tok;
+      while ((tok = parser.nextToken()) != JsonToken.END_ARRAY && tok != null) {
+        if (tok == JsonToken.START_ARRAY) {
+          writeRowObject(parser, gen, headers);
+          rowCount++;
+        } else if (tok.isStructStart()) {
+          // Defensive: unexpected object element inside a 2-D table — skip it.
+          parser.skipChildren();
+        }
+      }
+
+      gen.writeEndArray();
+    } finally {
+      gen.close();
+      parser.close();
     }
 
-    // Extract headers from first row
-    JsonNode headerRow = table.get(0);
-    String[] headers = new String[headerRow.size()];
-    for (int i = 0; i < headerRow.size(); i++) {
-      headers[i] = headerRow.get(i).asText();
-    }
+    LOGGER.debug("Census: streamed table with {} columns and {} data rows",
+        headers.length, rowCount);
+    return out.toString();
+  }
 
-    // Vintage-varying request variables (e.g. the Nonemployer Statistics NAICS variable
-    // NAICS2007/2012/2017/2022, injected per data reference year by
-    // NonemployerNaicsDimensionResolver) are renamed to a stable canonical header so the
-    // materialization column expression is vintage-independent. Only applies to pipelines
-    // that declare a naics_var dimension; cbp and the rest are unaffected.
+  /**
+   * Reads the header row into a column-name array, applying the vintage-varying
+   * request-variable rename.
+   *
+   * <p>Vintage-varying request variables (e.g. the Nonemployer Statistics NAICS
+   * variable NAICS2007/2012/2017/2022, injected per data reference year by
+   * NonemployerNaicsDimensionResolver) are renamed to a stable canonical header so
+   * the materialization column expression is vintage-independent. Only applies to
+   * pipelines that declare a naics_var dimension; cbp and the rest are unaffected.
+   *
+   * @param parser Positioned at the header row's {@code START_ARRAY}
+   * @param context Request context (supplies {@code naics_var})
+   * @return The column names
+   */
+  private String[] readHeaderRow(JsonParser parser, RequestContext context)
+      throws IOException {
+    List<String> hdr = new ArrayList<String>();
+    JsonToken t;
+    while ((t = parser.nextToken()) != JsonToken.END_ARRAY && t != null) {
+      hdr.add(parser.getValueAsString());
+    }
+    String[] headers = hdr.toArray(new String[0]);
+
     String naicsVar = context.getDimensionValues().get("naics_var");
     if (naicsVar != null) {
       for (int i = 0; i < headers.length; i++) {
@@ -262,28 +351,47 @@ public class CensusResponseTransformer implements ResponseTransformer {
         }
       }
     }
+    return headers;
+  }
 
-    // Convert data rows to objects
-    ArrayNode resultArray = MAPPER.createArrayNode();
-    for (int rowIndex = 1; rowIndex < table.size(); rowIndex++) {
-      JsonNode row = table.get(rowIndex);
-      ObjectNode obj = MAPPER.createObjectNode();
-
-      for (int colIndex = 0; colIndex < headers.length && colIndex < row.size(); colIndex++) {
-        JsonNode val = row.get(colIndex);
-        if (val.isTextual() && CENSUS_SENTINELS.contains(val.asText())) {
-          obj.putNull(headers[colIndex]);
+  /**
+   * Writes a single data row (an inner array) as a JSON object keyed by headers.
+   *
+   * <p>Textual Census suppression/unavailability sentinels are coerced to null;
+   * all other values are copied verbatim (numbers stay numbers). Cells beyond the
+   * header count are ignored, mirroring the min(headers, row) bound of the prior
+   * tree-based conversion.
+   *
+   * @param parser Positioned at the data row's {@code START_ARRAY}
+   * @param gen Output generator
+   * @param headers Column names
+   */
+  private void writeRowObject(JsonParser parser, JsonGenerator gen, String[] headers)
+      throws IOException {
+    gen.writeStartObject();
+    int col = 0;
+    JsonToken t;
+    while ((t = parser.nextToken()) != JsonToken.END_ARRAY && t != null) {
+      if (col < headers.length) {
+        String name = headers[col];
+        if (t == JsonToken.VALUE_STRING) {
+          String v = parser.getText();
+          if (CENSUS_SENTINELS.contains(v)) {
+            gen.writeNullField(name);
+          } else {
+            gen.writeStringField(name, v);
+          }
         } else {
-          obj.set(headers[colIndex], val);
+          gen.writeFieldName(name);
+          gen.copyCurrentStructure(parser);
         }
+      } else if (t.isStructStart()) {
+        // Extra cell beyond the header count — consume and discard.
+        parser.skipChildren();
       }
-
-      resultArray.add(obj);
+      col++;
     }
-
-    LOGGER.debug("Census: Converted table with {} columns and {} data rows",
-        headers.length, resultArray.size());
-    return resultArray.toString();
+    gen.writeEndObject();
   }
 
   /**
