@@ -715,6 +715,57 @@ Primary key: `(year, quarter, account_type)`
 
 **Coverage**: Includes trade balance, current account, capital account, and income balances.
 
+#### `iip_positions`
+BEA International Investment Position (IIP) — the U.S. external balance sheet. Tall layout:
+one row per `type_of_investment` × `component` × period. Covers the position (stock) of U.S.
+external assets and liabilities and the change-in-position decomposition (financial-account
+transactions, price changes, exchange-rate changes, other volume/valuation effects). Annual.
+
+Primary key: `(frequency, year, type_of_investment, component, time_period)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| type_of_investment | VARCHAR | Asset/liability category code (e.g. `CurrAndDepAssets`) |
+| component | VARCHAR | Measure code (`Pos` = position; `ChgPos*` = change in position by driver) |
+| time_series_id | VARCHAR | BEA series identifier |
+| time_series_description | VARCHAR | Human-readable series description |
+| time_period | VARCHAR | Data period (`2022` annual) |
+| data_value | DOUBLE | Value in units given by `cl_unit`/`unit_mult` (null when suppressed) |
+| cl_unit | VARCHAR | Classification unit (e.g. `USD`) |
+| unit_mult | VARCHAR | Unit multiplier (e.g. `6` for millions) |
+| frequency | VARCHAR | Data frequency (`A`) |
+| note_ref | VARCHAR | Reference to explanatory notes |
+
+**Coverage**: U.S. direct, portfolio, other, and reserve assets/liabilities; complements the
+flow-based `ita_data` and the direct-investment detail in `fdi_direct_investment`/`fdi_activities`.
+
+### International Trade (Census) Tables
+
+#### `trade_by_state`
+Monthly U.S. goods exports by origin state, HS-6 commodity, and destination country (Census
+International Trade `statehs` timeseries). Exports-only. Partitioned by `(type, year, month)`.
+`state='-'` rows are U.S. totals and `country_code='-'` rows are all-countries totals — filter
+both out for detail-grain analysis.
+
+Primary key: `(year, month, state, hs6, country_code)`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| state | VARCHAR | Origin state (USPS 2-char); `-` = U.S. total roll-up |
+| country_code | VARCHAR | Destination country code (Census 4-char); `-` = all-countries roll-up |
+| country_name | VARCHAR | Destination country name |
+| hs6 | VARCHAR | HS 6-digit commodity code |
+| hs2 | VARCHAR | HS 2-digit chapter (derived) |
+| commodity_desc | VARCHAR | Short HS commodity description |
+| value_usd | BIGINT | Total monthly export value, all modes (USD) |
+| vessel_value_usd | BIGINT | Export value shipped by vessel (USD) |
+| air_value_usd | BIGINT | Export value shipped by air (USD) |
+| container_value_usd | BIGINT | Export value shipped in containers (USD) |
+
+**Coverage**: HS-6 sub-national export exposure; joins to `geo.states` on `state` and to
+`sec.filing_metadata` for company-level trade exposure. Companion to the country-grain
+`trade_exports`/`trade_imports`.
+
 ### World Bank Tables
 
 #### `world_indicators`

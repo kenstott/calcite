@@ -976,6 +976,11 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Links location to geographic county
+      - columns: [country_code]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: Links location country (2-letter ISO) to ref.countries
   patent_claims:
     primaryKey: [patent_id, claim_sequence]
     foreignKeys:
@@ -998,3 +1003,8 @@ constraints:
         targetTable: states
         targetColumns: [state_abbr]
         comment: Links applicant state (2-letter code, not FIPS) to geographic state
+      - columns: [applicant_country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: Links applicant country (2-letter ISO) to ref.countries

@@ -515,11 +515,144 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ==========================================================================
+  # COUNTRIES — country identity crosswalk (Census code <-> ISO <-> FIPS <-> BEA name)
+  # ==========================================================================
+  - name: countries
+    # Country codes are extremely stable, so the ISO "spine" (alpha-3, numeric,
+    # FIPS, M49 region/subregion/continent, currency) is a checked-in resource
+    # (ref/country-enrichment.json, built by scripts/build-countries-ref-resources.py).
+    # Only the Census Schedule C code list is fetched live, and freshness gates it
+    # to a cheap daily HEAD — CountriesReferenceTransformer merges the two.
+    freshness:
+      type: last_modified
+    pattern: "type=countries.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Country identity crosswalk: one row per country carrying the Census 4-digit
+      trade code, ISO 3166-1 alpha-2/alpha-3/numeric, FIPS 10-4, a name-based BEA
+      area key, plus M49 region/subregion/continent and ISO 4217 currency. Lets the
+      Census-coded trade tables (econ.trade_by_state / trade_exports / trade_imports),
+      the ISO-3-coded econ.world_indicators, and the name-keyed BEA tables
+      (econ.ita_data / fdi_*) all join to a single reference.
+      Sources: Census Schedule C country list (live, freshness-gated) + a bundled
+      ISO spine derived from DataHub datasets/country-codes (public domain).
+
+    columns:
+      - name: census_cty_code
+        type: string
+        nullable: false
+        comment: Census 4-digit foreign-trade country code (FK target for the trade tables)
+      - name: iso_alpha2
+        type: string
+        nullable: true
+        comment: ISO 3166-1 alpha-2 code
+      - name: iso_alpha3
+        type: string
+        nullable: true
+        comment: ISO 3166-1 alpha-3 code
+      - name: iso_numeric
+        type: string
+        nullable: true
+        comment: ISO 3166-1 numeric code
+      - name: fips_code
+        type: string
+        nullable: true
+        comment: FIPS 10-4 country code
+      - name: country_name
+        type: string
+        nullable: true
+        comment: Census display name (clean short form)
+      - name: official_name
+        type: string
+        nullable: true
+        comment: ISO English official name
+      - name: bea_area_name
+        type: string
+        nullable: true
+        comment: country_name with any parenthetical stripped; best-effort join key for BEA area_or_country
+      - name: currency_code
+        type: string
+        nullable: true
+        comment: ISO 4217 currency alphabetic code
+      - name: region
+        type: string
+        nullable: true
+        comment: M49 region (e.g. Americas, Europe)
+      - name: subregion
+        type: string
+        nullable: true
+        comment: M49 sub-region (e.g. Northern America)
+      - name: intermediate_region
+        type: string
+        nullable: true
+        comment: M49 intermediate region (nullable)
+      - name: continent
+        type: string
+        nullable: true
+        comment: Continent code (e.g. NA, EU, AS)
+      - name: is_aggregate
+        type: boolean
+        nullable: true
+        comment: True when the Census row is a grouping/area with no single ISO country
+
+    source:
+      type: http
+      url: "https://www.census.gov/foreign-trade/schedules/c/country.txt"
+      method: GET
+      headers:
+        User-Agent: "govdata-etl kennethstott@gmail.com"
+      response:
+        # 'json' describes the CountriesReferenceTransformer OUTPUT; the raw body
+        # is the pipe-delimited Census text, which the transformer parses.
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ref.CountriesReferenceTransformer"
+
+    dimensions:
+      type:
+        - countries
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
 
 constraints:
+
+  countries:
+    primaryKey: [type, census_cty_code]
 
   gleif_entities:
     primaryKey: [type, lei]
@@ -529,6 +662,14 @@ constraints:
         targetTable: filings
         targetColumns: [cik]
         comment: Links GLEIF entities registered with SEC (RA000602) to SEC filings
+      - columns: [headquarters_country]
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: Links HQ country (ISO 3166-1 alpha-2) to country reference
+      - columns: [registered_country]
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: Links legal-registration country (ISO 3166-1 alpha-2) to country reference
 
   gleif_cik_mapping:
     primaryKey: [type, lei]

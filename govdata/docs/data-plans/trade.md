@@ -1,13 +1,20 @@
 # Trade Schema Data Plan
 
-## Implementation Status (2026-07-07)
+## Implementation Status (2026-07-08)
 
 There is no dedicated `trade` schema — trade data lives in `census` and `econ`.
 
 - **`bea_fdi_by_industry` — DELIVERED** as `econ.fdi_direct_investment` +
   `econ.fdi_activities` (BEA `MNE` dataset, Country × Industry, inward/outward), surfaced
   by the `econ.fdi_by_country` view. Shape is tall (vs. this plan's wide) and it lives in
-  `econ`, not a `trade` schema. Only the plan's secondary `IIP` dataset is unwired.
+  `econ`, not a `trade` schema.
+- **`IIP` (secondary dataset) — DELIVERED** as `econ.iip_positions` (BEA `IIP` dataset,
+  `TypeOfInvestment=All` × `Component=All`, annual). Tall layout: one row per
+  type_of_investment × component × period, covering U.S. external assets/liabilities
+  (position) and the change-in-position decomposition (transactions, price, exchange-rate,
+  other). New `IipDataTransformer`; annual only (BEA also offers QNSA/QSA), for parity with
+  `ita_data`. Endpoint field set verified live 2026-07-08. Verification gate: a keyed
+  ETL/DQ run (`BEA_API_KEY`) — not yet completed.
 - **`usa_trade_monthly` — DELIVERED** (substance) as `econ.trade_exports` /
   `econ.trade_imports`. Originally a thin country-level annual aggregate with a **hardcoded
   3-year `time` list** (frozen at 2023) living in the `census` schema. Reworked 2026-07-07 to
@@ -18,8 +25,14 @@ There is no dedicated `trade` schema — trade data lives in `census` and `econ`
   returns HTTP 204). **Moved from `census` to `econ` (2026-07-08)** to consolidate with the
   BEA trade/FDI tables — all trade data now lives in one schema. Verification gate: a keyed
   ETL/DQ run (`CENSUS_API_KEY`) — not yet completed.
-- **`usa_trade_by_state` — NOT IMPLEMENTED.** State exports (`intltrade/exports/statehs`)
-  remain to be built.
+- **`usa_trade_by_state` — DELIVERED** as `econ.trade_by_state` (Census
+  `intltrade/exports/statehs`, HS-6 × origin state × destination country × month, with
+  total/vessel/air/container export values). Exports-only (statehs has no import origin);
+  partitioned `[type, year, month]` with `overwritePartitions`. Like `/hs`, statehs requires
+  discrete `YEAR=`/`MONTH=` predicates. One (year, month) fetch returns ~2.1M state-detail
+  rows (~100 MB); `state='-'`/`country_code='-'` rows are U.S./all-countries roll-ups.
+  Verified live 2026-07-08. Verification gate: a keyed ETL/DQ run (`CENSUS_API_KEY`) — not
+  yet completed.
 
 ## Existing Coverage in ECON Schema
 
@@ -31,11 +44,13 @@ The `econ` schema already includes the following trade-related tables:
 | `trade_statistics` | View over BEA NIPA 4.2.5B — exports/imports of goods and services |
 | `trade_balance_summary` | Aggregated view: total exports, imports, net balance by category |
 
-These cover **macro-level BEA balance-of-payments data**. The gaps this plan addresses:
+These cover **macro-level BEA balance-of-payments data**. The gaps this plan addressed
+(all now delivered — see the Implementation Status above):
 
-1. **HS-commodity granularity** — `usa_trade_monthly` adds Census HS-6 × country × month (not in econ)
-2. **State-level exports** — `usa_trade_by_state` adds sub-national export exposure (not in econ)
-3. **FDI by industry** — `bea_fdi_by_industry` adds multinational enterprise investment flows (different BEA dataset from ITA)
+1. **HS-commodity granularity** — `trade_exports` / `trade_imports` add Census HS-6 × country × month
+2. **State-level exports** — `trade_by_state` adds sub-national HS-6 export exposure
+3. **FDI by industry** — `fdi_direct_investment` / `fdi_activities` add multinational enterprise investment flows (BEA MNE dataset)
+4. **External balance sheet** — `iip_positions` adds the U.S. International Investment Position (BEA IIP dataset)
 
 The `bea_international_transactions` table proposed below overlaps with `econ.ita_data`
 and should **not** be implemented if the econ ITA coverage is sufficient. Evaluate after

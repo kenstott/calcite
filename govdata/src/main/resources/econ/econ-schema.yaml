@@ -4305,6 +4305,146 @@ partitionedTables:
         stagingMode: local
       iceberg: *fdi_iceberg
 
+  # --- INTERNATIONAL INVESTMENT POSITION (BEA IIP dataset) ---
+  # U.S. external balance sheet: the stock (position) of U.S.-owned assets
+  # abroad and foreign-owned assets in the United States, plus the annual change
+  # in those positions decomposed by driver (financial-account transactions,
+  # price changes, exchange-rate changes, other volume/valuation effects).
+  # Complements the flow-based ita_data (balance of payments) and the
+  # direct-investment detail in fdi_direct_investment / fdi_activities. One BEA
+  # call per (frequency, year) with TypeOfInvestment=All & Component=All returns
+  # every series for that year; the table is tall (one row per
+  # type_of_investment x component x period). Verified live 2026-07-08:
+  # TypeOfInvestment=All&Component=All&Frequency=A&Year=2022 -> 200 with the
+  # field set mapped below.
+  - name: iip_positions
+    pattern: "type=iip_positions/frequency=*/year=*/iip_positions.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: frequency
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      BEA International Investment Position (IIP): U.S. external assets and
+      liabilities by type of investment, reporting position (stock) and the
+      change in position decomposed by driver (transactions, price changes,
+      exchange-rate changes, other). Tall layout: one row per
+      type_of_investment x component x period.
+    columns:
+      # Source columns from IipDataTransformer output (snake_case)
+      - name: type_of_investment
+        type: string
+        source: type_of_investment
+        nullable: true
+        comment: Asset/liability category code (e.g. CurrAndDepAssets, DirectInvAssets)
+      - name: component
+        type: string
+        source: component
+        nullable: true
+        comment: Measure code (Pos=position; ChgPos*=change in position by driver)
+      - name: time_series_id
+        type: string
+        source: time_series_id
+        nullable: true
+        comment: BEA series identifier (e.g. TSI_IipCurrAndDepAssetsChgPos_A)
+      - name: time_series_description
+        type: string
+        source: time_series_description
+        nullable: true
+        comment: Human-readable series description
+      - name: time_period
+        type: string
+        source: time_period
+        nullable: true
+        comment: Data period ('2022' annual, '2022Q1' quarterly)
+      - name: data_value
+        type: double
+        source: data_value
+        nullable: true
+        comment: Position or change value in the units given by cl_unit/unit_mult (null when BEA suppressed)
+      - name: cl_unit
+        type: string
+        source: cl_unit
+        nullable: true
+        comment: Classification unit (e.g. 'USD')
+      - name: unit_mult
+        type: string
+        source: unit_mult
+        nullable: true
+        comment: Unit multiplier (e.g. '6' for millions)
+      - name: frequency
+        type: string
+        source: frequency
+        nullable: true
+        comment: Data frequency ('A' for Annual)
+      - name: note_ref
+        type: string
+        source: note_ref
+        nullable: true
+        comment: Reference to explanatory notes
+
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "IIP"
+        TypeOfInvestment: "All"
+        Component: "All"
+        Frequency: "{frequency}"
+        Year: "{effective_year}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        # dataPath omitted: IipDataTransformer extracts BEAAPI.Results.Data
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.IipDataTransformer"
+
+    dimensions:
+      type:
+        - iip_positions
+      frequency:
+        - A   # Annual (BEA also publishes QNSA/QSA; annual chosen for parity with ita_data)
+      year: *year_range_from_2000
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=iip_positions/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- GDP STATISTICS ---
   - name: gdp_statistics
     pattern: "type=gdp_statistics/frequency=*/year=*/gdp_statistics.parquet"
@@ -4814,6 +4954,146 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # TRADE BY STATE — Census intltrade statehs, HS-6 state exports by destination
+  # ---------------------------------------------------------------------------
+  # Sub-national export exposure: monthly U.S. goods exports by origin STATE x
+  # HS-6 commodity x destination country. The /statehs timeseries only publishes
+  # exports (there is no state-level import origin), so this is exports-only and
+  # carries no `direction` partition. One fetch per (year, month) returns full
+  # state x country x commodity detail (~2.1M rows / ~100 MB per month, verified
+  # live 2026-07-08) plus roll-up rows: STATE='-' is the U.S. total and
+  # CTY_CODE='-' is the all-countries total — filter both out for detail-grain
+  # analysis. Like /hs, the statehs endpoint requires discrete YEAR=/MONTH=
+  # predicates (a time=YYYY-MM predicate is rejected), so month is a full list
+  # dimension and each (year, month) is one overwrite partition.
+  - name: trade_by_state
+    freshness:
+      type: hash
+    pattern: "type=trade_by_state/year=*/month=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: integer
+        - name: month
+          type: string
+    comment: >
+      Monthly U.S. goods exports by origin state, HS-6 commodity, and
+      destination country (Census International Trade timeseries, statehs
+      endpoint). state='-' rows are U.S. totals; country_code='-' rows are
+      all-countries totals.
+
+    dimensions:
+      type:
+        - trade_by_state
+      # Period dimension: dynamic yearRange (never hardcoded). publish year is
+      # iterated start->current; effective_year = publish - dataLag is the data
+      # year written to the partition. The intltrade statehs timeseries begins in
+      # 2013; minYear hard-floors the publish year at 2014 (=> data floor 2013).
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2014}"
+        end: "${GOVDATA_END_YEAR:current}"
+        minYear: 2014
+        dataLag: 1
+        descending: true
+      # Full monthly cadence: one fetch per (year, month) = one overwrite
+      # partition, so the fetch unit equals the partition granularity.
+      month:
+        type: list
+        values: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+
+    columns:
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."STATE"'
+        comment: Origin state (USPS 2-char abbreviation); '-' = U.S. total roll-up
+      - name: country_code
+        type: string
+        nullable: true
+        expression: 'src."CTY_CODE"'
+        comment: Destination country code (4-char Census); '-' = all-countries roll-up
+      - name: country_name
+        type: string
+        nullable: true
+        expression: 'src."CTY_NAME"'
+        comment: Destination country name
+      - name: hs6
+        type: string
+        nullable: true
+        expression: 'src."E_COMMODITY"'
+        comment: HS 6-digit commodity code
+      - name: hs2
+        type: string
+        nullable: true
+        expression: 'LEFT(src."E_COMMODITY", 2)'
+        comment: HS 2-digit chapter (derived from hs6)
+      - name: commodity_desc
+        type: string
+        nullable: true
+        expression: 'src."E_COMMODITY_SDESC"'
+        comment: Short HS commodity description
+      - name: value_usd
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ALL_VAL_MO" AS BIGINT)'
+        comment: Total export value for the month, all transport modes (USD)
+      - name: vessel_value_usd
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."VES_VAL_MO" AS BIGINT)'
+        comment: Export value shipped by vessel for the month (USD)
+      - name: air_value_usd
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."AIR_VAL_MO" AS BIGINT)'
+        comment: Export value shipped by air for the month (USD)
+      - name: container_value_usd
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CNT_VAL_MO" AS BIGINT)'
+        comment: Export value shipped in containers for the month (USD)
+
+    source:
+      type: http
+      # statehs requires discrete YEAR=/MONTH= predicates (time=YYYY-MM is
+      # rejected). Verified live 2026-07-08: YEAR/MONTH -> 200 with ~2.1M HS-6
+      # state-detail rows/month.
+      url: "https://api.census.gov/data/timeseries/intltrade/exports/statehs?get=STATE,CTY_CODE,CTY_NAME,E_COMMODITY,E_COMMODITY_SDESC,ALL_VAL_MO,VES_VAL_MO,AIR_VAL_MO,CNT_VAL_MO&COMM_LVL=HS6&YEAR={effective_year}&MONTH={month}&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trade_by_state/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+        valueSource:
+          year: effective_year
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -4828,8 +5108,54 @@ constraints:
   # International trade (Census intltrade HS-6 monthly)
   trade_exports:
     primaryKey: [year, month, hs6, country_code]
+    foreignKeys:
+      - columns:
+          - country_code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - census_cty_code
+        comment: >
+          Destination country (Census code) links to ref.countries for ISO/FIPS/region.
+          Metadata only; the country_code='-' all-countries roll-up rows do not resolve.
   trade_imports:
     primaryKey: [year, month, hs6, country_code]
+    foreignKeys:
+      - columns:
+          - country_code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - census_cty_code
+        comment: >
+          Origin country (Census code) links to ref.countries for ISO/FIPS/region.
+          Metadata only; the country_code='-' all-countries roll-up rows do not resolve.
+  # State-level HS-6 exports (Census intltrade statehs)
+  trade_by_state:
+    primaryKey: [year, month, state, hs6, country_code]
+    foreignKeys:
+      - columns:
+          - state
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns:
+          - state_abbr
+        comment: >
+          Origin state (USPS abbreviation) links to geo.states for state name/FIPS/geometry.
+          Metadata only; the state='-' U.S.-total roll-up rows do not resolve.
+      - columns:
+          - country_code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - census_cty_code
+        comment: >
+          Destination country (Census code) links to ref.countries for ISO/FIPS/region.
+          Metadata only; the country_code='-' all-countries roll-up rows do not resolve.
+  # BEA International Investment Position — no cross-schema FK: type_of_investment/component
+  # are BEA-internal codes with no reference table (there is no country grain in IIP).
+  iip_positions:
+    primaryKey: [frequency, year, type_of_investment, component, time_period]
 
   employment_statistics:
     primaryKey:
@@ -5045,6 +5371,16 @@ constraints:
       - type
       - frequency
       - year
+    foreignKeys:
+      - columns:
+          - countryiso3code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - iso_alpha3
+        comment: >
+          Links World Bank indicator country (ISO 3166-1 alpha-3) to ref.countries.
+          Metadata only; World Bank regional/income aggregates do not resolve.
 
   fred_indicators:
     primaryKey:

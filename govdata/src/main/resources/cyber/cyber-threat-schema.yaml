@@ -1227,6 +1227,12 @@ constraints:
 
   ioc_ips:
     primaryKey: [type, ip_address, first_seen]
+    foreignKeys:
+      - columns: [country]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: Links IOC IP geolocation country (ISO 3166-1 alpha-2) to ref.countries
 
   ioc_mixed:
     primaryKey: [type, ioc_value, first_seen]

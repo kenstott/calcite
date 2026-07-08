@@ -94,6 +94,8 @@ public class EconSchemaTableExposureTest {
     expectedTables.add("industry_gdp");
     expectedTables.add("trade_exports");
     expectedTables.add("trade_imports");
+    expectedTables.add("trade_by_state");
+    expectedTables.add("iip_positions");
 
     try (Connection conn =
         DriverManager.getConnection("jdbc:calcite:model=" + modelFile, props);
