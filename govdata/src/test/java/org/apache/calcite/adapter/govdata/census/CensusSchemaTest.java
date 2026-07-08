@@ -108,9 +108,7 @@ public class CensusSchemaTest {
       "nonemployer_statistics",
       "building_permits",
       "qwi_employment",
-      "lodes_workplace",
-      "trade_exports",
-      "trade_imports");
+      "lodes_workplace");
 
   @BeforeAll
   public static void setUp() throws Exception {
@@ -527,8 +525,7 @@ public class CensusSchemaTest {
           "decennial_population", "decennial_housing",
           "economic_census", "cbp_establishments", "pep_population",
           "saipe_poverty", "sahie_insurance", "bds_dynamics", "abs_characteristics",
-          "nonemployer_statistics", "building_permits", "qwi_employment", "lodes_workplace",
-          "trade_exports", "trade_imports");
+          "nonemployer_statistics", "building_permits", "qwi_employment", "lodes_workplace");
 
       for (String tableName : EXPECTED_TABLES) {
         try {

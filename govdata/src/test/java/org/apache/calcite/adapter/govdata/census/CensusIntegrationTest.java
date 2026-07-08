@@ -911,9 +911,7 @@ public class CensusIntegrationTest {
         "building_permits",
         "qwi_employment",
         // Specialized
-        "lodes_workplace",
-        "trade_exports",
-        "trade_imports"
+        "lodes_workplace"
     };
 
     try (Connection conn = createConnection()) {

@@ -1,5 +1,26 @@
 # Trade Schema Data Plan
 
+## Implementation Status (2026-07-07)
+
+There is no dedicated `trade` schema — trade data lives in `census` and `econ`.
+
+- **`bea_fdi_by_industry` — DELIVERED** as `econ.fdi_direct_investment` +
+  `econ.fdi_activities` (BEA `MNE` dataset, Country × Industry, inward/outward), surfaced
+  by the `econ.fdi_by_country` view. Shape is tall (vs. this plan's wide) and it lives in
+  `econ`, not a `trade` schema. Only the plan's secondary `IIP` dataset is unwired.
+- **`usa_trade_monthly` — DELIVERED** (substance) as `econ.trade_exports` /
+  `econ.trade_imports`. Originally a thin country-level annual aggregate with a **hardcoded
+  3-year `time` list** (frozen at 2023) living in the `census` schema. Reworked 2026-07-07 to
+  the `intltrade/{exports,imports}/hs` endpoints: HS-6 × country × **month**, with value,
+  quantity, and (imports) CIF charges; dynamic `year` yearRange (never hardcoded) ×
+  `month` list, partitioned `[type, direction, year, month]` with `overwritePartitions`. The
+  `/hs` series requires discrete `YEAR=`/`MONTH=` predicates (a `time=YYYY-MM` predicate
+  returns HTTP 204). **Moved from `census` to `econ` (2026-07-08)** to consolidate with the
+  BEA trade/FDI tables — all trade data now lives in one schema. Verification gate: a keyed
+  ETL/DQ run (`CENSUS_API_KEY`) — not yet completed.
+- **`usa_trade_by_state` — NOT IMPLEMENTED.** State exports (`intltrade/exports/statehs`)
+  remain to be built.
+
 ## Existing Coverage in ECON Schema
 
 The `econ` schema already includes the following trade-related tables:
