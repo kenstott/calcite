@@ -198,5 +198,5 @@ codeload tarball backfill — functionally equivalent.
 
 ## 9. Related notes
 - Memory: `cyber-vuln-refresh-design.md` (the durable summary of this plan).
-- `period_dimensions_design.md` / `period_dimensions_implementation_plan.md` (file adapter).
+- `period_dimensions_design.md` / `archive/file/docs/period_dimensions_implementation_plan.md` (file adapter; implementation plan archived).
 - Principle alignment: patents faithful-recreation (one source per table, no ETL joins).

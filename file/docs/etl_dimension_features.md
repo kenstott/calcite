@@ -3,7 +3,8 @@
 Reference for the period-model features in the file-adapter ETL layer
 (`file/src/main/java/org/apache/calcite/adapter/file/etl/`). Design rationale
 and the staged plan live in `period_dimensions_design.md` and
-`period_dimensions_implementation_plan.md`.
+`archive/file/docs/period_dimensions_implementation_plan.md` (the implementation
+plan is archived — the work has shipped).
 
 A table's spec separates **data sourcing** (which rows, fetched how) from
 **storage layout** (partition) — the two never constrain each other.

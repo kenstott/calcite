@@ -92,6 +92,7 @@ CLAUDE-TROUBLESHOOTING.ref
 .conversions.json.*
 ARCHITECTURE_SUMMARY.txt
 GOVDATA_ETL_ARCHITECTURE.md
+archive/**
 djia-production-README.md
 djia-production-verification.sql
 test-*.sql
