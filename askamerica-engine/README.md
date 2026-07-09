@@ -56,6 +56,9 @@ jdbc:askamerica:source=fec,crime,weather
 | `edu` | NCES education statistics (IPEDS, CCD) |
 | `lands` | USDA/NPS/BLM public lands boundaries, forest inventory, mineral royalties |
 | `patents` | USPTO patent grants, inventors, assignees, trademarks |
+| `disasters` | FEMA disaster declarations, NFIP claims/policies, NOAA storm events, WFIGS wildfire perimeters |
+| `cftc` | CFTC swaps and derivatives data |
+| `ag` | USDA agriculture (NASS/RMA/FSA) |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
 
 ## DBeaver setup

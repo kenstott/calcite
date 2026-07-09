@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
  *   query           — execute SQL, returns rows as JSON array
  *
  * Environment variables:
- *   ASKAMERICA_SCHEMAS  — comma-separated source list (default: all 15)
+ *   ASKAMERICA_SCHEMAS  — comma-separated source list (default: all 20)
  *   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3
  *                       — R2 credentials for data access
  */
@@ -70,7 +70,8 @@ public class McpServer {
 
     private static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
-        + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference";
+        + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
+        + "patents,lands,disasters,cftc,ag";
 
     // Lazy per-schema connections — initialized on first use, not all upfront.
     private static final ConcurrentHashMap<String, Connection> schemaConns =
@@ -220,7 +221,9 @@ public class McpServer {
             + "econ (BLS/BEA), census (ACS), crime (FBI UCR), "
             + "weather (NOAA GHCND), ref (NAICS/SIC), fec (campaign finance), "
             + "fedregister, cyber_vuln (NVD CVEs), cyber_threat (CISA KEV), "
-            + "energy (EIA), health (CDC/CMS), edu (NCES), econ_reference. "
+            + "energy (EIA), health (CDC/CMS), edu (NCES), econ_reference, "
+            + "patents (USPTO), lands (federal lands), disasters (FEMA/NOAA/WFIGS), "
+            + "cftc (swaps/derivatives), ag (USDA agriculture). "
             + "Call list_tables(schema) before querying. "
             + "When exploring or testing a query add FETCH FIRST N ROWS ONLY. "
             + "For analytical or aggregation queries omit the row limit so all "
