@@ -4721,8 +4721,9 @@ partitionedTables:
   # consolidated with the BEA trade/FDI tables so all trade data lives in econ).
   # ---------------------------------------------------------------------------
   - name: trade_exports
-    freshness:
-      type: hash
+    # No freshness probe: this table streams (StreamingResponseTransformer), and a hash
+    # probe would require a full body download to hash — defeating streaming. Past
+    # (year, month) partitions are skipped by completion markers; the open month re-streams.
     pattern: "type=trade/direction=exports/year=*/month=*/*.parquet"
     partitions:
       style: hive
@@ -4822,7 +4823,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.CensusTradeStreamingTransformer"
 
     materialize:
       format: iceberg
@@ -4846,8 +4847,9 @@ partitionedTables:
   # TRADE IMPORTS — Census intltrade HS-6 monthly, with CIF charges
   # ---------------------------------------------------------------------------
   - name: trade_imports
-    freshness:
-      type: hash
+    # No freshness probe: this table streams (StreamingResponseTransformer), and a hash
+    # probe would require a full body download to hash — defeating streaming. Past
+    # (year, month) partitions are skipped by completion markers; the open month re-streams.
     pattern: "type=trade/direction=imports/year=*/month=*/*.parquet"
     partitions:
       style: hive
@@ -4946,7 +4948,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.CensusTradeStreamingTransformer"
 
     materialize:
       format: iceberg
@@ -4980,8 +4982,9 @@ partitionedTables:
   # predicates (a time=YYYY-MM predicate is rejected), so month is a full list
   # dimension and each (year, month) is one overwrite partition.
   - name: trade_by_state
-    freshness:
-      type: hash
+    # No freshness probe: this table streams (StreamingResponseTransformer), and a hash
+    # probe would require a full body download to hash — defeating streaming. Past
+    # (year, month) partitions are skipped by completion markers; the open month re-streams.
     pattern: "type=trade_by_state/year=*/month=*/*.parquet"
     partitions:
       style: hive
@@ -5093,7 +5096,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.CensusTradeStreamingTransformer"
 
     materialize:
       format: iceberg

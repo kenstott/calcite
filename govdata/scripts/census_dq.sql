@@ -84,8 +84,6 @@ FROM (
   UNION ALL SELECT 'building_permits',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'qwi_employment',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'trade_exports',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_exports',           allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'trade_imports',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_imports',           allow_moved_paths := true) LIMIT 1) t)
 ) src;
 
 -- ============================================================================
@@ -151,9 +149,6 @@ FROM (
   -- qwi: 12 quarters × 51 states = 612 max; threshold 80% of max
   UNION ALL SELECT 'qwi_employment',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true)), 500
   UNION ALL SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true)), 10000
-  -- trade: 3 time periods × ~240 countries = ~720 max; threshold 80% of max
-  UNION ALL SELECT 'trade_exports',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_exports',           allow_moved_paths := true)), 600
-  UNION ALL SELECT 'trade_imports',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_imports',           allow_moved_paths := true)), 550
 ) src;
 
 -- ============================================================================
@@ -197,8 +192,6 @@ SELECT 'nonemployer_statistics' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'building_permits'       AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',       allow_moved_paths := true) LIMIT 1;
 SELECT 'qwi_employment'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',         allow_moved_paths := true) LIMIT 1;
 SELECT 'lodes_workplace'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',        allow_moved_paths := true) LIMIT 1;
-SELECT 'trade_exports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_exports',          allow_moved_paths := true) LIMIT 1;
-SELECT 'trade_imports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_imports',          allow_moved_paths := true) LIMIT 1;
 
 -- ============================================================================
 -- T4: ALL-NULL COLUMNS — no column should be 100% NULL
@@ -245,8 +238,6 @@ INSERT INTO dq_results SELECT 'census', 'nonemployer_statistics', 'all_null_cols
 INSERT INTO dq_results SELECT 'census', 'building_permits', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'qwi_employment', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'lodes_workplace', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace', allow_moved_paths := true)) WHERE null_percentage = 100.0;
-INSERT INTO dq_results SELECT 'census', 'trade_exports', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_exports', allow_moved_paths := true)) WHERE null_percentage = 100.0;
-INSERT INTO dq_results SELECT 'census', 'trade_imports', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_imports', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 
 -- ============================================================================
 -- T5: ALL-SAME-VALUE — no non-null column should have only one distinct value
@@ -289,8 +280,6 @@ INSERT INTO dq_results SELECT 'census', 'nonemployer_statistics', 'all_same_valu
 INSERT INTO dq_results SELECT 'census', 'building_permits', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'qwi_employment', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'lodes_workplace', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
-INSERT INTO dq_results SELECT 'census', 'trade_exports', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_exports', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'direction');
-INSERT INTO dq_results SELECT 'census', 'trade_imports', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/trade_imports', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'direction');
 
 -- ============================================================================
 -- T6: PK NULLS — SKIPPED

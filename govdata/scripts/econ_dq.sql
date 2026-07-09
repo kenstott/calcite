@@ -75,6 +75,8 @@ FROM (
   UNION ALL SELECT 'ita_data',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',             allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'gdp_statistics',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'industry_gdp',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',         allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'trade_exports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',        allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'trade_imports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',        allow_moved_paths := true) LIMIT 1) t)
 ) src
 WHERE tbl NOT IN ('jolts_regional', 'jolts_state') OR n > 0;
 
@@ -125,6 +127,10 @@ FROM (
   UNION ALL SELECT 'ita_data',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',              allow_moved_paths := true)), 10
   UNION ALL SELECT 'gdp_statistics',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',        allow_moved_paths := true)), 100
   UNION ALL SELECT 'industry_gdp',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',          allow_moved_paths := true)), 1000
+  -- trade: monthly HS-6 × country (~321k export / ~213k import rows per month at prod scale),
+  -- streamed with a bounded DQ row cap; a low floor just confirms the partition ingested.
+  UNION ALL SELECT 'trade_exports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',         allow_moved_paths := true)), 100
+  UNION ALL SELECT 'trade_imports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',         allow_moved_paths := true)), 100
 ) src;
 
 -- ============================================================================
@@ -159,6 +165,8 @@ SELECT 'regional_income'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'ita_data'               AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',               allow_moved_paths := true) LIMIT 1;
 SELECT 'gdp_statistics'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',         allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_gdp'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',           allow_moved_paths := true) LIMIT 1;
+SELECT 'trade_exports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',          allow_moved_paths := true) LIMIT 1;
+SELECT 'trade_imports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',          allow_moved_paths := true) LIMIT 1;
 
 -- ============================================================================
 -- T4: ALL-NULL COLUMNS — no column should be 100% NULL
@@ -371,6 +379,24 @@ SELECT 'econ', 'industry_gdp', 'all_null_cols', 'fail',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp', allow_moved_paths := true))
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('units', 'industry_description');
+
+-- trade_exports
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  -- quantity/quantity_unit are legitimately absent for value-only HS-6 commodities
+  AND column_name NOT IN ('quantity', 'quantity_unit');
+
+-- trade_imports
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  -- quantity/quantity_unit/cif_charges are legitimately absent for many HS-6 import lines
+  AND column_name NOT IN ('quantity', 'quantity_unit', 'cif_charges');
 
 -- ============================================================================
 -- T5: ALL-SAME-VALUE — no non-null column should have only one distinct value
@@ -633,6 +659,24 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/indus
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
+
+-- trade_exports
+INSERT INTO dq_results
+SELECT 'econ', 'trade_exports', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  -- type='trade'/direction='exports' are constant by design; quantity_unit is often one unit in a bounded sample
+  AND column_name NOT IN ('type', 'direction', 'quantity_unit');
+
+-- trade_imports
+INSERT INTO dq_results
+SELECT 'econ', 'trade_imports', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  -- type='trade'/direction='imports' are constant by design; quantity_unit is often one unit in a bounded sample
+  AND column_name NOT IN ('type', 'direction', 'quantity_unit');
 
 -- ============================================================================
 -- T6: PK NULLS — SKIPPED
