@@ -1290,12 +1290,18 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.debug("Iceberg extension may already be loaded: {}", e.getMessage());
       }
 
-      // Enable version guessing for tables without a version-hint file. Use SET GLOBAL: this
-      // setupConn only creates the views, while client queries run on separate connections
-      // (see getConnection() below) that share the same in-process DuckDB database. A
-      // connection-scoped SET would not reach them, so a table read mid-commit (version-hint
-      // momentarily absent during initial table creation) fails with "no version-hint could be
-      // found". SET GLOBAL applies database-wide so every query connection inherits it.
+      // Enable version guessing ONLY as a fallback for when version-hint.text is absent. Verified
+      // DuckDB semantics (iceberg ext): when version-hint.text is PRESENT the pointer is always
+      // followed and this flag is ignored (a higher/orphaned vN.metadata.json is NOT picked up);
+      // when it is ABSENT, guessing=true resolves the highest *valid* metadata (skipping garbage)
+      // while guessing=false errors with "no version-hint could be found". So this flag changes
+      // nothing for established tables (every one carries version-hint.text via the writer's
+      // ensureVersionHint) — those reads already resolve the atomic committed snapshot and stay
+      // robust under an in-flight writer (that guarantee comes from write-then-commit + the
+      // maintenance retention window + the orphan-cleanup fix, not from this setting). It only
+      // covers the version-hint-momentarily-absent window during a table's first commit, so leave
+      // it on. Use SET GLOBAL: query connections (getConnection() below) share this in-process
+      // DuckDB database and a connection-scoped SET would not reach them.
       try {
         conn.createStatement().execute("SET GLOBAL unsafe_enable_version_guessing = true");
         LOGGER.debug("Iceberg version guessing enabled globally");

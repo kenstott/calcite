@@ -927,7 +927,13 @@ public class IcebergTableWriter {
    * </ol>
    */
   private int removeOrphanFilesLocked(long olderThanMillis) {
-    // Collect all data files referenced by ANY snapshot (including ancestors)
+    // Collect all data files referenced by ANY snapshot (including ancestors). This "keep" set
+    // is what protects live data from deletion, so it MUST be complete: if planning any single
+    // snapshot fails, its files are absent from the set and every one of them not also referenced
+    // by another snapshot is deleted as a false orphan — leaving the live snapshot pointing at a
+    // physically-deleted file (404 on read). A partial keep-set must therefore abort the whole
+    // cleanup (delete nothing) rather than silently proceed; orphan reclamation is best-effort and
+    // retried on the next maintenance pass, but a wrong deletion is unrecoverable data loss.
     Set<String> referencedFiles = new HashSet<>();
 
     for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
@@ -937,7 +943,10 @@ public class IcebergTableWriter {
           referencedFiles.add(task.file().path().toString());
         }
       } catch (Exception e) {
-        LOGGER.debug("Failed to scan snapshot {}: {}", snapshot.snapshotId(), e.getMessage());
+        throw new IllegalStateException(
+            "Aborting orphan-file cleanup for table " + table.name() + ": failed to plan snapshot "
+            + snapshot.snapshotId() + " (" + e.getMessage() + "). Refusing to delete against an "
+            + "incomplete referenced-file set to avoid deleting live data.", e);
       }
     }
 
@@ -985,8 +994,11 @@ public class IcebergTableWriter {
             orphanFiles.add(filePath);
           }
         } catch (IOException e) {
-          // If we can't get metadata, assume it's old enough to delete
-          orphanFiles.add(filePath);
+          // Age unknown: do NOT delete. An unreferenced-but-recent file is typically an in-flight
+          // commit's data file not yet visible in a snapshot; deleting it on a transient metadata
+          // read failure would corrupt that write. Skip it — the next pass reclaims it once its
+          // age is readable and it is confirmed past the retention window.
+          LOGGER.debug("Skipping orphan candidate {} (age unreadable: {})", filePath, e.getMessage());
         }
       }
     }
@@ -1011,19 +1023,48 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Reader-drain window (days) for post-compaction snapshot expiry + orphan deletion when the
+   * caller does not supply the table's {@code snapshotRetentionDays}. Compaction must retain the
+   * pre-compaction snapshots and their (now-superseded) small files until any concurrent scan that
+   * planned against them has drained; deleting at {@code now} pulls files out from under an
+   * in-flight reader. Seven days matches the default {@code snapshotRetentionDays}, so the retained
+   * history the config already promises is exactly what keeps readers safe.
+   */
+  private static final int DEFAULT_POST_COMPACTION_RETENTION_DAYS = 7;
+
+  /**
+   * Compacts small files in the table into larger files, retaining pre-compaction snapshots/files
+   * for {@link #DEFAULT_POST_COMPACTION_RETENTION_DAYS} so concurrent readers stay safe.
+   */
+  public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
+      long smallFileSizeBytes) throws IOException {
+    return compactSmallFiles(targetFileSizeBytes, minFilesToCompact, smallFileSizeBytes,
+        DEFAULT_POST_COMPACTION_RETENTION_DAYS);
+  }
+
+  /**
    * Compacts small files in the table into larger files.
    *
    * <p>This method scans all data files, groups them by partition, and rewrites
    * partitions that have many small files into fewer larger files targeting the
    * specified file size.
    *
+   * <p>The compaction rewrite itself is an atomic Iceberg commit (a new snapshot that references
+   * the compacted files); the pre-compaction files remain referenced by the prior snapshots. The
+   * post-compaction snapshot-expiry and orphan-file deletion below therefore run against a
+   * <b>retention window</b> ({@code retentionDays}), never {@code now}: a query that resolved an
+   * older snapshot and is still scanning its manifests would otherwise find those files
+   * physically deleted mid-read (a dangling ref / partial-metadata read). Space from the
+   * superseded small files is reclaimed on a later pass once they age past the window.
+   *
    * @param targetFileSizeBytes Target size for compacted files (default: 128MB)
    * @param minFilesToCompact Minimum number of small files to trigger compaction (default: 10)
    * @param smallFileSizeBytes Files smaller than this are considered "small" (default: 10MB)
+   * @param retentionDays Days to retain pre-compaction snapshots/files before expiry+orphan delete
    * @return Number of partitions compacted
    */
   public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
-      long smallFileSizeBytes) throws IOException {
+      long smallFileSizeBytes, int retentionDays) throws IOException {
     LOGGER.info("Starting compaction for table {} (target={}MB, minFiles={}, smallSize={}MB)",
         table.name(), targetFileSizeBytes / (1024 * 1024), minFilesToCompact,
         smallFileSizeBytes / (1024 * 1024));
@@ -1067,38 +1108,44 @@ public class IcebergTableWriter {
     }
 
     if (compactedPartitions > 0) {
-      LOGGER.info("Compaction complete: {} partitions compacted, cleaning up old files",
-          compactedPartitions);
-      // Expire all snapshots except the current one to make old files orphans
-      // This is safe because compaction creates a new snapshot with all data
+      LOGGER.info("Compaction complete: {} partitions compacted, retaining superseded files for "
+          + "{} days before cleanup", compactedPartitions, retentionDays);
+      // Reclaim only files whose owning snapshots have aged past the retention window. The
+      // compaction rewrite already committed a new snapshot; the pre-compaction snapshots and
+      // their small files stay live until `retentionCutoff` so an in-flight reader that planned
+      // against an older snapshot still finds every file it references. Expiring/deleting at `now`
+      // (the previous behavior) raced concurrent readers and could yank files mid-scan.
+      long retentionCutoff = System.currentTimeMillis()
+          - TimeUnit.DAYS.toMillis(retentionDays);
       try {
-        long currentSnapshotId = table.currentSnapshot().snapshotId();
         int expiredCount = 0;
         for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
-          if (snapshot.snapshotId() != currentSnapshotId) {
+          if (snapshot.snapshotId() != table.currentSnapshot().snapshotId()
+              && snapshot.timestampMillis() < retentionCutoff) {
             expiredCount++;
           }
         }
         if (expiredCount > 0) {
-          // Expire all snapshots older than now (keeps only current)
           underCommitLock(() -> {
             table.expireSnapshots()
-                .expireOlderThan(System.currentTimeMillis())
+                .expireOlderThan(retentionCutoff)
                 .retainLast(1)
                 .commit();
           });
-          LOGGER.info("Expired {} old snapshots after compaction", expiredCount);
+          LOGGER.info("Expired {} snapshots older than {} days after compaction",
+              expiredCount, retentionDays);
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to expire snapshots after compaction: {}", e.getMessage());
       }
 
-      // Remove orphan files (the old pre-compaction files)
+      // Remove only orphans older than the retention window; the just-superseded small files
+      // (age ~0) are intentionally left for a later pass so concurrent readers keep working.
       try {
-        // Use 0ms threshold to delete all orphans immediately after compaction
-        int orphansRemoved = removeOrphanFiles(System.currentTimeMillis());
+        int orphansRemoved = removeOrphanFiles(retentionCutoff);
         if (orphansRemoved > 0) {
-          LOGGER.info("Removed {} orphan files after compaction", orphansRemoved);
+          LOGGER.info("Removed {} orphan files older than {} days after compaction",
+              orphansRemoved, retentionDays);
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to remove orphan files after compaction: {}", e.getMessage());
