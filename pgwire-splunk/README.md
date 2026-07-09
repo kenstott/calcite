@@ -25,7 +25,11 @@ Edit `model/model.json` in the extracted bundle:
 tar -xzf pgwire-splunk-<version>-<os>.tar.gz
 cd pgwire-splunk-<version>-<os>
 ./bin/pgwire-splunk               # serves on 127.0.0.1:5433
+./bin/pgwire-splunk --host 0.0.0.0 --port 5455   # alternate bind/port
 psql -h 127.0.0.1 -p 5433 -c 'SELECT * FROM splunk."<datamodel>" LIMIT 10'
 ```
+
+`--host` / `--port` (default `127.0.0.1:5433`) and any other launcher flags pass straight
+through to `pgwire-calcite`. There is no port env var — set it on the command line.
 
 No Python or Java install required — the bundle is airgap-ready.

@@ -29,7 +29,11 @@ export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_ACCOUNT_IDS=... AWS_R
 tar -xzf pgwire-cloudops-<version>-<os>.tar.gz
 cd pgwire-cloudops-<version>-<os>
 ./bin/pgwire-cloudops             # serves on 127.0.0.1:5433
+./bin/pgwire-cloudops --host 0.0.0.0 --port 5455   # alternate bind/port
 psql -h 127.0.0.1 -p 5433 -c 'SELECT * FROM cloudops."<resource_table>" LIMIT 10'
 ```
+
+`--host` / `--port` (default `127.0.0.1:5433`) and any other launcher flags pass straight
+through to `pgwire-calcite`. There is no port env var — set it on the command line.
 
 No Python or Java install required — the bundle is airgap-ready.

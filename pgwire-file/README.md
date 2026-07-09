@@ -25,7 +25,11 @@ Edit `model/model.json` in the extracted bundle:
 tar -xzf pgwire-file-<version>-<os>.tar.gz
 cd pgwire-file-<version>-<os>
 ./bin/pgwire-file                 # serves on 127.0.0.1:5433
+./bin/pgwire-file --host 0.0.0.0 --port 5455   # alternate bind/port
 psql -h 127.0.0.1 -p 5433 -c 'SELECT * FROM files."<table>" LIMIT 10'
 ```
+
+`--host` / `--port` (default `127.0.0.1:5433`) and any other launcher flags pass straight
+through to `pgwire-calcite`. There is no port env var — set it on the command line.
 
 No Python or Java install required — the bundle is airgap-ready.

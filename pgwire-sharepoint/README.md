@@ -24,7 +24,11 @@ Edit `model/model.json` in the extracted bundle:
 tar -xzf pgwire-sharepoint-<version>-<os>.tar.gz
 cd pgwire-sharepoint-<version>-<os>
 ./bin/pgwire-sharepoint            # serves on 127.0.0.1:5433
+./bin/pgwire-sharepoint --host 0.0.0.0 --port 5455   # alternate bind/port
 psql -h 127.0.0.1 -p 5433 -c 'SELECT * FROM sharepoint."<list>" LIMIT 10'
 ```
+
+`--host` / `--port` (default `127.0.0.1:5433`) and any other launcher flags pass straight
+through to `pgwire-calcite`. There is no port env var — set it on the command line.
 
 No Python or Java install required — the bundle is airgap-ready.
