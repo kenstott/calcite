@@ -1,0 +1,1157 @@
+# ============================================================================
+# U.S. Disasters Schema (DISASTERS)
+# ============================================================================
+# Data Sources:
+#   - FEMA OpenFEMA API (disaster declarations, public assistance, hazard
+#     mitigation, NFIP flood insurance policies and claims) — free, no key
+#   - NOAA NCEI Storm Events bulk CSV (per-year .csv.gz)
+#   - NIFC WFIGS Interagency Perimeters ArcGIS FeatureServer (wildfire polygons)
+#
+# Design principles (see govdata-schema-authoring):
+#   - One ETL table = one raw source. No multi-source transformers.
+#   - FEMA tables page via the engine-native OFFSET paginator ($top/$skip);
+#     each year is a separate windowed fetch so the partition `year` is supplied
+#     by the `year` dimension (no derived-year column, no engine changes).
+#   - storm_events and wildfire_perimeters use StreamingResponseTransformer:
+#     a single huge response (NOAA .csv.gz; 38k WFIGS polygons over the ArcGIS
+#     transfer cap) is streamed row-by-row to bound heap at O(chunk).
+#   - Geometry is converted from Esri rings to WKT via JTS (EsriGeometryConverter);
+#     geometry_wkt is a plain VARCHAR (project convention).
+#   - Cross-schema joins to geo (states/counties), sec, econ, fec, lands.
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:disasters}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. discrete emergency-event data: FEMA disaster declarations, Public
+  Assistance and Hazard Mitigation grant projects, NFIP flood-insurance
+  policies and paid claims, NOAA storm events, and NIFC WFIGS wildfire
+  perimeters. Each row is a bounded incident with a date, geographic footprint,
+  and measurable damage — distinct from the continuous meteorological
+  measurements in the weather schema. Enables disaster-risk analysis joined to
+  SEC filings (state-of-incorporation exposure), econ employment, lands national
+  forests (burned NF acreage), and FEC contributions.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit state FIPS code (FK to geo.states)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit county FIPS code (FK to geo.counties)
+
+  disaster_number_column: &disaster_number_column
+    name: disaster_number
+    type: integer
+    nullable: true
+    comment: FEMA disaster number (e.g., 4611); join key across FEMA tables
+
+  geometry_wkt_column: &geometry_wkt_column
+    name: geometry_wkt
+    type: string
+    nullable: true
+    comment: Simplified WGS84 perimeter polygon as WKT (display/spatial join)
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # FEMA declarations / PA / HMGP / NFIP claims — annual windows, no publish lag.
+  disasters_year_range: &disasters_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 0
+
+  # NOAA finalizes prior years ~3 months after year-end; current year is
+  # provisional and refreshed. dataLag 0 (current-year file exists and is useful).
+  storm_year_range: &storm_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 0
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # DISASTER DECLARATIONS — FEMA OpenFEMA DisasterDeclarationsSummaries (v2)
+  # ---------------------------------------------------------------------------
+  - name: disaster_declarations
+    pattern: "type=disaster_declarations/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Canonical FEMA disaster-declaration record. One row per
+      disaster-declaration-county-program-area combination. Partitioned by
+      fiscal year declared (fyDeclared). Joins to geo.counties via county_fips
+      and to sec.filing_metadata by state for risk-disclosure research. Refreshed
+      daily (declarations issued continuously within 24h of signature).
+      Source: fema.gov/api/open/v2/DisasterDeclarationsSummaries.
+
+    dimensions:
+      type:
+        - disaster_declarations
+      year: *disasters_year_range
+
+    columns:
+      - <<: *disaster_number_column
+        nullable: false
+      - name: fema_declaration_string
+        type: string
+        nullable: true
+        comment: Composite declaration id (e.g., 'EM-3610-PR')
+      - name: declaration_type
+        type: string
+        nullable: true
+        comment: DR (major), EM (emergency), FM (fire mgmt), FS (fire suppression)
+      - name: declaration_title
+        type: string
+        nullable: true
+        comment: Declaration title (e.g., 'TROPICAL STORM ERNESTO')
+      - name: declaration_date
+        type: date
+        nullable: true
+        comment: Date of presidential declaration
+      - name: incident_type
+        type: string
+        nullable: true
+        comment: Hurricane / Flood / Tornado / Wildfire / Severe Storm / etc.
+      - name: incident_begin_date
+        type: date
+        nullable: true
+        comment: Start of incident period
+      - name: incident_end_date
+        type: date
+        nullable: true
+        comment: End of incident period (null if ongoing)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: designated_area
+        type: string
+        nullable: true
+        comment: Human-readable designated area (e.g., 'Adjuntas (Municipio)')
+      - name: region
+        type: integer
+        nullable: true
+        comment: FEMA region number (1-10)
+      - name: ih_program_declared
+        type: boolean
+        nullable: true
+        comment: Individual and Households Program declared
+      - name: ia_program_declared
+        type: boolean
+        nullable: true
+        comment: Individual Assistance declared
+      - name: pa_program_declared
+        type: boolean
+        nullable: true
+        comment: Public Assistance declared
+      - name: hm_program_declared
+        type: boolean
+        nullable: true
+        comment: Hazard Mitigation declared
+      - name: tribal_request
+        type: boolean
+        nullable: true
+        comment: Whether the declaration was a tribal request
+      - name: id
+        type: string
+        nullable: false
+        comment: OpenFEMA row UUID (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
+      method: GET
+      parameters:
+        $filter: "fyDeclared eq {year}"
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "DisasterDeclarationsSummaries"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaDisasterDeclarationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=disaster_declarations/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: disaster_declarations
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # PUBLIC ASSISTANCE PROJECTS — FEMA PublicAssistanceFundedProjectsDetails (v2)
+  # ---------------------------------------------------------------------------
+  - name: public_assistance_projects
+    pattern: "type=public_assistance_projects/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FEMA Public Assistance grants to state/local governments and nonprofits
+      for disaster recovery. Largest dollar-value FEMA dataset. One row per
+      funded project worksheet. Partitioned by declaration year. Joins to
+      disaster_declarations by disaster_number (many-to-one; not a declared FK)
+      and to geo.counties via county_fips.
+      Source: fema.gov/api/open/v2/PublicAssistanceFundedProjectsDetails.
+
+    dimensions:
+      type:
+        - public_assistance_projects
+      year: *disasters_year_range
+
+    columns:
+      - <<: *disaster_number_column
+      - name: pw_number
+        type: integer
+        nullable: true
+        comment: Project worksheet number
+      - name: application_title
+        type: string
+        nullable: true
+        comment: Project title
+      - name: applicant_id
+        type: string
+        nullable: true
+        comment: FEMA applicant id
+      - name: declaration_date
+        type: date
+        nullable: true
+        comment: Date of declaration (drives the year partition)
+      - name: incident_type
+        type: string
+        nullable: true
+        comment: Incident type (Hurricane, Flood, etc.)
+      - name: damage_category_code
+        type: string
+        nullable: true
+        comment: FEMA damage category code (A-G)
+      - name: damage_category
+        type: string
+        nullable: true
+        comment: Damage category description
+      - name: project_status
+        type: string
+        nullable: true
+        comment: Active / Closed / etc.
+      - name: project_size
+        type: string
+        nullable: true
+        comment: Large or Small
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County/parish name
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-char state abbreviation
+      - name: project_amount
+        type: double
+        nullable: true
+        comment: Approved project cost (USD)
+      - name: federal_share_obligated
+        type: double
+        nullable: true
+        comment: Federal obligation to date (USD)
+      - name: total_obligated
+        type: double
+        nullable: true
+        comment: Total obligated incl. non-federal share (USD)
+      - name: hash
+        type: string
+        nullable: false
+        comment: OpenFEMA row hash (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v2/PublicAssistanceFundedProjectsDetails"
+      method: GET
+      parameters:
+        $filter: "declarationDate ge '{year}-01-01T00:00:00.000z' and declarationDate le '{year}-12-31T23:59:59.999z'"
+        $orderby: "hash"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "PublicAssistanceFundedProjectsDetails"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaPublicAssistanceTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=public_assistance_projects/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: public_assistance_projects
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HAZARD MITIGATION PROJECTS — FEMA HazardMitigationAssistanceProjects (v4)
+  # ---------------------------------------------------------------------------
+  - name: hazard_mitigation_projects
+    pattern: "type=hazard_mitigation_projects/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FEMA Hazard Mitigation Assistance projects (HMGP, BRIC, FMA, PDM, LPDM).
+      Pre- and post-disaster investment in resilience. One row per project.
+      Partitioned by program fiscal year (programFy). Joins to geo.counties via
+      county_fips and to disaster_declarations by disaster_number (nullable for
+      non-disaster BRIC/FMA programs). Source (API v4):
+      fema.gov/api/open/v4/HazardMitigationAssistanceProjects.
+
+    dimensions:
+      type:
+        - hazard_mitigation_projects
+      year: *disasters_year_range
+
+    columns:
+      - name: project_identifier
+        type: string
+        nullable: false
+        comment: HMA project identifier (PK; e.g., 'DR-1980-0019-F')
+      - name: program_area
+        type: string
+        nullable: true
+        comment: HMGP / BRIC / FMA / PDM / LPDM
+      - <<: *disaster_number_column
+      - name: region
+        type: integer
+        nullable: true
+        comment: FEMA region number
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: project_type
+        type: string
+        nullable: true
+        comment: Mitigation project type description
+      - name: status
+        type: string
+        nullable: true
+        comment: Project status (Approved / Closed / etc.)
+      - name: recipient
+        type: string
+        nullable: true
+        comment: Grant recipient (state/tribe)
+      - name: subrecipient
+        type: string
+        nullable: true
+        comment: Subrecipient (local government/entity)
+      - name: date_approved
+        type: date
+        nullable: true
+        comment: Date approved
+      - name: date_closed
+        type: date
+        nullable: true
+        comment: Date closed (null if open)
+      - name: project_amount
+        type: double
+        nullable: true
+        comment: Total project cost (USD)
+      - name: federal_share_obligated
+        type: double
+        nullable: true
+        comment: Federal share obligated (USD)
+      - name: cost_share_percentage
+        type: double
+        nullable: true
+        comment: Federal cost-share fraction (e.g., 0.75)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v4/HazardMitigationAssistanceProjects"
+      method: GET
+      parameters:
+        $filter: "programFy eq {year}"
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "HazardMitigationAssistanceProjects"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaHazardMitigationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hazard_mitigation_projects/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: hazard_mitigation_projects
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # NFIP CLAIMS — FEMA FimaNfipClaims (v2)
+  # ---------------------------------------------------------------------------
+  - name: nfip_claims
+    pattern: "type=nfip_claims/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Paid NFIP flood-insurance claims. One row per claim. ~2.7M rows.
+      Partitioned by year of loss. Key signal for disaster severity and
+      uninsured-loss estimation. Joins to geo.counties via county_fips and to
+      disaster_declarations / wildfire_perimeters by county+date overlap.
+      Source: fema.gov/api/open/v2/FimaNfipClaims.
+
+    dimensions:
+      type:
+        - nfip_claims
+      year: *disasters_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-char state abbreviation
+      - name: date_of_loss
+        type: date
+        nullable: true
+        comment: Date of flood loss
+      - name: flood_zone
+        type: string
+        nullable: true
+        comment: FEMA rated flood zone (AE, VE, X, etc.)
+      - name: cause_of_damage
+        type: string
+        nullable: true
+        comment: Cause-of-damage code
+      - name: occupancy_type
+        type: integer
+        nullable: true
+        comment: Occupancy type code (1=single family, etc.)
+      - name: policy_count
+        type: integer
+        nullable: true
+        comment: Number of policies represented by this claim record
+      - name: amount_paid_building
+        type: double
+        nullable: true
+        comment: Amount paid on building claim (USD)
+      - name: amount_paid_contents
+        type: double
+        nullable: true
+        comment: Amount paid on contents claim (USD)
+      - name: amount_paid_icc
+        type: double
+        nullable: true
+        comment: Amount paid on Increased Cost of Compliance claim (USD)
+      - name: total_building_coverage
+        type: double
+        nullable: true
+        comment: Total building insurance coverage (USD)
+      - name: total_contents_coverage
+        type: double
+        nullable: true
+        comment: Total contents insurance coverage (USD)
+      - name: census_tract
+        type: string
+        nullable: true
+        comment: 11-digit census tract FIPS
+      - name: reported_zip_code
+        type: string
+        nullable: true
+        comment: Reported ZIP code
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Approximate latitude (to 1 decimal per FEMA privacy rules)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Approximate longitude
+      - name: id
+        type: string
+        nullable: false
+        comment: OpenFEMA row UUID (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v2/FimaNfipClaims"
+      method: GET
+      parameters:
+        $filter: "yearOfLoss eq {year}"
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "FimaNfipClaims"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaNfipClaimsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nfip_claims/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: nfip_claims
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # NFIP POLICIES — FEMA FimaNfipPolicies (v2) — LARGE (~74M rows)
+  # ---------------------------------------------------------------------------
+  - name: nfip_policies
+    pattern: "type=nfip_policies/year=*/*.parquet"
+    partitions: *standard_partitions
+    dqRowLimit: 50000
+    comment: >
+      NFIP flood-insurance policy transactions. One row per policy term. VERY
+      LARGE (~74M rows all-history; several million per year). Partitioned by
+      policy effective year. dqRowLimit caps DQ sampling; prod loads everything.
+      Joins to geo.counties via county_fips and census_tract. Source:
+      fema.gov/api/open/v2/FimaNfipPolicies.
+
+    dimensions:
+      type:
+        - nfip_policies
+      year: *disasters_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: property_state
+        type: string
+        nullable: true
+        comment: 2-char property state abbreviation
+      - name: policy_effective_date
+        type: date
+        nullable: true
+        comment: Policy effective date (drives the year partition)
+      - name: policy_termination_date
+        type: date
+        nullable: true
+        comment: Policy termination date
+      - name: flood_zone
+        type: string
+        nullable: true
+        comment: FEMA rated flood zone
+      - name: occupancy_type
+        type: integer
+        nullable: true
+        comment: Occupancy type code
+      - name: policy_count
+        type: integer
+        nullable: true
+        comment: Number of policies represented
+      - name: policy_cost
+        type: double
+        nullable: true
+        comment: Policy cost (USD)
+      - name: total_insurance_premium
+        type: double
+        nullable: true
+        comment: Total insurance premium of the policy (USD)
+      - name: total_building_coverage
+        type: double
+        nullable: true
+        comment: Total building insurance coverage (USD)
+      - name: total_contents_coverage
+        type: double
+        nullable: true
+        comment: Total contents insurance coverage (USD)
+      - name: federal_policy_fee
+        type: double
+        nullable: true
+        comment: Federal policy fee (USD)
+      - name: census_tract
+        type: string
+        nullable: true
+        comment: 11-digit census tract FIPS
+      - name: reported_zip_code
+        type: string
+        nullable: true
+        comment: Reported ZIP code
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Approximate latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Approximate longitude
+      - name: id
+        type: string
+        nullable: false
+        comment: OpenFEMA row UUID (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v2/FimaNfipPolicies"
+      method: GET
+      parameters:
+        $filter: "policyEffectiveDate ge '{year}-01-01T00:00:00.000z' and policyEffectiveDate le '{year}-12-31T23:59:59.999z'"
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "FimaNfipPolicies"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaNfipPoliciesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nfip_policies/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: nfip_policies
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # STORM EVENTS — NOAA NCEI Storm Events bulk CSV.gz (streaming, per year)
+  # ---------------------------------------------------------------------------
+  - name: storm_events
+    pattern: "type=storm_events/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NOAA NCEI Storm Events Database — one row per storm event detail record
+      (tornadoes, floods, hurricanes, hail, winter storms, wildfires, etc.).
+      Streamed from the per-year gzip CSV
+      (StormEvents_details-ftp_v1.0_d{year}_c{procdate}.csv.gz); the processing
+      date suffix varies, so the streaming transformer lists the NCEI directory
+      to resolve the current file for the requested year. Damage figures are
+      converted from K/M/B notation to USD doubles. Joins to geo.counties and to
+      disaster_declarations by county+date overlap.
+
+    dimensions:
+      type:
+        - storm_events
+      year: *storm_year_range
+
+    columns:
+      - name: event_id
+        type: string
+        nullable: false
+        comment: NCEI event id (PK)
+      - name: episode_id
+        type: string
+        nullable: true
+        comment: Episode id (groups related events)
+      - name: begin_date
+        type: date
+        nullable: true
+        comment: Event begin date
+      - name: end_date
+        type: date
+        nullable: true
+        comment: Event end date
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name (as published by NCEI)
+      - name: event_type
+        type: string
+        nullable: true
+        comment: Tornado / Flash Flood / Hurricane / Blizzard / etc.
+      - name: cz_type
+        type: string
+        nullable: true
+        comment: C (county), Z (NWS zone), M (marine)
+      - name: magnitude
+        type: double
+        nullable: true
+        comment: Event magnitude (wind speed, hail size; type-dependent)
+      - name: magnitude_type
+        type: string
+        nullable: true
+        comment: EG/ES/MS/MG magnitude type
+      - name: injuries_direct
+        type: integer
+        nullable: true
+        comment: Direct injuries
+      - name: injuries_indirect
+        type: integer
+        nullable: true
+        comment: Indirect injuries
+      - name: deaths_direct
+        type: integer
+        nullable: true
+        comment: Direct fatalities
+      - name: deaths_indirect
+        type: integer
+        nullable: true
+        comment: Indirect fatalities
+      - name: damage_property
+        type: double
+        nullable: true
+        comment: Property damage USD (converted from K/M/B notation)
+      - name: damage_crops
+        type: double
+        nullable: true
+        comment: Crop damage USD (converted from K/M/B notation)
+      - name: begin_lat
+        type: double
+        nullable: true
+        comment: Event begin latitude
+      - name: begin_lon
+        type: double
+        nullable: true
+        comment: Event begin longitude
+
+    source:
+      type: http
+      url: "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.StormEventsStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=storm_events/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: storm_events
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # WILDFIRE PERIMETERS — NIFC WFIGS ArcGIS (streaming: resultOffset + geometry)
+  # ---------------------------------------------------------------------------
+  - name: wildfire_perimeters
+    pattern: "type=wildfire_perimeters/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NIFC WFIGS Interagency wildfire perimeters. One row per fire perimeter
+      (~39k features). Snapshot table (overwritePartitions) refreshed on cadence.
+      The streaming transformer pages the FeatureServer via resultOffset (the
+      layer exceeds the ArcGIS transfer cap) and converts each Esri ring polygon
+      to simplified WKT via JTS (EsriGeometryConverter). fire_year is derived
+      from the fire discovery date. Joins to geo.counties via county_fips (from
+      point-of-origin FIPS) and to nfip_claims for post-fire flood exposure.
+      Source: WFIGS_Interagency_Perimeters/FeatureServer/0.
+
+    dimensions:
+      type:
+        - wildfire_perimeters
+
+    columns:
+      - name: incident_id
+        type: string
+        nullable: false
+        comment: WFIGS IRWIN id (PK)
+      - name: incident_name
+        type: string
+        nullable: true
+        comment: Fire incident name
+      - name: unique_fire_identifier
+        type: string
+        nullable: true
+        comment: NIFC unique fire identifier (year-unit-localnumber)
+      - name: fire_year
+        type: integer
+        nullable: true
+        comment: Year derived from fire discovery date
+      - name: discovery_date
+        type: date
+        nullable: true
+        comment: Fire discovery datetime (date part)
+      - name: containment_date
+        type: date
+        nullable: true
+        comment: Containment datetime (date part; null if active)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: poo_state
+        type: string
+        nullable: true
+        comment: Point-of-origin state (2-char abbreviation)
+      - name: fire_cause
+        type: string
+        nullable: true
+        comment: Human / Natural / Undetermined
+      - name: incident_type_category
+        type: string
+        nullable: true
+        comment: WF (wildfire), RX (prescribed), etc.
+      - name: gis_acres
+        type: double
+        nullable: true
+        comment: GIS-calculated perimeter area in acres
+      - name: final_acres
+        type: double
+        nullable: true
+        comment: Reported final fire size in acres
+      - name: centroid_lat
+        type: double
+        nullable: true
+        comment: Perimeter centroid latitude (WGS84)
+      - name: centroid_lon
+        type: double
+        nullable: true
+        comment: Perimeter centroid longitude (WGS84)
+      - <<: *geometry_wkt_column
+
+    source:
+      type: http
+      url: "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0/query"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.WfigsPerimeterStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=wildfire_perimeters/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: wildfire_perimeters
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# PKs are the OpenFEMA row identifiers (id / hash) which are globally unique,
+# and source-native ids for NOAA/WFIGS. FKs point to the geo dimension tables
+# (states/counties). disaster_number is intentionally NOT a declared FK to
+# disaster_declarations: it is not unique there (one disaster has many
+# county/program rows), so it is a join key, not a referential parent.
+# ============================================================================
+
+constraints:
+
+  disaster_declarations:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  public_assistance_projects:
+    primaryKey: [hash]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  hazard_mitigation_projects:
+    primaryKey: [project_identifier]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  nfip_claims:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  nfip_policies:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  storm_events:
+    primaryKey: [event_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  wildfire_perimeters:
+    primaryKey: [incident_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: disasters_declarations_by_state_year
+    comment: >
+      Annual disaster-declaration counts by state and incident type. Aggregates
+      the county-program rows to distinct disasters per state/year. Ready to join
+      sec.filing_metadata on state for risk-disclosure research.
+    sql: >
+      SELECT
+        d.year,
+        d.state_fips,
+        d.incident_type,
+        COUNT(DISTINCT d.disaster_number)  AS disaster_count,
+        SUM(CASE WHEN d.ia_program_declared THEN 1 ELSE 0 END) AS ia_declarations,
+        SUM(CASE WHEN d.pa_program_declared THEN 1 ELSE 0 END) AS pa_declarations
+      FROM disaster_declarations d
+      GROUP BY d.year, d.state_fips, d.incident_type
+
+  - name: disasters_pa_obligated_by_county
+    comment: >
+      Total Public Assistance federal obligations by county and declaration year.
+      Joins to geo.counties for mapping; the next natural join is to
+      econ.bls_employment for disaster-affected employment analysis.
+    sql: >
+      SELECT
+        p.year,
+        p.state_fips,
+        p.county_fips,
+        p.incident_type,
+        COUNT(*)                          AS project_count,
+        SUM(p.project_amount)             AS total_project_amount,
+        SUM(p.federal_share_obligated)    AS total_federal_obligated
+      FROM public_assistance_projects p
+      GROUP BY p.year, p.state_fips, p.county_fips, p.incident_type
+
+  - name: disasters_nfip_claims_by_county
+    comment: >
+      Paid NFIP flood claims aggregated by county and year of loss. Key measure
+      of insured flood loss; joins to disaster_declarations and
+      wildfire_perimeters by county for post-event exposure analysis.
+    sql: >
+      SELECT
+        c.year,
+        c.state_fips,
+        c.county_fips,
+        COUNT(*)                          AS claim_count,
+        SUM(c.amount_paid_building)       AS total_paid_building,
+        SUM(c.amount_paid_contents)       AS total_paid_contents,
+        SUM(c.amount_paid_building + c.amount_paid_contents) AS total_paid
+      FROM nfip_claims c
+      GROUP BY c.year, c.state_fips, c.county_fips
+
+  - name: disasters_storm_impact_by_county
+    comment: >
+      Storm-event human and economic impact aggregated by county and year.
+      Joins to disaster_declarations by county to link storm episodes to FEMA
+      declarations, and to econ employment for economic-impact research.
+    sql: >
+      SELECT
+        s.year,
+        s.state_fips,
+        s.county_fips,
+        COUNT(*)                          AS event_count,
+        SUM(s.deaths_direct + s.deaths_indirect)     AS total_deaths,
+        SUM(s.injuries_direct + s.injuries_indirect) AS total_injuries,
+        SUM(s.damage_property)            AS total_property_damage,
+        SUM(s.damage_crops)               AS total_crop_damage
+      FROM storm_events s
+      GROUP BY s.year, s.state_fips, s.county_fips

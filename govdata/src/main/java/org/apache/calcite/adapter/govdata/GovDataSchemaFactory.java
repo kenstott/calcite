@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ag.AgSchemaFactory;
+import org.apache.calcite.adapter.govdata.disasters.DisastersSchemaFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
 import org.apache.calcite.adapter.govdata.cyber.CyberSchemaFactory;
@@ -478,6 +479,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
 
       case "lands":
         return new LandsSchemaFactory();
+
+      case "disasters":
+      case "disaster":
+      case "hazards":
+        return new DisastersSchemaFactory();
 
       case "cftc":
       case "swap":

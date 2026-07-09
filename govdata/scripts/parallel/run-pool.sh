@@ -108,7 +108,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -180,6 +180,7 @@ for arg in "$@"; do
       queue+=(energy:historical energy:daily)
       queue+=(patents:historical patents:daily lands:historical lands:daily cftc:historical cftc:daily)
       queue+=(ag:historical ag:daily)
+      queue+=(disasters:historical disasters:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -210,6 +211,11 @@ for arg in "$@"; do
       # no-year full-CSV fetch that would re-download on every per-year slot; the
       # NASS/RMA/FSA year-partitioned tables backfill their full range in one pass.
       queue+=(ag:historical)
+      # disasters runs as a single historical slot: its year-partitioned FEMA/NOAA tables
+      # backfill their full range in one pass (year dimension iterates 2010→cy-1), and the
+      # static wildfire_perimeters snapshot ingests once — avoiding the per-year re-fetch of
+      # the 39k-feature WFIGS layer that year-slicing would cause.
+      queue+=(disasters:historical)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -228,7 +234,7 @@ for arg in "$@"; do
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq
+        cftc:dq disasters:dq
       )
       ;;
 
@@ -241,7 +247,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild
       )
       ;;
 
@@ -254,7 +260,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume
       )
       ;;
 
@@ -276,6 +282,7 @@ for arg in "$@"; do
         energy:daily
         patents:daily lands:daily cftc:daily
         ag:daily
+        disasters:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
