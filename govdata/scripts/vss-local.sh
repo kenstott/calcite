@@ -17,8 +17,8 @@
 #
 # vss-local.sh — thin wrapper around vss-local.py: activates the CPU embed venv,
 # loads prod env, and dispatches. Replaces vss-gpu-runner.sh (Vultr) + vss.sh in
-# the pool. Embeddings are generated LOCALLY on CPU and the DuckDB HNSW cache is
-# published to MinIO. Years are walked BACKWARDS (current -> 2010) on backfill.
+# the pool. Embeddings are generated LOCALLY on CPU and quantized codes (binary +
+# int8) are appended to the vectorized_chunk_codes dataset in the lake (Path B).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -39,38 +39,22 @@ fi
 PY="$VENV/bin/python"
 APP="$SCRIPT_DIR/vss-local.py"
 
-BACKFILL_END="${VSS_BACKFILL_END:-2010}"
-
 usage() {
   cat <<EOF
 Usage: $0 <command>
-  year <N>                 Embed+insert the delta for year N into the cache
-  refresh <N>              year <N> then publish  (drop-in for the old vss.sh refresh)
-  daily                    Embed the current year delta, then publish
-  backfill [startYear]     Walk startYear (default: current) DOWN to ${BACKFILL_END},
-                           embed each, then rebuild the index and publish
-  rebuild                  Drop+rebuild the HNSW index (hygiene)
-  publish                  Atomically upload the cache .duckdb + metadata.json to MinIO
-  stats                    Per-year row/accession counts in the cache
+  daily                    PRIMARY: code the un-coded backlog (all years, newest first),
+                           time-boxed (~2h). Appends quantized codes to the lake. Daily.
+  backlog [maxRows]        Same as daily (with an explicit per-run row cap)
+  year <N>                 Code a single year's delta (manual)
+  stats                    Per-year counts in the codes dataset
 EOF
 }
 
 cmd="${1:-help}"
 case "$cmd" in
+  daily)    "$PY" "$APP" backlog ;;
+  backlog)  "$PY" "$APP" backlog ${2:+--max-rows "$2"} ;;
   year)     "$PY" "$APP" year --year "${2:?year required}" ;;
-  refresh)  "$PY" "$APP" year --year "${2:?year required}"; "$PY" "$APP" publish ;;
-  daily)    "$PY" "$APP" year --year "$(date +%Y)"; "$PY" "$APP" publish ;;
-  backfill)
-    start="${2:-$(date +%Y)}"
-    for (( y=start; y>=BACKFILL_END; y-- )); do
-      echo "[vss-local] backfill year $y"
-      "$PY" "$APP" year --year "$y"
-    done
-    "$PY" "$APP" rebuild
-    "$PY" "$APP" publish
-    ;;
-  rebuild)  "$PY" "$APP" rebuild ;;
-  publish)  "$PY" "$APP" publish ;;
   stats)    "$PY" "$APP" stats ;;
   *)        usage; exit 1 ;;
 esac

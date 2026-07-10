@@ -878,16 +878,12 @@ fi
 # daily forever instead of moving on to the historical fill. Log loudly, never abort.
 if $RUN_EMBEDDINGS; then
   VSS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-  CURRENT_YEAR=$(date +%Y)
-  export VSS_YEARS="${VSS_YEARS:-$CURRENT_YEAR}"
-  log_info "Embeddings (local CPU): year(s) $VSS_YEARS"
+  # Delta-driven, time-boxed: embed the un-embedded backlog across all years (newest
+  # first), capped by VSS_MAX_SECONDS (~2h) / VSS_MAX_ROWS. Drains over successive days.
+  log_info "Embeddings (local CPU): coding un-coded backlog (newest-first, time-boxed) → lake"
   if [ -f "$VSS_DIR/vss-local.sh" ]; then
-    for _vy in $VSS_YEARS; do
-      bash "$VSS_DIR/vss-local.sh" year "$_vy" \
-        || log_info "WARNING: vss-local year $_vy failed (non-fatal)"
-    done
-    bash "$VSS_DIR/vss-local.sh" publish \
-      || log_info "WARNING: vss-local publish failed (non-fatal) — cache not updated"
+    bash "$VSS_DIR/vss-local.sh" backlog \
+      || log_info "WARNING: vss-local backlog failed (non-fatal)"
   else
     log_info "WARNING: vss-local.sh not found — embeddings skipped"
   fi

@@ -19,11 +19,15 @@ package org.apache.calcite.adapter.govdata.sec;
  */
 public class SecTokenManager {
 
-  // Maximum tokens for most embedding models (e.g., OpenAI ada-002)
-  public static final int MAX_TOKENS = 8192;
+  // Per-chunk token ceiling for the enriched vectorization text. At CHARS_PER_TOKEN=4
+  // this caps a chunk at ~8192 chars. Note: the embedding model in use
+  // (snowflake-arctic-embed-xs) has a 512-token context window, so anything past
+  // 512 tokens is still truncated at embed time — 2048 is a forward-looking ceiling
+  // that trims the pathological long tail without over-padding enrichment.
+  public static final int MAX_TOKENS = 2048;
 
   // Reserve tokens for main text (50% of budget)
-  public static final int MAIN_TEXT_RESERVE = 4096;
+  public static final int MAIN_TEXT_RESERVE = 1024;
 
   // Approximate tokens per character (conservative estimate)
   private static final double CHARS_PER_TOKEN = 4.0;
@@ -160,10 +164,10 @@ public class SecTokenManager {
 
     public TokenAllocation() {
       this.totalBudget = MAX_TOKENS;
-      this.mainTextBudget = MAIN_TEXT_RESERVE;
-      this.parentContextBudget = 500;  // ~10% for parent/hierarchy
-      this.referencesBudget = 2500;    // ~30% for references
-      this.metricsBudget = 500;        // ~10% for metrics
+      this.mainTextBudget = MAIN_TEXT_RESERVE;   // 50% of budget
+      this.parentContextBudget = 125;  // ~6% for parent/hierarchy
+      this.referencesBudget = 625;     // ~30% for references
+      this.metricsBudget = 125;        // ~6% for metrics
     }
 
     public TokenAllocation(int total, double mainPercent, double parentPercent,

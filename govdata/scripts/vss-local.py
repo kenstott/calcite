@@ -15,53 +15,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-vss-local.py — LOCAL, CPU, per-year incremental VSS builder.
+vss-local.py — LOCAL, CPU, delta-driven quantized-code producer for semantic search.
 
-Replaces the remote-Vultr flow (vss-gpu-runner.sh + vss-bulk-gpu.py). Everything
-runs on the ETL box: reads chunks from the vectorized_chunks Iceberg table on the
-local MinIO endpoint, embeds NEW chunks on CPU (snowflake-arctic-embed-xs, tiny),
-and INSERTs them into a persisted DuckDB HNSW index. The index is shard-keyed by
-`yr` (year) — the pluggable shard dimension — and grows incrementally; a periodic
-full rebuild keeps the HNSW healthy. The finished .duckdb is published atomically
-to MinIO for clients to cache on first run.
+Embeds un-coded chunks from the vectorized_chunks Iceberg table on CPU
+(snowflake-arctic-embed-xs), quantizes each 384-d unit vector to:
+  * a 48-byte BINARY code  (sign bits, packed into 6x uint64)  — Hamming prefilter
+  * a 384-byte INT8 vector (scalar-quantized)                  — rerank
+and appends them as a parquet file to the `vectorized_chunk_codes` dataset in the
+lake. That dataset is the delivered semantic-search artifact (Path B): a Java
+intercept materializes it into a persistent local DuckDB and runs a two-stage
+`bit_count` Hamming prefilter + int8 rerank (fast on repeat via DuckDB persistence).
 
-Design notes:
-  * No Vultr, no ship-up/ship-down, MinIO never exposed off-box.
-  * No write-back to the Iceberg embedding column — embeddings live only in the
-    published cache, so ETL materialization stays append-clean.
-  * Embedder is an interface (CPU default); a GPU backend can drop in later.
+No HNSW, no DuckDB HNSW cache, no Postgres — vectors live only as quantized codes in
+the lake, and the "what's un-coded" delta is a self-describing Iceberg-vs-codes
+anti-join (chunk_ids in vectorized_chunks not yet in vectorized_chunk_codes).
 
 Commands:
-  year  --year N        Embed + insert the delta (Iceberg year N chunks not yet in
-                        the cache). Incremental: safe to re-run; only new chunk_ids
-                        are embedded. Creates the cache + index on first use.
-  rebuild               Drop and rebuild the HNSW index over all cached rows (hygiene).
-  publish               Atomically upload the cache .duckdb + metadata.json to MinIO.
-  stats                 Print per-year row/accession counts in the cache.
+  backlog [--max-rows N --max-seconds S]
+                        PRIMARY daily job. Code the un-coded delta across ALL years
+                        (newest filings first), capped at --max-rows and time-boxed
+                        to --max-seconds (~2h). Run daily; the backlog drains over
+                        successive runs. CPU only — no GPU.
+  year --year N         Code a single year's delta (manual/targeted).
+  stats                 Per-year counts in the codes dataset.
 """
 
 import argparse
-import hashlib
-import json
 import os
-import subprocess
-import sys
 import time
 
 import duckdb
 
 MODEL = os.environ.get("VSS_EMBED_MODEL", "Snowflake/snowflake-arctic-embed-xs")
 DIM = int(os.environ.get("VSS_EMBED_DIM", "384"))
-BATCH = int(os.environ.get("VSS_EMBED_BATCH", "10000"))         # rows per read+embed+insert cycle
-ENCODE_BATCH = int(os.environ.get("VSS_ENCODE_BATCH", "64"))    # sentence-transformers micro-batch
+BATCH = int(os.environ.get("VSS_EMBED_BATCH", "10000"))         # rows per embed+pack cycle
+ENCODE_BATCH = int(os.environ.get("VSS_ENCODE_BATCH", "128"))   # sentence-transformers micro-batch
+TORCH_THREADS = int(os.environ.get("VSS_TORCH_THREADS", str(os.cpu_count() or 8)))
 
 GOVDATA_HOME = os.environ.get("GOVDATA_HOME") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
-VSS_DB = os.environ.get("VSS_DB", os.path.join(GOVDATA_HOME, "build", ".aperio", "vss", "chunks_vss.duckdb"))
 PARQUET_BUCKET = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-v1")
 ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/sec/vectorized_chunks"
-CACHE_PREFIX = "cache/vss"  # under the parquet bucket
-RCLONE_REMOTE = os.environ.get("GOVDATA_RCLONE_REMOTE", "minio")
+# The delivered semantic-search artifact: an append-only parquet dataset of quantized
+# codes (one file per producer run). Overridable so tests can target a scratch prefix.
+CODES_DATASET = os.environ.get("VSS_CODES_DATASET", f"{PARQUET_BUCKET}/sec/vectorized_chunk_codes")
+# int8 = round(clip(x, -I8_SCALE, I8_SCALE) / I8_SCALE * 127). arctic vectors are unit
+# norm so components sit well inside +/-0.35; a fixed global scale keeps int8 dot
+# products comparable across rows for rerank.
+I8_SCALE = float(os.environ.get("VSS_I8_SCALE", "0.35"))
 MEM_LIMIT = os.environ.get("VSS_MEM_LIMIT", "4GB")
 TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/home/adminwsl/tmp_duck")
 
@@ -76,10 +77,15 @@ class CpuEmbedder(Embedder):
     """sentence-transformers on CPU. The model is tiny; this is the default backend."""
 
     def __init__(self, model_name=MODEL):
+        import torch
+        # Saturate the box: torch defaults to a subset of cores (~8) and in practice
+        # only used ~3.6. Pin to all cores.
+        torch.set_num_threads(TORCH_THREADS)
         from sentence_transformers import SentenceTransformer
         t = time.time()
         self.model = SentenceTransformer(model_name, device="cpu")
-        print(f"  [embedder] loaded {model_name} on CPU in {time.time()-t:.1f}s", flush=True)
+        print(f"  [embedder] loaded {model_name} on CPU in {time.time()-t:.1f}s "
+              f"(threads={TORCH_THREADS}, encode_batch={ENCODE_BATCH})", flush=True)
 
     def embed(self, texts):
         return self.model.encode(
@@ -94,7 +100,7 @@ def make_embedder():
     raise SystemExit(f"Unknown VSS_EMBED_BACKEND={backend!r} (only 'cpu' is implemented)")
 
 
-# ── DuckDB helpers ────────────────────────────────────────────────────────────
+# ── DuckDB / lake ─────────────────────────────────────────────────────────────
 def _endpoint_parts():
     ep = os.environ["AWS_ENDPOINT_OVERRIDE"]
     if ep.startswith("http://"):
@@ -104,21 +110,18 @@ def _endpoint_parts():
     return ep, "false"
 
 
-def connect_cache():
-    """Open the persisted cache DB with vss loaded and S3/iceberg configured."""
-    os.makedirs(os.path.dirname(VSS_DB), exist_ok=True)
+def connect_lake():
+    """In-memory DuckDB configured to read Iceberg and read/write parquet on MinIO."""
     os.makedirs(TEMP_DIR, exist_ok=True)
-    con = duckdb.connect(VSS_DB)
+    con = duckdb.connect()
     con.execute(f"SET memory_limit='{MEM_LIMIT}'")
     con.execute(f"SET temp_directory='{TEMP_DIR}'")
-    con.execute("INSTALL vss; LOAD vss")
-    con.execute("SET hnsw_enable_experimental_persistence=true")
     con.execute("INSTALL httpfs; LOAD httpfs")
     con.execute("INSTALL iceberg; LOAD iceberg")
-    host, ssl = _endpoint_parts()
-    for k, v in (("AWS_ACCESS_KEY_ID", None), ("AWS_SECRET_ACCESS_KEY", None)):
+    for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
         if not os.environ.get(k):
             raise SystemExit(f"{k} not set — source .env.prod first")
+    host, ssl = _endpoint_parts()
     con.execute("SET s3_region='us-east-1'")
     con.execute(f"SET s3_access_key_id='{os.environ['AWS_ACCESS_KEY_ID']}'")
     con.execute(f"SET s3_secret_access_key='{os.environ['AWS_SECRET_ACCESS_KEY']}'")
@@ -129,177 +132,183 @@ def connect_cache():
     return con
 
 
-def ensure_schema(con):
-    con.execute(f"""
-        CREATE TABLE IF NOT EXISTS chunks (
-            chunk_id VARCHAR,
-            cik VARCHAR,
-            accession_number VARCHAR,
-            yr INTEGER,
-            section VARCHAR,
-            source_type VARCHAR,
-            content_type VARCHAR,
-            chunk_text VARCHAR,
-            embedding FLOAT[{DIM}]
-        )
-    """)
+def _load_done(con):
+    """Temp table `_done` of already-coded chunk_ids; empty if the dataset is new."""
+    try:
+        con.execute(
+            f"CREATE OR REPLACE TEMP TABLE _done AS "
+            f"SELECT DISTINCT chunk_id FROM read_parquet('{CODES_DATASET}/*.parquet')")
+        return con.execute("SELECT count(*) FROM _done").fetchone()[0]
+    except Exception as e:
+        # First run: the dataset doesn't exist yet. Only swallow "no files"; re-raise
+        # anything else (bad creds, endpoint, etc.) so config errors aren't masked.
+        if "No files found" in str(e) or "does not exist" in str(e):
+            con.execute("CREATE OR REPLACE TEMP TABLE _done(chunk_id VARCHAR)")
+            return 0
+        raise
 
 
-def has_index(con):
-    r = con.execute(
-        "SELECT count(*) FROM duckdb_indexes() WHERE index_name='chunks_hnsw'").fetchone()
-    return r[0] > 0
+# ── Quantization + write ──────────────────────────────────────────────────────
+def _pack_codes(X):
+    """(n,384) unit float32 -> (W:(n,6) uint64 sign-bit code, I8:(n,384) int8 rerank)."""
+    import numpy as np
+    packed = np.packbits(X > 0, axis=1)                  # (n,48) uint8, big-endian bit order
+    W = packed.view(np.uint64).reshape(len(X), 6)        # (n,6) uint64
+    I8 = np.clip(np.round(X / I8_SCALE * 127.0), -127, 127).astype(np.int8)
+    return W, I8
 
 
-def ensure_index(con):
-    if not has_index(con):
-        print("  [index] creating HNSW index (cosine)...", flush=True)
-        t = time.time()
-        con.execute("CREATE INDEX chunks_hnsw ON chunks USING HNSW (embedding) WITH (metric='cosine')")
-        print(f"  [index] built in {time.time()-t:.1f}s", flush=True)
+def _write_codes(con, ids, yrs, W, I8, label):
+    """Append one parquet file of codes for this run to the lake dataset."""
+    import numpy as np
+    import pyarrow as pa
+    rerank = pa.FixedSizeListArray.from_arrays(pa.array(I8.reshape(-1), type=pa.int8()), 384)
+    tbl = pa.table({
+        "chunk_id": pa.array(ids, pa.string()),
+        "year": pa.array(np.asarray(yrs, dtype=np.int32)),
+        "w0": pa.array(np.ascontiguousarray(W[:, 0])),
+        "w1": pa.array(np.ascontiguousarray(W[:, 1])),
+        "w2": pa.array(np.ascontiguousarray(W[:, 2])),
+        "w3": pa.array(np.ascontiguousarray(W[:, 3])),
+        "w4": pa.array(np.ascontiguousarray(W[:, 4])),
+        "w5": pa.array(np.ascontiguousarray(W[:, 5])),
+        "rerank_i8": rerank,
+    })
+    con.register("_codes_out", tbl)
+    out = f"{CODES_DATASET}/codes-{label}.parquet"
+    con.execute(f"COPY _codes_out TO '{out}' (FORMAT parquet, COMPRESSION zstd)")
+    con.unregister("_codes_out")
+    return out
 
 
-# ── Commands ──────────────────────────────────────────────────────────────────
-def cmd_year(year):
-    con = connect_cache()
-    ensure_schema(con)
-
-    # Delta = Iceberg year-N chunks whose chunk_id is not already cached. Materialize
-    # the Iceberg side to a temp table first (avoids DuckDB's iceberg_scan list-column
-    # filter-pushdown quirk and gives a stable count), then anti-join the cache.
-    print(f"[year {year}] reading Iceberg delta from {ICEBERG_CHUNKS} ...", flush=True)
-    t = time.time()
-    con.execute(f"""
-        CREATE OR REPLACE TEMP TABLE _src AS
-        SELECT chunk_id, cik, accession_number, year AS yr, section,
-               source_type, content_type, chunk_text
-        FROM iceberg_scan('{ICEBERG_CHUNKS}')
-        WHERE year = {int(year)}
-          AND chunk_text IS NOT NULL AND length(chunk_text) > 10
-    """)
-    con.execute("""
-        CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.* FROM _src s
-        LEFT JOIN chunks c ON c.chunk_id = s.chunk_id
-        WHERE c.chunk_id IS NULL
-    """)
-    total = con.execute("SELECT count(*) FROM _todo").fetchone()[0]
-    src_total = con.execute("SELECT count(*) FROM _src").fetchone()[0]
-    print(f"[year {year}] source={src_total} chunks, {total} new to embed "
-          f"({src_total-total} already cached) — scan {time.time()-t:.1f}s", flush=True)
+def _embed_and_write(con, todo, label, max_seconds=None):
+    """Embed every (chunk_id, yr, chunk_text) in `todo`, quantize, and write one codes
+    file. Stops early if max_seconds elapses (remainder is picked up next run)."""
+    import numpy as np
+    total = len(todo)
     if total == 0:
-        print(f"[year {year}] nothing to do", flush=True)
-        con.close()
-        return
-
+        return 0
     emb = make_embedder()
+    ids, yrs, Ws, I8s = [], [], [], []
     done = 0
     t0 = time.time()
     while done < total:
-        rows = con.execute(
-            f"SELECT chunk_id, cik, accession_number, yr, section, source_type, "
-            f"content_type, chunk_text FROM _todo LIMIT {BATCH} OFFSET {done}").fetchall()
-        if not rows:
+        batch = todo[done:done + BATCH]
+        X = np.asarray(emb.embed([r[2] for r in batch]), dtype=np.float32)
+        W, I8 = _pack_codes(X)
+        ids.extend(r[0] for r in batch)
+        yrs.extend(int(r[1]) for r in batch)
+        Ws.append(W)
+        I8s.append(I8)
+        done += len(batch)
+        el = time.time() - t0
+        print(f"[{label}] coded {done}/{total} ({done/max(el,1e-6):.0f}/sec, {el:.0f}s)",
+              flush=True)
+        if max_seconds is not None and el >= max_seconds:
+            print(f"[{label}] time budget {max_seconds}s reached — stopping at "
+                  f"{done}/{total}; remainder next run", flush=True)
             break
-        vecs = emb.embed([r[7] for r in rows])
-        con.executemany(
-            "INSERT INTO chunks (chunk_id, cik, accession_number, yr, section, "
-            "source_type, content_type, chunk_text, embedding) VALUES (?,?,?,?,?,?,?,?,?)",
-            [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], vecs[k].tolist())
-             for k, r in enumerate(rows)])
-        done += len(rows)
-        rate = done / max(time.time() - t0, 1e-6)
-        print(f"[year {year}] embedded {done}/{total} ({rate:.0f}/sec)", flush=True)
-
-    # Index insert: the HNSW index updates on INSERT once it exists. Create it after the
-    # first batch load so the very first year still gets an index; later years insert
-    # into the live index incrementally.
-    ensure_index(con)
-    print(f"[year {year}] complete: +{total} chunks in {time.time()-t0:.0f}s", flush=True)
-    con.close()
+    out = _write_codes(con, ids, yrs, np.concatenate(Ws), np.concatenate(I8s), label)
+    print(f"[{label}] wrote {done} codes -> {out}", flush=True)
+    return done
 
 
-def cmd_rebuild():
-    con = connect_cache()
-    ensure_schema(con)
-    print("[rebuild] dropping and rebuilding HNSW index...", flush=True)
-    con.execute("DROP INDEX IF EXISTS chunks_hnsw")
+def _run_label(prefix):
+    return f"{prefix}-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
+
+
+# ── Commands ──────────────────────────────────────────────────────────────────
+def cmd_backlog(max_rows, max_seconds):
+    con = connect_lake()
+    coded = _load_done(con)
+    print(f"[backlog] {coded} chunks already coded; scanning Iceberg for the un-coded delta ...",
+          flush=True)
     t = time.time()
-    con.execute("CREATE INDEX chunks_hnsw ON chunks USING HNSW (embedding) WITH (metric='cosine')")
-    n = con.execute("SELECT count(*) FROM chunks").fetchone()[0]
-    print(f"[rebuild] index rebuilt over {n} chunks in {time.time()-t:.0f}s", flush=True)
+    # newest-first via (year, accession_number); accession encodes YY-seq, so recently
+    # filed / most-queried chunks lead and the historical backlog drains behind them.
+    con.execute(f"""
+        CREATE OR REPLACE TEMP TABLE _todo AS
+        SELECT s.chunk_id, s.year AS yr, s.chunk_text
+        FROM iceberg_scan('{ICEBERG_CHUNKS}') s
+        LEFT JOIN _done d ON d.chunk_id = s.chunk_id
+        WHERE d.chunk_id IS NULL
+          AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
+        ORDER BY s.year DESC, s.accession_number DESC
+        LIMIT {int(max_rows)}
+    """)
+    todo = con.execute("SELECT chunk_id, yr, chunk_text FROM _todo").fetchall()
+    total = len(todo)
+    capped = total >= max_rows
+    tail = " (cap hit — more remain for next run)" if capped else " (drains the backlog)"
+    print(f"[backlog] taking {total} newest un-coded chunks{tail} — scan {time.time()-t:.1f}s",
+          flush=True)
+    if total == 0:
+        print("[backlog] nothing to do — fully caught up", flush=True)
+        con.close()
+        return
+    _embed_and_write(con, todo, _run_label("backlog"), max_seconds=max_seconds)
     con.close()
 
 
-def _sha256(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for blk in iter(lambda: f.read(1 << 20), b""):
-            h.update(blk)
-    return h.hexdigest()
-
-
-def cmd_publish():
-    if not os.path.exists(VSS_DB):
-        raise SystemExit(f"No cache DB at {VSS_DB} — build a year first")
-    con = duckdb.connect(VSS_DB, read_only=True)
-    con.execute("LOAD vss")
-    rows = con.execute("SELECT count(*) FROM chunks").fetchone()[0]
+def cmd_year(year):
+    con = connect_lake()
+    _load_done(con)
+    print(f"[year {year}] scanning Iceberg for the un-coded delta ...", flush=True)
+    t = time.time()
+    con.execute(f"""
+        CREATE OR REPLACE TEMP TABLE _todo AS
+        SELECT s.chunk_id, s.year AS yr, s.chunk_text
+        FROM iceberg_scan('{ICEBERG_CHUNKS}') s
+        LEFT JOIN _done d ON d.chunk_id = s.chunk_id
+        WHERE d.chunk_id IS NULL AND s.year = {int(year)}
+          AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
+        ORDER BY s.accession_number DESC
+    """)
+    todo = con.execute("SELECT chunk_id, yr, chunk_text FROM _todo").fetchall()
+    print(f"[year {year}] {len(todo)} un-coded chunks — scan {time.time()-t:.1f}s", flush=True)
+    if not todo:
+        print(f"[year {year}] nothing to do", flush=True)
+        con.close()
+        return
+    _embed_and_write(con, todo, _run_label(f"year{year}"))
     con.close()
-
-    sha = _sha256(VSS_DB)
-    size = os.path.getsize(VSS_DB)
-    base = f"{RCLONE_REMOTE}:{PARQUET_BUCKET[len('s3://'):]}/{CACHE_PREFIX}"
-    tmp_key = f"{base}/.chunks_vss.duckdb.tmp"
-    final_key = f"{base}/chunks_vss.duckdb"
-    meta_key = f"{base}/metadata.json"
-
-    print(f"[publish] {rows} rows, {size/1e6:.1f} MB, sha256={sha[:12]}… -> {final_key}", flush=True)
-    # Atomic-ish: upload to a temp key, then server-side move into place so clients
-    # never observe a half-written cache.
-    subprocess.run(["rclone", "copyto", VSS_DB, tmp_key], check=True)
-    subprocess.run(["rclone", "moveto", tmp_key, final_key], check=True)
-
-    meta = {
-        "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "rows": rows, "embed_dim": DIM, "model": MODEL,
-        "sha256": sha, "bytes": size,
-    }
-    p = subprocess.Popen(["rclone", "rcat", meta_key], stdin=subprocess.PIPE)
-    p.communicate(json.dumps(meta).encode())
-    if p.returncode != 0:
-        raise SystemExit("metadata.json upload failed")
-    print(f"[publish] done -> {final_key} (+ metadata.json)", flush=True)
 
 
 def cmd_stats():
-    if not os.path.exists(VSS_DB):
-        print("(no cache DB yet)")
+    con = connect_lake()
+    try:
+        rows = con.execute(
+            f"SELECT year, count(*) AS codes FROM read_parquet('{CODES_DATASET}/*.parquet') "
+            "GROUP BY year ORDER BY year").fetchall()
+    except duckdb.Exception:
+        print("(no codes dataset yet)")
+        con.close()
         return
-    con = duckdb.connect(VSS_DB, read_only=True)
-    con.execute("LOAD vss")
-    for row in con.execute(
-        "SELECT yr, count(DISTINCT accession_number) AS accessions, count(*) AS chunks "
-        "FROM chunks GROUP BY yr ORDER BY yr").fetchall():
-        print(f"  year={row[0]}  accessions={row[1]}  chunks={row[2]}")
+    total = 0
+    for y, c in rows:
+        print(f"  year={y}  codes={c}")
+        total += c
+    print(f"  TOTAL codes={total}")
     con.close()
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Local CPU per-year incremental VSS builder")
+    ap = argparse.ArgumentParser(description="Local CPU delta-driven quantized-code producer")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p_year = sub.add_parser("year"); p_year.add_argument("--year", type=int, required=True)
-    sub.add_parser("rebuild")
-    sub.add_parser("publish")
+    p_bk = sub.add_parser("backlog")
+    p_bk.add_argument("--max-rows", type=int,
+                      default=int(os.environ.get("VSS_MAX_ROWS", "1000000")))
+    p_bk.add_argument("--max-seconds", type=int,
+                      default=int(os.environ.get("VSS_MAX_SECONDS", "7200")))
+    p_year = sub.add_parser("year")
+    p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
     args = ap.parse_args()
 
-    if args.cmd == "year":
+    if args.cmd == "backlog":
+        cmd_backlog(args.max_rows, args.max_seconds)
+    elif args.cmd == "year":
         cmd_year(args.year)
-    elif args.cmd == "rebuild":
-        cmd_rebuild()
-    elif args.cmd == "publish":
-        cmd_publish()
     elif args.cmd == "stats":
         cmd_stats()
     else:
