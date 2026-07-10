@@ -260,11 +260,20 @@ public class IcebergTableWriter {
 
       String filePath = entry.getPath();
       if (filePath.endsWith(".parquet")) {
-        // Compute relative path from staging
+        // Compute relative path (partition dirs + basename) from staging
         String relativePath = computeRelativePath(stagingPath, filePath);
 
-        // Compute final path in data directory
-        String finalPath = storageProvider.resolvePath(dataPath, relativePath);
+        // Iceberg data files must be write-once and uniquely named. DuckDB's partitioned COPY
+        // emits deterministic basenames (data_0.parquet per partition), so preserving them here
+        // overwrites the prior snapshot's object in place on every re-ingest — violating
+        // immutability (corrupts time-travel, and lets a concurrent reader/cache observe a
+        // mutating object). Keep the partition directory, but give each moved file a unique name,
+        // matching writeRecords()/compaction.
+        int relLastSlash = relativePath.lastIndexOf('/');
+        String partitionDir = relLastSlash >= 0 ? relativePath.substring(0, relLastSlash + 1) : "";
+        String uniqueName = "data_"
+            + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+        String finalPath = storageProvider.resolvePath(dataPath, partitionDir + uniqueName);
 
         // Create parent directories
         String parentPath = getParentPath(finalPath);
