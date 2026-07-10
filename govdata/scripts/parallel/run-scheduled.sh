@@ -26,6 +26,7 @@ load_env
 
 LOG_DIR="$SCRIPT_DIR/runs"
 ERROR_LOG="$LOG_DIR/errors.log"
+R2_LOG="$LOG_DIR/r2-sync.log"   # detailed R2 sync output — tailed by pool_status.py
 PID_FILE="$LOG_DIR/pids/scheduled.pid"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -59,11 +60,20 @@ if [ -z "${GOVDATA_JAR:-}" ]; then
 fi
 
 mkdir -p "$LOG_DIR/pids"
-echo $$ > "$PID_FILE"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
+
+# Send SIGTERM to a process and its whole descendant tree (children first). Used
+# both to supersede a stale runner at startup and to tear our own pool/workers/
+# embedder/R2-daemon down on shutdown. The pool runs under a `timeout` wrapper in
+# its own process group, so a plain kill of one PID would orphan the rest.
+tree_term() {
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do tree_term "$child"; done
+  kill -TERM "$pid" 2>/dev/null || true
+}
 
 log_error() {
   echo "[$(ts)] $*" | tee -a "$ERROR_LOG"
@@ -77,15 +87,37 @@ fmt_epoch() {
 # ── Graceful shutdown ─────────────────────────────────────────────────────────
 
 ACTIVE_POOL_PID=""
+_sync_pid=""
+_cleanup() {
+  # Tear down the active pool subtree and the R2 sync daemon, then release the
+  # pidfile (only if it still points at us — a superseding runner may own it now).
+  [ -n "$ACTIVE_POOL_PID" ] && tree_term "$ACTIVE_POOL_PID"
+  [ -n "$_sync_pid" ] && tree_term "$_sync_pid"
+  [ "$(cat "$PID_FILE" 2>/dev/null || true)" = "$$" ] && rm -f "$PID_FILE"
+}
 _shutdown() {
-  log_error "SIGTERM received — stopping perpetual runner (PID $$)"
-  if [ -n "$ACTIVE_POOL_PID" ] && kill -0 "$ACTIVE_POOL_PID" 2>/dev/null; then
-    kill -TERM "$ACTIVE_POOL_PID" 2>/dev/null || true
-  fi
-  rm -f "$PID_FILE"
-  exit 0
+  log_error "signal received — stopping perpetual runner (PID $$)"
+  exit 0   # triggers the EXIT trap, which runs _cleanup exactly once
 }
 trap _shutdown SIGTERM SIGINT
+trap _cleanup EXIT
+
+# ── Single-instance guard ─────────────────────────────────────────────────────
+# Supersede any perpetual runner still alive from a previous launch, so multiple
+# invocations don't race to spawn pools and fight over the concurrency cap.
+if [ -f "$PID_FILE" ]; then
+  _old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -n "$_old_pid" ] && [ "$_old_pid" != "$$" ] && kill -0 "$_old_pid" 2>/dev/null; then
+    log_error "INFO: superseding running perpetual runner (PID $_old_pid) and its subtree"
+    tree_term "$_old_pid"
+    for _ in $(seq 1 20); do kill -0 "$_old_pid" 2>/dev/null || break; sleep 0.5; done
+    if kill -0 "$_old_pid" 2>/dev/null; then
+      log_error "WARNING: PID $_old_pid still alive after TERM — sending KILL"
+      kill -KILL "$_old_pid" 2>/dev/null || true
+    fi
+  fi
+fi
+echo $$ > "$PID_FILE"
 
 # ── Mode selection ────────────────────────────────────────────────────────────
 
@@ -179,14 +211,26 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   (
     while true; do
       sleep 86400
+      # Rotate the R2 log once it grows past ~5MB so tailing it stays cheap.
+      if [ -f "$R2_LOG" ] && [ "$(stat -c%s "$R2_LOG" 2>/dev/null || echo 0)" -gt 5242880 ]; then
+        mv -f "$R2_LOG" "$R2_LOG.1"
+      fi
       log_error "INFO: daily R2 sync starting"
-      "$SCRIPT_DIR/sync-to-r2.sh" \
-        && log_error "INFO: daily R2 sync complete" \
-        || log_error "WARNING: R2 sync failed (will retry next cycle)"
+      echo "[$(ts)] R2 sync starting" >> "$R2_LOG"
+      # Full sync output goes to R2_LOG (pool_status.py tails it); errors.log keeps
+      # only the start/complete markers. The terminal banners match the watcher's
+      # "R2 sync complete|FAILED" detection so it can tell active from idle.
+      if "$SCRIPT_DIR/sync-to-r2.sh" >> "$R2_LOG" 2>&1; then
+        echo "[$(ts)] R2 sync complete" >> "$R2_LOG"
+        log_error "INFO: daily R2 sync complete"
+      else
+        echo "[$(ts)] R2 sync FAILED (will retry next cycle)" >> "$R2_LOG"
+        log_error "WARNING: R2 sync failed (will retry next cycle)"
+      fi
     done
   ) &
   _sync_pid=$!
-  log_error "INFO: R2 sync daemon started (PID $_sync_pid, runs every 24h)"
+  log_error "INFO: R2 sync daemon started (PID $_sync_pid, runs every 24h; log: $R2_LOG)"
 fi
 
 while true; do

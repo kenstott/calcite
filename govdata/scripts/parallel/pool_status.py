@@ -6,6 +6,10 @@ directory and prints a per-worker rollup: the latest overall counts, which
 workers are running (with elapsed time + last activity), which finished OK,
 and which failed (with the failure reason).
 
+After the pool completes, --watch keeps tailing the post-ETL embeddings phase
+(daily runs, from the same log) until it finishes, and shows the R2 sync daemon's
+progress from runs/r2-sync.log whenever a sync is active.
+
 Usage:
     pool_status.py                       # newest pool log under ./runs
     pool_status.py --runs-dir PATH       # explicit runs dir
@@ -48,6 +52,12 @@ EVENT_RE = re.compile(
 )
 #   worker-health-dq-rebuild     [7m5s] Processing batch 9 ...
 ACTIVITY_RE = re.compile(r"^\s+(?P<worker>worker-\S+)\s+\[(?P<elapsed>[^\]]+)\]\s+(?P<msg>.*)$")
+# Post-ETL embeddings phase (run-pool.sh, daily only). Both lines carry a full
+# "[YYYY-MM-DD HH:MM:SS] " timestamp prefix from common.sh's log_info, so match anywhere.
+EMBED_START_RE = re.compile(r"Embeddings \(local CPU\): year\(s\)\s+(?P<years>.+?)\s*$")
+EMBED_DONE_RE = re.compile(r"Embeddings:\s+complete\s*$")
+# R2 sync daemon banners written into runs/r2-sync.log by run-scheduled.sh.
+R2_DONE_RE = re.compile(r"R2 sync (complete|FAILED)\b")
 
 
 class C:
@@ -81,15 +91,21 @@ def newest_pool_log(runs_dir):
 
 
 def parse(path):
-    """Return (last_status, events{worker:(state,dur,reason,ts)}, activity{worker:(elapsed,msg)}, final).
+    """Return (last_status, events{worker:(state,dur,reason,ts)}, activity{worker:(elapsed,msg)}, final, post).
 
     ``final`` is None until the pool prints its ``=== Pool Complete ===`` sentinel, then a dict
-    with the run totals — used to render a definitive COMPLETE banner and stop the watch loop.
+    with the run totals. ``post`` describes the post-ETL embeddings phase (daily only) whose
+    output run-pool.sh appends to the same log after the sentinel: ``{"lines": [...last tail...],
+    "started": bool, "done": bool}``. The watcher uses it to keep tailing through embeddings and
+    to stop only once that phase is done.
     """
     last_status = None
     events = {}
     activity = {}
     final = None
+    post_lines = []
+    embed_started = False
+    embed_done = False
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         complete_seen = False
         for line in fh:
@@ -98,10 +114,20 @@ def parse(path):
                 complete_seen = True
                 final = final or {}
                 continue
-            if complete_seen and final is not None and not final:
-                m = TOTAL_RE.match(line)
-                if m:
-                    final = m.groupdict()
+            if complete_seen:
+                # Everything past the sentinel is the post-ETL tail: the TOTAL line
+                # first, then the embeddings-phase output (daily runs only).
+                if final is not None and not final:
+                    m = TOTAL_RE.match(line)
+                    if m:
+                        final = m.groupdict()
+                        continue
+                if EMBED_START_RE.search(line):
+                    embed_started = True
+                if EMBED_DONE_RE.search(line):
+                    embed_done = True
+                if line.strip():
+                    post_lines.append(line)
                 continue
             m = STATUS_RE.match(line)
             if m:
@@ -117,7 +143,8 @@ def parse(path):
             if m:
                 g = m.groupdict()
                 activity[g["worker"]] = (g["elapsed"], g["msg"].strip())
-    return last_status, events, activity, final
+    post = {"lines": post_lines[-8:], "started": embed_started, "done": embed_done}
+    return last_status, events, activity, final, post
 
 
 def schema_of(worker):
@@ -149,8 +176,78 @@ def _elapsed_str(pool_name, end_epoch):
     return f"{s}s"
 
 
+def tail_lines(path, n, nonempty=True):
+    """Last ``n`` lines of a file, read from the end so a large log stays cheap."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            data = b""
+            while size > 0 and data.count(b"\n") <= n + 1:
+                step = min(4096, size)
+                size -= step
+                fh.seek(size)
+                data = fh.read(step) + data
+    except OSError:
+        return []
+    lines = data.decode("utf-8", "replace").splitlines()
+    if nonempty:
+        lines = [ln for ln in lines if ln.strip()]
+    return lines[-n:]
+
+
+def _fmt_age(secs):
+    secs = int(max(0, secs))
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        return f"{secs // 60}m"
+    return f"{secs // 3600}h{(secs % 3600) // 60:02d}m"
+
+
+def embed_panel(path, final, post):
+    """Post-ETL embeddings phase, tailed from the same pool log (daily runs only)."""
+    if final is None or not post["lines"]:
+        return []
+    if post["done"]:
+        state, col = "complete", C.GREEN
+    elif post["started"]:
+        age = time.time() - os.path.getmtime(path)
+        state, col = f"running (last output {_fmt_age(age)} ago)", C.CYAN
+    else:
+        state, col = "starting…", C.YELLOW
+    out = [f"\n{C.BOLD}EMBEDDINGS (post-ETL) — {col}{state}{C.RESET}"]
+    for ln in post["lines"]:
+        if len(ln) > 116:
+            ln = ln[:113] + "..."
+        out.append(f"  {C.GREY}{ln}{C.RESET}")
+    return out
+
+
+def r2_panel(runs_dir):
+    """R2 sync daemon status, tailed from its own log (independent 24h cadence)."""
+    p = os.path.join(runs_dir, "r2-sync.log")
+    if not os.path.isfile(p):
+        return []
+    age = time.time() - os.path.getmtime(p)
+    lines = tail_lines(p, 6)
+    if not lines:
+        return []
+    done = bool(R2_DONE_RE.search(lines[-1]))
+    active = (not done) and age < 300
+    if active:
+        out = [f"\n{C.BOLD}R2 SYNC — {C.CYAN}running (last output {_fmt_age(age)} ago){C.RESET}"]
+        for ln in lines:
+            if len(ln) > 116:
+                ln = ln[:113] + "..."
+            out.append(f"  {C.GREY}{ln}{C.RESET}")
+        return out
+    tag = "idle" if done else "no update"
+    return [f"\n{C.GREY}R2 SYNC — {tag} (last activity {_fmt_age(age)} ago) · {lines[-1][:90]}{C.RESET}"]
+
+
 def render(path, color):
-    last_status, events, activity, final = parse(path)
+    last_status, events, activity, final, post = parse(path)
     out = []
     pool_name = os.path.basename(path)
     mtime = os.path.getmtime(path)
@@ -175,44 +272,47 @@ def render(path, color):
 
     if not last_status:
         out.append(f"{C.YELLOW}No status line parsed yet — pool may be starting up.{C.RESET}")
-        return "\n".join(out)
+    else:
+        s = last_status
+        out.append(
+            f"  [{s['t']}]  {C.CYAN}Running {s['running']}{C.RESET}  "
+            f"{C.GREEN}Done {s['done']}{C.RESET}  "
+            f"{(C.RED if int(s['failed']) else C.GREY)}Failed {s['failed']}{C.RESET}  "
+            f"Queued {s['queued']}  Restarts {s['restarts']}  "
+            f"{C.GREY}Heap {s['heap_used']}/{s['heap_total']}MB · Free {s['free']}MB{C.RESET}"
+        )
 
-    s = last_status
-    out.append(
-        f"  [{s['t']}]  {C.CYAN}Running {s['running']}{C.RESET}  "
-        f"{C.GREEN}Done {s['done']}{C.RESET}  "
-        f"{(C.RED if int(s['failed']) else C.GREY)}Failed {s['failed']}{C.RESET}  "
-        f"Queued {s['queued']}  Restarts {s['restarts']}  "
-        f"{C.GREY}Heap {s['heap_used']}/{s['heap_total']}MB · Free {s['free']}MB{C.RESET}"
-    )
+        running = [w for w in (s["workers"] or "").split() if w]
+        terminal = set(events)
+        running = [w for w in running if w not in terminal]  # reconcile late finishers
+        failed = [(w, d) for w, d in events.items() if d[0] == "FAILED"]
+        done = [(w, d) for w, d in events.items() if d[0] == "finished OK"]
 
-    running = [w for w in (s["workers"] or "").split() if w]
-    terminal = set(events)
-    running = [w for w in running if w not in terminal]  # reconcile late finishers
-    failed = [(w, d) for w, d in events.items() if d[0] == "FAILED"]
-    done = [(w, d) for w, d in events.items() if d[0] == "finished OK"]
+        if running:
+            out.append(f"\n{C.BOLD}RUNNING ({len(running)}){C.RESET}")
+            for w in running:
+                el, msg = activity.get(w, ("?", "(no activity line yet)"))
+                if len(msg) > 110:
+                    msg = msg[:107] + "..."
+                out.append(f"  {C.CYAN}●{C.RESET} {w:<34} {C.GREY}[{el}]{C.RESET} {msg}")
 
-    if running:
-        out.append(f"\n{C.BOLD}RUNNING ({len(running)}){C.RESET}")
-        for w in running:
-            el, msg = activity.get(w, ("?", "(no activity line yet)"))
-            if len(msg) > 110:
-                msg = msg[:107] + "..."
-            out.append(f"  {C.CYAN}●{C.RESET} {w:<34} {C.GREY}[{el}]{C.RESET} {msg}")
+        if failed:
+            out.append(f"\n{C.BOLD}{C.RED}FAILED ({len(failed)}){C.RESET}")
+            for w, (_, dur, reason, ts) in sorted(failed):
+                out.append(f"  {C.RED}✗{C.RESET} {w:<34} {C.GREY}({dur}, {ts}){C.RESET} {reason}")
 
-    if failed:
-        out.append(f"\n{C.BOLD}{C.RED}FAILED ({len(failed)}){C.RESET}")
-        for w, (_, dur, reason, ts) in sorted(failed):
-            out.append(f"  {C.RED}✗{C.RESET} {w:<34} {C.GREY}({dur}, {ts}){C.RESET} {reason}")
+        if done:
+            out.append(f"\n{C.BOLD}{C.GREEN}DONE ({len(done)}){C.RESET}")
+            for w, (_, dur, _, ts) in sorted(done):
+                out.append(f"  {C.GREEN}✓{C.RESET} {w:<34} {C.GREY}({dur}){C.RESET}")
 
-    if done:
-        out.append(f"\n{C.BOLD}{C.GREEN}DONE ({len(done)}){C.RESET}")
-        for w, (_, dur, _, ts) in sorted(done):
-            out.append(f"  {C.GREEN}✓{C.RESET} {w:<34} {C.GREY}({dur}){C.RESET}")
+        nq = int(s["queued"])
+        if nq:
+            out.append(f"\n{C.GREY}QUEUED: {nq} schema(s) not yet started{C.RESET}")
 
-    nq = int(s["queued"])
-    if nq:
-        out.append(f"\n{C.GREY}QUEUED: {nq} schema(s) not yet started{C.RESET}")
+    # Post-ETL phases: embeddings (same pool log) and the R2 sync daemon (its own log).
+    out += embed_panel(path, final, post)
+    out += r2_panel(os.path.dirname(os.path.abspath(path)))
     return "\n".join(out)
 
 
@@ -274,13 +374,18 @@ def main():
             frame = "\033[H" + "".join(ln + "\033[K\n" for ln in lines) + "\033[J"
             sys.stdout.write(frame)
             sys.stdout.flush()
-            # stop once the pool printed its completion sentinel, or nothing is running
-            last_status, events, _, final = parse(path)
+            # Stop once the pool AND its post-ETL embeddings phase are done. While
+            # embeddings run they can emit nothing for minutes, so an idle log is only
+            # treated as "finished" when the embed phase has not started at all.
+            last_status, events, _, final, post = parse(path)
             running = [w for w in ((last_status or {}).get("workers") or "").split()
                        if w and w not in events]
             if final is not None:
-                break
-            if last_status and int(last_status["running"]) == 0 and not running:
+                if post["done"]:
+                    break
+                if not post["started"] and (time.time() - os.path.getmtime(path)) > 30:
+                    break
+            elif last_status and int(last_status["running"]) == 0 and not running:
                 break
             time.sleep(args.watch)
     except KeyboardInterrupt:
