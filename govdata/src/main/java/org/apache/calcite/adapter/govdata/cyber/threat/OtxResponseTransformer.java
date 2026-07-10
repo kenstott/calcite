@@ -77,6 +77,7 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
   private static final int TIMEOUT_MS = 60_000;
   private static final long RATE_DELAY_MS = 500L;
+  private static final int MAX_RETRIES = 5;
 
   /** Fetch variable carrying the recovered incremental watermark (freshness {@code watermark_var}). */
   private static final String OTX_WATERMARK_VAR = "otxModifiedSince";
@@ -182,17 +183,20 @@ public class OtxResponseTransformer implements ResponseTransformer {
 
       String nextUrl = processPage(firstPage, gen, count);
 
+      // fetchPage retries transient failures internally and THROWS if it exhausts them — a
+      // partial "canonical snapshot" must fail the pull, never be written as if complete.
+      int pages = 1;
+      int loggedAt = 0;
       while (nextUrl != null) {
         sleepQuietly(RATE_DELAY_MS);
         String page = fetchPage(nextUrl, apiKey);
-        if (page == null) {
-          LOGGER.warn("OTX: pagination stopped at {}", nextUrl);
-          break;
-        }
         nextUrl = processPage(page, gen, count);
-
-        if (count[0] % 1000 == 0 && count[0] > 0) {
-          LOGGER.info("OTX: accumulated {} pulse rows so far", count[0]);
+        pages++;
+        // Log each time we cross another 1000 rows (robust to non-exact multiples), with the
+        // page count, so a slow-but-progressing pull is distinguishable from a stall.
+        if (count[0] - loggedAt >= 1000) {
+          loggedAt = count[0];
+          LOGGER.info("OTX: accumulated {} pulse rows across {} pages", count[0], pages);
         }
       }
 
@@ -307,47 +311,85 @@ public class OtxResponseTransformer implements ResponseTransformer {
     return datetime.substring(0, 10);
   }
 
-  private String fetchPage(String url, String apiKey) {
-    try {
-      HttpURLConnection conn =
-          (HttpURLConnection) URI.create(url).toURL().openConnection();
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(TIMEOUT_MS);
-      conn.setReadTimeout(TIMEOUT_MS);
-      conn.setRequestProperty("X-OTX-API-KEY", apiKey);
-      conn.setRequestProperty("Accept", "application/json");
+  /**
+   * Fetches one page, retrying transient failures (429, 5xx, network timeouts/resets) with
+   * bounded exponential backoff (honoring {@code Retry-After} for 429). Permanent failures
+   * (auth, unexpected 4xx) and exhausted retries THROW — the caller must fail the pull rather
+   * than silently truncate the snapshot.
+   */
+  private String fetchPage(String url, String apiKey) throws IOException {
+    String lastErr = "unknown";
+    for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      HttpURLConnection conn = null;
+      try {
+        conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(TIMEOUT_MS);
+        conn.setReadTimeout(TIMEOUT_MS);
+        conn.setRequestProperty("X-OTX-API-KEY", apiKey);
+        conn.setRequestProperty("Accept", "application/json");
 
-      int status = conn.getResponseCode();
-      if (status == 401 || status == 403) {
-        LOGGER.error("OTX: auth failure HTTP {} — check CYBER_OTX_API_KEY", status);
-        return null;
+        int status = conn.getResponseCode();
+        if (status == 200) {
+          try (BufferedReader reader = new BufferedReader(
+              new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+              sb.append(line);
+            }
+            return sb.toString();
+          }
+        }
+        if (status == 401 || status == 403) {
+          // Permanent: bad/missing key. Fail loudly — never truncate the snapshot.
+          throw new IllegalStateException("OTX auth failure HTTP " + status
+              + " — check CYBER_OTX_API_KEY");
+        }
+        if (status != 429 && status < 500) {
+          throw new IllegalStateException("OTX unexpected HTTP " + status + " fetching " + url);
+        }
+        // 429 / 5xx — retryable.
+        lastErr = "HTTP " + status;
+        long backoff = retryDelayMs(conn, attempt);
+        LOGGER.warn("OTX: {} on {} (attempt {}/{}) — backing off {}ms",
+            lastErr, url, attempt, MAX_RETRIES, backoff);
+        sleepQuietly(backoff);
+      } catch (IOException e) {
+        // Network-level failure (timeout, connection reset, DNS) — retryable.
+        lastErr = e.toString();
+        long backoff = retryDelayMs(null, attempt);
+        LOGGER.warn("OTX: network error fetching {} (attempt {}/{}) — backing off {}ms: {}",
+            url, attempt, MAX_RETRIES, backoff, e.getMessage());
+        sleepQuietly(backoff);
+      } finally {
+        if (conn != null) {
+          conn.disconnect();
+        }
       }
-      if (status == 429) {
-        LOGGER.warn("OTX: rate limited, sleeping 60s");
-        sleepQuietly(60_000L);
-        conn.disconnect();
-        return fetchPage(url, apiKey);
-      }
-      if (status != 200) {
-        LOGGER.warn("OTX: HTTP {} fetching {}", status, url);
-        return null;
-      }
-
-      BufferedReader reader = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line);
-      }
-      reader.close();
-      conn.disconnect();
-      return sb.toString();
-
-    } catch (Exception e) {
-      LOGGER.warn("OTX: error fetching {}: {}", url, e.getMessage());
-      return null;
     }
+    throw new IOException("OTX: giving up on " + url + " after " + MAX_RETRIES
+        + " attempts (last error: " + lastErr + ")");
+  }
+
+  /** Retry delay: honor the 429 {@code Retry-After} seconds header if present, else exponential
+   *  backoff (1,2,4,…,60s cap). */
+  private static long retryDelayMs(HttpURLConnection conn, int attempt) {
+    if (conn != null) {
+      String ra = conn.getHeaderField("Retry-After");
+      if (ra != null) {
+        try {
+          long secs = Long.parseLong(ra.trim());
+          if (secs > 0) {
+            return Math.min(120_000L, secs * 1000L);
+          }
+        } catch (NumberFormatException ignored) {
+          // Retry-After may be an HTTP-date; fall through to exponential.
+        }
+      }
+    }
+    int shift = Math.min(attempt - 1, 6);
+    return Math.min(60_000L, 1_000L * (1L << shift));
   }
 
   private static String textOrNull(JsonNode node, String field) {
