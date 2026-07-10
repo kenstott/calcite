@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.similarity;
 
 import org.apache.calcite.schema.impl.ScalarFunctionImpl;
+import org.apache.calcite.schema.impl.TableFunctionImpl;
 
 /**
  * SQL functions for text similarity and vector operations.
@@ -448,6 +449,11 @@ public class SimilarityFunctions {
     // Text operations
     schema.add("TEXT_SIMILARITY",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "textSimilarity"));
+
+    // Path B semantic search over the quantized-code dataset (binary Hamming prefilter +
+    // int8 rerank). Table function: SELECT * FROM TABLE(SEMANTIC_SEARCH('query text', 10)).
+    schema.add("SEMANTIC_SEARCH",
+        TableFunctionImpl.create(SemanticSearch.class, "SEMANTIC_SEARCH"));
   }
 
   /**

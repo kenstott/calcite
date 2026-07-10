@@ -401,6 +401,12 @@ public class DuckDBJdbcSchemaFactory {
       // Register similarity functions as DuckDB UDFs
       registerSimilarityFunctions(setupConn);
 
+      // Hand the Path B semantic-search function the S3 config we just resolved, so it reuses
+      // these credentials/endpoint and needs no separate launcher flags.
+      org.apache.calcite.adapter.file.similarity.SemanticSearch.configure(
+          finalEndpointHostPort, finalS3Region, finalS3AccessKey, finalS3SecretKey,
+          finalUseSSL != null && finalUseSSL);
+
       // Load query-time extensions for optimization (vss, fts)
       loadQueryExtensions(setupConn);
 
