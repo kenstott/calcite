@@ -42,6 +42,7 @@ Commands:
 
 import argparse
 import os
+import subprocess
 import time
 
 import duckdb
@@ -51,6 +52,7 @@ DIM = int(os.environ.get("VSS_EMBED_DIM", "384"))
 BATCH = int(os.environ.get("VSS_EMBED_BATCH", "10000"))         # rows per embed+pack cycle
 ENCODE_BATCH = int(os.environ.get("VSS_ENCODE_BATCH", "128"))   # sentence-transformers micro-batch
 TORCH_THREADS = int(os.environ.get("VSS_TORCH_THREADS", str(os.cpu_count() or 8)))
+FLUSH_ROWS = int(os.environ.get("VSS_FLUSH_ROWS", "100000"))    # write a codes parquet every N rows
 
 GOVDATA_HOME = os.environ.get("GOVDATA_HOME") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
@@ -59,6 +61,10 @@ ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/sec/vectorized_chunks"
 # The delivered semantic-search artifact: an append-only parquet dataset of quantized
 # codes (one file per producer run). Overridable so tests can target a scratch prefix.
 CODES_DATASET = os.environ.get("VSS_CODES_DATASET", f"{PARQUET_BUCKET}/sec/vectorized_chunk_codes")
+RCLONE_REMOTE = os.environ.get("GOVDATA_RCLONE_REMOTE", "minio")
+# Consolidate the codes dataset once it exceeds this many files (incremental flush + daily runs
+# accumulate small files; too many slows the query glob + the delta anti-join).
+COMPACT_MIN_FILES = int(os.environ.get("VSS_COMPACT_MIN_FILES", "16"))
 # int8 = round(clip(x, -I8_SCALE, I8_SCALE) / I8_SCALE * 127). arctic vectors are unit
 # norm so components sit well inside +/-0.35; a fixed global scale keeps int8 dot
 # products comparable across rows for rerank.
@@ -182,16 +188,32 @@ def _write_codes(con, ids, yrs, W, I8, label):
 
 
 def _embed_and_write(con, todo, label, max_seconds=None):
-    """Embed every (chunk_id, yr, chunk_text) in `todo`, quantize, and write one codes
-    file. Stops early if max_seconds elapses (remainder is picked up next run)."""
+    """Embed every (chunk_id, yr, chunk_text) in `todo`, quantize, and APPEND codes to the lake
+    dataset — flushing a parquet file every FLUSH_ROWS so memory stays flat and each flush is
+    durable (a crash/time-box costs only the un-flushed tail, not the whole run). Stops early if
+    max_seconds elapses; the remainder is picked up next run."""
     import numpy as np
     total = len(todo)
     if total == 0:
         return 0
     emb = make_embedder()
     ids, yrs, Ws, I8s = [], [], [], []
+    buffered = 0
+    flush_idx = 0
     done = 0
     t0 = time.time()
+
+    def _flush():
+        nonlocal ids, yrs, Ws, I8s, buffered, flush_idx
+        if not ids:
+            return
+        out = _write_codes(con, ids, yrs, np.concatenate(Ws), np.concatenate(I8s),
+                           f"{label}-{flush_idx:04d}")
+        print(f"[{label}] flushed {len(ids)} codes -> {out}", flush=True)
+        ids, yrs, Ws, I8s = [], [], [], []
+        buffered = 0
+        flush_idx += 1
+
     while done < total:
         batch = todo[done:done + BATCH]
         X = np.asarray(emb.embed([r[2] for r in batch]), dtype=np.float32)
@@ -200,21 +222,73 @@ def _embed_and_write(con, todo, label, max_seconds=None):
         yrs.extend(int(r[1]) for r in batch)
         Ws.append(W)
         I8s.append(I8)
+        buffered += len(batch)
         done += len(batch)
         el = time.time() - t0
         print(f"[{label}] coded {done}/{total} ({done/max(el,1e-6):.0f}/sec, {el:.0f}s)",
               flush=True)
+        if buffered >= FLUSH_ROWS:
+            _flush()
         if max_seconds is not None and el >= max_seconds:
             print(f"[{label}] time budget {max_seconds}s reached — stopping at "
                   f"{done}/{total}; remainder next run", flush=True)
             break
-    out = _write_codes(con, ids, yrs, np.concatenate(Ws), np.concatenate(I8s), label)
-    print(f"[{label}] wrote {done} codes -> {out}", flush=True)
+    _flush()
+    print(f"[{label}] complete: coded {done} chunks this run", flush=True)
     return done
 
 
 def _run_label(prefix):
     return f"{prefix}-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
+
+
+# ── Compaction ────────────────────────────────────────────────────────────────
+def _rclone_path(s3path):
+    """s3://bucket/key -> <remote>:bucket/key for rclone."""
+    return f"{RCLONE_REMOTE}:{s3path[len('s3://'):]}"
+
+
+def _list_code_files():
+    """Basenames of the *.parquet files currently in the codes dataset (via rclone)."""
+    r = subprocess.run(["rclone", "lsf", _rclone_path(CODES_DATASET) + "/"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return []
+    return [f.strip() for f in r.stdout.splitlines() if f.strip().endswith(".parquet")]
+
+
+def cmd_compact(con=None):
+    """Merge the codes dataset's many small files into one, once it exceeds COMPACT_MIN_FILES.
+    The consolidated file is written to a .compact/ staging key (outside the flat *.parquet glob),
+    moved into place, then the sources are deleted — so the query glob never sees a half-written
+    file. The brief overlap duplicates some chunk_ids, which is benign for search (redundant, not
+    missing) and for the delta anti-join (still 'coded')."""
+    own = con is None
+    con = con or connect_lake()
+    try:
+        files = _list_code_files()
+        if len(files) <= COMPACT_MIN_FILES:
+            print(f"[compact] {len(files)} files <= threshold {COMPACT_MIN_FILES} — nothing to do",
+                  flush=True)
+            return
+        tag = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
+        staged = f"{CODES_DATASET}/.compact/codes-compact-{tag}.parquet"
+        final = f"{CODES_DATASET}/codes-compact-{tag}.parquet"
+        print(f"[compact] merging {len(files)} files ...", flush=True)
+        t = time.time()
+        con.execute(f"COPY (SELECT * FROM read_parquet('{CODES_DATASET}/*.parquet')) "
+                    f"TO '{staged}' (FORMAT parquet, COMPRESSION zstd)")
+        subprocess.run(["rclone", "moveto", _rclone_path(staged), _rclone_path(final)],
+                       capture_output=True, text=True, check=True)
+        base = _rclone_path(CODES_DATASET)
+        for f in files:
+            subprocess.run(["rclone", "deletefile", f"{base}/{f}"], capture_output=True, text=True)
+        subprocess.run(["rclone", "purge", _rclone_path(f"{CODES_DATASET}/.compact")],
+                       capture_output=True, text=True)
+        print(f"[compact] done in {time.time()-t:.0f}s — {len(files)} files -> 1", flush=True)
+    finally:
+        if own:
+            con.close()
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
@@ -247,6 +321,7 @@ def cmd_backlog(max_rows, max_seconds):
         con.close()
         return
     _embed_and_write(con, todo, _run_label("backlog"), max_seconds=max_seconds)
+    cmd_compact(con)   # consolidate small files at end of run (no-op below the threshold)
     con.close()
 
 
@@ -292,17 +367,27 @@ def cmd_stats():
     con.close()
 
 
+def _default_max_seconds():
+    """Time budget for a backlog run: 20h on weekends (drain faster when there's slack),
+    2h on weekdays. VSS_MAX_SECONDS overrides both."""
+    env = os.environ.get("VSS_MAX_SECONDS")
+    if env:
+        return int(env)
+    import datetime
+    return 72000 if datetime.datetime.now().weekday() >= 5 else 7200
+
+
 def main():
     ap = argparse.ArgumentParser(description="Local CPU delta-driven quantized-code producer")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_bk = sub.add_parser("backlog")
     p_bk.add_argument("--max-rows", type=int,
                       default=int(os.environ.get("VSS_MAX_ROWS", "1000000")))
-    p_bk.add_argument("--max-seconds", type=int,
-                      default=int(os.environ.get("VSS_MAX_SECONDS", "7200")))
+    p_bk.add_argument("--max-seconds", type=int, default=_default_max_seconds())
     p_year = sub.add_parser("year")
     p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
+    sub.add_parser("compact")
     args = ap.parse_args()
 
     if args.cmd == "backlog":
@@ -311,6 +396,8 @@ def main():
         cmd_year(args.year)
     elif args.cmd == "stats":
         cmd_stats()
+    elif args.cmd == "compact":
+        cmd_compact()
     else:
         ap.error("unknown command")
 

@@ -30,7 +30,8 @@ R2_LOG="$LOG_DIR/r2-sync.log"   # detailed R2 sync output — tailed by pool_sta
 PID_FILE="$LOG_DIR/pids/scheduled.pid"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-WINDOW_SECS=43200   # 12 hours per mode
+WINDOW_SECS=43200        # 12h per mode on weekdays
+WEEKEND_WINDOW_SECS=79200 # 22h on weekends, so the ~20h weekend VSS embed (vss-local.py) fits
 RESTART_DELAY=30    # seconds to wait after a crash before restarting
 
 # Concurrency throttle passed to run-pool.sh's -j. run-pool otherwise admits
@@ -142,7 +143,11 @@ run_window() {
   local mode="$1"
   local fill_mode="${2:-}"   # when the primary mode finishes early, spend the rest of the window on this mode
   local window_log="$LOG_DIR/scheduled-${mode}-$(date '+%Y%m%d-%H%M%S').log"
-  local window_end=$(( $(date +%s) + WINDOW_SECS ))
+  # Weekends get a longer window so the extended (~20h) weekend VSS embed can run to completion
+  # instead of being cut short by the window timeout. date +%u: 6=Sat, 7=Sun.
+  local win_secs="$WINDOW_SECS"
+  [ "$(date +%u)" -ge 6 ] && win_secs="$WEEKEND_WINDOW_SECS"
+  local window_end=$(( $(date +%s) + win_secs ))
   local attempt=0
   local current="$mode"      # mode currently running; may switch to fill_mode after an early finish
 
