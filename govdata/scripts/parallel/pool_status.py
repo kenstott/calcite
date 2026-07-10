@@ -15,6 +15,7 @@ Usage:
     pool_status.py --runs-dir PATH       # explicit runs dir
     pool_status.py --pool FILE           # a specific pool-*.log
     pool_status.py --watch 10            # refresh every 10s until done
+    pool_status.py --watch 10 --forever  # never exit; roll across daily → vss → historical
     pool_status.py --no-color
 
 Runs dir resolution order: --runs-dir, $RUNPOOL_RUNS_DIR, ./runs next to this
@@ -52,9 +53,9 @@ EVENT_RE = re.compile(
 )
 #   worker-health-dq-rebuild     [7m5s] Processing batch 9 ...
 ACTIVITY_RE = re.compile(r"^\s+(?P<worker>worker-\S+)\s+\[(?P<elapsed>[^\]]+)\]\s+(?P<msg>.*)$")
-# Post-ETL embeddings phase (run-pool.sh, daily only). Both lines carry a full
-# "[YYYY-MM-DD HH:MM:SS] " timestamp prefix from common.sh's log_info, so match anywhere.
-EMBED_START_RE = re.compile(r"Embeddings \(local CPU\): year\(s\)\s+(?P<years>.+?)\s*$")
+# Post-ETL embeddings phase (run-pool.sh). Match the "Embeddings (local CPU)" banner
+# broadly so it survives producer wording changes (e.g. "…: coding un-coded backlog …").
+EMBED_START_RE = re.compile(r"Embeddings \(local CPU\)")
 EMBED_DONE_RE = re.compile(r"Embeddings:\s+complete\s*$")
 # R2 sync daemon banners written into runs/r2-sync.log by run-scheduled.sh.
 R2_DONE_RE = re.compile(r"R2 sync (complete|FAILED)\b")
@@ -322,6 +323,9 @@ def main():
     ap.add_argument("--pool", help="explicit pool-*.log file to read")
     ap.add_argument("--watch", nargs="?", type=float, const=5.0, metavar="SECS",
                     help="refresh in place every SECS (default 5) until nothing is running")
+    ap.add_argument("--forever", action="store_true",
+                    help="never exit — keep monitoring across daily → embeddings → historical, "
+                         "rolling onto each new pool-*.log (for the perpetual runner)")
     ap.add_argument("--no-color", action="store_true", help="disable ANSI colors")
     args = ap.parse_args()
 
@@ -336,15 +340,16 @@ def main():
     def show_once():
         path = pick()
         if not path:
-            where = args.pool or resolve_runs_dir(args.runs_dir)
-            print(f"No pool-*.log found ({where}).", file=sys.stderr)
             return None
-        body = render(path, not args.no_color)
-        return path, body
+        return path, render(path, not args.no_color)
+
+    def _no_pool_where():
+        return args.pool or resolve_runs_dir(args.runs_dir)
 
     if not args.watch:
         r = show_once()
         if r is None:
+            print(f"No pool-*.log found ({_no_pool_where()}).", file=sys.stderr)
             sys.exit(1)
         print(r[1])
         return
@@ -359,7 +364,15 @@ def main():
         while True:
             r = show_once()
             if r is None:
-                sys.exit(1)
+                # No pool-*.log yet. In --forever, wait for the next run; else exit.
+                if not args.forever:
+                    print(f"No pool-*.log found ({_no_pool_where()}).", file=sys.stderr)
+                    sys.exit(1)
+                sys.stdout.write("\033[H" + f"{C.GREY}waiting for a pool run …{C.RESET}"
+                                 + "\033[K\n\033[J")
+                sys.stdout.flush()
+                time.sleep(args.watch)
+                continue
             path, body = r
             lines = body.split("\n")
             try:
@@ -374,19 +387,21 @@ def main():
             frame = "\033[H" + "".join(ln + "\033[K\n" for ln in lines) + "\033[J"
             sys.stdout.write(frame)
             sys.stdout.flush()
-            # Stop once the pool AND its post-ETL embeddings phase are done. While
-            # embeddings run they can emit nothing for minutes, so an idle log is only
-            # treated as "finished" when the embed phase has not started at all.
-            last_status, events, _, final, post = parse(path)
-            running = [w for w in ((last_status or {}).get("workers") or "").split()
-                       if w and w not in events]
-            if final is not None:
-                if post["done"]:
+            # --forever: never stop — keep rolling onto the newest pool-*.log as the perpetual
+            # runner cycles daily → embeddings → historical → daily (pick() returns the newest
+            # log each frame). Otherwise stop once the pool AND its post-ETL embeddings phase
+            # are done (an idle log counts as finished only when the embed phase never started).
+            if not args.forever:
+                last_status, events, _, final, post = parse(path)
+                running = [w for w in ((last_status or {}).get("workers") or "").split()
+                           if w and w not in events]
+                if final is not None:
+                    if post["done"]:
+                        break
+                    if not post["started"] and (time.time() - os.path.getmtime(path)) > 30:
+                        break
+                elif last_status and int(last_status["running"]) == 0 and not running:
                     break
-                if not post["started"] and (time.time() - os.path.getmtime(path)) > 30:
-                    break
-            elif last_status and int(last_status["running"]) == 0 and not running:
-                break
             time.sleep(args.watch)
     except KeyboardInterrupt:
         pass
