@@ -1,5 +1,5 @@
 # pgwire-<adapter> releases — airgapped per-OS bundles that expose a single Calcite adapter
-# (file / sharepoint / splunk / cloudops) over the PostgreSQL wire protocol. Each is the generic
+# (file / sharepoint / splunk / cloudops / govdata) over the PostgreSQL wire protocol. Each is the generic
 # pgwire-calcite server (shared) bundled with that adapter's runtime jars + its model.json + a
 # launcher that starts the calcite backend against that model. Mirrors pgwire-calcite-release.yml.
 name: pgwire-adapters release
@@ -29,6 +29,7 @@ jobs:
           - { name: sharepoint, module: sharepoint-list }
           - { name: splunk,     module: splunk }
           - { name: cloudops,   module: cloud-ops }
+          - { name: govdata,    module: govdata }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -71,6 +72,7 @@ jobs:
           - { name: sharepoint, module: sharepoint-list }
           - { name: splunk,     module: splunk }
           - { name: cloudops,   module: cloud-ops }
+          - { name: govdata,    module: govdata }
         os:
           - { runner: ubuntu-latest, variant: linux-x86_64 }
           - { runner: macos-14,      variant: macos-arm64 }
