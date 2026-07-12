@@ -1367,6 +1367,18 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     List<IcebergCatalogManager.ColumnDef> tableColumns = extractColumnsFromConfig(tableConfig);
     LOGGER.debug("Extracted {} table columns for '{}' from YAML config", tableColumns.size(), tableName);
 
+    // element_id is synthesized per XBRL parse ("gen_"+hash) when the source element has no id, so
+    // it differs across re-conversions of the same filing and would defeat the full-row dedup in
+    // buildSelectSqlForFileList — the same fact would re-append with a new id on every run. Exclude
+    // it from the dedup key for any table that carries it (currently financial_line_items).
+    List<String> dedupIgnoreColumns = new ArrayList<>();
+    for (IcebergCatalogManager.ColumnDef col : tableColumns) {
+      if ("element_id".equals(col.getName())) {
+        dedupIgnoreColumns.add("element_id");
+        break;
+      }
+    }
+
     // Build CIK filter to avoid materializing all companies when only a subset is requested.
     // stock_prices is EXEMPT: the bulk pass ingests every US ticker (most have no SEC CIK, so
     // cik=''), and a cik IN (...) filter would drop the entire market down to the configured
@@ -1393,6 +1405,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .rowFilter(rowFilter)
         .icebergTableLocation(warehousePath + "/" + icebergTableName)
         .accessionColumn("accession_number")
+        .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .description(tableName)
         .build();

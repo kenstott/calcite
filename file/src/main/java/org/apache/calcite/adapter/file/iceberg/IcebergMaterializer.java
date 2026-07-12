@@ -212,6 +212,11 @@ public class IcebergMaterializer {
     private final String rowFilter;  // Optional WHERE clause filter (e.g., "cik IN ('0001', '0002')")
     private final String icebergTableLocation;  // Iceberg table location for accession-level dedup
     private final String accessionColumn;  // Column name for accession (default: "accession_number")
+    // Columns excluded from full-row dedup because they are synthesized per conversion and thus
+    // non-deterministic across re-runs (e.g. SEC element_id = "gen_"+hash(...) when the XBRL element
+    // carries no id). Including them in DISTINCT lets the SAME logical fact re-append with a fresh
+    // id on every run; excluding them makes re-materialization idempotent.
+    private final List<String> dedupIgnoreColumns;
     // When true, pre-built parquet (already matching the table schema) is committed to Iceberg by
     // moving files + building DataFile metadata — no rows are read into memory. Streams huge,
     // pre-transformed sources (e.g. the full-market stock_prices bulk).
@@ -241,6 +246,8 @@ public class IcebergMaterializer {
       this.rowFilter = builder.rowFilter;
       this.icebergTableLocation = builder.icebergTableLocation;
       this.accessionColumn = builder.accessionColumn != null ? builder.accessionColumn : "accession_number";
+      this.dedupIgnoreColumns = builder.dedupIgnoreColumns != null
+          ? builder.dedupIgnoreColumns : Collections.<String>emptyList();
       this.filePassthrough = builder.filePassthrough;
     }
 
@@ -360,6 +367,15 @@ public class IcebergMaterializer {
       return accessionColumn;
     }
 
+    /**
+     * Returns columns excluded from full-row dedup because they are synthesized per conversion
+     * (non-deterministic across re-runs, e.g. SEC element_id). Empty by default, in which case
+     * DISTINCT considers every column.
+     */
+    public List<String> getDedupIgnoreColumns() {
+      return dedupIgnoreColumns;
+    }
+
     public boolean supportsIncremental() {
       return !incrementalKeys.isEmpty();
     }
@@ -390,6 +406,7 @@ public class IcebergMaterializer {
       private String rowFilter;
       private String icebergTableLocation;
       private String accessionColumn;
+      private List<String> dedupIgnoreColumns;
       private boolean filePassthrough;
 
       public Builder sourcePattern(String sourcePattern) {
@@ -513,6 +530,15 @@ public class IcebergMaterializer {
        */
       public Builder accessionColumn(String accessionColumn) {
         this.accessionColumn = accessionColumn;
+        return this;
+      }
+
+      /**
+       * Sets columns to exclude from full-row dedup because they are synthesized per conversion
+       * (non-deterministic across re-runs). Empty/unset => DISTINCT over all columns.
+       */
+      public Builder dedupIgnoreColumns(List<String> dedupIgnoreColumns) {
+        this.dedupIgnoreColumns = dedupIgnoreColumns;
         return this;
       }
 
@@ -1430,12 +1456,35 @@ public class IcebergMaterializer {
       Set<String> excludeAccessions) {
     StringBuilder sql = new StringBuilder();
     Map<String, String> computedCols = config.getComputedColumns();
+    List<String> dedupIgnore = config.getDedupIgnoreColumns();
+    boolean groupDedup = dedupIgnore != null && !dedupIgnore.isEmpty();
     // DISTINCT removes exact-duplicate rows that arise when staging writes the same filing more
     // than once (fetch retried/regenerated). It does NOT collapse legitimately distinct rows of
     // a multi-row-per-filing table (e.g. financial_line_items, filing_contexts), which a
     // PARTITION BY accession dedup would. SEC filings are immutable, so a re-fetch yields
-    // identical rows — full-row dedup is exact.
-    if (computedCols == null || computedCols.isEmpty()) {
+    // identical rows — EXCEPT for dedupIgnoreColumns (e.g. element_id), which are synthesized per
+    // conversion and so differ between re-fetches. Those are dropped from the grouping key and
+    // carried through with any_value(), so a re-fetched fact collapses to one row instead of
+    // re-appending with a fresh id every run (deterministic duplication otherwise).
+    if (groupDedup) {
+      sql.append("SELECT * EXCLUDE (");
+      for (int i = 0; i < dedupIgnore.size(); i++) {
+        if (i > 0) {
+          sql.append(", ");
+        }
+        sql.append(dedupIgnore.get(i));
+      }
+      sql.append(")");
+      for (String col : dedupIgnore) {
+        sql.append(", any_value(").append(col).append(") AS ").append(col);
+      }
+      if (computedCols != null) {
+        for (Map.Entry<String, String> entry : computedCols.entrySet()) {
+          sql.append(", ").append(entry.getValue()).append(" AS ").append(entry.getKey());
+        }
+      }
+      sql.append(" FROM ");
+    } else if (computedCols == null || computedCols.isEmpty()) {
       sql.append("SELECT DISTINCT * FROM ");
     } else {
       sql.append("SELECT DISTINCT *, ");
@@ -1488,6 +1537,12 @@ public class IcebergMaterializer {
         }
         sql.append(")");
       }
+    }
+
+    // GROUP BY ALL collapses rows that are identical except for the dedupIgnoreColumns (carried via
+    // any_value above). Applied after WHERE so filters run before grouping.
+    if (groupDedup) {
+      sql.append(" GROUP BY ALL");
     }
 
     return sql.toString();
