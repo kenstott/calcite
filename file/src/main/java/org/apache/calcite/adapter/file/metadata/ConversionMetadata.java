@@ -114,6 +114,7 @@ public class ConversionMetadata {
 
     // === STATISTICS ===
     public Long rowCount;                 // Total row count from Iceberg metadata
+    public Long snapshotId;               // Iceberg snapshot the rowCount was computed from (staleness guard)
 
     // === PARTITION BASELINE (for DuckDB+Hive optimization) ===
     public PartitionBaseline baseline;   // Cached partition snapshot for fast change detection

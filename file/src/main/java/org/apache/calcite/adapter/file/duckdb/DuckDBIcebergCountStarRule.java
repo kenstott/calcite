@@ -199,29 +199,37 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
       return;
     }
 
-    // Get row count from ConversionRecord (stored during ETL materialization)
-    Long rowCount = record.rowCount;
-    if (rowCount == null || rowCount == 0L) {
-      // Self-heal: read row count from Iceberg metadata and cache it
-      // Also heal when rowCount is 0 - this can happen when table was registered before data was committed
-      LOGGER.info("[ICEBERG COUNT*]: No valid cached row count for '{}' (current: {}) - attempting to read from Iceberg metadata", tableName, rowCount);
-      String tableLocation = record.getSourceFile();
-      if (tableLocation != null) {
-        rowCount = readRowCountFromIcebergDirect(tableLocation, fileSchema.getStorageProvider());
-        if (rowCount != null) {
-          // Cache the row count for future queries
-          conversionMetadata.updateMaterializationInfo(tableName, tableLocation, "ICEBERG_PARQUET", rowCount);
-          LOGGER.info("[ICEBERG COUNT*]: Self-healed - cached row count {} for table '{}'", rowCount, tableName);
-        }
-      }
-      if (rowCount == null) {
-        LOGGER.info("[ICEBERG COUNT*]: Could not read row count from Iceberg metadata for '{}'", tableName);
-        return;
-      }
+    // Read the authoritative count from Iceberg, validating the cache against the current snapshot.
+    // A cached rowCount must NOT be trusted blindly: when a table is emptied/purged its current
+    // snapshot becomes null (count 0) but the old nonzero rowCount lingers, so COUNT(*) would report
+    // phantom rows. We always resolve the current snapshot (cheap metadata load) and only re-scan
+    // manifests (planFiles) when the snapshot changed since the cached count was taken.
+    String tableLocation = record.getSourceFile();
+    if (tableLocation == null) {
+      LOGGER.info("[ICEBERG COUNT*]: No source file for table '{}'", tableName);
+      return;
+    }
+    long[] res = readIcebergCountAndSnapshot(tableLocation, fileSchema.getStorageProvider(),
+        record.snapshotId, record.rowCount);
+    if (res == null) {
+      // Couldn't load Iceberg metadata — leave COUNT(*) to run normally rather than serve a guess.
+      LOGGER.info("[ICEBERG COUNT*]: Could not read count/snapshot for '{}' - not optimizing", tableName);
+      return;
+    }
+    long rowCount = res[0];
+    Long newSnapshotId = res[1] == Long.MIN_VALUE ? null : Long.valueOf(res[1]);
+
+    // Refresh the persisted cache whenever the count or snapshot changed (self-heals stale counts).
+    boolean changed = record.rowCount == null || record.rowCount.longValue() != rowCount
+        || !java.util.Objects.equals(record.snapshotId, newSnapshotId);
+    if (changed) {
+      record.snapshotId = newSnapshotId;
+      conversionMetadata.updateMaterializationInfo(tableName, tableLocation, "ICEBERG_PARQUET", rowCount);
+      LOGGER.info("[ICEBERG COUNT*]: Refreshed count for '{}' -> {} (snapshot {})",
+          tableName, rowCount, newSnapshotId);
     }
 
-    LOGGER.info("[ICEBERG COUNT*]: Replacing COUNT(*) on '{}' with cached row count: {}",
-        tableName, rowCount);
+    LOGGER.info("[ICEBERG COUNT*]: Replacing COUNT(*) on '{}' with row count: {}", tableName, rowCount);
 
     // Create VALUES node with the row count
     RelNode valuesNode = createCountStarValues(aggregate, rowCount);
@@ -309,8 +317,9 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
    * Read row count from Iceberg metadata directly using the table location.
    * This is storage-agnostic - uses StorageProvider for S3/local credentials.
    */
-  private Long readRowCountFromIcebergDirect(String tableLocation,
-      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider) {
+  private long[] readIcebergCountAndSnapshot(String tableLocation,
+      org.apache.calcite.adapter.file.storage.StorageProvider storageProvider,
+      Long cachedSnapshotId, Long cachedCount) {
     try {
       LOGGER.info("[ICEBERG COUNT*] Loading Iceberg table at: {}", tableLocation);
 
@@ -343,11 +352,17 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
 
       org.apache.iceberg.Snapshot snapshot = icebergTable.currentSnapshot();
       if (snapshot == null) {
-        LOGGER.info("[ICEBERG COUNT*] Iceberg table has no snapshot, returning 0");
-        return 0L;
+        LOGGER.info("[ICEBERG COUNT*] Iceberg table has no current snapshot (empty), count 0");
+        return new long[]{0L, Long.MIN_VALUE};
+      }
+      long snapshotId = snapshot.snapshotId();
+
+      // Snapshot unchanged since the cached count was taken — trust the cache, skip planFiles.
+      if (cachedSnapshotId != null && cachedSnapshotId.longValue() == snapshotId && cachedCount != null) {
+        return new long[]{cachedCount.longValue(), snapshotId};
       }
 
-      // Sum record counts from all data files in current snapshot
+      // Sum record counts from all data files in the current snapshot.
       long totalRecords = 0;
       try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.FileScanTask> fileScanTasks =
           icebergTable.newScan().planFiles()) {
@@ -356,12 +371,12 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
         }
       }
 
-      LOGGER.info("[ICEBERG COUNT*] Read row count {} from Iceberg metadata at {}",
-          totalRecords, tableLocation);
-      return totalRecords;
+      LOGGER.info("[ICEBERG COUNT*] Read row count {} (snapshot {}) from Iceberg metadata at {}",
+          totalRecords, snapshotId, tableLocation);
+      return new long[]{totalRecords, snapshotId};
 
     } catch (Exception e) {
-      LOGGER.warn("[ICEBERG COUNT*] Failed to read row count from Iceberg table at '{}': {}",
+      LOGGER.warn("[ICEBERG COUNT*] Failed to read count/snapshot from Iceberg table at '{}': {}",
           tableLocation, e.getMessage(), e);
       return null;
     }
