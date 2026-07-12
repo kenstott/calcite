@@ -52,7 +52,14 @@ abstract class AbstractOpenFemaTransformer implements ResponseTransformer {
     }
     try {
       JsonNode root = MAPPER.readTree(response);
-      JsonNode records = root.isArray() ? root : root.path(entityName());
+      // Three shapes reach us: a bare array or the entity-named array {"<entity>":[...]} from a
+      // fresh (single-page) OpenFEMA response, AND the {"results":[...]} envelope that HttpSource
+      // writes for a PAGINATED raw cache (see HttpSource.writeArrayFieldStart("results")). Reading
+      // the cached envelope by entityName() silently yields 0 rows — the bug that emptied
+      // public_assistance_projects despite an 818K-row source. Check "results" before entityName().
+      JsonNode records = root.isArray() ? root
+          : root.has("results") ? root.path("results")
+          : root.path(entityName());
       if (!records.isArray()) {
         // A FEMA "technical difficulties" HTML page or an error envelope reached us as a
         // successful body; surface it rather than silently emit zero rows.
