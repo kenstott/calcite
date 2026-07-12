@@ -784,101 +784,127 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   # TRADEMARK_APPLICATIONS — USPTO trademark applications and registrations
   # ---------------------------------------------------------------------------
-  - name: trademark_applications
-    pattern: "type=trademark_apps/year=*/*.parquet"
+  # TRADEMARKS — faithful per-file landing of USPTO TRCFECO2 (case_file/owner/classification/
+  # intl_class/statement). No ETL join: the trademark_applications VIEW (see views: below) joins
+  # them on serial_no. Each file is downloaded once per snapshot year and scoped to the serial_nos
+  # filed that year (via case_file.filing_dt). applicant_state (owner.own_addr_state_cd) is a
+  # 2-letter code, not FIPS — join to geo.states for FIPS.
+  - name: trademark_case_file
+    pattern: "type=trademark_case_file/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      One row per trademark application. USPTO trademark bulk dataset is a 13-table
-      relational dataset. This flat table requires ETL join of 5 files on serial_no:
-      case_file.csv (79 columns, core attributes), owner.csv (applicant identity),
-      classification.csv (US class codes), intl_class.csv (international class codes),
-      statement.csv (goods and services text). Files are cached locally with quarterly TTL
-      and filtered by application_year (parsed from filing_dt). applicant_state is a
-      2-letter code, not FIPS — join to geo.states for FIPS.
-
+      Faithful landing of USPTO TRCFECO2 case_file.csv — one row per trademark application
+      (serial_no), all 79 source columns verbatim. Year-partitioned by application filing year.
     dimensions:
       type:
-        - trademark_apps
+        - trademark_case_file
       year: *year_range
-
     columns:
       - name: serial_no
         type: string
-        comment: USPTO trademark serial number (primary key)
-      - name: registration_no
-        type: string
-        nullable: true
-        comment: Registration number; null if pending
-      - name: application_year
-        type: integer
         nullable: false
-        comment: Year parsed from filing_dt; partition key
+        comment: USPTO trademark serial number (primary key)
+      - {name: abandon_dt, type: string, nullable: true}
+      - {name: amend_reg_dt, type: string, nullable: true}
+      - {name: amend_lb_for_app_in, type: string, nullable: true}
+      - {name: amend_lb_for_reg_in, type: string, nullable: true}
+      - {name: amend_lb_itu_in, type: string, nullable: true}
+      - {name: amend_lb_use_in, type: string, nullable: true}
+      - {name: reg_cancel_cd, type: string, nullable: true}
+      - {name: reg_cancel_dt, type: string, nullable: true}
+      - {name: cancel_pend_in, type: string, nullable: true}
+      - {name: cert_mark_in, type: string, nullable: true}
+      - {name: chg_reg_in, type: string, nullable: true}
+      - {name: coll_memb_mark_in, type: string, nullable: true}
+      - {name: coll_serv_mark_in, type: string, nullable: true}
+      - {name: coll_trade_mark_in, type: string, nullable: true}
+      - {name: draw_color_cur_in, type: string, nullable: true}
+      - {name: draw_color_file_in, type: string, nullable: true}
+      - {name: concur_use_in, type: string, nullable: true}
+      - {name: concur_use_pend_in, type: string, nullable: true}
+      - {name: file_location, type: string, nullable: true}
+      - {name: draw_3d_cur_in, type: string, nullable: true}
+      - {name: draw_3d_file_in, type: string, nullable: true}
+      - {name: exm_attorney_name, type: string, nullable: true}
+      - {name: lb_use_file_in, type: string, nullable: true}
+      - {name: lb_for_app_cur_in, type: string, nullable: true}
+      - {name: lb_for_reg_cur_in, type: string, nullable: true}
+      - {name: lb_intl_reg_cur_in, type: string, nullable: true}
+      - {name: lb_for_app_file_in, type: string, nullable: true}
+      - {name: lb_for_reg_file_in, type: string, nullable: true}
+      - {name: lb_intl_reg_file_in, type: string, nullable: true}
+      - {name: lb_none_cur_in, type: string, nullable: true}
       - name: filing_dt
         type: string
         nullable: true
-        comment: Application filing date (YYYYMMDD)
-      - name: registration_dt
-        type: string
-        nullable: true
-        comment: Registration date; null if not registered
-      - name: abandon_dt
-        type: string
-        nullable: true
-        comment: Abandonment date; null for live marks
-      - name: mark_id_char
-        type: string
-        nullable: true
-        comment: Trademark text; null for design marks
+        comment: Application filing date (YYYYMMDD); source of the year partition
+      - {name: for_priority_in, type: string, nullable: true}
+      - {name: lb_itu_cur_in, type: string, nullable: true}
+      - {name: lb_itu_file_in, type: string, nullable: true}
+      - {name: interfer_pend_in, type: string, nullable: true}
+      - {name: exm_office_cd, type: string, nullable: true}
+      - {name: file_location_dt, type: string, nullable: true}
       - name: mark_draw_cd
         type: string
         nullable: true
         comment: Drawing code 1=typed 2=design 3=stylized 4=standard char 5=color
-      - name: cfh_status_cd
+      - name: mark_id_char
         type: string
         nullable: true
-        comment: Status code (live/dead/registered/abandoned/cancelled)
-      - name: cfh_status_dt
-        type: string
-        nullable: true
-        comment: Date of current status
-      - name: publication_dt
-        type: string
-        nullable: true
-        comment: Date published for opposition
-      - name: renewal_dt
-        type: string
-        nullable: true
-        comment: Most recent renewal date
+        comment: Trademark text; null for design marks
+      - {name: opposit_pend_in, type: string, nullable: true}
+      - {name: amend_principal_in, type: string, nullable: true}
+      - {name: concur_use_pub_in, type: string, nullable: true}
+      - {name: publication_dt, type: string, nullable: true}
+      - {name: registration_dt, type: string, nullable: true}
+      - {name: renewal_dt, type: string, nullable: true}
+      - {name: renewal_file_in, type: string, nullable: true}
+      - {name: repub_12c_dt, type: string, nullable: true}
+      - {name: repub_12c_in, type: string, nullable: true}
+      - {name: incontest_ack_in, type: string, nullable: true}
+      - {name: incontest_file_in, type: string, nullable: true}
+      - {name: acq_dist_in, type: string, nullable: true}
+      - {name: acq_dist_part_in, type: string, nullable: true}
+      - {name: use_afdv_acc_in, type: string, nullable: true}
+      - {name: use_afdv_file_in, type: string, nullable: true}
+      - {name: use_afdv_par_acc_in, type: string, nullable: true}
+      - {name: serv_mark_in, type: string, nullable: true}
       - name: std_char_claim_in
         type: string
         nullable: true
         comment: Standard character mark flag (T/F)
-      - name: applicant_name
+      - name: cfh_status_cd
         type: string
         nullable: true
-        comment: Owner/applicant name from owner.csv
-      - name: applicant_type
+        comment: Status code (live/dead/registered/abandoned/cancelled)
+      - {name: cfh_status_dt, type: string, nullable: true}
+      - {name: amend_supp_reg_in, type: string, nullable: true}
+      - {name: supp_reg_in, type: string, nullable: true}
+      - {name: trade_mark_in, type: string, nullable: true}
+      - {name: lb_use_cur_in, type: string, nullable: true}
+      - {name: lb_none_file_in, type: string, nullable: true}
+      - {name: ir_auto_reg_dt, type: string, nullable: true}
+      - {name: ir_first_refus_in, type: string, nullable: true}
+      - {name: ir_death_dt, type: string, nullable: true}
+      - {name: ir_publication_dt, type: string, nullable: true}
+      - {name: ir_registration_dt, type: string, nullable: true}
+      - {name: ir_registration_no, type: string, nullable: true}
+      - {name: ir_renewal_dt, type: string, nullable: true}
+      - {name: ir_status_cd, type: string, nullable: true}
+      - {name: ir_status_dt, type: string, nullable: true}
+      - {name: ir_priority_dt, type: string, nullable: true}
+      - {name: ir_priority_in, type: string, nullable: true}
+      - {name: related_other_in, type: string, nullable: true}
+      - name: registration_no
         type: string
         nullable: true
-        comment: Owner type code
-      - name: applicant_state
-        type: string
-        nullable: true
-        comment: 2-letter state code (not FIPS); join to geo.states for FIPS
-      - name: applicant_country
-        type: string
-        nullable: true
-        comment: 2-letter ISO country code
-      - name: goods_services_class
-        type: string
-        nullable: true
-        comment: International class(es) comma-separated (1-45)
-      - name: goods_services_description
-        type: string
-        nullable: true
-        comment: Description of goods/services (truncated to 2000 chars)
-
-    source:
+        comment: Registration number; null (or all-zeros) if pending
+      - {name: tad_file_id, type: string, nullable: true}
+      - name: year
+        type: integer
+        nullable: false
+        comment: Application filing year (Iceberg partition)
+    source: &trademark_source
       type: http
       url: "https://api.uspto.gov/api/v1/datasets/products/files/TRCFECO2/"
       method: GET
@@ -888,21 +914,186 @@ partitionedTables:
       response:
         format: JSON
       rawCache: *raw_cache_enabled
-
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkApplicationsTransformer"
-
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkCaseFileTransformer"
     materialize:
       format: iceberg
       output:
-        pattern: "type=trademark_apps/year=*/"
+        pattern: "type=trademark_case_file/year=*/"
       partition:
         columns: [type, year]
         valueSource:
           year: effective_year
       iceberg:
         <<: *patents_iceberg_common
-        tableName: trademark_applications
+        tableName: trademark_case_file
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: trademark_owner
+    pattern: "type=trademark_owner/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Faithful landing of USPTO TRCFECO2 owner.csv — applicant/owner identity, one row per
+      (serial_no, own_seq). own_addr_state_cd is a 2-letter code, not FIPS — join geo.states.
+    dimensions:
+      type:
+        - trademark_owner
+      year: *year_range
+    columns:
+      - {name: serial_no, type: string, nullable: false}
+      - {name: own_seq, type: string, nullable: true}
+      - {name: own_id, type: string, nullable: true}
+      - {name: own_name, type: string, nullable: true}
+      - {name: own_type_cd, type: string, nullable: true}
+      - {name: own_entity_cd, type: string, nullable: true}
+      - {name: own_entity_desc, type: string, nullable: true}
+      - {name: own_composed_of, type: string, nullable: true}
+      - {name: own_altn_name, type: string, nullable: true}
+      - {name: own_addr_1, type: string, nullable: true}
+      - {name: own_addr_2, type: string, nullable: true}
+      - {name: own_addr_city, type: string, nullable: true}
+      - {name: own_addr_state_cd, type: string, nullable: true}
+      - {name: own_addr_postal, type: string, nullable: true}
+      - {name: own_addr_country_cd, type: string, nullable: true}
+      - {name: own_addr_other_cd, type: string, nullable: true}
+      - {name: own_nalty_state_cd, type: string, nullable: true}
+      - {name: own_nalty_country_cd, type: string, nullable: true}
+      - {name: own_nalty_other_cd, type: string, nullable: true}
+      - name: year
+        type: integer
+        nullable: false
+        comment: Application filing year (Iceberg partition)
+    source: *trademark_source
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkOwnerTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trademark_owner/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: trademark_owner
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: trademark_classification
+    pattern: "type=trademark_classification/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Faithful landing of USPTO TRCFECO2 classification.csv — US class + first-use dates + status,
+      one row per (serial_no, class_id).
+    dimensions:
+      type:
+        - trademark_classification
+      year: *year_range
+    columns:
+      - {name: serial_no, type: string, nullable: false}
+      - {name: class_id, type: string, nullable: true}
+      - {name: class_primary_cd, type: string, nullable: true}
+      - {name: class_status_cd, type: string, nullable: true}
+      - {name: class_status_dt, type: string, nullable: true}
+      - {name: class_intl_count, type: string, nullable: true}
+      - {name: class_us_count, type: string, nullable: true}
+      - {name: first_use_any_dt, type: string, nullable: true}
+      - {name: first_use_any_dt_raw, type: string, nullable: true}
+      - {name: first_use_com_dt, type: string, nullable: true}
+      - {name: first_use_com_dt_raw, type: string, nullable: true}
+      - name: year
+        type: integer
+        nullable: false
+        comment: Application filing year (Iceberg partition)
+    source: *trademark_source
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkClassificationTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trademark_classification/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: trademark_classification
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: trademark_intl_class
+    pattern: "type=trademark_intl_class/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Faithful landing of USPTO TRCFECO2 intl_class.csv — international (Nice) class codes,
+      one row per (serial_no, intl_class_cd).
+    dimensions:
+      type:
+        - trademark_intl_class
+      year: *year_range
+    columns:
+      - {name: serial_no, type: string, nullable: false}
+      - {name: intl_class_cd, type: string, nullable: true}
+      - {name: class_id, type: string, nullable: true}
+      - name: year
+        type: integer
+        nullable: false
+        comment: Application filing year (Iceberg partition)
+    source: *trademark_source
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkIntlClassTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trademark_intl_class/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: trademark_intl_class
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: trademark_statement
+    pattern: "type=trademark_statement/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Faithful landing of USPTO TRCFECO2 statement.csv — goods/services and other statement text,
+      one row per (serial_no, statement_type_cd).
+    dimensions:
+      type:
+        - trademark_statement
+      year: *year_range
+    columns:
+      - {name: serial_no, type: string, nullable: false}
+      - {name: statement_type_cd, type: string, nullable: true}
+      - name: statement_text
+        type: string
+        nullable: true
+        comment: Statement text (goods/services description is one statement type)
+      - name: year
+        type: integer
+        nullable: false
+        comment: Application filing year (Iceberg partition)
+    source: *trademark_source
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.TrademarkStatementTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=trademark_statement/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *patents_iceberg_common
+        tableName: trademark_statement
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -995,16 +1186,88 @@ constraints:
         targetTable: patent_grants
         targetColumns: [patent_id]
         comment: Links summary row to parent patent grant
-  trademark_applications:
+  trademark_case_file:
     primaryKey: [serial_no]
+  trademark_owner:
+    primaryKey: [serial_no, own_seq]
     foreignKeys:
-      - columns: [applicant_state]
+      - columns: [serial_no]
+        targetTable: trademark_case_file
+        targetColumns: [serial_no]
+        comment: Owner rows belong to a case_file application
+      - columns: [own_addr_state_cd]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: states
         targetColumns: [state_abbr]
-        comment: Links applicant state (2-letter code, not FIPS) to geographic state
-      - columns: [applicant_country]
+        comment: Owner state (2-letter code, not FIPS) to geographic state
+      - columns: [own_addr_country_cd]
         targetSchema: "${REF_SCHEMA_NAME:ref}"
         targetTable: countries
         targetColumns: [iso_alpha2]
-        comment: Links applicant country (2-letter ISO) to ref.countries
+        comment: Owner country (2-letter ISO) to ref.countries
+  trademark_classification:
+    primaryKey: [serial_no, class_id]
+    foreignKeys:
+      - columns: [serial_no]
+        targetTable: trademark_case_file
+        targetColumns: [serial_no]
+  trademark_intl_class:
+    primaryKey: [serial_no, intl_class_cd]
+    foreignKeys:
+      - columns: [serial_no]
+        targetTable: trademark_case_file
+        targetColumns: [serial_no]
+  trademark_statement:
+    primaryKey: [serial_no, statement_type_cd]
+    foreignKeys:
+      - columns: [serial_no]
+        targetTable: trademark_case_file
+        targetColumns: [serial_no]
+
+views:
+  # Application-level trademark view: one row per serial_no, reconstructed from the faithful source
+  # tables — replaces the former ETL join, preserving the previous flat columns. The primary owner
+  # (lowest own_seq) supplies applicant_*; applicant_state is a 2-letter code (not FIPS) → geo.states.
+  - name: trademark_applications
+    comment: >
+      One row per trademark application (serial_no), joined from trademark_case_file + owner +
+      intl_class + statement. Replaces the old ETL-joined table. applicant_state is a 2-letter
+      code (not FIPS) — join geo.states.
+    sql: >
+      SELECT
+        cf.serial_no,
+        cf.registration_no,
+        cf.year AS application_year,
+        cf.filing_dt,
+        cf.registration_dt,
+        cf.abandon_dt,
+        cf.mark_id_char,
+        cf.mark_draw_cd,
+        cf.cfh_status_cd,
+        cf.cfh_status_dt,
+        cf.publication_dt,
+        cf.renewal_dt,
+        cf.std_char_claim_in,
+        o.applicant_name,
+        o.applicant_type,
+        o.applicant_state,
+        o.applicant_country,
+        ic.goods_services_class,
+        st.goods_services_description
+      FROM trademark_case_file cf
+      LEFT JOIN (
+        SELECT serial_no,
+          arg_min(own_name, TRY_CAST(own_seq AS INTEGER)) AS applicant_name,
+          arg_min(own_type_cd, TRY_CAST(own_seq AS INTEGER)) AS applicant_type,
+          arg_min(own_addr_state_cd, TRY_CAST(own_seq AS INTEGER)) AS applicant_state,
+          arg_min(own_addr_country_cd, TRY_CAST(own_seq AS INTEGER)) AS applicant_country
+        FROM trademark_owner GROUP BY serial_no
+      ) o ON o.serial_no = cf.serial_no
+      LEFT JOIN (
+        SELECT serial_no, string_agg(intl_class_cd, ',') AS goods_services_class
+        FROM trademark_intl_class GROUP BY serial_no
+      ) ic ON ic.serial_no = cf.serial_no
+      LEFT JOIN (
+        SELECT serial_no, arg_max(statement_text, length(statement_text)) AS goods_services_description
+        FROM trademark_statement GROUP BY serial_no
+      ) st ON st.serial_no = cf.serial_no
