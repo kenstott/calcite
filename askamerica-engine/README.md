@@ -57,6 +57,7 @@ jdbc:askamerica:source=fec,crime,weather
 | `lands` | USDA/NPS/BLM public lands boundaries, forest inventory, mineral royalties |
 | `patents` | USPTO patent grants, inventors, assignees, trademarks |
 | `disasters` | FEMA disaster declarations, NFIP claims/policies, NOAA storm events, WFIGS wildfire perimeters |
+| `housing` | FHFA house price indexes, Census new-residential building permits, HUD Fair Market Rents and income limits |
 | `cftc` | CFTC swaps and derivatives data |
 | `ag` | USDA agriculture (NASS/RMA/FSA) |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
@@ -147,3 +148,4 @@ Some schemas require API keys for higher rate limits:
 | `CENSUS_API_KEY` | `census` | Census API key |
 | `EIA_API_KEY` | `energy` | EIA API key |
 | `NVD_API_KEY` | `cyber_vuln` | NVD higher rate limit |
+| `HUD_TOKEN` | `housing` | HUD USER API (Fair Market Rents, income limits) |
