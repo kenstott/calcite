@@ -289,6 +289,7 @@ for arg in "$@"; do
         patents:daily lands:daily cftc:daily
         ag:daily
         disasters:daily
+        housing:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
