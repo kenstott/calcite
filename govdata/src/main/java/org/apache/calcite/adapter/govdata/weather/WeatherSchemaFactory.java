@@ -24,19 +24,19 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Sub-schema factory for U.S. weather, climate, and air quality data.
+ * Sub-schema factory for U.S. weather and climate data.
  *
  * <p>Data sources and their authentication requirements:
  * <ul>
  *   <li>NWS (weather.gov) — no auth: nws_stations, nws_alerts</li>
  *   <li>NOAA CDO v2 — requires NOAA_CDO_TOKEN: cdo_stations,
  *       cdo_monthly_summaries, cdo_annual_summaries</li>
- *   <li>EPA AQS — requires EPA_AQS_EMAIL + EPA_AQS_KEY: epa_annual_aqi</li>
  * </ul>
  *
  * <p>Tables are conditionally enabled based on environment variables.
- * NWS tables are always available. CDO and EPA tables are disabled when
- * their respective tokens are missing.
+ * NWS tables are always available. CDO tables are disabled when
+ * NOAA_CDO_TOKEN is missing. (EPA AQS air-quality tables moved to the
+ * environment schema.)
  */
 public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(WeatherSchemaFactory.class);
@@ -54,12 +54,6 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
           "cdo_monthly_summaries",
           "cdo_annual_summaries",
           "climate_normals_monthly"));
-
-  // EPA AQS tables (require EPA_AQS_EMAIL + EPA_AQS_KEY)
-  private static final Set<String> EPA_TABLES =
-      new HashSet<>(Arrays.asList(
-          "epa_annual_aqi",
-          "epa_daily_aqi"));
 
   // GHCND tables (no auth required — station inventory + bulk daily files)
   private static final Set<String> GHCND_STATION_TABLES =
@@ -92,8 +86,8 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
     Set<String> enabledSources = parseEnabledSources(operand);
 
     // Tables are gated only by enabledSources — credentials are NOT read here to disable a table.
-    // CDO/EPA tables require NOAA_CDO_TOKEN / EPA_AQS_EMAIL+KEY (carried in their source config); a
-    // missing required credential fails hard at fetch, never silently disables the table.
+    // CDO tables require NOAA_CDO_TOKEN (carried in their source config); a missing required
+    // credential fails hard at fetch, never silently disables the table.
     for (String tableName : NWS_TABLES) {
       builder.isEnabled(tableName, ctx ->
           isTableEnabled(tableName, "nws", enabledSources));
@@ -101,10 +95,6 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
     for (String tableName : CDO_TABLES) {
       builder.isEnabled(tableName, ctx ->
           isTableEnabled(tableName, "cdo", enabledSources));
-    }
-    for (String tableName : EPA_TABLES) {
-      builder.isEnabled(tableName, ctx ->
-          isTableEnabled(tableName, "epa", enabledSources));
     }
 
     // GHCND station inventory: always enabled (no auth required)
@@ -126,9 +116,8 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
     }
 
     LOGGER.debug("Configured hooks for WEATHER schema: {} NWS, {} CDO, "
-            + "{} EPA, {} GHCND, {} drought, {} HMS",
+            + "{} GHCND, {} drought, {} HMS",
         NWS_TABLES.size(), CDO_TABLES.size(),
-        EPA_TABLES.size(),
         GHCND_STATION_TABLES.size(), DROUGHT_TABLES.size(), HMS_TABLES.size());
   }
 

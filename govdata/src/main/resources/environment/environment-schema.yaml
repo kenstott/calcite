@@ -1,0 +1,1843 @@
+# ============================================================================
+# U.S. Environment Schema (ENVIRONMENT)
+# ============================================================================
+# Data Sources (all keyless; verified live 2026-07-13):
+#   - EPA AQS AirData      — air quality by monitor (moved here from weather)
+#   - EPA TRI              — Toxics Release Inventory (per-year bulk CSV)
+#   - EPA GHGRP            — greenhouse-gas facility emissions (Envirofacts)
+#   - USGS NWIS            — surface-water sites + daily streamflow (RDB)
+#   - EPA SDWIS            — public drinking-water systems (Envirofacts)
+#   - EPA ECHO / FRS       — facility registry + compliance (ECHO Exporter)
+#
+# Design principles (see govdata-schema-authoring):
+#   - One ETL table = one raw source. No multi-source transformers.
+#   - EPA Envirofacts efservice returns the FULL filtered result set as CSV
+#     without pagination (verified), so GHGRP/SDWIS/TRI are plain CSV sources
+#     mapped via `expression: 'src."col"'` — no Java.
+#   - AQS annual/daily reuse the row transformers moved from the weather schema
+#     (EpaAirData{Annual,Daily}Transformer, now in the environment package).
+#   - USGS NWIS RDB is tab-delimited with comment + types rows and per-site
+#     header blocks; two ResponseTransformers normalize it.
+#   - Cross-schema joins to geo (states/counties), sec (filings by company),
+#     econ, disasters, and weather (air quality vs. meteorology).
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:environment}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. environmental data spanning air quality (EPA AQS monitored concentrations
+  and AQI), toxics and greenhouse-gas emissions (EPA TRI and GHGRP by facility),
+  surface water (USGS streamflow and monitoring sites), public drinking-water
+  systems (EPA SDWIS), and the EPA facility registry with compliance and
+  enforcement history (ECHO/FRS). Each row is a place-and-period observation or a
+  facility record joinable to geo (states/counties), sec (regulated companies),
+  econ, and weather. Together they describe environmental quality, pollution
+  sources, and regulatory status across the United States.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: false
+    comment: "2-digit state FIPS code (e.g. '06' for California)"
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: "5-digit county FIPS code (FK to geo.counties)"
+
+  year_column: &year_column
+    name: year
+    type: integer
+    nullable: false
+    comment: Calendar year
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_state: &partition_state
+    name: state
+    type: VARCHAR
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  state_partitions: &state_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_state
+
+  state_year_partitions: &state_year_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_state
+      - *partition_year
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # EPA AQS AirData bulk files publish the prior year mid-year; dataLag 1 fetches
+  # the newest complete data year (effective_year = year - 1).
+  aqs_year_range: &aqs_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 1
+
+  # EPA TRI publishes CY through 2024 (verified); GHGRP through ~2023. dataLag 2
+  # targets the newest generally-available data year and never mislabels.
+  epa_year_range: &epa_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 2010
+    end: current
+    dataLag: 2
+    descending: true
+
+  # USGS daily values are near-real-time; dataLag 0 re-fetches the (partial)
+  # current year each run and overwrites the partition.
+  usgs_year_range: &usgs_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    end: current
+    dataLag: 0
+    descending: true
+
+  # EPA AQS pollutant parameter codes (daily files are one per pollutant-year).
+  aqi_pollutants: &aqi_pollutants
+    - '88101'  # PM2.5 - Local Conditions
+    - '44201'  # Ozone
+    - '42401'  # SO2
+    - '42602'  # NO2
+    - '42101'  # CO
+
+  # 50 states + DC + PR (2-letter codes; USGS stateCd and EPA state_code both
+  # accept these). Territories with no matching data yield empty partitions.
+  all_states: &all_states
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR"]
+
+  # 2-digit state FIPS codes — the Water Quality Portal filters by statecode=US:NN
+  # (FIPS), not the USPS abbreviation used by the EPA/USGS sources above.
+  all_state_fips: &all_state_fips
+    type: list
+    values: ["01","02","04","05","06","08","09","10","11","12","13","15","16",
+             "17","18","19","20","21","22","23","24","25","26","27","28","29",
+             "30","31","32","33","34","35","36","37","38","39","40","41","42",
+             "44","45","46","47","48","49","50","51","53","54","55","56","72"]
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # EPA AQS ANNUAL — annual_conc_by_monitor zip (delta by year, row transformer)
+  # ---------------------------------------------------------------------------
+  - name: air_quality_annual
+    pattern: "type=air_quality_annual/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA AirData annual-summary air quality by monitor and pollutant (annual
+      mean, peak values, observation/valid-day counts) for PM2.5, Ozone, SO2,
+      NO2, and CO. Keyless national bulk file annual_conc_by_monitor_<year>.zip.
+      Moved here from the weather schema (air quality is a distinct domain).
+      Joins geo.states via state_fips and geo.counties via county_fips.
+    dqRowLimit: 25000
+
+    dimensions:
+      type:
+        - air_quality_annual
+      year: *aqs_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: parameter_code
+        type: string
+        nullable: true
+        comment: "Pollutant code (88101, 44201, etc.)"
+      - name: parameter_name
+        type: string
+        nullable: true
+        comment: "Pollutant name (e.g. 'PM2.5 - Local Conditions')"
+      - <<: *year_column
+      - name: arithmetic_mean
+        type: double
+        nullable: true
+        comment: Annual mean concentration
+      - name: first_max_value
+        type: double
+        nullable: true
+        comment: Highest recorded value
+      - name: observation_count
+        type: integer
+        nullable: true
+        comment: Number of observations
+      - name: valid_day_count
+        type: integer
+        nullable: true
+        comment: Days with valid data
+      - name: aqi
+        type: integer
+        nullable: true
+        comment: Air Quality Index
+
+    source:
+      type: http
+      url: "https://aqs.epa.gov/aqsweb/airdata/annual_conc_by_monitor_{effective_year}.zip"
+      method: GET
+      extractPattern: "*.csv"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.environment.EpaAirDataAnnualTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=air_quality_annual/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: air_quality_annual
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA AQS DAILY — daily_<param>_<year> zip (delta by year × pollutant)
+  # ---------------------------------------------------------------------------
+  - name: air_quality_daily
+    pattern: "type=air_quality_daily/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA AirData daily-summary air quality by monitoring site. One row per site
+      per day per pollutant standard (mean, peak, AQI where applicable). Keyless
+      national bulk files daily_<param>_<year>.zip, one per pollutant-year.
+      Moved here from the weather schema. Joins geo.states/geo.counties.
+    dqRowLimit: 5000
+
+    dimensions:
+      type:
+        - air_quality_daily
+      year: *aqs_year_range
+      param: *aqi_pollutants
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: site_number
+        type: string
+        nullable: true
+        comment: "Monitoring site number"
+      - name: parameter_code
+        type: string
+        nullable: true
+        comment: "Pollutant code (88101, 44201, etc.)"
+      - name: parameter_name
+        type: string
+        nullable: true
+        comment: "Pollutant name"
+      - <<: *year_column
+      - name: date
+        type: string
+        nullable: false
+        comment: "Sample date (YYYY-MM-DD)"
+      - name: sample_duration
+        type: string
+        nullable: true
+        comment: "Sample duration (e.g. '24-HR BLK AVG', '1 HOUR')"
+      - name: pollutant_standard
+        type: string
+        nullable: true
+        comment: "Pollutant standard used for AQI calculation"
+      - name: arithmetic_mean
+        type: double
+        nullable: true
+        comment: "Daily mean concentration"
+      - name: first_max_value
+        type: double
+        nullable: true
+        comment: "Highest recorded value for the day"
+      - name: aqi
+        type: integer
+        nullable: true
+        comment: "Air Quality Index (null for non-daily-standard measurements)"
+      - name: observation_count
+        type: integer
+        nullable: true
+        comment: "Number of observations"
+      - name: latitude
+        type: double
+        nullable: true
+        comment: "Site latitude"
+      - name: longitude
+        type: double
+        nullable: true
+        comment: "Site longitude"
+
+    source:
+      type: http
+      url: "https://aqs.epa.gov/aqsweb/airdata/daily_{param}_{effective_year}.zip"
+      method: GET
+      extractPattern: "*.csv"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.environment.EpaAirDataDailyTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=air_quality_daily/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: air_quality_daily
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA AQS MONITORS — aqs_monitors.zip reference file (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: aqs_monitors
+    pattern: "type=aqs_monitors/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      EPA AQS monitor metadata — one row per (site, parameter, POC) with
+      location, monitor type, networks, and operating span. Keyless reference
+      file aqs_monitors.zip. Snapshot; joins air_quality_daily by site and geo
+      by county_fips.
+
+    dimensions:
+      type:
+        - aqs_monitors
+
+    columns:
+      - <<: *state_fips_column
+        nullable: true
+      - <<: *county_fips_column
+      - name: site_number
+        type: string
+        nullable: true
+        expression: 'src."Site Number"'
+        comment: Monitoring site number
+      - name: parameter_code
+        type: string
+        nullable: true
+        expression: 'src."Parameter Code"'
+        comment: Pollutant/parameter code
+      - name: parameter_name
+        type: string
+        nullable: true
+        expression: 'src."Parameter Name"'
+        comment: Parameter name
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Latitude" AS DOUBLE)'
+        comment: Monitor latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Longitude" AS DOUBLE)'
+        comment: Monitor longitude
+      - name: monitor_type
+        type: string
+        nullable: true
+        expression: 'src."Monitor Type"'
+        comment: Monitor type (e.g. SLAMS, SPM)
+      - name: networks
+        type: string
+        nullable: true
+        expression: 'src."Networks"'
+        comment: Monitoring networks
+      - name: first_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."First Year of Data" AS INTEGER)'
+        comment: First year of data
+      - name: last_sample_date
+        type: string
+        nullable: true
+        expression: 'src."Last Sample Date"'
+        comment: Last sample date
+      - name: local_site_name
+        type: string
+        nullable: true
+        expression: 'src."Local Site Name"'
+        comment: Local site name
+      - name: city_name
+        type: string
+        nullable: true
+        expression: 'src."City Name"'
+        comment: City name
+      - name: cbsa_name
+        type: string
+        nullable: true
+        expression: 'src."CBSA Name"'
+        comment: Core-Based Statistical Area name
+
+    source:
+      type: http
+      url: "https://aqs.epa.gov/aqsweb/airdata/aqs_monitors.zip"
+      method: GET
+      extractPattern: "*.csv"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=aqs_monitors/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: aqs_monitors
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA TRI — per-year Basic Data File CSV (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: tri_releases
+    pattern: "type=tri_releases/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA Toxics Release Inventory — one row per facility × chemical × reporting
+      form for the year, with on-site/off-site release and transfer amounts.
+      Per-year national bulk CSV (efservice mv_tri_basic_download). Delta by
+      year. Joins geo via state (abbr) + county name; frs_id links epa_facilities.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - tri_releases
+      year: *epa_year_range
+
+    columns:
+      - name: tri_facility_id
+        type: string
+        nullable: true
+        expression: 'src."2. TRIFD"'
+        comment: TRI facility id
+      - name: frs_id
+        type: string
+        nullable: true
+        expression: 'src."3. FRS ID"'
+        comment: FRS registry id (FK to epa_facilities.registry_id)
+      - name: facility_name
+        type: string
+        nullable: true
+        expression: 'src."4. FACILITY NAME"'
+        comment: Facility name
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."6. CITY"'
+        comment: City
+      - name: county
+        type: string
+        nullable: true
+        expression: 'src."7. COUNTY"'
+        comment: County name
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."8. ST"'
+        comment: State (USPS abbr)
+      - name: zip
+        type: string
+        nullable: true
+        expression: 'src."9. ZIP"'
+        comment: ZIP code
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."12. LATITUDE" AS DOUBLE)'
+        comment: Facility latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."13. LONGITUDE" AS DOUBLE)'
+        comment: Facility longitude
+      - name: primary_naics
+        type: string
+        nullable: true
+        expression: 'src."30. PRIMARY NAICS"'
+        comment: Primary NAICS code
+      - name: chemical
+        type: string
+        nullable: true
+        expression: 'src."37. CHEMICAL"'
+        comment: Chemical name
+      - name: cas_number
+        type: string
+        nullable: true
+        expression: 'src."40. CAS#"'
+        comment: CAS registry number
+      - name: unit_of_measure
+        type: string
+        nullable: true
+        expression: 'src."50. UNIT OF MEASURE"'
+        comment: Unit of measure for release amounts
+      - name: fugitive_air
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."51. 5.1 - FUGITIVE AIR" AS DOUBLE)'
+        comment: Fugitive air release
+      - name: stack_air
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."52. 5.2 - STACK AIR" AS DOUBLE)'
+        comment: Stack air release
+      - name: water_release
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."53. 5.3 - WATER" AS DOUBLE)'
+        comment: Surface-water discharge
+      - name: on_site_release_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."65. ON-SITE RELEASE TOTAL" AS DOUBLE)'
+        comment: Total on-site releases
+      - name: off_site_release_total
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."88. OFF-SITE RELEASE TOTAL" AS DOUBLE)'
+        comment: Total off-site releases
+      - name: total_releases
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."107. TOTAL RELEASES" AS DOUBLE)'
+        comment: Total releases (on-site + off-site)
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/downloads/tri/mv_tri_basic_download/{effective_year}_US/csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=tri_releases/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: tri_releases
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA GHGRP FACILITIES — Envirofacts pub_dim_facility (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: ghg_facilities
+    pattern: "type=ghg_facilities/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA GHGRP facility dimension — one row per reporting facility per year with
+      location, NAICS, parent company, and reported industry types. Envirofacts
+      efservice full-year CSV. Delta by year. Join ghg_emissions on
+      (facility_id, year); frs_id links epa_facilities.
+
+    dimensions:
+      type:
+        - ghg_facilities
+      year: *epa_year_range
+
+    columns:
+      - name: facility_id
+        type: string
+        nullable: false
+        expression: 'src."facility_id"'
+        comment: GHGRP facility id
+      - name: facility_name
+        type: string
+        nullable: true
+        expression: 'src."facility_name"'
+        comment: Facility name
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."latitude" AS DOUBLE)'
+        comment: Facility latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."longitude" AS DOUBLE)'
+        comment: Facility longitude
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."city"'
+        comment: City
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."state"'
+        comment: State (USPS abbr)
+      - <<: *county_fips_column
+        expression: 'src."county_fips"'
+      - name: county
+        type: string
+        nullable: true
+        expression: 'src."county"'
+        comment: County name
+      - name: zip
+        type: string
+        nullable: true
+        expression: 'src."zip"'
+        comment: ZIP code
+      - name: naics_code
+        type: string
+        nullable: true
+        expression: 'src."naics_code"'
+        comment: NAICS code
+      - name: frs_id
+        type: string
+        nullable: true
+        expression: 'src."frs_id"'
+        comment: FRS registry id (FK to epa_facilities.registry_id)
+      - name: parent_company
+        type: string
+        nullable: true
+        expression: 'src."parent_company"'
+        comment: Parent company
+      - name: reported_industry_types
+        type: string
+        nullable: true
+        expression: 'src."reported_industry_types"'
+        comment: Reported industry types
+      - name: facility_types
+        type: string
+        nullable: true
+        expression: 'src."facility_types"'
+        comment: Facility types (e.g. 'Direct Emitter')
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/pub_dim_facility/year/{effective_year}/CSV"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ghg_facilities/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: ghg_facilities
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA GHGRP EMISSIONS — Envirofacts pub_facts_sector_ghg_emission (delta/year)
+  # ---------------------------------------------------------------------------
+  - name: ghg_emissions
+    pattern: "type=ghg_emissions/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA GHGRP emissions facts — CO2-equivalent emissions keyed by facility ×
+      year × sector × subsector × gas. Envirofacts efservice full-year CSV.
+      Delta by year. Per-facility annual total = SUM(co2e_emission) over the
+      facility-year; join ghg_facilities on (facility_id, year) for geography.
+
+    dimensions:
+      type:
+        - ghg_emissions
+      year: *epa_year_range
+
+    columns:
+      - name: facility_id
+        type: string
+        nullable: false
+        expression: 'src."facility_id"'
+        comment: GHGRP facility id (FK to ghg_facilities.facility_id)
+      - name: sector_id
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."sector_id" AS INTEGER)'
+        comment: GHGRP sector id
+      - name: subsector_id
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."subsector_id" AS INTEGER)'
+        comment: GHGRP subsector id
+      - name: gas_id
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."gas_id" AS INTEGER)'
+        comment: Gas id (1=CO2, 2=CH4, 3=N2O, ...)
+      - name: co2e_emission
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."co2e_emission" AS DOUBLE)'
+        comment: Emissions in metric tons CO2-equivalent
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/pub_facts_sector_ghg_emission/year/{effective_year}/CSV"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ghg_emissions/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: ghg_emissions
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # USGS WATER SITES — NWIS site RDB (per-state snapshot, transformer)
+  # ---------------------------------------------------------------------------
+  - name: water_sites
+    pattern: "type=water_sites/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      USGS NWIS surface-water monitoring sites — one row per active stream site
+      with location, HUC, and drainage area. Fetched per state from the NWIS
+      site service (RDB, expanded output). Snapshot. site_no joins streamflow;
+      state_fips/county_fips join geo.
+
+    dimensions:
+      type:
+        - water_sites
+      state: *all_states
+
+    columns:
+      - name: site_no
+        type: string
+        nullable: false
+        comment: USGS site number (PK)
+      - name: agency_cd
+        type: string
+        nullable: true
+        comment: Reporting agency code
+      - name: station_name
+        type: string
+        nullable: true
+        comment: Station name
+      - name: site_type
+        type: string
+        nullable: true
+        comment: Site type code (ST = stream)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Decimal latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Decimal longitude
+      - <<: *state_fips_column
+        nullable: true
+      - <<: *county_fips_column
+      - name: huc_code
+        type: string
+        nullable: true
+        comment: Hydrologic unit code
+      - name: drainage_area_sqmi
+        type: double
+        nullable: true
+        comment: Drainage area (square miles)
+
+    source:
+      type: http
+      url: "https://waterservices.usgs.gov/nwis/site/?format=rdb&stateCd={state}&siteType=ST&siteStatus=active&siteOutput=expanded"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.UsgsSiteRdbTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=water_sites/state=*/"
+      partition:
+        columns: [type, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: water_sites
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # USGS STREAMFLOW — NWIS daily values RDB (delta by state × year, transformer)
+  # ---------------------------------------------------------------------------
+  - name: streamflow
+    pattern: "type=streamflow/state=*/year=*/*.parquet"
+    partitions: *state_year_partitions
+    comment: >
+      USGS NWIS daily streamflow — one row per (site, date) with discharge (cfs)
+      and gage height (ft). Fetched per (state, year) from the NWIS daily-values
+      service (RDB; concatenated per-site blocks with dynamically-named value
+      columns, normalized by the transformer). Delta by year; current year is
+      re-fetched. site_no joins water_sites.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - streamflow
+      state: *all_states
+      year: *usgs_year_range
+
+    columns:
+      - name: site_no
+        type: string
+        nullable: false
+        comment: USGS site number (FK to water_sites.site_no)
+      - name: obs_date
+        type: date
+        nullable: false
+        comment: Observation date
+      - name: discharge_cfs
+        type: double
+        nullable: true
+        comment: Daily mean discharge (cubic feet per second)
+      - name: discharge_qual
+        type: string
+        nullable: true
+        comment: Discharge qualifier (A=approved, P=provisional, e=estimated)
+      - name: gage_height_ft
+        type: double
+        nullable: true
+        comment: Daily mean gage height (feet)
+      - name: gage_height_qual
+        type: string
+        nullable: true
+        comment: Gage-height qualifier
+
+    source:
+      type: http
+      url: "https://waterservices.usgs.gov/nwis/dv/?format=rdb&stateCd={state}&parameterCd=00060,00065&startDT={effective_year}-01-01&endDT={effective_year}-12-31"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.UsgsStreamflowRdbTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=streamflow/state=*/year=*/"
+      partition:
+        columns: [type, state, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: streamflow
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA SDWIS — public water systems, Envirofacts water_system (per-state snap)
+  # ---------------------------------------------------------------------------
+  - name: drinking_water
+    pattern: "type=drinking_water/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      EPA SDWIS public water systems — one row per active public water system
+      (PWS) with type, population served, ownership, and source-water type.
+      Envirofacts efservice full-state CSV (active systems only). Snapshot.
+      pwsid joins drinking_water_violations; state_code joins geo.states.
+
+    dimensions:
+      type:
+        - drinking_water
+      state: *all_states
+
+    columns:
+      - name: pwsid
+        type: string
+        nullable: false
+        expression: 'src."pwsid"'
+        comment: Public Water System id (PK)
+      - name: pws_name
+        type: string
+        nullable: true
+        expression: 'src."pws_name"'
+        comment: Public water system name
+      - name: pws_type_code
+        type: string
+        nullable: true
+        expression: 'src."pws_type_code"'
+        comment: PWS type (CWS, NTNCWS, TNCWS)
+      - name: primacy_agency_code
+        type: string
+        nullable: true
+        expression: 'src."primacy_agency_code"'
+        comment: Primacy agency code
+      - name: epa_region
+        type: string
+        nullable: true
+        expression: 'src."epa_region"'
+        comment: EPA region
+      - name: population_served_count
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."population_served_count" AS BIGINT)'
+        comment: Population served
+      - name: service_connections_count
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."service_connections_count" AS BIGINT)'
+        comment: Service connections
+      - name: owner_type_code
+        type: string
+        nullable: true
+        expression: 'src."owner_type_code"'
+        comment: Owner type code
+      - name: gw_sw_code
+        type: string
+        nullable: true
+        expression: 'src."gw_sw_code"'
+        comment: Ground-water / surface-water code
+      - name: primary_source_code
+        type: string
+        nullable: true
+        expression: 'src."primary_source_code"'
+        comment: Primary source-water type
+      - name: city_name
+        type: string
+        nullable: true
+        expression: 'src."city_name"'
+        comment: City
+      - name: zip_code
+        type: string
+        nullable: true
+        expression: 'src."zip_code"'
+        comment: ZIP code
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."state_code"'
+        comment: State (USPS abbr)
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/water_system/state_code/{state}/pws_activity_code/A/CSV"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=drinking_water/state=*/"
+      partition:
+        columns: [type, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: drinking_water
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA ECHO — facility registry + compliance, ECHO Exporter (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: epa_facilities
+    pattern: "type=epa_facilities/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      EPA ECHO Exporter — one row per regulated facility (~1.5M) with registry
+      identity, location, and a rolled-up compliance/enforcement summary
+      (inspections, violations, penalties, per-statute compliance status). Keyless
+      weekly-snapshot bulk zip. registry_id links TRI/GHGRP frs_id; the
+      facility_compliance view projects the compliance subset.
+    dqRowLimit: 100000
+
+    dimensions:
+      type:
+        - epa_facilities
+
+    columns:
+      - name: registry_id
+        type: string
+        nullable: false
+        expression: 'src."REGISTRY_ID"'
+        comment: FRS registry id (PK)
+      - name: facility_name
+        type: string
+        nullable: true
+        expression: 'src."FAC_NAME"'
+        comment: Facility name
+      - name: street
+        type: string
+        nullable: true
+        expression: 'src."FAC_STREET"'
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."FAC_CITY"'
+        comment: City
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."FAC_STATE"'
+        comment: State (USPS abbr)
+      - name: zip
+        type: string
+        nullable: true
+        expression: 'src."FAC_ZIP"'
+        comment: ZIP code
+      - <<: *county_fips_column
+        expression: 'src."FAC_DERIVED_STCTY_FIPS"'
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."FAC_LAT" AS DOUBLE)'
+        comment: Facility latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."FAC_LONG" AS DOUBLE)'
+        comment: Facility longitude
+      - name: naics_codes
+        type: string
+        nullable: true
+        expression: 'src."FAC_NAICS_CODES"'
+        comment: NAICS codes (space-separated)
+      - name: sic_codes
+        type: string
+        nullable: true
+        expression: 'src."FAC_SIC_CODES"'
+        comment: SIC codes (space-separated)
+      - name: compliance_status
+        type: string
+        nullable: true
+        expression: 'src."FAC_COMPLIANCE_STATUS"'
+        comment: Overall compliance status
+      - name: snc_flag
+        type: string
+        nullable: true
+        expression: 'src."FAC_SNC_FLG"'
+        comment: Significant non-compliance flag
+      - name: inspection_count
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."FAC_INSPECTION_COUNT" AS INTEGER)'
+        comment: Inspections/evaluations count
+      - name: date_last_inspection
+        type: string
+        nullable: true
+        expression: 'src."FAC_DATE_LAST_INSPECTION"'
+        comment: Date of last inspection
+      - name: formal_action_count
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."FAC_FORMAL_ACTION_COUNT" AS INTEGER)'
+        comment: Formal enforcement actions count
+      - name: total_penalties
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."FAC_TOTAL_PENALTIES" AS DOUBLE)'
+        comment: Total penalties (USD)
+      - name: caa_compliance_status
+        type: string
+        nullable: true
+        expression: 'src."CAA_COMPLIANCE_STATUS"'
+        comment: Clean Air Act compliance status
+      - name: cwa_compliance_status
+        type: string
+        nullable: true
+        expression: 'src."CWA_COMPLIANCE_STATUS"'
+        comment: Clean Water Act compliance status
+      - name: rcra_compliance_status
+        type: string
+        nullable: true
+        expression: 'src."RCRA_COMPLIANCE_STATUS"'
+        comment: RCRA compliance status
+      - name: sdwa_compliance_status
+        type: string
+        nullable: true
+        expression: 'src."SDWA_COMPLIANCE_STATUS"'
+        comment: Safe Drinking Water Act compliance status
+
+    source:
+      type: http
+      url: "https://echo.epa.gov/files/echodownloads/echo_exporter.zip"
+      method: GET
+      extractPattern: "*.csv"
+      # Weekly full snapshot; the zip carries a real Last-Modified/ETag.
+      freshness:
+        type: last_modified
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=epa_facilities/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: epa_facilities
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA SDWIS VIOLATIONS — Envirofacts violation (per-state snapshot)
+  # ---------------------------------------------------------------------------
+  - name: drinking_water_violations
+    pattern: "type=drinking_water_violations/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      EPA SDWIS drinking-water violations — one row per violation per public
+      water system (health-based & monitoring violations: contaminants, lead/
+      copper, treatment). Envirofacts efservice full-state CSV, filtered by
+      primacy_agency_code (the state column; the literal `state` column silently
+      no-ops). Snapshot. pwsid joins drinking_water.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - drinking_water_violations
+      state: *all_states
+
+    columns:
+      - name: pwsid
+        type: string
+        nullable: false
+        expression: 'src."pwsid"'
+        comment: Public Water System id (FK to drinking_water.pwsid)
+      - name: violation_id
+        type: string
+        nullable: false
+        expression: 'src."violation_id"'
+        comment: Violation id (PK component)
+      - name: violation_code
+        type: string
+        nullable: true
+        expression: 'src."violation_code"'
+        comment: Violation type code
+      - name: violation_category_code
+        type: string
+        nullable: true
+        expression: 'src."violation_category_code"'
+        comment: Violation category (MR=monitoring, MCL, TT, ...)
+      - name: is_health_based
+        type: string
+        nullable: true
+        expression: 'src."is_health_based_ind"'
+        comment: Health-based violation indicator (Y/N)
+      - name: contaminant_code
+        type: string
+        nullable: true
+        expression: 'src."contaminant_code"'
+        comment: Contaminant code
+      - name: compliance_status_code
+        type: string
+        nullable: true
+        expression: 'src."compliance_status_code"'
+        comment: Compliance/return-to-compliance status
+      - name: is_major_violation
+        type: string
+        nullable: true
+        expression: 'src."is_major_viol_ind"'
+        comment: Major violation indicator (Y/N)
+      - name: viol_measure
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."viol_measure" AS DOUBLE)'
+        comment: Violation measurement value
+      - name: unit_of_measure
+        type: string
+        nullable: true
+        expression: 'src."unit_of_measure"'
+        comment: Unit of measure
+      - name: compl_per_begin_date
+        type: string
+        nullable: true
+        expression: 'src."compl_per_begin_date"'
+        comment: Compliance period begin date
+      - name: compl_per_end_date
+        type: string
+        nullable: true
+        expression: 'src."compl_per_end_date"'
+        comment: Compliance period end date
+      - name: rule_code
+        type: string
+        nullable: true
+        expression: 'src."rule_code"'
+        comment: Regulatory rule code
+      - name: pws_type_code
+        type: string
+        nullable: true
+        expression: 'src."pws_type_code"'
+        comment: PWS type (CWS, NTNCWS, TNCWS)
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/violation/primacy_agency_code/{state}/CSV"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=drinking_water_violations/state=*/"
+      partition:
+        columns: [type, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: drinking_water_violations
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA SUPERFUND — Envirofacts envirofacts_site / SEMS (national snapshot)
+  # ---------------------------------------------------------------------------
+  - name: superfund_sites
+    pattern: "type=superfund_sites/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      EPA SEMS Superfund sites — one row per site with National Priorities List
+      status and location. Envirofacts efservice full table (national, ~55K).
+      Snapshot. npl_status_code 'F' = Final NPL. Joins geo via fips_code
+      (county) / state; lat/lon populated for NPL sites.
+
+    dimensions:
+      type:
+        - superfund_sites
+
+    columns:
+      - name: site_id
+        type: string
+        nullable: false
+        expression: 'src."site_id"'
+        comment: SEMS site id (PK)
+      - name: epa_id
+        type: string
+        nullable: true
+        expression: 'src."epa_id"'
+        comment: EPA site id (e.g. CTD000604546)
+      - name: site_name
+        type: string
+        nullable: true
+        expression: 'src."name"'
+        comment: Site name
+      - name: npl_status_code
+        type: string
+        nullable: true
+        expression: 'src."npl_status_code"'
+        comment: NPL status code (F=Final NPL, N=not on NPL)
+      - name: npl_status_name
+        type: string
+        nullable: true
+        expression: 'src."npl_status_name"'
+        comment: NPL status description
+      - name: street
+        type: string
+        nullable: true
+        expression: 'src."street_addr_txt"'
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."city_name"'
+        comment: City
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."fk_ref_state_code"'
+        comment: State (USPS abbr)
+      - name: county_name
+        type: string
+        nullable: true
+        expression: 'src."county_name"'
+        comment: County name
+      - <<: *county_fips_column
+        expression: 'src."fips_code"'
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."primary_latitude_decimal_val" AS DOUBLE)'
+        comment: Site latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."primary_longitude_decimal_val" AS DOUBLE)'
+        comment: Site longitude
+      - name: federal_facility
+        type: string
+        nullable: true
+        expression: 'src."federal_facility_ind"'
+        comment: Federal facility indicator
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/envirofacts_site/CSV"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=superfund_sites/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: superfund_sites
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA RCRA HANDLERS — Envirofacts rcr_hd_handler (per-state snapshot)
+  # ---------------------------------------------------------------------------
+  - name: rcra_facilities
+    pattern: "type=rcra_facilities/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      EPA RCRAInfo hazardous-waste handlers — one row per current handler
+      (generators, transporters, treatment/storage/disposal). Envirofacts
+      efservice full-state CSV filtered to current_record='Y' (the table is
+      multi-cycle history). Snapshot. Joins geo via location_state + county_code.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - rcra_facilities
+      state: *all_states
+
+    columns:
+      - name: handler_id
+        type: string
+        nullable: false
+        expression: 'src."handler_id"'
+        comment: EPA RCRA handler id (PK)
+      - name: handler_name
+        type: string
+        nullable: true
+        expression: 'src."handler_name"'
+        comment: Handler name
+      - name: location_city
+        type: string
+        nullable: true
+        expression: 'src."location_city"'
+        comment: City
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."location_state"'
+        comment: State (USPS abbr)
+      - name: location_zip
+        type: string
+        nullable: true
+        expression: 'src."location_zip"'
+        comment: ZIP code
+      - name: county_code
+        type: string
+        nullable: true
+        expression: 'src."county_code"'
+        comment: County code
+      - name: fed_waste_generator
+        type: string
+        nullable: true
+        expression: 'src."fed_waste_generator"'
+        comment: Federal hazardous-waste generator status (1/2/3/N)
+      - name: transporter
+        type: string
+        nullable: true
+        expression: 'src."transporter"'
+        comment: Transporter activity flag
+      - name: tsd_activity
+        type: string
+        nullable: true
+        expression: 'src."tsd_activity"'
+        comment: Treatment/storage/disposal activity flag
+      - name: recycler_activity
+        type: string
+        nullable: true
+        expression: 'src."recycler_activity"'
+        comment: Recycler activity flag
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."location_latitude" AS DOUBLE)'
+        comment: Handler latitude
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."location_longitude" AS DOUBLE)'
+        comment: Handler longitude
+
+    source:
+      type: http
+      url: "https://data.epa.gov/efservice/rcr_hd_handler/location_state/{state}/current_record/Y/CSV"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rcra_facilities/state=*/"
+      partition:
+        columns: [type, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: rcra_facilities
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # WATER QUALITY PORTAL — measured sample results (delta by state × year)
+  # ---------------------------------------------------------------------------
+  - name: water_quality_samples
+    pattern: "type=water_quality_samples/state=*/year=*/*.parquet"
+    partitions: *state_year_partitions
+    comment: >
+      USGS/EPA Water Quality Portal — measured water-quality sample results
+      (nitrate, metals, bacteria, pH, etc.) at monitoring locations. Fetched per
+      (state FIPS, year) from the Result service. Delta by year; large/slow, so
+      DQ samples via dqRowLimit. monitoring_location_id joins USGS/STORET sites.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - water_quality_samples
+      state: *all_state_fips
+      year: *usgs_year_range
+
+    columns:
+      - name: organization_id
+        type: string
+        nullable: true
+        expression: 'src."OrganizationIdentifier"'
+        comment: Reporting organization id
+      - name: monitoring_location_id
+        type: string
+        nullable: true
+        expression: 'src."MonitoringLocationIdentifier"'
+        comment: Monitoring location id
+      - name: activity_id
+        type: string
+        nullable: true
+        expression: 'src."ActivityIdentifier"'
+        comment: Sampling activity id
+      - name: activity_start_date
+        type: string
+        nullable: true
+        expression: 'src."ActivityStartDate"'
+        comment: Sample date (YYYY-MM-DD)
+      - name: activity_media
+        type: string
+        nullable: true
+        expression: 'src."ActivityMediaName"'
+        comment: Sample medium (Water, ...)
+      - name: characteristic_name
+        type: string
+        nullable: true
+        expression: 'src."CharacteristicName"'
+        comment: Measured characteristic (e.g. Nitrate, pH, Lead)
+      - name: sample_fraction
+        type: string
+        nullable: true
+        expression: 'src."ResultSampleFractionText"'
+        comment: Sample fraction (Total, Dissolved, ...)
+      - name: result_value
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ResultMeasureValue" AS DOUBLE)'
+        comment: Measured result value
+      - name: result_unit
+        type: string
+        nullable: true
+        expression: 'src."ResultMeasure/MeasureUnitCode"'
+        comment: Result unit of measure
+      - name: usgs_pcode
+        type: string
+        nullable: true
+        expression: 'src."USGSPCode"'
+        comment: USGS parameter code
+      - name: result_status
+        type: string
+        nullable: true
+        expression: 'src."ResultStatusIdentifier"'
+        comment: Result status (Accepted, Preliminary, ...)
+
+    source:
+      type: http
+      url: "https://www.waterqualitydata.us/data/Result/search?statecode=US:{state}&startDateLo=01-01-{effective_year}&startDateHi=12-31-{effective_year}&mimeType=csv&zip=no"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=water_quality_samples/state=*/year=*/"
+      partition:
+        columns: [type, state, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: water_quality_samples
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  air_quality_annual:
+    primaryKey: [county_fips, parameter_code, year]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  air_quality_daily:
+    primaryKey: [county_fips, site_number, parameter_code, date]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  aqs_monitors:
+    primaryKey: [state_fips, county_fips, site_number, parameter_code]
+
+  tri_releases:
+    primaryKey: [year, tri_facility_id, chemical]
+
+  ghg_facilities:
+    primaryKey: [year, facility_id]
+
+  ghg_emissions:
+    primaryKey: [year, facility_id, sector_id, subsector_id, gas_id]
+
+  water_sites:
+    primaryKey: [site_no]
+    foreignKeys:
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  streamflow:
+    primaryKey: [site_no, obs_date]
+
+  drinking_water:
+    primaryKey: [pwsid]
+
+  epa_facilities:
+    primaryKey: [registry_id]
+    foreignKeys:
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  drinking_water_violations:
+    primaryKey: [pwsid, violation_id]
+
+  superfund_sites:
+    primaryKey: [site_id]
+    foreignKeys:
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  rcra_facilities:
+    primaryKey: [handler_id]
+
+  water_quality_samples:
+    primaryKey: [monitoring_location_id, activity_id, characteristic_name]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: ghg_facility_annual
+    comment: >
+      Per-facility annual greenhouse-gas emissions (total metric tons CO2e) with
+      geography, joining the emissions facts to the facility dimension.
+    sql: >
+      SELECT
+        f.year,
+        f.facility_id,
+        f.facility_name,
+        f.state_abbr,
+        f.county_fips,
+        f.latitude,
+        f.longitude,
+        f.naics_code,
+        SUM(e.co2e_emission) AS total_co2e
+      FROM ghg_facilities f
+      JOIN ghg_emissions e
+        ON f.facility_id = e.facility_id AND f.year = e.year
+      GROUP BY f.year, f.facility_id, f.facility_name, f.state_abbr,
+               f.county_fips, f.latitude, f.longitude, f.naics_code
+
+  - name: facility_compliance
+    comment: >
+      Compliance/enforcement projection of epa_facilities — identity plus the
+      inspection, penalty, and per-statute compliance-status columns.
+    sql: >
+      SELECT
+        registry_id,
+        facility_name,
+        state_abbr,
+        county_fips,
+        compliance_status,
+        snc_flag,
+        inspection_count,
+        formal_action_count,
+        total_penalties,
+        caa_compliance_status,
+        cwa_compliance_status,
+        rcra_compliance_status,
+        sdwa_compliance_status
+      FROM epa_facilities
+
+  - name: air_quality_annual_by_county
+    comment: >
+      County-year average of the annual mean concentration and peak AQI by
+      pollutant — the headline air-quality rollup, joinable to geo.counties.
+    sql: >
+      SELECT
+        a.year,
+        a.state_fips,
+        a.county_fips,
+        a.parameter_name,
+        AVG(a.arithmetic_mean) AS avg_concentration,
+        MAX(a.aqi)             AS peak_aqi
+      FROM air_quality_annual a
+      GROUP BY a.year, a.state_fips, a.county_fips, a.parameter_name

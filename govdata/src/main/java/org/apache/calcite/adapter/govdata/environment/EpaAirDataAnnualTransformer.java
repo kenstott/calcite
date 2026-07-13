@@ -8,7 +8,7 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
-package org.apache.calcite.adapter.govdata.weather;
+package org.apache.calcite.adapter.govdata.environment;
 
 import org.apache.calcite.adapter.file.etl.RowContext;
 import org.apache.calcite.adapter.file.etl.RowTransformer;

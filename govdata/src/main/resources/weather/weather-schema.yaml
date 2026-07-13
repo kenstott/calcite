@@ -1,16 +1,18 @@
 # ============================================================================
-# U.S. Weather, Climate, and Air Quality Data Schema (WEATHER)
+# U.S. Weather and Climate Data Schema (WEATHER)
 # ============================================================================
 # Data Sources:
 #   - NWS (weather.gov) - Weather stations and severe weather alerts (no auth)
 #   - NOAA CDO v2 - Historical monthly/annual climate summaries (token auth)
-#   - EPA AQS - Historical air quality data by pollutant (email+key auth)
+#   - NOAA GHCND / drought monitor / HMS smoke - daily observations (no auth)
+#
+# NOTE: EPA AQS air-quality tables were moved to the `environment` schema
+# (see environment-schema.yaml) — air quality is a distinct domain from weather.
 #
 # Features:
 #   - Cross-references with geo.states via state_abbr and state_fips
-#   - Cross-references with geo.counties via county_fips (EPA)
-#   - Token-gated table enablement (CDO requires NOAA_CDO_TOKEN,
-#     EPA requires EPA_AQS_EMAIL + EPA_AQS_KEY)
+#   - Cross-references with geo.counties via county_fips
+#   - Token-gated table enablement (CDO requires NOAA_CDO_TOKEN)
 #   - Hive-style partitioning for efficient querying
 # ============================================================================
 
@@ -19,14 +21,14 @@ dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
-  U.S. weather, climate, and air quality data from NWS (weather.gov), NOAA Climate
-  Data Online (CDO v2), and EPA Air Quality System (AQS). NWS tables provide weather
-  station metadata and active severe weather alerts by state (no auth required). CDO
+  U.S. weather and climate data from NWS (weather.gov), NOAA Climate Data Online
+  (CDO v2), and NOAA bulk observation feeds. NWS tables provide weather station
+  metadata and active severe weather alerts by state (no auth required). CDO
   tables provide historical monthly and annual climate summaries (GSOM/GSOY) with
-  temperature, precipitation, and snowfall metrics (requires NOAA_CDO_TOKEN). EPA table
-  provides annual air quality index data for PM2.5, Ozone, SO2, NO2, and CO by county
-  (requires EPA_AQS_EMAIL + EPA_AQS_KEY). All state-level tables join with geo.states
-  via state_abbr or state_fips; EPA data joins with geo.counties via county_fips.
+  temperature, precipitation, and snowfall metrics (requires NOAA_CDO_TOKEN). All
+  state-level tables join with geo.states via state_abbr or state_fips; county-grain
+  tables join geo.counties via county_fips. (EPA AQS air-quality data now lives in
+  the environment schema.)
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -243,14 +245,6 @@ dimension_values:
     start: "${GOVDATA_START_YEAR:2010}"
     end: current
     dataLag: 1
-
-  # EPA AQS pollutant parameter codes
-  aqi_pollutants: &aqi_pollutants
-    - '88101'  # PM2.5 - Local Conditions
-    - '44201'  # Ozone
-    - '42401'  # SO2
-    - '42602'  # NO2
-    - '42101'  # CO
 
   # GHCND daily year range (from 2000 for drought monitor compatibility)
   ghcnd_year_range: &ghcnd_year_range
@@ -729,222 +723,6 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_annual_summaries
-        catalogType: hadoop
-        runCompaction: true
-        compactionTargetFileSizeBytes: 134217728
-        compactionMinFiles: 5
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-
-  # ---------------------------------------------------------------------------
-  # EPA ANNUAL AQI - Air quality index by county (requires EPA_AQS_EMAIL + EPA_AQS_KEY)
-  # ---------------------------------------------------------------------------
-  - name: epa_annual_aqi
-    pattern: "type=epa_aqi/year=*/*.parquet"
-    partitions: *standard_partitions
-    comment: >
-      EPA AirData annual-summary air quality by monitor and pollutant (annual mean, peak
-      values, observation/valid-day counts) for PM2.5, Ozone, SO2, NO2, and CO. Sourced from
-      the keyless national bulk file annual_conc_by_monitor_<year>.zip — no API key or rate
-      limit. Cross-references geo.states via state_fips and geo.counties via county_fips.
-
-    # DQ sample cap (GOVDATA_DQ mode): one national ZIP per year (all pollutants), filtered to
-    # the 5 AQI pollutants + 50 states/DC. Fans out per year, so the cap bounds each year's
-    # materialization. Cache-safe — the extracted CSV is cached in full before the iterator.
-    dqRowLimit: 25000
-
-    dimensions:
-      type:
-        - epa_aqi
-      year: *weather_year_range
-
-    columns:
-      - <<: *state_fips_column
-      - name: county_fips
-        type: string
-        nullable: true
-        comment: "5-digit county FIPS code"
-      - name: parameter_code
-        type: string
-        nullable: true
-        comment: "Pollutant code (88101, 44201, etc.)"
-      - name: parameter_name
-        type: string
-        nullable: true
-        comment: "Pollutant name (e.g., 'PM2.5 - Local Conditions')"
-      - <<: *year_column
-      - name: arithmetic_mean
-        type: double
-        nullable: true
-        comment: Annual mean concentration
-      - name: first_max_value
-        type: double
-        nullable: true
-        comment: Highest recorded value
-      - name: observation_count
-        type: integer
-        nullable: true
-        comment: Number of observations
-      - name: valid_day_count
-        type: integer
-        nullable: true
-        comment: Days with valid data
-      - name: aqi
-        type: integer
-        nullable: true
-        comment: Air Quality Index
-
-    source:
-      type: http
-      url: "https://aqs.epa.gov/aqsweb/airdata/annual_conc_by_monitor_{effective_year}.zip"
-      method: GET
-      extractPattern: "*.csv"
-      response:
-        format: csv
-      rateLimit:
-        requestsPerSecond: 2.0
-        retryOn: [429, 503]
-        maxRetries: 3
-      rawCache:
-        enabled: true
-
-    hooks:
-      rowTransformers:
-        - type: class
-          class: "org.apache.calcite.adapter.govdata.weather.EpaAirDataAnnualTransformer"
-
-    materialize:
-      format: iceberg
-      options:
-        stagingMode: local
-      output:
-        pattern: "type=epa_aqi/year=*/"
-      partition:
-        columns: [type, year]
-        valueSource:
-          year: effective_year
-      iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
-        tableName: epa_annual_aqi
-        catalogType: hadoop
-        runCompaction: true
-        compactionTargetFileSizeBytes: 134217728
-        compactionMinFiles: 5
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
-
-  # ---------------------------------------------------------------------------
-  # EPA DAILY AQI - Air quality index by monitoring site per day
-  # ---------------------------------------------------------------------------
-  - name: epa_daily_aqi
-    pattern: "type=epa_daily_aqi/year=*/*.parquet"
-    partitions: *standard_partitions
-    comment: >
-      EPA AirData daily-summary air quality by monitoring site. One row per site per day per
-      pollutant standard (mean, peak, AQI where applicable). Sourced from the keyless national
-      bulk files daily_<param>_<year>.zip — no API key or rate limit. Cross-references
-      geo.states via state_fips and geo.counties via county_fips.
-
-    # DQ sample cap (GOVDATA_DQ mode): each pollutant-year is its own national ZIP fetch-unit
-    # (~400k rows), so the cap samples every pollutant in every year while bounding the
-    # materialization. Cache-safe — the extracted CSV is cached in full before the iterator,
-    # so prod (no GOVDATA_DQ) loads everything.
-    dqRowLimit: 5000
-
-    dimensions:
-      type:
-        - epa_daily_aqi
-      year: *weather_year_range
-      param: *aqi_pollutants
-
-    columns:
-      - <<: *state_fips_column
-      - name: county_fips
-        type: string
-        nullable: true
-        comment: "5-digit county FIPS code"
-      - name: site_number
-        type: string
-        nullable: true
-        comment: "Monitoring site number"
-      - name: parameter_code
-        type: string
-        nullable: true
-        comment: "Pollutant code (88101, 44201, etc.)"
-      - name: parameter_name
-        type: string
-        nullable: true
-        comment: "Pollutant name (e.g., 'PM2.5 - Local Conditions')"
-      - <<: *year_column
-      - name: date
-        type: string
-        nullable: false
-        comment: "Sample date (YYYY-MM-DD)"
-      - name: sample_duration
-        type: string
-        nullable: true
-        comment: "Sample duration (e.g., '24-HR BLK AVG', '1 HOUR')"
-      - name: pollutant_standard
-        type: string
-        nullable: true
-        comment: "Pollutant standard used for AQI calculation"
-      - name: arithmetic_mean
-        type: double
-        nullable: true
-        comment: "Daily mean concentration"
-      - name: first_max_value
-        type: double
-        nullable: true
-        comment: "Highest recorded value for the day"
-      - name: aqi
-        type: integer
-        nullable: true
-        comment: "Air Quality Index (null for non-daily-standard measurements)"
-      - name: observation_count
-        type: integer
-        nullable: true
-        comment: "Number of observations"
-      - name: latitude
-        type: double
-        nullable: true
-        comment: "Site latitude"
-      - name: longitude
-        type: double
-        nullable: true
-        comment: "Site longitude"
-
-    source:
-      type: http
-      url: "https://aqs.epa.gov/aqsweb/airdata/daily_{param}_{effective_year}.zip"
-      method: GET
-      extractPattern: "*.csv"
-      response:
-        format: csv
-      rateLimit:
-        requestsPerSecond: 2.0
-        retryOn: [429, 503]
-        maxRetries: 3
-      rawCache:
-        enabled: true
-
-    hooks:
-      rowTransformers:
-        - type: class
-          class: "org.apache.calcite.adapter.govdata.weather.EpaAirDataDailyTransformer"
-
-    materialize:
-      format: iceberg
-      options:
-        stagingMode: local
-      output:
-        pattern: "type=epa_daily_aqi/year=*/"
-      partition:
-        columns: [type, year]
-        valueSource:
-          year: effective_year
-      iceberg:
-        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
-        tableName: epa_daily_aqi
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1619,18 +1397,6 @@ constraints:
       - columns: [station_id]
         targetTable: cdo_stations
         targetColumns: [station_id]
-
-  epa_annual_aqi:
-    primaryKey: [county_fips, parameter_code, year]
-    foreignKeys:
-      - columns: [state_fips]
-        targetSchema: geo
-        targetTable: states
-        targetColumns: [state_fips]
-      - columns: [county_fips]
-        targetSchema: geo
-        targetTable: counties
-        targetColumns: [county_fips]
 
   ghcnd_stations_with_county:
     primaryKey: [station_id]

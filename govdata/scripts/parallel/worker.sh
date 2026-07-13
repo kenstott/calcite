@@ -450,12 +450,36 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model transport)" "$WORKER_ID"
     ;;
 
+  # ── Environment (EPA AQS/TRI/GHGRP, USGS water, SDWIS, ECHO/FRS, SEMS, RCRA) ─
+  # air_quality_*/tri/ghg/streamflow/water_quality carry a year (or year+state)
+  # dimension; the snapshot tables (aqs_monitors, water_sites, drinking_water,
+  # epa_facilities, superfund, rcra, violations) ignore the year range. All keyless.
+
+  environment)
+    case "$MODE" in
+      historical)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
+        export GOVDATA_END_YEAR=""
+        ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "environment: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    run_etl_inline "$(build_inline_model environment)" "$WORKER_ID"
+    ;;
+
   *)
     echo "Unknown schema: $SCHEMA" >&2
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-    echo "               housing, transport" >&2
+    echo "               housing, transport, environment" >&2
     exit 1
     ;;
 esac

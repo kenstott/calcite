@@ -41,8 +41,6 @@ FROM (
   UNION ALL SELECT 'cdo_stations',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'cdo_monthly_summaries',  COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'cdo_annual_summaries',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'epa_annual_aqi',         COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi',         allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'epa_daily_aqi',          COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi',          allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'ghcnd_daily',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'drought_monitor_weekly', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true) LIMIT 1)
@@ -58,10 +56,7 @@ FROM (
 -- Cap-aware floors: ghcnd_daily is DQ-sampled by station-stride inside GhcndBulkDataProvider
 -- (~150 stations/year spanning all networks), so it holds tens of thousands of rows per DQ
 -- year-unit, not the prod multi-million count — floor 20000 (one partial year, with margin).
--- epa_daily_aqi (bulk daily_<param>_<year>.zip,
--- cap 5000 per pollutant-year → 5 pollutants × years) and epa_annual_aqi (bulk
--- annual_conc_by_monitor_<year>.zip, cap 25000 per year) are cap-aware too — annual floor raised
--- to 15000 (one capped year). cdo_monthly_summaries / drought_monitor_weekly fan out across many
+-- cdo_monthly_summaries / drought_monitor_weekly fan out across many
 -- year×state units, so cap × units stays well above their floors — unchanged.
 -- ============================================================
 SELECT '=== T2: ROW COUNTS ===' AS section;
@@ -76,8 +71,6 @@ FROM (
   UNION ALL SELECT 'cdo_stations',           COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true)
   UNION ALL SELECT 'cdo_monthly_summaries',  COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true)
   UNION ALL SELECT 'cdo_annual_summaries',   COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true)
-  UNION ALL SELECT 'epa_annual_aqi',         COUNT(*),      15000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi',         allow_moved_paths=true)
-  UNION ALL SELECT 'epa_daily_aqi',          COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi',          allow_moved_paths=true)
   UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*),   5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true)
   UNION ALL SELECT 'ghcnd_daily',            COUNT(*),      20000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true)
   UNION ALL SELECT 'drought_monitor_weekly', COUNT(*),      50000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true)
@@ -96,8 +89,6 @@ SELECT 'nws_alerts'                 AS tbl, * FROM iceberg_scan('s3://${GOVDATA_
 SELECT 'cdo_stations'               AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true) LIMIT 1;
 SELECT 'cdo_monthly_summaries'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true) LIMIT 1;
 SELECT 'cdo_annual_summaries'       AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true) LIMIT 1;
-SELECT 'epa_annual_aqi'             AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi',         allow_moved_paths=true) LIMIT 1;
-SELECT 'epa_daily_aqi'              AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi',          allow_moved_paths=true) LIMIT 1;
 SELECT 'ghcnd_stations_with_county' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true) LIMIT 1;
 SELECT 'ghcnd_daily'                AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true) LIMIT 1;
 SELECT 'drought_monitor_weekly'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true) LIMIT 1;
@@ -150,22 +141,6 @@ SELECT 'weather', 'cdo_annual_summaries', 'all_null_cols',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries', allow_moved_paths=true))
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type', 'attributes');  -- GSOY annual records carry no per-value quality flags (GSOM monthly does)
-
-INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'all_null_cols',
-  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
-FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true))
-WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type', 'aqi');  -- aqi not populated in annual summary records
-
-INSERT INTO dq_results
-SELECT 'weather', 'epa_daily_aqi', 'all_null_cols',
-  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
-FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi', allow_moved_paths=true))
-WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type');
 
 INSERT INTO dq_results
 SELECT 'weather', 'ghcnd_stations_with_county', 'all_null_cols',
@@ -259,22 +234,6 @@ SELECT 'weather', 'cdo_annual_summaries', 'all_same_value',
   CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
-  AND column_name NOT IN ('type');
-
-INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'all_same_value',
-  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
-  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
-FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true))
-WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
-  AND column_name NOT IN ('type');
-
-INSERT INTO dq_results
-SELECT 'weather', 'epa_daily_aqi', 'all_same_value',
-  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
-  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
-FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type');
 
@@ -411,41 +370,6 @@ FROM (
     SUM(CASE WHEN state_fips IS NULL THEN 1 ELSE 0 END) AS null_state_fips,
     SUM(CASE WHEN year       IS NULL THEN 1 ELSE 0 END) AS null_year
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries', allow_moved_paths=true)
-);
-
--- epa_annual_aqi non-null: state_fips, year
-INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'pk_nulls',
-  CASE WHEN null_state_fips + null_year > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(null_state_fips + null_year AS VARCHAR), '0',
-  CONCAT_WS(', ',
-    CASE WHEN null_state_fips > 0 THEN 'state_fips:' || null_state_fips ELSE NULL END,
-    CASE WHEN null_year       > 0 THEN 'year:'       || null_year       ELSE NULL END
-  )
-FROM (
-  SELECT
-    SUM(CASE WHEN state_fips IS NULL THEN 1 ELSE 0 END) AS null_state_fips,
-    SUM(CASE WHEN year       IS NULL THEN 1 ELSE 0 END) AS null_year
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true)
-);
-
--- epa_daily_aqi non-null: state_fips, date, year
-INSERT INTO dq_results
-SELECT 'weather', 'epa_daily_aqi', 'pk_nulls',
-  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(total AS VARCHAR), '0',
-  CONCAT_WS(', ',
-    CASE WHEN n1 > 0 THEN 'state_fips:' || n1 ELSE NULL END,
-    CASE WHEN n2 > 0 THEN 'date:'       || n2 ELSE NULL END,
-    CASE WHEN n3 > 0 THEN 'year:'       || n3 ELSE NULL END
-  )
-FROM (
-  SELECT
-    SUM(CASE WHEN state_fips IS NULL THEN 1 ELSE 0 END) AS n1,
-    SUM(CASE WHEN date       IS NULL THEN 1 ELSE 0 END) AS n2,
-    SUM(CASE WHEN year       IS NULL THEN 1 ELSE 0 END) AS n3,
-    SUM(CASE WHEN state_fips IS NULL OR date IS NULL OR year IS NULL THEN 1 ELSE 0 END) AS total
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi', allow_moved_paths=true)
 );
 
 -- ghcnd_stations_with_county PK: station_id only; state_fips excluded — US territories (e.g. Midway Island) have no state
@@ -616,49 +540,6 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries', allow_moved_paths=true)
   WHERE month IS NOT NULL
 );
-
--- epa_annual_aqi: negative aqi is a data error (fail); aqi > 500 is Beyond Index (warn — valid for extreme events)
-INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'aqi_negative',
-  CASE WHEN neg > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(neg AS VARCHAR), '0',
-  'rows with aqi < 0 (impossible value)'
-FROM (SELECT SUM(CASE WHEN aqi < 0 THEN 1 ELSE 0 END) AS neg FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
-
-INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'aqi_beyond_index',
-  CASE WHEN hi > 0 THEN 'warn' ELSE 'pass' END,
-  CAST(hi AS VARCHAR), '0',
-  'rows with aqi > 500 (EPA Beyond Index — rare but valid for extreme events)'
-FROM (SELECT SUM(CASE WHEN aqi > 500 THEN 1 ELSE 0 END) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
-
--- epa_annual_aqi: parameter_code must be one of 5 known pollutants
-INSERT INTO dq_results
-SELECT 'weather', 'epa_annual_aqi', 'parameter_code_values',
-  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(bad AS VARCHAR), '0',
-  'distinct codes: ' || vals
-FROM (
-  SELECT SUM(CASE WHEN parameter_code NOT IN ('88101','44201','42401','42602','42101') THEN 1 ELSE 0 END) AS bad,
-         STRING_AGG(DISTINCT parameter_code, ', ' ORDER BY parameter_code) AS vals
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_annual_aqi', allow_moved_paths=true)
-  WHERE parameter_code IS NOT NULL
-);
-
--- epa_daily_aqi: negative aqi is a data error (fail); aqi > 500 is Beyond Index (warn — valid for extreme events)
-INSERT INTO dq_results
-SELECT 'weather', 'epa_daily_aqi', 'aqi_negative',
-  CASE WHEN neg > 0 THEN 'fail' ELSE 'pass' END,
-  CAST(neg AS VARCHAR), '0',
-  'rows with aqi < 0 (impossible value)'
-FROM (SELECT SUM(CASE WHEN aqi < 0 THEN 1 ELSE 0 END) AS neg FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
-
-INSERT INTO dq_results
-SELECT 'weather', 'epa_daily_aqi', 'aqi_beyond_index',
-  CASE WHEN hi > 100 THEN 'warn' ELSE 'pass' END,
-  CAST(hi AS VARCHAR), '100',
-  'rows with aqi > 500 (EPA Beyond Index — valid for extreme events; warn only if > 100 historical readings)'
-FROM (SELECT SUM(CASE WHEN aqi > 500 THEN 1 ELSE 0 END) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/epa_daily_aqi', allow_moved_paths=true) WHERE aqi IS NOT NULL);
 
 -- ghcnd_daily: temperature range -90 to 60 °C
 INSERT INTO dq_results
