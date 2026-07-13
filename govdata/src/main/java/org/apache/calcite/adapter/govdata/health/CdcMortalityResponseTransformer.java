@@ -26,13 +26,16 @@ import java.util.Map;
  *
  * <p>Handles two response shapes based on the "source_type" dimension:
  * <ul>
- *   <li>annual: NCHS annual mortality data (bi63-dtpu) — fields: year, state, cause_name, deaths,
- *       age_adjusted_rate</li>
- *   <li>weekly: weekly provisional mortality data (muzy-jte6) — fields: week_ending_date, state,
- *       cause_name (mapped from "group"), deaths</li>
+ *   <li>annual: NCHS Leading Causes of Death (bi63-dtpu) — source fields: year, state,
+ *       cause_name (short leading-cause name), _113_cause_name (detailed ICD-10 cause),
+ *       deaths, aadr (age-adjusted death rate)</li>
+ *   <li>weekly: Weekly Provisional Counts of Deaths by State and Select Causes (muzy-jte6) —
+ *       a wide table with one column per cause. We surface the COVID-19 underlying-cause count
+ *       (covid_19_u071_underlying_cause_of_death) as a single COVID-19 row per state-week,
+ *       sourcing mmwryear, week_ending_date, and jurisdiction_of_occurrence.</li>
  * </ul>
  * Both are normalised to: year, week_ending_date, state, cause_name, full_cause_name, deaths,
- * age_adjusted_rate.
+ * age_adjusted_rate. Weekly carries raw counts only, so age_adjusted_rate is null.
  *
  * <p>Implements {@link PerRecordResponseTransformer} so HttpSource's streamFromRawCache path
  * handles the paginated {@code {"results":[...]}} cache envelope correctly.
@@ -89,20 +92,19 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     put(row, "week_ending_date", null);
     put(row, "state", text(r, "state"));
     put(row, "cause_name", text(r, "cause_name"));
-    put(row, "full_cause_name", text(r, "cause_name"));
+    put(row, "full_cause_name", text(r, "_113_cause_name"));
     put(row, "deaths", text(r, "deaths"));
-    put(row, "age_adjusted_rate", text(r, "age_adjusted_death_rate"));
+    put(row, "age_adjusted_rate", text(r, "aadr"));
     put(row, "source_type", "annual");
   }
 
   private void mapWeekly(JsonNode r, ObjectNode row) {
     put(row, "year", text(r, "mmwryear"));
-    put(row, "week_ending_date", text(r, "weekendingdate"));
+    put(row, "week_ending_date", text(r, "week_ending_date"));
     put(row, "state", text(r, "jurisdiction_of_occurrence"));
-    String group = text(r, "group");
-    put(row, "cause_name", group);
-    put(row, "full_cause_name", group);
-    put(row, "deaths", text(r, "covid_19_deaths"));
+    put(row, "cause_name", "COVID-19");
+    put(row, "full_cause_name", "COVID-19 (underlying cause of death)");
+    put(row, "deaths", text(r, "covid_19_u071_underlying_cause_of_death"));
     put(row, "age_adjusted_rate", null);
     put(row, "source_type", "weekly");
   }
@@ -111,22 +113,20 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     row.put("year", str(r.get("year")));
     row.put("week_ending_date", null);
     row.put("state", str(r.get("state")));
-    String cause = str(r.get("cause_name"));
-    row.put("cause_name", cause);
-    row.put("full_cause_name", cause);
+    row.put("cause_name", str(r.get("cause_name")));
+    row.put("full_cause_name", str(r.get("_113_cause_name")));
     row.put("deaths", str(r.get("deaths")));
-    row.put("age_adjusted_rate", str(r.get("age_adjusted_death_rate")));
+    row.put("age_adjusted_rate", str(r.get("aadr")));
     row.put("source_type", "annual");
   }
 
   private void mapWeeklyMap(Map<String, Object> r, Map<String, Object> row) {
     row.put("year", str(r.get("mmwryear")));
-    row.put("week_ending_date", str(r.get("weekendingdate")));
+    row.put("week_ending_date", str(r.get("week_ending_date")));
     row.put("state", str(r.get("jurisdiction_of_occurrence")));
-    String group = str(r.get("group"));
-    row.put("cause_name", group);
-    row.put("full_cause_name", group);
-    row.put("deaths", str(r.get("covid_19_deaths")));
+    row.put("cause_name", "COVID-19");
+    row.put("full_cause_name", "COVID-19 (underlying cause of death)");
+    row.put("deaths", str(r.get("covid_19_u071_underlying_cause_of_death")));
     row.put("age_adjusted_rate", null);
     row.put("source_type", "weekly");
   }

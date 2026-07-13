@@ -804,46 +804,46 @@ partitionedTables:
         type: string
         nullable: false
         comment: USPTO trademark serial number (primary key)
-      - {name: abandon_dt, type: string, nullable: true}
-      - {name: amend_reg_dt, type: string, nullable: true}
-      - {name: amend_lb_for_app_in, type: string, nullable: true}
-      - {name: amend_lb_for_reg_in, type: string, nullable: true}
-      - {name: amend_lb_itu_in, type: string, nullable: true}
-      - {name: amend_lb_use_in, type: string, nullable: true}
-      - {name: reg_cancel_cd, type: string, nullable: true}
-      - {name: reg_cancel_dt, type: string, nullable: true}
-      - {name: cancel_pend_in, type: string, nullable: true}
-      - {name: cert_mark_in, type: string, nullable: true}
-      - {name: chg_reg_in, type: string, nullable: true}
-      - {name: coll_memb_mark_in, type: string, nullable: true}
-      - {name: coll_serv_mark_in, type: string, nullable: true}
-      - {name: coll_trade_mark_in, type: string, nullable: true}
-      - {name: draw_color_cur_in, type: string, nullable: true}
-      - {name: draw_color_file_in, type: string, nullable: true}
-      - {name: concur_use_in, type: string, nullable: true}
-      - {name: concur_use_pend_in, type: string, nullable: true}
-      - {name: file_location, type: string, nullable: true}
-      - {name: draw_3d_cur_in, type: string, nullable: true}
-      - {name: draw_3d_file_in, type: string, nullable: true}
-      - {name: exm_attorney_name, type: string, nullable: true}
-      - {name: lb_use_file_in, type: string, nullable: true}
-      - {name: lb_for_app_cur_in, type: string, nullable: true}
-      - {name: lb_for_reg_cur_in, type: string, nullable: true}
-      - {name: lb_intl_reg_cur_in, type: string, nullable: true}
-      - {name: lb_for_app_file_in, type: string, nullable: true}
-      - {name: lb_for_reg_file_in, type: string, nullable: true}
-      - {name: lb_intl_reg_file_in, type: string, nullable: true}
-      - {name: lb_none_cur_in, type: string, nullable: true}
+      - {name: abandon_dt, type: string, nullable: true, comment: "Date the mark/application was abandoned (YYYYMMDD)"}
+      - {name: amend_reg_dt, type: string, nullable: true, comment: "Date of the file amendment to register (YYYYMMDD)"}
+      - {name: amend_lb_for_app_in, type: string, nullable: true, comment: "Flag: filing basis amended to foreign application priority (44(d))"}
+      - {name: amend_lb_for_reg_in, type: string, nullable: true, comment: "Flag: filing basis amended to foreign registration (44(e))"}
+      - {name: amend_lb_itu_in, type: string, nullable: true, comment: "Flag: filing basis amended to intent-to-use"}
+      - {name: amend_lb_use_in, type: string, nullable: true, comment: "Flag: filing basis amended to use in commerce"}
+      - {name: reg_cancel_cd, type: string, nullable: true, comment: "Code identifying the section under which the registration was cancelled"}
+      - {name: reg_cancel_dt, type: string, nullable: true, comment: "Date cancellation of the entire registration was recorded (YYYYMMDD)"}
+      - {name: cancel_pend_in, type: string, nullable: true, comment: "Flag: a cancellation proceeding is pending"}
+      - {name: cert_mark_in, type: string, nullable: true, comment: "Flag: mark is a certification mark"}
+      - {name: chg_reg_in, type: string, nullable: true, comment: "Flag: registration changed (amendment, correction, fewer goods/classes)"}
+      - {name: coll_memb_mark_in, type: string, nullable: true, comment: "Flag: mark is a collective membership mark"}
+      - {name: coll_serv_mark_in, type: string, nullable: true, comment: "Flag: mark is a collective service mark"}
+      - {name: coll_trade_mark_in, type: string, nullable: true, comment: "Flag: mark is a collective trademark"}
+      - {name: draw_color_cur_in, type: string, nullable: true, comment: "Flag: drawing is currently in color"}
+      - {name: draw_color_file_in, type: string, nullable: true, comment: "Flag: drawing was in color at filing"}
+      - {name: concur_use_in, type: string, nullable: true, comment: "Flag: registration is subject to concurrent use"}
+      - {name: concur_use_pend_in, type: string, nullable: true, comment: "Flag: a concurrent use proceeding is pending"}
+      - {name: file_location, type: string, nullable: true, comment: "Current location of the application or registration file"}
+      - {name: draw_3d_cur_in, type: string, nullable: true, comment: "Flag: drawing is currently three-dimensional"}
+      - {name: draw_3d_file_in, type: string, nullable: true, comment: "Flag: drawing was three-dimensional at filing"}
+      - {name: exm_attorney_name, type: string, nullable: true, comment: "Name of the USPTO examining attorney assigned to the file"}
+      - {name: lb_use_file_in, type: string, nullable: true, comment: "Filing basis flag: filed as a use-in-commerce application"}
+      - {name: lb_for_app_cur_in, type: string, nullable: true, comment: "Filing basis flag: foreign application priority (44(d)) currently"}
+      - {name: lb_for_reg_cur_in, type: string, nullable: true, comment: "Filing basis flag: foreign registration (44(e)) currently"}
+      - {name: lb_intl_reg_cur_in, type: string, nullable: true, comment: "Filing basis flag: international registration (66(a)) currently"}
+      - {name: lb_for_app_file_in, type: string, nullable: true, comment: "Filing basis flag: foreign application priority (44(d)) at filing"}
+      - {name: lb_for_reg_file_in, type: string, nullable: true, comment: "Filing basis flag: foreign registration (44(e)) at filing"}
+      - {name: lb_intl_reg_file_in, type: string, nullable: true, comment: "Filing basis flag: international registration (66(a)) at filing"}
+      - {name: lb_none_cur_in, type: string, nullable: true, comment: "Filing basis flag: no basis currently claimed"}
       - name: filing_dt
         type: string
         nullable: true
         comment: Application filing date (YYYYMMDD); source of the year partition
-      - {name: for_priority_in, type: string, nullable: true}
-      - {name: lb_itu_cur_in, type: string, nullable: true}
-      - {name: lb_itu_file_in, type: string, nullable: true}
-      - {name: interfer_pend_in, type: string, nullable: true}
-      - {name: exm_office_cd, type: string, nullable: true}
-      - {name: file_location_dt, type: string, nullable: true}
+      - {name: for_priority_in, type: string, nullable: true, comment: "Flag: record contains foreign application info and a priority claim"}
+      - {name: lb_itu_cur_in, type: string, nullable: true, comment: "Filing basis flag: intent-to-use application currently"}
+      - {name: lb_itu_file_in, type: string, nullable: true, comment: "Filing basis flag: intent-to-use application at filing"}
+      - {name: interfer_pend_in, type: string, nullable: true, comment: "Flag: an interference proceeding is pending"}
+      - {name: exm_office_cd, type: string, nullable: true, comment: "Code of the USPTO examining law office assigned"}
+      - {name: file_location_dt, type: string, nullable: true, comment: "Date the file arrived at its current location (YYYYMMDD)"}
       - name: mark_draw_cd
         type: string
         nullable: true
@@ -852,23 +852,23 @@ partitionedTables:
         type: string
         nullable: true
         comment: Trademark text; null for design marks
-      - {name: opposit_pend_in, type: string, nullable: true}
-      - {name: amend_principal_in, type: string, nullable: true}
-      - {name: concur_use_pub_in, type: string, nullable: true}
-      - {name: publication_dt, type: string, nullable: true}
-      - {name: registration_dt, type: string, nullable: true}
-      - {name: renewal_dt, type: string, nullable: true}
-      - {name: renewal_file_in, type: string, nullable: true}
-      - {name: repub_12c_dt, type: string, nullable: true}
-      - {name: repub_12c_in, type: string, nullable: true}
-      - {name: incontest_ack_in, type: string, nullable: true}
-      - {name: incontest_file_in, type: string, nullable: true}
-      - {name: acq_dist_in, type: string, nullable: true}
-      - {name: acq_dist_part_in, type: string, nullable: true}
-      - {name: use_afdv_acc_in, type: string, nullable: true}
-      - {name: use_afdv_file_in, type: string, nullable: true}
-      - {name: use_afdv_par_acc_in, type: string, nullable: true}
-      - {name: serv_mark_in, type: string, nullable: true}
+      - {name: opposit_pend_in, type: string, nullable: true, comment: "Flag: an opposition proceeding is pending"}
+      - {name: amend_principal_in, type: string, nullable: true, comment: "Flag: application amended to the Principal Register"}
+      - {name: concur_use_pub_in, type: string, nullable: true, comment: "Flag: mark published subject to concurrent use"}
+      - {name: publication_dt, type: string, nullable: true, comment: "Date the mark was published for opposition (YYYYMMDD)"}
+      - {name: registration_dt, type: string, nullable: true, comment: "Date the mark was registered (YYYYMMDD)"}
+      - {name: renewal_dt, type: string, nullable: true, comment: "Date of registration renewal (YYYYMMDD)"}
+      - {name: renewal_file_in, type: string, nullable: true, comment: "Flag: a renewal application was filed"}
+      - {name: repub_12c_dt, type: string, nullable: true, comment: "Date of republication under Section 12(c) (YYYYMMDD)"}
+      - {name: repub_12c_in, type: string, nullable: true, comment: "Flag: registered mark republished under Section 12(c)"}
+      - {name: incontest_ack_in, type: string, nullable: true, comment: "Flag: Section 15 affidavit of incontestability acknowledged"}
+      - {name: incontest_file_in, type: string, nullable: true, comment: "Flag: Section 15 affidavit of incontestability filed"}
+      - {name: acq_dist_in, type: string, nullable: true, comment: "Flag: acquired distinctiveness claimed for the whole mark (Section 2(f))"}
+      - {name: acq_dist_part_in, type: string, nullable: true, comment: "Flag: acquired distinctiveness claimed for part of the mark (Section 2(f))"}
+      - {name: use_afdv_acc_in, type: string, nullable: true, comment: "Flag: Section 8 continued-use affidavit accepted"}
+      - {name: use_afdv_file_in, type: string, nullable: true, comment: "Flag: Section 8 continued-use affidavit filed"}
+      - {name: use_afdv_par_acc_in, type: string, nullable: true, comment: "Flag: Section 8 continued-use affidavit partially accepted"}
+      - {name: serv_mark_in, type: string, nullable: true, comment: "Flag: mark is a service mark"}
       - name: std_char_claim_in
         type: string
         nullable: true
@@ -877,29 +877,29 @@ partitionedTables:
         type: string
         nullable: true
         comment: Status code (live/dead/registered/abandoned/cancelled)
-      - {name: cfh_status_dt, type: string, nullable: true}
-      - {name: amend_supp_reg_in, type: string, nullable: true}
-      - {name: supp_reg_in, type: string, nullable: true}
-      - {name: trade_mark_in, type: string, nullable: true}
-      - {name: lb_use_cur_in, type: string, nullable: true}
-      - {name: lb_none_file_in, type: string, nullable: true}
-      - {name: ir_auto_reg_dt, type: string, nullable: true}
-      - {name: ir_first_refus_in, type: string, nullable: true}
-      - {name: ir_death_dt, type: string, nullable: true}
-      - {name: ir_publication_dt, type: string, nullable: true}
-      - {name: ir_registration_dt, type: string, nullable: true}
-      - {name: ir_registration_no, type: string, nullable: true}
-      - {name: ir_renewal_dt, type: string, nullable: true}
-      - {name: ir_status_cd, type: string, nullable: true}
-      - {name: ir_status_dt, type: string, nullable: true}
-      - {name: ir_priority_dt, type: string, nullable: true}
-      - {name: ir_priority_in, type: string, nullable: true}
-      - {name: related_other_in, type: string, nullable: true}
+      - {name: cfh_status_dt, type: string, nullable: true, comment: "Date the case file's current status was recorded (YYYYMMDD)"}
+      - {name: amend_supp_reg_in, type: string, nullable: true, comment: "Flag: application amended to the Supplemental Register"}
+      - {name: supp_reg_in, type: string, nullable: true, comment: "Flag: filed for or registered on the Supplemental Register"}
+      - {name: trade_mark_in, type: string, nullable: true, comment: "Flag: mark is a trademark"}
+      - {name: lb_use_cur_in, type: string, nullable: true, comment: "Filing basis flag: use-in-commerce application currently"}
+      - {name: lb_none_file_in, type: string, nullable: true, comment: "Filing basis flag: no basis claimed at filing"}
+      - {name: ir_auto_reg_dt, type: string, nullable: true, comment: "Date US registration auto-issued absent a first refusal (Madrid) (YYYYMMDD)"}
+      - {name: ir_first_refus_in, type: string, nullable: true, comment: "Flag: USPTO issued a notice of first refusal to the IB (Madrid)"}
+      - {name: ir_death_dt, type: string, nullable: true, comment: "Date the international registration expired (YYYYMMDD)"}
+      - {name: ir_publication_dt, type: string, nullable: true, comment: "Date the international registration was published (YYYYMMDD)"}
+      - {name: ir_registration_dt, type: string, nullable: true, comment: "Date of the international registration (Madrid) (YYYYMMDD)"}
+      - {name: ir_registration_no, type: string, nullable: true, comment: "International registration (Madrid Protocol) number"}
+      - {name: ir_renewal_dt, type: string, nullable: true, comment: "Date by which the international registration must be renewed (YYYYMMDD)"}
+      - {name: ir_status_cd, type: string, nullable: true, comment: "International registration status code"}
+      - {name: ir_status_dt, type: string, nullable: true, comment: "Effective date of the international registration status (YYYYMMDD)"}
+      - {name: ir_priority_dt, type: string, nullable: true, comment: "Date international registration priority was claimed (YYYYMMDD)"}
+      - {name: ir_priority_in, type: string, nullable: true, comment: "Flag: international registration priority claimed"}
+      - {name: related_other_in, type: string, nullable: true, comment: "Flag: 'and others' appears in the list of prior registrations"}
       - name: registration_no
         type: string
         nullable: true
         comment: Registration number; null (or all-zeros) if pending
-      - {name: tad_file_id, type: string, nullable: true}
+      - {name: tad_file_id, type: string, nullable: true, comment: "Identifier of the source XML file the record was extracted from"}
       - name: year
         type: integer
         nullable: false
@@ -941,25 +941,25 @@ partitionedTables:
         - trademark_owner
       year: *year_range
     columns:
-      - {name: serial_no, type: string, nullable: false}
-      - {name: own_seq, type: string, nullable: true}
-      - {name: own_id, type: string, nullable: true}
-      - {name: own_name, type: string, nullable: true}
-      - {name: own_type_cd, type: string, nullable: true}
-      - {name: own_entity_cd, type: string, nullable: true}
-      - {name: own_entity_desc, type: string, nullable: true}
-      - {name: own_composed_of, type: string, nullable: true}
-      - {name: own_altn_name, type: string, nullable: true}
-      - {name: own_addr_1, type: string, nullable: true}
-      - {name: own_addr_2, type: string, nullable: true}
-      - {name: own_addr_city, type: string, nullable: true}
-      - {name: own_addr_state_cd, type: string, nullable: true}
-      - {name: own_addr_postal, type: string, nullable: true}
-      - {name: own_addr_country_cd, type: string, nullable: true}
-      - {name: own_addr_other_cd, type: string, nullable: true}
-      - {name: own_nalty_state_cd, type: string, nullable: true}
-      - {name: own_nalty_country_cd, type: string, nullable: true}
-      - {name: own_nalty_other_cd, type: string, nullable: true}
+      - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
+      - {name: own_seq, type: string, nullable: true, comment: "Sequence of owner records within the same party type"}
+      - {name: own_id, type: string, nullable: true, comment: "Unique identifier for the owner record"}
+      - {name: own_name, type: string, nullable: true, comment: "Name of the owning party"}
+      - {name: own_type_cd, type: string, nullable: true, comment: "Owning party type code (e.g. original applicant, new owner)"}
+      - {name: own_entity_cd, type: string, nullable: true, comment: "Owner legal entity type code"}
+      - {name: own_entity_desc, type: string, nullable: true, comment: "Owner entity description or statement"}
+      - {name: own_composed_of, type: string, nullable: true, comment: "Owner 'composed of' statement"}
+      - {name: own_altn_name, type: string, nullable: true, comment: "Owner alternative names (DBA/AKA)"}
+      - {name: own_addr_1, type: string, nullable: true, comment: "Owner address line 1"}
+      - {name: own_addr_2, type: string, nullable: true, comment: "Owner address line 2"}
+      - {name: own_addr_city, type: string, nullable: true, comment: "City or foreign designation of the owner address"}
+      - {name: own_addr_state_cd, type: string, nullable: true, comment: "State code of the owner address"}
+      - {name: own_addr_postal, type: string, nullable: true, comment: "US or foreign postal code of the owner address"}
+      - {name: own_addr_country_cd, type: string, nullable: true, comment: "Country code of the owner address"}
+      - {name: own_addr_other_cd, type: string, nullable: true, comment: "Other region (non-country) code of the owner address"}
+      - {name: own_nalty_state_cd, type: string, nullable: true, comment: "State code of the owner's place of origin"}
+      - {name: own_nalty_country_cd, type: string, nullable: true, comment: "Country code of the owner's place of origin"}
+      - {name: own_nalty_other_cd, type: string, nullable: true, comment: "Other region (non-country) code of the owner's place of origin"}
       - name: year
         type: integer
         nullable: false
@@ -992,17 +992,17 @@ partitionedTables:
         - trademark_classification
       year: *year_range
     columns:
-      - {name: serial_no, type: string, nullable: false}
-      - {name: class_id, type: string, nullable: true}
-      - {name: class_primary_cd, type: string, nullable: true}
-      - {name: class_status_cd, type: string, nullable: true}
-      - {name: class_status_dt, type: string, nullable: true}
-      - {name: class_intl_count, type: string, nullable: true}
-      - {name: class_us_count, type: string, nullable: true}
-      - {name: first_use_any_dt, type: string, nullable: true}
-      - {name: first_use_any_dt_raw, type: string, nullable: true}
-      - {name: first_use_com_dt, type: string, nullable: true}
-      - {name: first_use_com_dt_raw, type: string, nullable: true}
+      - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
+      - {name: class_id, type: string, nullable: true, comment: "Unique identifier for the classification record"}
+      - {name: class_primary_cd, type: string, nullable: true, comment: "Classification primary code"}
+      - {name: class_status_cd, type: string, nullable: true, comment: "Classification status code"}
+      - {name: class_status_dt, type: string, nullable: true, comment: "Date the classification status was recorded (YYYYMMDD)"}
+      - {name: class_intl_count, type: string, nullable: true, comment: "Number of international classes"}
+      - {name: class_us_count, type: string, nullable: true, comment: "Number of US classes"}
+      - {name: first_use_any_dt, type: string, nullable: true, comment: "First-use-anywhere date, converted to a date value (YYYYMMDD)"}
+      - {name: first_use_any_dt_raw, type: string, nullable: true, comment: "First-use-anywhere date, as entered in the source XML"}
+      - {name: first_use_com_dt, type: string, nullable: true, comment: "First-use-in-commerce date, converted to a date value (YYYYMMDD)"}
+      - {name: first_use_com_dt_raw, type: string, nullable: true, comment: "First-use-in-commerce date, as entered in the source XML"}
       - name: year
         type: integer
         nullable: false
@@ -1035,9 +1035,9 @@ partitionedTables:
         - trademark_intl_class
       year: *year_range
     columns:
-      - {name: serial_no, type: string, nullable: false}
-      - {name: intl_class_cd, type: string, nullable: true}
-      - {name: class_id, type: string, nullable: true}
+      - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
+      - {name: intl_class_cd, type: string, nullable: true, comment: "International (Nice) class code"}
+      - {name: class_id, type: string, nullable: true, comment: "Corresponding classification record ID"}
       - name: year
         type: integer
         nullable: false
@@ -1070,8 +1070,8 @@ partitionedTables:
         - trademark_statement
       year: *year_range
     columns:
-      - {name: serial_no, type: string, nullable: false}
-      - {name: statement_type_cd, type: string, nullable: true}
+      - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
+      - {name: statement_type_cd, type: string, nullable: true, comment: "Statement type category code"}
       - name: statement_text
         type: string
         nullable: true

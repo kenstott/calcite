@@ -28,7 +28,7 @@ public class CmsOpenPaymentsResponseTransformer extends AbstractCsvResponseTrans
     put(row, "physician_profile_id", col(headers, values, "Covered_Recipient_Profile_ID"));
     put(row, "physician_first_name", col(headers, values, "Covered_Recipient_First_Name"));
     put(row, "physician_last_name", col(headers, values, "Covered_Recipient_Last_Name"));
-    put(row, "physician_specialty", col(headers, values, "Covered_Recipient_Primary_Type_1"));
+    put(row, "physician_specialty", col(headers, values, "Covered_Recipient_Specialty_1"));
     put(row, "physician_state", col(headers, values, "Recipient_State"));
     put(row, "physician_country", col(headers, values, "Recipient_Country"));
     put(row, "paying_entity_name",

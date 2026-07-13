@@ -183,18 +183,23 @@ partitionedTables:
         nullable: true
         comment: Applicant/manufacturer — text FK to sec and ref.gleif_entities
       - name: brand_name
+        comment: "Brand or trade name of the drug product"
         type: string
         nullable: true
       - name: generic_name
+        comment: "Generic name(s) of the drug product"
         type: string
         nullable: true
       - name: product_type
+        comment: "Type of drug product (e.g. human prescription drug, human OTC drug)"
         type: string
         nullable: true
       - name: dosage_form
+        comment: "Dosage form of the drug (e.g. TABLET, SOLUTION FOR INJECTION)"
         type: string
         nullable: true
       - name: route
+        comment: "Route of administration of the drug product"
         type: string
         nullable: true
       - name: marketing_status
@@ -295,6 +300,7 @@ partitionedTables:
         nullable: false
         comment: Recall identifier e.g. D-321-2016 — PK
       - name: event_id
+        comment: "Numeric ID FDA assigns to a specific recall event for tracking"
         type: string
         nullable: true
       - name: status
@@ -306,6 +312,7 @@ partitionedTables:
         nullable: true
         comment: Class I (most severe), Class II, Class III
       - name: voluntary_mandated
+        comment: "Who initiated the recall: firm-voluntary or FDA-mandated"
         type: string
         nullable: true
       - name: recalling_firm
@@ -313,6 +320,7 @@ partitionedTables:
         nullable: true
         comment: Text FK to fda_ndc_products.labeler_name
       - name: city
+        comment: "City in which the recalling firm is located"
         type: string
         nullable: true
       - name: state
@@ -320,18 +328,23 @@ partitionedTables:
         nullable: true
         comment: FK to geo.states.state_abbr
       - name: country
+        comment: "Country in which the recalling firm is located"
         type: string
         nullable: true
       - name: product_description
+        comment: "Brief description of the product being recalled"
         type: string
         nullable: true
       - name: reason_for_recall
+        comment: "How the product is defective and violates FDA law"
         type: string
         nullable: true
       - name: product_quantity
+        comment: "Amount of defective product subject to recall"
         type: string
         nullable: true
       - name: distribution_pattern
+        comment: "General area of initial distribution (e.g. states, nationwide)"
         type: string
         nullable: true
       - name: code_info
@@ -444,6 +457,7 @@ partitionedTables:
         nullable: true
         comment: 1 = outcome was death
       - name: patient_age
+        comment: "Age of the patient when the event first occurred (patientonsetage)"
         type: string
         nullable: true
       - name: patient_age_unit
@@ -459,9 +473,11 @@ partitionedTables:
         nullable: true
         comment: First suspect drug name — text FK to fda_ndc_products.generic_name
       - name: drug_indication
+        comment: "Reported indication for the drug's use (drugindication)"
         type: string
         nullable: true
       - name: drug_route
+        comment: "Drug's route of administration (drugadministrationroute)"
         type: string
         nullable: true
       - name: reactions
@@ -469,6 +485,7 @@ partitionedTables:
         nullable: true
         comment: Comma-joined MedDRA reaction preferred terms
       - name: reporter_country
+        comment: "Country from which the report was submitted"
         type: string
         nullable: true
 
@@ -564,9 +581,11 @@ partitionedTables:
         nullable: true
         comment: 510(k) premarket notification number
       - name: recalling_firm
+        comment: "Firm initiating the recall or responsible for the recalled device"
         type: string
         nullable: true
       - name: city
+        comment: "City in which the recalling firm is located"
         type: string
         nullable: true
       - name: state
@@ -574,9 +593,11 @@ partitionedTables:
         nullable: true
         comment: FK to geo.states.state_abbr
       - name: product_description
+        comment: "Brief description of the device being recalled"
         type: string
         nullable: true
       - name: reason_for_recall
+        comment: "How the device is defective and violates FDA law"
         type: string
         nullable: true
       - name: root_cause_description
@@ -588,9 +609,11 @@ partitionedTables:
         nullable: true
         comment: Corrective action taken
       - name: product_quantity
+        comment: "Amount of defective product subject to recall"
         type: string
         nullable: true
       - name: distribution_pattern
+        comment: "General area of initial distribution (e.g. states, nationwide)"
         type: string
         nullable: true
       - name: event_date_initiated
@@ -673,6 +696,7 @@ partitionedTables:
         nullable: false
         comment: NCT identifier — PK
       - name: brief_title
+        comment: "Short study title written in lay language"
         type: string
         nullable: true
       - name: overall_status
@@ -688,9 +712,11 @@ partitionedTables:
         nullable: true
         comment: Phase 1, Phase 2, Phase 3, Phase 4, N/A
       - name: enrollment_count
+        comment: "Number of participants enrolled (actual or anticipated)"
         type: int
         nullable: true
       - name: lead_sponsor
+        comment: "Entity that initiates and has authority/control over the study"
         type: string
         nullable: true
       - name: funder_type
@@ -983,6 +1009,7 @@ partitionedTables:
         nullable: true
         comment: Age group, race/ethnicity, or overall
       - name: dose1_administered
+        comment: "Cumulative count of people with at least one dose administered"
         type: string
         nullable: true
       - name: dose1_pct_us
@@ -990,21 +1017,27 @@ partitionedTables:
         nullable: true
         comment: Percentage of US population
       - name: series_complete_count
+        comment: "Cumulative count of people who completed the primary series"
         type: string
         nullable: true
       - name: series_complete_pct
+        comment: "Percent of population that completed the primary series"
         type: string
         nullable: true
       - name: booster_count
+        comment: "Cumulative count of people who received a booster dose"
         type: string
         nullable: true
       - name: booster_pct
+        comment: "Booster recipients as a percent of the vaccinated age group"
         type: string
         nullable: true
       - name: bivalent_booster_count
+        comment: "Cumulative count of people who received a bivalent (updated) booster"
         type: string
         nullable: true
       - name: bivalent_booster_pct
+        comment: "Percent of the age-group population with a bivalent booster"
         type: string
         nullable: true
 
@@ -1074,12 +1107,15 @@ partitionedTables:
         nullable: false
         comment: CMS facility ID — PK
       - name: facility_name
+        comment: "Name of the hospital facility"
         type: string
         nullable: true
       - name: address
+        comment: "Hospital street address"
         type: string
         nullable: true
       - name: city
+        comment: "City or town where the hospital is located"
         type: string
         nullable: true
       - name: state
@@ -1087,9 +1123,11 @@ partitionedTables:
         nullable: true
         comment: FK to geo.states.state_abbr
       - name: zip_code
+        comment: "Hospital ZIP code"
         type: string
         nullable: true
       - name: county
+        comment: "County or parish where the hospital is located"
         type: string
         nullable: true
       - name: hospital_type
@@ -1101,6 +1139,7 @@ partitionedTables:
         nullable: true
         comment: Government, Private non-profit, Physician-owned, etc.
       - name: emergency_services
+        comment: "Whether the hospital provides emergency services (Yes/No)"
         type: string
         nullable: true
       - name: overall_rating
@@ -1116,9 +1155,11 @@ partitionedTables:
         nullable: true
         comment: Count of mortality measures where hospital is worse than national
       - name: safety_measures_better
+        comment: "Count of safety-of-care measures better than the national benchmark"
         type: string
         nullable: true
       - name: safety_measures_worse
+        comment: "Count of safety-of-care measures worse than the national benchmark"
         type: string
         nullable: true
       - name: readm_measures_better
@@ -1228,18 +1269,23 @@ partitionedTables:
         nullable: false
         comment: Q1, Q2, Q3, Q4 — composite PK
       - name: utilization_type
+        comment: "Record type: FFSU (fee-for-service) or MCOU (managed care)"
         type: string
         nullable: true
       - name: product_name
+        comment: "FDA product name (first ~10 characters as listed with FDA)"
         type: string
         nullable: true
       - name: labeler_code
+        comment: "First NDC segment identifying the manufacturer/labeler"
         type: string
         nullable: true
       - name: units_reimbursed
+        comment: "Units of the NDC reimbursed (FFS) or dispensed (MCO) in the period"
         type: string
         nullable: true
       - name: number_of_prescriptions
+        comment: "Outpatient Rx claims reimbursed (FFS) or dispensed (MCO)"
         type: string
         nullable: true
       - name: total_amount_reimbursed
@@ -1325,24 +1371,31 @@ partitionedTables:
       (muzy-jte6) data. source_type dimension distinguishes the two.
     columns:
       - name: year
+        comment: "Data year of deaths; MMWR year for weekly rows"
         type: VARCHAR
         nullable: true
       - name: week_ending_date
+        comment: "Week-ending date; weekly rows only, null for annual"
         type: VARCHAR
         nullable: true
       - name: state
+        comment: "State/jurisdiction; annual includes a United States total row"
         type: VARCHAR
         nullable: true
       - name: cause_name
+        comment: "Cause-of-death name; NCHS leading cause (annual) or COVID-19 (weekly)"
         type: VARCHAR
         nullable: true
       - name: full_cause_name
+        comment: "Detailed cause name (NCHS 113-cause for annual; COVID-19 detail for weekly)"
         type: VARCHAR
         nullable: true
       - name: deaths
+        comment: "Number of deaths for the cause/period (COVID-19 deaths for weekly rows)"
         type: VARCHAR
         nullable: true
       - name: age_adjusted_rate
+        comment: "Age-adjusted deaths per 100,000 (2000 US std pop); annual only"
         type: VARCHAR
         nullable: true
       - name: source_type
@@ -1406,6 +1459,7 @@ partitionedTables:
       State-level health behavior estimates by year, question, and demographic breakout.
     columns:
       - name: year
+        comment: "Survey year"
         type: VARCHAR
         nullable: true
       - name: state
@@ -1413,15 +1467,19 @@ partitionedTables:
         nullable: true
         comment: 'state abbreviation from locationabbr'
       - name: question
+        comment: "Survey question text"
         type: VARCHAR
         nullable: true
       - name: category
+        comment: "BRFSS class grouping the topic (source class, e.g. Health Status)"
         type: VARCHAR
         nullable: true
       - name: topic
+        comment: "Topic within the class"
         type: VARCHAR
         nullable: true
       - name: response
+        comment: "Response/answer option to the question"
         type: VARCHAR
         nullable: true
       - name: pct
@@ -1429,15 +1487,19 @@ partitionedTables:
         nullable: true
         comment: 'prevalence percentage (data_value)'
       - name: sample_size
+        comment: "Number of survey respondents behind the estimate"
         type: VARCHAR
         nullable: true
       - name: break_out
+        comment: "Demographic subgroup value (e.g. 18-24)"
         type: VARCHAR
         nullable: true
       - name: break_out_category
+        comment: "Demographic dimension of the breakout (e.g. Age Group)"
         type: VARCHAR
         nullable: true
       - name: type
+        comment: "Constant record-type discriminator cdc_brfss"
         type: VARCHAR
         nullable: false
 
@@ -1508,48 +1570,63 @@ partitionedTables:
       (CY2018+) and payment_type (general/research/ownership), partitioned by both.
     columns:
       - name: program_year
+        comment: "Calendar year the payment/transfer of value was reported"
         type: VARCHAR
         nullable: true
       - name: change_type
+        comment: "Record status vs prior publication (new/changed/unchanged)"
         type: VARCHAR
         nullable: true
       - name: physician_profile_id
+        comment: "CMS-assigned unique ID for the covered recipient"
         type: VARCHAR
         nullable: true
       - name: physician_first_name
+        comment: "Covered recipient first name"
         type: VARCHAR
         nullable: true
       - name: physician_last_name
+        comment: "Covered recipient last name"
         type: VARCHAR
         nullable: true
       - name: physician_specialty
+        comment: "Covered recipient primary medical specialty (e.g. Internal Medicine)"
         type: VARCHAR
         nullable: true
       - name: physician_state
+        comment: "Covered recipient state"
         type: VARCHAR
         nullable: true
       - name: physician_country
+        comment: "Covered recipient country"
         type: VARCHAR
         nullable: true
       - name: paying_entity_name
+        comment: "Applicable manufacturer or GPO making the payment"
         type: VARCHAR
         nullable: true
       - name: total_amount
+        comment: "Total payment/transfer-of-value amount in US dollars"
         type: VARCHAR
         nullable: true
       - name: payment_date
+        comment: "Date of the payment or transfer of value"
         type: VARCHAR
         nullable: true
       - name: number_of_payments
+        comment: "Number of payments included in the total amount"
         type: VARCHAR
         nullable: true
       - name: nature_of_payment
+        comment: "Nature of the payment or transfer of value (e.g. Consulting Fee)"
         type: VARCHAR
         nullable: true
       - name: product_name
+        comment: "Name of associated drug, biological, device, or medical supply"
         type: VARCHAR
         nullable: true
       - name: product_category
+        comment: "Whether the product is a drug, biological, device, or medical supply"
         type: VARCHAR
         nullable: true
       - name: payment_type
@@ -1643,6 +1720,7 @@ partitionedTables:
         nullable: true
         comment: 'RxNorm concept unique identifier'
       - name: name
+        comment: "RxNorm concept name/string"
         type: VARCHAR
         nullable: true
       - name: tty
@@ -1650,6 +1728,7 @@ partitionedTables:
         nullable: true
         comment: 'term type: IN, BN, SCD'
       - name: type
+        comment: "Constant record-type discriminator rxnorm_drugs"
         type: VARCHAR
         nullable: false
 
