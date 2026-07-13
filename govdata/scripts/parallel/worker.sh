@@ -402,6 +402,30 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model ag)" "$WORKER_ID"
     ;;
 
+  # ── Housing (FHFA HPI, Census permits, HUD FMR/income limits) — annual ────
+  # building_permits carries a year dimension (dataLag=1); HUD FMR/income_limits
+  # fan out state×year (self-floored at 2017 via minYear); house_price_index is a
+  # single snapshot file that ignores the year range.
+
+  housing)
+    case "$MODE" in
+      historical)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
+        export GOVDATA_END_YEAR=""
+        ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "housing: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    run_etl_inline "$(build_inline_model housing)" "$WORKER_ID"
+    ;;
+
   *)
     echo "Unknown schema: $SCHEMA" >&2
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2

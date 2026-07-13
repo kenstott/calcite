@@ -181,6 +181,7 @@ for arg in "$@"; do
       queue+=(patents:historical patents:daily lands:historical lands:daily cftc:historical cftc:daily)
       queue+=(ag:historical ag:daily)
       queue+=(disasters:historical disasters:daily)
+      queue+=(housing:historical housing:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -216,6 +217,11 @@ for arg in "$@"; do
       # static wildfire_perimeters snapshot ingests once — avoiding the per-year re-fetch of
       # the 39k-feature WFIGS layer that year-slicing would cause.
       queue+=(disasters:historical)
+      # housing runs as a single historical slot: house_price_index is one snapshot file,
+      # HUD fair_market_rents/income_limits fan out state×year in one pass (self-floored at
+      # 2017), and building_permits backfills its full year range — none benefit from
+      # per-year slicing (the FHFA/HUD fetches would re-run identically on every slot).
+      queue+=(housing:historical)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -234,7 +240,7 @@ for arg in "$@"; do
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq
+        cftc:dq disasters:dq housing:dq
       )
       ;;
 
@@ -247,7 +253,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild
       )
       ;;
 
@@ -260,7 +266,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume
       )
       ;;
 

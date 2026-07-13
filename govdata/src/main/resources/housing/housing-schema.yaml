@@ -1,0 +1,749 @@
+# ============================================================================
+# U.S. Housing Schema (HOUSING)
+# ============================================================================
+# Data Sources (all verified live 2026-07-12):
+#   - FHFA House Price Index master file (monthly hpi_master.csv) — free, no key
+#   - U.S. Census Building Permits Survey, county annual (co{year}a.txt) — free
+#   - HUD USER Fair Market Rents API (fmr/statedata) — Bearer HUD_TOKEN
+#   - HUD USER Income Limits API (il/statedata) — Bearer HUD_TOKEN
+#
+# Design principles (see govdata-schema-authoring):
+#   - One ETL table = one raw source. No multi-source transformers.
+#   - FHFA and Census BPS are bulk text files streamed row-by-row
+#     (StreamingResponseTransformer) to bound heap at O(chunk).
+#   - HUD FMR/IL are small per-state JSON responses fanned out over a
+#     `state` list dimension × `year`; each (year, state) is one fetch unit =
+#     one overwrite partition (mirrors the econ trade_by_state month fan-out).
+#   - HUD tables are token-gated: HousingSchemaFactory disables them when
+#     ${HUD_TOKEN} is absent so the schema still builds without the secret.
+#   - Cross-schema joins to geo (states/counties/cbsa); FMR/BPS rows carry
+#     state_fips + county_fips FKs, income_limits carries state_fips.
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:housing}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. housing market and affordability data: FHFA house price indexes,
+  Census new-residential building permits, HUD Fair Market Rents, and HUD
+  income limits. Each row is a place-and-period observation joinable to geo
+  (states/counties/CBSAs), econ (income, employment), census (demographics),
+  and sec (homebuilder / REIT filings by state). Price appreciation (FHFA),
+  new supply (permits), rental cost (FMR), and affordability thresholds
+  (income limits) together describe local housing-market conditions.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit state FIPS code (FK to geo.states)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit county FIPS code (FK to geo.counties)
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_state: &partition_state
+    name: state
+    type: VARCHAR
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  state_partitions: &state_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_state
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # Census BPS county annual files publish ~Feb of the following year, so the
+  # current calendar year has no file yet; dataLag 1 fetches the newest data
+  # year (effective_year = publish_year - 1) and never 404-poisons.
+  bps_year_range: &bps_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: current
+    dataLag: 1
+
+  # HUD USER FMR/IL APIs return data from FY2017 onward (2016 -> HTTP 400,
+  # 2017 -> 200, verified). minYear hard-floors the window; current FY is
+  # published ahead of the fiscal year so dataLag 0 is correct.
+  hud_year_range: &hud_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2017}"
+    minYear: 2017
+    end: current
+    dataLag: 0
+
+  # 50 states + DC + PR + territories (exact set returned by HUD listStates).
+  hud_states: &hud_states
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+             "AS","GU","MP","PR","VI"]
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # FHFA HOUSE PRICE INDEX — monthly hpi_master.csv (snapshot, streamed)
+  # ---------------------------------------------------------------------------
+  - name: house_price_index
+    pattern: "type=house_price_index/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FHFA House Price Index observations from the master file (all index
+      types, flavors, frequencies, and geographies in one file). One row per
+      (hpi_type, hpi_flavor, frequency, level, place, period). Snapshot table:
+      the whole file is re-fetched and the partition overwritten each run;
+      history lives in Iceberg snapshots. State-level place_id is the USPS
+      abbreviation (join to geo.states.state_abbr); MSA-level place_id is the
+      5-digit CBSA code (join to geo.cbsa.cbsa_code). Source:
+      fhfa.gov/hpi/download/monthly/hpi_master.csv.
+
+    dimensions:
+      type:
+        - house_price_index
+
+    columns:
+      - name: hpi_type
+        type: string
+        nullable: true
+        comment: Index construction (e.g. 'traditional', 'expanded-data', 'distress-free')
+      - name: hpi_flavor
+        type: string
+        nullable: true
+        comment: Transaction basis ('purchase-only', 'all-transactions')
+      - name: frequency
+        type: string
+        nullable: true
+        comment: 'monthly' or 'quarterly'
+      - name: level
+        type: string
+        nullable: true
+        comment: Geography level ('USA or Census Division', 'State', 'MSA', 'Puerto Rico')
+      - name: place_name
+        type: string
+        nullable: true
+        comment: Human-readable place name
+      - name: place_id
+        type: string
+        nullable: false
+        comment: >
+          Place identifier; USPS abbr for State level, 5-digit CBSA code for MSA
+          level, division code (e.g. 'DV_ENC') / 'USA' for national level
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Observation year (FHFA 'yr' column)
+      - name: period
+        type: integer
+        nullable: false
+        comment: Period within year — month (1-12) or quarter (1-4) per frequency
+      - name: index_nsa
+        type: double
+        nullable: true
+        comment: Not-seasonally-adjusted index value (base 100)
+      - name: index_sa
+        type: double
+        nullable: true
+        comment: Seasonally-adjusted index value (base 100; null where unpublished)
+
+    source:
+      type: http
+      url: "https://www.fhfa.gov/hpi/download/monthly/hpi_master.csv"
+      method: GET
+      # FHFA serves no ETag/Last-Modified — only Content-Length (18.9 MB, verified).
+      # 'size' HEADs the file and skips the whole re-fetch when the byte length is
+      # unchanged; appending a new period changes the length, forcing a refresh.
+      # Weak (a same-length revision would be missed) but the only cheap signal FHFA
+      # exposes, and HPI revisions add periods rather than rewrite in place.
+      freshness:
+        type: size
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.FhfaHpiStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=house_price_index/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: house_price_index
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # CENSUS BUILDING PERMITS — county annual co{year}a.txt (delta, streamed)
+  # ---------------------------------------------------------------------------
+  - name: building_permits
+    pattern: "type=building_permits/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Census Building Permits Survey — new privately-owned residential
+      construction authorized by building permits, county annual totals. One
+      row per county per year with buildings/units/valuation for 1-unit,
+      2-unit, 3-4-unit, and 5-plus-unit structures (imputed totals). Leading
+      indicator of housing supply. Joins to geo.counties via county_fips.
+      Source: www2.census.gov/econ/bps/County/co{year}a.txt.
+
+    dimensions:
+      type:
+        - building_permits
+      year: *bps_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (as published by Census)
+      - name: region_code
+        type: integer
+        nullable: true
+        comment: Census region code
+      - name: division_code
+        type: integer
+        nullable: true
+        comment: Census division code
+      - name: units_1unit_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 1-unit buildings permitted
+      - name: units_1unit_units
+        type: integer
+        nullable: true
+        comment: Number of 1-unit housing units permitted
+      - name: units_1unit_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 1-unit permits (USD)
+      - name: units_2unit_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 2-unit buildings permitted
+      - name: units_2unit_units
+        type: integer
+        nullable: true
+        comment: Number of 2-unit housing units permitted
+      - name: units_2unit_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 2-unit permits (USD)
+      - name: units_34unit_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 3-4-unit buildings permitted
+      - name: units_34unit_units
+        type: integer
+        nullable: true
+        comment: Number of 3-4-unit housing units permitted
+      - name: units_34unit_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 3-4-unit permits (USD)
+      - name: units_5plus_bldgs
+        type: integer
+        nullable: true
+        comment: Number of 5-plus-unit buildings permitted
+      - name: units_5plus_units
+        type: integer
+        nullable: true
+        comment: Number of 5-plus-unit housing units permitted
+      - name: units_5plus_value
+        type: long
+        nullable: true
+        comment: Construction valuation of 5-plus-unit permits (USD)
+
+    source:
+      type: http
+      url: "https://www2.census.gov/econ/bps/County/co{effective_year}a.txt"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.CensusBuildingPermitsStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=building_permits/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: building_permits
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HUD FAIR MARKET RENTS — fmr/statedata (delta year × state list, JSON)
+  # ---------------------------------------------------------------------------
+  - name: fair_market_rents
+    pattern: "type=fair_market_rents/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      HUD Fair Market Rents — 40th-percentile gross rent by bedroom size, used
+      to set Section 8 voucher payment standards. County-grain (New England
+      rows may be sub-county town areas, distinguished by hud_area_code). One
+      fetch per (year, state) returns all counties for that state. Joins to
+      geo.counties via county_fips. Requires HUD_TOKEN. Source:
+      huduser.gov/hudapi/public/fmr/statedata/{state}.
+
+    dimensions:
+      type:
+        - fair_market_rents
+      year: *hud_year_range
+      state: *hud_states
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: hud_area_code
+        type: string
+        nullable: false
+        comment: HUD 10-digit area code (county FIPS + subdivision; PK component)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: town_name
+        type: string
+        nullable: true
+        comment: Town/sub-county area name (New England); null elsewhere
+      - name: metro_name
+        type: string
+        nullable: true
+        comment: HUD metro FMR area name
+      - name: smallarea_status
+        type: string
+        nullable: true
+        comment: '1 = Small Area FMR (ZIP-based) in effect, 0 = metro-wide'
+      - name: fmr_percentile
+        type: integer
+        nullable: true
+        comment: FMR percentile (40 standard, 50 for exception areas)
+      - name: fmr_efficiency
+        type: integer
+        nullable: true
+        comment: FMR for an efficiency (0-bedroom) unit (USD/month)
+      - name: fmr_1br
+        type: integer
+        nullable: true
+        comment: FMR for a 1-bedroom unit (USD/month)
+      - name: fmr_2br
+        type: integer
+        nullable: true
+        comment: FMR for a 2-bedroom unit (USD/month)
+      - name: fmr_3br
+        type: integer
+        nullable: true
+        comment: FMR for a 3-bedroom unit (USD/month)
+      - name: fmr_4br
+        type: integer
+        nullable: true
+        comment: FMR for a 4-bedroom unit (USD/month)
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/fmr/statedata/{state}?year={year}"
+      method: GET
+      headers:
+        Authorization: "Bearer ${HUD_TOKEN:}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HudFairMarketRentsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fair_market_rents/year=*/state=*/"
+      partition:
+        columns: [type, year, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: fair_market_rents
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HUD INCOME LIMITS — il/statedata (delta year × state list, JSON)
+  # ---------------------------------------------------------------------------
+  - name: income_limits
+    pattern: "type=income_limits/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      HUD Income Limits — Area Median Income and the extremely-low (30%),
+      very-low (50%), and low (80%) income thresholds that gate eligibility
+      for HUD-assisted housing and LIHTC. State-grain (the HUD il/statedata
+      endpoint returns one state summary; county/metro-level limits require
+      per-county calls and are a documented follow-up). Values shown for a
+      4-person household (HUD's reference size). Requires HUD_TOKEN. Source:
+      huduser.gov/hudapi/public/il/statedata/{state}.
+
+    dimensions:
+      type:
+        - income_limits
+      year: *hud_year_range
+      state: *hud_states
+
+    columns:
+      - <<: *state_fips_column
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: USPS state abbreviation (FK component to geo.states.state_abbr)
+      - name: median_income
+        type: integer
+        nullable: true
+        comment: Area (state) median family income (USD/year)
+      - name: il30_4person
+        type: integer
+        nullable: true
+        comment: Extremely-low-income limit (30% AMI), 4-person household (USD/year)
+      - name: il50_4person
+        type: integer
+        nullable: true
+        comment: Very-low-income limit (50% AMI), 4-person household (USD/year)
+      - name: il80_4person
+        type: integer
+        nullable: true
+        comment: Low-income limit (80% AMI), 4-person household (USD/year)
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/il/statedata/{state}?year={year}"
+      method: GET
+      headers:
+        Authorization: "Bearer ${HUD_TOKEN:}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HudIncomeLimitsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=income_limits/year=*/state=*/"
+      partition:
+        columns: [type, year, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: income_limits
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HUD INCOME LIMITS (COUNTY/METRO) — il/data per HUD area (streamed)
+  # ---------------------------------------------------------------------------
+  - name: income_limits_county
+    pattern: "type=income_limits_county/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      HUD Income Limits at county / HUD-metro-area grain — the same 30/50/80%
+      AMI thresholds as income_limits but resolved per HUD area rather than
+      state-wide. The streaming transformer fetches the state's HUD area list
+      (fmr/listCounties/{state}) then il/data/{area} for each, so one fetch unit
+      per (year, state) yields all its areas. hud_area_code matches
+      fair_market_rents.hud_area_code (New England rows are sub-county towns);
+      county_fips joins geo.counties. Values are the 4-person-household figures.
+      Requires HUD_TOKEN. Source: huduser.gov/hudapi/public/il/data/{area}.
+
+    dimensions:
+      type:
+        - income_limits_county
+      year: *hud_year_range
+      state: *hud_states
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: hud_area_code
+        type: string
+        nullable: false
+        comment: HUD 10-digit area code (county FIPS + subdivision; PK component)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County/area name (as published by HUD, e.g. 'Bristol County, RI')
+      - name: metro_status
+        type: string
+        nullable: true
+        comment: "'1' = area is within a metro FMR area, '0' = non-metro"
+      - name: metro_name
+        type: string
+        nullable: true
+        comment: CBSA/metro name (null for non-metro areas)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: HUD income-limit area name
+      - name: median_income
+        type: integer
+        nullable: true
+        comment: Area median family income (USD/year)
+      - name: il30_4person
+        type: integer
+        nullable: true
+        comment: Extremely-low-income limit (30% AMI), 4-person household (USD/year)
+      - name: il50_4person
+        type: integer
+        nullable: true
+        comment: Very-low-income limit (50% AMI), 4-person household (USD/year)
+      - name: il80_4person
+        type: integer
+        nullable: true
+        comment: Low-income limit (80% AMI), 4-person household (USD/year)
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/hudapi/public/fmr/listCounties/{state}?year={year}"
+      method: GET
+      headers:
+        Authorization: "Bearer ${HUD_TOKEN:}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HudCountyIncomeLimitsStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=income_limits_county/year=*/state=*/"
+      partition:
+        columns: [type, year, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: income_limits_county
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# PKs identify one observation. All FKs are INTER-schema, pointing at the geo
+# dimension tables — there are no intra-housing FKs because none of these four
+# tables is a dimensional parent of another; cross-housing analysis joins them
+# through the shared geo keys (county_fips / state_fips), not a declared parent.
+# house_price_index declares no FK: its place_id domain is heterogeneous
+# (state abbr for State rows, CBSA code for MSA rows), so no single column maps
+# to one geo table; those joins are expressed in the views below instead.
+# ============================================================================
+
+constraints:
+
+  house_price_index:
+    primaryKey: [hpi_type, hpi_flavor, frequency, level, place_id, data_year, period]
+
+  building_permits:
+    primaryKey: [year, county_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  fair_market_rents:
+    primaryKey: [year, hud_area_code]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  income_limits:
+    primaryKey: [year, state_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+  # income_limits_county shares its (year, hud_area_code) grain with
+  # fair_market_rents — the natural intra-housing join key — but neither table
+  # is the other's referential parent (both enumerate the same HUD area universe
+  # from geo), so only the inter-schema geo FKs are declared.
+  income_limits_county:
+    primaryKey: [year, hud_area_code]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: housing_hpi_state_annual
+    comment: >
+      State-level FHFA purchase-only price index, one row per state per year
+      (December/Q4 reading). place_id is the USPS abbreviation — ready to join
+      geo.states.state_abbr and to sec homebuilder/REIT filings by state.
+    sql: >
+      SELECT
+        h.data_year,
+        h.place_id       AS state_abbr,
+        h.place_name     AS state_name,
+        MAX(h.index_sa)  AS index_sa_year_end,
+        AVG(h.index_sa)  AS index_sa_year_avg
+      FROM house_price_index h
+      WHERE h.level = 'State' AND h.hpi_flavor = 'purchase-only'
+      GROUP BY h.data_year, h.place_id, h.place_name
+
+  - name: housing_permits_by_county
+    comment: >
+      Total permitted housing units by county and year across all structure
+      sizes. Primary housing-supply measure; joins to geo.counties and to
+      census population for permits-per-capita.
+    sql: >
+      SELECT
+        b.year,
+        b.state_fips,
+        b.county_fips,
+        b.county_name,
+        (b.units_1unit_units + b.units_2unit_units
+          + b.units_34unit_units + b.units_5plus_units) AS total_units,
+        b.units_1unit_units                             AS single_family_units,
+        (b.units_2unit_units + b.units_34unit_units
+          + b.units_5plus_units)                        AS multifamily_units,
+        (b.units_1unit_value + b.units_2unit_value
+          + b.units_34unit_value + b.units_5plus_value) AS total_valuation
+      FROM building_permits b
+
+  - name: housing_affordability_by_state
+    comment: >
+      State-level rental affordability: average 2-bedroom Fair Market Rent
+      against the HUD income limits for the same state and year. Bridges the
+      rental-cost (FMR) and eligibility-threshold (income_limits) tables via
+      shared state_fips/year — the natural cross-housing join.
+    sql: >
+      SELECT
+        f.year,
+        f.state_fips,
+        AVG(f.fmr_2br)        AS avg_fmr_2br,
+        i.median_income,
+        i.il50_4person        AS very_low_income_limit,
+        i.il80_4person        AS low_income_limit,
+        (AVG(f.fmr_2br) * 12.0) AS annual_2br_rent
+      FROM fair_market_rents f
+      JOIN income_limits i
+        ON f.state_fips = i.state_fips AND f.year = i.year
+      GROUP BY f.year, f.state_fips, i.median_income,
+               i.il50_4person, i.il80_4person
