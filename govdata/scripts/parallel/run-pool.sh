@@ -108,7 +108,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -182,6 +182,7 @@ for arg in "$@"; do
       queue+=(ag:historical ag:daily)
       queue+=(disasters:historical disasters:daily)
       queue+=(housing:historical housing:daily)
+      queue+=(transport:historical transport:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -222,6 +223,12 @@ for arg in "$@"; do
       # 2017), and building_permits backfills its full year range — none benefit from
       # per-year slicing (the FHFA/HUD fetches would re-run identically on every slot).
       queue+=(housing:historical)
+      # transport runs as a single historical slot: its year/month-partitioned tables
+      # (fatal_crashes, airline_ontime, transit_ridership, t100_segments,
+      # vehicle_registrations) backfill their full range in one pass, while the
+      # snapshot tables (vehicle_recalls, safety_complaints, airports) ingest once —
+      # none benefit from per-year slicing (the snapshot fetches would re-run identically).
+      queue+=(transport:historical)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -240,7 +247,7 @@ for arg in "$@"; do
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq housing:dq
+        cftc:dq disasters:dq housing:dq transport:dq
       )
       ;;
 
@@ -253,7 +260,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild
       )
       ;;
 
@@ -266,7 +273,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume
       )
       ;;
 
@@ -290,6 +297,7 @@ for arg in "$@"; do
         ag:daily
         disasters:daily
         housing:daily
+        transport:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true

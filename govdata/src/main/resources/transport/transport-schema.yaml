@@ -1,0 +1,1353 @@
+# ============================================================================
+# U.S. Transportation Schema (TRANSPORT)
+# ============================================================================
+# Data Sources (all verified live 2026-07-13):
+#   - NHTSA vehicle recalls — DOT Socrata dataset 6axg-epim (JSON, snapshot) — no key
+#   - NHTSA consumer complaints — static.nhtsa.gov FLAT_CMPL.zip (TAB flat file) — no key
+#   - NHTSA FARS fatal crashes — per-year National CSV zip (accident.csv) — no key
+#   - BTS airline On-Time Performance — TranStats PREZIP monthly zip — no key
+#   - FAA airports — NTAD ArcGIS FeatureServer (paginated JSON snapshot) — no key
+#   - FTA transit ridership — DOT Socrata dataset 8bui-9xvu (JSON, monthly long) — no key
+#   - BTS T-100 Domestic Segment — TranStats DownLoad_Table.asp POST export — no key
+#   - FHWA MV-1 vehicle registrations — Highway Statistics annual XLSX — no key
+#
+# Design principles (see govdata-schema-authoring):
+#   - One ETL table = one raw source. No multi-source transformers.
+#   - Clean tabular sources (complaints TAB flat file, FARS accident.csv, BTS
+#     on-time CSV, FTA/NHTSA Socrata JSON) map straight through DuckDB staging
+#     via `expression: 'src."RAWCOL"'` columns — no Java transformer needed.
+#   - Two sources have no clean bulk path and use custom hooks:
+#       * airports    — ArcGIS FeatureServer paginates 2000/page; a self-paginating
+#                       ResponseTransformer fetches all pages and flattens
+#                       features[].attributes.
+#       * t100_segments — no stable GET; a DataProvider POSTs the TranStats
+#                       download form per year and returns the CSV rows.
+#       * vehicle_registrations — FHWA publishes only multi-header XLSX; a
+#                       ResponseTransformer parses the fixed MV-1 layout.
+#   - Cross-schema joins to geo (states/counties), econ (fuel prices, employment),
+#     sec (airline / automaker / homebuilder filings), and weather (delay causes).
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:transport}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. transportation data spanning motor-vehicle safety (NHTSA recalls,
+  consumer complaints, FARS fatal crashes), aviation (BTS airline on-time
+  performance, FAA airport master, BTS T-100 air-carrier traffic), public
+  transit (FTA National Transit Database monthly ridership), and highways
+  (FHWA state motor-vehicle registrations). Each row is a discrete event or a
+  place-and-period observation joinable to geo (states/counties), econ (fuel
+  prices, employment), sec (airline / automaker filings), and weather. Together
+  they describe how people and goods move, how safely, and at what capacity.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit state FIPS code (FK to geo.states)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit county FIPS code (FK to geo.counties)
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_month: &partition_month
+    name: month
+    type: VARCHAR
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  month_partitions: &month_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_month
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # FARS National files publish ~15 months after the data year (2024 final was
+  # posted March/April 2026; 2025 -> 404). dataLag 2 fetches the newest complete
+  # data year (effective_year = publish_year - 2) and never 404-poisons.
+  fars_year_range: &fars_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 1975
+    end: current
+    dataLag: 2
+    descending: true
+
+  # BTS On-Time PREZIP files run 1987-10 .. current-~2mo. dataLag 1 fetches only
+  # fully-complete prior years (all 12 months present), so the monthly fan-out
+  # never requests an unpublished month. Current partial year is picked up once
+  # it completes (acceptable: the table is a historical punctuality series).
+  ontime_year_range: &ontime_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    minYear: 1987
+    end: current
+    dataLag: 1
+    descending: true
+
+  # T-100 Domestic Segment: full monthly history; the DownLoad_Table.asp POST is
+  # filtered per year. dataLag 1 keeps to complete prior years (T-100 lags ~3-4mo).
+  t100_year_range: &t100_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    minYear: 1990
+    end: current
+    dataLag: 1
+    descending: true
+
+  # FHWA Highway Statistics MV-1 publishes annually ~2 years in arrears (verified
+  # 2026-07-13: 2024 -> 200, 2025 -> 404). dataLag 2 targets the newest available
+  # data year (effective_year = year - 2) and never 404-poisons.
+  fhwa_year_range: &fhwa_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    minYear: 2016
+    end: current
+    dataLag: 2
+    descending: true
+
+  # Full 12-month cadence: one fetch per (year, month) = one overwrite partition.
+  all_months: &all_months
+    type: list
+    values: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # NHTSA VEHICLE RECALLS — DOT Socrata 6axg-epim (snapshot, JSON)
+  # ---------------------------------------------------------------------------
+  - name: vehicle_recalls
+    pattern: "type=vehicle_recalls/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NHTSA vehicle safety recall campaigns — one row per recall (NHTSA
+      campaign id). All-history to current (~30K campaigns), served as a single
+      Socrata JSON export, so this is a snapshot table: the whole set is
+      re-fetched and the partition overwritten each run. The affected make /
+      model / year set is rolled into the description text (not exploded).
+      Source: data.transportation.gov/resource/6axg-epim.json.
+
+    dimensions:
+      type:
+        - vehicle_recalls
+
+    columns:
+      - name: nhtsa_id
+        type: string
+        nullable: false
+        comment: NHTSA recall campaign id (e.g. 26V434000) — PK
+      - name: report_received_date
+        type: date
+        nullable: true
+        comment: Date NHTSA received the recall report
+      - name: manufacturer
+        type: string
+        nullable: true
+        comment: Recalling manufacturer
+      - name: subject
+        type: string
+        nullable: true
+        comment: Recall subject line
+      - name: component
+        type: string
+        nullable: true
+        comment: Affected component category
+      - name: mfr_campaign_number
+        type: string
+        nullable: true
+        comment: Manufacturer's own campaign number
+      - name: recall_type
+        type: string
+        nullable: true
+        comment: Vehicle / Equipment / Tire / Child Seat
+      - name: potentially_affected
+        type: long
+        nullable: true
+        comment: Estimated number of units potentially affected
+      - name: recall_description
+        type: string
+        nullable: true
+        comment: Description of the defect (SODA defect_summary)
+      - name: consequence_summary
+        type: string
+        nullable: true
+        comment: Consequence of the defect
+      - name: corrective_action
+        type: string
+        nullable: true
+        comment: Manufacturer's remedy
+      - name: park_outside_advisory
+        type: string
+        nullable: true
+        comment: Fire-risk-when-parked advisory (Yes/No)
+      - name: do_not_drive_advisory
+        type: string
+        nullable: true
+        comment: Do-not-drive advisory (Yes/No)
+      - name: recall_url
+        type: string
+        nullable: true
+        comment: NHTSA recall detail page URL (from recall_link.url)
+
+    source:
+      type: http
+      # $limit above the ~30K row count returns the full set in one response
+      # (well under Socrata's 50000/page cap), so no pagination is needed.
+      url: "https://data.transportation.gov/resource/6axg-epim.json?$limit=50000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.NhtsaRecallsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=vehicle_recalls/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: vehicle_recalls
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 1
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # NHTSA CONSUMER COMPLAINTS — FLAT_CMPL.zip (snapshot, TAB flat file)
+  # ---------------------------------------------------------------------------
+  - name: safety_complaints
+    pattern: "type=safety_complaints/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NHTSA consumer safety-defect complaints — one row per complaint component
+      record since 1995 (all-history bulk flat file, refreshed daily). No header
+      row; the fixed 51-field TAB layout (CMPL.txt spec) is declared via
+      columnNames. Snapshot: the whole file is re-fetched and the partition
+      overwritten each run. In DQ mode dqRowLimit caps the sample. Source:
+      static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip.
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - safety_complaints
+
+    columns:
+      - name: cmplid
+        type: string
+        nullable: false
+        expression: 'src."CMPLID"'
+        comment: NHTSA internal unique sequence number — PK
+      - name: odino
+        type: string
+        nullable: true
+        expression: 'src."ODINO"'
+        comment: NHTSA internal reference number (may repeat across components)
+      - name: manufacturer
+        type: string
+        nullable: true
+        expression: 'src."MFR_NAME"'
+        comment: Manufacturer name
+      - name: make
+        type: string
+        nullable: true
+        expression: 'src."MAKETXT"'
+        comment: Vehicle/equipment make
+      - name: model
+        type: string
+        nullable: true
+        expression: 'src."MODELTXT"'
+        comment: Vehicle/equipment model
+      - name: model_year
+        type: string
+        nullable: true
+        expression: 'src."YEARTXT"'
+        comment: Model year (9999 = unknown/NA)
+      - name: crash
+        type: string
+        nullable: true
+        expression: 'src."CRASH"'
+        comment: Was vehicle involved in a crash (Y/N)
+      - name: fail_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(src."FAILDATE",''''), ''%Y%m%d'') AS DATE)'
+        comment: Date of incident
+      - name: fire
+        type: string
+        nullable: true
+        expression: 'src."FIRE"'
+        comment: Was vehicle involved in a fire (Y/N)
+      - name: injured
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."INJURED" AS INTEGER)'
+        comment: Number of persons injured
+      - name: deaths
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."DEATHS" AS INTEGER)'
+        comment: Number of fatalities
+      - name: component_desc
+        type: string
+        nullable: true
+        expression: 'src."COMPDESC"'
+        comment: Specific component description
+      - name: city
+        type: string
+        nullable: true
+        expression: 'src."CITY"'
+        comment: Consumer's city
+      - <<: *state_fips_column
+        expression: 'NULL'
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."STATE"'
+        comment: Consumer's state code (USPS abbr; FK component to geo.states)
+      - name: vin
+        type: string
+        nullable: true
+        expression: 'src."VIN"'
+        comment: Partial VIN
+      - name: date_added
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(src."DATEA",''''), ''%Y%m%d'') AS DATE)'
+        comment: Date added to file
+      - name: date_complaint_received
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(src."LDATE",''''), ''%Y%m%d'') AS DATE)'
+        comment: Date complaint received by NHTSA
+      - name: miles
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."MILES" AS INTEGER)'
+        comment: Vehicle mileage at failure
+      - name: complaint_description
+        type: string
+        nullable: true
+        expression: 'src."CDESCR"'
+        comment: Free-text description of the complaint
+      - name: complaint_type
+        type: string
+        nullable: true
+        expression: 'src."CMPL_TYPE"'
+        comment: Source-of-complaint code (IVOQ, EWR, VOQ, ...)
+      - name: product_type
+        type: string
+        nullable: true
+        expression: 'src."PROD_TYPE"'
+        comment: Product type (V=vehicle, T=tires, E=equipment, C=child restraint)
+      - name: state_of_incident
+        type: string
+        nullable: true
+        expression: 'src."STATE_OF_INCIDENT"'
+        comment: Incident state code (USPS abbr)
+
+    source:
+      type: http
+      url: "https://static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip"
+      method: GET
+      extractPattern: "*.txt"
+      # No ETag on HEAD (chunked); the file changes daily. freshness type etag
+      # still works off the GET response ETag the server does send.
+      freshness:
+        type: etag
+      response:
+        format: csv
+        delimiter: "\t"
+        hasHeader: false
+        columnNames: "CMPLID\tODINO\tMFR_NAME\tMAKETXT\tMODELTXT\tYEARTXT\tCRASH\tFAILDATE\tFIRE\tINJURED\tDEATHS\tCOMPDESC\tCITY\tSTATE\tVIN\tDATEA\tLDATE\tMILES\tOCCURENCES\tCDESCR\tCMPL_TYPE\tPOLICE_RPT_YN\tPURCH_DT\tORIG_OWNER_YN\tANTI_BRAKES_YN\tCRUISE_CONT_YN\tNUM_CYLS\tDRIVE_TRAIN\tFUEL_SYS\tFUEL_TYPE\tTRANS_TYPE\tVEH_SPEED\tDOT\tTIRE_SIZE\tLOC_OF_TIRE\tTIRE_FAIL_TYPE\tORIG_EQUIP_YN\tMANUF_DT\tSEAT_TYPE\tRESTRAINT_TYPE\tDEALER_NAME\tDEALER_TEL\tDEALER_CITY\tDEALER_STATE\tDEALER_ZIP\tPROD_TYPE\tREPAIRED_YN\tMEDICAL_ATTN\tVEHICLES_TOWED_YN\tSTATE_OF_INCIDENT\tVEHICLE_OPERATOR"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=safety_complaints/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: safety_complaints
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # NHTSA FARS FATAL CRASHES — per-year National zip / accident.csv (delta)
+  # ---------------------------------------------------------------------------
+  - name: fatal_crashes
+    pattern: "type=fatal_crashes/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NHTSA Fatality Analysis Reporting System — one row per fatal traffic crash
+      (accident.csv, grain ST_CASE) for the given data year. FARS coded columns
+      each have a decoded *NAME sibling; a curated subset is projected here.
+      Delta by year: past years immutable, newest complete year (effective_year
+      = year - 2) re-fetched. Joins to geo.counties via county_fips. Source:
+      static.nhtsa.gov/nhtsa/downloads/FARS/{year}/National/FARS{year}NationalCSV.zip.
+
+    dimensions:
+      type:
+        - fatal_crashes
+      year: *fars_year_range
+
+    columns:
+      - name: st_case
+        type: integer
+        nullable: false
+        expression: 'TRY_CAST(src."ST_CASE" AS INTEGER)'
+        comment: FARS crash case number (unique within data year) — PK
+      - <<: *state_fips_column
+        expression: 'lpad(CAST(TRY_CAST(src."STATE" AS INTEGER) AS VARCHAR), 2, ''0'')'
+      - name: state_name
+        type: string
+        nullable: true
+        expression: 'src."STATENAME"'
+        comment: State name
+      - <<: *county_fips_column
+        expression: 'CASE WHEN TRY_CAST(src."COUNTY" AS INTEGER) IS NULL OR TRY_CAST(src."COUNTY" AS INTEGER) >= 997 THEN NULL ELSE lpad(CAST(TRY_CAST(src."STATE" AS INTEGER) AS VARCHAR), 2, ''0'') || lpad(CAST(TRY_CAST(src."COUNTY" AS INTEGER) AS VARCHAR), 3, ''0'') END'
+      - name: county_name
+        type: string
+        nullable: true
+        expression: 'src."COUNTYNAME"'
+        comment: County name
+      - name: city_name
+        type: string
+        nullable: true
+        expression: 'src."CITYNAME"'
+        comment: City name
+      - name: crash_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(make_date(TRY_CAST(src."YEAR" AS INTEGER), TRY_CAST(src."MONTH" AS INTEGER), TRY_CAST(src."DAY" AS INTEGER)) AS DATE)'
+        comment: Crash date (from YEAR/MONTH/DAY)
+      - name: day_of_week
+        type: string
+        nullable: true
+        expression: 'src."DAY_WEEKNAME"'
+        comment: Day of week
+      - name: hour
+        type: integer
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."HOUR" AS INTEGER) = 99 THEN NULL ELSE TRY_CAST(src."HOUR" AS INTEGER) END'
+        comment: Hour of crash (0-23; 99=unknown mapped to null)
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."LATITUDE" AS DOUBLE) >= 77.0 THEN NULL ELSE TRY_CAST(src."LATITUDE" AS DOUBLE) END'
+        comment: Crash latitude (77.7777+ sentinel mapped to null)
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."LONGITUD" AS DOUBLE) <= -998.0 THEN NULL ELSE TRY_CAST(src."LONGITUD" AS DOUBLE) END'
+        comment: Crash longitude (-999.x sentinel mapped to null)
+      - name: harmful_event
+        type: string
+        nullable: true
+        expression: 'src."HARM_EVNAME"'
+        comment: First harmful event (decoded)
+      - name: manner_of_collision
+        type: string
+        nullable: true
+        expression: 'src."MAN_COLLNAME"'
+        comment: Manner of collision (decoded)
+      - name: light_condition
+        type: string
+        nullable: true
+        expression: 'src."LGT_CONDNAME"'
+        comment: Light condition (decoded)
+      - name: weather
+        type: string
+        nullable: true
+        expression: 'src."WEATHERNAME"'
+        comment: Atmospheric conditions (decoded)
+      - name: roadway_function
+        type: string
+        nullable: true
+        expression: 'src."FUNC_SYSNAME"'
+        comment: Roadway functional classification (decoded)
+      - name: persons_count
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."PERSONS" AS INTEGER)'
+        comment: Number of persons in the crash
+      - name: vehicles_count
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."VE_TOTAL" AS INTEGER)'
+        comment: Number of vehicles (contact + non-contact)
+      - name: fatalities
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."FATALS" AS INTEGER)'
+        comment: Number of fatalities in the crash
+      - name: pedestrians
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."PEDS" AS INTEGER)'
+        comment: Number of pedestrians/non-motorists involved
+
+    source:
+      type: http
+      url: "https://static.nhtsa.gov/nhtsa/downloads/FARS/{effective_year}/National/FARS{effective_year}NationalCSV.zip"
+      method: GET
+      # Select the crash-level file only; excludes the ~100MB vehicle/person CSVs
+      # and MIACC.CSV. Casing varies by year (2024 lowercase accident.csv); the
+      # glob matches either case via the char classes.
+      extractPattern: "*[aA][cC][cC][iI][dD][eE][nN][tT].[cC][sS][vV]"
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fatal_crashes/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: fatal_crashes
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # BTS AIRLINE ON-TIME PERFORMANCE — PREZIP monthly zip (delta year×month)
+  # ---------------------------------------------------------------------------
+  - name: airline_ontime
+    pattern: "type=airline_ontime/year=*/month=*/*.parquet"
+    partitions: *month_partitions
+    comment: >
+      BTS Reporting Carrier On-Time Performance — one row per scheduled domestic
+      flight for the (year, month) with departure/arrival delays, cancellations,
+      diversions, and delay-cause minutes. A curated subset of the 110-column
+      source is projected. Delta by (year, month); dataLag 1 keeps to complete
+      prior years so no unpublished month is requested. In DQ mode dqRowLimit
+      caps each month. Source:
+      transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{year}_{month}.zip.
+    dqRowLimit: 100000
+
+    dimensions:
+      type:
+        - airline_ontime
+      year: *ontime_year_range
+      month: *all_months
+
+    columns:
+      - name: flight_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(src."FlightDate" AS DATE)'
+        comment: Flight date
+      - name: reporting_airline
+        type: string
+        nullable: true
+        expression: 'src."Reporting_Airline"'
+        comment: Reporting carrier IATA-style code
+      - name: dot_id_reporting_airline
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."DOT_ID_Reporting_Airline" AS INTEGER)'
+        comment: DOT-assigned carrier id
+      - name: tail_number
+        type: string
+        nullable: true
+        expression: 'src."Tail_Number"'
+        comment: Aircraft tail number
+      - name: flight_number
+        type: string
+        nullable: true
+        expression: 'src."Flight_Number_Reporting_Airline"'
+        comment: Flight number
+      - name: origin
+        type: string
+        nullable: true
+        expression: 'src."Origin"'
+        comment: Origin airport code (FK to airports.arpt_id)
+      - name: origin_city_name
+        type: string
+        nullable: true
+        expression: 'src."OriginCityName"'
+        comment: Origin city name
+      - name: origin_state
+        type: string
+        nullable: true
+        expression: 'src."OriginState"'
+        comment: Origin state (USPS abbr)
+      - name: dest
+        type: string
+        nullable: true
+        expression: 'src."Dest"'
+        comment: Destination airport code (FK to airports.arpt_id)
+      - name: dest_city_name
+        type: string
+        nullable: true
+        expression: 'src."DestCityName"'
+        comment: Destination city name
+      - name: dest_state
+        type: string
+        nullable: true
+        expression: 'src."DestState"'
+        comment: Destination state (USPS abbr)
+      - name: crs_dep_time
+        type: string
+        nullable: true
+        expression: 'src."CRSDepTime"'
+        comment: Scheduled departure time (local hhmm)
+      - name: dep_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."DepDelay" AS DOUBLE)'
+        comment: Departure delay in minutes (negative = early)
+      - name: dep_del15
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."DepDel15" AS DOUBLE)'
+        comment: Departure delayed >= 15 min (1/0)
+      - name: crs_arr_time
+        type: string
+        nullable: true
+        expression: 'src."CRSArrTime"'
+        comment: Scheduled arrival time (local hhmm)
+      - name: arr_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ArrDelay" AS DOUBLE)'
+        comment: Arrival delay in minutes (negative = early)
+      - name: arr_del15
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ArrDel15" AS DOUBLE)'
+        comment: Arrival delayed >= 15 min (1/0)
+      - name: cancelled
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Cancelled" AS DOUBLE)'
+        comment: Flight cancelled (1/0)
+      - name: cancellation_code
+        type: string
+        nullable: true
+        expression: 'src."CancellationCode"'
+        comment: Cancellation reason (A=carrier, B=weather, C=NAS, D=security)
+      - name: diverted
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Diverted" AS DOUBLE)'
+        comment: Flight diverted (1/0)
+      - name: air_time
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."AirTime" AS DOUBLE)'
+        comment: Flight time in the air (minutes)
+      - name: distance
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."Distance" AS DOUBLE)'
+        comment: Distance between airports (miles)
+      - name: carrier_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."CarrierDelay" AS DOUBLE)'
+        comment: Delay minutes attributed to the carrier
+      - name: weather_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."WeatherDelay" AS DOUBLE)'
+        comment: Delay minutes attributed to weather
+      - name: nas_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."NASDelay" AS DOUBLE)'
+        comment: Delay minutes attributed to the National Airspace System
+      - name: security_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SecurityDelay" AS DOUBLE)'
+        comment: Delay minutes attributed to security
+      - name: late_aircraft_delay
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."LateAircraftDelay" AS DOUBLE)'
+        comment: Delay minutes attributed to a late inbound aircraft
+
+    source:
+      type: http
+      url: "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{effective_year}_{month_nopad}.zip"
+      method: GET
+      extractPattern: "*.csv"
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=airline_ontime/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: airline_ontime
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAA AIRPORTS — NTAD ArcGIS FeatureServer (snapshot, self-paginated JSON)
+  # ---------------------------------------------------------------------------
+  - name: airports
+    pattern: "type=airports/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FAA airport / aviation-facility master (NTAD, NASR-derived) — one row per
+      facility (~19,445), keyed by FAA location id. The ArcGIS FeatureServer
+      paginates 2000 features/page, so a self-paginating ResponseTransformer
+      fetches all pages and flattens features[].attributes. Snapshot, refreshed
+      on the FAA 56-day NASR cycle. arpt_id joins airline_ontime.origin/dest.
+      Source: services.arcgis.com/.../NTAD_Aviation_Facilities/FeatureServer/0.
+
+    dimensions:
+      type:
+        - airports
+
+    columns:
+      - name: arpt_id
+        type: string
+        nullable: false
+        comment: FAA location identifier (e.g. ATL) — PK
+      - name: arpt_name
+        type: string
+        nullable: true
+        comment: Airport/facility name
+      - name: city
+        type: string
+        nullable: true
+        comment: Associated city
+      - name: state_code
+        type: string
+        nullable: true
+        comment: State (USPS abbr; FK component to geo.states)
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Latitude (decimal degrees, WGS84)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Longitude (decimal degrees, WGS84)
+      - name: elevation_ft
+        type: double
+        nullable: true
+        comment: Field elevation (feet)
+      - name: site_type_code
+        type: string
+        nullable: true
+        comment: Facility type (A=airport, H=heliport, S=seaplane base, ...)
+      - name: facility_use_code
+        type: string
+        nullable: true
+        comment: PU=public, PR=private
+      - name: ownership_type_code
+        type: string
+        nullable: true
+        comment: Ownership (PU=public, PR=private, MA/MN/MR=military)
+      - name: arpt_status
+        type: string
+        nullable: true
+        comment: Operational status (O=operational)
+      - name: region_code
+        type: string
+        nullable: true
+        comment: FAA region code
+      - name: eff_date
+        type: string
+        nullable: true
+        comment: NASR effective date (56-day cycle) — freshness marker
+
+    source:
+      type: http
+      # Trigger URL; the transformer self-paginates via resultOffset. returnGeometry
+      # is off (lat/lon come from the LAT_DECIMAL/LONG_DECIMAL attributes).
+      # where / outFields / f=json live in the URL; the OFFSET paginator injects
+      # resultOffset + resultRecordCount (do NOT hardcode them here). ArcGIS caps
+      # a page at maxRecordCount=2000; pageSize 2000 makes full pages exactly 2000
+      # rows so termination fires on the short final page (no count in the body).
+      url: "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_Aviation_Facilities/FeatureServer/0/query?where=1%3D1&outFields=ARPT_ID,ARPT_NAME,CITY,STATE_CODE,STATE_NAME,COUNTY_NAME,LAT_DECIMAL,LONG_DECIMAL,ELEV,SITE_TYPE_CODE,FACILITY_USE_CODE,OWNERSHIP_TYPE_CODE,ARPT_STATUS,REGION_CODE,EFF_DATE&returnGeometry=false&f=json"
+      method: GET
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          offsetParam: resultOffset
+          limitParam: resultRecordCount
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      # Paginated source — the paginator merges pages; the single-response cache
+      # would truncate to page 1, so keep it off.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FaaAirportsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=airports/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: airports
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FTA TRANSIT RIDERSHIP — DOT Socrata 8bui-9xvu (delta by month, JSON)
+  # ---------------------------------------------------------------------------
+  - name: transit_ridership
+    pattern: "type=transit_ridership/year=*/month=*/*.parquet"
+    partitions: *month_partitions
+    comment: >
+      FTA National Transit Database — Complete Monthly Ridership (with
+      adjustments and estimates). Long format: one row per transit agency ×
+      mode × type-of-service × month with unlinked passenger trips (upt),
+      vehicles operated in max service (voms), and vehicle revenue hours/miles
+      (vrh/vrm). Delta by (year, month) sliced from the Socrata `date` field.
+      Source: data.transportation.gov/resource/8bui-9xvu.json.
+
+    dimensions:
+      type:
+        - transit_ridership
+      year: *ontime_year_range
+      month: *all_months
+
+    columns:
+      - name: ntd_id
+        type: string
+        nullable: true
+        expression: 'src."ntd_id"'
+        comment: NTD agency id
+      - name: agency
+        type: string
+        nullable: true
+        expression: 'src."agency"'
+        comment: Transit agency name
+      - name: uza_name
+        type: string
+        nullable: true
+        expression: 'src."uza_name"'
+        comment: Urbanized area name
+      - name: mode
+        type: string
+        nullable: true
+        expression: 'src."mode"'
+        comment: NTD mode code (e.g. DR, MB, HR, LR)
+      - name: mode_name
+        type: string
+        nullable: true
+        expression: 'src."_3_mode"'
+        comment: Grouped mode label (e.g. Bus, Heavy Rail)
+      - name: tos
+        type: string
+        nullable: true
+        expression: 'src."tos"'
+        comment: Type of service (DO=directly operated, PT=purchased transportation)
+      - name: reporter_type
+        type: string
+        nullable: true
+        expression: 'src."reporter_type"'
+        comment: Reporter type (Full Reporter, ...)
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."state"'
+        comment: State (USPS abbr; FK component to geo.states)
+      - name: fta_region
+        type: string
+        nullable: true
+        expression: 'src."fta_region"'
+        comment: FTA region number
+      - name: ride_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(src."date" AS DATE)'
+        comment: Observation month (first of month)
+      - name: upt
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."upt" AS DOUBLE)'
+        comment: Unlinked passenger trips
+      - name: voms
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."voms" AS DOUBLE)'
+        comment: Vehicles operated in maximum service
+      - name: vrh
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."vrh" AS DOUBLE)'
+        comment: Vehicle revenue hours
+      - name: vrm
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."vrm" AS DOUBLE)'
+        comment: Vehicle revenue miles
+      - name: agency_mode_tos_date
+        type: string
+        nullable: false
+        expression: 'src."agency_mode_tos_date"'
+        comment: Composite natural key (agency_mode_tos_reporter_uace_date) — PK
+
+    source:
+      type: http
+      # SoQL slices the (year, month) partition directly from the `date` field;
+      # one fetch per partition well under Socrata's 50000-row page cap.
+      url: "https://data.transportation.gov/resource/8bui-9xvu.json?$where=date%20%3E%3D%20'{effective_year}-{month}-01T00:00:00'%20AND%20date%20%3C%20'{period_end}'&$limit=50000&$order=agency_mode_tos_date"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=transit_ridership/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: transit_ridership
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # BTS T-100 DOMESTIC SEGMENT — TranStats DownLoad postback (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: t100_segments
+    pattern: "type=t100_segments/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      BTS T-100 Domestic Segment (All Carriers) — monthly air-carrier traffic and
+      capacity per (carrier, origin, dest, aircraft type): passengers, freight,
+      mail, seats, and departures performed/scheduled. Complements airline_ontime
+      (which has punctuality but no volumes). One fetch per year returns all
+      months. T-100 has no stable download URL, so a DataProvider reproduces the
+      TranStats ASP.NET postback (gnoyr_VQ=GEE). Delta by year; dataLag 1 keeps to
+      complete prior years. Source: transtats.bts.gov DL_SelectFields.aspx.
+
+    dimensions:
+      type:
+        - t100_segments
+      year: *t100_year_range
+
+    columns:
+      - name: month
+        type: integer
+        nullable: true
+        comment: Calendar month (1-12)
+      - name: carrier
+        type: string
+        nullable: true
+        comment: Unique carrier code
+      - name: carrier_name
+        type: string
+        nullable: true
+        comment: Unique carrier name
+      - name: origin
+        type: string
+        nullable: true
+        comment: Origin airport code (FK to airports.arpt_id)
+      - name: origin_city_name
+        type: string
+        nullable: true
+        comment: Origin city name
+      - name: origin_state
+        type: string
+        nullable: true
+        comment: Origin state (USPS abbr)
+      - name: dest
+        type: string
+        nullable: true
+        comment: Destination airport code (FK to airports.arpt_id)
+      - name: dest_city_name
+        type: string
+        nullable: true
+        comment: Destination city name
+      - name: dest_state
+        type: string
+        nullable: true
+        comment: Destination state (USPS abbr)
+      - name: aircraft_type
+        type: string
+        nullable: true
+        comment: BTS aircraft type code
+      - name: service_class
+        type: string
+        nullable: true
+        comment: Service class (F=scheduled passenger/cargo, ...)
+      - name: departures_scheduled
+        type: double
+        nullable: true
+        comment: Departures scheduled on the segment for the month
+      - name: departures_performed
+        type: double
+        nullable: true
+        comment: Departures performed on the segment for the month
+      - name: seats
+        type: double
+        nullable: true
+        comment: Available seats
+      - name: passengers
+        type: double
+        nullable: true
+        comment: Passengers transported
+      - name: freight
+        type: double
+        nullable: true
+        comment: Freight transported (pounds)
+      - name: mail
+        type: double
+        nullable: true
+        comment: Mail transported (pounds)
+      - name: distance
+        type: double
+        nullable: true
+        comment: Segment distance (miles)
+
+    source:
+      type: http
+      # Base field-selection page for T-100 Domestic Segment (All Carriers). The
+      # DataProvider drives the ASP.NET postback; year is injected as cboYear.
+      url: "https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=GEE&QO_fu146_anzr=Nv4%20Pn44vr45"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      # DataProvider fetches + unzips itself; nothing to cache.
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.transport.BtsT100DataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=t100_segments/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: t100_segments
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FHWA VEHICLE REGISTRATIONS — Highway Statistics MV-1 XLSX (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: vehicle_registrations
+    pattern: "type=vehicle_registrations/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FHWA Highway Statistics table MV-1 — state motor-vehicle registrations by
+      vehicle class (automobiles, buses, trucks, motorcycles, and the all-vehicle
+      total) for the data year. FHWA publishes MV-1 only as a merged multi-header
+      Excel workbook, so a ResponseTransformer parses the fixed MV-1 layout and
+      derives state_fips. Delta by year; dataLag 2 targets the newest available
+      data year. Joins to geo.states via state_fips. Source:
+      fhwa.dot.gov/policyinformation/statistics/{year}/xls/mv1.xlsx.
+
+    dimensions:
+      type:
+        - vehicle_registrations
+      year: *fhwa_year_range
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name (footnote markers stripped)
+      - name: automobiles
+        type: long
+        nullable: true
+        comment: Registered automobiles (total, public + private)
+      - name: buses
+        type: long
+        nullable: true
+        comment: Registered buses (total)
+      - name: trucks
+        type: long
+        nullable: true
+        comment: Registered trucks (total)
+      - name: motorcycles
+        type: long
+        nullable: true
+        comment: Registered motorcycles (total)
+      - name: all_motor_vehicles
+        type: long
+        nullable: true
+        comment: All registered motor vehicles (total)
+
+    source:
+      type: http
+      url: "https://www.fhwa.dot.gov/policyinformation/statistics/{effective_year}/xls/mv1.xlsx"
+      method: GET
+      # Transformer re-downloads the URL as raw bytes and parses with POI; the
+      # text body handed in is ignored (binary XLSX corrupts under UTF-8 decode).
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FhwaVehicleRegistrationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=vehicle_registrations/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: vehicle_registrations
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# PKs identify one observation. FKs are inter-schema, pointing at geo dimension
+# tables via state/county keys. No intra-transport FKs — the tables span
+# independent modes (road safety, aviation, transit) and share only geo keys.
+# ============================================================================
+
+constraints:
+
+  vehicle_recalls:
+    primaryKey: [nhtsa_id]
+
+  safety_complaints:
+    primaryKey: [cmplid]
+
+  fatal_crashes:
+    primaryKey: [year, st_case]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  airline_ontime:
+    primaryKey: [flight_date, reporting_airline, flight_number, origin, dest, crs_dep_time]
+
+  airports:
+    primaryKey: [arpt_id]
+
+  transit_ridership:
+    primaryKey: [agency_mode_tos_date]
+
+  t100_segments:
+    primaryKey: [year, month, carrier, origin, dest, aircraft_type]
+
+  vehicle_registrations:
+    primaryKey: [year, state_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: states
+        targetColumns: [state_fips]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: airline_ontime_by_carrier_month
+    comment: >
+      Monthly on-time summary by reporting carrier: flight counts, average
+      arrival delay, and cancellation rate. The headline punctuality rollup.
+    sql: >
+      SELECT
+        o.year,
+        o.month,
+        o.reporting_airline,
+        COUNT(*)                                      AS flights,
+        AVG(o.arr_delay)                              AS avg_arr_delay,
+        SUM(o.cancelled)                              AS cancellations,
+        SUM(o.cancelled) / CAST(COUNT(*) AS DOUBLE)   AS cancellation_rate,
+        AVG(o.dep_del15)                              AS pct_dep_delayed_15
+      FROM airline_ontime o
+      GROUP BY o.year, o.month, o.reporting_airline
+
+  - name: fatal_crashes_by_state_year
+    comment: >
+      Fatal crashes and total fatalities by state and year — the core FARS
+      rollup, joinable to geo.states and census population for per-capita rates.
+    sql: >
+      SELECT
+        f.year,
+        f.state_fips,
+        f.state_name,
+        COUNT(*)             AS crashes,
+        SUM(f.fatalities)    AS fatalities,
+        SUM(f.pedestrians)   AS pedestrians_involved
+      FROM fatal_crashes f
+      GROUP BY f.year, f.state_fips, f.state_name
+
+  - name: transit_ridership_by_agency_year
+    comment: >
+      Annual transit ridership (unlinked passenger trips) by agency and mode,
+      summed from the monthly series.
+    sql: >
+      SELECT
+        CAST(EXTRACT(YEAR FROM t.ride_date) AS INTEGER) AS year,
+        t.ntd_id,
+        t.agency,
+        t.mode_name,
+        t.state_abbr,
+        SUM(t.upt)   AS unlinked_passenger_trips,
+        SUM(t.vrm)   AS vehicle_revenue_miles
+      FROM transit_ridership t
+      GROUP BY 1, t.ntd_id, t.agency, t.mode_name, t.state_abbr

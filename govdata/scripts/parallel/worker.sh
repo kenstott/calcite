@@ -426,11 +426,36 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model housing)" "$WORKER_ID"
     ;;
 
+  # ── Transport (NHTSA, BTS, FAA, FTA, FHWA) — mixed snapshot/annual/monthly ─
+  # fatal_crashes/airline_ontime/transit_ridership/t100_segments/vehicle_registrations
+  # carry a year (or year+month) dimension; vehicle_recalls/safety_complaints/airports
+  # are snapshots that ignore the year range. All sources are keyless.
+
+  transport)
+    case "$MODE" in
+      historical)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
+        export GOVDATA_END_YEAR=""
+        ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "transport: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    run_etl_inline "$(build_inline_model transport)" "$WORKER_ID"
+    ;;
+
   *)
     echo "Unknown schema: $SCHEMA" >&2
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
-    echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag" >&2
+    echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
+    echo "               housing, transport" >&2
     exit 1
     ;;
 esac
