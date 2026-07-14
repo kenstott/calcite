@@ -37,5 +37,5 @@ uv pip install --python .venv -e ./vendor/buenavista -e . pytest
 
 # Run the server (Phase 0 stub backend):
 .venv/bin/python -m pgwire_calcite.launcher --host 127.0.0.1 --port 5455
-psql "host=127.0.0.1 port=5455 user=tester dbname=calcite" -c "SELECT 1;"
+psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
 ```

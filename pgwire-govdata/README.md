@@ -51,8 +51,12 @@ export GOVDATA_PARQUET_DIR='s3://govdata/parquet/'
 export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_ENDPOINT_OVERRIDE=...
 ./bin/pgwire-govdata                 # serves on 127.0.0.1:5433
 ./bin/pgwire-govdata --host 0.0.0.0 --port 5455   # alternate bind/port
-psql -h 127.0.0.1 -p 5433 -c 'SELECT cik, company_name FROM sec.filing_metadata LIMIT 5'
+psql -h 127.0.0.1 -p 5433 -d govdata -c 'SELECT cik, company_name FROM sec.filing_metadata LIMIT 5'
 ```
+
+The database is named **`govdata`** (`current_database()`, the JDBC URL, and the DataGrip/DBeaver
+database node); the `sec`, `econ`, `census`, … sources are schemas under it. The wrapper passes
+`--database govdata` by default — override with `--database <name>` if you need a different label.
 
 `--host` / `--port` (default `127.0.0.1:5433`) and any other launcher flags pass straight through to
 `pgwire-calcite`. There is no port env var — set it on the command line.
