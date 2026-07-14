@@ -210,31 +210,15 @@ for arg in "$@"; do
       # archives on every year slot, so ingest them ONCE here; the per-year lands:${_y} slots below
       # cover only its year-partitioned tables (timber_sales, nps_visitation, onrr_revenues).
       queue+=(lands:once)
-      # ag runs as a single historical slot (not year-sliced): ers_farm_income is a
-      # no-year full-CSV fetch that would re-download on every per-year slot; the
-      # NASS/RMA/FSA year-partitioned tables backfill their full range in one pass.
-      queue+=(ag:historical)
-      # disasters runs as a single historical slot: its year-partitioned FEMA/NOAA tables
-      # backfill their full range in one pass (year dimension iterates 2010→cy-1), and the
-      # static wildfire_perimeters snapshot ingests once — avoiding the per-year re-fetch of
-      # the 39k-feature WFIGS layer that year-slicing would cause.
-      queue+=(disasters:historical)
-      # housing runs as a single historical slot: house_price_index is one snapshot file,
-      # HUD fair_market_rents/income_limits fan out state×year in one pass (self-floored at
-      # 2017), and building_permits backfills its full year range — none benefit from
-      # per-year slicing (the FHFA/HUD fetches would re-run identically on every slot).
-      queue+=(housing:historical)
-      # transport runs as a single historical slot: its year/month-partitioned tables
-      # (fatal_crashes, airline_ontime, transit_ridership, t100_segments,
-      # vehicle_registrations) backfill their full range in one pass, while the
-      # snapshot tables (vehicle_recalls, safety_complaints, airports) ingest once —
-      # none benefit from per-year slicing (the snapshot fetches would re-run identically).
-      queue+=(transport:historical)
-      # environment runs as a single historical slot: its year/state-partitioned tables
-      # (air_quality_*, tri, ghg, streamflow, water_quality) backfill their full range in
-      # one pass, and the snapshot tables (aqs_monitors, water_sites, drinking_water,
-      # epa_facilities, superfund, rcra, violations) ingest once — no per-year slicing.
-      queue+=(environment:historical)
+      # ag/disasters/housing/transport/environment are SPLIT (lands-style): each mixes
+      # year-addressable tables (sliced per-year in the loop below for parallelism) with
+      # snapshot/full-archive tables that ignore the year range and would re-download on
+      # every year slot — those ingest exactly once via a :once slot here. worker.sh fences
+      # each slot to its table subset via enabledTables (_split_year_tables/_split_once_tables).
+      # The :once tables are: ag=ers_farm_income; disasters=wildfire_perimeters;
+      # housing=house_price_index; transport=vehicle_recalls/safety_complaints/airports;
+      # environment=aqs_monitors/water_sites/drinking_water/epa_facilities/violations/superfund/rcra.
+      queue+=(ag:once disasters:once housing:once transport:once environment:once)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -242,6 +226,8 @@ for arg in "$@"; do
         queue+=("econ:${_y}" "census:${_y}" "geo:${_y}" "crime:${_y}" "weather:${_y}" "energy:${_y}")
         queue+=("fec:${_y}" "fedregister:${_y}" "cftc:${_y}")
         queue+=("health:${_y}" "edu:${_y}" "patents:${_y}" "lands:${_y}")
+        # Split-schema year-addressable tables (snapshots handled by the :once slots above).
+        queue+=("housing:${_y}" "transport:${_y}" "environment:${_y}" "ag:${_y}" "disasters:${_y}")
         _y=$((_y - 1))
       done
       ;;
@@ -831,7 +817,12 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     fi
     log_file="$SCRIPT_DIR/runs/${id}/launch.log"
     if [ -f "$log_file" ]; then
-      last_modified=$(stat -c '%Y' "$log_file" 2>/dev/null || echo "$now")
+      # launch.log is a symlink to launch_<ts>.log; the symlink's own mtime is
+      # frozen at creation (launch time). stat does NOT dereference by default,
+      # so plain 'stat -c %Y' returns that frozen mtime and idle_secs collapses to
+      # uptime — turning this idle check into a hard wall-clock cap that kills any
+      # worker still busy at its timeout. -L follows the link to the live log file.
+      last_modified=$(stat -L -c '%Y' "$log_file" 2>/dev/null || echo "$now")
       idle_secs=$(( now - last_modified ))
     else
       idle_secs=$uptime_secs

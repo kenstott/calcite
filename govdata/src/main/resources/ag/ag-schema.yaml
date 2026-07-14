@@ -562,6 +562,11 @@ partitionedTables:
   # source.url is the LANDING PAGE — ErsFarmIncomeProvider scrapes it for the
   # current rotating /media/.../release.zip, then streams the latin-1 CSV.
   - name: ers_farm_income
+    # Freshness gate: ERS republishes this cumulative file ~quarterly. A Last-Modified probe of
+    # the landing page skips the re-fetch/re-materialize on unchanged runs (fails open, so a null
+    # token just re-fetches — correctness never depends on the gate, only efficiency).
+    freshness:
+      type: last_modified
     pattern: "type=ers_farm_income/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
@@ -653,7 +658,14 @@ partitionedTables:
         compression: snappy
         batchSize: 50000
         stagingMode: local
-      iceberg: *nass_iceberg
+      iceberg:
+        # Cumulative full-file source: the provider re-fetches the ENTIRE CSV every run, so the
+        # materialize must REPLACE each year partition (ReplacePartitions), not append — otherwise
+        # every run and every worker restart duplicates the whole table (this drove it to 15.4B
+        # rows for a ~460K-row source). overwritePartitions=true flips IcebergMaterializationWriter
+        # to the replace-partitions commit path; all other settings inherit from *nass_iceberg.
+        <<: *nass_iceberg
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # FSA_COMMODITY_PAYMENTS — FSA program/conservation payments by county

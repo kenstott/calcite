@@ -80,6 +80,35 @@ esac
 WORKER_ID="worker-${SCHEMA}-${MODE}"
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
+# ── Split-schema table sets ────────────────────────────────────────────────────
+# housing/transport/environment/ag/disasters each MIX year-addressable tables (one
+# ETL slot per year — real parallelism, no redundant download) with snapshot or
+# full-archive tables that ignore the year range (a single :once slot). The pool's
+# historical builder emits `schema:once` + `schema:${year}` (mirroring the lands
+# split); worker.sh fences each slot to its subset via the enabledTables operand so
+# per-year slots never re-fetch the snapshots. Query-time views are NOT ETL tables
+# and are excluded here. Keep these lists in sync with each schema YAML `tables:`.
+_split_year_tables() {   # year-addressable base tables → per-year slots
+  case "$1" in
+    housing)     echo '"building_permits","fair_market_rents","income_limits","income_limits_county"' ;;
+    transport)   echo '"fatal_crashes","airline_ontime","transit_ridership","t100_segments","vehicle_registrations"' ;;
+    environment) echo '"air_quality_annual","air_quality_daily","tri_releases","ghg_facilities","ghg_emissions","streamflow","water_quality_samples"' ;;
+    ag)          echo '"nass_crop_production","nass_livestock_inventory","rma_crop_insurance","fsa_commodity_payments"' ;;
+    disasters)   echo '"disaster_declarations","public_assistance_projects","hazard_mitigation_projects","nfip_claims","nfip_policies","storm_events"' ;;
+    *) echo "ERROR: no year-table set for schema '$1'" >&2; return 1 ;;
+  esac
+}
+_split_once_tables() {   # snapshot / full-archive base tables → single :once slot
+  case "$1" in
+    housing)     echo '"house_price_index"' ;;
+    transport)   echo '"vehicle_recalls","safety_complaints","airports"' ;;
+    environment) echo '"aqs_monitors","water_sites","drinking_water","epa_facilities","drinking_water_violations","superfund_sites","rcra_facilities"' ;;
+    ag)          echo '"ers_farm_income"' ;;
+    disasters)   echo '"wildfire_perimeters"' ;;
+    *) echo "ERROR: no once-table set for schema '$1'" >&2; return 1 ;;
+  esac
+}
+
 case "$SCHEMA" in
 
   # ── SEC primary (10-K / 10-Q) — one year per invocation ──────────────────
@@ -222,7 +251,7 @@ case "$SCHEMA" in
   # cadence (energy's weekly/monthly/annual mix) lives in the schema YAML
   # dimensions (month cache-buster), not in worker flags.
 
-  econ|census|crime|weather|energy|disasters)
+  econ|census|crime|weather|energy)
     case "$MODE" in
       historical)
         export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
@@ -378,13 +407,27 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model cftc)" "$WORKER_ID"
     ;;
 
-  # ── USDA agriculture (NASS, ERS, RMA, FSA) — annual, year-range ───────────
-  # NASS crop/livestock, RMA crop insurance, and FSA payments carry a year
-  # dimension (dataLag=1); ERS farm income is a single cumulative fetch that
-  # partitions by row year and ignores the range. NASS digital record starts ~1997.
-
-  ag)
+  # ── Split-aware annual schemas — year tables per-year; snapshot/full-archive :once ──
+  # housing (FHFA/Census/HUD), transport (NHTSA/BTS/FAA/FTA/FHWA), environment
+  # (EPA/USGS), ag (USDA NASS/ERS/RMA/FSA), disasters (FEMA/NOAA/WFIGS). Each mixes
+  # year-addressable tables with snapshot/full-archive tables — see the
+  # _split_year_tables/_split_once_tables sets above. Modes:
+  #   once           — snapshot/full-archive tables only, ingested once over the full range
+  #   <year>|<range> — year-addressable tables ONLY (the pool's per-year slots); skips the
+  #                    snapshots so they are not re-fetched on every year slot
+  #   historical     — ALL tables (manual/`all` full backfill; the pool does NOT emit this —
+  #                    it emits :once + per-year)
+  #   daily          — ALL tables (snapshots refresh + current-year data; currentMonth passed
+  #                    so month-partitioned tables like transport's airline_ontime bust cache)
+  housing|transport|environment|ag|disasters)
+    ENABLED=""
+    EXTRA=""
     case "$MODE" in
+      once)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ENABLED="\"enabledTables\":[$(_split_once_tables "$SCHEMA")]"
+        ;;
       historical)
         export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
         export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
@@ -392,86 +435,19 @@ case "$SCHEMA" in
       daily)
         export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
         export GOVDATA_END_YEAR=""
+        EXTRA="\"currentMonth\":\"$(date +%m)\""
         ;;
       [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
         export GOVDATA_START_YEAR="${MODE%-*}"
         export GOVDATA_END_YEAR="${MODE#*-}"
+        ENABLED="\"enabledTables\":[$(_split_year_tables "$SCHEMA")]"
         ;;
-      *) echo "ag: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+      *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, once, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
-    run_etl_inline "$(build_inline_model ag)" "$WORKER_ID"
-    ;;
-
-  # ── Housing (FHFA HPI, Census permits, HUD FMR/income limits) — annual ────
-  # building_permits carries a year dimension (dataLag=1); HUD FMR/income_limits
-  # fan out state×year (self-floored at 2017 via minYear); house_price_index is a
-  # single snapshot file that ignores the year range.
-
-  housing)
-    case "$MODE" in
-      historical)
-        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
-        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
-        ;;
-      daily)
-        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
-        export GOVDATA_END_YEAR=""
-        ;;
-      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
-        export GOVDATA_START_YEAR="${MODE%-*}"
-        export GOVDATA_END_YEAR="${MODE#*-}"
-        ;;
-      *) echo "housing: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
-    esac
-    run_etl_inline "$(build_inline_model housing)" "$WORKER_ID"
-    ;;
-
-  # ── Transport (NHTSA, BTS, FAA, FTA, FHWA) — mixed snapshot/annual/monthly ─
-  # fatal_crashes/airline_ontime/transit_ridership/t100_segments/vehicle_registrations
-  # carry a year (or year+month) dimension; vehicle_recalls/safety_complaints/airports
-  # are snapshots that ignore the year range. All sources are keyless.
-
-  transport)
-    case "$MODE" in
-      historical)
-        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
-        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
-        ;;
-      daily)
-        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
-        export GOVDATA_END_YEAR=""
-        ;;
-      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
-        export GOVDATA_START_YEAR="${MODE%-*}"
-        export GOVDATA_END_YEAR="${MODE#*-}"
-        ;;
-      *) echo "transport: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
-    esac
-    run_etl_inline "$(build_inline_model transport)" "$WORKER_ID"
-    ;;
-
-  # ── Environment (EPA AQS/TRI/GHGRP, USGS water, SDWIS, ECHO/FRS, SEMS, RCRA) ─
-  # air_quality_*/tri/ghg/streamflow/water_quality carry a year (or year+state)
-  # dimension; the snapshot tables (aqs_monitors, water_sites, drinking_water,
-  # epa_facilities, superfund, rcra, violations) ignore the year range. All keyless.
-
-  environment)
-    case "$MODE" in
-      historical)
-        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
-        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
-        ;;
-      daily)
-        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
-        export GOVDATA_END_YEAR=""
-        ;;
-      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
-        export GOVDATA_START_YEAR="${MODE%-*}"
-        export GOVDATA_END_YEAR="${MODE#*-}"
-        ;;
-      *) echo "environment: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
-    esac
-    run_etl_inline "$(build_inline_model environment)" "$WORKER_ID"
+    # Comma-join the optional operands (enabledTables, currentMonth) into one fragment.
+    OPS="$ENABLED"
+    [ -n "$EXTRA" ] && OPS="${OPS:+${OPS},}${EXTRA}"
+    run_etl_inline "$(build_inline_model "$SCHEMA" "$OPS")" "$WORKER_ID"
     ;;
 
   *)

@@ -153,7 +153,7 @@ partitionedTables:
       - name: frequency
         type: string
         nullable: true
-        comment: 'monthly' or 'quarterly'
+        comment: Frequency ('monthly' or 'quarterly')
       - name: level
         type: string
         nullable: true

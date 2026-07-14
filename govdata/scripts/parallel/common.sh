@@ -944,7 +944,11 @@ get_heap_config() {
       # FSA loads full 36MB xlsx workbooks into POI + holds distinct-payee dedup
       # sets for a whole disbursement-year vintage; RMA streams ~150k rows/yr.
       case "$_mode" in
-        historical) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;
+        historical) _HEAP_MIN="4g"; _HEAP_MAX="6g" ;;  # full manual backfill, all tables
+        # Per-year slots (split): one FSA vintage's POI workbook + dedup set + RMA/NASS year.
+        [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+                    _HEAP_MIN="3g"; _HEAP_MAX="4g" ;;
+        # once slot = ers_farm_income only (streams a cumulative CSV, partitions by row year).
         *)          _HEAP_MIN="2g"; _HEAP_MAX="3g" ;;
       esac ;;
     *)
