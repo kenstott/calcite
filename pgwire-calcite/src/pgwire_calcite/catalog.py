@@ -22,8 +22,15 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
+
+# Captured once per process (≈ server start). pg_postmaster_start_time() and
+# pg_conf_load_time() are answered with this stable value so clients (e.g. DataGrip,
+# which uses startup_time for restart detection) get PG-faithful, restart-stable
+# semantics rather than NULL.
+_SERVER_START_ISO = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S+00")
 
 _SET_RE = re.compile(r"^\s*SET\b", re.IGNORECASE)
 _SHOW_RE = re.compile(r"^\s*SHOW\b", re.IGNORECASE)
@@ -1213,6 +1220,12 @@ _SCALAR_NAMES = frozenset(
         "current_schema",
         "version",
         "pg_backend_pid",
+        # Client introspection probes (e.g. DataGrip's startup_time query) call these
+        # server-time functions inside EXTRACT/AT TIME ZONE expressions Calcite can't
+        # parse; route them to the DuckDB intercept engine, where _rewrite_for_duckdb
+        # answers them NULL (PGW-014).
+        "pg_postmaster_start_time",
+        "pg_conf_load_time",
         # DuckDB's ATTACH handshake probes these regclass/regtype lookups; we own
         # no such objects, so they are intercepted and answered NULL (PGW-014).
         "to_regclass",
@@ -2779,7 +2792,10 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             ):
                 return exp.null()
             if "pg_postmaster_start_time" in fn or "pg_conf_load_time" in fn:
-                return exp.null()
+                # PG returns a real timestamptz (server start / config-load time); clients
+                # use it for restart detection, so answer with a stable per-process value
+                # instead of NULL.
+                return exp.cast(exp.Literal.string(_SERVER_START_ISO), "TIMESTAMPTZ")
             if "pg_is_other_temp_schema" in fn:
                 return exp.false()
             if (
