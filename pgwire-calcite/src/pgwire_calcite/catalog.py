@@ -2535,8 +2535,15 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
     if not constraint_rows:
         return
     oid_to_ns: dict[int, str] = {v: k for k, v in idx.ns_map.items()}
+    # PK/unique constraint name per table OID: information_schema.referential_constraints
+    # points each FK at the unique constraint it references (the target table's PK).
+    # con_row[3]=contype, con_row[7]=conrelid, con_row[1]=conname.
+    pk_name_by_relid: dict[int, str] = {
+        row[7]: row[1] for row in constraint_rows if row[3] == "p"
+    }
     is_tc_rows: list[tuple] = []
     is_kcu_rows: list[tuple] = []
+    is_rc_rows: list[tuple] = []
     for con_row in constraint_rows:
         conname_v: str = con_row[1]
         conns_oid_v: int = con_row[2]
@@ -2560,6 +2567,22 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                 "YES",
             )
         )
+        if contype_v == "f":
+            confrelid_v: int = con_row[11]
+            _, ref_sch_v, _ = idx.toid_to_table.get(confrelid_v, (_DATABASE_NAME, "public", ""))
+            is_rc_rows.append(
+                (
+                    _DATABASE_NAME,
+                    con_schema_v,
+                    conname_v,
+                    _DATABASE_NAME,
+                    ref_sch_v,
+                    pk_name_by_relid.get(confrelid_v),
+                    "NONE",
+                    "NO ACTION",
+                    "NO ACTION",
+                )
+            )
         conkeys_raw = con_row[18]
         conkeys_list: list[int] = list(conkeys_raw) if conkeys_raw else []
         for pos, attnum_v in enumerate(conkeys_list, 1):
@@ -2587,6 +2610,11 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         db.executemany(
             f"INSERT INTO _is_key_column_usage VALUES ({','.join(['?'] * 9)})",
             is_kcu_rows,
+        )
+    if is_rc_rows:
+        db.executemany(
+            f"INSERT INTO _is_referential_constraints VALUES ({','.join(['?'] * 9)})",
+            is_rc_rows,
         )
 
 
