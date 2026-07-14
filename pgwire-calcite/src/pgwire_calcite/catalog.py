@@ -1241,6 +1241,11 @@ _SCALAR_NAMES = frozenset(
         # answers them NULL (PGW-014).
         "pg_postmaster_start_time",
         "pg_conf_load_time",
+        # Recovery/txid probes (DataGrip's current_txid query nests these inside
+        # CASE/CAST/MOD that Calcite can't resolve); intercept and answer constants.
+        "pg_is_in_recovery",
+        "txid_current",
+        "pg_current_xact_id",
         # DuckDB's ATTACH handshake probes these regclass/regtype lookups; we own
         # no such objects, so they are intercepted and answered NULL (PGW-014).
         "to_regclass",
@@ -2839,6 +2844,13 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 # use it for restart detection, so answer with a stable per-process value
                 # instead of NULL.
                 return exp.cast(exp.Literal.string(_SERVER_START_ISO), "TIMESTAMPTZ")
+            if "pg_is_in_recovery" in fn:
+                # We are never a standby/replica in recovery.
+                return exp.false()
+            if "txid_current" in fn or "pg_current_xact_id" in fn:
+                # Transaction id probes (DataGrip's current_txid). No real MVCC txids;
+                # answer a constant so the surrounding CAST/MOD expression evaluates.
+                return exp.Literal.number(1)
             if "pg_is_other_temp_schema" in fn:
                 return exp.false()
             if (
