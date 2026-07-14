@@ -32,6 +32,21 @@ log = logging.getLogger(__name__)
 # semantics rather than NULL.
 _SERVER_START_ISO = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S+00")
 
+# Catalog/database name reported to clients: current_database(), pg_database.datname,
+# information_schema.*.table_catalog/constraint_catalog, etc. Configurable per pgwire
+# variant via the launcher's --database flag (default the PG-standard "postgres");
+# e.g. pgwire-govdata sets "govdata". Set once at startup — no per-query override.
+_DATABASE_NAME = "postgres"
+
+
+def set_database_name(name: str) -> None:
+    """Set the catalog/database name reported to clients. Called once at startup;
+    no silent default — an empty name is a configuration error (CLAUDE.md rule 6)."""
+    global _DATABASE_NAME
+    if not name or not name.strip():
+        raise ValueError("database name must be a non-empty string")
+    _DATABASE_NAME = name.strip()
+
 _SET_RE = re.compile(r"^\s*SET\b", re.IGNORECASE)
 _SHOW_RE = re.compile(r"^\s*SHOW\b", re.IGNORECASE)
 _TXN_RE = re.compile(
@@ -1340,7 +1355,7 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
         if tm.table_id in seen_table_ids:
             continue
         seen_table_ids.add(tm.table_id)
-        cat = "calcite"
+        cat = _DATABASE_NAME
         raw_schema = tm.domain_id or tm.schema_name or "public"
         sch = domain_to_sql_name(raw_schema)
         tname = semantic_table_name(tm)
@@ -1377,7 +1392,7 @@ def _populate_is_schemata(db, idx: CatalogIndex) -> None:
     seen_schemas: set[tuple] = {(c, s) for c, s, *_ in idx.tables}
     if seen_schemas:
         db.executemany(
-            "INSERT INTO _is_schemata VALUES (?,?,'calcite',NULL,NULL,NULL,NULL)",
+            f"INSERT INTO _is_schemata VALUES (?,?,'{_DATABASE_NAME}',NULL,NULL,NULL,NULL)",
             list(seen_schemas),
         )
 
@@ -1416,7 +1431,7 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
         generation_expression VARCHAR, is_updatable VARCHAR)""")
     col_rows = []
     for toid, col_name, col_type, is_nullable, ordinal in idx.all_cols:
-        c, s, t = idx.toid_to_table.get(toid, ("calcite", "public", ""))
+        c, s, t = idx.toid_to_table.get(toid, (_DATABASE_NAME, "public", ""))
         pg_type = _trino_to_pg_name(col_type)
         null_str = "YES" if is_nullable else "NO"
         col_rows.append(
@@ -2109,7 +2124,7 @@ def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
         datconnlimit INTEGER, datfrozenxid INTEGER, datminmxid INTEGER,
         dattablespace INTEGER, datcollate VARCHAR, datctype VARCHAR, datacl VARCHAR)""")
     db.execute(
-        "INSERT INTO _pg_database VALUES (16384,'calcite',10,6,'c',FALSE,TRUE,-1,726,1,1663,'en_US.UTF-8','en_US.UTF-8',NULL)"
+        f"INSERT INTO _pg_database VALUES (16384,'{_DATABASE_NAME}',10,6,'c',FALSE,TRUE,-1,726,1,1663,'en_US.UTF-8','en_US.UTF-8',NULL)"
     )
 
 
@@ -2327,7 +2342,7 @@ def _populate_pg_tables_and_am(db, idx: CatalogIndex) -> None:
         hastriggers BOOLEAN, rowsecurity BOOLEAN)""")
     if idx.tables:
         db.executemany(
-            "INSERT INTO _pg_tables VALUES (?,?,'calcite',NULL,FALSE,FALSE,FALSE,FALSE)",
+            f"INSERT INTO _pg_tables VALUES (?,?,'{_DATABASE_NAME}',NULL,FALSE,FALSE,FALSE,FALSE)",
             [(row[1], row[2]) for row in idx.tables],
         )
     db.execute("""CREATE TABLE _pg_am (
@@ -2527,12 +2542,12 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         conns_oid_v: int = con_row[2]
         contype_v: str = con_row[3]
         conrelid_v: int = con_row[7]
-        c_v, c_sch_v, c_tname_v = idx.toid_to_table.get(conrelid_v, ("calcite", "public", ""))
+        c_v, c_sch_v, c_tname_v = idx.toid_to_table.get(conrelid_v, (_DATABASE_NAME, "public", ""))
         con_schema_v = oid_to_ns.get(conns_oid_v, "public")
         ctype_str = "PRIMARY KEY" if contype_v == "p" else "FOREIGN KEY"
         is_tc_rows.append(
             (
-                "calcite",
+                _DATABASE_NAME,
                 con_schema_v,
                 conname_v,
                 c_v,
@@ -2552,7 +2567,7 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
             if col_name_v:
                 is_kcu_rows.append(
                     (
-                        "calcite",
+                        _DATABASE_NAME,
                         con_schema_v,
                         conname_v,
                         c_v,
@@ -2740,7 +2755,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                     base = base.where("nspname NOT IN ('pg_catalog', 'information_schema')")
                 return exp.Subquery(this=base)
             if "pg_get_userbyid" in fn or "pg_get_role_name" in fn:
-                return exp.Literal.string("calcite")
+                return exp.Literal.string(_DATABASE_NAME)
             if fn.startswith("pg_get_") or "pg_tablespace_location" in fn:
                 return exp.null()
             if "pg_encoding_to_char" in fn:
@@ -2831,7 +2846,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if fn in ("current_user", "session_user"):
                 return exp.Literal.string(role_id)
             if fn in ("current_database",):
-                return exp.Literal.string("calcite")
+                return exp.Literal.string(_DATABASE_NAME)
             if fn == "version":
                 return exp.Literal.string("PostgreSQL 14.0 on Provisa")
             if "set_config" in fn:
@@ -2843,7 +2858,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
         if type(node).__name__ == "CurrentUser":
             return exp.Literal.string(role_id)
         if type(node).__name__ == "CurrentDatabase":
-            return exp.Literal.string("calcite")
+            return exp.Literal.string(_DATABASE_NAME)
         if type(node).__name__ == "CurrentSchema":
             return exp.Literal.string("public")
         if isinstance(node, exp.Dot):
@@ -2960,7 +2975,7 @@ def _handle_scalar(sql: str, role_id: str):
     if "current_user" in s or "session_user" in s:
         return QueryResult(rows=[(role_id,)], column_names=["current_user"])
     if "current_database" in s:
-        return QueryResult(rows=[("calcite",)], column_names=["current_database"])
+        return QueryResult(rows=[(_DATABASE_NAME,)], column_names=["current_database"])
     if "version()" in s:
         return QueryResult(rows=[("PostgreSQL 14.0 on Provisa",)], column_names=["version"])
     if "current_schema()" in s:

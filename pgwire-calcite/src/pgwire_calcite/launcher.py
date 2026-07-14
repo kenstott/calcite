@@ -66,9 +66,17 @@ def serve(
     backend=None,
     auth_provider=None,
     authz_grants=None,
+    database: str = "postgres",
 ) -> server_mod.CalciteServer:
     """Install state and start the server thread. Returns the server (non-blocking)."""
+    # Set the catalog/database name reported to clients (current_database, pg_database,
+    # information_schema) BEFORE catalog population reads it. Single source of truth,
+    # kept in sync with schema_registry.database below.
+    from pgwire_calcite import catalog as _catalog
+
+    _catalog.set_database_name(database)
     server_mod.state = build_state(backend=backend, auth=auth, users=users)
+    server_mod.state.schema_registry.database = database
     if auth_provider is not None:
         server_mod.state.auth_provider = auth_provider
     # Set authz grants before catalog population so discovery is filtered per role.
@@ -131,6 +139,13 @@ def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pgwire-calcite", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5433)
+    parser.add_argument(
+        "--database",
+        default="postgres",
+        help="catalog/database name reported to clients (current_database(), "
+        "pg_database, information_schema); default the PG-standard 'postgres'. "
+        "Set a topic-relevant name per variant, e.g. --database govdata.",
+    )
     parser.add_argument("--backend", choices=["stub", "calcite", "bridge"], default="stub")
     parser.add_argument("--model", default=None, help="Calcite model JSON path (--backend calcite)")
     parser.add_argument(
@@ -218,6 +233,7 @@ def main(argv: list | None = None) -> int:
         keyfile=args.tls_key,
         backend=backend,
         auth_provider=auth_provider,
+        database=args.database,
     )
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",

@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, List
 
-from pgwire_calcite import normalize
+from pgwire_calcite import catalog, normalize
 from pgwire_calcite.compiler.sql_gen import (
     ColumnMeta,
     CompilationContext,
@@ -88,7 +88,7 @@ def build_context(conn) -> tuple:
             continue
         tm = TableMeta(
             table_id=next_id,
-            catalog_name="calcite",
+            catalog_name=catalog._DATABASE_NAME,
             schema_name=schema,
             table_name=name,
             type_name=f"{schema}.{name}",

@@ -39,7 +39,9 @@ class SchemaRegistry:
 
     #: schema name -> {table name -> list[(column_name, duckdb_type)]}
     tables: Dict[str, Dict[str, list]] = field(default_factory=dict)
-    database: str = "calcite"
+    #: PG-standard default; overridden per variant via the launcher's --database flag
+    #: (kept in sync with catalog._DATABASE_NAME, the value reported to clients).
+    database: str = "postgres"
 
 
 @dataclass

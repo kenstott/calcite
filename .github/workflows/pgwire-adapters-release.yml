@@ -109,8 +109,11 @@ jobs:
         run: |
           mkdir -p bundle/model bundle/bin
           cp "pgwire-${{ matrix.adapter.name }}/model.json" bundle/model/model.json
-          # Adapter-specific entry: starts the calcite backend against this adapter's model. Extra
-          # args (e.g. --port, --auth) are appended after and win.
+          # Adapter-specific entry: starts the calcite backend against this adapter's model.
+          # --database defaults the reported catalog name to the adapter's topic (e.g. govdata)
+          # instead of the generic "postgres". Extra args (e.g. --port, --auth, --database) are
+          # appended after and win. (${{ matrix.adapter.name }} is substituted by the runner
+          # even inside the quoted heredoc; $HERE/$@ stay literal for the generated script.)
           cat > "bundle/bin/pgwire-${{ matrix.adapter.name }}" <<'SH'
           #!/usr/bin/env bash
           HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -119,7 +122,8 @@ jobs:
           exec "$HERE/jre/bin/java" \
             "-Dpgwire.python=$HERE/cpython/bin/python" \
             -jar "$HERE/pgwire-launcher.jar" \
-            --backend calcite --model "$HERE/model/model.json" "$@"
+            --backend calcite --model "$HERE/model/model.json" \
+            --database ${{ matrix.adapter.name }} "$@"
           SH
           chmod +x "bundle/bin/pgwire-${{ matrix.adapter.name }}"
 
