@@ -45,7 +45,7 @@ GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
 RUNNER="org.apache.calcite.adapter.govdata.etl.GovDataModelVerificationRunner"
 
 # Canonical primary dataSource names (GovDataSchemaFactory.getFactoryForDataSource switch).
-ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregister cyber_vuln cyber_threat health energy edu patents lands cftc disasters housing"
+ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregister cyber_vuln cyber_threat health energy edu patents lands cftc disasters housing ag transport environment"
 
 SOURCE=""
 LIMIT="1"
