@@ -89,7 +89,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
     }
     Table table = delegate.getTable(name);
     if (table != null && constraintMetadata.containsKey(name)) {
-      return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name));
+      String schemaName = owner != null ? owner.getName() : null;
+      return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name), schemaName, name);
     }
     return table;
   }
@@ -176,12 +177,18 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
   private static class ConstraintAwareJdbcTable implements CommentableTable {
     private final Table wrappedDelegate;
     private final Map<String, Object> constraintConfig;
+    private final @Nullable String schemaName;
+    private final @Nullable String tableName;
     private Statistic statistic;  // Non-final to allow lazy initialization
 
     public ConstraintAwareJdbcTable(Table wrappedDelegate,
-                                    Map<String, Object> constraintConfig) {
+                                    Map<String, Object> constraintConfig,
+                                    @Nullable String schemaName,
+                                    @Nullable String tableName) {
       this.wrappedDelegate = wrappedDelegate;
       this.constraintConfig = constraintConfig;
+      this.schemaName = schemaName;
+      this.tableName = tableName;
       // Delay statistic creation until we have column names
       this.statistic = null;
     }
@@ -218,7 +225,8 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
           // Create statistic with actual column names and row count from base
           // Note: FK validation happens at schema level in FileSchema.validateForeignKeyConstraints()
           // which removes invalid FKs from constraint metadata before tables read it
-          statistic = TableConstraints.fromConfig(tableConfig, columnNames, rowCount);
+          statistic = TableConstraints.fromConfig(tableConfig, columnNames, rowCount,
+              schemaName, tableName);
           LOGGER.info("Created statistic with {} keys, {} referential constraints, rowCount={}",
                       statistic.getKeys() != null ? statistic.getKeys().size() : 0,
                       statistic.getReferentialConstraints() != null ?

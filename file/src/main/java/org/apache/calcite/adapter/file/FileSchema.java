@@ -6302,6 +6302,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     return comment;
   }
 
+  /** Returns this schema's name, used to qualify intra-schema FK targets. */
+  public String getName() {
+    return name;
+  }
+
   private final java.util.concurrent.atomic.AtomicBoolean foreignKeysValidated =
       new java.util.concurrent.atomic.AtomicBoolean(false);
 
