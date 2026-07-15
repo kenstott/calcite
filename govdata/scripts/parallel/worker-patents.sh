@@ -113,8 +113,11 @@ case "$MODE" in
     run_patents_model "patents-historical-summaries" \
       '"patent_summaries"' "$START" "$END"
 
+    # Enable the 5 physical TRCFECO2 source tables (their transformers create the Iceberg
+    # tables). The trademark_applications VIEW joins them and resolves once they exist —
+    # enabling the view name here created nothing (NoSuchTableException).
     run_patents_model "patents-historical-trademarks" \
-      '"trademark_applications"' "$START" "$END"
+      '"trademark_case_file","trademark_owner","trademark_classification","trademark_intl_class","trademark_statement"' "$START" "$END"
     ;;
 
   daily)
@@ -136,7 +139,7 @@ case "$MODE" in
       '"patent_summaries"' "$START"
 
     run_patents_model "patents-daily-trademarks" \
-      '"trademark_applications"' "$START"
+      '"trademark_case_file","trademark_owner","trademark_classification","trademark_intl_class","trademark_statement"' "$START"
 
     # Current-quarter forever tables. startYear is unused by these transformers (no year
     # dimension); the quarter dimension drives sourcing. Inventor file (~8 GB) runs last.

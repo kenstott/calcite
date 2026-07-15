@@ -47,7 +47,12 @@ public class PatentsSchemaFactory implements GovDataSubSchemaFactory {
   private static final List<String> ALL_TABLES = Arrays.asList(
       "patent_grants", "patent_assignees", "patent_inventors",
       "patent_cpc_classes", "patent_claims", "patent_summaries",
-      "trademark_applications",
+      // Physical trademark source tables (USPTO TRCFECO2). Each has its own transformer,
+      // so they must be enable-gated here. The trademark_applications VIEW joins them —
+      // it is a schema view, NOT an ETL table, so it is intentionally absent from this list
+      // (enabling the view name never created these tables -> NoSuchTableException).
+      "trademark_case_file", "trademark_owner", "trademark_classification",
+      "trademark_intl_class", "trademark_statement",
       // Faithful append-only snapshot tables (loaded once in the snapshot pass).
       "patent_abstracts", "patent_applications", "patent_figures",
       "patent_locations");
