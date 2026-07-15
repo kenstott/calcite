@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -64,6 +65,21 @@ import java.util.regex.Pattern;
 public class LocalStagingStorageProvider implements StorageProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(LocalStagingStorageProvider.class);
+
+  /**
+   * Hadoop Configuration that routes {@code file://} through {@link
+   * org.apache.hadoop.fs.RawLocalFileSystem} instead of the default checksum-wrapping
+   * {@code LocalFileSystem}. Without this, every staged parquet gets a hidden
+   * {@code .<name>.parquet.crc} sidecar that {@link java.io.File#delete()} cannot see, so
+   * flush cleanup orphans one crc per staged filing — ~1M tiny files over a full SEC
+   * backfill, which exhausts the tmpfs inode table and fails ETL with "No space left on
+   * device" while bytes remain free. RawLocalFileSystem writes no checksums, so none leak.
+   */
+  private static final Configuration NO_CHECKSUM_CONF = new Configuration();
+  static {
+    NO_CHECKSUM_CONF.set("fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem");
+    NO_CHECKSUM_CONF.setBoolean("fs.file.impl.disable.cache", true);
+  }
 
   /**
    * Matches the table-type suffix in a per-filing parquet filename.
@@ -235,6 +251,7 @@ public class LocalStagingStorageProvider implements StorageProvider {
     // Write parquet using Parquet/Avro writer
     try (org.apache.parquet.hadoop.ParquetWriter<GenericRecord> writer =
         AvroParquetWriter.<GenericRecord>builder(new Path(localFile.toURI()))
+            .withConf(NO_CHECKSUM_CONF)
             .withSchema(schema)
             .withCompressionCodec(CompressionCodecName.SNAPPY)
             .build()) {
@@ -341,8 +358,18 @@ public class LocalStagingStorageProvider implements StorageProvider {
   }
 
   private static void deleteQuietly(File file) {
-    if (file != null && file.exists() && !file.delete()) {
+    if (file == null) {
+      return;
+    }
+    if (file.exists() && !file.delete()) {
       LOGGER.warn("Could not delete temp file: {}", file.getAbsolutePath());
+    }
+    // Also remove Hadoop's hidden checksum sidecar (.{name}.crc) if one exists. New writes go
+    // through RawLocalFileSystem and never create it, but this reaps any pre-existing sidecar so
+    // flush cleanup can never orphan a crc and slowly exhaust the tmpfs inode table.
+    File crc = new File(file.getParentFile(), "." + file.getName() + ".crc");
+    if (crc.exists() && !crc.delete()) {
+      LOGGER.warn("Could not delete checksum sidecar: {}", crc.getAbsolutePath());
     }
   }
 
