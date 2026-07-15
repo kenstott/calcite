@@ -587,6 +587,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
 
                 try:
                     tag = DdlHandler(self).handle(ctx, stmt)
+                    # DDL changed the schema — drop memoized catalog DBs so the next
+                    # introspection rebuilds against the new metadata.
+                    from pgwire_calcite.catalog import invalidate_catalog_cache
+
+                    invalidate_catalog_cache()
                     self.send_command_complete(f"{tag}\x00")
                 except PermissionError as exc:
                     self._send_pg_error("ERROR", "42501", str(exc))

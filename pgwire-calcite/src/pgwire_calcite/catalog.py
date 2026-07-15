@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
-import time
+import threading
 from datetime import datetime, timezone
 
 log = logging.getLogger(__name__)
@@ -2623,33 +2623,41 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         )
 
 
-_row_count_cache: dict[str, tuple[float, dict[int, float]]] = {}
-_ROW_COUNT_TTL = 300.0
+# The catalog metadata (schemas/tables/columns/PKs/FKs) is static for a read-only
+# warehouse — captured once from Calcite into state.contexts at startup and never
+# changed during the process. Building the DuckDB catalog on every introspection
+# query (DataGrip fires dozens) was pure waste, so memoize the built DB per role and
+# reuse it. Invalidated on catalog re-populate and on successful DDL.
+_catalog_db_cache: dict[str, object] = {}
+_catalog_db_lock = threading.Lock()
 
 
-def _fetch_row_counts(ctx, idx: CatalogIndex, trino_conn) -> dict[int, float]:
-    """Fetch row count estimates via SHOW STATS FOR. Returns {toid: row_count}."""
-    if ctx is None or trino_conn is None:
-        return {}
-    table_id_to_meta: dict[int, tuple[str, str, str]] = {
-        tm.table_id: (tm.catalog_name, tm.schema_name, tm.table_name) for tm in ctx.tables.values()
-    }
-    result: dict[int, float] = {}
-    for _, _, _, table_id, toid in idx.tables:
-        ref = table_id_to_meta.get(table_id)
-        if not ref:
-            continue
-        cat, sch, tname = ref
-        try:
-            cur = trino_conn.cursor()
-            cur.execute(f'SHOW STATS FOR "{cat}"."{sch}"."{tname}"')
-            for row in cur.fetchall():
-                if row[0] is None and row[4] is not None:
-                    result[toid] = float(row[4])
-                    break
-        except Exception:
-            pass
-    return result
+def invalidate_catalog_cache() -> None:
+    """Drop every cached catalog DB. Call when the underlying metadata changes
+    (populate_state re-seed, successful DDL); closes the DuckDB connections."""
+    with _catalog_db_lock:
+        for db in _catalog_db_cache.values():
+            try:
+                db.close()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        _catalog_db_cache.clear()
+
+
+def _get_catalog_db(role_id: str, state):
+    """Return the memoized catalog DB for this role, building it once on first use.
+    Callers run each query on a fresh cursor (``_get_catalog_db(...).cursor()``) so
+    the shared in-memory catalog is safe for concurrent introspection (DuckDB reads
+    are MVCC-concurrent across cursors)."""
+    db = _catalog_db_cache.get(role_id)
+    if db is not None:
+        return db
+    with _catalog_db_lock:
+        db = _catalog_db_cache.get(role_id)
+        if db is None:
+            db = _build_catalog_db(role_id, state)
+            _catalog_db_cache[role_id] = db
+        return db
 
 
 def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
@@ -2676,13 +2684,11 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     col_types: dict = state.schema_build_cache.get("column_types", {})
     idx = _build_catalog_index(ctx, col_types)
 
-    now = time.monotonic()
-    cached = _row_count_cache.get(role_id)
-    if cached and now - cached[0] < _ROW_COUNT_TTL:
-        row_counts = cached[1]
-    else:
-        row_counts = _fetch_row_counts(ctx, idx, getattr(state, "trino_conn", None))
-        _row_count_cache[role_id] = (now, row_counts)
+    # Row counts (pg_class.reltuples) came from a Trino `SHOW STATS FOR` path that this
+    # fork never rewired (state.trino_conn was never provided, so it always yielded {}).
+    # Left at 0 — clients tolerate unknown estimates. A cached Iceberg/DuckDB count can
+    # be sourced here later; it's now cheap since the whole catalog DB is memoized.
+    row_counts: dict = {}
 
     _populate_is_schemata(db, idx)
     _populate_is_tables(db, idx)
@@ -3108,9 +3114,11 @@ def answer(sql: str, role_id: str, state):  # REQ-532
         return QueryResult(rows=[(None,)], column_names=[_reg_m.group(1).lower()], column_types=["VARCHAR"])
 
     rewritten = stripped
-    db = None
+    cur = None
     try:
-        db = _build_catalog_db(role_id, state)
+        # Memoized catalog DB (built once per role); run this query on its own cursor
+        # so concurrent introspection is safe. Do NOT close the shared DB here.
+        cur = _get_catalog_db(role_id, state).cursor()
         # Substitute $N params before rewriting so SQLGlot can parse the SQL.
         # Queries with $N::type[] (e.g. asyncpg type introspection) would otherwise
         # fail to parse, preventing table-name rewrites.
@@ -3120,7 +3128,7 @@ def answer(sql: str, role_id: str, state):  # REQ-532
         # can parse the query without failing on array-type annotations.
         pre_subst = _re.sub(r"\$\d+(?:::[^\s,)]+)?", "NULL", stripped)
         rewritten = _rewrite_for_duckdb(pre_subst, role_id)
-        cur = db.execute(rewritten)
+        cur.execute(rewritten)
         rows = [tuple(r) for r in cur.fetchall()]
         col_names = [desc[0] for desc in (cur.description or [])]
         col_types = [str(desc[1]) for desc in (cur.description or [])]
@@ -3131,5 +3139,8 @@ def answer(sql: str, role_id: str, state):  # REQ-532
         )
         raise
     finally:
-        if db is not None:
-            db.close()
+        if cur is not None:
+            try:
+                cur.close()
+            except Exception:
+                pass

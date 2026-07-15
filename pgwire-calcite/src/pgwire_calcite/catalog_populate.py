@@ -240,6 +240,8 @@ def install_catalog(state, ctx: CompilationContext, column_types) -> None:
         state.contexts = SharedContexts(ctx)
     state.schema_build_cache = {"column_types": column_types, "tables": [], "domains": []}
     state.catalog_enabled = True
+    # Drop any catalog DBs memoized from a previous model (bridge re-seed / restart).
+    catalog.invalidate_catalog_cache()
 
 
 def populate_state(conn, state, role_id: str = "") -> None:
