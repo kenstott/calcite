@@ -836,7 +836,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Wrapping DuckDB schema with constraint metadata for {} tables",
                     constraintsToPass.size());
-        schemaToRegister = new ConstraintAwareJdbcSchema(duckdbSchema, constraintsToPass);
+        schemaToRegister = new ConstraintAwareJdbcSchema(duckdbSchema, constraintsToPass, fileSchema);
       }
 
       // Register the schema with the parent so SQL queries can find the tables
@@ -944,7 +944,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Wrapping ClickHouse schema with constraint metadata for {} tables",
                     constraintsToPass.size());
-        schemaToRegister = new ConstraintAwareJdbcSchema(clickhouseSchema, constraintsToPass);
+        schemaToRegister = new ConstraintAwareJdbcSchema(clickhouseSchema, constraintsToPass, fileSchema);
       }
 
       parentSchema.add(name, schemaToRegister);
@@ -1042,7 +1042,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Wrapping Trino schema with constraint metadata for {} tables",
                     constraintsToPass.size());
-        schemaToRegister = new ConstraintAwareJdbcSchema(trinoSchema, constraintsToPass);
+        schemaToRegister = new ConstraintAwareJdbcSchema(trinoSchema, constraintsToPass, fileSchema);
       }
 
       parentSchema.add(name, schemaToRegister);
@@ -1140,7 +1140,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       if (constraintsToPass != null && !constraintsToPass.isEmpty()) {
         LOGGER.info("FileSchemaFactory: Wrapping Spark schema with constraint metadata for {} tables",
                     constraintsToPass.size());
-        schemaToRegister = new ConstraintAwareJdbcSchema(sparkSchema, constraintsToPass);
+        schemaToRegister = new ConstraintAwareJdbcSchema(sparkSchema, constraintsToPass, fileSchema);
       }
 
       parentSchema.add(name, schemaToRegister);

@@ -53,10 +53,20 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
 
   private final JdbcSchema delegate;
   private final Map<String, Map<String, Object>> constraintMetadata;
+  private final FileSchema owner;
 
-  public ConstraintAwareJdbcSchema(JdbcSchema delegate, Map<String, Map<String, Object>> constraintMetadata) {
+  /** Convenience for callers without an owning FileSchema (e.g. unit tests): no owner
+   * means no deferred FK validation is triggered from getTable(). */
+  public ConstraintAwareJdbcSchema(JdbcSchema delegate,
+      Map<String, Map<String, Object>> constraintMetadata) {
+    this(delegate, constraintMetadata, null);
+  }
+
+  public ConstraintAwareJdbcSchema(JdbcSchema delegate,
+      Map<String, Map<String, Object>> constraintMetadata, FileSchema owner) {
     this.delegate = delegate;
     this.constraintMetadata = constraintMetadata != null ? constraintMetadata : new LinkedHashMap<>();
+    this.owner = owner;
     LOGGER.info("Created ConstraintAwareJdbcSchema with constraints for tables: {}",
                 this.constraintMetadata.keySet());
   }
@@ -71,6 +81,12 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
 
   @SuppressWarnings("deprecation")
   @Override public @Nullable Table getTable(String name) {
+    // Deferred FK validation: run once here — the lazy consumption point reached only
+    // after every sibling schema is registered — so cross-schema FK targets resolve
+    // instead of being wrongly stripped during this schema's own construction.
+    if (owner != null) {
+      owner.ensureForeignKeysValidated();
+    }
     Table table = delegate.getTable(name);
     if (table != null && constraintMetadata.containsKey(name)) {
       return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name));

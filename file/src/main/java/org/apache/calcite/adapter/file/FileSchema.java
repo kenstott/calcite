@@ -2337,8 +2337,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       LOGGER.warn("[FileSchema.getTableMap] WARNING: No tables were registered for schema '{}'!", name);
     }
 
-    // Validate FK constraints and log warnings for invalid references
-    validateForeignKeyConstraints(tableCache);
+    // FK validation is DEFERRED to ensureForeignKeysValidated(), invoked lazily from
+    // ConstraintAwareJdbcSchema.getTable(). Validating here (during this schema's own
+    // construction) wrongly strips cross-schema FKs (e.g. energy -> geo.states) because
+    // sibling schemas are not yet registered on the parent, so their targets can't be
+    // resolved. Deferring runs the check only once all schemas are loaded.
 
     // Generate Calcite model file in baseDirectory
     generateModelFile(tableCache);
@@ -6299,6 +6302,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     return comment;
   }
 
+  private final java.util.concurrent.atomic.AtomicBoolean foreignKeysValidated =
+      new java.util.concurrent.atomic.AtomicBoolean(false);
+
+  /**
+   * Runs foreign-key validation exactly once, lazily. Deferred from schema
+   * construction (getTableMap) so cross-schema FK targets — e.g.
+   * energy.eia_power_plants -&gt; geo.states — resolve only after all sibling schemas
+   * are registered on the parent. Invoked from ConstraintAwareJdbcSchema.getTable(),
+   * the lazy consumption point (all schemas loaded by the time a client introspects).
+   * CAS-gated with no lock held across the cross-schema getSubSchema/getTableNames
+   * calls, to avoid deadlock with the synchronized getTableMap().
+   */
+  public void ensureForeignKeysValidated() {
+    if (foreignKeysValidated.compareAndSet(false, true)) {
+      validateForeignKeyConstraints(getTableMap());
+    }
+  }
+
   /**
    * Validates foreign key constraints by checking if target tables exist.
    * Invalid FKs (referencing non-existent tables) are removed from the constraint
@@ -6400,9 +6421,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
     }
 
-    // Schema not found - log this separately as it might be expected for deferred loading
-    LOGGER.debug("Target schema '{}' not found when validating FK to table '{}'",
-        schemaName, tableName);
-    return false;
+    // Target schema is not resolvable here — it is simply not registered on the parent
+    // yet (govdata mounts schemas incrementally, so a cross-schema FK such as
+    // energy -> geo.states is validated before 'geo' is added). "Not yet loaded" is NOT
+    // "absent": KEEP the FK rather than silently dropping a valid cross-schema reference.
+    // FKs whose target schema IS resolved but genuinely lacks the table are still removed
+    // above. (Deferred validation moves this later, but schema registration order can
+    // still leave a target unresolved at the moment a given schema is validated.)
+    LOGGER.debug("Target schema '{}' not yet registered when validating FK to table '{}' — "
+        + "keeping FK (cannot confirm absence)", schemaName, tableName);
+    return true;
   }
 }
