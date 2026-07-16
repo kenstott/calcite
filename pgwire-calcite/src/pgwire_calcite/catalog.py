@@ -2809,6 +2809,32 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
     # ARRAY[a,b]::type[] → ARRAY[a,b] (strip redundant cast; DuckDB infers type)
     sql = _pre_re.sub(r"(ARRAY\[[^\]]*\])::\w+(?:\[\])+", r"\1", sql, flags=_pre_re.IGNORECASE)
 
+    # `'[schema.]name'::regclass` → unqualified `'name'` string. pgwire fakes
+    # pg_description.classoid as the short relation name (e.g. 'pg_class'), and DataGrip's
+    # comment queries filter `classoid = 'pg_catalog.pg_class'::regclass`; map the literal
+    # to its last component so the comparison matches (else all comments drop). Must run
+    # before the generic reg* strip below.
+    sql = _pre_re.sub(
+        r"'(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*)'\s*::\s*regclass\b",
+        r"'\1'",
+        sql,
+        flags=_pre_re.IGNORECASE,
+    )
+
+    # Strip PG-catalog-only scalar type casts DuckDB has no type for (oid/xid/reg*).
+    # DataGrip's introspection binds e.g. `relnamespace = $1::oid`; DuckDB can't equate
+    # `2215::oid` to the integer OID stored in the synthetic catalog, so the predicate
+    # matches NOTHING and the parameterized column query returns zero rows — every column
+    # type renders "unknown". Dropping the cast keeps the underlying integer value so
+    # comparisons work. Array casts (::oid[]) are handled above (word boundary, no '[').
+    sql = _pre_re.sub(
+        r"::\s*(?:oid|xid|xid8|cid|tid|regclass|regtype|regproc|regprocedure|"
+        r"regnamespace|regrole|regoper|regoperator|regconfig|regdictionary)\b(?!\[)",
+        "",
+        sql,
+        flags=_pre_re.IGNORECASE,
+    )
+
     try:
         tree = sqlglot.parse_one(sql, read="postgres")
     except Exception:
