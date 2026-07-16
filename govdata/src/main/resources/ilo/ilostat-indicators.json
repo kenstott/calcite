@@ -1,0 +1,15 @@
+{
+  "_comment": "Curated UN ILO ILOSTAT indicator fan-out list for econ.ilostat_indicators. 'code' is the ILOSTAT indicator id used in the per-indicator bulk CSV URL (https://www.ilo.org/ilostat-files/WEB_bulk_download/indicator/{code}.csv.gz). ref_area in those files is ISO alpha-3. Keep curated (labor analogs of the econ BLS tables) — do not fan out over the full ILOSTAT index. Indicator ids are PENDING LIVE VERIFICATION against the ILOSTAT bulk-download index.",
+  "indicators": [
+    { "code": "UNE_DEAP_SEX_AGE_RT",  "name": "Unemployment rate by sex and age (%)" },
+    { "code": "EMP_DWAP_SEX_AGE_RT",  "name": "Employment-to-population ratio by sex and age (%)" },
+    { "code": "EAP_DWAP_SEX_AGE_RT",  "name": "Labour force participation rate by sex and age (%)" },
+    { "code": "EMP_TEMP_SEX_ECO_NB",  "name": "Employment by sex and economic activity (thousands)" },
+    { "code": "EAR_4MTH_SEX_ECO_CUR_NB", "name": "Mean nominal monthly earnings of employees by sex and economic activity" },
+    { "code": "HOW_TEMP_SEX_ECO_NB",  "name": "Mean weekly hours actually worked per employed person by sex and economic activity" },
+    { "code": "EMP_TEMP_SEX_STE_NB",  "name": "Employment by sex and status in employment (thousands)" },
+    { "code": "SDG_0111_SEX_AGE_RT",  "name": "Working poverty rate (SDG 1.1.1, %)" },
+    { "code": "EIP_NEET_SEX_RT",      "name": "Youth NEET rate (% of youth not in employment, education or training)" },
+    { "code": "EMP_TEMP_SEX_INS_NB",  "name": "Informal employment by sex (thousands)" }
+  ]
+}

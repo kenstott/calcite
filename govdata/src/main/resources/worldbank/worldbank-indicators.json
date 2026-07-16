@@ -60,6 +60,18 @@
           "name": "LABOR_FORCE_PARTICIPATION",
           "description": "Labor force participation rate (%)",
           "unit": "%"
+        },
+        {
+          "code": "SL.EMP.TOTL.SP.ZS",
+          "name": "EMPLOYMENT_TO_POPULATION",
+          "description": "Employment to population ratio, 15+ (%)",
+          "unit": "%"
+        },
+        {
+          "code": "SL.TLF.CACT.FE.ZS",
+          "name": "FEMALE_LABOR_FORCE_PARTICIPATION",
+          "description": "Labor force participation rate, female (% of female pop 15+)",
+          "unit": "%"
         }
       ]
     },
@@ -187,6 +199,24 @@
           "name": "EDUCATION_EXPENDITURE",
           "description": "Government expenditure on education (% of GDP)",
           "unit": "% of GDP"
+        },
+        {
+          "code": "SE.TER.ENRR",
+          "name": "TERTIARY_ENROLLMENT",
+          "description": "Tertiary school enrollment (% gross)",
+          "unit": "% gross"
+        },
+        {
+          "code": "SE.ADT.LITR.ZS",
+          "name": "ADULT_LITERACY",
+          "description": "Adult literacy rate, 15+ (%)",
+          "unit": "%"
+        },
+        {
+          "code": "SE.PRM.CMPT.ZS",
+          "name": "PRIMARY_COMPLETION",
+          "description": "Primary completion rate (% of relevant age group)",
+          "unit": "%"
         }
       ]
     },
@@ -198,6 +228,47 @@
           "name": "HEALTH_EXPENDITURE",
           "description": "Current health expenditure (% of GDP)",
           "unit": "% of GDP"
+        },
+        {
+          "code": "SH.STA.MMRT",
+          "name": "MATERNAL_MORTALITY",
+          "description": "Maternal mortality ratio (per 100,000 live births)",
+          "unit": "per 100,000 live births"
+        },
+        {
+          "code": "SH.DYN.MORT",
+          "name": "UNDER5_MORTALITY",
+          "description": "Mortality rate, under-5 (per 1,000 live births)",
+          "unit": "per 1,000 live births"
+        },
+        {
+          "code": "SH.MED.BEDS.ZS",
+          "name": "HOSPITAL_BEDS",
+          "description": "Hospital beds (per 1,000 people)",
+          "unit": "per 1,000 people"
+        },
+        {
+          "code": "SH.IMM.MEAS",
+          "name": "MEASLES_IMMUNIZATION",
+          "description": "Immunization, measles (% of children 12-23 months)",
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "category": "Agriculture",
+      "items": [
+        {
+          "code": "AG.PRD.FOOD.XD",
+          "name": "FOOD_PRODUCTION_INDEX",
+          "description": "Food production index (2014-2016 = 100)",
+          "unit": "index"
+        },
+        {
+          "code": "AG.LND.AGRI.ZS",
+          "name": "AGRICULTURAL_LAND",
+          "description": "Agricultural land (% of land area)",
+          "unit": "% of land area"
         }
       ]
     },
@@ -237,6 +308,24 @@
           "name": "CO2_EMISSIONS",
           "description": "CO2 emissions (metric tons per capita)",
           "unit": "metric tons per capita"
+        },
+        {
+          "code": "EN.ATM.PM25.MC.M3",
+          "name": "PM25_AIR_POLLUTION",
+          "description": "PM2.5 air pollution, mean annual exposure (micrograms per cubic meter)",
+          "unit": "micrograms per cubic meter"
+        },
+        {
+          "code": "AG.LND.FRST.ZS",
+          "name": "FOREST_AREA",
+          "description": "Forest area (% of land area)",
+          "unit": "% of land area"
+        },
+        {
+          "code": "ER.H2O.FWTL.ZS",
+          "name": "FRESHWATER_WITHDRAWAL",
+          "description": "Annual freshwater withdrawals, total (% of internal resources)",
+          "unit": "% of internal resources"
         }
       ]
     }

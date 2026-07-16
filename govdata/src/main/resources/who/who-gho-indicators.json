@@ -1,0 +1,18 @@
+{
+  "_comment": "Curated WHO Global Health Observatory (GHO) indicator fan-out list for health.who_gho_indicators. 'code' is the GHO indicator id used in the OData URL (https://ghoapi.azureedge.net/api/{code}). GHO SpatialDim is ISO alpha-3 for COUNTRY rows. Keep curated (health analogs of the U.S. openFDA/clinical tables) — do not fan out over the full ~2,000-indicator GHO catalog. Indicator ids are PENDING LIVE VERIFICATION against https://ghoapi.azureedge.net/api/Indicator.",
+  "indicators": [
+    { "code": "WHOSIS_000001",       "name": "Life expectancy at birth (years)" },
+    { "code": "WHOSIS_000002",       "name": "Healthy life expectancy (HALE) at birth (years)" },
+    { "code": "MORT_MATERNALNUM",    "name": "Number of maternal deaths" },
+    { "code": "MDG_0000000001",      "name": "Under-five mortality rate (per 1000 live births)" },
+    { "code": "MDG_0000000020",      "name": "Incidence of tuberculosis (per 100 000 population)" },
+    { "code": "MALARIA_EST_INCIDENCE", "name": "Estimated malaria incidence (per 1000 at risk)" },
+    { "code": "HIV_0000000001",      "name": "Prevalence of HIV among adults 15-49 (%)" },
+    { "code": "NCD_BMI_30A",         "name": "Prevalence of obesity, BMI >= 30 (crude, %)" },
+    { "code": "SA_0000001688",       "name": "Alcohol, total per capita consumption (litres)" },
+    { "code": "M_Est_tob_curr_std",  "name": "Age-standardized prevalence of current tobacco use (%)" },
+    { "code": "WHS4_100",            "name": "Measles-containing-vaccine first dose (MCV1) coverage (%)" },
+    { "code": "UHC_INDEX_REPORTED",  "name": "UHC service coverage index" },
+    { "code": "HWF_0001",            "name": "Medical doctors (per 10 000 population)" }
+  ]
+}

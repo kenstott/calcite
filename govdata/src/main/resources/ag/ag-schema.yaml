@@ -757,6 +757,114 @@ partitionedTables:
         stagingMode: local
       iceberg: *nass_iceberg
 
+  # ==========================================================================
+  # INTERNATIONAL / UN FEED — FAO FAOSTAT
+  # ==========================================================================
+  # Country-level production/land/food-balance, keyed to ref.countries via M49
+  # (ISO 3166-1 numeric) — the only ag table keyed to ref.countries rather than
+  # the geo FIPS spine. See docs/data-plans/ag.md. Streamed by FaostatTransformer.
+  # Domain codes + bulk column names PENDING LIVE VERIFICATION.
+  - name: faostat_production
+    pattern: "type=faostat/domain=*/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: domain
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      UN FAO FAOSTAT production, land use, and food-balance statistics per area
+      (country) x item x element x year. Tall — the international analog of the USDA
+      NASS/ERS tables. country_code is the UN M49 / ISO 3166-1 numeric code (FK to
+      ref.countries.iso_numeric); FAO regional/economic-group areas are flagged
+      is_aggregate. Fan out one normalized bulk file per FAOSTAT domain; year is
+      emitted per row and the partition is replaced wholesale on re-run.
+    dimensions:
+      type:
+        - faostat
+      domain:
+        type: json_catalog
+        source: "/faostat/faostat-domains.json"
+        path: "domains[*].code"
+    columns:
+      - name: country_code
+        type: string
+        nullable: true
+        comment: UN M49 / ISO 3166-1 numeric, unpadded (FK to ref.countries.iso_numeric)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: FAO area name
+      - name: item_code
+        type: string
+        nullable: true
+        comment: FAO item code (commodity / land class / balance line)
+      - name: item_name
+        type: string
+        nullable: true
+        comment: Item name (Wheat, Cattle, Arable land, ...)
+      - name: element_code
+        type: string
+        nullable: true
+        comment: FAO element code (statistic type)
+      - name: element_name
+        type: string
+        nullable: true
+        comment: Element (Production, Area harvested, Yield, Import quantity, ...)
+      - name: year
+        type: integer
+        nullable: false
+        comment: Data year (partition column; from FAO Year)
+      - name: value
+        type: double
+        nullable: true
+        comment: Numeric value (null when FAO suppressed / not available)
+      - name: unit
+        type: string
+        nullable: true
+        comment: Unit (tonnes, ha, hg/ha, 1000 head, ...)
+      - name: flag
+        type: string
+        nullable: true
+        comment: FAOSTAT observation flag (E=estimate, I=imputed, M=missing, ...)
+      - name: is_aggregate
+        type: boolean
+        nullable: true
+        comment: True for FAO regional/economic-group areas (Area Code >= 5000)
+    source:
+      type: http
+      url: "https://bulks-faostat.fao.org/production/{domain}_All_Data_(Normalized).zip"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.FaostatTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=faostat/domain=*/year=*/"
+      partition:
+        columns: [type, domain, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *nass_iceberg
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -768,6 +876,19 @@ partitionedTables:
 # declared as constraints.
 
 constraints:
+
+  # FAOSTAT international production (int'l feed). Tall grain: one row per domain x
+  # country x item x element x year. country_code is UN M49 -> ref.countries.iso_numeric.
+  faostat_production:
+    primaryKey: [type, year, domain, country_code, item_code, element_code]
+    foreignKeys:
+      - columns: [country_code]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_numeric]
+        comment: >
+          Area M49 / ISO 3166-1 numeric (unpadded) links to ref.countries. Metadata
+          only; FAO regional/economic-group areas (is_aggregate=true) do not resolve.
 
   nass_crop_production:
     # Uniqueness = program source x geography x full data-item (short_desc) x
@@ -880,3 +1001,36 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  # --- International / UN feed view -----------------------------------------
+  # Reads faostat_production; resolves once that table is populated.
+  - name: faostat_production_enriched
+    comment: >
+      FAOSTAT rows enriched with country identity from ref.countries (ISO alpha-3,
+      name, M49 region). Country areas only (FAO regional/economic-group aggregates
+      filtered out). The international complement to the U.S. NASS/ERS tables —
+      country-level production, land use, and food balances.
+    sql: >
+      SELECT
+        f.domain,
+        f.year,
+        f.country_code AS m49_code,
+        c.iso_alpha3,
+        c.country_name,
+        c.region,
+        f.item_code,
+        f.item_name,
+        f.element_code,
+        f.element_name,
+        f.value,
+        f.unit,
+        f.flag
+      FROM faostat_production f
+      LEFT JOIN "ref"."countries" c ON f.country_code = c.iso_numeric
+      WHERE f.is_aggregate = FALSE

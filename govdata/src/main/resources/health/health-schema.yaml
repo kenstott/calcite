@@ -1766,11 +1766,143 @@ partitionedTables:
         runMaintenance: false
         runCompaction: false
 
+  # ==========================================================================
+  # INTERNATIONAL / UN FEED — WHO Global Health Observatory
+  # ==========================================================================
+  # Country-level health indicators keyed to ref.countries (ISO alpha-3), the
+  # international analog of the U.S. openFDA tables. See docs/data-plans/health.md.
+  # Streamed by org.apache.calcite.adapter.govdata.health.WhoGhoTransformer.
+  # Indicator ids PENDING LIVE VERIFICATION against the GHO indicator catalog.
+  - name: who_gho_indicators
+    pattern: "type=who_gho/indicator=*/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: indicator
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      WHO Global Health Observatory indicators: value per country x indicator x
+      dimension x year. Tall — the international analog of the U.S. openFDA/clinical
+      tables. country_code is ISO alpha-3 (FK to ref.countries); WHO REGION /
+      income-group rows are flagged is_aggregate. Fan out one GHO OData indicator
+      per request; year is emitted per row and the partition is replaced wholesale
+      on re-run (overwritePartitions).
+    dimensions:
+      type:
+        - who_gho
+      indicator:
+        type: json_catalog
+        source: "/who/who-gho-indicators.json"
+        path: "indicators[*].code"
+    columns:
+      - name: indicator_code
+        type: string
+        nullable: true
+        comment: GHO indicator id (the fan-out key)
+      - name: indicator_name
+        type: string
+        nullable: true
+        comment: Indicator label (from the bundled catalog)
+      - name: country_code
+        type: string
+        nullable: true
+        comment: Country ISO alpha-3 (GHO SpatialDim; FK to ref.countries.iso_alpha3)
+      - name: spatial_type
+        type: string
+        nullable: true
+        comment: GHO SpatialDimType (COUNTRY / REGION / WORLDBANKINCOMEGROUP)
+      - name: sex
+        type: string
+        nullable: true
+        comment: Sex dimension (BTSX / MLE / FMLE) when the indicator is sex-disaggregated
+      - name: dimension
+        type: string
+        nullable: true
+        comment: Other GHO Dim1 value (age group, cause, ...) when present
+      - name: value_numeric
+        type: double
+        nullable: true
+        comment: Numeric value (GHO NumericValue; null when only a display string exists)
+      - name: value_display
+        type: string
+        nullable: true
+        comment: Display value string (e.g. "72.6 [70.1-75.0]")
+      - name: unit
+        type: string
+        nullable: true
+        comment: Unit when GHO supplies one (usually null for this endpoint)
+      - name: year
+        type: integer
+        nullable: false
+        comment: Data year (partition column; from GHO TimeDim)
+      - name: is_aggregate
+        type: boolean
+        nullable: true
+        comment: True when spatial_type != COUNTRY (region/income-group roll-up)
+    source:
+      type: http
+      url: "https://ghoapi.azureedge.net/api/{indicator}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.WhoGhoTransformer"
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=who_gho/indicator=*/year=*/"
+      partition:
+        columns: [type, indicator, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # Views
 # ============================================================================
 
 views:
+
+  # --- International / UN feed view -----------------------------------------
+  # Reads who_gho_indicators; resolves once that table is populated.
+  - name: who_health_snapshot
+    comment: >
+      Headline WHO GHO indicators pivoted wide: one row per country x year with life
+      expectancy, healthy life expectancy, under-5 mortality, and UHC service coverage
+      (country rows, both-sexes). International complement to the U.S. openFDA tables;
+      join to ref.countries for names/regions.
+    sql: >
+      SELECT
+        country_code,
+        year,
+        MAX(CASE WHEN indicator_code = 'WHOSIS_000001' THEN value_numeric END) AS life_expectancy,
+        MAX(CASE WHEN indicator_code = 'WHOSIS_000002' THEN value_numeric END) AS healthy_life_expectancy,
+        MAX(CASE WHEN indicator_code = 'MDG_0000000001' THEN value_numeric END) AS under5_mortality_rate,
+        MAX(CASE WHEN indicator_code = 'UHC_INDEX_REPORTED' THEN value_numeric END) AS uhc_service_index
+      FROM who_gho_indicators
+      WHERE is_aggregate = FALSE
+        AND (sex = 'BTSX' OR sex IS NULL)
+      GROUP BY country_code, year
 
   - name: drug_profile
     comment: >
@@ -2108,6 +2240,19 @@ views:
 # ============================================================================
 
 constraints:
+
+  # WHO GHO international health indicators (int'l feed). Tall grain: one row per
+  # indicator x country x spatial type x sex x dimension x year.
+  who_gho_indicators:
+    primaryKey: [type, year, indicator_code, country_code, spatial_type, sex, dimension]
+    foreignKeys:
+      - columns: [country_code]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns: [iso_alpha3]
+        comment: >
+          Country (ISO alpha-3, WHO SpatialDim) links to ref.countries. Metadata only;
+          WHO REGION / income-group rows (is_aggregate=true) do not resolve.
 
   fda_ndc_products:
     primaryKey: [type, product_ndc]

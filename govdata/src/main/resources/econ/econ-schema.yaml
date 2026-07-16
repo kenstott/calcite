@@ -5116,6 +5116,261 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ==========================================================================
+  # INTERNATIONAL / UN FEEDS
+  # ==========================================================================
+  # Country-level feeds keyed to ref.countries (ISO alpha-3), NOT the U.S. geo
+  # FIPS spine. See docs/data-plans/international.md. These two tables require
+  # their response transformers (below) before they will ETL — the transformer
+  # maps the upstream JSON/CSV to the clean columns declared here. World Bank
+  # (world_indicators) is already delivered above; this block adds Comtrade + ILO.
+
+  # --- UN COMTRADE: bilateral merchandise trade -----------------------------
+  # Streamed by org.apache.calcite.adapter.govdata.econ.ComtradeTransformer.
+  # API param/field names PENDING LIVE VERIFICATION with COMTRADE_API_KEY.
+  - name: comtrade_flows
+    pattern: "type=comtrade/reporter=*/flow=*/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: reporter
+          type: string
+        - name: flow
+          type: string
+        - name: year
+          type: integer
+    comment: >
+      UN Comtrade bilateral merchandise trade: reported value and quantity per
+      reporter country x partner country x HS-6 commodity x flow x year. Tall.
+      reporter_code and partner_code are ISO alpha-3 (FK to ref.countries);
+      partner_code='WLD' and other non-country codes are world/aggregate roll-ups
+      (is_aggregate=true). Complements the one-sided U.S. Census trade_exports/
+      trade_imports with the partner side of every flow. Fan-out is a curated
+      major-reporter list (comtrade/comtrade-reporters.json) x flow x year: one
+      (reporter, flow, year) fetch returns all partners x HS-6, accumulated into
+      the year partition and replaced wholesale on re-run (overwritePartitions).
+    dimensions:
+      type:
+        - comtrade
+      reporter:
+        type: json_catalog
+        source: "/comtrade/comtrade-reporters.json"
+        path: "reporters[*].m49"
+      flow:
+        type: list
+        values: ['M', 'X']   # Comtrade flowCode: M=import, X=export
+      # Period dimension: dynamic yearRange (never hardcoded). effective_year =
+      # publish - dataLag is the data year written to the partition. Comtrade HS
+      # annual data is thin before 2000; minYear hard-floors the data year.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2014}"
+        end: "${GOVDATA_END_YEAR:current}"
+        minYear: 2000
+        dataLag: 1
+        descending: true
+    columns:
+      - name: reporter_code
+        type: string
+        nullable: true
+        comment: Reporting country ISO alpha-3 (FK to ref.countries.iso_alpha3)
+      - name: partner_code
+        type: string
+        nullable: true
+        comment: "Partner country ISO alpha-3 (FK to ref.countries.iso_alpha3; 'WLD'=world total)"
+      - name: flow_desc
+        type: string
+        nullable: true
+        comment: Trade flow (Import / Export / Re-import / Re-export)
+      - name: hs6
+        type: string
+        nullable: true
+        comment: HS 6-digit commodity code
+      - name: hs2
+        type: string
+        nullable: true
+        comment: HS 2-digit chapter (derived from hs6 by the transformer)
+      - name: hs_description
+        type: string
+        nullable: true
+        comment: Commodity description
+      - name: hs_revision
+        type: string
+        nullable: true
+        comment: HS classification vintage of the reported code (H0..H6)
+      - name: trade_value_usd
+        type: double
+        nullable: true
+        comment: Reported trade value (USD)
+      - name: net_weight_kg
+        type: double
+        nullable: true
+        comment: Net weight (kg) when reported
+      - name: quantity
+        type: double
+        nullable: true
+        comment: Quantity in quantity_unit when reported
+      - name: quantity_unit
+        type: string
+        nullable: true
+        comment: Supplementary quantity unit
+      - name: is_aggregate
+        type: boolean
+        nullable: true
+        comment: True for world/aggregate partner roll-ups (exclude from partner-level joins)
+    source:
+      type: http
+      url: "https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode={reporter}&period={effective_year}&flowCode={flow}"
+      method: GET
+      headers:
+        Ocp-Apim-Subscription-Key: "${COMTRADE_API_KEY}"
+      # StreamingResponseTransformer opens the URL itself; dataPath/rawCache do not
+      # apply. Completed (reporter, flow, year) partitions are skipped by completion
+      # markers on re-run, so no raw cache is needed for idempotency.
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.ComtradeTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=comtrade/reporter=*/flow=*/year=*/"
+      partition:
+        columns: [type, reporter, flow, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- UN ILO ILOSTAT: labor indicators -------------------------------------
+  # Streamed by org.apache.calcite.adapter.govdata.econ.IlostatTransformer
+  # (parses the per-indicator bulk CSV.gz to the tall columns below).
+  # Indicator ids + bulk column names PENDING LIVE VERIFICATION against the ILOSTAT index.
+  - name: ilostat_indicators
+    # ILOSTAT republishes each indicator's full history per release; a Last-Modified
+    # probe skips the re-fetch on unchanged runs (fails open — correctness never
+    # depends on the gate, only efficiency).
+    freshness:
+      type: last_modified
+    pattern: "type=ilostat/indicator=*/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: indicator
+          type: string
+        - name: year
+          type: integer
+    comment: >
+      UN ILO ILOSTAT labor indicators: value per country x indicator x sex x
+      classification x year. Tall — the international analog of the econ BLS tables
+      (employment_statistics, *_wages, jolts_*). country_code is ISO alpha-3 (FK to
+      ref.countries); ILO regional/income aggregates are flagged is_aggregate. Fan
+      out one bulk CSV per indicator (each carries all countries/years); year is
+      split on write (responsePartitioning) and replaced wholesale (overwritePartitions).
+    dimensions:
+      type:
+        - ilostat
+      indicator:
+        type: json_catalog
+        source: "/ilo/ilostat-indicators.json"
+        path: "indicators[*].code"
+    columns:
+      - name: indicator_code
+        type: string
+        nullable: true
+        comment: ILOSTAT indicator id (the fan-out key)
+      - name: indicator_name
+        type: string
+        nullable: true
+        comment: Indicator label
+      - name: country_code
+        type: string
+        nullable: true
+        comment: Country ISO alpha-3 (FK to ref.countries.iso_alpha3; from ILO ref_area)
+      - name: sex
+        type: string
+        nullable: true
+        comment: Sex classification (Total / Male / Female)
+      - name: classif1
+        type: string
+        nullable: true
+        comment: Primary classification value (age band, sector, ...); "Total" when none
+      - name: classif2
+        type: string
+        nullable: true
+        comment: Secondary classification value when present
+      - name: year
+        type: integer
+        nullable: false
+        comment: Reference year (partition column; emitted from the ILO time field)
+      - name: value
+        type: double
+        nullable: true
+        comment: Indicator value (unit implied by indicator; null when unreported)
+      - name: unit
+        type: string
+        nullable: true
+        comment: Unit / measure (rate %, thousands, local currency, ...)
+      - name: obs_status
+        type: string
+        nullable: true
+        comment: ILO observation status flag
+      - name: is_aggregate
+        type: boolean
+        nullable: true
+        comment: True for ILO regional/income-group ref_area rows (exclude from country joins)
+    source:
+      type: http
+      url: "https://www.ilo.org/ilostat-files/WEB_bulk_download/indicator/{indicator}.csv.gz"
+      method: GET
+      response:
+        format: json   # IlostatTransformer streams the gz CSV and emits records
+      # StreamingResponseTransformer streams the gz CSV itself; rawCache/responsePartitioning
+      # do not apply. Each row carries its own year (from the ILO time field); the writer
+      # partitions on [type, indicator, year] and replaces those partitions wholesale.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.IlostatTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ilostat/indicator=*/year=*/"
+      partition:
+        columns: [type, indicator, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -5174,6 +5429,46 @@ constraints:
         comment: >
           Destination country (Census code) links to ref.countries for ISO/FIPS/region.
           Metadata only; the country_code='-' all-countries roll-up rows do not resolve.
+  # UN Comtrade bilateral trade (int'l feed). Tall grain: one row per reporter x
+  # partner x flow x HS-6 commodity x HS vintage x year. Both country codes are ISO
+  # alpha-3 -> ref.countries; the 'WLD'/aggregate partner rows (is_aggregate=true) do
+  # not resolve.
+  comtrade_flows:
+    primaryKey: [type, year, reporter_code, partner_code, flow_desc, hs6, hs_revision]
+    foreignKeys:
+      - columns:
+          - reporter_code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - iso_alpha3
+        comment: Reporting country (ISO alpha-3) links to ref.countries for name/region/FIPS.
+      - columns:
+          - partner_code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - iso_alpha3
+        comment: >
+          Partner country (ISO alpha-3) links to ref.countries. Metadata only; the
+          partner_code='WLD' world-total and other aggregate rows do not resolve.
+
+  # UN ILO ILOSTAT labor indicators (int'l feed). Tall grain: one row per indicator x
+  # country x sex x classification x year. Intra-schema sibling of the econ BLS tables
+  # (semantic, not a shared key).
+  ilostat_indicators:
+    primaryKey: [type, year, indicator_code, country_code, sex, classif1, classif2]
+    foreignKeys:
+      - columns:
+          - country_code
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: countries
+        targetColumns:
+          - iso_alpha3
+        comment: >
+          Country (ISO alpha-3, from ILO ref_area) links to ref.countries. Metadata
+          only; ILO regional/income-group rows (is_aggregate=true) do not resolve.
+
   # BEA International Investment Position — no cross-schema FK: type_of_investment/component
   # are BEA-internal codes with no reference table (there is no country grain in IIP).
   iip_positions:
@@ -5738,6 +6033,80 @@ tables:
 # ============================================================================
 
 views:
+
+  # --- International / UN feed views ----------------------------------------
+  # These read the wip Comtrade/ILOSTAT tables; they resolve once those tables
+  # are populated (see docs/data-plans/international.md). View definitions are
+  # metadata and do not run until queried.
+
+  - name: comtrade_bilateral_trade
+    comment: >
+      Enriched UN Comtrade bilateral flows: one row per year x reporter x partner x
+      HS-6 x flow, with reporter/partner country names and M49 regions joined from
+      ref.countries. Country-level only (aggregate/world-total partner rows filtered
+      out). Use for supply-chain and partner-exposure analysis; complements the
+      one-sided U.S. trade_exports/trade_imports with the partner side of each flow.
+    sql: >
+      SELECT
+        f.year,
+        f.reporter_code,
+        rc.country_name AS reporter_name,
+        rc.region       AS reporter_region,
+        f.partner_code,
+        pc.country_name AS partner_name,
+        pc.region       AS partner_region,
+        f.flow_desc,
+        f.hs2,
+        f.hs6,
+        f.hs_description,
+        f.trade_value_usd,
+        f.net_weight_kg,
+        f.quantity,
+        f.quantity_unit
+      FROM comtrade_flows f
+      LEFT JOIN "ref"."countries" rc ON f.reporter_code = rc.iso_alpha3
+      LEFT JOIN "ref"."countries" pc ON f.partner_code = pc.iso_alpha3
+      WHERE f.is_aggregate = FALSE
+
+  - name: comtrade_partner_balances
+    comment: >
+      Bilateral trade balance from UN Comtrade, aggregated across commodities: one
+      row per year x reporter x partner with total exports, total imports, and net
+      balance (exports - imports) in USD. Country-level only. Enables bilateral
+      surplus/deficit analysis and pairs with econ.trade_balance_summary (U.S. macro).
+    sql: >
+      SELECT
+        year,
+        reporter_code,
+        partner_code,
+        SUM(CASE WHEN flow_desc = 'Export' THEN trade_value_usd ELSE 0 END) AS exports_usd,
+        SUM(CASE WHEN flow_desc = 'Import' THEN trade_value_usd ELSE 0 END) AS imports_usd,
+        SUM(CASE WHEN flow_desc = 'Export' THEN trade_value_usd ELSE 0 END)
+          - SUM(CASE WHEN flow_desc = 'Import' THEN trade_value_usd ELSE 0 END) AS trade_balance_usd
+      FROM comtrade_flows
+      WHERE is_aggregate = FALSE
+      GROUP BY year, reporter_code, partner_code
+
+  - name: ilostat_labor_snapshot
+    comment: >
+      Headline ILOSTAT labor indicators pivoted wide: one row per country x year with
+      unemployment rate, employment-to-population ratio, labour force participation
+      rate, and youth NEET rate (total sex, all ages). The international analog of the
+      econ BLS labor tables — join to ref.countries for names/regions, or compare a
+      given year against U.S. employment_statistics.
+    sql: >
+      SELECT
+        country_code,
+        year,
+        MAX(CASE WHEN indicator_code = 'UNE_DEAP_SEX_AGE_RT' THEN value END) AS unemployment_rate,
+        MAX(CASE WHEN indicator_code = 'EMP_DWAP_SEX_AGE_RT' THEN value END) AS employment_to_population,
+        MAX(CASE WHEN indicator_code = 'EAP_DWAP_SEX_AGE_RT' THEN value END) AS labor_force_participation,
+        MAX(CASE WHEN indicator_code = 'EIP_NEET_SEX_RT'     THEN value END) AS youth_neet_rate
+      FROM ilostat_indicators
+      WHERE is_aggregate = FALSE
+        AND sex = 'Total'
+        AND (classif1 = 'Total' OR classif1 IS NULL)
+      GROUP BY country_code, year
 
   - name: state_economic_snapshot
     comment: >
