@@ -3102,6 +3102,18 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 "pg_index_has_property",
                 "pg_index_column_has_property",
             ):
+                # Our synthetic PK/unique indexes are all btree. DataGrip's index-columns
+                # query gates the key column list on pg_indexam_has_property(relam,'can_order')
+                # — returning false made it treat the columns as unordered and DROP them from
+                # the generated DDL's `primary key (...)` clause (while the keys tree, built
+                # from a different path, still showed them). Report the btree access method's
+                # true properties so ordered key columns render; unknown props stay false.
+                _args = node.args.get("expressions", [])
+                _prop = None
+                if _args and isinstance(_args[-1], exp.Literal) and _args[-1].is_string:
+                    _prop = _args[-1].this.lower()
+                if _prop in ("can_order", "can_unique", "can_multi_col", "can_include"):
+                    return exp.true()
                 return exp.false()
             if fn in ("current_user", "session_user"):
                 return exp.Literal.string(role_id)
