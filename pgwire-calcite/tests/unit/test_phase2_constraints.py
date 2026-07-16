@@ -102,6 +102,75 @@ def test_pg_constraint_has_foreign_key_for_er_diagram(keyed_server):
         c.close()
 
 
+def _unique_target_catalog():
+    """emps.dept_name -> depts.dname, where dname is a non-PK UNIQUE column (the
+    geo.counties.state_fips -> geo.state_ref.state_fips shape)."""
+    depts = TableMeta(1, "calcite", "SALES", "depts", "SALES.depts")
+    emps = TableMeta(2, "calcite", "SALES", "emps", "SALES.emps")
+    ctx = CompilationContext(
+        tables={depts.type_name: depts, emps.type_name: emps},
+        pk_columns={1: ["deptno"], 2: ["empno"]},
+        unique_columns={1: [["dname"]]},
+        joins={
+            ("SALES.emps", "dept_name"): JoinMeta(
+                source_column="dept_name", target_column="dname", target=depts,
+                cardinality="many-to-one",
+            )
+        },
+    )
+    column_types = {
+        1: [ColumnMeta("deptno", "INTEGER", False), ColumnMeta("dname", "VARCHAR", False)],
+        2: [
+            ColumnMeta("empno", "INTEGER", False),
+            ColumnMeta("dept_name", "VARCHAR"),
+            ColumnMeta("ename", "VARCHAR"),
+        ],
+    }
+    return ctx, column_types
+
+
+def test_non_pk_unique_column_surfaced_as_constraint(keyed_server):
+    """A declared non-PK unique key must appear as a pg_constraint contype='u' row so
+    ER tools accept it as the target of an FK (else the relationship line is dropped)."""
+    ctx, column_types = _unique_target_catalog()
+    import pgwire_calcite.server as server_mod
+
+    install_catalog(server_mod.state, ctx, column_types)
+    host, port = keyed_server
+    c = MiniPgClient(host, port)
+    try:
+        r = c.query(
+            "SELECT r.relname, c.contype FROM pg_catalog.pg_constraint c "
+            "JOIN pg_catalog.pg_class r ON r.oid = c.conrelid "
+            "WHERE c.contype = 'u' ORDER BY r.relname"
+        )
+        assert r["error"] is None, r["error"]
+        assert r["rows"] == [["depts", "u"]]
+    finally:
+        c.close()
+
+
+def test_fk_links_to_unique_constraint_not_pk(keyed_server):
+    """referential_constraints must point the FK at the UNIQUE key it references
+    (depts.dname), not the target's primary key (depts.deptno)."""
+    ctx, column_types = _unique_target_catalog()
+    import pgwire_calcite.server as server_mod
+
+    install_catalog(server_mod.state, ctx, column_types)
+    host, port = keyed_server
+    c = MiniPgClient(host, port)
+    try:
+        r = c.query(
+            "SELECT unique_constraint_name FROM information_schema.referential_constraints "
+            "WHERE constraint_name LIKE 'fk_emps%'"
+        )
+        assert r["error"] is None, r["error"]
+        assert len(r["rows"]) == 1, r["rows"]
+        assert r["rows"][0][0] == "uq_depts__dname"
+    finally:
+        c.close()
+
+
 def test_keyless_catalog_still_reports_empty(keyed_server):
     """Sanity: a table with no PK/FK contributes no constraint rows (PGW-013)."""
     ctx, column_types = _keyed_catalog()

@@ -333,7 +333,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: FK to geo.states.state_abbr
+        comment: FK to geo.state_ref.state_abbr
       - name: country
         comment: "Country in which the recalling firm is located"
         type: string
@@ -598,7 +598,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: FK to geo.states.state_abbr
+        comment: FK to geo.state_ref.state_abbr
       - name: product_description
         comment: "Brief description of the device being recalled"
         type: string
@@ -1128,7 +1128,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: FK to geo.states.state_abbr
+        comment: FK to geo.state_ref.state_abbr
       - name: zip_code
         comment: "Hospital ZIP code"
         type: string
@@ -2270,6 +2270,12 @@ constraints:
 
   fda_ndc_products:
     primaryKey: [type, product_ndc]
+    unique:
+      # product_ndc9 is a lossless normalization of the PK product_ndc (labeler[5]+
+      # product[4]), so it is 1:1 with product_ndc and therefore unique. Declared here
+      # so it is a valid FK target for medicaid_drug_utilization.product_ndc9 (the
+      # 11-digit package ndc and hyphenated product_ndc never join directly).
+      - [product_ndc9]
     foreignKeys:
       - columns: [application_number]
         targetTable: fda_drug_approvals

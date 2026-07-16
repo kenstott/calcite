@@ -92,6 +92,7 @@ def build_context(conn) -> tuple:
             schema_name=schema,
             table_name=name,
             type_name=f"{schema}.{name}",
+            comment=r.get("REMARKS") or None,
         )
         ctx.tables[tm.type_name] = tm
         by_qualified[(schema, name)] = tm
@@ -111,6 +112,7 @@ def build_context(conn) -> tuple:
                     column_name=r.get("COLUMN_NAME") or "",
                     data_type=normalize.duckdb_label(type_name),
                     is_nullable=nullable,
+                    comment=r.get("REMARKS") or None,
                 )
             )
         column_types[tm.table_id] = cols
@@ -189,18 +191,35 @@ def _enrich_keys_from_statistic(conn, ctx: CompilationContext, by_qualified) -> 
                 fields = _fields(table)
             except Exception:
                 continue
-            # Primary key: first unique key from getKeys().
+            # Keys from getKeys(): keys[0] is the primary key, any remaining entries are
+            # declared UNIQUE keys (e.g. state_ref.state_fips / state_name). Surface the PK
+            # (when JDBC gave none) and every distinct non-PK unique key so they become valid
+            # FK targets rather than being silently dropped.
             try:
                 keys = stat.getKeys()
             except Exception:
                 keys = None
-            if keys is not None and len(keys) > 0 and tm.table_id not in ctx.pk_columns:
+            key_col_lists = []
+            for k in list(keys) if keys else []:
                 try:
-                    cols = [fields[int(i)] for i in keys[0].toList()]
-                    if cols:
-                        ctx.pk_columns[tm.table_id] = cols
+                    cols = [fields[int(i)] for i in k.toList()]
                 except Exception:
-                    pass
+                    continue
+                if cols:
+                    key_col_lists.append(cols)
+            if key_col_lists and tm.table_id not in ctx.pk_columns:
+                ctx.pk_columns[tm.table_id] = key_col_lists[0]
+            pk_set = frozenset(ctx.pk_columns.get(tm.table_id, []))
+            uniques = []
+            seen_key_sets = {pk_set}
+            for cols in key_col_lists:
+                col_set = frozenset(cols)
+                if col_set in seen_key_sets:
+                    continue
+                seen_key_sets.add(col_set)
+                uniques.append(cols)
+            if uniques:
+                ctx.unique_columns[tm.table_id] = uniques
             # Referential (foreign) constraints.
             try:
                 refs = stat.getReferentialConstraints()
@@ -238,7 +257,25 @@ def install_catalog(state, ctx: CompilationContext, column_types) -> None:
         state.contexts = AuthzContexts(ctx, grants)
     else:
         state.contexts = SharedContexts(ctx)
-    state.schema_build_cache = {"column_types": column_types, "tables": [], "domains": []}
+    # raw_tables carries table/column comments (from JDBC REMARKS) in the shape
+    # catalog._populate_pg_description reads, so pg_description / obj_description /
+    # col_description surface the schema YAML `comment:` text to clients (DataGrip).
+    raw_tables = [
+        {
+            "id": tm.table_id,
+            "description": tm.comment,
+            "columns": [
+                {"column_name": c.column_name, "description": c.comment}
+                for c in column_types.get(tm.table_id, [])
+            ],
+        }
+        for tm in ctx.tables.values()
+    ]
+    state.schema_build_cache = {
+        "column_types": column_types,
+        "tables": raw_tables,
+        "domains": [],
+    }
     state.catalog_enabled = True
     # Drop any catalog DBs memoized from a previous model (bridge re-seed / restart).
     catalog.invalidate_catalog_cache()
@@ -265,14 +302,21 @@ def serialize_catalog(ctx: CompilationContext, column_types) -> dict:
             "table_name": t.table_name,
             "type_name": t.type_name,
             "domain_id": t.domain_id,
+            "comment": t.comment,
         }
 
     def cm(c):
-        return {"column_name": c.column_name, "data_type": c.data_type, "is_nullable": c.is_nullable}
+        return {
+            "column_name": c.column_name,
+            "data_type": c.data_type,
+            "is_nullable": c.is_nullable,
+            "comment": c.comment,
+        }
 
     return {
         "tables": {tn: tm(t) for tn, t in ctx.tables.items()},
         "pk_columns": {str(tid): cols for tid, cols in ctx.pk_columns.items()},
+        "unique_columns": {str(tid): cols for tid, cols in ctx.unique_columns.items()},
         "joins": [
             {
                 "src_type": k[0],
@@ -292,6 +336,7 @@ def deserialize_catalog(d: dict):
     """Rebuild (CompilationContext, column_types) from serialize_catalog()."""
     tables = {tn: TableMeta(**t) for tn, t in d["tables"].items()}
     pk = {int(tid): cols for tid, cols in d["pk_columns"].items()}
+    uniq = {int(tid): cols for tid, cols in d.get("unique_columns", {}).items()}
     joins = {}
     for j in d["joins"]:
         target = tables.get(j["target_type"])
@@ -303,7 +348,7 @@ def deserialize_catalog(d: dict):
             target=target,
             cardinality=j["cardinality"],
         )
-    ctx = CompilationContext(tables=tables, pk_columns=pk, joins=joins)
+    ctx = CompilationContext(tables=tables, pk_columns=pk, unique_columns=uniq, joins=joins)
     column_types = {
         int(tid): [ColumnMeta(**c) for c in cols] for tid, cols in d["column_types"].items()
     }

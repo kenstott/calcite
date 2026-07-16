@@ -2421,6 +2421,71 @@ def _build_pk_constraint_rows(
     return rows, con_oid
 
 
+def _build_unique_constraint_rows(
+    ctx,
+    idx: CatalogIndex,
+    con_oid_start: int,
+) -> tuple[list[tuple], int]:
+    """pg_constraint contype='u' rows for declared non-PK unique keys, so an FK that
+    references a unique-but-not-primary column (e.g. counties.state_fips ->
+    state_ref.state_fips) resolves to a real key on the target and ER tools draw the edge."""
+    from pgwire_calcite.compiler.sql_gen import semantic_table_name
+
+    rows: list[tuple] = []
+    con_oid = con_oid_start
+    seen_table_ids: set[int] = set()
+    for _, tm in ctx.tables.items():
+        if tm.table_id in seen_table_ids:
+            continue
+        toid = idx.table_id_to_oid.get(tm.table_id)
+        if toid is None:
+            continue
+        uniques = ctx.unique_columns.get(tm.table_id, [])
+        if not uniques:
+            continue
+        seen_table_ids.add(tm.table_id)
+        ns_oid = idx.ns_map.get(idx.toid_to_table[toid][1], 2200)
+        used_names: set[str] = set()
+        for cols in uniques:
+            conkey = [idx.col_attnum.get((toid, c), 0) for c in cols]
+            if any(a == 0 for a in conkey):
+                continue
+            base_name = f"uq_{semantic_table_name(tm)}__{'_'.join(cols)}"
+            con_name = base_name if base_name not in used_names else f"{base_name}_{con_oid}"
+            used_names.add(con_name)
+            rows.append(
+                (
+                    con_oid,
+                    con_name,
+                    ns_oid,
+                    "u",
+                    False,
+                    False,
+                    True,
+                    toid,
+                    0,
+                    0,
+                    0,
+                    0,
+                    None,
+                    None,
+                    None,
+                    True,
+                    0,
+                    True,
+                    conkey,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            )
+            con_oid += 1
+    return rows, con_oid
+
+
 def _build_fk_constraint_rows(
     ctx,
     idx: CatalogIndex,
@@ -2517,6 +2582,8 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
     if ctx:
         pk_rows, next_oid = _build_pk_constraint_rows(ctx, idx, 20000)
         constraint_rows.extend(pk_rows)
+        uq_rows, next_oid = _build_unique_constraint_rows(ctx, idx, next_oid)
+        constraint_rows.extend(uq_rows)
         fk_rows, _ = _build_fk_constraint_rows(ctx, idx, next_oid)
         constraint_rows.extend(fk_rows)
     if constraint_rows:
@@ -2546,6 +2613,13 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
     pk_name_by_relid: dict[int, str] = {
         row[7]: row[1] for row in constraint_rows if row[3] == "p"
     }
+    # (target relid, referenced-column attnum set) -> PK/UNIQUE constraint name, so an FK
+    # referencing a non-PK unique column links to the correct key (counties.state_fips ->
+    # state_ref UNIQUE(state_fips)), not blindly the target's primary key.
+    key_name_by_relid_cols: dict[tuple[int, frozenset], str] = {}
+    for row in constraint_rows:
+        if row[3] in ("p", "u"):
+            key_name_by_relid_cols[(row[7], frozenset(row[18] or []))] = row[1]
     is_tc_rows: list[tuple] = []
     is_kcu_rows: list[tuple] = []
     is_rc_rows: list[tuple] = []
@@ -2556,7 +2630,9 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         conrelid_v: int = con_row[7]
         c_v, c_sch_v, c_tname_v = idx.toid_to_table.get(conrelid_v, (_DATABASE_NAME, "public", ""))
         con_schema_v = oid_to_ns.get(conns_oid_v, "public")
-        ctype_str = "PRIMARY KEY" if contype_v == "p" else "FOREIGN KEY"
+        ctype_str = {"p": "PRIMARY KEY", "u": "UNIQUE", "f": "FOREIGN KEY"}.get(
+            contype_v, "CHECK"
+        )
         is_tc_rows.append(
             (
                 _DATABASE_NAME,
@@ -2574,7 +2650,11 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         )
         if contype_v == "f":
             confrelid_v: int = con_row[11]
+            confkey_v = frozenset(con_row[19] or [])
             _, ref_sch_v, _ = idx.toid_to_table.get(confrelid_v, (_DATABASE_NAME, "public", ""))
+            ref_key_name = key_name_by_relid_cols.get(
+                (confrelid_v, confkey_v)
+            ) or pk_name_by_relid.get(confrelid_v)
             is_rc_rows.append(
                 (
                     _DATABASE_NAME,
@@ -2582,7 +2662,7 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                     conname_v,
                     _DATABASE_NAME,
                     ref_sch_v,
-                    pk_name_by_relid.get(confrelid_v),
+                    ref_key_name,
                     "NONE",
                     "NO ACTION",
                     "NO ACTION",
@@ -2603,7 +2683,7 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                         c_tname_v,
                         col_name_v,
                         pos,
-                        pos if contype_v == "p" else None,
+                        pos if contype_v in ("p", "u") else None,
                     )
                 )
     if is_tc_rows:

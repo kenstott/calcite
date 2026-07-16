@@ -185,6 +185,21 @@ public final class GovDataUtils {
       // '${GEO_SCHEMA_NAME:geo}.states', is dropped by FileSchema's FK validation, and the
       // cross-schema views that depend on it (e.g. econ.state_economic_snapshot) fail to resolve.
       resolveConstraintVariables(constraints);
+      // GovData schema YAML declares secondary unique keys under `unique:` (the natural
+      // authoring word), but the file-adapter constraint contract (TableConstraints) reads
+      // them under `uniqueKeys`. Translate at this boundary so declared unique keys reach
+      // Statistic.getKeys() — otherwise they are silently dropped and non-PK unique columns
+      // (e.g. geo.state_ref.state_fips) are not surfaced as valid FK targets to JDBC
+      // metadata / pgwire / DataGrip.
+      for (Map<String, Object> tableConstraints : constraints.values()) {
+        if (tableConstraints == null) {
+          continue;
+        }
+        Object unique = tableConstraints.remove("unique");
+        if (unique != null && !tableConstraints.containsKey("uniqueKeys")) {
+          tableConstraints.put("uniqueKeys", unique);
+        }
+      }
       return constraints;
     } catch (IOException e) {
       throw new RuntimeException("Error loading " + schemaResourceName, e);
