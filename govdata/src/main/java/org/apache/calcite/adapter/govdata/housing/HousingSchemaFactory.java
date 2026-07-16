@@ -27,21 +27,28 @@ import java.util.Set;
 /**
  * Factory for the U.S. housing schema.
  *
- * <p>Consolidates housing-market and affordability data from three sources:
+ * <p>Consolidates housing-market and affordability data from five sources:
  * <ul>
  *   <li><b>FHFA</b> House Price Index — {@code house_price_index}
  *       (bulk {@code hpi_master.csv}, streamed; no key)</li>
  *   <li><b>Census</b> Building Permits Survey — {@code building_permits}
  *       (per-year county text file; no key)</li>
- *   <li><b>HUD</b> USER API — {@code fair_market_rents}, {@code income_limits}
- *       (per-state JSON, Bearer {@code HUD_TOKEN})</li>
+ *   <li><b>HUD</b> USER API — {@code fair_market_rents}, {@code income_limits},
+ *       {@code income_limits_county} (per-state JSON, Bearer {@code HUD_TOKEN})</li>
+ *   <li><b>CFPB</b> HMDA Data Browser — {@code hmda_loans}
+ *       (per-{@code (year, state)} aggregations JSON; no key)</li>
+ *   <li><b>HUD Open Data ArcGIS</b> — {@code opportunity_zones},
+ *       {@code hud_subsidized_housing} (paginated FeatureServer JSON; no key)</li>
+ *   <li><b>HUD USER files</b> — {@code hud_subsidized_county}
+ *       (annual Picture-of-Subsidized-Households {@code .xlsx}; no key)</li>
  * </ul>
  *
- * <p>The two HUD tables are token-gated: when {@code ${HUD_TOKEN}} resolves to
- * empty they are disabled via {@link FileSchemaBuilder#isEnabled} so the schema
- * still builds (the FHFA and Census tables need no secret). The optional
- * {@code enabledSources} operand ({@code fhfa} / {@code census} / {@code hud})
- * narrows the schema to one source for targeted DQ/backfill runs.
+ * <p>The three HUD USER API tables are token-gated: when {@code ${HUD_TOKEN}}
+ * resolves to empty they are disabled via {@link FileSchemaBuilder#isEnabled} so the
+ * schema still builds (the FHFA, Census, CFPB, ArcGIS, and HUD-file tables need no
+ * secret). The optional {@code enabledSources} operand ({@code fhfa} / {@code census}
+ * / {@code hud} / {@code cfpb} / {@code arcgis} / {@code hud_files}) narrows the
+ * schema to one source for targeted DQ/backfill runs.
  */
 public class HousingSchemaFactory implements GovDataSubSchemaFactory {
 
@@ -56,6 +63,13 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     m.put("fair_market_rents", "hud");
     m.put("income_limits", "hud");
     m.put("income_limits_county", "hud");
+    // CFPB HMDA and HUD Open Data ArcGIS are public (no HUD_TOKEN), so these
+    // tables are never token-gated — only narrowed by the enabledSources operand.
+    m.put("hmda_loans", "cfpb");
+    m.put("hmda_applicant_demographics", "cfpb");
+    m.put("opportunity_zones", "arcgis");
+    m.put("hud_subsidized_housing", "arcgis");
+    m.put("hud_subsidized_county", "hud_files");
     TABLE_SOURCE = Collections.unmodifiableMap(m);
   }
 
@@ -71,7 +85,8 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     Set<String> enabledSources = parseEnabledSources(operand);
     boolean hudTokenPresent = isHudTokenPresent();
     if (!hudTokenPresent) {
-      LOGGER.info("HOUSING: HUD_TOKEN absent — fair_market_rents and income_limits disabled");
+      LOGGER.info("HOUSING: HUD_TOKEN absent — fair_market_rents, income_limits, "
+          + "income_limits_county disabled (CFPB/ArcGIS tables unaffected)");
     }
 
     for (Map.Entry<String, String> entry : TABLE_SOURCE.entrySet()) {
