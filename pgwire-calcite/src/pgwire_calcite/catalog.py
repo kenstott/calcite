@@ -38,6 +38,16 @@ _SERVER_START_ISO = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S+00")
 # e.g. pgwire-govdata sets "govdata". Set once at startup — no per-query override.
 _DATABASE_NAME = "postgres"
 
+# A PK/unique index needs a resolvable access method + opclass for DataGrip to treat it as a
+# key-bearing index and populate its columns. Real PG stores per-column opclass oids in
+# pg_index.indclass (e.g. 3126 = text btree ops); DataGrip's index query joins
+# pg_opclass on those oids to read opcmethod as access_method_id. With indclass all-zero the
+# join yields NULL and DataGrip renders `primary key ()`. Point indclass at one synthetic
+# default btree opclass (opcmethod=403=btree) and indcollation at the default collation (100).
+_BTREE_AM_OID = 403
+_SYNTH_BTREE_OPCLASS_OID = 1978
+_DEFAULT_COLLATION_OID = 100
+
 
 def set_database_name(name: str) -> None:
     """Set the catalog/database name reported to clients. Called once at startup;
@@ -1982,6 +1992,13 @@ def _populate_empty_system_tables(db) -> None:
     db.execute(
         "CREATE TABLE _pg_opclass (oid INTEGER, opcmethod INTEGER, opcname VARCHAR, opcnamespace INTEGER, opcowner INTEGER, opcfamily INTEGER, opcintype INTEGER, opcdefault BOOLEAN, opckeytype INTEGER)"
     )
+    # One synthetic default btree opclass so pk/unique index columns resolve an access method
+    # (opcmethod=403). opcdefault=True → DataGrip nulls the opclass name in DDL (matches real PG
+    # default-opclass behaviour). indclass on our synthetic indexes points here.
+    db.execute(
+        "INSERT INTO _pg_opclass VALUES (?, ?, 'synthetic_btree_ops', 11, 10, 0, 0, True, 0)",
+        (_SYNTH_BTREE_OPCLASS_OID, _BTREE_AM_OID),
+    )
     db.execute(
         "CREATE TABLE _pg_amop (oid INTEGER, amopfamily INTEGER, amoplefttype INTEGER, amoprighttype INTEGER, amopstrategy SMALLINT, amoppurpose VARCHAR, amopopr INTEGER, amopmethod INTEGER, amopsortfamily INTEGER)"
     )
@@ -1990,6 +2007,11 @@ def _populate_empty_system_tables(db) -> None:
     )
     db.execute(
         "CREATE TABLE _pg_collation (oid INTEGER, collname VARCHAR, collnamespace INTEGER, collowner INTEGER, collprovider VARCHAR, collisdeterministic BOOLEAN, collencoding INTEGER, collcollate VARCHAR, collctype VARCHAR, collversion VARCHAR)"
+    )
+    # Default collation (oid 100 in real PG) so index columns' indcollation resolves.
+    db.execute(
+        "INSERT INTO _pg_collation VALUES (?, 'default', 11, 10, 'd', True, -1, 'default', 'default', NULL)",
+        (_DEFAULT_COLLATION_OID,),
     )
     db.execute(
         "CREATE TABLE _pg_range (rngtypid INTEGER, rngsubtype INTEGER, rngmultitypid INTEGER, rngcollation INTEGER, rngsubopc INTEGER, rngcanonical INTEGER, rngsubdiff INTEGER)"
@@ -2627,7 +2649,8 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
             index_rows.append((
                 _idx_oid, conrelid, n, n, True, row[3] == "p", False,
                 True, False, True, False, True, True, False,
-                conkey, [0] * n, [0] * n, [0] * n, None, None,
+                conkey, [_DEFAULT_COLLATION_OID] * n, [_SYNTH_BTREE_OPCLASS_OID] * n,
+                [0] * n, None, None,
             ))
             index_class_rows.append((
                 _idx_oid, conname, ns_oid, 0, 0, 10, 403, 0, 0, 0, 0.0, 0, 0,
