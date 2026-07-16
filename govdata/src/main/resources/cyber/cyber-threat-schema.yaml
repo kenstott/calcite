@@ -1251,6 +1251,15 @@ constraints:
 
   attack_to_nist_mappings:
     primaryKey: [type, technique_id, nist_control_id]
+    foreignKeys:
+      - columns: [technique_id]
+        targetTable: attack_techniques
+        targetColumns: [technique_id]
+        comment: Links each ATT&CK technique mapping to its technique definition
+      - columns: [nist_control_id]
+        targetTable: nist_controls
+        targetColumns: [control_id]
+        comment: Links each mapping to the NIST 800-53 control it satisfies
 
   threat_pulses:
     primaryKey: [type, pulse_id, first_seen]
