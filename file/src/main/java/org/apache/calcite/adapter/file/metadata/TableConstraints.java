@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiPredicate;
+import java.util.function.Function;
 
 /**
  * Table constraint metadata for file-based tables.
@@ -67,13 +68,32 @@ public class TableConstraints {
    * @param tableName The table name
    * @return A Statistic with the configured constraints
    */
-  @SuppressWarnings("unchecked")
   public static Statistic fromConfig(
       Map<String, Object> tableConfig,
       List<String> columnNames,
       @Nullable Double rowCount,
       @Nullable String schemaName,
       @Nullable String tableName) {
+    return fromConfig(tableConfig, columnNames, rowCount, schemaName, tableName, null);
+  }
+
+  /**
+   * As {@link #fromConfig(Map, List, Double, String, String)} but with a resolver that maps
+   * a target table's qualified name to its ordered column names, so a composite FK's target
+   * columns resolve to their TRUE ordinal in the target table (not the positional index in
+   * the FK's column list, which is wrong whenever a target column is not at that position).
+   *
+   * @param targetColumnResolver qualified target name (e.g. [schema, table]) -&gt; column names,
+   *                             or null; returns null when the target can't be resolved.
+   */
+  @SuppressWarnings("unchecked")
+  public static Statistic fromConfig(
+      Map<String, Object> tableConfig,
+      List<String> columnNames,
+      @Nullable Double rowCount,
+      @Nullable String schemaName,
+      @Nullable String tableName,
+      @Nullable Function<List<String>, List<String>> targetColumnResolver) {
 
     // Extract constraint configuration
     Map<String, Object> constraints = (Map<String, Object>) tableConfig.get("constraints");
@@ -92,7 +112,8 @@ public class TableConstraints {
     List<ImmutableBitSet> keys = parsePrimaryKeys(constraints, effectiveColumnNames);
 
     // Parse foreign keys
-    List<RelReferentialConstraint> foreignKeys = parseForeignKeys(constraints, effectiveColumnNames, schemaName, tableName);
+    List<RelReferentialConstraint> foreignKeys =
+        parseForeignKeys(constraints, effectiveColumnNames, schemaName, tableName, targetColumnResolver);
 
     // Parse collations (optional)
     List<RelCollation> collations = parseCollations(constraints, columnNames);
@@ -216,7 +237,8 @@ public class TableConstraints {
       Map<String, Object> constraints,
       List<String> columnNames,
       @Nullable String schemaName,
-      @Nullable String tableName) {
+      @Nullable String tableName,
+      @Nullable Function<List<String>, List<String>> targetColumnResolver) {
 
     List<RelReferentialConstraint> foreignKeys = new ArrayList<>();
 
@@ -265,11 +287,30 @@ public class TableConstraints {
         continue; // Skip invalid FK definition
       }
 
+      // Resolve the target table's real column order so each target column maps to its TRUE
+      // ordinal in the target table. Without this, a composite FK's non-first target columns
+      // bind to the wrong column (positional index i != actual ordinal). Falls back to
+      // positional when no resolver is supplied or the target can't be resolved.
+      List<String> targetTableColumns = null;
+      if (targetColumnResolver != null && targetTable != null) {
+        try {
+          targetTableColumns = targetColumnResolver.apply(targetTable);
+        } catch (RuntimeException e) {
+          targetTableColumns = null;
+        }
+      }
+
       // Build column pairs
       List<IntPair> columnPairs = new ArrayList<>();
       for (int i = 0; i < sourceColumns.size() && i < targetColumns.size(); i++) {
         int sourceIndex = columnNames.indexOf(sourceColumns.get(i));
-        int targetIndex = i; // Target column ordinal in target table
+        int targetIndex = i; // positional fallback
+        if (targetTableColumns != null) {
+          int resolved = targetTableColumns.indexOf(targetColumns.get(i));
+          if (resolved >= 0) {
+            targetIndex = resolved;
+          }
+        }
         if (sourceIndex >= 0) {
           columnPairs.add(IntPair.of(sourceIndex, targetIndex));
         }

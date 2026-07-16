@@ -90,9 +90,53 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
     Table table = delegate.getTable(name);
     if (table != null && constraintMetadata.containsKey(name)) {
       String schemaName = owner != null ? owner.getName() : null;
-      return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name), schemaName, name);
+      return new ConstraintAwareJdbcTable(table, constraintMetadata.get(name), schemaName, name,
+          targetColumnResolver());
     }
     return table;
+  }
+
+  /**
+   * Resolver mapping a target table's qualified name ([schema, table] or [table]) to its
+   * ordered column names, so a composite FK's target columns resolve to their TRUE ordinal
+   * in the target table rather than a positional guess. Null when there is no owning
+   * FileSchema (e.g. unit tests). Same-schema targets are read from the owner; cross-schema
+   * from the parent schema's sibling.
+   */
+  private java.util.function.@Nullable Function<java.util.List<String>, java.util.List<String>> targetColumnResolver() {
+    final FileSchema fs = owner;
+    if (fs == null) {
+      return null;
+    }
+    return qn -> {
+      try {
+        if (qn == null || qn.isEmpty()) {
+          return null;
+        }
+        String tschema = qn.size() >= 2 ? qn.get(qn.size() - 2) : fs.getName();
+        String ttable = qn.get(qn.size() - 1);
+        Table tt;
+        if (tschema.equals(fs.getName())) {
+          tt = fs.getTable(ttable);
+        } else {
+          SchemaPlus parent = fs.getParentSchema();
+          SchemaPlus sub = parent != null ? parent.getSubSchema(tschema) : null;
+          tt = sub != null ? sub.getTable(ttable) : null;
+        }
+        if (tt == null) {
+          return null;
+        }
+        RelDataTypeFactory tf = new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+            org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+        java.util.List<String> cols = new ArrayList<>();
+        for (org.apache.calcite.rel.type.RelDataTypeField f : tt.getRowType(tf).getFieldList()) {
+          cols.add(f.getName());
+        }
+        return cols;
+      } catch (RuntimeException e) {
+        return null;
+      }
+    };
   }
 
   @SuppressWarnings("deprecation")
@@ -179,16 +223,19 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
     private final Map<String, Object> constraintConfig;
     private final @Nullable String schemaName;
     private final @Nullable String tableName;
+    private final java.util.function.@Nullable Function<java.util.List<String>, java.util.List<String>> targetColumnResolver;
     private Statistic statistic;  // Non-final to allow lazy initialization
 
     public ConstraintAwareJdbcTable(Table wrappedDelegate,
                                     Map<String, Object> constraintConfig,
                                     @Nullable String schemaName,
-                                    @Nullable String tableName) {
+                                    @Nullable String tableName,
+                                    java.util.function.@Nullable Function<java.util.List<String>, java.util.List<String>> targetColumnResolver) {
       this.wrappedDelegate = wrappedDelegate;
       this.constraintConfig = constraintConfig;
       this.schemaName = schemaName;
       this.tableName = tableName;
+      this.targetColumnResolver = targetColumnResolver;
       // Delay statistic creation until we have column names
       this.statistic = null;
     }
@@ -226,7 +273,7 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
           // Note: FK validation happens at schema level in FileSchema.validateForeignKeyConstraints()
           // which removes invalid FKs from constraint metadata before tables read it
           statistic = TableConstraints.fromConfig(tableConfig, columnNames, rowCount,
-              schemaName, tableName);
+              schemaName, tableName, targetColumnResolver);
           LOGGER.info("Created statistic with {} keys, {} referential constraints, rowCount={}",
                       statistic.getKeys() != null ? statistic.getKeys().size() : 0,
                       statistic.getReferentialConstraints() != null ?

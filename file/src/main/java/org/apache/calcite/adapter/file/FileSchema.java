@@ -6307,6 +6307,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     return name;
   }
 
+  /** Parent schema (where sibling schemas are registered), used to resolve cross-schema
+   * FK target tables' columns. May be null. */
+  public @Nullable SchemaPlus getParentSchema() {
+    return parentSchema;
+  }
+
   private final java.util.concurrent.atomic.AtomicBoolean foreignKeysValidated =
       new java.util.concurrent.atomic.AtomicBoolean(false);
 
