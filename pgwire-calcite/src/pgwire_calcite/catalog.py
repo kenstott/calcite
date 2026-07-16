@@ -2586,11 +2586,46 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
         constraint_rows.extend(uq_rows)
         fk_rows, _ = _build_fk_constraint_rows(ctx, idx, next_oid)
         constraint_rows.extend(fk_rows)
+    # Every PK/unique constraint needs a backing index: DataGrip reads PK/unique COLUMNS
+    # from pg_index.indkey (+ the index's pg_class row, relkind='i'), NOT pg_constraint.conkey.
+    # Without this the constraint name renders but with empty columns (`primary key ()`).
+    # Build index rows, link them via conindid, and add index relations to _pg_class.
+    index_rows: list[tuple] = []
+    index_class_rows: list[tuple] = []
+    linked_rows: list[tuple] = []
+    _idx_oid = 90000
+    for row in constraint_rows:
+        if row[3] in ("p", "u"):
+            conrelid = row[7]
+            conkey = list(row[18] or [])
+            conname = row[1]
+            _, sch, _ = idx.toid_to_table.get(conrelid, (_DATABASE_NAME, "public", ""))
+            ns_oid = idx.ns_map.get(sch, 2200)
+            n = len(conkey)
+            r = list(row)
+            r[9] = _idx_oid  # conindid -> the backing index
+            row = tuple(r)
+            index_rows.append((
+                _idx_oid, conrelid, n, n, True, row[3] == "p", False,
+                True, False, True, False, True, True, False,
+                conkey, [0] * n, [0] * n, [0] * n, None, None,
+            ))
+            index_class_rows.append((
+                _idx_oid, conname, ns_oid, 0, 0, 10, 403, 0, 0, 0, 0.0, 0, 0,
+                False, False, "p", "i", n, 0, False, False, False, False, False,
+                True, "n", False, 0, 0, 0, None, None, None,
+            ))
+            _idx_oid += 1
+        linked_rows.append(row)
+    constraint_rows = linked_rows
     if constraint_rows:
         db.executemany(
             f"INSERT INTO _pg_constraint VALUES ({','.join(['?'] * 25)})",
             constraint_rows,
         )
+    if index_rows:
+        db.executemany(f"INSERT INTO _pg_index VALUES ({','.join(['?'] * 20)})", index_rows)
+        db.executemany(f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", index_class_rows)
     return constraint_rows
 
 
