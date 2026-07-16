@@ -1043,6 +1043,10 @@ partitionedTables:
         type: string
         nullable: true
         comment: HUD program label
+      - name: sub_program
+        type: string
+        nullable: true
+        comment: HUD sub-program within the program (e.g. voucher subtype; null when none)
       - name: total_units
         type: integer
         nullable: true
@@ -1262,7 +1266,7 @@ constraints:
         targetColumns: [state_abbr]
 
   hud_subsidized_county:
-    primaryKey: [year, county_fips, program_code]
+    primaryKey: [year, county_fips, program_code, sub_program]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"

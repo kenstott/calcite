@@ -57,7 +57,11 @@ public class HudPictureCountyDataProvider implements DataProvider {
       "https://www.huduser.gov/portal/datasets/pictures/files/";
   private static final String REFERER =
       "https://www.huduser.gov/portal/datasets/assthsg.html";
-  private static final String USER_AGENT = "Mozilla/5.0 (compatible; GovData/1.0)";
+  // HUD's WAF serves the workbook only to a browser-like UA; a "compatible; GovData"
+  // token is answered with HTTP 202 (bot challenge) and no file. Verified 2026-07-16.
+  private static final String USER_AGENT =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+          + "(KHTML, like Gecko) Chrome/120.0 Safari/537.36";
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 180_000;
   private static final int MAX_RETRIES = 3;
@@ -69,6 +73,7 @@ public class HudPictureCountyDataProvider implements DataProvider {
       {"name", "county_name", "str"},
       {"program", "program_code", "str"},
       {"program_label", "program", "str"},
+      {"sub_program", "sub_program", "str"},
       {"total_units", "total_units", "int"},
       {"pct_occupied", "pct_occupied", "dbl"},
       {"people_total", "people_total", "int"},
@@ -104,11 +109,13 @@ public class HudPictureCountyDataProvider implements DataProvider {
       if (header == null) {
         throw new IOException("hud_subsidized_county: empty workbook for year " + year);
       }
+      // Case-insensitive header index: HUD renames columns across vintages
+      // (e.g. 'name' in 2024 became 'NAME' in 2025), so match on lowercased headers.
       Map<String, Integer> col = new HashMap<String, Integer>();
       for (Cell c : header) {
         String h = c.getStringCellValue();
         if (h != null) {
-          col.put(h.trim(), c.getColumnIndex());
+          col.put(h.trim().toLowerCase(), c.getColumnIndex());
         }
       }
       Integer yearInt = Integer.valueOf(year);
@@ -165,7 +172,9 @@ public class HudPictureCountyDataProvider implements DataProvider {
             return readAll(in);
           }
         }
-        if (status != 429 && status < 500) {
+        // 202 is HUD's WAF challenge for a non-browser client; retry (the browser UA
+        // above normally yields 200 on the first try, so this is belt-and-suspenders).
+        if (status != 429 && status != HttpURLConnection.HTTP_ACCEPTED && status < 500) {
           throw new IOException("HTTP " + status + " from " + url);
         }
         last = new IOException("HTTP " + status + " from " + url);
@@ -215,7 +224,7 @@ public class HudPictureCountyDataProvider implements DataProvider {
       return null;
     }
     s = s.trim();
-    return s.isEmpty() || "NA".equalsIgnoreCase(s) ? null : s;
+    return s.isEmpty() || "NA".equalsIgnoreCase(s) || "N/A".equalsIgnoreCase(s) ? null : s;
   }
 
   private static Double toDbl(Cell c) {
