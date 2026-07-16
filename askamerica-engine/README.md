@@ -60,6 +60,9 @@ jdbc:askamerica:source=fec,crime,weather
 | `housing` | FHFA house price indexes, Census new-residential building permits, HUD Fair Market Rents and income limits |
 | `cftc` | CFTC swaps and derivatives data |
 | `ag` | USDA agriculture (NASS/RMA/FSA) |
+| `transport` | NHTSA recalls/complaints/FARS crashes, BTS airline on-time & T-100, FAA airports, FTA transit ridership |
+| `environment` | EPA air quality, TRI, GHG, drinking water, Superfund/RCRA facilities + USGS water |
+| `research` | NSF NCSES R&D: National Patterns, Federal Funds for R&D, Higher Education R&D (HERD) |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
 
 ## DBeaver setup
