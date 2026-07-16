@@ -814,6 +814,434 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
 
+  # ==========================================================================
+  # CALENDAR — daily date spine (2010 → current+2yr) with every ISO form + parts
+  # ==========================================================================
+  # Pure-generated conformed date dimension. One row per day carrying the day in
+  # every full-date representation (each declared unique → a valid FK target for
+  # the heterogeneously-formatted date columns across schemas), plus every date
+  # part in numeric and named forms, calendar flags, and US-federal fiscal
+  # attributes. computed_delta append keyed on iso_date (mirrors gleif_entities):
+  # each daily ETL run extends the spine by the newly-reached day. fiscal_year
+  # FKs ref.fiscal_year.
+  - name: calendar
+    dataset_type: computed_delta
+    pattern: "type=calendar.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Daily date spine from 2010-01-01 through two years past the current year,
+      one row per calendar day. The full-date representations (date_key, iso_date,
+      basic_iso YYYYMMDD, iso_ordinal YYYY-DDD, iso_week_date YYYY-Www-D,
+      epoch_day) are each unique and serve as FK targets for date columns in any
+      form. Also carries numeric and named date parts, calendar flags, and
+      US-federal fiscal attributes (fiscal_year FKs ref.fiscal_year). Generated
+      by CalendarDataProvider — no external source.
+
+    columns:
+      - name: date_key
+        type: date
+        nullable: false
+        comment: Calendar day as a native DATE (canonical FK target for DATE-typed columns)
+      - name: iso_date
+        type: string
+        nullable: false
+        comment: ISO-8601 calendar date YYYY-MM-DD (FK target for ISO date strings)
+      - name: basic_iso
+        type: string
+        nullable: false
+        comment: ISO-8601 basic date YYYYMMDD (FK target for compact date stamps)
+      - name: iso_ordinal
+        type: string
+        nullable: false
+        comment: ISO-8601 ordinal date YYYY-DDD
+      - name: iso_week_date
+        type: string
+        nullable: false
+        comment: ISO-8601 week date YYYY-Www-D
+      - name: epoch_day
+        type: long
+        nullable: false
+        comment: Days since 1970-01-01 (numeric full-date form)
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - name: quarter
+        type: integer
+        nullable: false
+        comment: Calendar quarter (1-4)
+      - name: month
+        type: integer
+        nullable: false
+        comment: Month of year (1-12)
+      - name: day_of_month
+        type: integer
+        nullable: false
+        comment: Day of month (1-31)
+      - name: day_of_week_iso
+        type: integer
+        nullable: false
+        comment: ISO day of week (1=Monday .. 7=Sunday)
+      - name: day_of_week_us
+        type: integer
+        nullable: false
+        comment: US day of week (1=Sunday .. 7=Saturday)
+      - name: day_of_year
+        type: integer
+        nullable: false
+        comment: Day of year (1-366)
+      - name: day_of_quarter
+        type: integer
+        nullable: false
+        comment: Day of quarter (1-92)
+      - name: iso_week
+        type: integer
+        nullable: false
+        comment: ISO-8601 week of week-based year (1-53)
+      - name: iso_week_year
+        type: integer
+        nullable: false
+        comment: ISO-8601 week-based year (may differ from year near Jan/Dec boundaries)
+      - name: days_in_month
+        type: integer
+        nullable: false
+        comment: Number of days in this month
+      - name: month_name
+        type: string
+        nullable: false
+        comment: Full month name (English, e.g. January)
+      - name: month_abbr
+        type: string
+        nullable: false
+        comment: Abbreviated month name (English, e.g. Jan)
+      - name: day_name
+        type: string
+        nullable: false
+        comment: Full weekday name (English, e.g. Monday)
+      - name: day_abbr
+        type: string
+        nullable: false
+        comment: Abbreviated weekday name (English, e.g. Mon)
+      - name: year_month
+        type: string
+        nullable: false
+        comment: Month-grain key YYYY-MM
+      - name: year_quarter
+        type: string
+        nullable: false
+        comment: Quarter-grain key YYYY-Qn
+      - name: year_iso_week
+        type: string
+        nullable: false
+        comment: ISO week-grain key YYYY-Www
+      - name: is_weekend
+        type: boolean
+        nullable: false
+        comment: True on Saturday or Sunday
+      - name: is_weekday
+        type: boolean
+        nullable: false
+        comment: True Monday through Friday
+      - name: is_month_start
+        type: boolean
+        nullable: false
+        comment: True on the first day of the month
+      - name: is_month_end
+        type: boolean
+        nullable: false
+        comment: True on the last day of the month
+      - name: is_quarter_start
+        type: boolean
+        nullable: false
+        comment: True on the first day of the quarter
+      - name: is_quarter_end
+        type: boolean
+        nullable: false
+        comment: True on the last day of the quarter
+      - name: is_year_start
+        type: boolean
+        nullable: false
+        comment: True on January 1
+      - name: is_year_end
+        type: boolean
+        nullable: false
+        comment: True on December 31
+      - name: is_leap_year
+        type: boolean
+        nullable: false
+        comment: True when the calendar year is a leap year
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: US federal fiscal year (starts Oct 1; FK to fiscal_year.fiscal_year)
+      - name: fiscal_quarter
+        type: integer
+        nullable: false
+        comment: US federal fiscal quarter (1=Oct-Dec .. 4=Jul-Sep)
+      - name: fiscal_month
+        type: integer
+        nullable: false
+        comment: US federal fiscal month (1=October .. 12=September)
+      - name: fiscal_year_label
+        type: string
+        nullable: false
+        comment: Fiscal year label, e.g. FY2024
+      - name: day_of_fiscal_year
+        type: integer
+        nullable: false
+        comment: Day of the federal fiscal year (1-366, from Oct 1)
+
+    source:
+      # No external source — CalendarDataProvider generates every row. The source
+      # block exists only to declare the computed_delta high-water-mark key.
+      type: http
+      incremental:
+        dateField: iso_date
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ref.CalendarDataProvider"
+
+    dimensions:
+      type:
+        - calendar
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [type]
+        overwritePartitions: false   # APPEND the computed_delta rows (new days); never rewrite history
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ==========================================================================
+  # FISCAL_YEAR — US federal fiscal-year dimension (Oct 1 start)
+  # ==========================================================================
+  - name: fiscal_year
+    pattern: "type=fiscal_year.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      US federal fiscal-year dimension: one row per fiscal year (FY starts Oct 1,
+      labelled by the calendar year it ends — FY2024 = 2023-10-01..2024-09-30).
+      Boundary and per-quarter start dates are ISO strings that join to
+      ref.calendar. Conformed FK target for fiscal_year across schemas
+      (ref.calendar.fiscal_year references it). Generated by
+      FiscalYearDataProvider — no external source. Covers FY2010 through two
+      years past the current fiscal year.
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: US federal fiscal year (e.g. 2024 = 2023-10-01..2024-09-30)
+      - name: fiscal_year_label
+        type: string
+        nullable: false
+        comment: Fiscal year label, e.g. FY2024
+      - name: start_date
+        type: date
+        nullable: false
+        comment: First day of the fiscal year (Oct 1 of the prior calendar year)
+      - name: end_date
+        type: date
+        nullable: false
+        comment: Last day of the fiscal year (Sep 30)
+      - name: start_iso_date
+        type: string
+        nullable: false
+        comment: start_date as ISO YYYY-MM-DD (FK to calendar.iso_date)
+      - name: end_iso_date
+        type: string
+        nullable: false
+        comment: end_date as ISO YYYY-MM-DD (FK to calendar.iso_date)
+      - name: calendar_years
+        type: string
+        nullable: false
+        comment: Spanning calendar years, e.g. 2023-2024
+      - name: days_in_fiscal_year
+        type: integer
+        nullable: false
+        comment: Number of days in the fiscal year (365 or 366)
+      - name: q1_start_date
+        type: string
+        nullable: false
+        comment: Fiscal Q1 start (Oct 1) as ISO YYYY-MM-DD
+      - name: q2_start_date
+        type: string
+        nullable: false
+        comment: Fiscal Q2 start (Jan 1) as ISO YYYY-MM-DD
+      - name: q3_start_date
+        type: string
+        nullable: false
+        comment: Fiscal Q3 start (Apr 1) as ISO YYYY-MM-DD
+      - name: q4_start_date
+        type: string
+        nullable: false
+        comment: Fiscal Q4 start (Jul 1) as ISO YYYY-MM-DD
+      - name: prior_fiscal_year
+        type: integer
+        nullable: false
+        comment: The preceding fiscal year
+      - name: next_fiscal_year
+        type: integer
+        nullable: false
+        comment: The following fiscal year
+
+    source:
+      # No external source — FiscalYearDataProvider generates every row.
+      type: http
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ref.FiscalYearDataProvider"
+
+    dimensions:
+      type:
+        - fiscal_year
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+
+  # ==========================================================================
+  # HOLIDAYS — multi-country public holidays (Nager.Date, ~110 countries)
+  # ==========================================================================
+  - name: holidays
+    pattern: "type=holidays/year=*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: VARCHAR
+
+    comment: >
+      Public holidays for every country supported by the Nager.Date API (~110),
+      one row per (country, holiday) per year. Joins to ref.calendar via
+      holiday_date (ISO YYYY-MM-DD) and to ref.countries via country_code (ISO
+      3166-1 alpha-2). Generated by HolidaysDataProvider, which pulls
+      /api/v3/AvailableCountries then /api/v3/PublicHolidays/{year}/{country}.
+      Source: date.nager.at (free, no API key).
+
+    columns:
+      - name: country_code
+        type: string
+        nullable: false
+        comment: ISO 3166-1 alpha-2 country code (FK to countries.iso_alpha2)
+      - name: country_name
+        type: string
+        nullable: true
+        comment: English country name (Nager AvailableCountries)
+      - name: holiday_date
+        type: string
+        nullable: false
+        comment: Holiday date ISO YYYY-MM-DD (FK to calendar.iso_date)
+      - name: holiday_name
+        type: string
+        nullable: false
+        comment: Holiday name in English
+      - name: local_name
+        type: string
+        nullable: true
+        comment: Holiday name in the local language
+      - name: is_global
+        type: boolean
+        nullable: true
+        comment: True when the holiday applies nationwide (not subdivision-scoped)
+      - name: is_fixed
+        type: boolean
+        nullable: true
+        comment: True when the holiday falls on the same calendar date every year
+      - name: counties
+        type: string
+        nullable: true
+        comment: Comma-separated ISO-3166-2 subdivisions when the holiday is regional (else null)
+      - name: launch_year
+        type: integer
+        nullable: true
+        comment: Year the holiday was first observed, when known
+      - name: holiday_types
+        type: string
+        nullable: true
+        comment: Comma-separated Nager holiday types (Public, Bank, Optional, ...)
+
+    source:
+      type: http
+      url: "https://date.nager.at/api/v3/PublicHolidays/{year}/{countryCode}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ref.HolidaysDataProvider"
+
+    dimensions:
+      type:
+        - holidays
+      year: *ref_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        batchPartitionColumns: [type, year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1825
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -832,8 +1260,51 @@ constraints:
     primaryKey: [currency_code]
     comment: ISO 4217 code; FK target for ref.countries.currency_code.
 
+  calendar:
+    primaryKey: [type, date_key]
+    unique:
+      # Every full-date representation is unique per day, so each is a valid FK
+      # target for date columns stored in that form across schemas.
+      - [date_key]
+      - [iso_date]
+      - [basic_iso]
+      - [iso_ordinal]
+      - [iso_week_date]
+      - [epoch_day]
+    foreignKeys:
+      - columns: [fiscal_year]
+        targetTable: fiscal_year
+        targetColumns: [fiscal_year]
+        comment: US federal fiscal year the day belongs to
+
+  fiscal_year:
+    primaryKey: [type, fiscal_year]
+    unique:
+      # fiscal_year is globally unique; declared so calendar.fiscal_year can FK it.
+      - [fiscal_year]
+    comment: US federal fiscal-year dimension; FK target for fiscal_year across schemas.
+
+  holidays:
+    primaryKey: [type, year, country_code, holiday_date, holiday_name]
+    foreignKeys:
+      - columns: [country_code]
+        targetTable: countries
+        targetColumns: [iso_alpha2]
+        comment: ISO 3166-1 alpha-2 country of the holiday
+      - columns: [holiday_date]
+        targetTable: calendar
+        targetColumns: [iso_date]
+        comment: Holiday date joins the ref.calendar spine
+
   countries:
     primaryKey: [type, census_cty_code]
+    unique:
+      # ISO alpha-3 is a globally unique country identifier; declared unique so it
+      # is a valid FK target (e.g. health.who_gho_indicators.country_code).
+      - [iso_alpha3]
+      # ISO alpha-2 is likewise globally unique; declared so the inbound alpha-2 FKs
+      # render as real edges (gleif_entities HQ/registered country, ref.holidays).
+      - [iso_alpha2]
     foreignKeys:
       - columns: [currency_code]
         targetTable: currencies
