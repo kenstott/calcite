@@ -312,6 +312,11 @@ trademark_applications (serial_no, application_year)
     └── geo.states (applicant_state via state code lookup)
 ```
 
+**R&D input ↔ patent output (cross-schema).** The NSF/NCSES R&D tables live in `econ`
+(`econ.nsf_herd_by_institution`, etc. — see `research.md`). Aggregating `econ` R&D spend by
+`state_fips, year` against `patent_assignees` grant counts by `state_fips, grant_year` gives a
+patents-per-R&D-dollar ratio — a cross-schema join, not an in-schema one.
+
 **Key analytical joins:**
 - `patent_assignees` / `trademark_applications` join to `sec.filing_metadata` via entity extraction (handled outside this schema)
 - `patent_cpc_classes.cpc_section = 'G'` (Physics/Computing) concentrations by county join
