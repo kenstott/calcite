@@ -64,6 +64,7 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     // CFPB HMDA and HUD Open Data ArcGIS are public (no HUD_TOKEN), so these
     // tables are never token-gated — only narrowed by the enabledSources operand.
     m.put("hmda_loans", "cfpb");
+    m.put("hmda_applicant_demographics", "cfpb");
     m.put("opportunity_zones", "arcgis");
     m.put("hud_subsidized_housing", "arcgis");
     TABLE_SOURCE = Collections.unmodifiableMap(m);

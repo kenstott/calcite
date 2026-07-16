@@ -734,6 +734,98 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CFPB HMDA — applicant demographics (delta year × state, 3 fetches/unit)
+  # ---------------------------------------------------------------------------
+  - name: hmda_applicant_demographics
+    pattern: "type=hmda_applicant_demographics/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      HMDA fair-lending breakdown from the CFPB HMDA Data Browser aggregations
+      API — the applicant race / ethnicity / sex cut that hmda_loans cannot
+      carry (the aggregations endpoint allows at most two breakdown dimensions
+      per request, and hmda_loans spends them on action × purpose). Long format:
+      one row per (year, state, action_taken, demographic_dimension,
+      demographic_value) with loan count and total amount, where
+      demographic_dimension is 'race', 'ethnicity', or 'sex'. The streaming
+      transformer issues one request per dimension per (year, state) and unions
+      them. Joins to geo.state_ref via state_abbr. Source:
+      ffiec.cfpb.gov/v2/data-browser-api/view/aggregations.
+
+    dimensions:
+      type:
+        - hmda_applicant_demographics
+      year: *hmda_year_range
+      state: *hmda_states
+
+    columns:
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: action_taken
+        type: string
+        nullable: false
+        comment: >
+          HMDA action code (1 originated, 2 approved-not-accepted, 3 denied,
+          4 withdrawn, 5 closed-incomplete, 6 purchased, 7 preapproval-denied,
+          8 preapproval-approved-not-accepted)
+      - name: action_label
+        type: string
+        nullable: true
+        comment: Human-readable action_taken label
+      - name: demographic_dimension
+        type: string
+        nullable: false
+        comment: "Applicant dimension: 'race', 'ethnicity', or 'sex'"
+      - name: demographic_value
+        type: string
+        nullable: false
+        comment: >
+          HMDA category within the dimension (e.g. 'White', 'Black or African
+          American', 'Hispanic or Latino', 'Female', 'Joint', '… Not Available')
+      - name: loan_count
+        type: long
+        nullable: true
+        comment: Number of loan records in this (action, demographic) cell
+      - name: loan_amount_total
+        type: double
+        nullable: true
+        comment: Sum of loan amounts (USD) across the cell
+
+    source:
+      type: http
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/aggregations?years={year}&states={state}&actions_taken=1,2,3,4,5,6,7,8"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HmdaApplicantDemographicsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hmda_applicant_demographics/year=*/state=*/"
+      partition:
+        columns: [type, year, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hmda_applicant_demographics
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # HUD OPPORTUNITY ZONES — ArcGIS FeatureServer (static snapshot, paginated)
   # ---------------------------------------------------------------------------
   - name: opportunity_zones
@@ -987,6 +1079,14 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
 
+  hmda_applicant_demographics:
+    primaryKey: [year, state_abbr, action_taken, demographic_dimension, demographic_value]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
   # opportunity_zones and hud_subsidized_housing are tract-grain. census_tract
   # is NOT declared an FK to geo.census_tracts: that table is year-partitioned
   # over multiple TIGER vintages (heterogeneous key domain), so — as with
@@ -1116,3 +1216,37 @@ views:
         SUM(CASE WHEN o.is_rural THEN 0 ELSE 1 END)         AS nonrural_oz_tracts
       FROM opportunity_zones o
       GROUP BY o.state_abbr, o.state_name
+
+  - name: housing_hmda_denial_rate_by_race
+    comment: >
+      HMDA denial funnel by state, year, and applicant race — originated
+      (action_taken = 1) vs denied (action_taken = 3) loan counts, the core
+      fair-lending metric. Pivots the long-format hmda_applicant_demographics
+      table for the 'race' dimension. Joins to geo.state_ref via state_abbr.
+    sql: >
+      SELECT
+        d.year,
+        d.state_abbr,
+        d.demographic_value                                          AS applicant_race,
+        SUM(CASE WHEN d.action_taken = '1' THEN d.loan_count ELSE 0 END) AS originated_count,
+        SUM(CASE WHEN d.action_taken = '3' THEN d.loan_count ELSE 0 END) AS denied_count
+      FROM hmda_applicant_demographics d
+      WHERE d.demographic_dimension = 'race'
+      GROUP BY d.year, d.state_abbr, d.demographic_value
+
+  - name: housing_subsidized_by_county
+    comment: >
+      County rollup of the tract-grain HUD Picture of Subsidized Households
+      snapshot: total subsidized units and assisted residents per county
+      (all-HUD-programs summary). Recovers the plan's county grain from the
+      ArcGIS tract layer. Joins to geo.counties via county_fips.
+    sql: >
+      SELECT
+        s.county_fips,
+        s.state_abbr,
+        COUNT(*)                AS tract_count,
+        SUM(s.total_units)      AS total_units,
+        SUM(s.people_total)     AS people_total,
+        AVG(s.pct_disabled)     AS avg_pct_disabled
+      FROM hud_subsidized_housing s
+      GROUP BY s.county_fips, s.state_abbr

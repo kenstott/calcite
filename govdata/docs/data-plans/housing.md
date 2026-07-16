@@ -40,7 +40,8 @@ using a real public API instead of bulk ZIP microdata:
 | `building_permits` | Census BPS **county-annual** | plan said monthly |
 | `fair_market_rents` | HUD FMR (HUD_TOKEN) | as planned |
 | `income_limits`, `income_limits_county` | HUD IL (HUD_TOKEN, extra) | added |
-| `hmda_loans` | CFPB **Data Browser aggregations**, per `(year, state)`, broken out by `action_taken` × `loan_purpose` | not loan-level; the aggregations API allows only 2 breakdown dims, so race/ethnicity/sex are a documented follow-up |
+| `hmda_loans` | CFPB **Data Browser aggregations**, per `(year, state)`, broken out by `action_taken` × `loan_purpose` | not loan-level; the aggregations API allows only 2 breakdown dims |
+| `hmda_applicant_demographics` | CFPB aggregations, per `(year, state)`, long-format `action_taken` × {`race`,`ethnicity`,`sex`} (3 fetches/unit) | recovers the fair-lending cut the 2-dim cap kept out of `hmda_loans` |
 | `hud_subsidized_housing` | HUD Open Data **ArcGIS** "Picture of Subsidized Households" — Dec-2020 all-programs **tract** snapshot (63,584 tracts) | tract-grain single-program summary, not county multi-program (the county/multi-program cut is ZIP-only bulk) |
 | `opportunity_zones` | HUD Open Data **ArcGIS** `Opportunity_Zones` FeatureServer (~8,764 OZ 1.0 tracts) | as planned (static) |
 
