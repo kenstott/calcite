@@ -214,6 +214,12 @@ public class NsfHerdTransformer implements StreamingResponseTransformer {
 
       Map<String, Object> out = new LinkedHashMap<String, Object>();
       out.put("year", year);
+      // inst_id is the unique campus key (1:1 with the institution, survives name changes) —
+      // the institution component of the PK. ncses_inst_id is a coarser parent/system id
+      // (one id can span several campuses), kept for system-level rollups. The legal name
+      // is descriptive only.
+      out.put("inst_id", pick(cols, "inst_id"));
+      out.put("ncses_inst_id", pick(cols, "ncses_inst_id"));
       out.put("institution", pick(cols, "inst_name_long"));
       // IPEDS UnitID is always numeric; blank means NCSES did not match the institution
       // (legitimate null, never fabricated). Emitted as INTEGER to join edu.ipeds_institutions.unitid.

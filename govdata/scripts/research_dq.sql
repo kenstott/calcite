@@ -144,8 +144,8 @@ FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
 
 INSERT INTO dq_results
 SELECT 'research', 'nsf_herd_by_institution', 'T6_pk_nulls',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year or institution rows'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_herd_by_institution', allow_moved_paths := true) WHERE year IS NULL OR institution IS NULL);
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year or inst_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_herd_by_institution', allow_moved_paths := true) WHERE year IS NULL OR inst_id IS NULL);
 
 INSERT INTO dq_results
 SELECT 'research', 'nsf_herd_by_institution', 'T7_institution_coverage',

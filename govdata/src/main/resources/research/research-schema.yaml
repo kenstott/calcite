@@ -258,10 +258,18 @@ partitionedTables:
         type: integer
         nullable: false
         comment: Fiscal year of expenditure (partition column; from the HERD year field)
+      - name: inst_id
+        type: string
+        nullable: true
+        comment: Unique campus identifier (1:1 with the institution, survives name changes); the institution key in the PK
+      - name: ncses_inst_id
+        type: string
+        nullable: true
+        comment: NCSES parent/system id — coarser than inst_id (one id can span several campuses); for system-level rollups
       - name: institution
         type: string
         nullable: true
-        comment: Institution legal name (inst_name_long)
+        comment: Institution legal name (inst_name_long); descriptive
       - name: ipeds_unitid
         type: int
         nullable: true
@@ -343,16 +351,24 @@ constraints:
     primaryKey: [year, funding_agency, performing_sector, rd_field, rd_type]
 
   nsf_herd_by_institution:
-    primaryKey: [year, institution, rd_field, funding_source, federal_agency]
+    primaryKey: [year, inst_id, rd_field, funding_source, federal_agency]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+        # geo.state_ref covers the 50 states + DC only; territory institutions
+        # (Guam=66, Puerto Rico=72, USVI=78) carry real FIPS that do not resolve here
+        # (best-effort FK, same limitation every state_ref FK shares).
+        comment: 2-digit state FIPS (best-effort — territories 66/72/78 are unmatched by the 50+DC state_ref)
       - columns: [ipeds_unitid]
         targetSchema: "${EDU_SCHEMA_NAME:edu}"
         targetTable: ipeds_institutions
         targetColumns: [unitid]
+        comment: IPEDS UnitID; null (~5-6% of rows) when NCSES did not match the institution — best-effort
+    # federal_agency here and nsf_federal_rd_obligations.funding_agency both name federal
+    # agencies but have no conformed reference dimension to target yet (a future
+    # ref.federal_agencies dim would let both declare an FK).
 
 # ============================================================================
 # VIEWS
