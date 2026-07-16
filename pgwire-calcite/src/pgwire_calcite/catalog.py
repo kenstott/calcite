@@ -2634,6 +2634,11 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
     index_rows: list[tuple] = []
     index_class_rows: list[tuple] = []
     linked_rows: list[tuple] = []
+    # (referenced table oid, referenced column set) -> that key's backing index oid, so each
+    # FK's conindid can point at the unique/PK index it references (as real PG does). With
+    # conindid=0 on FKs DataGrip can't link the FK to the referenced key and drops key columns
+    # on the *referencing* table (empty `primary key ()` when a composite FK is present).
+    pu_index_by_relid_cols: dict[tuple[int, frozenset], int] = {}
     _idx_oid = 90000
     for row in constraint_rows:
         if row[3] in ("p", "u"):
@@ -2646,6 +2651,7 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
             r = list(row)
             r[9] = _idx_oid  # conindid -> the backing index
             row = tuple(r)
+            pu_index_by_relid_cols[(conrelid, frozenset(conkey))] = _idx_oid
             index_rows.append((
                 _idx_oid, conrelid, n, n, True, row[3] == "p", False,
                 True, False, True, False, True, True, False,
@@ -2659,6 +2665,17 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
             ))
             _idx_oid += 1
         linked_rows.append(row)
+    # Second pass: point each FK's conindid at the referenced key's backing index (row[11]=
+    # confrelid, row[19]=confkey). Left at 0 when the referenced key isn't a modelled PK/unique.
+    for i, row in enumerate(linked_rows):
+        if row[3] == "f":
+            target_idx = pu_index_by_relid_cols.get(
+                (row[11], frozenset(row[19] or []))
+            )
+            if target_idx:
+                r = list(row)
+                r[9] = target_idx
+                linked_rows[i] = tuple(r)
     constraint_rows = linked_rows
     if constraint_rows:
         db.executemany(
