@@ -108,7 +108,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -185,6 +185,7 @@ for arg in "$@"; do
       queue+=(transport:historical transport:daily)
       queue+=(environment:historical environment:daily)
       queue+=(research:historical research:daily)
+      queue+=(fiscal:historical fiscal:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -225,7 +226,7 @@ for arg in "$@"; do
       # The :once tables are: ag=ers_farm_income; disasters=wildfire_perimeters;
       # housing=house_price_index; transport=vehicle_recalls/safety_complaints/airports;
       # environment=aqs_monitors/water_sites/drinking_water/epa_facilities/violations/superfund/rcra.
-      queue+=(ag:once disasters:once housing:once transport:once environment:once)
+      queue+=(ag:once disasters:once housing:once transport:once environment:once fiscal:once)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -234,7 +235,7 @@ for arg in "$@"; do
         queue+=("fec:${_y}" "fedregister:${_y}" "cftc:${_y}")
         queue+=("health:${_y}" "edu:${_y}" "patents:${_y}" "lands:${_y}")
         # Split-schema year-addressable tables (snapshots handled by the :once slots above).
-        queue+=("housing:${_y}" "transport:${_y}" "environment:${_y}" "ag:${_y}" "disasters:${_y}")
+        queue+=("housing:${_y}" "transport:${_y}" "environment:${_y}" "ag:${_y}" "disasters:${_y}" "fiscal:${_y}")
         _y=$((_y - 1))
       done
       ;;
@@ -246,7 +247,7 @@ for arg in "$@"; do
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq
+        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq
       )
       ;;
 
@@ -259,7 +260,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild
       )
       ;;
 
@@ -272,7 +273,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume
       )
       ;;
 
@@ -299,6 +300,7 @@ for arg in "$@"; do
         transport:daily
         environment:daily
         research:daily
+        fiscal:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true

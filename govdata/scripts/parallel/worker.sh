@@ -95,6 +95,7 @@ _split_year_tables() {   # year-addressable base tables → per-year slots
     environment) echo '"air_quality_annual","air_quality_daily","tri_releases","ghg_facilities","ghg_emissions","streamflow","water_quality_samples"' ;;
     ag)          echo '"nass_crop_production","nass_livestock_inventory","rma_crop_insurance","fsa_commodity_payments"' ;;
     disasters)   echo '"disaster_declarations","public_assistance_projects","hazard_mitigation_projects","nfip_claims","nfip_policies","storm_events"' ;;
+    fiscal)      echo '"soi_income_by_zip","soi_income_by_county","county_migration_flows","exempt_org_990","usaspending_by_agency","usaspending_by_state","ssa_benefits_by_geography","ssa_benefits_by_geography_acs"' ;;
     *) echo "ERROR: no year-table set for schema '$1'" >&2; return 1 ;;
   esac
 }
@@ -105,6 +106,7 @@ _split_once_tables() {   # snapshot / full-archive base tables → single :once 
     environment) echo '"aqs_monitors","water_sites","drinking_water","epa_facilities","drinking_water_violations","superfund_sites","rcra_facilities"' ;;
     ag)          echo '"ers_farm_income"' ;;
     disasters)   echo '"wildfire_perimeters"' ;;
+    fiscal)      echo '"exempt_org_master","sba_loan_approvals"' ;;
     *) echo "ERROR: no once-table set for schema '$1'" >&2; return 1 ;;
   esac
 }
@@ -419,7 +421,7 @@ case "$SCHEMA" in
   #                    it emits :once + per-year)
   #   daily          — ALL tables (snapshots refresh + current-year data; currentMonth passed
   #                    so month-partitioned tables like transport's airline_ontime bust cache)
-  housing|transport|environment|ag|disasters)
+  housing|transport|environment|ag|disasters|fiscal)
     ENABLED=""
     EXTRA=""
     case "$MODE" in
@@ -455,7 +457,7 @@ case "$SCHEMA" in
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, econ_reference," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-    echo "               housing, transport, environment" >&2
+    echo "               housing, transport, environment, fiscal" >&2
     exit 1
     ;;
 esac

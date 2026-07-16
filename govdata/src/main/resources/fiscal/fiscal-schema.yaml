@@ -1,0 +1,1414 @@
+# ============================================================================
+# U.S. Federal Fiscal Schema (FISCAL)
+# ============================================================================
+# Pairs the federal government's REVENUE side (IRS Statistics of Income — where
+# tax revenue comes from, by geography and taxpayer class) with the OUTLAY side
+# (USAspending / SBA — where federal dollars go, by agency, geography, and
+# recipient). Both key to the geo (states/counties) and, for entities, the EIN.
+#
+# Data sources (all free, no key):
+#   - IRS SOI ZIP-code income        — {YY}zpallagi.csv    (SoiZipProvider)
+#   - IRS SOI county income          — {YY}incyallagi.csv  (SoiCountyProvider)
+#   - IRS SOI county migration       — countyoutflow{YYZZ}.csv (SoiMigrationProvider)
+#   - IRS EO Business Master File    — eo1..eo4.csv        (IrsEoBmfProvider)
+#   - IRS Form 990 e-file XML        — index_{YEAR}.csv + TEOS zips (Irs990Provider)
+#   - USAspending by agency          — /api/v2/spending/   (UsaSpendingAgencyProvider)
+#   - USAspending by state           — /api/v2/search/spending_by_geography/ (UsaSpendingStateProvider)
+#   - SBA 7(a) & 504 loan approvals  — data.sba.gov DKAN CSV (SbaLoansProvider)
+#
+# Design (project rules): one ETL table = one upstream source, tall (one row per
+# geography/entity x year). Every table uses a DataProvider hook because none of
+# these sources maps through the built-in HTTP+CSV path cleanly: the IRS SOI
+# files are addressed by a 2-digit year the templating layer does not synthesize,
+# USAspending is a POST-JSON aggregate API, the EO BMF is sharded across four
+# regional files, Form 990 is a zip-of-XML archive, and SBA is a DKAN portal that
+# blocks non-browser clients and rolls its filename quarterly. Java reads inputs
+# from the model / dimension variables, never System.getenv; unmapped geographies
+# fail loudly, never a placeholder FIPS.
+#
+# ssa_benefits_by_geography: SSA's WAF 403s non-browser clients, so the provider
+# fetches the SSA statcomps workbook via its Wayback Machine capture (un-WAF'd) and
+# POI-parses the per-state county tables (OASDI Table 4/5, SSI Table 3). County FIPS
+# comes from the ANSI Code column. Depends on archive.org having a yearly snapshot.
+# It alone carries the SSA administrative beneficiary-type/program detail.
+# ssa_benefits_by_geography_acs: a WAF-free complement derived from Census ACS
+# (open API) — county SS/SSI recipiency + aggregate dollars, no archive.org
+# dependency, but survey estimates on a household basis (no OASI/DI or type split).
+#
+# DEFERRED (documented, not yet built — see govdata/docs/data-plans/fiscal.md):
+#   - soi_national            — SOI historical XLS tables have non-uniform,
+#                               per-table layouts; needs a bespoke workbook parser.
+#   - usaspending_awards      — Phase 2 (award-level detail from the bulk archive).
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:fiscal}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. federal fiscal data: the revenue side (IRS Statistics of Income — income,
+  deductions and tax by ZIP, county, and taxpayer class; county-to-county
+  migration of returns; the roster and financials of tax-exempt organizations)
+  and the outlay side (USAspending obligations by awarding agency and by recipient
+  state; SBA 7(a) and 504 loan approvals). Each row is a geography-and-period or
+  entity-and-period observation joinable to geo (states/counties) and, for
+  nonprofits and borrowers, by EIN/name. Together they show where federal money
+  comes from and where it goes, comparable per county against population and income.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_program: &partition_program
+    name: program
+    type: VARCHAR
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  program_partitions: &program_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_program
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  state_fips_column: &state_fips_column
+    name: state_fips
+    type: string
+    nullable: true
+    comment: 2-digit state FIPS code (FK to geo.state_ref)
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit county FIPS code (FK to geo.counties)
+
+  state_abbr_column: &state_abbr_column
+    name: state_abbr
+    type: string
+    nullable: true
+    comment: 2-letter USPS state code (FK to geo.state_ref)
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # IRS SOI ZIP/county files publish ~2.5 years after the tax year; as of 2026
+  # the newest posted is TY2022. dataLag 4 targets the newest fully-available
+  # data year (effective_year = publish_year - 4) so no request 404-poisons.
+  # Lower this to 3/2 as TY2023/TY2024 post.
+  soi_year_range: &soi_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 2011
+    end: current
+    dataLag: 4
+    descending: true
+
+  # SOI migration is published as a year pair (e.g. 2021->2022 == "2122"); the
+  # provider derives the pair token from effective_year. Same lag as the income
+  # files (newest pair is 2021-2022).
+  migration_year_range: &migration_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 2012
+    end: current
+    dataLag: 4
+    descending: true
+
+  # Form 990 index is keyed by IRS receipt year; index_2025.csv is live and
+  # actively updated. dataLag 1 keeps to complete prior receipt years.
+  efile990_year_range: &efile990_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2020}"
+    minYear: 2019
+    end: current
+    dataLag: 1
+    descending: true
+
+  # USAspending federal fiscal years; FY closes Sep 30. dataLag 1 keeps to
+  # complete prior fiscal years (the provider requests period 12 / Oct-Sep).
+  usaspending_year_range: &usaspending_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    minYear: 2001
+    end: current
+    dataLag: 1
+    descending: true
+
+  # SBA 7(a) vs 504 program fan-out; one CSV per program covers many years.
+  sba_programs: &sba_programs
+    type: list
+    values: ['7a', '504']
+
+  # SSA statcomps publish ~1 year in arrears, but the provider reads the
+  # Wayback-archived workbook and archive.org lags further: verified 2026-07-16
+  # that oasdi_sc22/23.xlsx are captured but oasdi_sc24.xlsx is NOT yet. dataLag 3
+  # targets the newest Wayback-archived report year (effective_year = year - 3 =
+  # 2023). The provider fails loud and skips a year whose snapshot is missing, so
+  # lower this to 2 once the current report is archived.
+  ssa_year_range: &ssa_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2020}"
+    minYear: 2020
+    end: current
+    dataLag: 3
+    descending: true
+
+  # ACS 5-year estimates publish ~1 year after the end year (ACS5 2023 released
+  # Dec 2024). dataLag 2 targets the newest fully-released vintage.
+  acs_year_range: &acs_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 2010
+    end: current
+    dataLag: 2
+    descending: true
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # IRS SOI INDIVIDUAL INCOME BY ZIP — {YY}zpallagi.csv (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: soi_income_by_zip
+    pattern: "type=soi_income_by_zip/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      IRS Statistics of Income individual income tax statistics aggregated by
+      ZIP x AGI size class (agi_stub) x tax year. The finest-grained revenue
+      table; joins to geo ZIP crosswalks for county/CBSA rollups and to census
+      ACS income. All dollar amounts are in THOUSANDS of dollars and may be
+      negative. agi_stub brackets: 1=$1-25k, 2=$25-50k, 3=$50-75k, 4=$75-100k,
+      5=$100-200k, 6=$200k+. zip_code = 00000 rows are the state total for that
+      state (kept; exclude in views that sum ZIPs). Source (per year):
+      irs.gov/pub/irs-soi/{YY}zpallagi.csv.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - soi_income_by_zip
+      year: *soi_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *state_abbr_column
+      - name: zip_code
+        type: string
+        nullable: false
+        comment: 5-digit ZIP (00000 = state total)
+      - name: agi_bracket
+        type: string
+        nullable: false
+        comment: SOI AGI size class (agi_stub 1-6)
+      - name: num_returns
+        type: long
+        nullable: true
+        comment: Number of returns (N1) ~ households
+      - name: num_individuals
+        type: long
+        nullable: true
+        comment: Number of individuals / exemptions (N2) ~ population
+      - name: num_single_returns
+        type: long
+        nullable: true
+        comment: Single returns (mars1)
+      - name: num_joint_returns
+        type: long
+        nullable: true
+        comment: Joint returns (MARS2)
+      - name: num_hoh_returns
+        type: long
+        nullable: true
+        comment: Head-of-household returns (MARS4)
+      - name: num_elderly_returns
+        type: long
+        nullable: true
+        comment: Returns with elderly (65+) taxpayers (ELDERLY)
+      - name: adjusted_gross_income
+        type: double
+        nullable: true
+        comment: Adjusted gross income, $1000s (A00100)
+      - name: total_income_amount
+        type: double
+        nullable: true
+        comment: Total income, $1000s (A02650)
+      - name: salaries_wages
+        type: double
+        nullable: true
+        comment: Salaries and wages amount, $1000s (A00200)
+      - name: taxable_interest
+        type: double
+        nullable: true
+        comment: Taxable interest amount, $1000s (A00300)
+      - name: ordinary_dividends
+        type: double
+        nullable: true
+        comment: Ordinary dividends amount, $1000s (A00600)
+      - name: business_net_income
+        type: double
+        nullable: true
+        comment: Business/professional net income, $1000s (A00900)
+      - name: net_capital_gain
+        type: double
+        nullable: true
+        comment: Net capital gain amount, $1000s (A01000)
+      - name: taxable_pensions
+        type: double
+        nullable: true
+        comment: Taxable pensions and annuities, $1000s (A01700)
+      - name: unemployment_comp
+        type: double
+        nullable: true
+        comment: Unemployment compensation, $1000s (A02300)
+      - name: taxable_social_security
+        type: double
+        nullable: true
+        comment: Taxable Social Security benefits, $1000s (A02500)
+      - name: total_itemized_deductions
+        type: double
+        nullable: true
+        comment: Total itemized deductions, $1000s (A04470)
+      - name: taxable_income
+        type: double
+        nullable: true
+        comment: Taxable income, $1000s (A04800)
+      - name: income_tax_before_credits
+        type: double
+        nullable: true
+        comment: Income tax before credits, $1000s (A05800)
+      - name: total_income_tax
+        type: double
+        nullable: true
+        comment: Total income tax, $1000s (A06500)
+      - name: total_tax_liability
+        type: double
+        nullable: true
+        comment: Total tax liability, $1000s (A10300)
+      - name: eitc_amount
+        type: double
+        nullable: true
+        comment: Earned income tax credit amount, $1000s (A59660)
+
+    source:
+      type: http
+      url: "https://www.irs.gov/pub/irs-soi/zpallagi.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SoiZipProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=soi_income_by_zip/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: soi_income_by_zip
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # IRS SOI INDIVIDUAL INCOME BY COUNTY — {YY}incyallagi.csv (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: soi_income_by_county
+    pattern: "type=soi_income_by_county/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      IRS SOI individual income tax statistics at county grain x AGI size class x
+      tax year (coarser than ZIP, longer history). Joins directly to geo.counties
+      via county_fips. Amounts in $1000s. county_fips ending in 000 (COUNTYFIPS
+      = 000) is the state total (kept; exclude in views that sum counties).
+      Source: irs.gov/pub/irs-soi/{YY}incyallagi.csv.
+    dqRowLimit: 30000
+
+    dimensions:
+      type:
+        - soi_income_by_county
+      year: *soi_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *state_abbr_column
+      - <<: *county_fips_column
+        nullable: false
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (000 rows carry the state name)
+      - name: agi_bracket
+        type: string
+        nullable: false
+        comment: SOI AGI size class (agi_stub 1-6)
+      - name: num_returns
+        type: long
+        nullable: true
+        comment: Number of returns (N1)
+      - name: num_individuals
+        type: long
+        nullable: true
+        comment: Number of individuals / exemptions (N2)
+      - name: adjusted_gross_income
+        type: double
+        nullable: true
+        comment: Adjusted gross income, $1000s (A00100)
+      - name: total_income_amount
+        type: double
+        nullable: true
+        comment: Total income, $1000s (A02650)
+      - name: salaries_wages
+        type: double
+        nullable: true
+        comment: Salaries and wages amount, $1000s (A00200)
+      - name: business_net_income
+        type: double
+        nullable: true
+        comment: Business/professional net income, $1000s (A00900)
+      - name: net_capital_gain
+        type: double
+        nullable: true
+        comment: Net capital gain amount, $1000s (A01000)
+      - name: taxable_income
+        type: double
+        nullable: true
+        comment: Taxable income, $1000s (A04800)
+      - name: total_income_tax
+        type: double
+        nullable: true
+        comment: Total income tax, $1000s (A06500)
+      - name: total_tax_liability
+        type: double
+        nullable: true
+        comment: Total tax liability, $1000s (A10300)
+
+    source:
+      type: http
+      url: "https://www.irs.gov/pub/irs-soi/incyallagi.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SoiCountyProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=soi_income_by_county/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: soi_income_by_county
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # IRS SOI COUNTY-TO-COUNTY MIGRATION — countyoutflow{YYZZ}.csv (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: county_migration_flows
+    pattern: "type=county_migration_flows/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      IRS SOI county-to-county migration derived from year-over-year address
+      changes on returns. One row per origin->destination county for the filing
+      year (from the OUTFLOW file: Y1 = origin, Y2 = destination). Summary/foreign
+      buckets (state FIPS >= 57; county 000) and non-migrant same-county rows are
+      filtered out; suppressed cells (n1 < 0) dropped. Both endpoints join to
+      geo.counties. agi in $1000s. Source:
+      irs.gov/pub/irs-soi/countyoutflow{YYZZ}.csv.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - county_migration_flows
+      year: *migration_year_range
+
+    columns:
+      - name: origin_state_fips
+        type: string
+        nullable: false
+        comment: Origin state FIPS (Y1; FK to geo.state_ref)
+      - name: origin_county_fips
+        type: string
+        nullable: false
+        comment: 5-digit origin county FIPS (Y1; FK to geo.counties)
+      - name: dest_state_fips
+        type: string
+        nullable: false
+        comment: Destination state FIPS (Y2; FK to geo.state_ref)
+      - name: dest_county_fips
+        type: string
+        nullable: false
+        comment: 5-digit destination county FIPS (Y2; FK to geo.counties)
+      - name: dest_county_name
+        type: string
+        nullable: true
+        comment: Destination county name
+      - name: num_returns
+        type: long
+        nullable: true
+        comment: Returns (households) that moved (n1)
+      - name: num_individuals
+        type: long
+        nullable: true
+        comment: Individuals (exemptions) that moved (n2)
+      - name: agi
+        type: double
+        nullable: true
+        comment: Aggregate AGI of movers, $1000s
+
+    source:
+      type: http
+      url: "https://www.irs.gov/pub/irs-soi/countyoutflow.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SoiMigrationProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=county_migration_flows/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: county_migration_flows
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # IRS EXEMPT ORG MASTER FILE — eo1..eo4.csv (snapshot, 4 regional shards)
+  # ---------------------------------------------------------------------------
+  - name: exempt_org_master
+    pattern: "type=exempt_org_master/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      IRS Exempt Organizations Business Master File — the roster of all registered
+      tax-exempt entities (EIN, name, location, subsection, deductibility, NTEE,
+      latest financials). Cumulative monthly snapshot sharded across four regional
+      files (eo1..eo4), fetched and concatenated in one pass. subsection_code 03 =
+      501(c)(3); ruling_date/tax_period are YYYYMM. Anchors exempt_org_990 on EIN.
+      Dollar amounts fold the sign into the value. Source:
+      irs.gov/pub/irs-soi/eo{1..4}.csv.
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - exempt_org_master
+
+    columns:
+      - name: ein
+        type: string
+        nullable: false
+        comment: Employer Identification Number (9-digit) — PK
+      - name: org_name
+        type: string
+        nullable: true
+        comment: Legal name
+      - name: street
+        type: string
+        nullable: true
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - <<: *state_abbr_column
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: subsection_code
+        type: string
+        nullable: true
+        comment: IRC 501(c) subsection (03 = 501(c)(3))
+      - name: classification_code
+        type: string
+        nullable: true
+        comment: Classification refinement code
+      - name: ruling_date
+        type: string
+        nullable: true
+        comment: IRS ruling date (YYYYMM)
+      - name: deductibility_code
+        type: string
+        nullable: true
+        comment: Contribution deductibility (1=deductible, 2=not, 4=by treaty)
+      - name: foundation_code
+        type: string
+        nullable: true
+        comment: Foundation status code
+      - name: organization_code
+        type: string
+        nullable: true
+        comment: Organization type (1=corp, 2=trust, 3=coop, 4=partnership, 5=assoc)
+      - name: exempt_status
+        type: string
+        nullable: true
+        comment: Exemption status (01 = unconditional)
+      - name: tax_period
+        type: string
+        nullable: true
+        comment: Latest return tax period (YYYYMM)
+      - name: asset_amount
+        type: double
+        nullable: true
+        comment: Total assets (USD)
+      - name: income_amount
+        type: double
+        nullable: true
+        comment: Computed income (USD, signed)
+      - name: revenue_amount
+        type: double
+        nullable: true
+        comment: Form 990 Part I total revenue (USD, signed)
+      - name: ntee_code
+        type: string
+        nullable: true
+        comment: NTEE taxonomy code (first char A-Z = major group)
+      - name: sort_name
+        type: string
+        nullable: true
+        comment: Secondary / DBA name line
+
+    source:
+      type: http
+      url: "https://www.irs.gov/pub/irs-soi/eo1.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.IrsEoBmfProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=exempt_org_master/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: exempt_org_master
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # IRS FORM 990 E-FILE — index_{YEAR}.csv + TEOS zips (delta by receipt year)
+  # ---------------------------------------------------------------------------
+  - name: exempt_org_990
+    pattern: "type=exempt_org_990/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Nonprofit/tax-exempt financials from IRS Form 990 e-file XML — one row per
+      filing (OBJECT_ID) for the IRS receipt year. The provider reads the per-year
+      index CSV, then streams each TEOS XML zip, extracting header identity and
+      Part I summary financials with version-defensive local-name matching across
+      990 / 990-EZ / 990-PF. NTEE is not in the XML — join to exempt_org_master on
+      ein. Joins to ref/EIN. Source: apps.irs.gov/pub/epostcard/990/xml/{YEAR}/.
+    dqRowLimit: 5000
+
+    dimensions:
+      type:
+        - exempt_org_990
+      year: *efile990_year_range
+
+    columns:
+      - name: ein
+        type: string
+        nullable: true
+        comment: Filer EIN (9-digit; FK to exempt_org_master.ein)
+      - name: org_name
+        type: string
+        nullable: true
+        comment: Organization name (BusinessNameLine1)
+      - name: return_type
+        type: string
+        nullable: true
+        comment: Form type (990 / 990EZ / 990PF)
+      - name: tax_period_end
+        type: string
+        nullable: true
+        comment: Tax period end date (YYYY-MM-DD)
+      - name: tax_year
+        type: integer
+        nullable: true
+        comment: Tax year of the return
+      - name: total_revenue
+        type: double
+        nullable: true
+        comment: Total revenue (Part I / current year)
+      - name: total_expenses
+        type: double
+        nullable: true
+        comment: Total expenses (Part I / current year)
+      - name: total_assets
+        type: double
+        nullable: true
+        comment: Total assets, end of year (Part X)
+      - name: object_id
+        type: string
+        nullable: false
+        comment: IRS filing object id — PK
+
+    source:
+      type: http
+      url: "https://apps.irs.gov/pub/epostcard/990/xml/"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.Irs990Provider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=exempt_org_990/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: exempt_org_990
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # USASPENDING BY AGENCY — /api/v2/spending/ (delta by fiscal year)
+  # ---------------------------------------------------------------------------
+  - name: usaspending_by_agency
+    pattern: "type=usaspending_by_agency/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Federal obligations summarized by awarding agency x fiscal year, from the
+      USAspending Spending Explorer (type=agency, period=12 == full FY through
+      Sep). Amounts are cumulative obligations. Joins semantically to
+      fedregister.agencies by name. Source: api.usaspending.gov/api/v2/spending/.
+
+    dimensions:
+      type:
+        - usaspending_by_agency
+      year: *usaspending_year_range
+
+    columns:
+      - name: agency_code
+        type: string
+        nullable: true
+        comment: Awarding agency code (Treasury AGENCY code)
+      - name: agency_name
+        type: string
+        nullable: false
+        comment: Awarding agency name
+      - name: obligated_amount
+        type: double
+        nullable: true
+        comment: Total obligations for the fiscal year (USD)
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/spending/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAgencyProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_by_agency/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_by_agency
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # USASPENDING BY STATE — /api/v2/search/spending_by_geography/ (delta by FY)
+  # ---------------------------------------------------------------------------
+  - name: usaspending_by_state
+    pattern: "type=usaspending_by_state/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Federal spending summarized by place-of-performance state x fiscal year, the
+      spatial counterpart to the SOI revenue tables. From USAspending
+      spending_by_geography (geo_layer=state, all award types, FY expressed as
+      Oct-Sep). Joins to geo.state_ref via state_abbr. Source:
+      api.usaspending.gov/api/v2/search/spending_by_geography/.
+
+    dimensions:
+      type:
+        - usaspending_by_state
+      year: *usaspending_year_range
+
+    columns:
+      - <<: *state_abbr_column
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name
+      - name: obligated_amount
+        type: double
+        nullable: true
+        comment: Aggregated obligations for the fiscal year (USD)
+      - name: population
+        type: long
+        nullable: true
+        comment: State population (USAspending reference)
+      - name: per_capita
+        type: double
+        nullable: true
+        comment: Spending per capita (USD)
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/search/spending_by_geography/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingStateProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_by_state/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_by_state
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # SBA 7(a) & 504 LOAN APPROVALS — data.sba.gov DKAN CSV (snapshot per program)
+  # ---------------------------------------------------------------------------
+  - name: sba_loan_approvals
+    pattern: "type=sba_loan_approvals/program=*/*.parquet"
+    partitions: *program_partitions
+    comment: >
+      Small Business Administration 7(a) and 504 loan approvals (FOIA public data),
+      one row per approved loan — federal credit activity by borrower geography,
+      industry, lender, and approval fiscal year. Fanned out by program; each CSV
+      covers many years (year is a data column, not a partition). Reissued
+      quarterly, so the whole program partition is overwritten each run. Joins to
+      geo.state_ref via borrower_state and to ref by borrower name/EIN. Source:
+      data.sba.gov 7(a)-504 FOIA.
+    dqRowLimit: 100000
+
+    dimensions:
+      type:
+        - sba_loan_approvals
+      program: *sba_programs
+
+    columns:
+      - name: borrower_name
+        type: string
+        nullable: true
+        comment: Borrower business name (join to ref entity bridge)
+      - name: borrower_city
+        type: string
+        nullable: true
+        comment: Borrower city
+      - name: borrower_state
+        type: string
+        nullable: true
+        comment: Borrower state (USPS abbr; FK to geo.state_ref)
+      - name: borrower_zip
+        type: string
+        nullable: true
+        comment: Borrower ZIP
+      - name: gross_approval
+        type: double
+        nullable: true
+        comment: Gross approved amount (USD)
+      - name: sba_guaranteed
+        type: double
+        nullable: true
+        comment: SBA-guaranteed portion (USD)
+      - name: approval_date
+        type: string
+        nullable: true
+        comment: Approval date
+      - name: year
+        type: integer
+        nullable: true
+        comment: Approval fiscal year (ApprovalFiscalYear)
+      - name: delivery_method
+        type: string
+        nullable: true
+        comment: SBA delivery method / loan program subtype
+      - name: subprogram
+        type: string
+        nullable: true
+        comment: Subprogram description (subpgmdesc)
+      - name: naics_code
+        type: string
+        nullable: true
+        comment: Borrower NAICS industry code
+      - name: naics_description
+        type: string
+        nullable: true
+        comment: NAICS industry description
+      - name: project_county
+        type: string
+        nullable: true
+        comment: Project county name
+      - name: project_state
+        type: string
+        nullable: true
+        comment: Project state (USPS abbr)
+      - name: business_type
+        type: string
+        nullable: true
+        comment: Business type (corporation / individual / partnership)
+      - name: loan_status
+        type: string
+        nullable: true
+        comment: Loan status (approved / paid in full / charged off / ...)
+      - name: jobs_supported
+        type: integer
+        nullable: true
+        comment: Reported jobs supported
+      - name: lender_name
+        type: string
+        nullable: true
+        comment: Approving lender (bank for 7(a); third-party lender for 504)
+
+    source:
+      type: http
+      url: "https://data.sba.gov/en/dataset/7-a-504-foia"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SbaLoansProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=sba_loan_approvals/program=*/"
+      partition:
+        columns: [type, program]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: sba_loan_approvals
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [program]
+        incrementalKeys: [program]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # SSA OASDI/SSI BENEFITS BY COUNTY — statcomps XLSX via Wayback (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: ssa_benefits_by_geography
+    pattern: "type=ssa_benefits_by_geography/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      SSA OASDI and SSI beneficiary counts and total benefit dollars by county x
+      program x benefit type x year — the largest federal mandatory-spending
+      stream, geo-keyed and comparable per county against soi_income_by_county and
+      usaspending_by_state. SSA publishes only multi-sheet XLSX reports on a
+      WAF-protected host that 403s non-browser clients, so the provider fetches the
+      Wayback-archived workbook (oasdi_sc / ssi_sc) and parses the per-state county
+      tables (Table 4 counts + Table 5 dollars for OASDI; Table 3 for SSI). The
+      ANSI Code column carries the county FIPS directly. beneficiary_type is a
+      mutually-exclusive published category (OASDI leaves sum to 'total'). Amounts
+      are the December total monthly benefits, in whole USD; avg_monthly is per
+      beneficiary. SSI per-category dollars are not published (only the total).
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - ssa_benefits_by_geography
+      year: *ssa_year_range
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name (from the workbook tab)
+      - <<: *county_fips_column
+        nullable: false
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name
+      - name: program
+        type: string
+        nullable: false
+        comment: OASDI (Old-Age/Survivors/Disability) or SSI
+      - name: beneficiary_type
+        type: string
+        nullable: false
+        comment: >
+          Published category — OASDI: total, retired_workers, retired_spouses,
+          retired_children, survivors_widows_parents, survivors_children,
+          disabled_workers, disabled_spouses, disabled_children (leaves sum to
+          total); SSI: total, aged, blind_and_disabled
+      - name: num_beneficiaries
+        type: long
+        nullable: true
+        comment: Number of beneficiaries in current-payment status (December)
+      - name: total_benefits_usd
+        type: double
+        nullable: true
+        comment: Total December monthly benefits, USD (null for SSI non-total types)
+      - name: avg_monthly_benefit_usd
+        type: double
+        nullable: true
+        comment: Average monthly benefit per beneficiary, USD (derived)
+
+    source:
+      type: http
+      # Nominal source; the provider fetches the Wayback-archived workbook per year.
+      url: "https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SsaBenefitsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ssa_benefits_by_geography/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: ssa_benefits_by_geography
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # SSA BENEFITS (ACS-DERIVED) — Census ACS county estimates (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: ssa_benefits_by_geography_acs
+    pattern: "type=ssa_benefits_by_geography_acs/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      County-level Social Security and SSI recipiency and dollars DERIVED from the
+      Census ACS 5-year estimates — a fully open-API, WAF-free complement to the
+      Wayback-sourced ssa_benefits_by_geography (which alone carries the SSA
+      administrative beneficiary-type/program detail). One row per county x ACS
+      vintage. These are SURVEY ESTIMATES on a HOUSEHOLD basis (not SSA
+      administrative person counts): they cannot split OASI vs DI or beneficiary
+      type, but give the geographic distribution of Social Security / SSI receipt
+      and aggregate dollars with no archive.org dependency. Aggregate-dollar
+      figures are survey-reported and run below SSA administrative totals. Source:
+      api.census.gov/data/{year}/acs/acs5 (B19055/B19056/B19065/B19066).
+
+    dimensions:
+      type:
+        - ssa_benefits_by_geography_acs
+      year: *acs_year_range
+
+    columns:
+      - name: state_fips
+        type: string
+        nullable: false
+        expression: 'src."state"'
+        comment: 2-digit state FIPS (FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: false
+        expression: 'src."state" || src."county"'
+        comment: 5-digit county FIPS (FK to geo.counties)
+      - name: county_name
+        type: string
+        nullable: true
+        expression: 'src."NAME"'
+        comment: County name (ACS NAME field)
+      - name: total_households
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19055_001E" AS BIGINT)'
+        comment: Total households (ACS B19055_001E)
+      - name: households_with_social_security
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19055_002E" AS BIGINT)'
+        comment: Households with Social Security income (ACS B19055_002E)
+      - name: households_with_ssi
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19056_002E" AS BIGINT)'
+        comment: Households with Supplemental Security Income (ACS B19056_002E)
+      - name: aggregate_social_security_usd
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."B19065_001E" AS DOUBLE)'
+        comment: Aggregate Social Security income, USD (ACS B19065_001E)
+      - name: aggregate_ssi_usd
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."B19066_001E" AS DOUBLE)'
+        comment: Aggregate Supplemental Security Income, USD (ACS B19066_001E)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B19055_001E,B19055_002E,B19056_002E,B19065_001E,B19066_001E&for=county:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ssa_benefits_by_geography_acs/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: ssa_benefits_by_geography_acs
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# PKs identify one observation. Most FKs are inter-schema, pointing at geo
+# dimension tables via state/county keys; exempt_org_990 keys to
+# exempt_org_master on EIN (the nonprofit entity spine).
+# ============================================================================
+
+constraints:
+
+  soi_income_by_zip:
+    # state_fips is REQUIRED in the key: zipcode=00000 is a per-state total row, so
+    # (year, zip_code, agi_bracket) repeats once per state without state_fips. Cross-
+    # state ZIPs are likewise disambiguated by their state.
+    primaryKey: [year, state_fips, zip_code, agi_bracket]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  soi_income_by_county:
+    primaryKey: [year, county_fips, agi_bracket]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  county_migration_flows:
+    primaryKey: [year, origin_county_fips, dest_county_fips]
+    foreignKeys:
+      - columns: [origin_county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [dest_county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  exempt_org_master:
+    primaryKey: [ein]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  exempt_org_990:
+    primaryKey: [year, object_id]
+    foreignKeys:
+      - columns: [ein]
+        targetTable: exempt_org_master
+        targetColumns: [ein]
+
+  usaspending_by_agency:
+    primaryKey: [year, agency_name]
+
+  usaspending_by_state:
+    primaryKey: [year, state_abbr]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  sba_loan_approvals:
+    foreignKeys:
+      - columns: [borrower_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [project_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  ssa_benefits_by_geography:
+    primaryKey: [year, program, county_fips, beneficiary_type]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  ssa_benefits_by_geography_acs:
+    primaryKey: [year, county_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: soi_income_by_county_year
+    comment: >
+      County-level revenue rollup: returns, AGI, and total income tax by county
+      and tax year, summed across AGI brackets (excludes the state-total 000 rows).
+    sql: >
+      SELECT
+        c.year,
+        c.state_fips,
+        c.county_fips,
+        c.county_name,
+        SUM(c.num_returns)            AS num_returns,
+        SUM(c.num_individuals)        AS num_individuals,
+        SUM(c.adjusted_gross_income)  AS adjusted_gross_income,
+        SUM(c.total_income_tax)       AS total_income_tax
+      FROM soi_income_by_county c
+      WHERE c.county_fips NOT LIKE '%000'
+      GROUP BY c.year, c.state_fips, c.county_fips, c.county_name
+
+  - name: federal_money_by_state_year
+    comment: >
+      Both sides of the ledger per state and fiscal/tax year: SOI total income tax
+      collected (from county rollup) beside USAspending obligations. A direct
+      revenue-vs-outlay comparison keyed on geo.state_ref.
+    sql: >
+      SELECT
+        s.year,
+        s.state_abbr,
+        s.state_name,
+        s.obligated_amount           AS federal_obligations_usd,
+        r.total_income_tax_thousands AS soi_income_tax_thousands
+      FROM usaspending_by_state s
+      LEFT JOIN (
+        SELECT
+          c.year,
+          c.state_fips,
+          SUM(c.total_income_tax) AS total_income_tax_thousands
+        FROM soi_income_by_county c
+        WHERE c.county_fips LIKE '%000'
+        GROUP BY c.year, c.state_fips
+      ) r
+        ON r.year = s.year
+
+  - name: nonprofit_financials
+    comment: >
+      Form 990 filings enriched with the exempt-org roster: financials from
+      exempt_org_990 joined to name/state/NTEE/subsection from exempt_org_master
+      on EIN — the nonprofit sector view.
+    sql: >
+      SELECT
+        f.year,
+        f.ein,
+        COALESCE(m.org_name, f.org_name) AS org_name,
+        m.state_abbr,
+        m.ntee_code,
+        m.subsection_code,
+        f.return_type,
+        f.tax_year,
+        f.total_revenue,
+        f.total_expenses,
+        f.total_assets
+      FROM exempt_org_990 f
+      LEFT JOIN exempt_org_master m
+        ON m.ein = f.ein
