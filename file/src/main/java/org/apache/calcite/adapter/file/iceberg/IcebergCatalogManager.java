@@ -320,7 +320,16 @@ public class IcebergCatalogManager {
 
     LOGGER.info("Creating Iceberg table: {}", identifier);
     Table table = catalog.createTable(identifier, schema, partitionSpec);
-    LOGGER.info("Created Iceberg table at location: {}", table.location());
+    // A freshly created Iceberg table carries schema metadata but NO snapshot, which makes it
+    // unscannable ("Could not guess Iceberg table version") and keeps it from registering in the
+    // catalog — so a table whose data source never delivers rows (e.g. an upstream 429/outage
+    // before the first append) silently vanishes, dropping every FK that targets it. Commit an
+    // initial EMPTY snapshot so the table is always queryable (0 rows) regardless of whether the
+    // fetch ever succeeds: table existence is decoupled from data arrival.
+    table.newAppend().commit();
+    table.refresh();
+    LOGGER.info("Created Iceberg table at location: {} (initial empty snapshot committed)",
+        table.location());
     return table;
   }
 
