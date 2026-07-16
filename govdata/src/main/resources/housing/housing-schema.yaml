@@ -135,6 +135,18 @@ dimension_values:
              "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
              "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR"]
 
+  # HUD Picture of Subsidized Households county workbooks carry 2020-census
+  # county geography from data year 2022 onward (COUNTY_<yr>_2020census.xlsx),
+  # so the county table is floored at 2022 to stay aligned with geo.counties.
+  # The newest year's file publishes mid-following-year, so dataLag 1 targets
+  # the newest confirmed vintage.
+  psh_year_range: &psh_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2022}"
+    minYear: 2022
+    end: current
+    dataLag: 1
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -990,6 +1002,131 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — county workbook (delta year, xlsx)
+  # ---------------------------------------------------------------------------
+  - name: hud_subsidized_county
+    pattern: "type=hud_subsidized_county/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      HUD "A Picture of Subsidized Households" at county × HUD-program grain, from
+      the annual county workbook (COUNTY_<year>_2020census.xlsx). One row per
+      (county, program) — 'Summary of All HUD Programs', 'Public Housing',
+      'Housing Choice Vouchers', 'Project-Based Section 8', etc. — with the full
+      resident profile the ArcGIS tract snapshot (hud_subsidized_housing) omits:
+      occupancy, average income, tenant rent, HUD spending, and percent
+      minority / female-headed / elderly / disabled. HUD's -1 / 'NA' suppression
+      sentinels are nulled. Joins to geo.counties via county_fips. Source:
+      huduser.gov/portal/datasets/pictures/files.
+
+    dimensions:
+      type:
+        - hud_subsidized_county
+      year: *psh_year_range
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (as published by HUD)
+      - name: program_code
+        type: string
+        nullable: false
+        comment: HUD program code (1 = Summary of All HUD Programs, 2 = Public Housing, …)
+      - name: program
+        type: string
+        nullable: true
+        comment: HUD program label
+      - name: total_units
+        type: integer
+        nullable: true
+        comment: Total subsidized units under the program
+      - name: pct_occupied
+        type: double
+        nullable: true
+        comment: Percent of units occupied
+      - name: people_total
+        type: integer
+        nullable: true
+        comment: Total assisted residents
+      - name: people_per_unit
+        type: double
+        nullable: true
+        comment: Average people per assisted unit
+      - name: avg_hh_income
+        type: integer
+        nullable: true
+        comment: Average annual household income of assisted residents (USD)
+      - name: avg_tenant_rent
+        type: integer
+        nullable: true
+        comment: Average monthly tenant rent contribution (USD)
+      - name: avg_hud_spending
+        type: integer
+        nullable: true
+        comment: Average monthly HUD spending per unit — the federal subsidy (USD)
+      - name: pct_minority
+        type: double
+        nullable: true
+        comment: Percent of assisted households that are minority
+      - name: pct_female_head
+        type: double
+        nullable: true
+        comment: Percent of assisted households that are female-headed
+      - name: pct_elderly
+        type: double
+        nullable: true
+        comment: Percent of assisted households with head/spouse age 62+
+      - name: pct_disabled
+        type: double
+        nullable: true
+        comment: Percent of assisted households reporting a disability
+      - name: months_waiting
+        type: integer
+        nullable: true
+        comment: Average months on the waiting list before admission
+
+    source:
+      type: http
+      url: "https://www.huduser.gov/portal/datasets/pictures/files/COUNTY_{effective_year}_2020census.xlsx"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.HudPictureCountyDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hud_subsidized_county/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hud_subsidized_county
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1110,6 +1247,22 @@ constraints:
 
   hud_subsidized_housing:
     primaryKey: [census_tract]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  hud_subsidized_county:
+    primaryKey: [year, county_fips, program_code]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -1250,3 +1403,27 @@ views:
         AVG(s.pct_disabled)     AS avg_pct_disabled
       FROM hud_subsidized_housing s
       GROUP BY s.county_fips, s.state_abbr
+
+  - name: housing_subsidized_profile_by_county
+    comment: >
+      County resident profile for all HUD programs combined (program_code = 1)
+      from hud_subsidized_county — units, average income, HUD subsidy, and the
+      minority / female-headed / elderly / disabled shares for the latest loaded
+      years. Joins to geo.counties via county_fips.
+    sql: >
+      SELECT
+        c.year,
+        c.state_abbr,
+        c.county_fips,
+        c.county_name,
+        c.total_units,
+        c.pct_occupied,
+        c.avg_hh_income,
+        c.avg_tenant_rent,
+        c.avg_hud_spending,
+        c.pct_minority,
+        c.pct_female_head,
+        c.pct_elderly,
+        c.pct_disabled
+      FROM hud_subsidized_county c
+      WHERE c.program_code = '1'

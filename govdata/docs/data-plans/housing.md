@@ -42,7 +42,8 @@ using a real public API instead of bulk ZIP microdata:
 | `income_limits`, `income_limits_county` | HUD IL (HUD_TOKEN, extra) | added |
 | `hmda_loans` | CFPB **Data Browser aggregations**, per `(year, state)`, broken out by `action_taken` × `loan_purpose` | not loan-level; the aggregations API allows only 2 breakdown dims |
 | `hmda_applicant_demographics` | CFPB aggregations, per `(year, state)`, long-format `action_taken` × {`race`,`ethnicity`,`sex`} (3 fetches/unit) | recovers the fair-lending cut the 2-dim cap kept out of `hmda_loans` |
-| `hud_subsidized_housing` | HUD Open Data **ArcGIS** "Picture of Subsidized Households" — Dec-2020 all-programs **tract** snapshot (63,584 tracts) | tract-grain single-program summary, not county multi-program (the county/multi-program cut is ZIP-only bulk) |
+| `hud_subsidized_housing` | HUD Open Data **ArcGIS** "Picture of Subsidized Households" — Dec-2020 all-programs **tract** snapshot (63,584 tracts) | tract-grain all-programs summary (units/people/income/pct-disabled) |
+| `hud_subsidized_county` | HUD USER annual **county workbook** (`COUNTY_<yr>_2020census.xlsx`, 2022+), county × HUD program, via POI `dataProvider` | the full plan realization: county grain, per-program, with pct minority / female-headed / elderly / disabled, income, tenant rent, and HUD subsidy |
 | `opportunity_zones` | HUD Open Data **ArcGIS** `Opportunity_Zones` FeatureServer (~8,764 OZ 1.0 tracts) | as planned (static) |
 
 `hmda_loans`, `opportunity_zones`, and `hud_subsidized_housing` need **no
