@@ -5371,6 +5371,244 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ==========================================================================
+  # USITC — TARIFFS & DUTIES (the schedule dimension)
+  # ==========================================================================
+  # The Census intltrade tables above carry trade FLOWS (values/quantities); they
+  # do not carry the tariff SCHEDULE — the duty rates and duties actually collected.
+  # These two tables add that missing dimension from the U.S. International Trade
+  # Commission (USITC). Both land in econ (there is no standalone `trade` schema),
+  # sitting beside the Census import flows they join to on hs6.
+  # See docs/data-plans/econ.md ("USITC — Tariffs & Duties").
+
+  # --- USITC DATAWEB: realized duties (what was collected) -------------------
+  # Streamed by org.apache.calcite.adapter.govdata.econ.UsitcTariffsTransformer.
+  # DataWeb runReport is a POST with a JSON query spec and a Bearer token; the
+  # transformer builds the POST itself (StreamingResponseTransformer bypasses the
+  # normal GET fetch) and reads the token from the source header below.
+  # QUERY SPEC + RESPONSE FIELD NAMES PENDING LIVE VERIFICATION with TRADE_USITC_API_TOKEN.
+  - name: usitc_tariffs
+    pattern: "type=usitc_tariffs/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: integer
+    comment: >
+      USITC DataWeb imports-for-consumption with the duty breakout: one row per
+      HTS-8 x partner country x year. The tariff counterpart to econ.trade_imports
+      — hs6 (first 6 of hts8) is the join key back to the Census HS-6 import flows.
+      Carries customs value, calculated duties, and the effective duty rate
+      (calculated_duties / customs_value). Country is the DataWeb country NAME
+      (the runReport grid reports names, not codes) — join hts_description via
+      econ.usitc_tariff_schedule. Because a single DataWeb runReport is hard-capped at
+      20,000 rows AND a broad all-commodities year query is too slow to compute, the
+      transformer CHUNKS BY HTS CHAPTER: one query per chapter (01..99, ex-77) at HTS-8
+      x country, merged into the year partition (replaced wholesale on re-run,
+      overwritePartitions). Zero-trade rows are suppressed; requests are paced for
+      DataWeb's rate limit. Requires a free DataWeb token (TRADE_USITC_API_TOKEN). NOTE:
+      a single very large chapter can still exceed the 20k cap (the transformer WARNs and
+      that chapter is a top slice); dutiable value, first-unit quantity, and import-program
+      breakout are additional DataWeb measures not yet wired (their dataToReport codes
+      require a DataWeb-UI network capture to confirm).
+    dimensions:
+      type:
+        - usitc_tariffs
+      # Period dimension: dynamic yearRange (never hardcoded). effective_year =
+      # publish - dataLag is the data year the DataWeb query requests and the
+      # partition is stamped with. DataWeb final annual trade+duty data for the
+      # prior year publishes ~months 3-6; minYear hard-floors the data year.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2014}"
+        end: "${GOVDATA_END_YEAR:current}"
+        minYear: 2000
+        dataLag: 1
+        releaseMonth: 4
+        descending: true
+    columns:
+      - name: hts8
+        type: string
+        nullable: true
+        comment: HTS 8-digit commodity code (U.S. tariff-line detail)
+      - name: hs6
+        type: string
+        nullable: true
+        comment: HS-6 prefix (first 6 digits of hts8) — join key to econ.trade_imports.hs6
+      - name: country_name
+        type: string
+        nullable: true
+        comment: Partner country name (DataWeb reports country names, not codes)
+      - name: customs_value_usd
+        type: double
+        nullable: true
+        comment: Customs (import) value for consumption imports (USD)
+      - name: calculated_duties_usd
+        type: double
+        nullable: true
+        comment: Calculated duties collected (USD)
+      - name: ave_duty_rate
+        type: double
+        nullable: true
+        comment: >
+          Effective duty rate = calculated_duties / customs_value; null when
+          customs_value is 0/absent (not fabricated). Denominator is customs value
+          (DataWeb dutiable-value measure not yet wired).
+    source:
+      type: http
+      # DataWeb runReport endpoint. UsitcTariffsTransformer builds the nested
+      # SavedQuery body (from effective_year), POST-polls the async job with the
+      # Bearer token below, and parses the per-measure result tables. method/body
+      # here are informational — the streaming transformer owns the call.
+      url: "https://datawebws.usitc.gov/dataweb/api/v2/report2/runReport"
+      method: POST
+      headers:
+        Authorization: "Bearer ${TRADE_USITC_API_TOKEN}"
+        Content-Type: "application/json"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      # One DataWeb year query returns the full HTS-8 x country grid. Pin to 1 so
+      # only one year is resident at a time.
+      parallel: 1
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.UsitcTariffsTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usitc_tariffs/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- USITC HTS: statutory rate lines (what the law says) ------------------
+  # Streamed by org.apache.calcite.adapter.govdata.econ.UsitcHtsScheduleTransformer.
+  # The public HTS export (hts.usitc.gov/reststop/exportList) serves the CURRENT
+  # revision only and carries no year/hs6 field, so — like ilostat_indicators —
+  # there is NO year fan-out dimension: one fetch pulls the whole schedule and the
+  # transformer stamps each row's `year` (current HTS revision year, UTC), split on
+  # write (batchPartitionColumns) and replaced wholesale (overwritePartitions).
+  # Historical revisions (a different archive mechanism) are a live-verification
+  # follow-on. No token — only DataWeb statistics need one.
+  - name: usitc_tariff_schedule
+    # HTS is reissued each January with intra-year revisions; a Last-Modified probe
+    # skips the re-fetch on unchanged runs (fails open — correctness never depends
+    # on the gate, only efficiency).
+    freshness:
+      type: last_modified
+    pattern: "type=usitc_schedule/year=*/*.parquet"
+    partitions:
+      style: hive
+      columns:
+        - name: type
+          type: string
+        - name: year
+          type: integer
+    comment: >
+      USITC statutory Harmonized Tariff Schedule rate lines (the published
+      general/special/column-2 rates, as opposed to duties actually collected in
+      usitc_tariffs): one row per HTS-8 tariff line of the current HTS revision.
+      hs6 is the first 6 digits of hts8 (join key). general_ave (ad-valorem
+      equivalent) and effective_date are left null when not derivable from the
+      export — never fabricated. Slowly-changing; the whole schedule is one fetch,
+      stamped with the current revision year and overwritten each January.
+    dimensions:
+      type:
+        - usitc_schedule
+    columns:
+      - name: hts8
+        type: string
+        nullable: true
+        comment: HTS 8-digit commodity code
+      - name: hs6
+        type: string
+        nullable: true
+        comment: HS-6 prefix (first 6 digits of hts8) — join key
+      - name: description
+        type: string
+        nullable: true
+        comment: Tariff-line description
+      - name: unit_of_quantity
+        type: string
+        nullable: true
+        comment: Statutory unit(s) of quantity (comma-joined when multiple)
+      - name: general_rate
+        type: string
+        nullable: true
+        comment: Column-1 General (MFN / normal trade relations) rate text
+      - name: general_ave
+        type: double
+        nullable: true
+        comment: >
+          Ad-valorem equivalent of the general rate; null for non-ad-valorem or
+          complex rates (not fabricated) and null in the current export
+      - name: special_rate
+        type: string
+        nullable: true
+        comment: Column-1 Special (FTA / preference) rate text
+      - name: column2_rate
+        type: string
+        nullable: true
+        comment: Column-2 (non-NTR) rate text
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Effective date of this rate line (null when not published in the export)
+      - name: year
+        type: integer
+        nullable: false
+        comment: HTS revision year (partition column; stamped by the transformer)
+    source:
+      type: http
+      # Full current HTS export as a JSON array. UsitcHtsScheduleTransformer streams
+      # the array and emits one row per 8-digit tariff line.
+      url: "https://hts.usitc.gov/reststop/exportList?from=0101&to=9999&format=JSON&styles=false"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.UsitcHtsScheduleTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usitc_schedule/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -5468,6 +5706,40 @@ constraints:
         comment: >
           Country (ISO alpha-3, from ILO ref_area) links to ref.countries. Metadata
           only; ILO regional/income-group rows (is_aggregate=true) do not resolve.
+
+  # USITC DataWeb realized duties. Grain: one row per HTS-8 x partner country x
+  # trade program x year. hs6 (first 6 of hts8) is the join key to trade_imports;
+  # country_code links to ref.countries (Census partner-country code, same as the
+  # trade_* tables).
+  usitc_tariffs:
+    primaryKey: [type, year, hts8, country_name]
+    foreignKeys:
+      - columns:
+          - hs6
+        targetSchema: "${SCHEMA_NAME:econ}"
+        targetTable: trade_imports
+        targetColumns:
+          - hs6
+        comment: >
+          HS-6 prefix links the realized-duty lines to the Census HS-6 import
+          flows for effective-tariff-rate analysis. Metadata only.
+      # No country_code FK: DataWeb runReport reports country NAMEs, not codes, so
+      # there is no clean key into ref.countries.census_cty_code.
+
+  # USITC statutory HTS rate lines. Grain: one row per HTS-8 line of the current
+  # revision. Intra-schema sibling of usitc_tariffs (statutory vs. realized).
+  usitc_tariff_schedule:
+    primaryKey: [type, year, hts8]
+    foreignKeys:
+      - columns:
+          - hs6
+        targetSchema: "${SCHEMA_NAME:econ}"
+        targetTable: trade_imports
+        targetColumns:
+          - hs6
+        comment: >
+          HS-6 prefix links the statutory rate lines to the Census HS-6 import
+          flows (and to usitc_tariffs' realized duties). Metadata only.
 
   # BEA International Investment Position — no cross-schema FK: type_of_investment/component
   # are BEA-internal codes with no reference table (there is no country grain in IIP).
