@@ -32,8 +32,9 @@ import java.util.Set;
  *       (FLAT_CMPL.zip), {@code fatal_crashes} (FARS per-year zips)</li>
  *   <li><b>BTS</b> — {@code airline_ontime} (PREZIP monthly zip),
  *       {@code t100_segments} (TranStats postback DataProvider)</li>
- *   <li><b>FAA</b> — {@code airports} (NTAD ArcGIS, paginated),
- *       {@code faa_aircraft_registry} (ReleasableAircraft.zip, streamed zip join)</li>
+ *   <li><b>FAA</b> — {@code airports} (NTAD ArcGIS, paginated), and the aircraft registry as
+ *       faithful per-file tables {@code faa_aircraft_master} / {@code faa_aircraft_reference} /
+ *       {@code faa_engine_reference} (ReleasableAircraft.zip; the faa_aircraft_registry view joins them)</li>
  *   <li><b>FTA</b> — {@code transit_ridership} (Socrata monthly long-format)</li>
  *   <li><b>FHWA</b> — {@code vehicle_registrations} (Highway Statistics MV-1 XLSX)</li>
  *   <li><b>FMCSA</b> — {@code fmcsa_carriers} (Company Census bulk CSV)</li>
@@ -61,7 +62,9 @@ public class TransportSchemaFactory implements GovDataSubSchemaFactory {
     m.put("airline_ontime", "bts");
     m.put("t100_segments", "bts");
     m.put("airports", "faa");
-    m.put("faa_aircraft_registry", "faa");
+    m.put("faa_aircraft_master", "faa");
+    m.put("faa_aircraft_reference", "faa");
+    m.put("faa_engine_reference", "faa");
     m.put("transit_ridership", "fta");
     m.put("vehicle_registrations", "fhwa");
     m.put("fmcsa_carriers", "fmcsa");

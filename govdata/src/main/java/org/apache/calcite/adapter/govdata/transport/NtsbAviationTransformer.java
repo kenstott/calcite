@@ -193,7 +193,7 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
     row.put("event_year", e == null ? null : e.eventYear);
     row.put("event_date", e == null ? null : e.eventDate);
     row.put("event_type", e == null ? null : e.eventType);
-    row.put("aircraft_n_number", a.getString("regis_no"));
+    row.put("aircraft_n_number", canonicalN(a.getString("regis_no")));
     row.put("aircraft_make", a.getString("acft_make"));
     row.put("aircraft_model", a.getString("acft_model"));
     row.put("aircraft_category", a.getString("acft_category"));
@@ -222,6 +222,25 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
 
   private static String narrKey(String evId, Integer aircraftKey) {
     return evId + "|" + (aircraftKey == null ? "" : aircraftKey.toString());
+  }
+
+  /**
+   * Canonical N-prefixed tail number so it matches {@code faa_aircraft_master.n_number}
+   * regardless of whether NTSB stores {@code regis_no} with or without the leading N.
+   * FAA registration suffixes never begin with N, so stripping one leading N is safe.
+   */
+  private static String canonicalN(String regis) {
+    if (regis == null) {
+      return null;
+    }
+    String s = regis.trim().toUpperCase();
+    if (s.isEmpty()) {
+      return null;
+    }
+    if (s.charAt(0) == 'N') {
+      s = s.substring(1);
+    }
+    return s.isEmpty() ? null : "N" + s;
   }
 
   private static String decode(Map<String, String> table, String code) {

@@ -1421,124 +1421,419 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
-  # FAA AIRCRAFT REGISTRY — ReleasableAircraft.zip (snapshot, streamed zip join)
+  # FAA AIRCRAFT REGISTRY — ReleasableAircraft.zip, one faithful table per file
   # ---------------------------------------------------------------------------
-  - name: faa_aircraft_registry
-    pattern: "type=faa_aircraft_registry/*.parquet"
+  # The zip holds MASTER.txt (registered aircraft), ACFTREF.txt (aircraft
+  # reference), ENGINE.txt (engine reference), plus DEALER/RESERVED/DEREG. Each
+  # file is a comma-delimited, space-padded, header-bearing text file (verified
+  # 0 ragged rows — no embedded commas), so each lands as a faithful clean-CSV
+  # passthrough table (all columns, no Java), sharing one cached zip via
+  # extractPattern. The friendly denormalized join + code decoding is the
+  # faa_aircraft_registry VIEW (SQL, never Java). The prior single projected
+  # table dropped engine detail, Mode-S/ICAO hex, addresses, and dates.
+  # ---------------------------------------------------------------------------
+  - name: faa_aircraft_master
+    pattern: "type=faa_aircraft_master/*.parquet"
     partitions: *static_partitions
     comment: >
-      FAA Civil Aircraft Registry — one row per registered aircraft (~300K),
-      keyed by N-number. A StreamingResponseTransformer downloads the daily
-      ReleasableAircraft.zip, loads ACFTREF.txt (aircraft reference) into memory,
-      and streams MASTER.txt joining on the 7-char Mfr/Model/Series code so
-      manufacturer / model / aircraft category / engine type come through while
-      peak heap stays O(chunk). Snapshot: the whole set is re-fetched and the
-      partition overwritten each run. Registrant STATE (USPS) + COUNTY (3-digit
-      FIPS) yield state_fips/county_fips for US registrants; foreign registrants
-      leave them null. Source: registry.faa.gov/database/ReleasableAircraft.zip.
+      FAA MASTER.txt — one row per registered aircraft (~314K), keyed by
+      N-number. Faithful recreation of the master file: registration, address,
+      airworthiness/certificate dates, Mode-S transponder codes, fractional
+      ownership, kit build, and the reference/engine join codes. Snapshot.
+      Source: registry.faa.gov/database/ReleasableAircraft.zip (MASTER.txt).
+    dqRowLimit: 100000
 
     dimensions:
       type:
-        - faa_aircraft_registry
+        - faa_aircraft_master
 
     columns:
       - name: n_number
         type: string
         nullable: false
-        comment: FAA N-number / tail number (e.g. N12345) — PK
-      - name: snapshot_month
-        type: date
-        nullable: true
-        comment: First-of-month at ingest (the registry is a daily-refreshed snapshot)
+        expression: '''N'' || trim(src."N-NUMBER")'
+        comment: FAA N-number / tail number, canonical N-prefixed form (e.g. N100) — PK; join target for airline_ontime.tail_number and ntsb_aviation_accidents.aircraft_n_number
       - name: serial_number
         type: string
         nullable: true
+        expression: 'trim(src."SERIAL NUMBER")'
         comment: Manufacturer serial number
       - name: mfr_mdl_code
         type: string
         nullable: true
-        comment: 7-char Aircraft Mfr/Model/Series code (join key to ACFTREF)
-      - name: manufacturer
+        expression: 'trim(src."MFR MDL CODE")'
+        comment: 7-char Aircraft Mfr/Model/Series code (FK to faa_aircraft_reference.code)
+      - name: eng_mfr_mdl
         type: string
         nullable: true
-        comment: Manufacturer name (from ACFTREF)
-      - name: model
-        type: string
-        nullable: true
-        comment: Aircraft model/series name (from ACFTREF)
-      - name: aircraft_category
-        type: string
-        nullable: true
-        comment: Aircraft category (Land / Sea / Amphibian; from ACFTREF AC-CAT)
-      - name: aircraft_type
-        type: string
-        nullable: true
-        comment: Aircraft type (Fixed wing single engine / Rotorcraft / Balloon / ...)
-      - name: engine_type
-        type: string
-        nullable: true
-        comment: Engine type (Reciprocating / Turbo-prop / Turbo-fan / Electric / ...)
-      - name: year_manufactured
+        expression: 'trim(src."ENG MFR MDL")'
+        comment: 5-char engine Mfr/Model code (FK to faa_engine_reference.code)
+      - name: year_mfr
         type: integer
         nullable: true
-        comment: Year of manufacture (null when unreported)
+        expression: 'TRY_CAST(NULLIF(trim(src."YEAR MFR"),'''') AS INTEGER)'
+        comment: Year of manufacture
+      - name: type_registrant
+        type: string
+        nullable: true
+        expression: 'trim(src."TYPE REGISTRANT")'
+        comment: Registrant type code (1=Individual, 3=Corporation, 5=Government, 7=LLC, ...)
       - name: registrant_name
         type: string
         nullable: true
+        expression: 'trim(src."NAME")'
         comment: Registered owner name
-      - name: registrant_type
+      - name: street
         type: string
         nullable: true
-        comment: Registrant type (Individual / Corporation / LLC / Government / ...)
+        expression: 'trim(src."STREET")'
+        comment: Registrant street address
+      - name: street2
+        type: string
+        nullable: true
+        expression: 'trim(src."STREET2")'
+        comment: Registrant street address line 2
+      - name: city
+        type: string
+        nullable: true
+        expression: 'trim(src."CITY")'
+        comment: Registrant city
       - name: state_abbr
         type: string
         nullable: true
-        comment: Registrant state (USPS abbr; FK component to geo.state_ref)
-      - <<: *state_fips_column
-      - <<: *county_fips_column
-      - name: status
+        expression: 'trim(src."STATE")'
+        comment: Registrant state (USPS abbr; FK to geo.state_ref)
+      - name: zip_code
         type: string
         nullable: true
-        comment: Registration status (Valid Registration / Registration pending / ...)
+        expression: 'trim(src."ZIP CODE")'
+        comment: Registrant ZIP code
+      - name: region
+        type: string
+        nullable: true
+        expression: 'trim(src."REGION")'
+        comment: FAA region code (internal, not census)
+      - name: county_code
+        type: string
+        nullable: true
+        expression: 'trim(src."COUNTY")'
+        comment: County code (3-digit FIPS county within state, US records)
+      - name: country
+        type: string
+        nullable: true
+        expression: 'trim(src."COUNTRY")'
+        comment: Country code (US = domestic)
+      - name: last_action_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(trim(src."LAST ACTION DATE"),''''), ''%Y%m%d'') AS DATE)'
+        comment: Date of last registration action
       - name: cert_issue_date
         type: date
         nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(trim(src."CERT ISSUE DATE"),''''), ''%Y%m%d'') AS DATE)'
         comment: Certificate issue date
+      - name: certification
+        type: string
+        nullable: true
+        expression: 'trim(src."CERTIFICATION")'
+        comment: Airworthiness classification + approved operations (packed code)
+      - name: type_aircraft
+        type: string
+        nullable: true
+        expression: 'trim(src."TYPE AIRCRAFT")'
+        comment: Aircraft type code (denormalized; see faa_aircraft_reference.type_acft)
+      - name: type_engine
+        type: string
+        nullable: true
+        expression: 'trim(src."TYPE ENGINE")'
+        comment: Engine type code (denormalized; see faa_aircraft_reference.type_eng)
+      - name: status_code
+        type: string
+        nullable: true
+        expression: 'trim(src."STATUS CODE")'
+        comment: Registration status code (V=Valid, R=pending, ...)
+      - name: mode_s_code
+        type: string
+        nullable: true
+        expression: 'trim(src."MODE S CODE")'
+        comment: Mode-S transponder code (octal)
+      - name: fract_owner
+        type: string
+        nullable: true
+        expression: 'trim(src."FRACT OWNER")'
+        comment: Fractional ownership indicator (Y/blank)
       - name: airworthiness_date
         type: date
         nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(trim(src."AIR WORTH DATE"),''''), ''%Y%m%d'') AS DATE)'
         comment: Date of original airworthiness certificate
+      - name: other_names_1
+        type: string
+        nullable: true
+        expression: 'trim(src."OTHER NAMES(1)")'
+        comment: Additional registrant name 1
+      - name: other_names_2
+        type: string
+        nullable: true
+        expression: 'trim(src."OTHER NAMES(2)")'
+        comment: Additional registrant name 2
+      - name: other_names_3
+        type: string
+        nullable: true
+        expression: 'trim(src."OTHER NAMES(3)")'
+        comment: Additional registrant name 3
+      - name: other_names_4
+        type: string
+        nullable: true
+        expression: 'trim(src."OTHER NAMES(4)")'
+        comment: Additional registrant name 4
+      - name: other_names_5
+        type: string
+        nullable: true
+        expression: 'trim(src."OTHER NAMES(5)")'
+        comment: Additional registrant name 5
+      - name: expiration_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(trim(src."EXPIRATION DATE"),''''), ''%Y%m%d'') AS DATE)'
+        comment: Registration expiration date
+      - name: unique_id
+        type: string
+        nullable: true
+        expression: 'trim(src."UNIQUE ID")'
+        comment: FAA stable unique aircraft id
+      - name: kit_mfr
+        type: string
+        nullable: true
+        expression: 'trim(src."KIT MFR")'
+        comment: Kit manufacturer (amateur-built)
+      - name: kit_model
+        type: string
+        nullable: true
+        expression: 'trim(src." KIT MODEL")'
+        comment: Kit model (amateur-built)
+      - name: mode_s_code_hex
+        type: string
+        nullable: true
+        expression: 'trim(src."MODE S CODE HEX")'
+        comment: Mode-S / ICAO 24-bit address (hex; ADS-B flight-tracking join key)
 
     source:
       type: http
       url: "https://registry.faa.gov/database/ReleasableAircraft.zip"
       method: GET
-      # StreamingResponseTransformer opens the URL itself (73MB zip); the framework
-      # does not pre-fetch, so rawCache does not apply.
+      extractPattern: "MASTER.txt"
       response:
-        format: json
+        format: csv
+        hasHeader: true
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
         maxRetries: 3
       rawCache:
-        enabled: false
-
-    hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FaaAircraftRegistryTransformer"
+        enabled: true
 
     materialize:
       format: iceberg
       output:
-        pattern: "type=faa_aircraft_registry/"
+        pattern: "type=faa_aircraft_master/"
       partition:
         columns: [type]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
-        tableName: faa_aircraft_registry
+        tableName: faa_aircraft_master
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  - name: faa_aircraft_reference
+    pattern: "type=faa_aircraft_reference/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FAA ACFTREF.txt — aircraft reference file, one row per Mfr/Model/Series
+      code (~94K): manufacturer, model, aircraft/engine type, category, engine
+      and seat counts, weight class, cruising speed, type-certificate holder.
+      Faithful recreation; joined from faa_aircraft_master on mfr_mdl_code.
+      Source: registry.faa.gov/database/ReleasableAircraft.zip (ACFTREF.txt).
+
+    dimensions:
+      type:
+        - faa_aircraft_reference
+
+    columns:
+      - name: code
+        type: string
+        nullable: false
+        expression: 'trim(src."CODE")'
+        comment: 7-char Aircraft Mfr/Model/Series code — PK
+      - name: mfr
+        type: string
+        nullable: true
+        expression: 'trim(src."MFR")'
+        comment: Manufacturer name
+      - name: model
+        type: string
+        nullable: true
+        expression: 'trim(src."MODEL")'
+        comment: Model / series name
+      - name: type_acft
+        type: string
+        nullable: true
+        expression: 'trim(src."TYPE-ACFT")'
+        comment: Aircraft type code (4=Fixed wing single, 5=Fixed wing multi, 6=Rotorcraft, ...)
+      - name: type_eng
+        type: string
+        nullable: true
+        expression: 'trim(src."TYPE-ENG")'
+        comment: Engine type code (1=Reciprocating, 4=Turbo-jet, 5=Turbo-fan, 10=Electric, ...)
+      - name: ac_cat
+        type: string
+        nullable: true
+        expression: 'trim(src."AC-CAT")'
+        comment: Aircraft category code (1=Land, 2=Sea, 3=Amphibian)
+      - name: build_cert_ind
+        type: string
+        nullable: true
+        expression: 'trim(src."BUILD-CERT-IND")'
+        comment: Builder certification (0=Type Certificated, 1=Not TC, 2=Light Sport)
+      - name: no_eng
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(NULLIF(trim(src."NO-ENG"),'''') AS INTEGER)'
+        comment: Number of engines
+      - name: no_seats
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(NULLIF(trim(src."NO-SEATS"),'''') AS INTEGER)'
+        comment: Maximum number of seats
+      - name: ac_weight
+        type: string
+        nullable: true
+        expression: 'trim(src."AC-WEIGHT")'
+        comment: Weight class (CLASS 1 <=12499 lb, CLASS 2, CLASS 3 20000+, CLASS 4 UAV)
+      - name: speed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(NULLIF(trim(src."SPEED"),'''') AS INTEGER)'
+        comment: Average cruising speed (mph)
+      - name: tc_data_sheet
+        type: string
+        nullable: true
+        expression: 'trim(src."TC-DATA-SHEET")'
+        comment: Type Certificate data sheet
+      - name: tc_data_holder
+        type: string
+        nullable: true
+        expression: 'trim(src."TC-DATA-HOLDER")'
+        comment: Type Certificate data holder
+
+    source:
+      type: http
+      url: "https://registry.faa.gov/database/ReleasableAircraft.zip"
+      method: GET
+      extractPattern: "ACFTREF.txt"
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=faa_aircraft_reference/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: faa_aircraft_reference
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  - name: faa_engine_reference
+    pattern: "type=faa_engine_reference/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FAA ENGINE.txt — engine reference file, one row per engine Mfr/Model code
+      (~5K): manufacturer, model, engine type, horsepower, thrust. Faithful
+      recreation; joined from faa_aircraft_master on eng_mfr_mdl.
+      Source: registry.faa.gov/database/ReleasableAircraft.zip (ENGINE.txt).
+
+    dimensions:
+      type:
+        - faa_engine_reference
+
+    columns:
+      - name: code
+        type: string
+        nullable: false
+        expression: 'trim(src."CODE")'
+        comment: 5-char engine Mfr/Model code — PK
+      - name: mfr
+        type: string
+        nullable: true
+        expression: 'trim(src."MFR")'
+        comment: Engine manufacturer name
+      - name: model
+        type: string
+        nullable: true
+        expression: 'trim(src."MODEL")'
+        comment: Engine model name
+      - name: engine_type_code
+        type: string
+        nullable: true
+        expression: 'trim(src."TYPE")'
+        comment: Engine type code (1=Reciprocating, 4=Turbo-jet, 5=Turbo-fan, 10=Electric, ...)
+      - name: horsepower
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(NULLIF(trim(src."HORSEPOWER"),'''') AS INTEGER)'
+        comment: Rated horsepower (piston/turboprop)
+      - name: thrust
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(NULLIF(trim(src."THRUST"),'''') AS INTEGER)'
+        comment: Rated thrust in pounds (jet)
+
+    source:
+      type: http
+      url: "https://registry.faa.gov/database/ReleasableAircraft.zip"
+      method: GET
+      extractPattern: "ENGINE.txt"
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=faa_engine_reference/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: faa_engine_reference
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
         incrementalTtlDays: 7
         overwritePartitions: true
@@ -1589,7 +1884,7 @@ partitionedTables:
       - name: aircraft_n_number
         type: string
         nullable: true
-        comment: Aircraft registration / tail number (regis_no)
+        comment: Aircraft tail number, canonical N-prefixed (regis_no; FK to faa_aircraft_master.n_number)
       - name: aircraft_make
         type: string
         nullable: true
@@ -1905,6 +2200,9 @@ constraints:
       - columns: [dest]
         targetTable: airports
         targetColumns: [arpt_id]
+      - columns: [tail_number]
+        targetTable: faa_aircraft_master
+        targetColumns: [n_number]
       - columns: [origin_state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
@@ -1967,21 +2265,27 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
 
-  faa_aircraft_registry:
+  faa_aircraft_master:
     primaryKey: [n_number]
+    unique:
+      - [unique_id]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
-      - columns: [state_fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: state_ref
-        targetColumns: [state_fips]
-      - columns: [county_fips]
-        targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: counties
-        targetColumns: [county_fips]
+      - columns: [mfr_mdl_code]
+        targetTable: faa_aircraft_reference
+        targetColumns: [code]
+      - columns: [eng_mfr_mdl]
+        targetTable: faa_engine_reference
+        targetColumns: [code]
+
+  faa_aircraft_reference:
+    primaryKey: [code]
+
+  faa_engine_reference:
+    primaryKey: [code]
 
   ntsb_aviation_accidents:
     primaryKey: [event_id, aircraft_key]
@@ -1994,6 +2298,12 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+      - columns: [airport_id]
+        targetTable: airports
+        targetColumns: [arpt_id]
+      - columns: [aircraft_n_number]
+        targetTable: faa_aircraft_master
+        targetColumns: [n_number]
 
   cfs_shipments:
     primaryKey: [shipmt_id]
@@ -2085,3 +2395,64 @@ views:
         COUNT(*)                                                      AS sample_shipments
       FROM cfs_shipments s
       GROUP BY s.survey_year, s.orig_state_fips, s.dest_state_fips, s.sctg_code, s.mode_code
+
+  - name: faa_aircraft_registry
+    comment: >
+      Friendly denormalized view of the FAA aircraft registry: faa_aircraft_master
+      joined to faa_aircraft_reference (manufacturer / model / category / seats)
+      and faa_engine_reference (engine make / model / horsepower / thrust), with
+      the registrant-type, aircraft-type, engine-type, category and status codes
+      decoded. n_number is surfaced as the full tail number (N-prefixed). Raw
+      per-file detail (addresses, Mode-S codes, dates, kit build, other names)
+      stays on faa_aircraft_master; other cross-tabs are sibling views.
+    sql: >
+      SELECT
+        m.n_number,
+        m.unique_id,
+        m.serial_number,
+        m.mfr_mdl_code,
+        r.mfr                                                        AS manufacturer,
+        r.model                                                      AS model,
+        CASE r.ac_cat WHEN '1' THEN 'Land' WHEN '2' THEN 'Sea' WHEN '3' THEN 'Amphibian' END AS aircraft_category,
+        CASE COALESCE(r.type_acft, m.type_aircraft)
+          WHEN '1' THEN 'Glider' WHEN '2' THEN 'Balloon' WHEN '3' THEN 'Blimp/Dirigible'
+          WHEN '4' THEN 'Fixed wing single engine' WHEN '5' THEN 'Fixed wing multi engine'
+          WHEN '6' THEN 'Rotorcraft' WHEN '7' THEN 'Weight-shift-control'
+          WHEN '8' THEN 'Powered Parachute' WHEN '9' THEN 'Gyroplane'
+          WHEN 'H' THEN 'Hybrid Lift' WHEN 'O' THEN 'Other' END      AS aircraft_type,
+        CASE COALESCE(r.type_eng, m.type_engine)
+          WHEN '0' THEN 'None' WHEN '1' THEN 'Reciprocating' WHEN '2' THEN 'Turbo-prop'
+          WHEN '3' THEN 'Turbo-shaft' WHEN '4' THEN 'Turbo-jet' WHEN '5' THEN 'Turbo-fan'
+          WHEN '6' THEN 'Ramjet' WHEN '7' THEN '2 Cycle' WHEN '8' THEN '4 Cycle'
+          WHEN '9' THEN 'Unknown' WHEN '10' THEN 'Electric' WHEN '11' THEN 'Rotary' END AS engine_type,
+        r.no_eng                                                     AS num_engines,
+        r.no_seats                                                   AS num_seats,
+        r.ac_weight                                                  AS weight_class,
+        e.mfr                                                        AS engine_manufacturer,
+        e.model                                                      AS engine_model,
+        e.horsepower                                                 AS engine_horsepower,
+        e.thrust                                                     AS engine_thrust,
+        m.year_mfr                                                   AS year_manufactured,
+        m.registrant_name,
+        CASE m.type_registrant
+          WHEN '1' THEN 'Individual' WHEN '2' THEN 'Partnership' WHEN '3' THEN 'Corporation'
+          WHEN '4' THEN 'Co-Owned' WHEN '5' THEN 'Government' WHEN '7' THEN 'LLC'
+          WHEN '8' THEN 'Non-Citizen Corporation' WHEN '9' THEN 'Non-Citizen Co-Owned' END AS registrant_type,
+        m.city,
+        m.state_abbr,
+        m.zip_code,
+        m.county_code,
+        m.country,
+        CASE m.status_code
+          WHEN 'V' THEN 'Valid Registration' WHEN 'R' THEN 'Registration pending'
+          WHEN 'A' THEN 'Triennial form not returned' WHEN 'D' THEN 'Expired Dealer'
+          WHEN 'E' THEN 'Revoked by enforcement' WHEN 'W' THEN 'Certificate ineffective'
+          WHEN 'Z' THEN 'Permanent Reserved' ELSE m.status_code END  AS status,
+        m.mode_s_code_hex,
+        m.fract_owner,
+        m.cert_issue_date,
+        m.airworthiness_date,
+        m.expiration_date
+      FROM faa_aircraft_master m
+      LEFT JOIN faa_aircraft_reference r ON m.mfr_mdl_code = r.code
+      LEFT JOIN faa_engine_reference e ON m.eng_mfr_mdl = e.code
