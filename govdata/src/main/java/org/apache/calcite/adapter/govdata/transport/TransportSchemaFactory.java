@@ -26,21 +26,27 @@ import java.util.Set;
 /**
  * Factory for the U.S. transportation schema.
  *
- * <p>Consolidates transportation data across five keyless federal sources:
+ * <p>Consolidates transportation data across eight keyless federal sources:
  * <ul>
  *   <li><b>NHTSA</b> — {@code vehicle_recalls} (Socrata), {@code safety_complaints}
  *       (FLAT_CMPL.zip), {@code fatal_crashes} (FARS per-year zips)</li>
  *   <li><b>BTS</b> — {@code airline_ontime} (PREZIP monthly zip),
  *       {@code t100_segments} (TranStats postback DataProvider)</li>
- *   <li><b>FAA</b> — {@code airports} (NTAD ArcGIS, paginated)</li>
+ *   <li><b>FAA</b> — {@code airports} (NTAD ArcGIS, paginated), and the aircraft registry as
+ *       faithful per-file tables {@code faa_aircraft_master} / {@code faa_aircraft_reference} /
+ *       {@code faa_engine_reference} (ReleasableAircraft.zip; the faa_aircraft_registry view joins them)</li>
  *   <li><b>FTA</b> — {@code transit_ridership} (Socrata monthly long-format)</li>
  *   <li><b>FHWA</b> — {@code vehicle_registrations} (Highway Statistics MV-1 XLSX)</li>
+ *   <li><b>FMCSA</b> — {@code fmcsa_carriers} (Company Census bulk CSV)</li>
+ *   <li><b>NTSB</b> — {@code ntsb_aviation_accidents} (avall.mdb Access DB, Jackcess)</li>
+ *   <li><b>CFS</b> — {@code cfs_shipments} (Commodity Flow Survey Public Use File, shipment
+ *       microdata; the {@code bts_freight_flows} view aggregates it)</li>
  * </ul>
  *
  * <p>No source needs a secret, so nothing is token-gated. The optional
  * {@code enabledSources} operand ({@code nhtsa} / {@code bts} / {@code faa} /
- * {@code fta} / {@code fhwa}) narrows the schema to one source for targeted
- * DQ/backfill runs.
+ * {@code fta} / {@code fhwa} / {@code fmcsa} / {@code ntsb} / {@code cfs}) narrows the schema
+ * to one source for targeted DQ/backfill runs.
  */
 public class TransportSchemaFactory implements GovDataSubSchemaFactory {
 
@@ -56,8 +62,14 @@ public class TransportSchemaFactory implements GovDataSubSchemaFactory {
     m.put("airline_ontime", "bts");
     m.put("t100_segments", "bts");
     m.put("airports", "faa");
+    m.put("faa_aircraft_master", "faa");
+    m.put("faa_aircraft_reference", "faa");
+    m.put("faa_engine_reference", "faa");
     m.put("transit_ridership", "fta");
     m.put("vehicle_registrations", "fhwa");
+    m.put("fmcsa_carriers", "fmcsa");
+    m.put("ntsb_aviation_accidents", "ntsb");
+    m.put("cfs_shipments", "cfs");
     TABLE_SOURCE = Collections.unmodifiableMap(m);
   }
 
