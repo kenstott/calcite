@@ -2889,6 +2889,20 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
         flags=_pre_re.IGNORECASE,
     )
 
+    # pg_index's indkey/indoption/indcollation/indclass are int2vector/oidvector — 0-BASED
+    # in Postgres. DataGrip's index-introspection query pairs them with
+    # `unnest(indkey) with ordinality u(u, k)` (k is 1-based) and reads `indkey[k-1]`.
+    # Our synthetic catalog stores these as DuckDB arrays, which are 1-BASED (`[0]` → NULL),
+    # so `[k-1]` is off by one: the first PK column resolves to NULL and the rest shift down,
+    # leaving DataGrip unable to resolve the key columns (renders `primary key ()`). Convert
+    # the 0-based `[k-1]` subscript on these vector columns to the 1-based `[k]`.
+    sql = _pre_re.sub(
+        r"\b(ind(?:key|option|collation|class))\s*\[\s*k\s*-\s*1\s*\]",
+        r"\1[k]",
+        sql,
+        flags=_pre_re.IGNORECASE,
+    )
+
     try:
         tree = sqlglot.parse_one(sql, read="postgres")
     except Exception:
