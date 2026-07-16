@@ -23,7 +23,9 @@ public class FdaNdcResponseTransformer extends AbstractOpenFdaResponseTransforme
 
   @Override
   protected void flattenRecord(JsonNode record, ObjectNode row) {
-    put(row, "product_ndc", text(record, "product_ndc"));
+    String productNdc = text(record, "product_ndc");
+    put(row, "product_ndc", productNdc);
+    put(row, "product_ndc9", NdcNormalizer.fromProductNdc(productNdc));
     put(row, "generic_name", text(record, "generic_name"));
     put(row, "brand_name", text(record, "brand_name"));
     put(row, "brand_name_base", text(record, "brand_name_base"));

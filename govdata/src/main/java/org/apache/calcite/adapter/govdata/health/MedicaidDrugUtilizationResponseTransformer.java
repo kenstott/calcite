@@ -40,7 +40,9 @@ public class MedicaidDrugUtilizationResponseTransformer implements PerRecordResp
     Map<String, Object> src = new HashMap<>(row);
     row.clear();
     row.put("state", str(src.get("state")));
-    row.put("ndc", str(src.get("ndc")));
+    String ndc = str(src.get("ndc"));
+    row.put("ndc", ndc);
+    row.put("product_ndc9", NdcNormalizer.fromElevenDigitNdc(ndc));
     row.put("year", str(src.get("year")));
     row.put("quarter", normalizeQuarter(str(src.get("quarter"))));
     row.put("utilization_type", str(src.get("utilization_type")));

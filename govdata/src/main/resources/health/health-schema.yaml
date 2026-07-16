@@ -56,6 +56,13 @@ partitionedTables:
         type: string
         nullable: false
         comment: 'NDC product code (e.g. "24909-042") — PK'
+      - name: product_ndc9
+        type: string
+        nullable: true
+        comment: >
+          Normalized 9-digit product NDC (labeler[5]+product[4], zero-padded) derived
+          from product_ndc. Join key to medicaid_drug_utilization.product_ndc9 — the raw
+          hyphenated product_ndc and Medicaid's 11-digit package NDC never match directly.
       - name: generic_name
         type: string
         nullable: true
@@ -1259,7 +1266,14 @@ partitionedTables:
       - name: ndc
         type: string
         nullable: false
-        comment: National Drug Code — composite PK, FK to fda_ndc_products.product_ndc
+        comment: National Drug Code (11-digit package NDC) — composite PK
+      - name: product_ndc9
+        type: string
+        nullable: true
+        comment: >
+          Normalized 9-digit product NDC (package segment dropped, zero-padded to
+          labeler[5]+product[4]) derived from ndc. FK/join key to
+          fda_ndc_products.product_ndc9.
       - name: year
         type: string
         nullable: false
@@ -1718,7 +1732,7 @@ partitionedTables:
       - name: rxcui
         type: VARCHAR
         nullable: true
-        comment: 'RxNorm concept unique identifier'
+        comment: 'RxNorm concept unique identifier — PK; FK target of fda_ndc_products.rxcui'
       - name: name
         comment: "RxNorm concept name/string"
         type: VARCHAR
@@ -1984,7 +1998,7 @@ views:
         m.non_medicaid_amount_reimbursed,
         m.suppression_used
       FROM medicaid_drug_utilization m
-      LEFT JOIN fda_ndc_products n ON m.ndc = n.product_ndc
+      LEFT JOIN fda_ndc_products n ON m.product_ndc9 = n.product_ndc9
       LEFT JOIN rxnorm_drugs r     ON n.rxcui = r.rxcui
 
   - name: public_health_indicators
@@ -2126,7 +2140,7 @@ views:
         SUM(TRY_CAST(m.number_of_prescriptions AS BIGINT))         AS total_prescriptions
       FROM fda_ndc_products n
       LEFT JOIN fda_drug_approvals        a ON n.application_number = a.application_number
-      LEFT JOIN medicaid_drug_utilization m ON n.product_ndc = m.ndc
+      LEFT JOIN medicaid_drug_utilization m ON n.product_ndc9 = m.product_ndc9
       GROUP BY n.labeler_name, n.application_number, a.sponsor_name
 
   - name: rxnorm_medicaid_bridge
@@ -2144,7 +2158,7 @@ views:
         SUM(TRY_CAST(m.number_of_prescriptions AS BIGINT))         AS total_prescriptions
       FROM rxnorm_drugs r
       LEFT JOIN fda_ndc_products          n ON r.rxcui = n.rxcui
-      LEFT JOIN medicaid_drug_utilization m ON n.product_ndc = m.ndc
+      LEFT JOIN medicaid_drug_utilization m ON n.product_ndc9 = m.product_ndc9
       GROUP BY r.rxcui, r.name, r.tty
 
   - name: hospital_county_summary
@@ -2187,7 +2201,7 @@ views:
         SUM(TRY_CAST(m.number_of_prescriptions    AS BIGINT)) AS annual_prescriptions,
         COUNT(DISTINCT m.quarter)                              AS quarters_reported
       FROM medicaid_drug_utilization m
-      LEFT JOIN fda_ndc_products n ON m.ndc = n.product_ndc
+      LEFT JOIN fda_ndc_products n ON m.product_ndc9 = n.product_ndc9
       GROUP BY m.state, m.year, m.ndc, n.brand_name, n.generic_name, n.labeler_name
 
   - name: health_social_equity
@@ -2270,11 +2284,13 @@ constraints:
     primaryKey: [type, application_number]
 
   fda_drug_recalls:
-    primaryKey: [type, event_id]
+    # recall_number is the unique enforcement-action id (non-null); event_id groups
+    # many recall_number rows under one recall event and is nullable — not a key.
+    primaryKey: [type, recall_number]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links recall voluntary firm state to geographic data
 
@@ -2283,6 +2299,12 @@ constraints:
 
   fda_device_recalls:
     primaryKey: [type, cfres_id]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links recalling firm state to geographic data
 
   clinical_trials:
     primaryKey: [type, nct_id]
@@ -2311,38 +2333,51 @@ constraints:
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links hospital state to geographic data for regional quality analysis
+      - columns: [zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit hospital ZIP to the conformed ZCTA dimension
 
   cdc_mortality:
-    primaryKey: [source_type, year, state, cause_name]
+    # week_ending_date distinguishes the weekly rows (cause_name is the constant
+    # "COVID-19" there); null for annual rows, where (year, state, cause_name) is unique.
+    primaryKey: [source_type, year, state, cause_name, week_ending_date]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links mortality data to geographic state for spatial health analysis
 
   cdc_brfss:
-    primaryKey: [type, year, state, question, break_out_category, response]
+    # break_out (the subgroup value, e.g. "18-24") is required for uniqueness: one row
+    # per subgroup value within a break_out_category for the same question/response.
+    primaryKey: [type, year, state, question, break_out_category, break_out, response]
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links BRFSS survey data to geographic state for behavioral health mapping
 
   medicaid_drug_utilization:
-    primaryKey: [type, state, ndc, year, quarter]
+    # utilization_type (FFSU vs MCOU) yields two rows per (state, ndc, year, quarter).
+    primaryKey: [type, state, ndc, year, quarter, utilization_type]
     foreignKeys:
-      - columns: [ndc]
+      - columns: [product_ndc9]
         targetTable: fda_ndc_products
-        targetColumns: [product_ndc]
-        comment: Links Medicaid drug spend to FDA NDC product catalog for drug detail enrichment
+        targetColumns: [product_ndc9]
+        comment: >
+          Links Medicaid drug spend to the FDA NDC product catalog via the normalized
+          9-digit product NDC (Medicaid's 11-digit package ndc and openFDA's hyphenated
+          product_ndc are different representations and do not join directly).
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links state drug utilization to geographic data for Medicaid spending maps
 
@@ -2351,7 +2386,7 @@ constraints:
     foreignKeys:
       - columns: [physician_state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links physician practice state to geographic data
 
