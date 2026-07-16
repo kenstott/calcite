@@ -1248,6 +1248,615 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # FMCSA MOTOR CARRIER CENSUS — DOT Socrata az4n-8mr2 bulk CSV (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: fmcsa_carriers
+    pattern: "type=fmcsa_carriers/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FMCSA Company Census File — one row per USDOT-registered motor carrier
+      (~4.47M rows), carrying registration, fleet size, operation type, and
+      (for carriers that received a compliance review) the assigned safety
+      rating. Bulk CSV export of DOT Socrata dataset az4n-8mr2 — the whole set
+      is downloaded in one unpaginated request and the partition overwritten
+      each run, so this is a snapshot. Crash/inspection/out-of-service metrics
+      are NOT on this file (only ~54K carriers are ever rated); they publish as
+      separate per-event SMS datasets (SMS Input - Crash 4wxs-vbns / aayw-vxb3,
+      SMS Input - Inspection rbkj-cgst) and would be their own raw tables + a
+      rollup view, per the one-source-per-table rule. In DQ mode dqRowLimit caps
+      the sample. Source:
+      data.transportation.gov/api/views/az4n-8mr2/rows.csv?accessType=DOWNLOAD.
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - fmcsa_carriers
+
+    columns:
+      - name: dot_number
+        type: string
+        nullable: false
+        expression: 'src."DOT_NUMBER"'
+        comment: USDOT number — PK
+      - name: carrier_name
+        type: string
+        nullable: true
+        expression: 'src."LEGAL_NAME"'
+        comment: Legal carrier name (fuzzy-join to sec.filing_metadata)
+      - name: dba_name
+        type: string
+        nullable: true
+        expression: 'src."DBA_NAME"'
+        comment: Doing-business-as name (often blank)
+      - name: phy_city
+        type: string
+        nullable: true
+        expression: 'src."PHY_CITY"'
+        comment: Principal place of business — city
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'src."PHY_STATE"'
+        comment: Principal office state (USPS abbr; FK component to geo.state_ref)
+      - name: phy_zip
+        type: string
+        nullable: true
+        expression: 'src."PHY_ZIP"'
+        comment: Principal place of business — ZIP
+      - name: business_org
+        type: string
+        nullable: true
+        expression: 'src."BUSINESS_ORG_DESC"'
+        comment: Business organization (CORPORATION / LLC / SOLE PROPRIETOR / ...)
+      - name: classdef
+        type: string
+        nullable: true
+        expression: 'src."CLASSDEF"'
+        comment: Carrier classification (semicolon multi-value, e.g. PRIVATE PROPERTY;AUTHORIZED FOR HIRE)
+      - name: operation_type
+        type: string
+        nullable: true
+        expression: 'src."CARRIER_OPERATION"'
+        comment: Operation classification (A=Interstate, B=Intrastate Hazmat, C=Intrastate Non-Hazmat)
+      - name: safety_rating
+        type: string
+        nullable: true
+        expression: 'src."SAFETY_RATING"'
+        comment: Safety rating (S=Satisfactory, C=Conditional, U=Unsatisfactory; blank unless a compliance review occurred)
+      - name: safety_rating_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(src."SAFETY_RATING_DATE",''''), ''%Y%m%d'') AS DATE)'
+        comment: Date of the most recent safety rating
+      - name: review_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(strptime(NULLIF(src."REVIEW_DATE",''''), ''%Y%m%d'') AS DATE)'
+        comment: Date of the most recent compliance review
+      - name: total_drivers
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."TOTAL_DRIVERS" AS INTEGER)'
+        comment: Number of drivers
+      - name: total_cdl
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."TOTAL_CDL" AS INTEGER)'
+        comment: Number of CDL drivers
+      - name: power_units
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."POWER_UNITS" AS INTEGER)'
+        comment: Power units (trucks and tractors)
+      - name: truck_units
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."TRUCK_UNITS" AS INTEGER)'
+        comment: Truck units
+      - name: bus_units
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."BUS_UNITS" AS INTEGER)'
+        comment: Bus units
+      - name: hazmat_flag
+        type: string
+        nullable: true
+        expression: 'src."HM_Ind"'
+        comment: Authorized to transport hazardous materials (Y/N)
+      - name: recordable_crash_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."RECORDABLE_CRASH_RATE" AS DOUBLE)'
+        comment: FMCSA recordable crash rate (per the carrier census, when computed)
+      - name: mcs150_mileage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MCS150_MILEAGE" AS BIGINT)'
+        comment: Annual vehicle miles traveled reported on the MCS-150
+      - name: mcs150_mileage_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."MCS150_MILEAGE_YEAR" AS INTEGER)'
+        comment: Year of the reported MCS-150 mileage
+      - name: status_code
+        type: string
+        nullable: true
+        expression: 'src."STATUS_CODE"'
+        comment: Carrier record status code (A=Active, I=Inactive, ...)
+
+    source:
+      type: http
+      # Socrata bulk CSV export = the whole dataset in one unpaginated request
+      # (preferred over $limit/$offset paging of 4.47M rows). Headers are the
+      # UPPERCASE source field names (note HM_Ind is mixed-case).
+      url: "https://data.transportation.gov/api/views/az4n-8mr2/rows.csv?accessType=DOWNLOAD"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+      freshness:
+        type: etag
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fmcsa_carriers/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: fmcsa_carriers
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAA AIRCRAFT REGISTRY — ReleasableAircraft.zip (snapshot, streamed zip join)
+  # ---------------------------------------------------------------------------
+  - name: faa_aircraft_registry
+    pattern: "type=faa_aircraft_registry/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FAA Civil Aircraft Registry — one row per registered aircraft (~300K),
+      keyed by N-number. A StreamingResponseTransformer downloads the daily
+      ReleasableAircraft.zip, loads ACFTREF.txt (aircraft reference) into memory,
+      and streams MASTER.txt joining on the 7-char Mfr/Model/Series code so
+      manufacturer / model / aircraft category / engine type come through while
+      peak heap stays O(chunk). Snapshot: the whole set is re-fetched and the
+      partition overwritten each run. Registrant STATE (USPS) + COUNTY (3-digit
+      FIPS) yield state_fips/county_fips for US registrants; foreign registrants
+      leave them null. Source: registry.faa.gov/database/ReleasableAircraft.zip.
+
+    dimensions:
+      type:
+        - faa_aircraft_registry
+
+    columns:
+      - name: n_number
+        type: string
+        nullable: false
+        comment: FAA N-number / tail number (e.g. N12345) — PK
+      - name: snapshot_month
+        type: date
+        nullable: true
+        comment: First-of-month at ingest (the registry is a daily-refreshed snapshot)
+      - name: serial_number
+        type: string
+        nullable: true
+        comment: Manufacturer serial number
+      - name: mfr_mdl_code
+        type: string
+        nullable: true
+        comment: 7-char Aircraft Mfr/Model/Series code (join key to ACFTREF)
+      - name: manufacturer
+        type: string
+        nullable: true
+        comment: Manufacturer name (from ACFTREF)
+      - name: model
+        type: string
+        nullable: true
+        comment: Aircraft model/series name (from ACFTREF)
+      - name: aircraft_category
+        type: string
+        nullable: true
+        comment: Aircraft category (Land / Sea / Amphibian; from ACFTREF AC-CAT)
+      - name: aircraft_type
+        type: string
+        nullable: true
+        comment: Aircraft type (Fixed wing single engine / Rotorcraft / Balloon / ...)
+      - name: engine_type
+        type: string
+        nullable: true
+        comment: Engine type (Reciprocating / Turbo-prop / Turbo-fan / Electric / ...)
+      - name: year_manufactured
+        type: integer
+        nullable: true
+        comment: Year of manufacture (null when unreported)
+      - name: registrant_name
+        type: string
+        nullable: true
+        comment: Registered owner name
+      - name: registrant_type
+        type: string
+        nullable: true
+        comment: Registrant type (Individual / Corporation / LLC / Government / ...)
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: Registrant state (USPS abbr; FK component to geo.state_ref)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: status
+        type: string
+        nullable: true
+        comment: Registration status (Valid Registration / Registration pending / ...)
+      - name: cert_issue_date
+        type: date
+        nullable: true
+        comment: Certificate issue date
+      - name: airworthiness_date
+        type: date
+        nullable: true
+        comment: Date of original airworthiness certificate
+
+    source:
+      type: http
+      url: "https://registry.faa.gov/database/ReleasableAircraft.zip"
+      method: GET
+      # StreamingResponseTransformer opens the URL itself (73MB zip); the framework
+      # does not pre-fetch, so rawCache does not apply.
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FaaAircraftRegistryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=faa_aircraft_registry/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: faa_aircraft_registry
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # NTSB AVIATION ACCIDENTS — avall.zip / avall.mdb (snapshot, Jackcess MDB read)
+  # ---------------------------------------------------------------------------
+  - name: ntsb_aviation_accidents
+    pattern: "type=ntsb_aviation_accidents/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NTSB aviation accident & incident database — one row per aircraft involved
+      in an event (all events 1982-present). The download (avall.zip, ~95MB) is a
+      single Microsoft Access database (avall.mdb, ~553MB) read in-JVM with
+      Jackcess by NtsbAviationTransformer: the `aircraft` table (grain ev_id +
+      Aircraft_Key) is streamed and joined to `events` (ev_id) and the
+      `narratives.narr_cause` probable-cause text. The MDB has no county column,
+      so only state_fips is derived (from USPS ev_state). Snapshot: the whole MDB
+      is re-ingested and the partition overwritten each run. event_year is a
+      column (not a partition) since one file carries all years. Source:
+      data.ntsb.gov/avdata/avall.zip.
+
+    dimensions:
+      type:
+        - ntsb_aviation_accidents
+
+    columns:
+      - name: event_id
+        type: string
+        nullable: false
+        comment: NTSB event id (ev_id) — PK component
+      - name: aircraft_key
+        type: integer
+        nullable: false
+        comment: Aircraft sequence within the event (Aircraft_Key) — PK component
+      - name: event_year
+        type: integer
+        nullable: true
+        comment: Year of the event
+      - name: event_date
+        type: date
+        nullable: true
+        comment: Date of the accident/incident
+      - name: event_type
+        type: string
+        nullable: true
+        comment: Accident / Incident (decoded from ev_type)
+      - name: aircraft_n_number
+        type: string
+        nullable: true
+        comment: Aircraft registration / tail number (regis_no)
+      - name: aircraft_make
+        type: string
+        nullable: true
+        comment: Aircraft manufacturer (acft_make)
+      - name: aircraft_model
+        type: string
+        nullable: true
+        comment: Aircraft model (acft_model)
+      - name: aircraft_category
+        type: string
+        nullable: true
+        comment: Aircraft category code (acft_category; e.g. AIR, HELI)
+      - name: far_part
+        type: string
+        nullable: true
+        comment: FAR operating part (091, 121, 135, ...) — operation type
+      - name: carrier_name
+        type: string
+        nullable: true
+        comment: Operator/carrier name (oper_name)
+      - name: city
+        type: string
+        nullable: true
+        comment: Event city (ev_city)
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: Event state (USPS abbr; FK component to geo.state_ref)
+      - <<: *state_fips_column
+      - name: country
+        type: string
+        nullable: true
+        comment: Event country code (ev_country)
+      - name: airport_id
+        type: string
+        nullable: true
+        comment: Nearest airport id (ev_nr_apt_id; null for en-route)
+      - name: airport_name
+        type: string
+        nullable: true
+        comment: Nearest airport name (apt_name)
+      - name: injury_severity
+        type: string
+        nullable: true
+        comment: Highest injury level (Fatal / Serious / Minor / None; decoded)
+      - name: fatal_injuries
+        type: integer
+        nullable: true
+        comment: Total fatalities (inj_tot_f)
+      - name: serious_injuries
+        type: integer
+        nullable: true
+        comment: Total serious injuries (inj_tot_s)
+      - name: minor_injuries
+        type: integer
+        nullable: true
+        comment: Total minor injuries (inj_tot_m)
+      - name: aircraft_damage
+        type: string
+        nullable: true
+        comment: Aircraft damage (Destroyed / Substantial / Minor / None; decoded)
+      - name: phase_flt_code
+        type: integer
+        nullable: true
+        comment: NTSB phase-of-flight code (phase_flt_spec; raw code, not decoded)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Event latitude (dec_latitude, WGS84)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Event longitude (dec_longitude, WGS84)
+      - name: probable_cause
+        type: string
+        nullable: true
+        comment: NTSB probable-cause narrative (narr_cause, truncated to 4000 chars)
+
+    source:
+      type: http
+      url: "https://data.ntsb.gov/avdata/avall.zip"
+      method: GET
+      # StreamingResponseTransformer opens the URL itself (95MB zip -> 553MB MDB);
+      # the framework does not pre-fetch, so rawCache does not apply.
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.NtsbAviationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ntsb_aviation_accidents/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: ntsb_aviation_accidents
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        incrementalTtlDays: 7
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # CFS SHIPMENTS — Commodity Flow Survey Public Use File (snapshot, bulk CSV)
+  # ---------------------------------------------------------------------------
+  - name: cfs_shipments
+    pattern: "type=cfs_shipments/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Census/BTS Commodity Flow Survey 2017 Public Use File (PUF) — one row per
+      sampled shipment (~5.98M), the shipment-level microdata behind every CFS
+      cross-tab. Origin/destination state + CFS area, SCTG commodity, mode,
+      shipper NAICS, value ($), weight (lb), great-circle + routed distance
+      (miles), and WGT_FACTOR (the tabulation weight: SUM(measure * wgt_factor)
+      estimates the population total). All published cross-tabs (origin x dest x
+      commodity x mode, by-NAICS, by-distance, ...) are SQL views over this one
+      table (never Java) — e.g. the bts_freight_flows view. Aggregates are
+      sample-weighted estimates and approximate the official CFS tables. Bulk CSV
+      export of BTS Socrata y9wr-xk52; snapshot, partition overwritten each run.
+      Source: data.bts.gov/api/views/y9wr-xk52/rows.csv.
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - cfs_shipments
+
+    columns:
+      - name: shipmt_id
+        type: string
+        nullable: false
+        expression: 'src."SHIPMT_ID"'
+        comment: Shipment identifier — PK
+      - name: survey_year
+        type: integer
+        nullable: false
+        expression: '2017'
+        comment: CFS survey year (this PUF file is 2017)
+      - name: orig_state_fips
+        type: string
+        nullable: true
+        expression: 'CASE WHEN src."ORIG_STATE" IS NULL OR src."ORIG_STATE"='''' THEN NULL ELSE lpad(src."ORIG_STATE", 2, ''0'') END'
+        comment: Origin state FIPS (FK to geo.state_ref)
+      - name: orig_cfs_area
+        type: string
+        nullable: true
+        expression: 'src."ORIG_CFS_AREA"'
+        comment: Origin CFS area code (state-MA)
+      - name: dest_state_fips
+        type: string
+        nullable: true
+        expression: 'CASE WHEN src."DEST_STATE" IS NULL OR src."DEST_STATE"='''' THEN NULL ELSE lpad(src."DEST_STATE", 2, ''0'') END'
+        comment: Destination state FIPS (FK to geo.state_ref)
+      - name: dest_cfs_area
+        type: string
+        nullable: true
+        expression: 'src."DEST_CFS_AREA"'
+        comment: Destination CFS area code (state-MA)
+      - name: naics
+        type: string
+        nullable: true
+        expression: 'src."NAICS"'
+        comment: Shipper NAICS code
+      - name: quarter
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."QUARTER" AS INTEGER)'
+        comment: Quarter of shipment (1-4)
+      - name: sctg_code
+        type: string
+        nullable: true
+        expression: 'src."SCTG"'
+        comment: SCTG commodity code
+      - name: mode_code
+        type: string
+        nullable: true
+        expression: 'src."MODE"'
+        comment: CFS transport mode code (raw; some recoded for confidentiality)
+      - name: shipmt_value
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SHIPMT_VALUE" AS DOUBLE)'
+        comment: Shipment value (USD)
+      - name: shipmt_weight_lb
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SHIPMT_WGHT" AS DOUBLE)'
+        comment: Shipment weight (pounds)
+      - name: dist_gc_miles
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SHIPMT_DIST_GC" AS DOUBLE)'
+        comment: Great-circle distance origin->destination (miles)
+      - name: dist_routed_miles
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."SHIPMT_DIST_ROUTED" AS DOUBLE)'
+        comment: Routed distance origin->destination (miles)
+      - name: temp_controlled
+        type: string
+        nullable: true
+        expression: 'src."TEMP_CNTL_YN"'
+        comment: Temperature-controlled shipment (true/false)
+      - name: export_yn
+        type: string
+        nullable: true
+        expression: 'src."EXPORT_YN"'
+        comment: Export shipment (true/false)
+      - name: export_country
+        type: string
+        nullable: true
+        expression: 'src."EXPORT_CNTRY"'
+        comment: Export final destination country indicator
+      - name: hazmat
+        type: string
+        nullable: true
+        expression: 'src."HAZMAT"'
+        comment: Hazardous material code (N = not hazmat)
+      - name: wgt_factor
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."WGT_FACTOR" AS DOUBLE)'
+        comment: Shipment tabulation weighting factor (multiply measures by this for population estimates)
+
+    source:
+      type: http
+      # Socrata bulk CSV export = the whole 5.98M-row PUF in one unpaginated
+      # request (preferred over paging). Headers are UPPERCASE source names.
+      url: "https://data.bts.gov/api/views/y9wr-xk52/rows.csv?accessType=DOWNLOAD"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+      freshness:
+        type: etag
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cfs_shipments/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: cfs_shipments
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1350,6 +1959,54 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_fips]
 
+  fmcsa_carriers:
+    primaryKey: [dot_number]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  faa_aircraft_registry:
+    primaryKey: [n_number]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  ntsb_aviation_accidents:
+    primaryKey: [event_id, aircraft_key]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  cfs_shipments:
+    primaryKey: [shipmt_id]
+    foreignKeys:
+      - columns: [orig_state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [dest_state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -1403,3 +2060,28 @@ views:
         SUM(t.vrm)   AS vehicle_revenue_miles
       FROM transit_ridership t
       GROUP BY 1, t.ntd_id, t.agency, t.mode_name, t.state_abbr
+
+  - name: bts_freight_flows
+    comment: >
+      Commodity Flow Survey freight flows — the origin-state x destination-state x
+      SCTG commodity x mode estimate, aggregated from the cfs_shipments Public Use
+      File by the tabulation weight (WGT_FACTOR). value_million = USD millions,
+      tons_thousands = thousands of short tons (weight_lb / 2000), ton_miles_million
+      = millions of ton-miles (tons x routed miles). These are sample-weighted
+      estimates and approximate — not identical to — the official published CFS
+      tables. Every other CFS cross-tab (by NAICS, by distance band, ...) is a
+      sibling view over cfs_shipments; add as needed.
+    sql: >
+      SELECT
+        s.survey_year,
+        s.orig_state_fips                                             AS origin_state_fips,
+        s.dest_state_fips,
+        s.sctg_code,
+        s.mode_code,
+        SUM(s.shipmt_value * s.wgt_factor) / 1e6                      AS value_million,
+        SUM(s.shipmt_weight_lb * s.wgt_factor) / 2000.0 / 1000.0      AS tons_thousands,
+        SUM(s.shipmt_weight_lb * s.wgt_factor * s.dist_routed_miles) / 2000.0 / 1e6
+                                                                      AS ton_miles_million,
+        COUNT(*)                                                      AS sample_shipments
+      FROM cfs_shipments s
+      GROUP BY s.survey_year, s.orig_state_fips, s.dest_state_fips, s.sctg_code, s.mode_code

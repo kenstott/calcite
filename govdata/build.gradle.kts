@@ -111,6 +111,9 @@ dependencies {
     implementation("org.apache.poi:poi:5.3.0")
     implementation("org.apache.poi:poi-ooxml:5.3.0")
 
+    // Pure-Java Access (.mdb) reader for the NTSB aviation accident database (avall.mdb)
+    implementation("com.healthmarketscience.jackcess:jackcess:4.0.5")
+
     // Geometry processing with JTS (lightweight)
     implementation("org.locationtech.jts:jts-core:1.19.0")
 
