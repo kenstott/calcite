@@ -2486,23 +2486,76 @@ def _build_unique_constraint_rows(
     return rows, con_oid
 
 
+def _fk_row(con_oid, con_name, ns_oid, src_toid, tgt_toid, conkey, confkey):
+    """One pg_constraint 'f' row (conkey/confkey are attnum arrays — one entry per FK column)."""
+    return (
+        con_oid, con_name, ns_oid, "f", False, False, True, src_toid, 0, 0, 0, tgt_toid,
+        "a", "a", "s", True, 0, True, conkey, confkey, None, None, None, None, None,
+    )
+
+
 def _build_fk_constraint_rows(
     ctx,
     idx: CatalogIndex,
     con_oid_start: int,
 ) -> tuple[list[tuple], int]:
     from pgwire_calcite.compiler.sql_gen import semantic_table_name
+    from pgwire_calcite.compiler.naming import apply_sql_name
 
     rows: list[tuple] = []
     con_oid = con_oid_start
-    seen_joins: set[tuple] = set()
     used_names: set[str] = set()
+    seen_fks: set[tuple] = set()
+    covered: set[tuple] = set()  # (src_type, source_column) emitted as a grouped FK
+
+    def _src_tm(src_type):
+        return next((tm for tm in ctx.tables.values() if tm.type_name == src_type), None)
+
+    # 1) Grouped FKs (constraint model): one row per FK, multi-column conkey/confkey — so a
+    #    composite FK renders as ONE edge instead of one bogus edge per column.
+    for src_type, target, pairs in getattr(ctx, "foreign_keys", []):
+        sig = (src_type, target.table_id, tuple(pairs))
+        if sig in seen_fks:
+            continue
+        seen_fks.add(sig)
+        src_tm = _src_tm(src_type)
+        if src_tm is None:
+            continue
+        src_toid = idx.table_id_to_oid.get(src_tm.table_id)
+        tgt_toid = idx.table_id_to_oid.get(target.table_id)
+        if src_toid is None or tgt_toid is None:
+            continue
+        conkey: list[int] = []
+        confkey: list[int] = []
+        ok = True
+        for sc, tc in pairs:
+            src_attnum = idx.col_attnum.get((src_toid, apply_sql_name(sc)), 0)
+            tgt_attnum = idx.col_attnum.get((tgt_toid, apply_sql_name(tc)), 0) if tc else 0
+            if src_attnum == 0 or tgt_attnum == 0:
+                ok = False
+                break
+            conkey.append(src_attnum)
+            confkey.append(tgt_attnum)
+        if not ok:
+            continue  # fall back to per-column below
+        ns_oid = idx.ns_map.get(idx.toid_to_table[src_toid][1], 2200)
+        base_name = f"fk_{semantic_table_name(src_tm)}__{apply_sql_name(pairs[0][0])}"
+        con_name = base_name if base_name not in used_names else f"{base_name}__{semantic_table_name(target)}"
+        used_names.add(con_name)
+        rows.append(_fk_row(con_oid, con_name, ns_oid, src_toid, tgt_toid, conkey, confkey))
+        con_oid += 1
+        for sc, _tc in pairs:
+            covered.add((src_type, sc))
+
+    # 2) Per-column fallback for joins not covered above (synthetic joins, or grouped FKs
+    #    that failed to resolve). Preserves the original single-column behaviour.
+    seen_joins: set[tuple] = set()
     for (src_type, join_field), jm in ctx.joins.items():
-        if not jm.target_column:
+        if not jm.target_column or jm.cardinality != "many-to-one":
             continue
-        if jm.cardinality != "many-to-one":
+        if (src_type, jm.source_column) in covered:
             continue
-        src_tm = next((tm for tm in ctx.tables.values() if tm.type_name == src_type), None)
+        src_tm = _src_tm(src_type)
         if src_tm is None:
             continue
         dedup_key = (src_tm.table_id, jm.source_column, jm.target.table_id, jm.target_column)
@@ -2519,52 +2572,18 @@ def _build_fk_constraint_rows(
             or jm.source_expr is not None
             or jm.source_column.startswith("__")
         )
-        from pgwire_calcite.compiler.naming import apply_sql_name
-
         src_col_sql = apply_sql_name(jm.source_column)
         tgt_col_sql = apply_sql_name(jm.target_column)
         col_label = join_field if is_synthetic else src_col_sql
-        src_sem_name = semantic_table_name(src_tm)
-        base_name = f"fk_{src_sem_name}__{col_label}"
-        tgt_sem_name = semantic_table_name(jm.target)
-        con_name = base_name if base_name not in used_names else f"{base_name}__{tgt_sem_name}"
+        base_name = f"fk_{semantic_table_name(src_tm)}__{col_label}"
+        con_name = base_name if base_name not in used_names else f"{base_name}__{semantic_table_name(jm.target)}"
         used_names.add(con_name)
-        attnum_col = src_col_sql
-        if jm.source_column.startswith("__"):
-            attnum_col = "_name_"
+        attnum_col = "_name_" if jm.source_column.startswith("__") else src_col_sql
         src_attnum = idx.col_attnum.get((src_toid, attnum_col), 0)
         tgt_attnum = idx.col_attnum.get((tgt_toid, tgt_col_sql), 0)
         if src_attnum == 0:
             continue
-        rows.append(
-            (
-                con_oid,
-                con_name,
-                ns_oid_fk,
-                "f",
-                False,
-                False,
-                True,
-                src_toid,
-                0,
-                0,
-                0,
-                tgt_toid,
-                "a",
-                "a",
-                "s",
-                True,
-                0,
-                True,
-                [src_attnum],
-                [tgt_attnum],
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-        )
+        rows.append(_fk_row(con_oid, con_name, ns_oid_fk, src_toid, tgt_toid, [src_attnum], [tgt_attnum]))
         con_oid += 1
     return rows, con_oid
 

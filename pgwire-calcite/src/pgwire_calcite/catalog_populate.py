@@ -127,23 +127,37 @@ def build_context(conn) -> tuple:
         if pk:
             ctx.pk_columns[tm.table_id] = pk
 
-    # Foreign keys -> joins (many-to-one), for pg_constraint / ER diagrams.
+    # Foreign keys -> per-column joins (query model) + grouped foreign_keys (constraint model,
+    # so a multi-column FK renders as one edge). Group JDBC rows by FK_NAME + target.
     for schema, name, tm in table_keys:
         try:
             frs = md.getImportedKeys(None, schema, name)
         except Exception:
             continue
+        fk_groups: Dict[tuple, dict] = {}
         for r in _rows(frs):
             tgt = by_qualified.get((r.get("PKTABLE_SCHEM") or "", r.get("PKTABLE_NAME") or ""))
             if tgt is None:
                 continue
             fk_col = r.get("FKCOLUMN_NAME") or ""
+            pk_col = r.get("PKCOLUMN_NAME") or ""
             ctx.joins[(tm.type_name, fk_col)] = JoinMeta(
                 source_column=fk_col,
-                target_column=r.get("PKCOLUMN_NAME") or "",
+                target_column=pk_col,
                 target=tgt,
                 cardinality="many-to-one",
             )
+            try:
+                key_seq = int(r.get("KEY_SEQ") or 1)
+            except (TypeError, ValueError):
+                key_seq = 1
+            fk_name = r.get("FK_NAME") or f"{name}.{fk_col}"
+            g = fk_groups.setdefault((fk_name, tgt.table_id), {"target": tgt, "pairs": []})
+            g["pairs"].append((key_seq, fk_col, pk_col))
+        for g in fk_groups.values():
+            pairs = [(sc, tc) for _seq, sc, tc in sorted(g["pairs"])]
+            if pairs:
+                ctx.foreign_keys.append((tm.type_name, g["target"], pairs))
 
     # PGW-012 canonical source: read keys/referential constraints from Calcite's
     # Statistic API (adapter-agnostic — file TableConstraints, govdata YAML, etc.),
@@ -232,6 +246,7 @@ def _enrich_keys_from_statistic(conn, ctx: CompilationContext, by_qualified) -> 
                     if tgt is None:
                         continue
                     tfields = _fields(root.getSubSchema(tq[-2]).getTable(tq[-1]))
+                    pairs = []
                     for pair in list(rc.getColumnPairs()):
                         sc = fields[int(pair.source)]
                         tc = tfields[int(pair.target)]
@@ -239,6 +254,10 @@ def _enrich_keys_from_statistic(conn, ctx: CompilationContext, by_qualified) -> 
                             source_column=sc, target_column=tc, target=tgt,
                             cardinality="many-to-one",
                         )
+                        pairs.append((sc, tc))
+                    if pairs:
+                        # One grouped FK per referential constraint (preserves composite identity).
+                        ctx.foreign_keys.append((tm.type_name, tgt, pairs))
                 except Exception:
                     continue
 

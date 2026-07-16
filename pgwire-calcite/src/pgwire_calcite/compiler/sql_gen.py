@@ -66,6 +66,11 @@ class CompilationContext:
     unique_columns: Dict[int, List[List[str]]] = field(default_factory=dict)
     #: keyed by (source TableMeta.type_name, join_field)
     joins: Dict[Tuple[str, str], JoinMeta] = field(default_factory=dict)
+    #: Grouped FKs preserving multi-column FK identity, so a composite FK renders as ONE
+    #: pg_constraint edge (not one per column). Each: (source type_name, target TableMeta,
+    #: [(source_column, target_column), ...]). ``joins`` above is kept per-column for the
+    #: query/join model; this is the constraint model.
+    foreign_keys: List[Tuple[str, "TableMeta", List[Tuple[str, str]]]] = field(default_factory=list)
     physical_to_sql: Dict[Tuple[int, str], str] = field(default_factory=dict)
     virtual_columns: Dict[int, dict] = field(default_factory=dict)
 
