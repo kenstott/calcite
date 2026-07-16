@@ -123,12 +123,7 @@ partitionedTables:
 
   # --- REFERENCE JOLTS INDUSTRIES ---
   - name: jolts_industries
-    pattern: "type=jolts_industries.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
+    pattern: "jolts_industries.parquet"
     sourcePaths:
       ftpFiles:
         - cachePath: "type=jolts_ftp/jt.industry"
@@ -177,7 +172,7 @@ partitionedTables:
       output:
         pattern: ""
       partition:
-        columns: [type]
+        columns: []
       options:
         compression: snappy
         batchSize: 50000
@@ -189,12 +184,7 @@ partitionedTables:
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: jolts_dataelements
-    pattern: "type=jolts_dataelements.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
+    pattern: "jolts_dataelements.parquet"
     sourcePaths:
       ftpFiles:
         - cachePath: "type=jolts_ftp/jt.dataelement"
@@ -242,7 +232,7 @@ partitionedTables:
       output:
         pattern: ""
       partition:
-        columns: [type]
+        columns: []
       options:
         compression: snappy
         batchSize: 50000
@@ -254,12 +244,7 @@ partitionedTables:
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: bls_geographies
-    pattern: "type=bls_geographies.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
+    pattern: "bls_geographies.parquet"
     comment: >
       BLS geography reference table mapping state abbreviations to FIPS codes, census regions, metro areas, and BLS-specific area codes. Consolidates STATE_FIPS_MAP, CENSUS_REGIONS, METRO_AREA_CODES, METRO_CPI_CODES, and METRO_BLS_AREA_CODES into a single catalog-driven table. Enables dynamic geography lookups without hardcoded maps.
     columns:
@@ -319,7 +304,7 @@ partitionedTables:
       output:
         pattern: ""
       partition:
-        columns: [type]
+        columns: []
       options:
         compression: snappy
         batchSize: 50000
@@ -332,11 +317,6 @@ partitionedTables:
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: naics_sectors
     pattern: "naics_sectors.parquet"
-    partitions:
-      style: hive
-      columnDefinitions:
-        - name: type
-          type: VARCHAR
     comment: >
       BLS NAICS supersector reference table mapping supersector codes to industry names. Consolidates NAICS_SUPERSECTORS hardcoded map. Used for state_industry_employment, metro_industry_employment, and other industry-based BLS series.
     columns:
@@ -373,7 +353,7 @@ partitionedTables:
       output:
         pattern: ""
       partition:
-        columns: [type]
+        columns: []
       options:
         compression: snappy
         batchSize: 50000
@@ -389,8 +369,6 @@ partitionedTables:
     partitions:
       style: hive
       columnDefinitions:
-        - name: type
-          type: VARCHAR
         - name: section
           type: VARCHAR
     comment: >
@@ -481,7 +459,7 @@ partitionedTables:
       output:
         pattern: "section=*/"
       partition:
-        columns: [type, section]
+        columns: [section]
       options:
         compression: snappy
         batchSize: 50000
@@ -497,8 +475,6 @@ partitionedTables:
     partitions:
       style: hive
       columnDefinitions:
-        - name: type
-          type: VARCHAR
         - name: tablename
           type: VARCHAR
     comment: >
@@ -712,7 +688,7 @@ partitionedTables:
       output:
         pattern: "tablename=*/"
       partition:
-        columns: [type, tablename]
+        columns: [tablename]
       options:
         compression: snappy
         batchSize: 50000
@@ -732,8 +708,6 @@ partitionedTables:
     partitions:
       style: hive
       columnDefinitions:
-        - name: type
-          type: VARCHAR
         - name: category
           type: INTEGER
     comment: >
@@ -846,10 +820,8 @@ partitionedTables:
       output:
         pattern: "category=*/"
       partition:
-        columns: [type, category]
+        columns: [category]
         columnDefinitions:
-          - name: type
-            type: VARCHAR
           - name: category
             type: INTEGER
       options:
@@ -871,22 +843,21 @@ partitionedTables:
 constraints:
   jolts_industries:
     primaryKey:
-      - type
+      - industry_code
     comment: Reference dimension table for JOLTS industry classifications
 
   jolts_dataelements:
     primaryKey:
-      - type
+      - dataelement_code
     comment: Reference dimension table for JOLTS metric codes and descriptions
 
   bls_geographies:
     primaryKey:
-      - type
       - geo_code
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links BLS state geography codes to Census TIGER state boundaries (for geo_type='state' records)
       - columns: [cbsa_code]
@@ -898,25 +869,28 @@ constraints:
 
   nipa_tables:
     primaryKey:
-      - type
+      - section
+      - table_name
     comment: Reference dimension table for NIPA table classifications and descriptions
 
   naics_sectors:
     primaryKey:
-      - type
       - supersector_code
-    comment: Reference dimension table for NAICS supersector industry classifications
+    comment: >
+      Reference dimension table for NAICS supersector industry classifications.
+      PK is supersector_code alone; the 'type' partition column is a constant
+      physical discriminator ('naics_sectors') and carries no identity, so it is
+      excluded from the logical key. This lets state_industry/metro_industry FKs
+      reference the real primary key rather than a PK subset.
 
   regional_linecodes:
     primaryKey:
-      - type
       - tablename
       - LineCode
     comment: Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and LineCode data column.
 
   fred_series:
     primaryKey:
-      - type
       - category
       - series
     indexes:

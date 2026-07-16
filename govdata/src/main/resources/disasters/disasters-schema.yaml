@@ -1003,7 +1003,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
@@ -1015,19 +1015,23 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   hazard_mitigation_projects:
     primaryKey: [project_identifier]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
@@ -1039,31 +1043,45 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [reported_zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit reported ZIP to the conformed ZCTA dimension
 
   nfip_policies:
     primaryKey: [id]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [reported_zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit reported ZIP to the conformed ZCTA dimension
 
   storm_events:
     primaryKey: [event_id]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
@@ -1075,7 +1093,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo

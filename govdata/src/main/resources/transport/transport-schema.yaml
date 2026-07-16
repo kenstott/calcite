@@ -346,8 +346,6 @@ partitionedTables:
         nullable: true
         expression: 'src."CITY"'
         comment: Consumer's city
-      - <<: *state_fips_column
-        expression: 'NULL'
       - name: state_abbr
         type: string
         nullable: true
@@ -1253,9 +1251,11 @@ partitionedTables:
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
-# PKs identify one observation. FKs are inter-schema, pointing at geo dimension
-# tables via state/county keys. No intra-transport FKs — the tables span
-# independent modes (road safety, aviation, transit) and share only geo keys.
+# PKs identify one observation. Most FKs are inter-schema, pointing at geo
+# dimension tables via state/county keys. The one intra-transport dimension is
+# airports: the aviation traffic tables (airline_ontime, t100_segments) FK their
+# origin/dest airport codes to airports.arpt_id. The road-safety and transit
+# tables share only geo keys with the rest.
 # ============================================================================
 
 constraints:
@@ -1265,13 +1265,22 @@ constraints:
 
   safety_complaints:
     primaryKey: [cmplid]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [state_of_incident]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   fatal_crashes:
     primaryKey: [year, st_case]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -1280,22 +1289,65 @@ constraints:
 
   airline_ontime:
     primaryKey: [flight_date, reporting_airline, flight_number, origin, dest, crs_dep_time]
+    foreignKeys:
+      - columns: [origin]
+        targetTable: airports
+        targetColumns: [arpt_id]
+      - columns: [dest]
+        targetTable: airports
+        targetColumns: [arpt_id]
+      - columns: [origin_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [dest_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   airports:
     primaryKey: [arpt_id]
+    foreignKeys:
+      - columns: [state_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   transit_ridership:
     primaryKey: [agency_mode_tos_date]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   t100_segments:
-    primaryKey: [year, month, carrier, origin, dest, aircraft_type]
+    # service_class is part of the grain: T-100 publishes separate rows per
+    # service class (scheduled passenger vs. cargo, etc.) for the same
+    # carrier/route/aircraft/month, so it must be in the key to stay unique.
+    primaryKey: [year, month, carrier, origin, dest, aircraft_type, service_class]
+    foreignKeys:
+      - columns: [origin]
+        targetTable: airports
+        targetColumns: [arpt_id]
+      - columns: [dest]
+        targetTable: airports
+        targetColumns: [arpt_id]
+      - columns: [origin_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [dest_state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   vehicle_registrations:
     primaryKey: [year, state_fips]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
 # ============================================================================

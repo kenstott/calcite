@@ -1357,7 +1357,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   nws_alerts:
@@ -1365,7 +1365,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cdo_stations:
@@ -1373,7 +1373,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   cdo_monthly_summaries:
@@ -1381,7 +1381,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [station_id]
         targetTable: cdo_stations
@@ -1392,7 +1392,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [station_id]
         targetTable: cdo_stations
@@ -1403,7 +1403,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
@@ -1415,7 +1415,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [station_id]
         targetTable: ghcnd_stations_with_county
@@ -1426,19 +1426,23 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
       - columns: [county_fips]
         targetSchema: geo
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   hms_smoke_daily:
     primaryKey: [county_fips, date]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: geo
@@ -1450,8 +1454,12 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
       - columns: [station_id]
         targetTable: ghcnd_stations_with_county
         targetColumns: [station_id]

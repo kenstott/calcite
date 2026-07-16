@@ -115,9 +115,8 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       USDA Forest Service National Forest and Grassland unit boundaries. ~175 units
-      across 10 USFS regions. Reference/dimension table — joins to geo.states via
-      state_fips and to timber_sales via forest_id. FK target for
-      disasters.wildfire_perimeters.forest_id. Updated annually post-fire-season (October).
+      across 10 USFS regions. Reference/dimension table — FK target for
+      timber_sales.forest_code via forest_id. Updated annually post-fire-season (October).
 
     dimensions:
       type:
@@ -1281,13 +1280,17 @@ constraints:
       - columns: [forest_code]
         targetTable: national_forests
         targetColumns: [forest_id]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   forest_inventory:
     primaryKey: [state_fips, inventory_year, forest_type_group, ownership_class]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   forest_metrics:
@@ -1297,8 +1300,68 @@ constraints:
         targetTable: forest_inventory
         targetColumns: [state_fips, inventory_year, forest_type_group, ownership_class]
 
+  fia_plots:
+    primaryKey: [plot_cn]
+    foreignKeys:
+      - columns: [prev_plot_cn]
+        targetTable: fia_plots
+        targetColumns: [plot_cn]
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  fia_tree_grm:
+    primaryKey: [state_fips, inventory_year, species_code, estimation_type]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  fia_seedlings:
+    primaryKey: [state_fips, inventory_year, species_code]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  fia_down_woody_debris:
+    primaryKey: [state_fips, inventory_year, debris_category]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  fia_invasives:
+    primaryKey: [state_fips, inventory_year, species_code]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  fia_pop_evaluations:
+    primaryKey: [eval_cn]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
   nps_units:
     primaryKey: [unit_code]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   nps_visitation:
     primaryKey: [unit_code, visit_year, visit_month]
@@ -1309,6 +1372,11 @@ constraints:
 
   blm_field_offices:
     primaryKey: [office_code]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   onrr_revenues:
     primaryKey: [fiscal_year, county_fips, land_class, commodity, revenue_type, product]

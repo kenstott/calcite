@@ -2248,7 +2248,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_offenses:
@@ -2256,7 +2256,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_police_employment:
@@ -2264,7 +2264,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_hate_crimes:
@@ -2272,7 +2272,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_use_of_force:
@@ -2280,20 +2280,26 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   # No FK to cde_agencies: the Return A master file carries the 7-character ORI7,
   # whereas cde_agencies.ori is the 9-character ORI9 — the mapping is resolved in views.
   cde_reta:
     primaryKey: [ori, year, month]
+    foreignKeys:
+      - columns: [zip_code]
+        targetSchema: geo
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit agency ZIP to the conformed ZCTA dimension
 
   cde_arrests:
     primaryKey: [state_abbr, year, section, category, label]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_shr:
@@ -2301,7 +2307,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_leoka:
@@ -2309,7 +2315,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_supplemental:
@@ -2317,7 +2323,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   cde_trends:

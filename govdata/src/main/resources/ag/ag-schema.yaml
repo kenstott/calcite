@@ -785,7 +785,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips_code]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: NASS state FIPS to geo.states
       - columns: [county_fips]
@@ -809,7 +809,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: RMA state FIPS to geo.states
       - columns: [county_fips]
@@ -817,6 +817,10 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Derived 5-digit county FIPS to geo.counties
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   ers_farm_income:
     # PK is (year, artificial_key) — ERS artificial_key already encodes state+variable
@@ -830,7 +834,7 @@ constraints:
     foreignKeys:
       - columns: [state]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: ERS state USPS abbreviation to geo.states (excludes the 'US' national total)
 
@@ -845,7 +849,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: FSA state FIPS to geo.states
       - columns: [county_fips]
@@ -868,7 +872,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips_code]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: NASS state FIPS to geo.states
       - columns: [county_fips]

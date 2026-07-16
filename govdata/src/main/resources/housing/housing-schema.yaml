@@ -134,7 +134,7 @@ partitionedTables:
       the whole file is re-fetched and the partition overwritten each run;
       history lives in Iceberg snapshots. State-level place_id is the USPS
       abbreviation (join to geo.states.state_abbr); MSA-level place_id is the
-      5-digit CBSA code (join to geo.cbsa.cbsa_code). Source:
+      5-digit CBSA code (join to geo.cbsa.cbsa_fips). Source:
       fhfa.gov/hpi/download/monthly/hpi_master.csv.
 
     dimensions:
@@ -470,7 +470,7 @@ partitionedTables:
       - name: state_abbr
         type: string
         nullable: false
-        comment: USPS state abbreviation (FK component to geo.states.state_abbr)
+        comment: USPS state abbreviation (convenience label; the geo FK is on state_fips)
       - name: median_income
         type: integer
         nullable: true
@@ -642,19 +642,29 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [region_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: census_regions
+        targetColumns: [region_code]
+        comment: Census region (1-4) — conformed geographic dimension
+      - columns: [division_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: census_divisions
+        targetColumns: [division_code]
+        comment: Census division (1-9) — conformed geographic dimension
 
   fair_market_rents:
     primaryKey: [year, hud_area_code]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -666,8 +676,12 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   # income_limits_county shares its (year, hud_area_code) grain with
   # fair_market_rents — the natural intra-housing join key — but neither table
@@ -678,7 +692,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"

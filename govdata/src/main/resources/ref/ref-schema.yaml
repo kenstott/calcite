@@ -645,14 +645,200 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ==========================================================================
+  # NAICS — North American Industry Classification System (2-6 digit)
+  # ==========================================================================
+  # Static, non-vintaged industry taxonomy built from the Census 2022 NAICS code
+  # list by scripts/build-refs.py (bundled /ref/naics-codes.yaml). Canonical FK
+  # target for naics_code across census (County Business Patterns), econ, and
+  # environment (TRI facility NAICS). Modeled like geo.state_ref: flat file, no
+  # type/year partition, natural-key PK.
+  - name: naics
+    pattern: "naics.parquet"
+    comment: >
+      NAICS 2022 industry classification: one row per 2-to-6-digit code with its
+      title and hierarchy level (2=sector, 3=subsector, 4=industry group,
+      5=NAICS industry, 6=national industry). Sector codes retain the Census
+      range form (e.g. '31-33' manufacturing). Canonical FK target for naics_code
+      across census/econ/environment. Source: Census 2022 NAICS code list.
+
+    columns:
+      - name: naics_code
+        type: string
+        nullable: false
+        comment: 2-6 digit NAICS code (sectors may be a range, e.g. '31-33')
+      - name: naics_title
+        type: string
+        nullable: false
+        comment: Industry title
+      - name: level
+        type: integer
+        nullable: false
+        comment: Hierarchy depth = number of digits in the base code (2=sector … 6=national industry)
+
+    source:
+      type: constants
+      file: "/ref/naics-codes.yaml"
+      path: "naics"
+
+    dimensions:
+      type:
+        - naics
+      year: *ref_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
+  # ==========================================================================
+  # SIC — SEC EDGAR Standard Industrial Classification list
+  # ==========================================================================
+  # Static, non-vintaged. Built from the SEC EDGAR SIC code list by
+  # scripts/build-refs.py (bundled /ref/sic-codes.yaml). Canonical FK target for
+  # sec.filing_metadata.sic_code. Codes are zero-padded to 4 digits to match the
+  # SEC list form; verify the sec side is padded the same before enforcing.
+  - name: sic
+    pattern: "sic.parquet"
+    comment: >
+      SEC EDGAR Standard Industrial Classification codes: one row per 4-digit SIC
+      code with its EDGAR Assistant-Director office and industry title. FK target
+      for sec.filing_metadata.sic_code. Source: SEC EDGAR siccodes list.
+
+    columns:
+      - name: sic_code
+        type: string
+        nullable: false
+        comment: 4-digit SIC code, zero-padded (e.g. '0100', '7372')
+      - name: ad_office
+        type: string
+        nullable: true
+        comment: EDGAR Assistant-Director office / industry group that reviews filers in this SIC
+      - name: industry_title
+        type: string
+        nullable: false
+        comment: SIC industry title (SEC EDGAR display form)
+
+    source:
+      type: constants
+      file: "/ref/sic-codes.yaml"
+      path: "sic"
+
+    dimensions:
+      type:
+        - sic
+      year: *ref_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
+  # ==========================================================================
+  # CURRENCIES — ISO 4217 active currency codes
+  # ==========================================================================
+  # Static, non-vintaged. Built from datasets/currency-codes (ISO 4217) by
+  # scripts/build-refs.py (bundled /ref/currency-codes.yaml). FK target for
+  # ref.countries.currency_code and any table carrying an ISO 4217 code.
+  - name: currencies
+    pattern: "currencies.parquet"
+    comment: >
+      ISO 4217 active currencies: one row per alphabetic code with its name,
+      numeric code, and minor-unit (decimal places). FK target for
+      ref.countries.currency_code. Withdrawn codes are excluded. Source: ISO 4217
+      (datasets/currency-codes).
+
+    columns:
+      - name: currency_code
+        type: string
+        nullable: false
+        comment: ISO 4217 3-letter alphabetic code (e.g. 'USD')
+      - name: currency_name
+        type: string
+        nullable: false
+        comment: Currency name (e.g. 'US Dollar')
+      - name: numeric_code
+        type: string
+        nullable: true
+        comment: ISO 4217 3-digit numeric code, zero-padded (e.g. '840')
+      - name: minor_unit
+        type: integer
+        nullable: true
+        comment: Number of decimal places in the minor unit (e.g. 2 for cents; null when not applicable)
+
+    source:
+      type: constants
+      file: "/ref/currency-codes.yaml"
+      path: "currencies"
+
+    dimensions:
+      type:
+        - currencies
+      year: *ref_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
 
 constraints:
 
+  naics:
+    primaryKey: [naics_code]
+    comment: NAICS code is the canonical FK target for naics_code across schemas.
+
+  sic:
+    primaryKey: [sic_code]
+    comment: 4-digit SIC code; FK target for sec.filing_metadata.sic_code.
+
+  currencies:
+    primaryKey: [currency_code]
+    comment: ISO 4217 code; FK target for ref.countries.currency_code.
+
   countries:
     primaryKey: [type, census_cty_code]
+    foreignKeys:
+      - columns: [currency_code]
+        targetTable: currencies
+        targetColumns: [currency_code]
+        comment: ISO 4217 currency of the country (null/aggregate rows excluded by nullability)
 
   gleif_entities:
     primaryKey: [type, lei]

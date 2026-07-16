@@ -277,6 +277,247 @@ partitionedTables:
         compactionSmallFileSizeBytes: 10485760
 
   # --------------------------------------------------------------------------
+  # State Reference - conformed state-identity dimension (static, non-vintaged)
+  # --------------------------------------------------------------------------
+  # The `states` table above is a year-partitioned TIGER boundary snapshot, so
+  # its state_abbr / state_fips are NOT unique and cannot serve as FK targets.
+  # This static table is the canonical FK target for state_abbr / state_fips
+  # across every govdata schema. Populated from the bundled /geo/state-ref.yaml
+  # via source.type=constants (no HTTP, no vintage); append a row for a new
+  # jurisdiction.
+  - name: state_ref
+    pattern: "state_ref.parquet"
+    comment: >
+      Conformed US state-identity reference dimension: 50 states + DC with FIPS
+      code, 2-letter postal abbreviation, and full name. Static and non-vintaged
+      — this is the canonical foreign-key target for state_abbr and state_fips
+      across all govdata schemas (geo.states is a year-partitioned boundary
+      snapshot and cannot be an FK target). Join here to attach state names/codes
+      to any table carrying a state abbreviation or FIPS code.
+
+    columns:
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS code, zero-padded (e.g., '06' for California)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter USPS state abbreviation (e.g., 'CA')
+      - name: state_name
+        type: string
+        nullable: false
+        comment: Full state name (e.g., 'California')
+
+    # Static reference data read from a bundled classpath resource (not HTTP).
+    source:
+      type: constants
+      file: "/geo/state-ref.yaml"
+      path: "states"
+
+    # Single batch for all reference rows; no year partitioning.
+    dimensions:
+      type:
+        - state_ref
+      year: *tiger_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: state_ref
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
+  # --------------------------------------------------------------------------
+  # Census regions / divisions — conformed geographic dimensions
+  # --------------------------------------------------------------------------
+  # Static, non-vintaged. The Census Bureau groups states into 4 regions and 9
+  # divisions (statutory since 1984). Canonical FK targets for the Census
+  # region_code / division_code carried by housing (Building Permits Survey).
+  # NOTE: EIA storage regions (energy), FAA regions (transport) and BLS
+  # census-region codes (econ_reference) are DIFFERENT taxonomies and must NOT
+  # key here. Populated from the bundled /geo/census-regions.yaml.
+  - name: census_regions
+    pattern: "census_regions.parquet"
+    comment: >
+      US Census Bureau statistical regions: 4 rows (Northeast, Midwest, South,
+      West). Canonical FK target for a Census region_code (integer 1-4). Static
+      and non-vintaged.
+
+    columns:
+      - name: region_code
+        type: integer
+        nullable: false
+        comment: Census region code (1=Northeast, 2=Midwest, 3=South, 4=West)
+      - name: region_name
+        type: string
+        nullable: false
+        comment: Census region name
+
+    source:
+      type: constants
+      file: "/geo/census-regions.yaml"
+      path: "regions"
+
+    dimensions:
+      type:
+        - census_regions
+      year: *tiger_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: census_regions
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
+  - name: census_divisions
+    pattern: "census_divisions.parquet"
+    comment: >
+      US Census Bureau statistical divisions: 9 rows (New England, Middle
+      Atlantic, East/West North Central, South Atlantic, East/West South Central,
+      Mountain, Pacific), each carrying its parent region. Canonical FK target for
+      a Census division_code (integer 1-9). Static and non-vintaged.
+
+    columns:
+      - name: division_code
+        type: integer
+        nullable: false
+        comment: Census division code (1-9)
+      - name: division_name
+        type: string
+        nullable: false
+        comment: Census division name
+      - name: region_code
+        type: integer
+        nullable: false
+        comment: Parent Census region code (FK to census_regions)
+      - name: region_name
+        type: string
+        nullable: false
+        comment: Parent Census region name (denormalized for convenience)
+
+    source:
+      type: constants
+      file: "/geo/census-regions.yaml"
+      path: "divisions"
+
+    dimensions:
+      type:
+        - census_divisions
+      year: *tiger_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: census_divisions
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
+  # --------------------------------------------------------------------------
+  # ZCTA reference — conformed, non-vintaged ZIP-code-tabulation-area dimension
+  # --------------------------------------------------------------------------
+  # geo.zctas is a year-partitioned TIGER boundary snapshot whose zcta is NOT
+  # unique across vintages, so it cannot be a foreign-key target (same reason
+  # geo.state_ref exists alongside geo.states). This static table is the
+  # canonical FK target for a 5-digit zip_code / ZCTA across every govdata schema
+  # (fec, environment, health, crime, disasters, ...). Populated from the Census
+  # 2020-vintage national ZCTA gazetteer via scripts/build-refs.py; join here to
+  # attach centroid/area to any table carrying a ZIP code, and use geo.zctas only
+  # when a specific-vintage boundary polygon is required.
+  - name: zcta_ref
+    pattern: "zcta_ref.parquet"
+    comment: >
+      Conformed ZIP Code Tabulation Area reference dimension: one row per 5-digit
+      ZCTA (2020 census vintage) with land/water area and internal-point centroid.
+      Static and non-vintaged — the canonical foreign-key target for zip_code /
+      ZCTA across all govdata schemas (geo.zctas is a year-partitioned boundary
+      snapshot and cannot be an FK target).
+
+    columns:
+      - name: zcta
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code Tabulation Area code
+      - name: land_area_sqmi
+        type: double
+        nullable: true
+        comment: Land area (square miles)
+      - name: water_area_sqmi
+        type: double
+        nullable: true
+        comment: Water area (square miles)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Internal-point latitude (centroid)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Internal-point longitude (centroid)
+
+    source:
+      type: constants
+      file: "/geo/zcta-ref.yaml"
+      path: "zctas"
+
+    dimensions:
+      type:
+        - zcta_ref
+      year: *tiger_year_range
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: zcta_ref
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+
+  # --------------------------------------------------------------------------
   # Counties - U.S. county boundaries
   # --------------------------------------------------------------------------
   - name: counties
@@ -2462,28 +2703,65 @@ constraints:
 
   # --- TIGER Boundary Tables ---
 
+  state_ref:
+    primaryKey: [state_abbr]
+    unique:
+      - [state_fips]
+      - [state_name]
+    comment: >
+      Canonical state-identity dimension. state_abbr is the primary key (the
+      column most cross-schema FKs join on); state_fips and state_name are
+      declared unique so they are equally valid FK targets.
+
+  census_regions:
+    primaryKey: [region_code]
+    unique:
+      - [region_name]
+    comment: Conformed Census region dimension; FK target for a Census region_code (1-4).
+
+  census_divisions:
+    primaryKey: [division_code]
+    unique:
+      - [division_name]
+    foreignKeys:
+      - columns: [region_code]
+        targetTable: census_regions
+        targetColumns: [region_code]
+    comment: Conformed Census division dimension; FK target for a Census division_code (1-9).
+
   states:
     primaryKey: [state_fips, year]
     unique:
       - [state_code, year]
       - [state_name, year]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Every boundary-snapshot row resolves to a canonical state identity
 
   counties:
     primaryKey: [county_fips, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   places:
     primaryKey: [place_fips, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   zctas:
     primaryKey: [zcta, year]
+
+  zcta_ref:
+    primaryKey: [zcta]
+    comment: >
+      Canonical non-vintaged ZCTA dimension; zcta is the FK target for zip_code /
+      ZCTA across schemas (year-partitioned geo.zctas cannot serve as one).
 
   census_tracts:
     primaryKey: [tract_fips, year]
@@ -2491,13 +2769,22 @@ constraints:
       - columns: [county_fips]
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   block_groups:
     primaryKey: [block_group_fips, year]
     foreignKeys:
-      - columns: [tract_fips]
+      - columns: [tract_fips, year]
         targetTable: census_tracts
-        targetColumns: [tract_fips]
+        targetColumns: [tract_fips, year]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
 
   cbsa:
     primaryKey: [cbsa_fips, year]
@@ -2508,28 +2795,28 @@ constraints:
     primaryKey: [cd_fips, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   school_districts:
     primaryKey: [sd_lea, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   state_legislative_lower:
     primaryKey: [sldl_fips, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   state_legislative_upper:
     primaryKey: [sldu_fips, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   county_subdivisions:
@@ -2538,6 +2825,9 @@ constraints:
       - columns: [county_fips]
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   tribal_areas:
     primaryKey: [aiannhce, year]
@@ -2549,7 +2839,7 @@ constraints:
     primaryKey: [state_fips, puma_code, year]
     foreignKeys:
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
 
   voting_districts:
@@ -2558,6 +2848,9 @@ constraints:
       - columns: [county_fips]
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   # --- HUD Crosswalk Tables ---
 
@@ -2584,9 +2877,9 @@ constraints:
   tract_zip_crosswalk:
     primaryKey: [tract_fips, zip, year]
     foreignKeys:
-      - columns: [tract_fips]
+      - columns: [tract_fips, year]
         targetTable: census_tracts
-        targetColumns: [tract_fips]
+        targetColumns: [tract_fips, year]
     indexes:
       - [tract_fips]
       - [zip]
@@ -2594,9 +2887,12 @@ constraints:
   zip_tract_crosswalk:
     primaryKey: [zip, tract_fips, year]
     foreignKeys:
-      - columns: [tract_fips]
+      - columns: [tract_fips, year]
         targetTable: census_tracts
-        targetColumns: [tract_fips]
+        targetColumns: [tract_fips, year]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
     indexes:
       - [zip]
       - [tract_fips]
@@ -2639,6 +2935,9 @@ constraints:
       - columns: [county_fips]
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
     indexes:
       - [rucc_code]
       - [metro_nonmetro]
@@ -2663,7 +2962,7 @@ constraints:
         targetColumns: [county_fips]
         comment: Links gazetteer county metadata to county boundaries
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links gazetteer county to state
     indexes:
@@ -2678,7 +2977,7 @@ constraints:
         targetColumns: [place_fips]
         comment: Links gazetteer place metadata to place boundaries
       - columns: [state_fips]
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links gazetteer place to state
     indexes:

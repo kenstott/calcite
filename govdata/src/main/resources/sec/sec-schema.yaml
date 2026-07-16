@@ -1474,10 +1474,15 @@ constraints:
       - [state_of_incorporation]
     foreignKeys:
       - columns: [state_of_incorporation]
-        targetSchema: "${GEO_SCHEMA_NAME:GEO}"
-        targetTable: states
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
         targetColumns: [state_abbr]
-        comment: Links filing state of incorporation to geographic state data
+        comment: Links filing state of incorporation to the canonical state-identity dimension
+      - columns: [sic_code]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: sic
+        targetColumns: [sic_code]
+        comment: Links the filer's SIC code to the SEC EDGAR industry-classification reference
 
   financial_line_items:
     primaryKey: [cik, accession_number, element_id]

@@ -1628,7 +1628,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   eia_electricity_prices:
@@ -1636,7 +1636,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   eia_utility_annual:
@@ -1644,7 +1644,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   eia_power_plants:
@@ -1652,8 +1652,12 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
       - columns: [utility_id]
         targetTable: eia_utility_annual
         targetColumns: [utility_id]
@@ -1663,7 +1667,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
       - columns: [plant_id]
         targetTable: eia_power_plants
@@ -1674,7 +1678,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   eia_state_energy_consumption:
@@ -1682,7 +1686,7 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   eia_natural_gas_storage:
@@ -1696,7 +1700,7 @@ constraints:
     foreignKeys:
       - columns: [refinery_state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
 
   eia_refinery_operations:
@@ -1707,8 +1711,12 @@ constraints:
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
 
 # ============================================================================
 # VIEWS

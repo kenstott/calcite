@@ -1104,13 +1104,21 @@ partitionedTables:
 constraints:
   patent_grants:
     primaryKey: [patent_id]
+  # NOTE: The patent_id -> patent_grants foreign keys on the six full-dump snapshot tables
+  # below (patent_assignees, patent_inventors, patent_cpc_classes, patent_abstracts,
+  # patent_applications, patent_figures) are INFORMATIONAL only. Each snapshot lands the entire
+  # PatentsView dump (grants back to 1976) with no year filter, while patent_grants materializes
+  # only GOVDATA_START_YEAR+ (2010 by default). Patent_ids granted before the grant window
+  # therefore have no parent row — the constraint documents the join, it is not referentially
+  # complete. (patent_claims / patent_summaries are year-partitioned to the same window and do
+  # not have this gap.)
   patent_assignees:
     primaryKey: [patent_id, assignee_sequence]
     foreignKeys:
       - columns: [patent_id]
         targetTable: patent_grants
         targetColumns: [patent_id]
-        comment: Links assignee row to parent patent grant
+        comment: Links assignee row to parent patent grant (informational — see note in constraints)
       - columns: [location_id]
         targetTable: patent_locations
         targetColumns: [location_id]
@@ -1121,7 +1129,7 @@ constraints:
       - columns: [patent_id]
         targetTable: patent_grants
         targetColumns: [patent_id]
-        comment: Links inventor row to parent patent grant
+        comment: Links inventor row to parent patent grant (informational — see note in constraints)
       - columns: [location_id]
         targetTable: patent_locations
         targetColumns: [location_id]
@@ -1132,34 +1140,34 @@ constraints:
       - columns: [patent_id]
         targetTable: patent_grants
         targetColumns: [patent_id]
-        comment: Links CPC classification row to parent patent grant
+        comment: Links CPC classification row to parent patent grant (informational — see note in constraints)
   patent_abstracts:
     primaryKey: [patent_id]
     foreignKeys:
       - columns: [patent_id]
         targetTable: patent_grants
         targetColumns: [patent_id]
-        comment: Links abstract to parent patent grant
+        comment: Links abstract to parent patent grant (informational — see note in constraints)
   patent_applications:
     primaryKey: [patent_id]
     foreignKeys:
       - columns: [patent_id]
         targetTable: patent_grants
         targetColumns: [patent_id]
-        comment: Links application record to parent patent grant
+        comment: Links application record to parent patent grant (informational — see note in constraints)
   patent_figures:
     primaryKey: [patent_id]
     foreignKeys:
       - columns: [patent_id]
         targetTable: patent_grants
         targetColumns: [patent_id]
-        comment: Links figure-count record to parent patent grant
+        comment: Links figure-count record to parent patent grant (informational — see note in constraints)
   patent_locations:
     primaryKey: [location_id]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links location to geographic state
       - columns: [county_fips]
@@ -1197,7 +1205,7 @@ constraints:
         comment: Owner rows belong to a case_file application
       - columns: [own_addr_state_cd]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Owner state (2-letter code, not FIPS) to geographic state
       - columns: [own_addr_country_cd]
@@ -1217,6 +1225,10 @@ constraints:
       - columns: [serial_no]
         targetTable: trademark_case_file
         targetColumns: [serial_no]
+      - columns: [serial_no, class_id]
+        targetTable: trademark_classification
+        targetColumns: [serial_no, class_id]
+        comment: Links the international (Nice) class row to its parent US classification record
   trademark_statement:
     primaryKey: [serial_no, statement_type_cd]
     foreignKeys:

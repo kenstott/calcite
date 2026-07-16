@@ -1,0 +1,60 @@
+# US Census Bureau statistical regions and divisions (conformed geographic dimension)
+# ---------------------------------------------------------------------------
+# Static, non-vintaged. The Census Bureau groups the 50 states + DC into 4
+# regions and 9 divisions; these codes are statutory and have not changed since
+# 1984 (when "North Central" was renamed "Midwest"). Read by geo.census_regions
+# and geo.census_divisions via source.type: constants. Canonical FK targets for
+# the Census region_code / division_code carried by housing (Building Permits
+# Survey) and any other Census-coded table.
+#
+# NOTE: these are the *Census* region taxonomy only. EIA storage regions
+# (energy.*), FAA regions (transport.airports) and BLS census-region codes
+# (econ_reference.bls_geographies) are DIFFERENT code systems and do NOT key
+# here.
+regions:
+  - region_code: 1
+    region_name: Northeast
+  - region_code: 2
+    region_name: Midwest
+  - region_code: 3
+    region_name: South
+  - region_code: 4
+    region_name: West
+
+divisions:
+  - division_code: 1
+    division_name: New England
+    region_code: 1
+    region_name: Northeast
+  - division_code: 2
+    division_name: Middle Atlantic
+    region_code: 1
+    region_name: Northeast
+  - division_code: 3
+    division_name: East North Central
+    region_code: 2
+    region_name: Midwest
+  - division_code: 4
+    division_name: West North Central
+    region_code: 2
+    region_name: Midwest
+  - division_code: 5
+    division_name: South Atlantic
+    region_code: 3
+    region_name: South
+  - division_code: 6
+    division_name: East South Central
+    region_code: 3
+    region_name: South
+  - division_code: 7
+    division_name: West South Central
+    region_code: 3
+    region_name: South
+  - division_code: 8
+    division_name: Mountain
+    region_code: 4
+    region_name: West
+  - division_code: 9
+    division_name: Pacific
+    region_code: 4
+    region_name: West

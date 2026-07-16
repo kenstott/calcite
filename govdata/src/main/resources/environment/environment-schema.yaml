@@ -1709,7 +1709,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -1721,7 +1721,7 @@ constraints:
     foreignKeys:
       - columns: [state_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
@@ -1730,19 +1730,71 @@ constraints:
 
   aqs_monitors:
     primaryKey: [state_fips, county_fips, site_number, parameter_code]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
 
   tri_releases:
     primaryKey: [year, tri_facility_id, chemical]
+    foreignKeys:
+      - columns: [frs_id]
+        targetTable: epa_facilities
+        targetColumns: [registry_id]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [zip]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: Facility ZIP to the conformed ZCTA dimension (best-effort; 5-digit ZIPs only)
 
   ghg_facilities:
     primaryKey: [year, facility_id]
+    foreignKeys:
+      - columns: [naics_code]
+        targetSchema: "${REF_SCHEMA_NAME:ref}"
+        targetTable: naics
+        targetColumns: [naics_code]
+        comment: Links the facility's primary NAICS to the NAICS classification reference
+      - columns: [frs_id]
+        targetTable: epa_facilities
+        targetColumns: [registry_id]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [zip]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: Facility ZIP to the conformed ZCTA dimension (best-effort; 5-digit ZIPs only)
 
   ghg_emissions:
     primaryKey: [year, facility_id, sector_id, subsector_id, gas_id]
+    foreignKeys:
+      - columns: [facility_id, year]
+        targetTable: ghg_facilities
+        targetColumns: [facility_id, year]
 
   water_sites:
     primaryKey: [site_no]
     foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
@@ -1750,9 +1802,23 @@ constraints:
 
   streamflow:
     primaryKey: [site_no, obs_date]
+    foreignKeys:
+      - columns: [site_no]
+        targetTable: water_sites
+        targetColumns: [site_no]
 
   drinking_water:
     primaryKey: [pwsid]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: Water-system ZIP to the conformed ZCTA dimension (best-effort; 5-digit ZIPs only)
 
   epa_facilities:
     primaryKey: [registry_id]
@@ -1761,9 +1827,22 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [zip]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: Facility ZIP to the conformed ZCTA dimension (best-effort; 5-digit ZIPs only)
 
   drinking_water_violations:
     primaryKey: [pwsid, violation_id]
+    foreignKeys:
+      - columns: [pwsid]
+        targetTable: drinking_water
+        targetColumns: [pwsid]
 
   superfund_sites:
     primaryKey: [site_id]
@@ -1772,9 +1851,18 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
         targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   rcra_facilities:
     primaryKey: [handler_id]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   water_quality_samples:
     primaryKey: [monitoring_location_id, activity_id, characteristic_name]

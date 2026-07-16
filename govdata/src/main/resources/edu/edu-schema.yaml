@@ -65,7 +65,7 @@ partitionedTables:
       - name: county_code
         type: string
         nullable: true
-        comment: 4-digit county code from API; pad to 5 digits for geo.counties.county_fips join
+        comment: County FIPS, zero-padded to 5 chars by the transformer (e.g. '06037') — FK to geo.counties.county_fips
       - name: county_name
         type: string
         nullable: true
@@ -260,7 +260,7 @@ partitionedTables:
       - name: county_code
         type: string
         nullable: true
-        comment: 4-digit county code; pad to 5 digits for geo.counties.county_fips join
+        comment: County FIPS, zero-padded to 5 chars by the transformer (e.g. '06037') — FK to geo.counties.county_fips
       - name: latitude
         type: double
         nullable: true
@@ -941,7 +941,7 @@ partitionedTables:
       - name: opeid
         type: string
         nullable: true
-        comment: OPE ID 8-digit — FK to college_scorecard.ope8_id
+        comment: OPE ID 8-digit — parent key for college_scorecard.ope8_id (that child declares the FK)
       - name: year
         type: int
         nullable: false
@@ -2412,9 +2412,18 @@ constraints:
     foreignKeys:
       - columns: [fips]
         targetSchema: "geo"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links district state to geographic state record
+      - columns: [county_code]
+        targetSchema: "geo"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links district county to geo.counties; county_code is zero-padded to 5-char FIPS by the transformer
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   ccd_schools:
     primaryKey: [year, ncessch]
@@ -2425,16 +2434,21 @@ constraints:
         comment: Links school to parent LEA district record
       - columns: [fips]
         targetSchema: "geo"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links school state to geographic state record
+      - columns: [county_code]
+        targetSchema: "geo"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links school county to geo.counties; county_code is zero-padded to 5-char FIPS by the transformer
 
   naep_scores:
     primaryKey: [year, jurisdiction, subject, grade, variable_type, subgroup_name]
     foreignKeys:
       - columns: [jurisdiction]
         targetSchema: "geo"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links NAEP state to geo.states; jurisdiction=0 (national aggregate) will not match
 
@@ -2457,13 +2471,18 @@ constraints:
         targetTable: ccd_districts
         targetColumns: [leaid, year]
         comment: Links CRDC school to parent district; populated for directory sub-endpoint only
+      - columns: [fips]
+        targetSchema: "geo"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        comment: Links CRDC school state to geographic state record
 
   ipeds_institutions:
     primaryKey: [year, unitid]
     foreignKeys:
       - columns: [fips]
         targetSchema: "geo"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_fips]
         comment: Links institution state to geographic state record
       - columns: [county_fips_str]
@@ -2471,9 +2490,13 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Links institution county to geo.counties; county_fips_str is zero-padded by transformer
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   ipeds_completions:
-    primaryKey: [year, unitid, cipcode, award_level, majornum, race, sex]
+    primaryKey: [year, unitid, cipcode, award_level, majornum]
     foreignKeys:
       - columns: [unitid, year]
         targetTable: ipeds_institutions
@@ -2505,7 +2528,7 @@ constraints:
         comment: Links Scorecard institution to IPEDS directory via unitid
       - columns: [state]
         targetSchema: "geo"
-        targetTable: states
+        targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links institution state to geographic state record
 
