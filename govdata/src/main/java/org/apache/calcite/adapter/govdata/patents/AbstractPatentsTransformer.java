@@ -323,17 +323,26 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
 
   /** True if {@code url} is listed as a downloadable file in the product CATALOG (the ODP metadata
    * {@code fileDownloadURI} set), i.e. that exact snapshot actually exists. Lets a caller skip a
-   * not-yet-published snapshot without attempting a download (which would 404 and spend a request).
-   * Fails OPEN — returns true when the catalog cannot be read — so a metadata outage never silently
-   * suppresses a legitimate download. */
+   * not-yet-published snapshot without attempting a download (which would 404/429 and spend one of
+   * the file's scarce ANNUAL per-(key, URI) requests — see the cap note above).
+   *
+   * <p>Fails CLOSED — returns false when the catalog cannot be read — because attempting a download
+   * we cannot confirm is publishable is exactly what burns the annual per-URI budget on years USPTO
+   * has not posted (e.g. a future snapshot). A metadata outage is transient (24h TTL + the generous
+   * weekly metadata quota) and the fetch is retried next cycle, so skipping a run costs nothing;
+   * wrongly spending the annual file budget cannot be undone until the yearly window rolls over. */
   protected boolean isPublished(String url) {
     String[] pf = productAndFile(url);
     if (pf == null) {
+      // Not an ODP bulk-file URL — this publication gate does not apply; let the caller proceed.
       return true;
     }
     com.fasterxml.jackson.databind.JsonNode root = productMetadata(pf[0]);
     if (root == null) {
-      return true;
+      LOGGER.info("Patents: cannot confirm publication of {} (product metadata unavailable) — "
+          + "skipping this run to preserve the annual per-URI download budget; retries next cycle",
+          url);
+      return false;
     }
     return catalogHasDownloadUri(root, url);
   }
