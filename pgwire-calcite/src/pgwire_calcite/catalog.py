@@ -1698,7 +1698,9 @@ def _populate_pg_description(
         db.executemany("INSERT INTO _pg_description VALUES (?,?,?,?)", desc_rows)
 
 
-def _populate_pg_attribute(db, idx: CatalogIndex) -> None:
+def _populate_pg_attribute(db, idx: CatalogIndex, pk_notnull_cols: set = None) -> None:
+    if pk_notnull_cols is None:
+        pk_notnull_cols = set()
     db.execute("""CREATE TABLE _pg_attribute (
         attrelid INTEGER, attname VARCHAR, atttypid INTEGER, attstattarget INTEGER,
         attlen SMALLINT, attnum SMALLINT, attndims INTEGER, attcacheoff INTEGER,
@@ -1713,6 +1715,9 @@ def _populate_pg_attribute(db, idx: CatalogIndex) -> None:
         attlen, attbyval, attalign, attstorage = _PG_OID_ATTR_META.get(
             pg_oid, (-1, False, "i", "x")
         )
+        # PK columns are NOT NULL regardless of the source's (Parquet) nullability, so
+        # DataGrip includes them in the generated primary key clause.
+        attnotnull = (not is_nullable) or ((toid, col_name) in pk_notnull_cols)
         attr_rows.append(
             (
                 toid,
@@ -1727,7 +1732,7 @@ def _populate_pg_attribute(db, idx: CatalogIndex) -> None:
                 attbyval,
                 attalign,
                 attstorage,
-                not is_nullable,
+                attnotnull,
                 False,
                 False,
                 "",
@@ -2869,7 +2874,21 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     _populate_is_columns(db, idx)
     _populate_pg_namespace(db, idx)
     _populate_pg_class(db, idx, row_counts)
-    _populate_pg_attribute(db, idx)
+    # A PK column is NOT NULL by definition in PostgreSQL. DataGrip's DDL generator omits
+    # nullable columns from the generated `primary key (...)` clause, so if our catalog reports
+    # PK columns as nullable (attnotnull=false) the PK renders with no columns for EVERY table
+    # — even though the keys tree (which doesn't enforce not-null) shows them. Our source
+    # nullability comes from Parquet (which can't enforce NOT NULL), so mark the PK-participating
+    # columns NOT NULL here to match real PG. (toid, column-name) pairs.
+    pk_notnull_cols: set = set()
+    if ctx is not None:
+        for _tid, _cols in getattr(ctx, "pk_columns", {}).items():
+            _toid = idx.table_id_to_oid.get(_tid)
+            if _toid is None:
+                continue
+            for _c in _cols:
+                pk_notnull_cols.add((_toid, _c))
+    _populate_pg_attribute(db, idx, pk_notnull_cols)
     _populate_system_attributes(db)
     _populate_pg_type(db)
     _populate_empty_system_tables(db)
