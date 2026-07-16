@@ -108,7 +108,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment"
+  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -184,6 +184,7 @@ for arg in "$@"; do
       queue+=(housing:historical housing:daily)
       queue+=(transport:historical transport:daily)
       queue+=(environment:historical environment:daily)
+      queue+=(research:historical research:daily)
       queue+=(econ_reference:daily)
       ;;
 
@@ -205,6 +206,12 @@ for arg in "$@"; do
       # single windowed pass (NVD resolver spans the full pub-year range), so it isn't sliced
       # per-year here; per-year cyber would need worker-cyber.sh to accept a year (follow-up).
       queue+=(cyber_vuln:historical)
+      # research (NSF NCSES) is a single historical slot, not year-sliced: its two XLSX
+      # tables (nsf_national_rd, nsf_federal_rd_obligations) are single-fetch full-refresh
+      # (no year dim — per-year slots would re-download the same publication file each year),
+      # and nsf_herd_by_institution backfills all years within one worker via its year
+      # dimension (dataLag=2). Small tables; sequential year iteration is cheap.
+      queue+=(research:historical)
       # lands has NO year axis for its FIA/static tables — the download is the full {state}_CSV.zip
       # archive (inventory_year is a column). Slicing those per-year re-downloads all ~51 state
       # archives on every year slot, so ingest them ONCE here; the per-year lands:${_y} slots below
@@ -239,7 +246,7 @@ for arg in "$@"; do
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq
+        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq
       )
       ;;
 
@@ -252,7 +259,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild
       )
       ;;
 
@@ -265,7 +272,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume
       )
       ;;
 
@@ -291,6 +298,7 @@ for arg in "$@"; do
         housing:daily
         transport:daily
         environment:daily
+        research:daily
         econ_reference:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true

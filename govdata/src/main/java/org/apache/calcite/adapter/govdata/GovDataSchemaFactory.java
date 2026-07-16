@@ -39,6 +39,7 @@ import org.apache.calcite.adapter.govdata.cftc.CftcSchemaFactory;
 import org.apache.calcite.adapter.govdata.lands.LandsSchemaFactory;
 import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
+import org.apache.calcite.adapter.govdata.research.ResearchSchemaFactory;
 import org.apache.calcite.adapter.govdata.sec.SecSchemaFactory;
 import org.apache.calcite.adapter.govdata.weather.WeatherSchemaFactory;
 import org.apache.calcite.model.JsonTable;
@@ -513,12 +514,17 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "epa":
         return new EnvironmentSchemaFactory();
 
+      case "research":
+      case "rd":
+      case "ncses":
+        return new ResearchSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
             + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands, cftc, ag,"
-            + " housing, transport, environment");
+            + " housing, transport, environment, research");
     }
   }
 

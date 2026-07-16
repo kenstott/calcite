@@ -1,0 +1,393 @@
+# ============================================================================
+# Research & Development Schema (RESEARCH)
+# ============================================================================
+# Data source: NSF NCSES (National Center for Science and Engineering
+# Statistics) — one of the 13 Principal Federal Statistical Agencies. There is
+# NO NCSES JSON API (ncsesdata.nsf.gov/api/ returns 405); every series is a free,
+# unauthenticated BULK FILE download over HTTPS. Three annual surveys, one tall
+# Iceberg table each (one ETL table = one upstream NCSES series):
+#
+#   - nsf_national_rd              National Patterns of R&D (multi-year XLSX, Table 1)
+#   - nsf_federal_rd_obligations   Federal Funds for R&D (single-FY XLSX, Table 7)
+#   - nsf_herd_by_institution      HERD survey institution microdata (per-year ZIP CSV)
+#
+# Design notes (see govdata-schema-authoring):
+#   - No key required — nothing added to .env.prod.
+#   - NCSES restates prior-year figures on every annual release, so every table is
+#     full-refresh: overwritePartitions replaces year partitions wholesale (same
+#     pattern as econ.world_indicators).
+#   - The XLSX publications embed the NSF publication id in the URL (nsf26313,
+#     nsf24321). That id must be bumped by hand when NCSES publishes a new edition.
+#   - The two XLSX tables carry MERGED multi-row headers, so the transformers key on
+#     fixed column positions, not header text.
+#
+# Placement note: the R&D data plan proposed these tables inside `econ`; they live
+# in a dedicated `research` schema at the project owner's direction. The marquee
+# patents-per-R&D-dollar join therefore crosses research ⟂ patents on
+# (state_fips, year) rather than econ ⟂ patents.
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:research}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. research & development statistics from NSF NCSES: national R&D
+  expenditure by performing sector and funding source (National Patterns),
+  federal R&D obligations by agency and performer (Federal Funds), and Higher
+  Education R&D (HERD) expenditure by institution, field, and funding source.
+  R&D is the innovation *input*; joined to patents (the innovation *output*) on
+  (state_fips, year) it yields patents-per-R&D-dollar productivity, and to
+  geo/edu for place- and institution-level analysis.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  iceberg_common: &iceberg_common
+    catalogType: hadoop
+    targetFileSizeBytes: 134217728
+    batchPartitionColumns: [year]
+    overwritePartitions: true
+    runMaintenance: true
+    snapshotRetentionDays: 7
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728
+    compactionMinFiles: 5
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # --- NATIONAL PATTERNS OF R&D (National aggregate, multi-year) --------------
+  - name: nsf_national_rd
+    pattern: "type=nsf_national_rd/year=*/*.parquet"
+    partitions: *standard_partitions
+    # Pub-id URL is stable across a release; a Last-Modified probe skips the
+    # re-fetch on unchanged runs (fails open — correctness never depends on the gate).
+    freshness:
+      type: last_modified
+    comment: >
+      NSF NCSES National Patterns of R&D — the top-line macro view of U.S.
+      research spending, from Table 1 (1953→latest). One row per year ×
+      decomposition. The all/all total row carries total R&D in current and
+      constant (2017-chained) USD millions plus R&D-as-%-of-GDP; the per-
+      performing-sector (Business / Federal government / Higher education /
+      Other) and per-funding-source (Business / Federal / Other) rows carry
+      R&D-as-%-of-GDP only — Table 1 publishes those breakdowns as shares of
+      GDP, not dollars. Semantically joins econ.fred_indicators
+      (R&D-share-of-GDP) and is the national context for
+      nsf_herd_by_institution.
+
+    dimensions:
+      type:
+        - nsf_national_rd
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Statistics year (partition column; emitted from the Table 1 row)
+      - name: performing_sector
+        type: string
+        nullable: true
+        comment: Business / Federal government / Higher education / Other; "All performers" on source-decomposition and total rows
+      - name: funding_source
+        type: string
+        nullable: true
+        comment: Business / Federal / Other; "All sources" on performer-decomposition and total rows
+      - name: rd_type
+        type: string
+        nullable: true
+        comment: R&D type; Table 1 reports total R&D only ("Total")
+      - name: rd_expenditure_usd_million
+        type: double
+        nullable: true
+        comment: Total R&D expenditure in current USD millions; populated only on the all/all total row (Table 1 gives per-sector breakdowns as % of GDP, not dollars)
+      - name: rd_expenditure_constant_usd_million
+        type: double
+        nullable: true
+        comment: Total R&D expenditure in constant 2017 USD millions; populated only on the all/all total row
+      - name: pct_of_gdp
+        type: double
+        nullable: true
+        comment: R&D as a share of GDP (percent) — total on the all/all row, and by performing sector / funding source on the breakdown rows
+
+    source:
+      type: http
+      url: "https://ncses.nsf.gov/pubs/nsf26313/assets/data-tables/tables/nsf26313-tab001.xlsx"
+      method: GET
+      response:
+        format: TEXT   # NsfNationalRdTransformer re-downloads the XLSX and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfNationalRdTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nsf_national_rd/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nsf_national_rd
+
+  # --- FEDERAL FUNDS FOR R&D (Federal obligations by agency × performer) ------
+  - name: nsf_federal_rd_obligations
+    pattern: "type=nsf_federal_rd_obligations/year=*/*.parquet"
+    partitions: *standard_partitions
+    freshness:
+      type: last_modified
+    comment: >
+      NSF NCSES Survey of Federal Funds for R&D — federal R&D obligations by
+      funding agency × performing sector for the latest fiscal year in the
+      publication (Table 7). Values in current USD millions. rd_field is
+      "All fields" and rd_type is "Total R&D" (Table 7 does not break these out).
+      The reference fiscal year is read from the table title. Shows which federal
+      agencies fund research and where it flows; the agency name aligns with
+      fiscal.usaspending agency budgets for the R&D slice.
+
+    dimensions:
+      type:
+        - nsf_federal_rd_obligations
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (partition column; read from the Table 7 title)
+      - name: funding_agency
+        type: string
+        nullable: true
+        comment: Federal agency (or sub-agency) obligating funds; "All agencies" for the national total row
+      - name: performing_sector
+        type: string
+        nullable: true
+        comment: Intramural — Federal agencies / Intramural — FFRDCs / Businesses / Higher education / Nonprofit organizations / State and local government / Non-U.S. performers
+      - name: rd_field
+        type: string
+        nullable: true
+        comment: S&E field; "All fields" (Table 7 aggregates over field)
+      - name: rd_type
+        type: string
+        nullable: true
+        comment: R&D type; "Total R&D" (Table 7 aggregates over type)
+      - name: obligations_usd_million
+        type: double
+        nullable: true
+        comment: Federal R&D obligations in current USD millions ("*" in source rounds to 0.0)
+
+    source:
+      type: http
+      url: "https://ncses.nsf.gov/pubs/nsf24321/assets/data-tables/tables/nsf24321-tab007.xlsx"
+      method: GET
+      response:
+        format: TEXT   # NsfFederalRdTransformer re-downloads the XLSX and emits JSON rows
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfFederalRdTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nsf_federal_rd_obligations/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nsf_federal_rd_obligations
+
+  # --- HIGHER EDUCATION R&D (HERD) — institution microdata -------------------
+  - name: nsf_herd_by_institution
+    pattern: "type=nsf_herd_by_institution/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NSF NCSES Higher Education R&D (HERD) survey — R&D expenditure by academic
+      institution × S&E field × funding source × year, from the per-year
+      institution microdata (herd{year}.csv, a tall EAV file). Projects the two
+      R&D-expenditure question families: "Federal expenditures by field and
+      agency" (funding_source=Federal, federal_agency=column) and "Nonfederal
+      expenditures by field and source" (funding_source=column). Values in USD
+      thousands. Carries the IPEDS UnitID crosswalk into edu and state_fips into
+      geo; the finest-grained NCSES table and the state×year R&D-spend half of the
+      patents-per-R&D-dollar productivity join.
+
+    # HERD survey year is published ~14 months after fiscal-year end; the newest
+    # available data year lags the current publish year by ~2 → iterate the publish
+    # year, fetch the effective (data) year's ZIP via {effective_year}.
+    dimensions:
+      type:
+        - nsf_herd_by_institution
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: current
+        dataLag: 2
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Fiscal year of expenditure (partition column; from the HERD year field)
+      - name: inst_id
+        type: string
+        nullable: true
+        comment: Unique campus identifier (1:1 with the institution, survives name changes); the institution key in the PK
+      - name: ncses_inst_id
+        type: string
+        nullable: true
+        comment: NCSES parent/system id — coarser than inst_id (one id can span several campuses); for system-level rollups
+      - name: institution
+        type: string
+        nullable: true
+        comment: Institution legal name (inst_name_long); descriptive
+      - name: ipeds_unitid
+        type: int
+        nullable: true
+        comment: IPEDS UnitID — FK to edu.ipeds_institutions.unitid; null when NCSES did not match the institution
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS derived from inst_state_code (FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: County FIPS — not published in HERD microdata (always null)
+      - name: control
+        type: string
+        nullable: true
+        comment: Institutional control (Public / Private) — not resolved from microdata (null)
+      - name: rd_field
+        type: string
+        nullable: true
+        comment: S&E field (row label of the expenditure question); "All R&D fields" for totals
+      - name: funding_source
+        type: string
+        nullable: true
+        comment: Federal for the federal-agency question; otherwise the nonfederal source (Institution / State & local / Business / Nonprofit / All other)
+      - name: federal_agency
+        type: string
+        nullable: true
+        comment: Sponsoring federal agency (HHS/NIH, DOD, NSF, DOE, NASA, …); null unless funding_source = Federal
+      - name: rd_expenditure_usd_thousand
+        type: double
+        nullable: true
+        comment: R&D expenditure in USD thousands
+
+    source:
+      type: http
+      url: "https://ncses.nsf.gov/821/assets/0/files/higher_education_r_and_d_{effective_year}.zip"
+      method: GET
+      response:
+        format: json   # NsfHerdTransformer streams the ZIP'd CSV and emits records
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfHerdTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nsf_herd_by_institution/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nsf_herd_by_institution
+        incrementalKeys: [year]
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+# Metadata only (not enforced). Primary keys document the tall-row grain; foreign
+# keys document the cross-schema joins (geo, edu) for query hints / DataGrip edges.
+# nsf_national_rd / nsf_federal_rd_obligations carry only text sector/agency labels
+# (no conformed FK target), so they declare a PK but no FK.
+# ============================================================================
+
+constraints:
+
+  nsf_national_rd:
+    primaryKey: [year, performing_sector, funding_source, rd_type]
+
+  nsf_federal_rd_obligations:
+    primaryKey: [year, funding_agency, performing_sector, rd_field, rd_type]
+
+  nsf_herd_by_institution:
+    primaryKey: [year, inst_id, rd_field, funding_source, federal_agency]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        # geo.state_ref covers the 50 states + DC only; territory institutions
+        # (Guam=66, Puerto Rico=72, USVI=78) carry real FIPS that do not resolve here
+        # (best-effort FK, same limitation every state_ref FK shares).
+        comment: 2-digit state FIPS (best-effort — territories 66/72/78 are unmatched by the 50+DC state_ref)
+      - columns: [ipeds_unitid]
+        targetSchema: "${EDU_SCHEMA_NAME:edu}"
+        targetTable: ipeds_institutions
+        targetColumns: [unitid]
+        comment: IPEDS UnitID; null (~5-6% of rows) when NCSES did not match the institution — best-effort
+    # federal_agency here and nsf_federal_rd_obligations.funding_agency both name federal
+    # agencies but have no conformed reference dimension to target yet (a future
+    # ref.federal_agencies dim would let both declare an FK).
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: research_herd_rd_by_state_year
+    comment: >
+      HERD R&D expenditure aggregated to state × year — the R&D-spend half of the
+      patents-per-R&D-dollar productivity ratio. Join to patents.patent_assignees
+      (grant counts by state_fips × grant_year) to compute innovation input ÷ output.
+    sql: >
+      SELECT
+        h.year,
+        h.state_fips,
+        SUM(h.rd_expenditure_usd_thousand)                                        AS rd_expenditure_usd_thousand,
+        SUM(CASE WHEN h.funding_source = 'Federal' THEN h.rd_expenditure_usd_thousand ELSE 0 END) AS federal_rd_usd_thousand,
+        COUNT(DISTINCT h.institution)                                             AS institution_count
+      FROM nsf_herd_by_institution h
+      WHERE h.state_fips IS NOT NULL
+      GROUP BY h.year, h.state_fips

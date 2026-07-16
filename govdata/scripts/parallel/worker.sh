@@ -251,7 +251,7 @@ case "$SCHEMA" in
   # cadence (energy's weekly/monthly/annual mix) lives in the schema YAML
   # dimensions (month cache-buster), not in worker flags.
 
-  econ|census|crime|weather|energy)
+  econ|census|crime|weather|energy|research)
     case "$MODE" in
       historical)
         export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
