@@ -115,6 +115,26 @@ dimension_values:
              "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
              "AS","GU","MP","PR","VI"]
 
+  # CFPB HMDA Data Browser aggregations exist from data year 2018 (the post-2018
+  # HMDA-reform schema) through the prior year; the current year's file is not
+  # published until ~June following, so dataLag 1 targets the newest complete
+  # year and never 404-poisons.
+  hmda_year_range: &hmda_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    minYear: 2018
+    end: current
+    dataLag: 1
+
+  # HMDA covers the 50 states + DC + Puerto Rico (the API's two-letter state
+  # codes). Other territories are excluded from HMDA reporting.
+  hmda_states: &hmda_states
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR"]
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -620,6 +640,264 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # CFPB HMDA — Data Browser aggregations (delta year × state list, JSON)
+  # ---------------------------------------------------------------------------
+  - name: hmda_loans
+    pattern: "type=hmda_loans/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      Home Mortgage Disclosure Act loan aggregates from the CFPB HMDA Data
+      Browser aggregations API. One row per (year, state, action_taken,
+      loan_purpose) with the loan count and total loan amount. Not loan-level
+      microdata: the aggregations endpoint accepts at most two breakdown
+      dimensions per request, so this table breaks HMDA out by loan action
+      (originated / approved-not-accepted / denied / withdrawn / …) and loan
+      purpose (home purchase / refinance / cash-out / …) — the mortgage-market
+      funnel. Applicant race / ethnicity / sex breakdowns are available from the
+      same endpoint as a documented follow-up. Joins to geo.state_ref via
+      state_abbr and to sec homebuilder / mortgage-lender filings by state.
+      Source: ffiec.cfpb.gov/v2/data-browser-api/view/aggregations.
+
+    dimensions:
+      type:
+        - hmda_loans
+      year: *hmda_year_range
+      state: *hmda_states
+
+    columns:
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: action_taken
+        type: string
+        nullable: false
+        comment: >
+          HMDA action code (1 originated, 2 approved-not-accepted, 3 denied,
+          4 withdrawn, 5 closed-incomplete, 6 purchased, 7 preapproval-denied,
+          8 preapproval-approved-not-accepted)
+      - name: action_label
+        type: string
+        nullable: true
+        comment: Human-readable action_taken label
+      - name: loan_purpose
+        type: string
+        nullable: false
+        comment: >
+          HMDA loan-purpose code (1 home purchase, 2 home improvement,
+          31 refinancing, 32 cash-out refinancing, 4 other, 5 not applicable)
+      - name: loan_purpose_label
+        type: string
+        nullable: true
+        comment: Human-readable loan_purpose label
+      - name: loan_count
+        type: long
+        nullable: true
+        comment: Number of loan records in this (action, purpose) cell
+      - name: loan_amount_total
+        type: double
+        nullable: true
+        comment: Sum of loan amounts (USD) across the cell
+
+    source:
+      type: http
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/aggregations?years={year}&states={state}&actions_taken=1,2,3,4,5,6,7,8&loan_purposes=1,2,31,32,4,5"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HmdaLoansTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hmda_loans/year=*/state=*/"
+      partition:
+        columns: [type, year, state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hmda_loans
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HUD OPPORTUNITY ZONES — ArcGIS FeatureServer (static snapshot, paginated)
+  # ---------------------------------------------------------------------------
+  - name: opportunity_zones
+    pattern: "type=opportunity_zones/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Qualified Opportunity Zones (OZ 1.0) — the ~8,764 census tracts designated
+      under IRC §§1400Z-1/-2 by the 2018 nomination round, in effect through
+      2028. One row per designated tract. Static table: the whole layer is
+      re-paginated and the partition overwritten each run; history lives in
+      Iceberg snapshots. census_tract is the 11-digit tract GEOID; joins to
+      geo.counties via county_fips and to geo.state_ref via state_fips /
+      state_abbr. Source: HUD Open Data ArcGIS Opportunity_Zones FeatureServer
+      (services.arcgis.com/VTyQ9soqVukalItT).
+
+    dimensions:
+      type:
+        - opportunity_zones
+
+    columns:
+      - name: census_tract
+        type: string
+        nullable: false
+        comment: 11-digit census tract FIPS/GEOID (2010 vintage; PK)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: tract_code
+        type: string
+        nullable: true
+        comment: 6-digit tract code within the county
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name (as published by HUD)
+      - name: is_rural
+        type: boolean
+        nullable: true
+        comment: True when the tract carries HUD's rural designation
+
+    source:
+      type: http
+      url: "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Opportunity_Zones/FeatureServer/13/query?where=1%3D1&outFields=GEOID10,STATE,COUNTY,TRACT,STUSAB,STATE_NAME,Rural&returnGeometry=false&f=json&resultRecordCount=2000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HudOpportunityZonesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=opportunity_zones/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: opportunity_zones
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — ArcGIS FeatureServer (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: hud_subsidized_housing
+    pattern: "type=hud_subsidized_housing/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      HUD "A Picture of Subsidized Households" — the all-HUD-programs summary of
+      assisted-housing units and residents, by census tract (December 2020
+      snapshot). One row per tract (Summary of All HUD Programs). Static table:
+      the whole layer is re-paginated and the partition overwritten each run.
+      census_tract is the 11-digit tract GEOID; joins to geo.counties via
+      county_fips and to geo.state_ref via state_abbr. Source: HUD Open Data
+      ArcGIS Snapshot_HUD_Picture_Subsidized_Households FeatureServer.
+
+    dimensions:
+      type:
+        - hud_subsidized_housing
+
+    columns:
+      - name: census_tract
+        type: string
+        nullable: false
+        comment: 11-digit census tract FIPS/GEOID (2010 vintage; PK)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: tract_name
+        type: string
+        nullable: true
+        comment: Census tract label (e.g. 'Census Tract 109.05')
+      - name: program
+        type: string
+        nullable: true
+        comment: HUD program grouping ('Summary of All HUD Programs')
+      - name: total_units
+        type: integer
+        nullable: true
+        comment: Total subsidized units in the tract
+      - name: people_total
+        type: integer
+        nullable: true
+        comment: Total assisted residents (null-suppressed for small cells)
+      - name: people_per_unit
+        type: double
+        nullable: true
+        comment: Average people per assisted unit
+      - name: avg_hh_income
+        type: integer
+        nullable: true
+        comment: Average annual household income of assisted residents (USD)
+      - name: pct_disabled
+        type: double
+        nullable: true
+        comment: Percent of assisted households reporting a disability
+
+    source:
+      type: http
+      url: "https://services.arcgis.com/VTyQ9soqVukalItT/arcgis/rest/services/Snapshot_HUD_Picture_Subsidized_Households/FeatureServer/0/query?where=1%3D1&outFields=code,CNTY_FIPS,NAME,State_ABB,program_label,total_units,people_total,people_per_unit,hh_income,pct_disabled_all&returnGeometry=false&f=json&resultRecordCount=2000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.housing.HudSubsidizedHouseholdsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hud_subsidized_housing/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hud_subsidized_housing
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -699,6 +977,53 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
 
+  # hmda_loans is aggregated by (year, state, action_taken, loan_purpose); its
+  # only geo FK is state-grain (state_abbr), matching the API's state fan-out.
+  hmda_loans:
+    primaryKey: [year, state_abbr, action_taken, loan_purpose]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  # opportunity_zones and hud_subsidized_housing are tract-grain. census_tract
+  # is NOT declared an FK to geo.census_tracts: that table is year-partitioned
+  # over multiple TIGER vintages (heterogeneous key domain), so — as with
+  # geo.zctas / geo.states — the stable FK targets are county_fips -> geo.counties
+  # and state_fips / state_abbr -> geo.state_ref.
+  opportunity_zones:
+    primaryKey: [census_tract]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  hud_subsidized_housing:
+    primaryKey: [census_tract]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -761,3 +1086,33 @@ views:
         ON f.state_fips = i.state_fips AND f.year = i.year
       GROUP BY f.year, f.state_fips, i.median_income,
                i.il50_4person, i.il80_4person
+
+  - name: housing_mortgage_originations
+    comment: >
+      Originated mortgages (HMDA action_taken = 1) by state, year, and loan
+      purpose — the housing-market volume cut. Joins to geo.state_ref via
+      state_abbr and to sec mortgage-lender / homebuilder filings by state.
+    sql: >
+      SELECT
+        h.year,
+        h.state_abbr,
+        h.loan_purpose,
+        h.loan_purpose_label,
+        h.loan_count            AS originated_count,
+        h.loan_amount_total     AS originated_amount
+      FROM hmda_loans h
+      WHERE h.action_taken = '1'
+
+  - name: housing_opportunity_zone_counts
+    comment: >
+      Count of designated Opportunity Zone tracts per state, split by rural vs
+      non-rural. Joins to geo.state_ref via state_abbr.
+    sql: >
+      SELECT
+        o.state_abbr,
+        o.state_name,
+        COUNT(*)                                            AS oz_tract_count,
+        SUM(CASE WHEN o.is_rural THEN 1 ELSE 0 END)         AS rural_oz_tracts,
+        SUM(CASE WHEN o.is_rural THEN 0 ELSE 1 END)         AS nonrural_oz_tracts
+      FROM opportunity_zones o
+      GROUP BY o.state_abbr, o.state_name

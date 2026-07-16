@@ -28,6 +28,28 @@ Census Building Permits: `https://www.census.gov/construction/bps/`
 
 ---
 
+## Implementation Status (2026-07-16)
+
+All planned datasets are now authored and compile. Two deviations from the
+original loan-level / county-summary design were made for tractability, each
+using a real public API instead of bulk ZIP microdata:
+
+| Table | Built as | Deviation from plan |
+|---|---|---|
+| `house_price_index` | FHFA HPI master (extra, beyond plan) | added |
+| `building_permits` | Census BPS **county-annual** | plan said monthly |
+| `fair_market_rents` | HUD FMR (HUD_TOKEN) | as planned |
+| `income_limits`, `income_limits_county` | HUD IL (HUD_TOKEN, extra) | added |
+| `hmda_loans` | CFPB **Data Browser aggregations**, per `(year, state)`, broken out by `action_taken` × `loan_purpose` | not loan-level; the aggregations API allows only 2 breakdown dims, so race/ethnicity/sex are a documented follow-up |
+| `hud_subsidized_housing` | HUD Open Data **ArcGIS** "Picture of Subsidized Households" — Dec-2020 all-programs **tract** snapshot (63,584 tracts) | tract-grain single-program summary, not county multi-program (the county/multi-program cut is ZIP-only bulk) |
+| `opportunity_zones` | HUD Open Data **ArcGIS** `Opportunity_Zones` FeatureServer (~8,764 OZ 1.0 tracts) | as planned (static) |
+
+`hmda_loans`, `opportunity_zones`, and `hud_subsidized_housing` need **no
+secret** (public CFPB / ArcGIS endpoints); only the three HUD USER tables are
+`HUD_TOKEN`-gated. Live ingest / DQ / verify still pending.
+
+---
+
 ## Proposed Tables
 
 ### `hmda_loans`
