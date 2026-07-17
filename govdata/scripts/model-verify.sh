@@ -35,8 +35,16 @@
 #   --source LIST   comma/space-separated dataSource list (default: all supported)
 #   --limit N       rows to fetch per table probe (default 1)
 #   --no-probes     skip the geo/embedding feature probes
+#   --no-dup        skip the primary-key duplicate-row check
+#   --dup-threshold N  min duplicate keyed-row count to flag/fail (default 1)
 #
-# Exit code: 0 if every schema passed; 1 if any schema reported ERROR/probe failure.
+# Duplicate-row check: for every base table with a declared primaryKey, the runner compares the
+# count of fully-keyed rows (all PK columns non-null) against the count of DISTINCT PK tuples. A
+# non-unique declared PK (>= threshold duplicate rows) is reported in the DUP column and fails the
+# schema — it is the signature of the Iceberg file-duplication bug. Views / tables with no PK show
+# DUP=- and are not checked.
+#
+# Exit code: 0 if every schema passed; 1 if any schema reported ERROR / probe failure / duplicate PK.
 #
 set -e
 
@@ -50,14 +58,17 @@ ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregiste
 SOURCE=""
 LIMIT="1"
 PROBES_ENABLED=true
+DUP_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --source)     SOURCE="$2"; shift 2 ;;
-        --limit)      LIMIT="$2"; shift 2 ;;
-        --no-probes)  PROBES_ENABLED=false; shift ;;
-        -h|--help)    sed -n '17,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *)            echo "Unknown argument: $1" >&2; exit 2 ;;
+        --source)         SOURCE="$2"; shift 2 ;;
+        --limit)          LIMIT="$2"; shift 2 ;;
+        --no-probes)      PROBES_ENABLED=false; shift ;;
+        --no-dup)         DUP_ARGS+=(--no-dup); shift ;;
+        --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
+        -h|--help)        sed -n '17,48p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *)                echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 
@@ -123,7 +134,7 @@ failed_list=""
 for s in $SELECTED; do
     echo "========================= $s ========================="
     probe="$(write_probes "$s")"
-    args=(--source "$s" --limit "$LIMIT")
+    args=(--source "$s" --limit "$LIMIT" "${DUP_ARGS[@]}")
     [[ -n "$probe" ]] && args+=(--probes "$probe")
     if java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}" 2>/dev/null; then
         passed=$((passed + 1))

@@ -84,6 +84,11 @@ public final class GovDataModelVerificationRunner {
     SCHEMA_YAML.put("lands", "/lands/lands-schema.yaml");
     SCHEMA_YAML.put("cftc", "/cftc/cftc-schema.yaml");
     SCHEMA_YAML.put("ag", "/ag/ag-schema.yaml");
+    SCHEMA_YAML.put("disasters", "/disasters/disasters-schema.yaml");
+    SCHEMA_YAML.put("housing", "/housing/housing-schema.yaml");
+    SCHEMA_YAML.put("transport", "/transport/transport-schema.yaml");
+    SCHEMA_YAML.put("environment", "/environment/environment-schema.yaml");
+    SCHEMA_YAML.put("research", "/research/research-schema.yaml");
     KNOWN_SCHEMAS.addAll(SCHEMA_YAML.keySet());
   }
 
@@ -100,6 +105,12 @@ public final class GovDataModelVerificationRunner {
     String expected;
     String probes;
     Set<String> schemaFilter = new LinkedHashSet<String>();
+    // Duplicate-row check: for each base table with a declared primaryKey, compare the count of
+    // fully-keyed rows (all PK columns non-null) against the count of DISTINCT PK tuples. A
+    // declared PK that is not unique is a defect (the signature of the Iceberg file-duplication
+    // bug), so any table with >= dupThreshold duplicate keyed rows fails the run.
+    boolean dupCheck = true;
+    int dupThreshold = 1;   // minimum duplicate keyed-row count to flag/fail (>=1 → any duplication)
   }
 
   /** A table/view defined in a schema YAML, with its category and (for views) dependencies. */
@@ -144,6 +155,12 @@ public final class GovDataModelVerificationRunner {
     String mat;    // OK, EMPTY, ERROR  (can a full row be materialized)
     int cols;
     String error;  // first error encountered (reach takes precedence)
+    // Duplicate-row check (only for base tables with a declared primaryKey and count > 0):
+    boolean pkChecked;   // the PK duplicate check actually ran for this table
+    long keyedRows = -1; // rows where every PK column is non-null
+    long distinctKeys = -1; // COUNT(DISTINCT pk-tuple) over those keyed rows
+    long dupRows = -1;   // keyedRows - distinctKeys (>0 ⇒ the declared PK is not unique)
+    String dupErr;       // dup-check SQL failed (reported as n/a, not a hard failure)
   }
 
   public static void main(String[] args) throws Exception {
@@ -262,6 +279,27 @@ public final class GovDataModelVerificationRunner {
         }
       }
 
+      // Tables whose declared primaryKey is not unique (>= dupThreshold duplicate keyed rows).
+      List<TableResult> dupped = new ArrayList<TableResult>();
+      for (int i = 0; i < results.size(); i++) {
+        TableResult r = results.get(i);
+        if (r.dupRows >= cfg.dupThreshold && r.dupRows > 0) {
+          dupped.add(r);
+        }
+      }
+      if (!dupped.isEmpty()) {
+        System.out.println();
+        System.out.println("-- DUPLICATE PRIMARY KEYS (" + dupped.size()
+            + ") — declared PK not unique --");
+        System.out.printf("  %-15s %-34s %12s %12s %8s%n",
+            "SCHEMA", "TABLE", "KEYED_ROWS", "DISTINCT", "FACTOR");
+        for (int i = 0; i < dupped.size(); i++) {
+          TableResult r = dupped.get(i);
+          System.out.printf("  %-15s %-34s %12d %12d %8s%n",
+              r.schema, trunc(r.table, 34), r.keyedRows, r.distinctKeys, dupRatio(r));
+        }
+      }
+
       System.out.println();
       System.out.println("================ SUMMARY ================");
       System.out.println("  base tables          : " + cBase.line());
@@ -273,14 +311,16 @@ public final class GovDataModelVerificationRunner {
         System.out.println("  unclassified         : " + cOther.line());
       }
       System.out.println("  feature-probe failures: " + probeFailures);
+      System.out.println("  duplicate-PK tables  : " + dupped.size()
+          + (cfg.dupCheck ? "" : "   (dup-check disabled)"));
       System.out.println("  elapsed ms           : " + (System.currentTimeMillis() - t0));
 
       // Inter-schema views missing because their dependency was not mounted are expected, not a
-      // failure. Only errors, genuinely-missing base tables / intra-schema views, and probe
-      // failures fail the run.
+      // failure. Only errors, genuinely-missing base tables / intra-schema views, probe failures,
+      // and non-unique declared primary keys fail the run.
       int errs = cBase.error + cIntra.error + cInter.error + cOther.error;
       int missingHard = cBase.missing + cIntra.missing;
-      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0) ? 1 : 0;
+      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()) ? 1 : 0;
       System.exit(exit);
     } finally {
       try {
@@ -319,12 +359,23 @@ public final class GovDataModelVerificationRunner {
     }
     tabs.close();
 
+    // Primary-key columns per base table (schema.table → [pk cols]) from the bundled YAML,
+    // used by the duplicate-row check below. Loaded once for the schema(s) being probed.
+    Set<String> pkSchemas = new LinkedHashSet<String>();
+    if (cfg.primary != null) {
+      pkSchemas.add(cfg.primary);
+    } else {
+      pkSchemas.addAll(KNOWN_SCHEMAS);
+    }
+    Map<String, List<String>> pkByTable =
+        cfg.dupCheck ? loadPrimaryKeys(pkSchemas) : new LinkedHashMap<String, List<String>>();
+
     System.out.println("Enumerated " + coords.size() + " exposed tables. Probing (LIMIT "
-        + cfg.limit + ") ...");
+        + cfg.limit + ")" + (cfg.dupCheck ? ", PK dup-check on" : "") + " ...");
     // Live per-table progress: print each result as it completes (not just batched in the
     // final report) so slow R2 sweeps show progress and a timeout still yields partial data.
-    System.out.printf("%-15s %-32s %-6s %10s %-6s  %s%n",
-        "SCHEMA", "TABLE", "REACH", "ROWS", "MAT", "DETAIL");
+    System.out.printf("%-15s %-32s %-6s %10s %-6s %-11s %s%n",
+        "SCHEMA", "TABLE", "REACH", "ROWS", "MAT", "DUP", "DETAIL");
     for (int i = 0; i < coords.size(); i++) {
       String schema = coords.get(i)[0];
       String table = coords.get(i)[1];
@@ -386,12 +437,93 @@ public final class GovDataModelVerificationRunner {
       } else {
         r.mat = "-";
       }
-      System.out.printf("%-15s %-32s %-6s %10d %-6s  %s%n",
-          r.schema, trunc(r.table, 32), r.reach, r.count, r.mat,
-          r.error == null ? "" : trunc(r.error, 80));
+
+      // Phase 3: duplicate-key check. Only for base tables that declare a primaryKey and hold
+      // rows. Compare fully-keyed rows (all PK cols non-null — parquet keys can be null and a
+      // null key is not a real duplicate) against DISTINCT PK tuples; a positive delta means the
+      // declared PK is not unique. A dup-check SQL failure (e.g. an un-DISTINCT-able column type)
+      // is recorded as n/a and never fails the run — only genuine duplication does.
+      List<String> pk = pkByTable.get((schema + "." + table).toLowerCase());
+      if (cfg.dupCheck && "OK".equals(r.reach) && r.count > 0 && pk != null && !pk.isEmpty()) {
+        checkDuplicateKeys(conn, r, pk);
+      }
+
+      String detail = r.error != null ? trunc(r.error, 80)
+          : (r.dupRows > 0 ? "DUPLICATE PK: " + r.dupRows + " dup rows over " + r.keyedRows
+              + " keyed (" + dupRatio(r) + ")"
+              : (r.dupErr != null ? "dup-check n/a: " + trunc(r.dupErr, 60) : ""));
+      System.out.printf("%-15s %-32s %-6s %10d %-6s %-11s %s%n",
+          r.schema, trunc(r.table, 32), r.reach, r.count, r.mat, dupCell(r), detail);
       results.add(r);
     }
     return results;
+  }
+
+  /**
+   * Runs the PK duplicate check for one table: counts rows whose PK columns are all non-null,
+   * and the number of DISTINCT PK tuples among them. Populates keyedRows / distinctKeys / dupRows
+   * on the result, or dupErr if the SQL fails.
+   */
+  private static void checkDuplicateKeys(Connection conn, TableResult r, List<String> pk) {
+    StringBuilder cols = new StringBuilder();
+    StringBuilder notNull = new StringBuilder();
+    for (int j = 0; j < pk.size(); j++) {
+      if (j > 0) {
+        cols.append(", ");
+        notNull.append(" AND ");
+      }
+      String qc = "\"" + pk.get(j) + "\"";
+      cols.append(qc);
+      notNull.append(qc).append(" IS NOT NULL");
+    }
+    String from = "\"" + r.schema + "\".\"" + r.table + "\" WHERE " + notNull;
+    // Two plain aggregates (not a scalar subquery) so each pushes cleanly to DuckDB and can't hit
+    // a Calcite scalar-subquery planning edge case across the full table sweep.
+    try {
+      long keyed = scalarCount(conn, "SELECT COUNT(*) FROM " + from);
+      long distinct = scalarCount(conn,
+          "SELECT COUNT(*) FROM (SELECT DISTINCT " + cols + " FROM " + from + ")");
+      r.keyedRows = keyed;
+      r.distinctKeys = distinct;
+      r.dupRows = keyed - distinct;
+      r.pkChecked = true;
+    } catch (Exception e) {
+      r.dupErr = e.getMessage();
+      if (System.getenv("VERIFY_STACK") != null) {
+        System.err.println("DUP STACK for " + r.schema + "." + r.table + ":");
+        e.printStackTrace();
+      }
+    }
+  }
+
+  /** Runs a single-column COUNT query and returns the long value (0 if no row). */
+  private static long scalarCount(Connection conn, String sql) throws Exception {
+    Statement st = null;
+    ResultSet rs = null;
+    try {
+      st = conn.createStatement();
+      rs = st.executeQuery(sql);
+      return rs.next() ? rs.getLong(1) : 0L;
+    } finally {
+      closeQuietly(rs);
+      closeQuietly(st);
+    }
+  }
+
+  /** Duplication factor keyedRows/distinctKeys as a "N.NNx" string (empty if not computable). */
+  private static String dupRatio(TableResult r) {
+    if (r.distinctKeys <= 0) {
+      return "";
+    }
+    return String.format("%.2fx", (double) r.keyedRows / (double) r.distinctKeys);
+  }
+
+  /** Compact DUP cell for the live table: "-" not checked, "ok", "n/a" (check errored), "DUP N.NNx". */
+  private static String dupCell(TableResult r) {
+    if (!r.pkChecked) {
+      return r.dupErr != null ? "n/a" : "-";
+    }
+    return r.dupRows > 0 ? "DUP " + dupRatio(r) : "ok";
   }
 
   private static List<String> crossCheckExpected(Config cfg, List<TableResult> results)
@@ -506,6 +638,10 @@ public final class GovDataModelVerificationRunner {
         cfg.source = args[++i];
       } else if ("--limit".equals(a)) {
         cfg.limit = Integer.parseInt(args[++i]);
+      } else if ("--no-dup".equals(a)) {
+        cfg.dupCheck = false;
+      } else if ("--dup-threshold".equals(a)) {
+        cfg.dupThreshold = Integer.parseInt(args[++i]);
       } else if ("--expected".equals(a)) {
         cfg.expected = args[++i];
       } else if ("--probes".equals(a)) {
@@ -632,6 +768,65 @@ public final class GovDataModelVerificationRunner {
   }
 
   /**
+   * Loads the declared primaryKey column list for every base table in the given schemas from the
+   * bundled YAML's top-level {@code constraints:} map. Keyed by "schema.table" (lower-case). Tables
+   * without a primaryKey (and views, which are not in constraints) are simply absent, so the
+   * duplicate-row check skips them.
+   */
+  private static Map<String, List<String>> loadPrimaryKeys(Set<String> schemas) {
+    Map<String, List<String>> pks = new LinkedHashMap<String, List<String>>();
+    for (String schema : schemas) {
+      String resource = SCHEMA_YAML.get(schema);
+      if (resource == null) {
+        continue;
+      }
+      InputStream in = GovDataModelVerificationRunner.class.getResourceAsStream(resource);
+      if (in == null) {
+        continue;
+      }
+      try {
+        org.yaml.snakeyaml.LoaderOptions loaderOptions = new org.yaml.snakeyaml.LoaderOptions();
+        loaderOptions.setMaxAliasesForCollections(500);
+        Object root = new org.yaml.snakeyaml.Yaml(loaderOptions).load(in);
+        if (!(root instanceof Map)) {
+          continue;
+        }
+        Object cons = ((Map<?, ?>) root).get("constraints");
+        if (!(cons instanceof Map)) {
+          continue;
+        }
+        for (Map.Entry<?, ?> e : ((Map<?, ?>) cons).entrySet()) {
+          if (e.getKey() == null || !(e.getValue() instanceof Map)) {
+            continue;
+          }
+          Object pk = ((Map<?, ?>) e.getValue()).get("primaryKey");
+          if (!(pk instanceof List)) {
+            continue;
+          }
+          List<String> cols = new ArrayList<String>();
+          for (Object c : (List<?>) pk) {
+            if (c != null) {
+              cols.add(String.valueOf(c));
+            }
+          }
+          if (!cols.isEmpty()) {
+            pks.put((schema + "." + e.getKey()).toLowerCase(), cols);
+          }
+        }
+      } catch (Exception e) {
+        System.out.println("  (failed to parse constraints for '" + schema + "': " + e.getMessage() + ")");
+      } finally {
+        try {
+          in.close();
+        } catch (Exception ignored) {
+          // ignore
+        }
+      }
+    }
+    return pks;
+  }
+
+  /**
    * Other schemas referenced by a view's SQL via a qualified reference (e.g. {@code geo.counties}
    * or {@code "geo"."counties"}). Matches a known schema name on a word boundary immediately
    * followed by an optional quote and a dot, which avoids matching unrelated identifiers.
@@ -697,6 +892,8 @@ public final class GovDataModelVerificationRunner {
       }
       if (r != null && r.error != null && "ERROR".equals(status)) {
         detail = trunc(r.error, 60);
+      } else if (r != null && r.dupRows > 0) {
+        detail = "DUPLICATE PK: " + r.dupRows + " dup (" + dupRatio(r) + ")";
       }
       long rows = r != null ? r.count : -1;
       System.out.printf("  %-15s %-34s %-8s %10d  %s%n",
@@ -711,6 +908,8 @@ public final class GovDataModelVerificationRunner {
         + "jdbc:govdata:source=... (model built internally; dir from GOVDATA_PARQUET_DIR)");
     System.err.println("  --model     Calcite model JSON (alternative to --source)");
     System.err.println("  --limit     rows to fetch per table probe (default 1)");
+    System.err.println("  --no-dup    skip the primary-key duplicate-row check");
+    System.err.println("  --dup-threshold N  min duplicate keyed-row count to flag/fail (default 1)");
     System.err.println("  --expected  file of 'schema.table' lines; reports defined-but-not-exposed");
     System.err.println("  --probes    file of 'label|||SQL' lines for feature probes (geo, semantic)");
     System.err.println("  --schemas   comma-separated schema allow-list (default: all)");
