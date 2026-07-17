@@ -48,6 +48,14 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   private final String schemaName; // Keep local copy since parent field is package-private
   private final String catalogPath; // DuckDB file path — used as key for pending view flush
 
+  /** Iceberg views already checked for staleness this connection (checked at most once each). */
+  private final Set<String> refreshedIcebergViews =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+  /** Lightweight type factory used only to read a FileSchema table's expected field count. */
+  private static final RelDataTypeFactory HEAL_TYPE_FACTORY =
+      new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
+          org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
+
   public DuckDBJdbcSchema(DataSource dataSource, SqlDialect dialect,
                          JdbcConvention convention, String catalog, String schema,
                          String directoryPath, boolean recursive, Connection persistentConnection,
@@ -175,6 +183,78 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     }
   }
 
+  /**
+   * Heals a stale persistent-catalog view before Calcite reads its schema.
+   *
+   * <p>Base-table iceberg views are created with {@code CREATE VIEW IF NOT EXISTS} for fast
+   * start (no eager S3 reads). A view left in a persistent catalog by an earlier session can
+   * therefore outlive a schema change to its table (e.g. a partition column dropped from the
+   * parquet); Calcite would then bake that stale column list into its plan and every query
+   * fails with "Contents of view were altered". On first access per connection, compare the
+   * catalog view's column count against the FileSchema's current row type and, on a mismatch,
+   * {@code CREATE OR REPLACE} the view so Calcite introspects the fresh schema. Each view is
+   * checked at most once per connection; only mismatched views are recreated (the healthy path
+   * runs one catalog-local count query — no S3 read).
+   */
+  private void refreshStaleIcebergViewIfNeeded(String name) {
+    if (fileSchema == null || persistentConnection == null || name == null) {
+      return;
+    }
+    if (!refreshedIcebergViews.add(name)) {
+      return; // already checked on this connection
+    }
+    try {
+      ConversionMetadata meta = fileSchema.getConversionMetadata();
+      if (meta == null) {
+        return;
+      }
+      ConversionMetadata.ConversionRecord record = meta.getAllConversions().get(name);
+      if (record == null) {
+        record = meta.getAllConversions().get(name.toLowerCase());
+      }
+      if (record == null || !"ICEBERG_PARQUET".equals(record.conversionType)
+          || record.sourceFile == null || record.sourceFile.endsWith(".parquet")) {
+        return;
+      }
+      Table fsTable = fileSchema.tables().get(name);
+      if (fsTable == null) {
+        fsTable = fileSchema.tables().get(name.toLowerCase());
+      }
+      if (fsTable == null) {
+        return;
+      }
+      // Expected columns per the current FileSchema (already loaded — no S3 read).
+      int expected = fsTable.getRowType(HEAL_TYPE_FACTORY).getFieldCount();
+      // Actual columns the persistent DuckDB catalog view exposes (catalog-local — no S3 read).
+      int actual = catalogViewColumnCount(name);
+      if (actual > 0 && actual != expected) {
+        LOGGER.info("Self-heal: catalog view \"{}\".\"{}\" exposes {} columns but the current "
+            + "schema has {} — recreating from iceberg_scan", schemaName, name, actual, expected);
+        recreateIcebergView(name, record.sourceFile);
+      }
+    } catch (Exception e) {
+      LOGGER.debug("Self-heal staleness check skipped for '{}': {}", name, e.getMessage());
+    }
+  }
+
+  /** Column count of a view in the DuckDB catalog; 0 when the view does not exist. */
+  private int catalogViewColumnCount(String name) {
+    String sql = "SELECT COUNT(*) FROM information_schema.columns "
+        + "WHERE table_schema = ? AND table_name = ?";
+    try (java.sql.PreparedStatement ps = persistentConnection.prepareStatement(sql)) {
+      ps.setString(1, schemaName);
+      ps.setString(2, name);
+      try (java.sql.ResultSet rs = ps.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt(1);
+        }
+      }
+    } catch (java.sql.SQLException e) {
+      LOGGER.debug("Could not read catalog column count for '{}': {}", name, e.getMessage());
+    }
+    return 0;
+  }
+
 
   /**
    * Returns the internal FileSchema that manages file discovery and conversion.
@@ -231,6 +311,9 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     if (catalogPath != null && DuckDBPendingViews.hasPending(catalogPath)) {
       DuckDBPendingViews.flush(catalogPath, persistentConnection);
     }
+    // Heal a stale persistent-catalog view before Calcite introspects its columns, so a
+    // schema change made by an earlier session doesn't bake a wrong row type into the plan.
+    refreshStaleIcebergViewIfNeeded(name);
     Table table = super.getTable(name);
     if (table != null) {
       LOGGER.info("Found DuckDB table '{}' - all operations will be pushed to DuckDB", name);
