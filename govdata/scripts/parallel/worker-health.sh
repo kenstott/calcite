@@ -93,10 +93,13 @@ ENDJSON
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
-# Run all 15 health tables, grouped so a single model failure isolates to its group.
+# Run all 16 health tables, grouped so a single model failure isolates to its group.
 run_all_health_tables() {
   run_health_model "health-fda" \
     '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
+
+  run_health_model "health-who" \
+    '"who_gho_indicators"'
 
   run_health_model "health-trials" \
     '"clinical_trials", "clinical_trial_conditions", "clinical_trial_interventions"'
