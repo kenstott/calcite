@@ -1965,7 +1965,10 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.ntsb.gov/avdata/avall.zip"
+      # NTSB migrated off the direct /avdata/avall.zip path (now 404) to a
+      # FileDirectory download endpoint; fileID is the URL-encoded Windows path
+      # C:\avdata\avall.zip. Verified 200 (application/octet-stream, ~95MB).
+      url: "https://data.ntsb.gov/avdata/FileDirectory/DownloadFile?fileID=C%3A%5Cavdata%5Cavall.zip"
       method: GET
       # StreamingResponseTransformer opens the URL itself (95MB zip -> 553MB MDB);
       # the framework does not pre-fetch, so rawCache does not apply.
