@@ -90,7 +90,7 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 # and are excluded here. Keep these lists in sync with each schema YAML `tables:`.
 _split_year_tables() {   # year-addressable base tables → per-year slots
   case "$1" in
-    housing)     echo '"building_permits","fair_market_rents","income_limits","income_limits_county"' ;;
+    housing)     echo '"building_permits","fair_market_rents","income_limits","income_limits_county","hmda_loans","hmda_applicant_demographics","hud_subsidized_county"' ;;
     transport)   echo '"fatal_crashes","airline_ontime","transit_ridership","t100_segments","vehicle_registrations"' ;;
     environment) echo '"air_quality_annual","air_quality_daily","tri_releases","ghg_facilities","ghg_emissions","streamflow","water_quality_samples"' ;;
     ag)          echo '"nass_crop_production","nass_livestock_inventory","rma_crop_insurance","fsa_commodity_payments"' ;;
@@ -101,8 +101,8 @@ _split_year_tables() {   # year-addressable base tables → per-year slots
 }
 _split_once_tables() {   # snapshot / full-archive base tables → single :once slot
   case "$1" in
-    housing)     echo '"house_price_index"' ;;
-    transport)   echo '"vehicle_recalls","safety_complaints","airports"' ;;
+    housing)     echo '"house_price_index","hud_subsidized_housing","opportunity_zones"' ;;
+    transport)   echo '"vehicle_recalls","safety_complaints","airports","cfs_shipments","fmcsa_carriers","ntsb_aviation_accidents"' ;;
     environment) echo '"aqs_monitors","water_sites","drinking_water","epa_facilities","drinking_water_violations","superfund_sites","rcra_facilities"' ;;
     ag)          echo '"ers_farm_income"' ;;
     disasters)   echo '"wildfire_perimeters"' ;;
