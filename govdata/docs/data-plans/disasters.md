@@ -1,5 +1,36 @@
 # Disasters Schema Data Plan
 
+## Implementation Status (2026-07-16)
+
+**Status: PARTIALLY DELIVERED.** All 7 planned tables are built (with transformers), plus
+extension roll-up views. Several planned columns were renamed or not ingested; most importantly
+`wildfire_perimeters.forest_id` — the bridge FK to `lands.national_forests` — is NOT built,
+which blocks the planned wildfire→lands cross-schema join.
+
+Verified against `disasters-schema.yaml` and `.../govdata/disasters/`.
+
+| Planned table | Delivered as (transformer) | Notes |
+|---|---|---|
+| `disaster_declarations` | `disaster_declarations` (FemaDisasterDeclarationsTransformer) | Built |
+| `public_assistance_projects` | `public_assistance_projects` (FemaPublicAssistanceTransformer) | Column renames |
+| `hazard_mitigation_projects` | `hazard_mitigation_projects` (FemaHazardMitigationTransformer) | Built |
+| `nfip_policies` | `nfip_policies` (FemaNfipPoliciesTransformer) | Per-transaction grain (not pre-aggregated) |
+| `nfip_claims` | `nfip_claims` (FemaNfipClaimsTransformer) | Per-claim grain (not pre-aggregated) |
+| `wildfire_perimeters` | `wildfire_perimeters` (WfigsPerimeterStreamingTransformer) | `forest_id` NOT built; static snapshot |
+| `storm_events` | `storm_events` (StormEventsStreamingTransformer) | `narrative` NOT ingested |
+
+**Extension views delivered beyond plan:** `disasters_declarations_by_state_year`,
+`disasters_pa_obligated_by_county`, `disasters_nfip_claims_by_county`,
+`disasters_storm_impact_by_county`.
+
+**Missing columns / not yet built:**
+- `wildfire_perimeters`: `forest_id` ABSENT — the bridge FK to `lands.national_forests` is NOT built, blocking the wildfire→lands cross-schema join; `agency` (lead agency FS/BLM/NPS) ABSENT — YAML has `poo_state`/`fire_cause`/`incident_type_category` instead; static snapshot, NOT `fire_year`-partitioned; renamed `cause`→`fire_cause`, `fire_type`→`incident_type_category`, `acres_burned`→`gis_acres`/`final_acres`.
+- `storm_events`: `narrative` ABSENT (2000-char event narrative not ingested).
+- `public_assistance_projects`: `project_number`→`pw_number`; `applicant_name`→`applicant_id` (name not stored); `category`→`damage_category_code`/`damage_category`.
+- `nfip_policies`/`nfip_claims`: delivered at per-transaction/per-claim grain (plan described pre-aggregation by zip/county; aggregation deferred to the views); `zip_code`→`reported_zip_code`.
+
+---
+
 ## Strategic Context
 
 The `disasters` schema consolidates **discrete emergency event data** from three authoritative
@@ -87,13 +118,13 @@ Largest dollar-value dataset — billions per major disaster.
 
 | Column | Type | Description |
 |---|---|---|
-| project_number | VARCHAR | PA project identifier |
+| project_number | VARCHAR | PA project identifier — delivered as `pw_number` |
 | disaster_number | VARCHAR | FK to disaster_declarations |
 | declaration_year | INTEGER | Partition key |
 | state_fips | VARCHAR | FK to geo.states |
 | county_fips | VARCHAR | FK to geo.counties |
-| applicant_name | VARCHAR | Recipient organization name |
-| category | VARCHAR | FEMA category (A=debris, B=protective measures, C-G=infrastructure) |
+| applicant_name | VARCHAR | Recipient organization name — delivered as `applicant_id` (name **NOT** stored) |
+| category | VARCHAR | FEMA category (A=debris, B=protective measures, C-G=infrastructure) — delivered as `damage_category_code`/`damage_category` |
 | project_amount | DOUBLE | Approved project cost (USD) |
 | federal_share_obligated | DOUBLE | Federal obligation to date (USD) |
 | total_obligated | DOUBLE | Total obligated including non-federal share (USD) |
@@ -131,7 +162,7 @@ investment in resilience — useful for insurance risk, infrastructure, and clim
 ### `nfip_policies`
 
 National Flood Insurance Program in-force policy counts and coverage by ZIP/county.
-Aggregated — not individual policies. Joins to geo.zctas on zip_code.
+Aggregated — not individual policies. Joins to geo.zctas on zip_code. — **delivered at per-transaction grain** (not pre-aggregated; aggregation deferred to the views)
 
 **Source:** `fimaNfipPolicies`
 **Partition:** `policy_year`
@@ -145,7 +176,7 @@ Aggregated — not individual policies. Joins to geo.zctas on zip_code.
 | policy_count | INTEGER | Number of in-force policies |
 | state_fips | VARCHAR | FK to geo.states |
 | county_fips | VARCHAR | FK to geo.counties |
-| zip_code | VARCHAR | ZIP code — FK to geo.zctas |
+| zip_code | VARCHAR | ZIP code — FK to geo.zctas — delivered as `reported_zip_code` |
 | coverage_amount | DOUBLE | Total building + contents coverage (USD) |
 | total_written_premium | DOUBLE | Annual premium (USD) |
 | occupancy_type | VARCHAR | Single family, 2-4 family, other residential, non-residential |
@@ -156,7 +187,7 @@ Aggregated — not individual policies. Joins to geo.zctas on zip_code.
 ### `nfip_claims`
 
 Paid flood insurance claims by county and year. Key signal for disaster severity and
-uninsured loss estimation. Joins to disaster_declarations on county/date overlap.
+uninsured loss estimation. Joins to disaster_declarations on county/date overlap. — **delivered at per-claim grain** (not pre-aggregated; aggregation deferred to the views)
 
 **Source:** `fimaNfipClaims`
 **Partition:** `year_of_loss`
@@ -169,7 +200,7 @@ uninsured loss estimation. Joins to disaster_declarations on county/date overlap
 | year_of_loss | INTEGER | Partition key |
 | state_fips | VARCHAR | FK to geo.states |
 | county_fips | VARCHAR | FK to geo.counties |
-| zip_code | VARCHAR | FK to geo.zctas |
+| zip_code | VARCHAR | FK to geo.zctas — delivered as `reported_zip_code` |
 | flood_zone | VARCHAR | FEMA flood zone at time of loss |
 | number_of_claims | INTEGER | Claim count (aggregated) |
 | total_building_payment | DOUBLE | Total building claims paid (USD) |
@@ -185,6 +216,8 @@ Current and historical wildfire perimeters from WFIGS (Wildland Fire Interagency
 Services). One row per fire incident. Joins to `disaster_declarations` on county/date for
 FEMA fire management declarations; joins to `lands.national_forests` on `forest_id` for
 timber revenue impact; joins to `nfip_claims` for post-fire flood exposure estimation.
+**Delivered as a static snapshot, NOT `fire_year`-partitioned; `forest_id` NOT built, so the
+`lands.national_forests` bridge join is unavailable.**
 
 **Source:** NIFC WFIGS — `wfigs_perimeters_current_year` (daily) + historical archive (annual)
 **Partition:** `fire_year`
@@ -201,11 +234,11 @@ timber revenue impact; joins to `nfip_claims` for post-fire flood exposure estim
 | containment_date | DATE | Date fire was 100% contained (null if active) |
 | state_fips | VARCHAR | FK to geo.states |
 | county_fips | VARCHAR | FK to geo.counties (primary county of origin) |
-| cause | VARCHAR | Human / Lightning / Undetermined |
-| fire_type | VARCHAR | Wildfire / Prescribed / Unknown |
-| acres_burned | DOUBLE | Final (or current) fire perimeter area in acres |
-| forest_id | VARCHAR | FK to lands.national_forests (null if not on NF land) |
-| agency | VARCHAR | Lead agency (FS, BLM, NPS, BIA, State, Local) |
+| cause | VARCHAR | Human / Lightning / Undetermined — delivered as `fire_cause` |
+| fire_type | VARCHAR | Wildfire / Prescribed / Unknown — delivered as `incident_type_category` |
+| acres_burned | DOUBLE | Final (or current) fire perimeter area in acres — delivered as `gis_acres`/`final_acres` |
+| forest_id | VARCHAR | FK to lands.national_forests (null if not on NF land) — **NOT BUILT** (blocks wildfire→lands cross-schema join) |
+| agency | VARCHAR | Lead agency (FS, BLM, NPS, BIA, State, Local) — **NOT BUILT** (YAML has `poo_state` instead) |
 | geometry_wkt | VARCHAR | Fire perimeter polygon WKT (simplified) |
 
 ---
@@ -241,7 +274,7 @@ episodes to FEMA declarations; joins to `econ.bls_employment` for economic impac
 | deaths_indirect | INTEGER | Indirect fatalities |
 | damage_property | DOUBLE | Property damage (USD, converted from K/M/B notation) |
 | damage_crops | DOUBLE | Crop damage (USD) |
-| narrative | VARCHAR | Event narrative (truncated to 2000 chars) |
+| narrative | VARCHAR | Event narrative (truncated to 2000 chars) — **NOT BUILT** (not ingested) |
 | cz_type | VARCHAR | C (county), Z (NWS forecast zone), M (marine) |
 
 ---
@@ -257,7 +290,7 @@ geo.counties (county_fips)
     │                          econ.bls_employment (county_fips, year)
     │                          edu.ipeds_institutions (county_fips)
     ├── wildfire_perimeters (county_fips, fire_year)
-    │       ├── lands.national_forests (forest_id → NF land impact)
+    │       ├── lands.national_forests (forest_id → NF land impact)   # NOT BUILT (forest_id absent)
     │       └── nfip_claims (county_fips + year → post-fire flood claims)
     └── storm_events (county_fips, event_year)
             └── [date overlap] disaster_declarations (incident_type match)
@@ -271,7 +304,7 @@ geo.zctas (zip_code)
 - `weather` schema: drought monitor, GHCN-Daily observations, climate normals — continuous
   measurements. Join to `disasters` on county/year for disaster context.
 - `forests` schema: national forest boundaries, timber sales, forest inventory — land management
-  data. `wildfire_perimeters.forest_id` bridges the two schemas.
+  data. `wildfire_perimeters.forest_id` bridges the two schemas. — **NOT BUILT** (`forest_id` absent; bridge unavailable)
 
 ---
 

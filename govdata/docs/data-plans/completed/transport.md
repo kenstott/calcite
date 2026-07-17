@@ -1,5 +1,25 @@
 # Transport Schema Data Plan
 
+## Status: DELIVERED (2026-07-16)
+
+All planned tables are **implemented and merged to main** (`059efbbb0`). They ship in [transport-schema.yaml](../../../src/main/resources/transport/transport-schema.yaml) with transformers under [org.apache.calcite.adapter.govdata.transport](../../../src/main/java/org/apache/calcite/adapter/govdata/transport/).
+
+| Planned table | Delivered as | Java |
+|---|---|---|
+| `bts_airline_performance` | `airline_ontime` + `t100_segments` (split by BTS source) | `BtsT100DataProvider` (t100); airline_ontime = CSV passthrough |
+| `faa_aircraft_registry` | tables `faa_aircraft_master` + `faa_aircraft_reference` + `faa_engine_reference` + VIEW `faa_aircraft_registry` | CSV passthrough over `ReleasableAircraft.zip`; view does the join/decodes |
+| `ntsb_aviation_accidents` | `ntsb_aviation_accidents` | `NtsbAviationTransformer` (Jackcess, avall.mdb) |
+| `fmcsa_carriers` | `fmcsa_carriers` | Socrata bulk-CSV passthrough |
+| `bts_freight_flows` | table `cfs_shipments` (CFS PUF microdata) + VIEW `bts_freight_flows` | CSV passthrough; view = weighted O-D aggregation |
+
+**Delivery deviations:**
+- One-table-per-source rule split several planned tables (airline perf → 2, FAA registry → 3 faithful tables + a view, CFS → microdata table + view).
+- FMCSA safety-event columns (`crashes_fatal/injury/tow`, `out_of_service_rate`, `total_inspections`) are **not** in `fmcsa_carriers` — those live in separate SMS datasets, deferred to future companion tables + a rollup view.
+- NTSB grain is event×aircraft with no `county_fips` (the MDB lacks it) — state_fips only.
+- Six tables beyond plan shipped: `vehicle_recalls`, `safety_complaints`, `fatal_crashes`, `airports`, `transit_ridership`, `vehicle_registrations`.
+
+The proposal below is preserved for historical context.
+
 ## Strategic Context
 
 The U.S. Department of Transportation and its sub-agencies publish comprehensive

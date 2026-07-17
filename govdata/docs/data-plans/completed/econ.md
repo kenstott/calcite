@@ -1,5 +1,27 @@
 # Econ Schema Data Plan
 
+## Status: DELIVERED (2026-07-16)
+
+The trade / international / science-input tables proposed here are **implemented and merged to main**. They ship in [econ-schema.yaml](../../../src/main/resources/econ/econ-schema.yaml) with transformers under [org.apache.calcite.adapter.govdata.econ](../../../src/main/java/org/apache/calcite/adapter/govdata/econ/).
+
+| Planned table | Delivered as | Java transformer |
+|---|---|---|
+| `usa_trade_monthly` | `trade_exports` + `trade_imports` (split by flow) | `CensusTradeStreamingTransformer` |
+| `usa_trade_by_state` | `trade_by_state` | `CensusTradeStreamingTransformer` |
+| `bea_fdi_by_industry` | `fdi_direct_investment` + `fdi_activities` (+ views `fdi_by_country`, `fdi_data`) | `FdiDataTransformer` |
+| `IIP` | `iip_positions` | `IipDataTransformer` |
+| `usitc_tariffs` | `usitc_tariffs` | `UsitcTariffsTransformer` |
+| `usitc_tariff_schedule` | `usitc_tariff_schedule` | `UsitcHtsScheduleTransformer` |
+| `comtrade_flows` (Follow-on 2) | `comtrade_flows` (+ views `comtrade_bilateral_trade`, `comtrade_partner_balances`) | `ComtradeTransformer` |
+| `ilostat_indicators` (Follow-on 3) | `ilostat_indicators` (+ view `ilostat_labor_snapshot`) | `IlostatTransformer` |
+| `world_indicators` (Follow-on 1) | pre-existing `world_indicators` | catalog-driven (`worldbank-indicators.json`) |
+
+**Delivery deviations:**
+- `bea_international_transactions` was **not** built — the plan itself instructed skipping it when the existing `ita_data` table (`ItaDataTransformer`) already covers the balance-of-payments series.
+- The USITC tariff pair was the last remaining gap; merged 2026-07-16 (`a74c04c0b`). `usitc_tariffs` is per-year DataWeb realized-duty microdata; `usitc_tariff_schedule` is the statutory HTS rate lines.
+
+The proposal below is preserved for historical context.
+
 The `econ` schema is the project's home for **cross-country economics and U.S. macro/trade
 data**. It already carries the BLS/BEA/FRED macro series, World Bank benchmarking
 (`world_indicators`), and the full trade/FDI stack. Because trade tables *are* econ tables,

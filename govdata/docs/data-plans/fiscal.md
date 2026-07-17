@@ -1,5 +1,36 @@
 # Fiscal Schema — IRS Revenue + Federal Outlays Data Plan
 
+## Implementation Status (2026-07-16)
+
+**Partially delivered.** Merged to `main` (`a1a83b220` / `c1c114c25`). 9 tables shipped, each
+with a Java provider; `soi_national` is a real gap; `usaspending_awards` is a planned Phase 2
+deferral (not a shortfall).
+
+| Planned table | Status | Delivered as |
+|---|---|---|
+| `soi_income_by_zip` | ✅ Delivered | `SoiZipProvider` |
+| `soi_income_by_county` | ✅ Delivered | `SoiCountyProvider` |
+| `county_migration_flows` | ✅ Delivered | `SoiMigrationProvider` |
+| `exempt_org_990` | ✅ Delivered | `Irs990Provider` |
+| `exempt_org_master` | ✅ Delivered | `IrsEoBmfProvider` |
+| `usaspending_by_agency` | ✅ Delivered | `UsaSpendingAgencyProvider` |
+| `usaspending_by_state` | ✅ Delivered | `UsaSpendingStateProvider` |
+| `ssa_benefits_by_geography` | ✅ Delivered | `SsaBenefitsProvider` |
+| `sba_loan_approvals` | ✅ Delivered | `SbaLoansProvider` |
+| `soi_national` | ❌ **NOT BUILT** | absent from YAML; no provider/transformer exists — real gap |
+| `usaspending_awards` | ⏸ **Deferred (Phase 2)** | intentionally deferred per plan; not a shortfall |
+
+**Extension views beyond the plan (delivered):** `ssa_benefits_by_geography_acs`,
+`soi_income_by_county_year`, `federal_money_by_state_year`, `nonprofit_financials`.
+
+**Not yet built:**
+- `soi_national` — SOI national + corporate historical aggregates. No `SoiNationalProvider`/
+  `SoiNationalTransformer` in the code or YAML. Genuine outstanding gap.
+- `usaspending_awards` — award-level detail. **Planned Phase 2 deferral**, not a delivery
+  shortfall (see the "Phase 2 — deferred" section below).
+
+---
+
 The `fiscal` schema is **new**. It closes the single largest thematic gap in govdata: the
 federal government's own money. It pairs the **revenue side** (IRS Statistics of Income —
 where tax revenue comes from, by geography and taxpayer class) with the **outlay side**
@@ -53,7 +84,7 @@ inputs from the model, never `System.getenv` (rule #7); unmapped real geographie
 
 ## Revenue Side — IRS Statistics of Income
 
-### `soi_income_by_zip`
+### `soi_income_by_zip` — delivered as `SoiZipProvider`
 
 IRS SOI individual income tax statistics aggregated by ZIP × AGI bracket × year. The schema's
 finest-grained revenue table; joins to `geo` ZIP crosswalks for county/CBSA rollups and
@@ -75,7 +106,7 @@ reconciles against `census` ACS income.
 | total_income_tax | DOUBLE | Total income tax ($1000s) |
 | statistic_code | VARCHAR | SOI field code (Nxxxxx count / Axxxxx amount) |
 
-### `soi_income_by_county`
+### `soi_income_by_county` — delivered as `SoiCountyProvider`
 
 Same SOI series at county grain (coarser, longer history than ZIP). Joins directly to
 `geo.counties`.
@@ -92,7 +123,7 @@ Same SOI series at county grain (coarser, longer history than ZIP). Joins direct
 | adjusted_gross_income | DOUBLE | Total AGI ($1000s) |
 | total_income_tax | DOUBLE | Total income tax ($1000s) |
 
-### `county_migration_flows`
+### `county_migration_flows` — delivered as `SoiMigrationProvider`
 
 IRS SOI county-to-county migration (derived from year-over-year address changes on returns).
 One row per origin→destination county × year, with in- and out-flow counts. High-value dataset;
@@ -110,7 +141,7 @@ joins both endpoints to `geo.counties`.
 | num_exemptions | BIGINT | Individuals (exemptions) that moved |
 | agi | DOUBLE | Aggregate AGI of movers ($1000s) |
 
-### `exempt_org_990`
+### `exempt_org_990` — delivered as `Irs990Provider`
 
 Nonprofit/tax-exempt organization financials from IRS Form 990 e-file XML, one row per EIN ×
 filing year. Joins to `ref` on EIN (a nonprofit analog to the `ref` SEC CIK bridge).
@@ -129,7 +160,7 @@ filing year. Joins to `ref` on EIN (a nonprofit analog to the `ref` SEC CIK brid
 | total_assets | DOUBLE | End-of-year total assets |
 | form_type | VARCHAR | 990 / 990-EZ / 990-PF |
 
-### `exempt_org_master`
+### `exempt_org_master` — delivered as `IrsEoBmfProvider`
 
 IRS Exempt Organizations Business Master File — the roster/reference of all registered
 tax-exempt entities (EIN, name, location, subsection, deductibility). Slowly-changing reference
@@ -148,7 +179,7 @@ that anchors `exempt_org_990`.
 | ntee_code | VARCHAR | NTEE classification |
 | ruling_date | VARCHAR | IRS ruling date (YYYYMM) |
 
-### `soi_national`
+### `soi_national` — **NOT BUILT** (no provider/transformer; absent from YAML — real gap)
 
 SOI national + corporate historical aggregate tables (Table-1 style national totals and
 corporate income tax statistics). National time series, no geographic key.
@@ -173,7 +204,7 @@ USAspending is **enormous** (tens of millions of award records per year). First 
 **agency/geographic aggregates**; award-level detail is a documented **Phase 2** (log the scope
 so coverage is never silently truncated).
 
-### `usaspending_by_agency` *(Phase 1)*
+### `usaspending_by_agency` *(Phase 1)* — delivered as `UsaSpendingAgencyProvider`
 
 Federal obligations/outlays summarized by awarding agency × fiscal year × award type. Joins to
 `fedregister` agency names semantically.
@@ -190,7 +221,7 @@ Federal obligations/outlays summarized by awarding agency × fiscal year × awar
 | obligated_amount | DOUBLE | Total obligations |
 | outlayed_amount | DOUBLE | Total outlays |
 
-### `usaspending_by_state` *(Phase 1)*
+### `usaspending_by_state` *(Phase 1)* — delivered as `UsaSpendingStateProvider`
 
 Federal spending summarized by recipient state/county × fiscal year. Joins to `geo`; the direct
 spatial counterpart to the SOI revenue tables.
@@ -207,7 +238,7 @@ spatial counterpart to the SOI revenue tables.
 | cfda_program | VARCHAR | Assistance listing (CFDA) program, nullable |
 | obligated_amount | DOUBLE | Total obligations |
 
-### `usaspending_awards` *(Phase 2 — deferred)*
+### `usaspending_awards` *(Phase 2 — deferred)* — **NOT BUILT (intentional Phase 2 deferral, not a shortfall)**
 
 Award-level detail (one row per award × modification), keyed to recipient EIN/UEI and
 place-of-performance. Deferred to Phase 2 because of volume; sourced from the USAspending bulk
@@ -224,7 +255,7 @@ does *not* fully surface are **mandatory benefit outlays** (Social Security) and
 credit** (SBA lending). Adding them completes the outlay side: entitlement payments to
 individuals and guaranteed loans to businesses, both geo-keyed and joinable to the revenue tables.
 
-### `ssa_benefits_by_geography`
+### `ssa_benefits_by_geography` — delivered as `SsaBenefitsProvider`
 
 Social Security Administration — OASDI (Old-Age, Survivors, Disability Insurance) and SSI
 beneficiary counts and total benefit payments by state/county × program × year. The single
@@ -247,7 +278,7 @@ income) and `usaspending_by_state` (total federal money into a county).
 | total_benefits_usd | DOUBLE | Total annual benefits paid (USD) |
 | avg_monthly_benefit_usd | DOUBLE | Average monthly benefit (USD) |
 
-### `sba_loan_approvals`
+### `sba_loan_approvals` — delivered as `SbaLoansProvider`
 
 Small Business Administration — 7(a) and 504 loan approvals (FOIA public data), one row per
 approved loan. Federal **credit** activity by lender, borrower geography, industry, and year.
@@ -332,7 +363,9 @@ key, so **no new secret** is introduced.
 - **New transformers (Java 8):** `SoiZipTransformer`, `SoiCountyTransformer`,
   `SoiMigrationTransformer`, `Irs990Transformer`, `IrsEoBmfTransformer`, `SoiNationalTransformer`,
   `UsaSpendingAgencyTransformer`, `UsaSpendingStateTransformer`. Each maps one upstream source to
-  one tall table.
+  one tall table. — *Delivered as `*Provider` classes (`SoiZipProvider`, `SoiCountyProvider`,
+  `SoiMigrationProvider`, `Irs990Provider`, `IrsEoBmfProvider`, `UsaSpendingAgencyProvider`,
+  `UsaSpendingStateProvider`, plus `SsaBenefitsProvider` / `SbaLoansProvider`); `SoiNationalTransformer`/`SoiNationalProvider` **NOT BUILT**.*
 - **Geographic keys.** SOI ZIP files carry ZIP + state; map ZIP→county through the existing
   `geo` ZIP crosswalk (HUD USER), don't invent a new one. **Fail loudly** (rule #6) on an
   unmapped real ZIP/county; never default to a placeholder FIPS.

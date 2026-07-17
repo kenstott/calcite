@@ -1,5 +1,17 @@
 # Health Schema — International (UN) Data Plan
 
+## Status: DELIVERED (committed scope)
+
+The proposed WHO GHO table is **implemented and merged to main**. It ships in [health-schema.yaml](../../../src/main/resources/health/health-schema.yaml) with its transformer under [org.apache.calcite.adapter.govdata.health](../../../src/main/java/org/apache/calcite/adapter/govdata/health/).
+
+| Planned table | Delivered as | Java |
+|---|---|---|
+| `who_gho_indicators` | `who_gho_indicators` (partition `[type, indicator, year]`) + view `who_health_snapshot` | `WhoGhoTransformer` |
+
+**Deferred (as the plan states):** the UNICEF IGME and UNAIDS follow-on tables were never promised for this iteration and remain unbuilt.
+
+The proposal below is preserved for historical context.
+
 The `health` schema is U.S.-domestic today (openFDA: `fda_ndc_products`, `fda_drug_approvals`,
 `fda_drug_recalls`, `fda_adverse_events`). This plan adds the **health-related UN feeds** —
 country-level health statistics that mirror the U.S. clinical/drug data with international

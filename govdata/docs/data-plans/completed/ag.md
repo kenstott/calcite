@@ -1,5 +1,18 @@
 # Ag Schema — International (UN) Data Plan
 
+## Status: DELIVERED
+
+The proposed FAOSTAT table is **implemented and merged to main**. It ships in [ag-schema.yaml](../../../src/main/resources/ag/ag-schema.yaml) with its transformer under [org.apache.calcite.adapter.govdata.ag](../../../src/main/java/org/apache/calcite/adapter/govdata/ag/).
+
+| Planned table | Delivered as | Java |
+|---|---|---|
+| `faostat_production` | `faostat_production` (partition `[type, domain, year]`) + view `faostat_production_enriched` | `FaostatTransformer` |
+
+**Delivery deviations:**
+- Country key kept as raw M49 `country_code` FK'd to `ref.countries.iso_numeric`, rather than mapping M49 → ISO alpha-3 as proposed — functionally equivalent; aggregate rows flagged via `Area Code >= 5000`.
+
+The proposal below is preserved for historical context.
+
 The `ag` schema is U.S.-domestic today (USDA: `nass_crop_production`,
 `nass_livestock_inventory`, `rma_crop_insurance`, `ers_farm_income`,
 `fsa_commodity_payments`) — all geo-FK'd to `geo.states` / `geo.counties`. This plan adds

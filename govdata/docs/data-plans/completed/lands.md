@@ -1,5 +1,27 @@
 # Public Lands Schema Data Plan
 
+## Status: DELIVERED
+
+All eight planned tables are **implemented and merged to main**. They ship in [lands-schema.yaml](../../../src/main/resources/lands/lands-schema.yaml) with transformers under [org.apache.calcite.adapter.govdata.lands](../../../src/main/java/org/apache/calcite/adapter/govdata/lands/).
+
+| Planned table | Delivered as | Java |
+|---|---|---|
+| `national_forests` | `national_forests` | `UsfsForestBoundaryTransformer` |
+| `timber_sales` | `timber_sales` | `UsfsFactsTransformer` (+ `UsfsTimberLayerResolver`) |
+| `forest_inventory` | `forest_inventory` | `FiaDatamartTransformer` |
+| `forest_metrics` | `forest_metrics` | `FiaMetricsTransformer` |
+| `nps_units` | `nps_units` | `NpsUnitBoundaryTransformer` |
+| `nps_visitation` | `nps_visitation` | `NpsIrmaTransformer` |
+| `blm_field_offices` | `blm_field_offices` | `BlmFieldOfficeTransformer` |
+| `onrr_revenues` | `onrr_revenues` | `OnrrRevenueTransformer` |
+
+**Delivery deviations:**
+- `forest_metrics` remains a CONDPROP-weighted **approximation**; proper population-level FIA estimation (EXPNS / POP_EVAL expansion factors) is still deferred — even though the `fia_pop_evaluations` inputs now land as an extension table.
+- `national_forests.gis_acres` delivered as `gross_acres`.
+- Six extension FIA tables beyond plan: `fia_plots`, `fia_tree_grm`, `fia_seedlings`, `fia_down_woody_debris`, `fia_invasives`, `fia_pop_evaluations`.
+
+The proposal below is preserved for historical context.
+
 ## Strategic Context
 
 The `lands` schema covers U.S. federal public land units and their associated economic,

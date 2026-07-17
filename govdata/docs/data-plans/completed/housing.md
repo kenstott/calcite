@@ -1,5 +1,24 @@
 # Housing Schema Data Plan
 
+## Status: DELIVERED (2026-07-16)
+
+All four proposed tables are **implemented and merged to main** (`2337b7466`). They ship in [housing-schema.yaml](../../../src/main/resources/housing/housing-schema.yaml) with transformers under [org.apache.calcite.adapter.govdata.housing](../../../src/main/java/org/apache/calcite/adapter/govdata/housing/).
+
+| Planned table | Delivered as | Java |
+|---|---|---|
+| `hmda_loans` | `hmda_loans` (+ `hmda_applicant_demographics`) | `HmdaLoansTransformer`, `HmdaApplicantDemographicsTransformer` |
+| `hud_fair_market_rents` | `fair_market_rents` | `HudFairMarketRentsTransformer` |
+| `census_building_permits` | `building_permits` | `CensusBuildingPermitsStreamingTransformer` |
+| `hud_subsidized_housing` | `hud_subsidized_housing` (tract snapshot) + `hud_subsidized_county` (annual county profile) | `HudSubsidizedHouseholdsTransformer`, `HudPictureCountyDataProvider` |
+
+**Delivery deviations:**
+- **HMDA is aggregation-grain, not loan-level** — CFPB Data-Browser aggregations per (year, state) broken out by action×purpose; the 2-dim API cap pushed the race/ethnicity/sex cut into the separate `hmda_applicant_demographics` long table. Per-loan columns (lei, census_tract, ltv, rate_spread, denial_reason, …) are not present.
+- Building permits built **county-annual** (co{year}a.txt), not monthly — no `permit_month` grain.
+- `hud_` / `census_` source prefixes dropped from FMR and building-permits table names.
+- Extension tables beyond plan: `house_price_index` (FHFA), `income_limits` + `income_limits_county` (HUD IL), `opportunity_zones`.
+
+The proposal below is preserved for historical context.
+
 ## Strategic Context
 
 Housing data spans three federal sources with complementary coverage: CFPB HMDA provides

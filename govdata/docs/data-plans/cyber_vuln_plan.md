@@ -1,5 +1,40 @@
 # cyber_vuln Refresh Architecture Plan
 
+## Implementation Status (2026-07-16)
+
+**Partially delivered.** Verified against `cyber/cyber-vuln-schema.yaml` and
+`.../govdata/cyber/vuln/`. Base tables and enrichment views shipped; the **OT advisory track is
+the one substantive remaining gap**. The other departures from the plan are accepted, documented
+deviations (see §7).
+
+| Planned artifact | Status | Delivered as |
+|---|---|---|
+| `cwe_catalog` | ✅ Delivered | `CweResponseTransformer` |
+| `vulnerabilities` | ✅ Delivered | `NvdResponseTransformer` + `NvdPublishedWindowDimensionResolver` |
+| `kev_catalog` | ✅ Delivered | `CisaKevResponseTransformer` |
+| `osv_vulnerabilities` | ✅ Delivered | `OsvResponseTransformer` (static `type: list` ecosystems) |
+| `advisories` | ⚠️ Delivered, **IT only** | `CisaAdvisoryResponseTransformer` + `CsafAdvisoryDimensionResolver` — **no OT track, no `track` column** |
+| `vulnerability_cwes` (view) | ⚠️ Delivered as **materialized TABLE** | `NvdVulnCwesResponseTransformer` (needs `UNNEST`; can't be a Calcite view) |
+| `kev_cwes` (view) | ⚠️ Delivered as **materialized TABLE** | `CisaKevCwesResponseTransformer` |
+| `vuln_cross_refs` (3-source view) | ⚠️ Delivered as **single-source GHSA table** | `GithubSaResponseTransformer` + `vuln_cross_refs_unique` dedup view |
+| `ghsa_advisories` (new table) | ❌ **NOT BUILT** (folded into `vuln_cross_refs`) | accepted deviation §7 |
+| `mitre_cve_refs` (new table) | ❌ **NOT BUILT** — MITRE CVE refs dropped from scope | accepted deviation §7 |
+| **OT advisory ingestion** (§6) | ❌ **NOT BUILT** | **the one real functional gap** |
+
+**Enrichment views (delivered):** `kev_enriched`, `vuln_cwe_enriched`, `kev_cwe_enriched`,
+`vuln_threat_chain`, `kev_cross_threat`.
+
+**Not yet built:**
+- **OT advisory track** — the substantive gap. `advisories`' source URL and
+  `CsafAdvisoryDimensionResolver` hardcode `csaf_files/IT/...`; §6 called for `csaf_files/{IT,OT}/`
+  with a `track` column/partition. No `track` column exists and OT advisories are never ingested.
+- `ghsa_advisories` / `mitre_cve_refs` as standalone tables — **accepted deviation** (GHSA folded
+  into `vuln_cross_refs`; MITRE CVE refs intentionally out of scope, §7 Phase 3).
+- §5 junctions and `vuln_cross_refs` as SQL **views** — shipped as physical ETL tables instead;
+  **accepted deviation** (a Calcite view cannot `UNNEST` a delimited string, §7 Phase 2).
+
+---
+
 **Status:** implemented and running. Phases 1, 2, and 5 shipped as designed; Phase 4 shipped
 with one deviation (static ecosystem list instead of a custom resolver); Phase 3 was solved
 by a different route than the plan text (see the per-phase status in §7). Two intentional
@@ -78,13 +113,13 @@ All raw tables set `materialize.iceberg.overwritePartitions: true`.
 
 | Raw table | Source | `dataset_type` | Dimensions | Freshness | Transformer change |
 |---|---|---|---|---|---|
-| `cwe_catalog` | MITRE CWE (`cwec_latest.xml.zip`, ~2 MB, ~quarterly) | `snapshot` | `type` | `last_modified` (server sends no etag) | none |
-| `vulnerabilities` | NVD CVE 2.0 (API) | `delta` · `backfill_period: quarterly` | `type` + `year(yearRange 2010→current)` + `quarter`; partition `[type, year, month]` via `effectiveYearField/MonthField: published` | none (API; refresh via period re-fetch) | none (already emits `published`) |
-| `kev_catalog` | CISA KEV (`known_exploited_vulnerabilities.json`, ~1.4 MB, ~2–3×/wk) | `snapshot` | `type` | `etag` | none |
-| `osv_vulnerabilities` | OSV per-ecosystem `all.zip` (PyPI alone ~24 MB) | `snapshot` | `type` + **`ecosystem` (custom provider)** | none (multi-file) | **lift the `CYBER_OSV_ECOSYSTEMS` loop out into a chained custom `DimensionResolver`** |
-| `advisories` | **CISA CSAF via GitHub `cisagov/CSAF`** (see §6) | `delta` · `backfill_period: annual` | `type` + `year(yearRange 2017→current)` + **custom provider on `changes.csv`** | per-file `etag` / `changes.csv` HWM | **rewrite** to parse CSAF 2.0 JSON |
-| `ghsa_advisories` *(new)* | GitHub Security Advisories GraphQL | `snapshot`/`delta` | `type` | none (API) | split out of `vuln_cross_refs` |
-| `mitre_cve_refs` *(new, if needed)* | MITRE CVE list | `delta` | `type` | none (API) | split out of `vuln_cross_refs` |
+| `cwe_catalog` — delivered (`CweResponseTransformer`) | MITRE CWE (`cwec_latest.xml.zip`, ~2 MB, ~quarterly) | `snapshot` | `type` | `last_modified` (server sends no etag) | none |
+| `vulnerabilities` — delivered (`NvdResponseTransformer` + `NvdPublishedWindowDimensionResolver`) | NVD CVE 2.0 (API) | `delta` · `backfill_period: quarterly` | `type` + `year(yearRange 2010→current)` + `quarter`; partition `[type, year, month]` via `effectiveYearField/MonthField: published` | none (API; refresh via period re-fetch) | none (already emits `published`) |
+| `kev_catalog` — delivered (`CisaKevResponseTransformer`) | CISA KEV (`known_exploited_vulnerabilities.json`, ~1.4 MB, ~2–3×/wk) | `snapshot` | `type` | `etag` | none |
+| `osv_vulnerabilities` — delivered (`OsvResponseTransformer`; static `type: list` ecosystems, not a custom resolver) | OSV per-ecosystem `all.zip` (PyPI alone ~24 MB) | `snapshot` | `type` + **`ecosystem` (custom provider)** | none (multi-file) | **lift the `CYBER_OSV_ECOSYSTEMS` loop out into a chained custom `DimensionResolver`** |
+| `advisories` — delivered **IT only** (`CisaAdvisoryResponseTransformer` + `CsafAdvisoryDimensionResolver`); **no OT track, no `track` column — real gap** | **CISA CSAF via GitHub `cisagov/CSAF`** (see §6) | `delta` · `backfill_period: annual` | `type` + `year(yearRange 2017→current)` + **custom provider on `changes.csv`** | per-file `etag` / `changes.csv` HWM | **rewrite** to parse CSAF 2.0 JSON |
+| `ghsa_advisories` *(new)* — **NOT BUILT** (folded into single-source `vuln_cross_refs` via `GithubSaResponseTransformer`; accepted deviation §7) | GitHub Security Advisories GraphQL | `snapshot`/`delta` | `type` | none (API) | split out of `vuln_cross_refs` |
+| `mitre_cve_refs` *(new, if needed)* — **NOT BUILT** — MITRE CVE refs dropped from scope (accepted deviation §7) | MITRE CVE list | `delta` | `type` | none (API) | split out of `vuln_cross_refs` |
 
 ### Per-source notes
 - **`cwe_catalog`:** confirmed via HEAD — server sends only `Last-Modified`, no `ETag`; 2 MB
@@ -109,9 +144,9 @@ All raw tables set `materialize.iceberg.overwritePartitions: true`.
 
 | View | Definition | Replaces |
 |---|---|---|
-| `vulnerability_cwes` | `SELECT cve_id, UNNEST(cwe_ids)…` over `vulnerabilities` | a 2nd full NVD pull |
-| `kev_cwes` | `UNNEST(cwes)` over `kev_catalog` | a 2nd full KEV pull |
-| `vuln_cross_refs` | `UNION`/`JOIN` over `ghsa_advisories` + `mitre_cve_refs` + `osv_vulnerabilities` aliases on `cve_id` | a 3-source transformer |
+| `vulnerability_cwes` — delivered as a **materialized TABLE** (`NvdVulnCwesResponseTransformer`), not a view (view can't `UNNEST`; accepted deviation §7 Phase 2) | `SELECT cve_id, UNNEST(cwe_ids)…` over `vulnerabilities` | a 2nd full NVD pull |
+| `kev_cwes` — delivered as a **materialized TABLE** (`CisaKevCwesResponseTransformer`), not a view (accepted deviation §7 Phase 2) | `UNNEST(cwes)` over `kev_catalog` | a 2nd full KEV pull |
+| `vuln_cross_refs` — delivered as a **single-source GHSA table** (`GithubSaResponseTransformer`) + `vuln_cross_refs_unique` dedup view, not a 3-source UNION view; MITRE CVE refs dropped (accepted deviation §7 Phase 3) | `UNION`/`JOIN` over `ghsa_advisories` + `mitre_cve_refs` + `osv_vulnerabilities` aliases on `cve_id` | a 3-source transformer |
 
 If a junction must be physical for performance, make it a materialized view / CTAS over its
 **parent table**, never an independent source fetch. The existing enrichment views
@@ -130,7 +165,8 @@ application/feed paths (UA spoofing fails — TLS/JA3 fingerprinting). Only stat
 **Solution:** pull from CISA's official machine-readable repo **`github.com/cisagov/CSAF`**
 (branch `develop`), served by GitHub (not Akamai) → 200 server-side, updated daily.
 
-- Layout: `csaf_files/{IT,OT}/white/{year}/{advisory-id}.json` — ~11,430 CSAF 2.0 advisories,
+- Layout: `csaf_files/{IT,OT}/white/{year}/{advisory-id}.json` — **PARTIALLY BUILT: only `IT/` is
+  ingested; `OT/` is NOT ingested (source URL + `CsafAdvisoryDimensionResolver` hardcode `IT`).** — ~11,430 CSAF 2.0 advisories,
   2017→2026. Per `white/` dir: `index.txt` (path list), `changes.csv` (`path,ISO-ts`
   changelog), `cisa-csaf-*-feed-tlp-white.json` (ROLIE feed).
 - **Backfill:** one tarball fetch `codeload.github.com/cisagov/CSAF/tar.gz/refs/heads/develop`
@@ -141,7 +177,9 @@ application/feed paths (UA spoofing fails — TLS/JA3 fingerprinting). Only stat
 - **Transformer rewrite:** parse CSAF 2.0 (`document.title`, `document.tracking.*`,
   `vulnerabilities[].cve` / CVSS, `product_tree`) — strictly simpler and richer than the old
   HTML scrape + PDF fallback; CVE/CVSS/remediation come natively. Fetch TLP `white` only.
-- IT vs OT: one `advisories` table with a `track` column (or partition).
+- IT vs OT: one `advisories` table with a `track` column (or partition). — **NOT BUILT: no `track`
+  column/partition exists and OT advisories are never fetched. This is the one substantive
+  remaining gap.**
 
 ---
 
