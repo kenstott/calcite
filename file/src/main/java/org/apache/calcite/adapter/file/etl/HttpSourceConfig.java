@@ -524,13 +524,26 @@ public class HttpSourceConfig {
     return new Builder();
   }
 
-  @SuppressWarnings("unchecked")
   public static HttpSourceConfig fromMap(Map<String, Object> map) {
+    return fromMap(map, false);
+  }
+
+  /**
+   * Builds an {@link HttpSourceConfig} from a YAML/JSON map.
+   *
+   * @param map the raw {@code source} block
+   * @param providerBacked true when the table declares a {@code hooks.dataProvider} that
+   *     supplies the rows, in which case a URL is not required (the source block may exist
+   *     only to carry metadata such as the {@code incremental} high-water-mark key)
+   */
+  @SuppressWarnings("unchecked")
+  public static HttpSourceConfig fromMap(Map<String, Object> map, boolean providerBacked) {
     if (map == null) {
       return null;
     }
 
     Builder builder = builder();
+    builder.providerBacked(providerBacked);
     builder.url((String) map.get("url"));
 
     // Bulk download reference
@@ -2572,6 +2585,7 @@ public class HttpSourceConfig {
     private int parallel = 0;  // 0 = unset; defer to global calcite.etl.threads
     private IncrementalConfig incremental;
     private boolean skipResponseBody;
+    private boolean providerBacked;
 
     public Builder url(String url) {
       this.url = url;
@@ -2708,12 +2722,26 @@ public class HttpSourceConfig {
       return this;
     }
 
+    /**
+     * Marks this source as backed by a {@code hooks.dataProvider}. A provider-backed
+     * table generates or fetches its own rows, so the source block carries no URL —
+     * it exists only to declare metadata such as the {@code incremental} high-water-mark
+     * key. When set, {@link #build()} waives the URL/bulkDownload/documentSource
+     * requirement.
+     */
+    public Builder providerBacked(boolean providerBacked) {
+      this.providerBacked = providerBacked;
+      return this;
+    }
+
     public HttpSourceConfig build() {
-      // Either url, bulkDownload, or documentSource must be set
+      // Either url, bulkDownload, or documentSource must be set — unless a DataProvider
+      // hook supplies the rows (the source block then only carries metadata such as the
+      // incremental high-water-mark key).
       boolean hasUrl = url != null && !url.isEmpty();
       boolean hasBulkDownload = bulkDownload != null && !bulkDownload.isEmpty();
       boolean hasDocumentSource = documentSource != null && documentSource.isEnabled();
-      if (!hasUrl && !hasBulkDownload && !hasDocumentSource) {
+      if (!providerBacked && !hasUrl && !hasBulkDownload && !hasDocumentSource) {
         throw new IllegalArgumentException(
             "Either URL, bulkDownload, or documentSource is required");
       }

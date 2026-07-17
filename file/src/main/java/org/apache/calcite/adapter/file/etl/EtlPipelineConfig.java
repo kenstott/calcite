@@ -264,6 +264,15 @@ public class EtlPipelineConfig {
       builder.enabled(parseEnabledValue(enabledObj));
     }
 
+    // A table backed by a hooks.dataProvider generates or fetches its own rows, so its
+    // source block may omit the URL (it exists only to carry metadata such as the
+    // incremental high-water-mark key). Detect that here so the HTTP source parser can
+    // waive the URL requirement.
+    Map<String, Object> hooksMapForSource = toMap(map.get("hooks"));
+    boolean providerBacked = hooksMapForSource != null
+        && hooksMapForSource.get("dataProvider") instanceof String
+        && !((String) hooksMapForSource.get("dataProvider")).isEmpty();
+
     Map<String, Object> sourceMap = toMap(map.get("source"));
     if (sourceMap != null) {
       // Detect source type - default to "http" if not specified
@@ -276,7 +285,7 @@ public class EtlPipelineConfig {
 
       // Only parse as HttpSourceConfig for HTTP sources
       if (SOURCE_TYPE_HTTP.equals(sourceType)) {
-        builder.source(HttpSourceConfig.fromMap(sourceMap));
+        builder.source(HttpSourceConfig.fromMap(sourceMap, providerBacked));
       }
     }
 
