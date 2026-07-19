@@ -78,6 +78,37 @@ else
 fi
 $DRY_RUN && _flags="$_flags --dry-run"
 
+# --- Skip schemas with an active ETL writer ------------------------------------------
+# Syncing a live Iceberg table races its own compaction: the writer deletes superseded
+# manifest .avro files mid-copy, so rclone (which listed them a moment earlier) hits a
+# source 404 NoSuchKey — and worse, pass 2 could advance the R2 pointer to a snapshot
+# whose manifests didn't finish uploading, briefly exposing a torn snapshot to R2
+# readers. A schema is "active" when run-pool has a live worker-<schema>-<mode>.pid with
+# no matching .exit marker. Exclude that schema's <schema>/** subtree from BOTH passes;
+# the next pass (once the writer finishes and drops its .exit) picks it up. All sec_*
+# workers write the shared sec/ tree, so they collapse to a single sec/ exclude.
+_pid_dir="$SCRIPT_DIR/runs/pids"
+active_excludes=()
+_active_schemas=""
+if [ -d "$_pid_dir" ]; then
+  for _pf in "$_pid_dir"/worker-*.pid; do
+    [ -e "$_pf" ] || continue
+    _id=$(basename "$_pf" .pid)                        # worker-<schema>-<mode>
+    [ -f "$_pid_dir/${_id}.exit" ] && continue         # worker already finished
+    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
+    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
+    _rest=${_id#worker-}                               # <schema>-<mode>
+    _schema=${_rest%-*}                                # strip the -<mode> suffix
+    case "$_schema" in sec_*|sec) _schema=sec ;; esac  # sec_* all write sec/
+    case " $_active_schemas " in *" $_schema "*) continue ;; esac      # dedup
+    _active_schemas="$_active_schemas $_schema"
+    active_excludes+=(--exclude "${_schema}/**")
+  done
+fi
+if [ -n "$_active_schemas" ]; then
+  log_info "sync-to-r2: skipping active-writer schema(s) this pass —${_active_schemas}"
+fi
+
 for bucket in "${BUCKETS[@]}"; do
   log_info "sync-to-r2: $bucket"
   # Two-pass, pointer-last copy. rclone transfers a pass's files concurrently in an
@@ -90,11 +121,11 @@ for bucket in "${BUCKETS[@]}"; do
   #   Pass 2 — advance version-hint.text only now that its referenced tree is present.
   # This re-imposes on R2 the write-order guarantee the writer already holds on MinIO.
   rclone copy "${MINIO_REMOTE}:${bucket}" "${R2_REMOTE}:${bucket}" \
-    --exclude "**/version-hint.text" $_flags 2>&1 | while IFS= read -r line; do
+    "${active_excludes[@]}" --exclude "**/version-hint.text" $_flags 2>&1 | while IFS= read -r line; do
     log_info "sync-to-r2: [$bucket] $line"
   done
   rclone copy "${MINIO_REMOTE}:${bucket}" "${R2_REMOTE}:${bucket}" \
-    --include "**/version-hint.text" $_flags 2>&1 | while IFS= read -r line; do
+    "${active_excludes[@]}" --include "**/version-hint.text" $_flags 2>&1 | while IFS= read -r line; do
     log_info "sync-to-r2: [$bucket] pointer: $line"
   done
   log_info "sync-to-r2: $bucket done"
