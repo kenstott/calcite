@@ -1,8 +1,8 @@
 {
   "_comment": "Curated FAOSTAT domain fan-out list for ag.faostat_production. 'code' is the FAOSTAT domain code used in the normalized bulk URL (https://bulks-faostat.fao.org/production/{code}_All_Data_(Normalized).zip). Each file carries all countries/years for that domain. Keep curated (analogs of the USDA NASS/ERS tables) — do not fan out over all ~80 FAOSTAT domains. Domain codes + bulk column names are PENDING LIVE VERIFICATION.",
   "domains": [
-    { "code": "QCL", "name": "Crops and livestock products (production)" },
-    { "code": "RL",  "name": "Land use" },
-    { "code": "FBS", "name": "Food balances (2010-)" }
+    { "code": "Production_Crops_Livestock_E", "name": "Crops and livestock products (production)" },
+    { "code": "Inputs_LandUse_E",            "name": "Land use" },
+    { "code": "FoodBalanceSheets_E",         "name": "Food balances (2010-)" }
   ]
 }

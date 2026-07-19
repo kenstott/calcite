@@ -58,7 +58,20 @@ import java.util.Map;
 public class ConstantsSource implements DataSource {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ConstantsSource.class);
-  private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
+  private static final ObjectMapper YAML_MAPPER =
+      new ObjectMapper(YAMLFactory.builder().loaderOptions(largeDocLoaderOptions()).build());
+
+  /**
+   * SnakeYAML loader options with a raised code-point limit. Jackson's YAMLFactory defaults to
+   * SnakeYAML's 3 MiB codePointLimit; large embedded constants files (e.g. {@code geo/zcta-ref.yaml},
+   * the ~33k-ZCTA reference at ~4 MiB) exceed it and fail to load with "incoming YAML document
+   * exceeds the limit". Raise to 64 MiB so reference constants of this scale parse.
+   */
+  private static org.yaml.snakeyaml.LoaderOptions largeDocLoaderOptions() {
+    org.yaml.snakeyaml.LoaderOptions options = new org.yaml.snakeyaml.LoaderOptions();
+    options.setCodePointLimit(64 * 1024 * 1024);
+    return options;
+  }
 
   private final ConstantsSourceConfig config;
 

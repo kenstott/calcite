@@ -5,7 +5,7 @@
     { "code": "EMP_DWAP_SEX_AGE_RT",  "name": "Employment-to-population ratio by sex and age (%)" },
     { "code": "EAP_DWAP_SEX_AGE_RT",  "name": "Labour force participation rate by sex and age (%)" },
     { "code": "EMP_TEMP_SEX_ECO_NB",  "name": "Employment by sex and economic activity (thousands)" },
-    { "code": "EAR_4MTH_SEX_ECO_CUR_NB", "name": "Mean nominal monthly earnings of employees by sex and economic activity" },
+    { "code": "EAR_EMTA_SEX_ECO_CUR_NB", "name": "Average monthly earnings of employees by sex, economic activity and currency" },
     { "code": "HOW_TEMP_SEX_ECO_NB",  "name": "Mean weekly hours actually worked per employed person by sex and economic activity" },
     { "code": "EMP_TEMP_SEX_STE_NB",  "name": "Employment by sex and status in employment (thousands)" },
     { "code": "SDG_0111_SEX_AGE_RT",  "name": "Working poverty rate (SDG 1.1.1, %)" },

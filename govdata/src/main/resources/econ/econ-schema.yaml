@@ -5222,7 +5222,7 @@ partitionedTables:
         comment: True for world/aggregate partner roll-ups (exclude from partner-level joins)
     source:
       type: http
-      url: "https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode={reporter}&period={effective_year}&flowCode={flow}"
+      url: "https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode={reporter}&period={effective_year}&flowCode={flow}&includeDesc=TRUE"
       method: GET
       headers:
         Ocp-Apim-Subscription-Key: "${COMTRADE_API_KEY}"
@@ -5337,7 +5337,7 @@ partitionedTables:
         comment: True for ILO regional/income-group ref_area rows (exclude from country joins)
     source:
       type: http
-      url: "https://www.ilo.org/ilostat-files/WEB_bulk_download/indicator/{indicator}.csv.gz"
+      url: "https://rplumber.ilo.org/data/indicator/?id={indicator}&type=code&format=.csv.gz"
       method: GET
       response:
         format: json   # IlostatTransformer streams the gz CSV and emits records

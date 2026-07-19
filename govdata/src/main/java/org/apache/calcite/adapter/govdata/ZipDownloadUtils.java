@@ -213,7 +213,15 @@ public final class ZipDownloadUtils {
     } finally {
       conn.disconnect();
     }
-    LOGGER.info("Download complete: {} ({} MB)", dest.getName(), dest.length() / (1024 * 1024));
+    // Verify completeness: a dropped connection can end the read early with no exception, leaving a
+    // truncated file. Downstream zip/xlsx readers then fail obscurely (e.g. POI falls back to stream
+    // mode and trips its array-length cap). Throw so the retry wrapper re-requests a full copy.
+    long finalLength = dest.length();
+    if (contentLength > 0 && finalLength != contentLength) {
+      throw new IOException("Truncated download for " + url + ": got " + finalLength + " of "
+          + contentLength + " bytes");
+    }
+    LOGGER.info("Download complete: {} ({} MB)", dest.getName(), finalLength / (1024 * 1024));
   }
 
   /**
