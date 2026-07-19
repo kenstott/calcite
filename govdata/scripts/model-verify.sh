@@ -92,10 +92,36 @@ set -a; source "$ENV_FILE"; set +a
 # leaked value can't silently retarget reads at the truncated sample bucket.
 unset GOVDATA_DQ
 
+# ---- test isolation: run against a DEDICATED operating-dir base, separate from the ETL/pool ----
+# The persistent DuckDB read-catalog (.duckdb/govdata.duckdb) and the FileSchema conversion-record
+# store (.aperio/<schema>/.conversions.json) are keyed to the operating-dir base (GOVDATA_DATA_DIR,
+# else ~/.govdata) and shared by EVERY jdbc:govdata connection — including the ETL pool, which also
+# loads GovDataDriver. Two problems follow: (1) probing would share the pool's live catalog, and
+# (2) neither store is reconciled against the current schema YAMLs, so a table moved between schemas
+# (e.g. EPA AQS weather->environment) leaves an orphaned record that gets re-advertised and then
+# fails to read (stale Iceberg path) — a false ERROR reflecting a prior state, not the model under
+# test. Point this run at its OWN base so it never touches the pool's catalog, then purge that base's
+# caches so each verify starts from the current model. Both are regenerated on first connect. The
+# httpfs data cache (.duckdb_httpfs_cache) under this base is kept between runs (remote parquet
+# bytes, not table definitions). Override the base with GOVDATA_VERIFY_DATA_DIR.
+export GOVDATA_DATA_DIR="${GOVDATA_VERIFY_DATA_DIR:-$HOME/.govdata-verify}"
+echo "Isolated operating-dir base: $GOVDATA_DATA_DIR (separate from the ETL pool's ~/.govdata)"
+echo "Purging stale verify-local metadata (.aperio conversion records + .duckdb catalog)"
+mkdir -p "$GOVDATA_DATA_DIR"
+rm -rf "$GOVDATA_DATA_DIR/.aperio" "$GOVDATA_DATA_DIR/.duckdb"
+
 # ---- classpath: pin a single shaded jar (avoid wildcard picking up stale strays) ----
+# MODEL_VERIFY_JAR overrides jar selection so a PRIVATE build (e.g. sih-govdata-fixes.jar) can be
+# verified without touching the unversioned sih-govdata.jar a running ETL pool is executing.
 JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m}"
 LIBS="$GOVDATA_HOME/build/libs"
-if [[ -f "$LIBS/sih-govdata.jar" ]]; then
+if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then
+    if [[ ! -f "$MODEL_VERIFY_JAR" ]]; then
+        echo "Error: MODEL_VERIFY_JAR set but not found: $MODEL_VERIFY_JAR" >&2
+        exit 2
+    fi
+    CLASSPATH="$MODEL_VERIFY_JAR"
+elif [[ -f "$LIBS/sih-govdata.jar" ]]; then
     CLASSPATH="$LIBS/sih-govdata.jar"
 elif ls "$LIBS"/sih-govdata-[0-9]*.jar >/dev/null 2>&1; then
     CLASSPATH="$(ls -t "$LIBS"/sih-govdata-[0-9]*.jar | head -1)"
