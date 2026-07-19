@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
+import org.apache.calcite.adapter.file.etl.RetryableHttp;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import com.fasterxml.jackson.core.JsonFactory;
@@ -24,7 +25,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -58,9 +58,6 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final JsonFactory JSON_FACTORY = MAPPER.getFactory();
 
-  private static final int CONNECT_TIMEOUT_MS = 60_000;
-  private static final int READ_TIMEOUT_MS = 900_000;
-  private static final int MAX_RETRIES = 4;
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
@@ -68,7 +65,10 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     if (url == null || url.isEmpty()) {
       throw new IllegalStateException("ComtradeTransformer: no URL in context");
     }
-    HttpURLConnection conn = openWithRetry(url, context.getHeaders());
+    Map<String, String> reqHeaders = new LinkedHashMap<String, String>(context.getHeaders());
+    reqHeaders.put("Accept", "application/json");
+    HttpURLConnection conn =
+        RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
     InputStream in = conn.getInputStream();
     JsonParser parser = JSON_FACTORY.createParser(in);
 
@@ -116,51 +116,6 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     }
     LOGGER.debug("Comtrade: no data array for {}{}", url, dims);
     return Collections.<Map<String, Object>>emptyList().iterator();
-  }
-
-  private static HttpURLConnection openWithRetry(String url, Map<String, String> headers)
-      throws IOException {
-    IOException last = null;
-    for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-      conn.setReadTimeout(READ_TIMEOUT_MS);
-      conn.setRequestProperty("User-Agent", "GovData/1.0");
-      conn.setRequestProperty("Accept", "application/json");
-      if (headers != null) {
-        for (Map.Entry<String, String> h : headers.entrySet()) {
-          conn.setRequestProperty(h.getKey(), h.getValue());
-        }
-      }
-      int status;
-      try {
-        status = conn.getResponseCode();
-      } catch (IOException e) {
-        conn.disconnect();
-        last = e;
-        sleep(attempt);
-        continue;
-      }
-      if (status == HttpURLConnection.HTTP_OK) {
-        return conn;
-      }
-      conn.disconnect();
-      if (status == 429 || status == 500 || status == 503) {
-        LOGGER.warn("Comtrade: HTTP {} (attempt {}/{}) for {}", status, attempt, MAX_RETRIES, url);
-        sleep(attempt);
-        continue;
-      }
-      throw new IOException("HTTP " + status + " from " + url);
-    }
-    throw last != null ? last : new IOException("Comtrade: retries exhausted for " + url);
-  }
-
-  private static void sleep(int attempt) {
-    try {
-      Thread.sleep(1000L * attempt);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
   }
 
   private static void close(JsonParser parser, HttpURLConnection conn) {

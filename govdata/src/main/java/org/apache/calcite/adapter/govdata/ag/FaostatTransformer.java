@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.ag;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
+import org.apache.calcite.adapter.file.etl.RetryableHttp;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import org.slf4j.Logger;
@@ -21,7 +22,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -57,8 +57,6 @@ public class FaostatTransformer implements StreamingResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(FaostatTransformer.class);
 
-  private static final int CONNECT_TIMEOUT_MS = 60_000;
-  private static final int READ_TIMEOUT_MS = 1_800_000;
   private static final int AGGREGATE_AREA_CODE_FLOOR = 5000;
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
@@ -70,25 +68,21 @@ public class FaostatTransformer implements StreamingResponseTransformer {
     String domain = context.getDimensionValues().get("domain");
     LOGGER.info("faostat[{}]: streaming {}", domain, url);
 
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-    conn.setReadTimeout(READ_TIMEOUT_MS);
-    conn.setInstanceFollowRedirects(true);
-    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (compatible; govdata-etl/1.0)");
+    Map<String, String> reqProps = new LinkedHashMap<String, String>();
+    reqProps.put("User-Agent", "Mozilla/5.0 (compatible; govdata-etl/1.0)");
     if (context.getHeaders() != null) {
-      for (Map.Entry<String, String> h : context.getHeaders().entrySet()) {
-        conn.setRequestProperty(h.getKey(), h.getValue());
+      reqProps.putAll(context.getHeaders());
+    }
+    HttpURLConnection conn;
+    try {
+      // Shared retryable open (Retry-After + backoff + declared rateLimit), following redirects.
+      conn = RetryableHttp.openWithRetry(url, reqProps, context.getRateLimit(), true);
+    } catch (RetryableHttp.HttpStatusException e) {
+      if (e.getStatus() == HttpURLConnection.HTTP_NOT_FOUND) {
+        LOGGER.warn("faostat[{}]: HTTP 404 (no bulk file) for {}", domain, url);
+        return Collections.<Map<String, Object>>emptyList().iterator();
       }
-    }
-    int status = conn.getResponseCode();
-    if (status == HttpURLConnection.HTTP_NOT_FOUND) {
-      conn.disconnect();
-      LOGGER.warn("faostat[{}]: HTTP 404 (no bulk file) for {}", domain, url);
-      return Collections.<Map<String, Object>>emptyList().iterator();
-    }
-    if (status != HttpURLConnection.HTTP_OK) {
-      conn.disconnect();
-      throw new IOException("HTTP " + status + " from " + url);
+      throw e;
     }
 
     ZipInputStream zis = new ZipInputStream(conn.getInputStream());

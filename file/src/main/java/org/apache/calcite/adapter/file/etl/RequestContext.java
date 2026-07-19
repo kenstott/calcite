@@ -42,6 +42,7 @@ public class RequestContext {
   private final Map<String, String> headers;
   private final Map<String, String> dimensionValues;
   private final Map<String, String> variables;
+  private final HttpSourceConfig.RateLimitConfig rateLimit;
 
   private RequestContext(Builder builder) {
     this.url = builder.url;
@@ -57,6 +58,18 @@ public class RequestContext {
     this.variables = builder.variables != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.variables))
         : Collections.<String, String>emptyMap();
+    this.rateLimit = builder.rateLimit;
+  }
+
+  /**
+   * Returns the source's declared rate-limit config (max retries, retry backoff, requests/sec), or
+   * {@code null} if none. Lets a {@link StreamingResponseTransformer} — which opens its own HTTP
+   * connection, bypassing this source's shared retry path — apply the same declared limits.
+   *
+   * @return The rate-limit config, or null
+   */
+  public HttpSourceConfig.RateLimitConfig getRateLimit() {
+    return rateLimit;
   }
 
   /**
@@ -142,6 +155,7 @@ public class RequestContext {
     private Map<String, String> headers;
     private Map<String, String> dimensionValues;
     private Map<String, String> variables;
+    private HttpSourceConfig.RateLimitConfig rateLimit;
 
     /**
      * Sets the request URL.
@@ -195,6 +209,17 @@ public class RequestContext {
      */
     public Builder variables(Map<String, String> variables) {
       this.variables = variables;
+      return this;
+    }
+
+    /**
+     * Sets the source's declared rate-limit config.
+     *
+     * @param rateLimit The rate-limit config (may be null)
+     * @return This builder
+     */
+    public Builder rateLimit(HttpSourceConfig.RateLimitConfig rateLimit) {
+      this.rateLimit = rateLimit;
       return this;
     }
 

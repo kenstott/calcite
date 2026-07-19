@@ -366,6 +366,7 @@ public class HttpSource implements DataSource {
           .parameters(params)
           .headers(config.getHeaders())
           .dimensionValues(variables)
+          .rateLimit(config.getRateLimit())
           .build();
       return ((StreamingResponseTransformer) responseTransformer).fetchAndTransform(ctx);
     }

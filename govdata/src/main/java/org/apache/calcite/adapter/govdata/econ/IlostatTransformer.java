@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
+import org.apache.calcite.adapter.file.etl.RetryableHttp;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,7 +26,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,9 +59,6 @@ public class IlostatTransformer implements StreamingResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(IlostatTransformer.class);
 
-  private static final int CONNECT_TIMEOUT_MS = 60_000;
-  private static final int READ_TIMEOUT_MS = 900_000;
-
   /** code -> label, loaded once from the bundled fan-out catalog. */
   private static volatile Map<String, String> indicatorNames;
 
@@ -77,20 +74,17 @@ public class IlostatTransformer implements StreamingResponseTransformer {
     }
     LOGGER.info("ilostat[{}]: streaming {}", indicator, url);
 
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-    conn.setReadTimeout(READ_TIMEOUT_MS);
-    conn.setRequestProperty("User-Agent", "GovData/1.0");
-    int status = conn.getResponseCode();
-    if (status == HttpURLConnection.HTTP_NOT_FOUND) {
-      // No bulk file for this indicator id — honest absence, not a fabricated row.
-      conn.disconnect();
-      LOGGER.warn("ilostat[{}]: HTTP 404 (no bulk file) for {}", indicator, url);
-      return Collections.<Map<String, Object>>emptyList().iterator();
-    }
-    if (status != HttpURLConnection.HTTP_OK) {
-      conn.disconnect();
-      throw new IOException("HTTP " + status + " from " + url);
+    HttpURLConnection conn;
+    try {
+      // Shared retryable open (Retry-After + backoff + declared rateLimit); default UA is GovData/1.0.
+      conn = RetryableHttp.openWithRetry(url, null, context.getRateLimit(), false);
+    } catch (RetryableHttp.HttpStatusException e) {
+      if (e.getStatus() == HttpURLConnection.HTTP_NOT_FOUND) {
+        // No bulk file for this indicator id — honest absence, not a fabricated row.
+        LOGGER.warn("ilostat[{}]: HTTP 404 (no bulk file) for {}", indicator, url);
+        return Collections.<Map<String, Object>>emptyList().iterator();
+      }
+      throw e;
     }
     InputStream raw = conn.getInputStream();
     BufferedReader reader = new BufferedReader(
