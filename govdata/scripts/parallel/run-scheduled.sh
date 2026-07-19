@@ -211,31 +211,33 @@ run_window() {
 log_error "INFO: Perpetual runner started (PID $$), first window: $MODE"
 
 # When PROD_* publish creds are present, spawn a background sync daemon that copies new
-# files from local MinIO to R2 every 24h. Runs out-of-band so ETL is never blocked by it.
+# files from local MinIO to R2 continuously: sync, then sleep a short interval, then loop.
+# Each pass is self-bounding via the ~/.r2-last-sync sentinel + --max-age, so a pass with
+# no new data copies nothing — the cost of a quiet pass is one local MinIO LIST. This keeps
+# R2 minutes-fresh instead of up to 24h stale, out-of-band so ETL is never blocked by it.
 if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
+  R2_SYNC_INTERVAL="${GOVDATA_R2_SYNC_INTERVAL:-60}"
   (
     while true; do
-      sleep 86400
       # Rotate the R2 log once it grows past ~5MB so tailing it stays cheap.
       if [ -f "$R2_LOG" ] && [ "$(stat -c%s "$R2_LOG" 2>/dev/null || echo 0)" -gt 5242880 ]; then
         mv -f "$R2_LOG" "$R2_LOG.1"
       fi
-      log_error "INFO: daily R2 sync starting"
       echo "[$(ts)] R2 sync starting" >> "$R2_LOG"
-      # Full sync output goes to R2_LOG (pool_status.py tails it); errors.log keeps
-      # only the start/complete markers. The terminal banners match the watcher's
-      # "R2 sync complete|FAILED" detection so it can tell active from idle.
+      # Full sync output goes to R2_LOG (pool_status.py tails it). The start/complete/FAILED
+      # markers match the watcher's "R2 sync complete|FAILED" detection so it can tell active
+      # from idle. errors.log gets only failures — at this cadence per-pass INFO would spam it.
       if "$SCRIPT_DIR/sync-to-r2.sh" >> "$R2_LOG" 2>&1; then
         echo "[$(ts)] R2 sync complete" >> "$R2_LOG"
-        log_error "INFO: daily R2 sync complete"
       else
         echo "[$(ts)] R2 sync FAILED (will retry next cycle)" >> "$R2_LOG"
         log_error "WARNING: R2 sync failed (will retry next cycle)"
       fi
+      sleep "$R2_SYNC_INTERVAL"
     done
   ) &
   _sync_pid=$!
-  log_error "INFO: R2 sync daemon started (PID $_sync_pid, runs every 24h; log: $R2_LOG)"
+  log_error "INFO: R2 sync daemon started (PID $_sync_pid, continuous every ${R2_SYNC_INTERVAL}s; log: $R2_LOG)"
 fi
 
 while true; do

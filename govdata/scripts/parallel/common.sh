@@ -166,6 +166,18 @@ configure_r2_remote() {
   # R2 ignores region but the S3 backend requires one; PROD_AWS_REGION is 'auto' in .env.prod.
   export RCLONE_CONFIG_R2_REGION="${PROD_AWS_REGION:-auto}"
   export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
+  # Minimize R2 Class A ops per uploaded object. Iceberg data files target 128MB
+  # (compactionTargetFileSizeBytes), so with a single-part cutoff at R2's 5GiB PutObject
+  # limit every realistic data + metadata file uploads as ONE PutObject (1 Class A op),
+  # bypassing multipart (which costs CreateMultipartUpload + UploadPart-per-part +
+  # CompleteMultipartUpload — several Class A ops per file). Single-part streams from
+  # disk, so this is memory-safe regardless of file size — unlike a large --s3-chunk-size,
+  # whose buffer is chunk × upload_concurrency × transfers held in RAM. chunk_size +
+  # concurrency=1 below only bound the pathological >5GiB file that should never occur at
+  # a 128MB target; they cap its multipart part count without inflating memory.
+  export RCLONE_CONFIG_R2_UPLOAD_CUTOFF=5Gi
+  export RCLONE_CONFIG_R2_CHUNK_SIZE=256Mi
+  export RCLONE_CONFIG_R2_UPLOAD_CONCURRENCY=1
 }
 
 # Resolve the govdata shadow JAR (fat JAR with all dependencies).
