@@ -155,7 +155,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -277,7 +278,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -414,7 +416,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -542,7 +545,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -675,7 +679,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -808,7 +813,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -892,7 +898,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -984,7 +991,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1088,7 +1096,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1231,7 +1240,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1370,7 +1380,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
 # ============================================================================
@@ -1461,7 +1472,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   - name: cdc_brfss
@@ -1567,7 +1579,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   - name: cms_open_payments
@@ -1715,7 +1728,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   - name: rxnorm_drugs
@@ -1777,7 +1791,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1788,7 +1803,7 @@ partitionedTables:
   # Streamed by org.apache.calcite.adapter.govdata.health.WhoGhoTransformer.
   # Indicator ids PENDING LIVE VERIFICATION against the GHO indicator catalog.
   - name: who_gho_indicators
-    pattern: "type=who_gho/indicator=*/year=*/*.parquet"
+    pattern: "type=who_gho/indicator=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -1796,8 +1811,6 @@ partitionedTables:
           type: VARCHAR
         - name: indicator
           type: VARCHAR
-        - name: year
-          type: INTEGER
     comment: >
       WHO Global Health Observatory indicators: value per country x indicator x
       dimension x year. Tall — the international analog of the U.S. openFDA/clinical
@@ -1852,7 +1865,7 @@ partitionedTables:
       - name: year
         type: integer
         nullable: false
-        comment: Data year (partition column; from GHO TimeDim)
+        comment: Data year (from GHO TimeDim)
       - name: is_aggregate
         type: boolean
         nullable: true
@@ -1873,9 +1886,9 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=who_gho/indicator=*/year=*/"
+        pattern: "type=who_gho/indicator=*/"
       partition:
-        columns: [type, indicator, year]
+        columns: [type, indicator]
       options:
         compression: snappy
         batchSize: 50000
@@ -1883,7 +1896,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728
-        batchPartitionColumns: [year]
+        batchPartitionColumns: [indicator]
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7

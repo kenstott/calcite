@@ -97,14 +97,6 @@ column_templates:
     columnDefinitions:
       - *partition_type
 
-  ghcnd_daily_partitions: &ghcnd_daily_partitions
-    style: hive
-    columnDefinitions:
-      - *partition_type
-      - *partition_year
-      - *partition_state_fips
-      - *partition_month
-
   drought_partitions: &drought_partitions
     style: hive
     columnDefinitions:
@@ -348,6 +340,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: nws_stations
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -449,6 +443,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: nws_alerts
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -543,6 +539,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_stations
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         overwritePartitions: true
         runCompaction: true
@@ -638,6 +636,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_monthly_summaries
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -723,6 +723,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_annual_summaries
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -820,6 +822,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: ghcnd_stations_with_county
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -830,8 +834,8 @@ partitionedTables:
   # GHCND DAILY - NOAA GHCN-Daily bulk annual files (no auth required)
   # ---------------------------------------------------------------------------
   - name: ghcnd_daily
-    pattern: "type=ghcnd_daily/year=*/state_fips=*/month=*/*.parquet"
-    partitions: *ghcnd_daily_partitions
+    pattern: "type=ghcnd_daily/year=*/*.parquet"
+    partitions: *standard_partitions
     comment: >
       NOAA GHCN-Daily station observations from NCEI annual bulk files
       (https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/YYYY.csv.gz).
@@ -924,12 +928,14 @@ partitionedTables:
       options:
         stagingMode: local
       output:
-        pattern: "type=ghcnd_daily/year=*/state_fips=*/month=*/"
+        pattern: "type=ghcnd_daily/year=*/"
       partition:
-        columns: [type, year, state_fips, month]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: ghcnd_daily
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1042,6 +1048,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: drought_monitor_weekly
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1126,6 +1134,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: hms_smoke_daily
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1195,6 +1205,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: hms_smoke_polygons
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1307,6 +1319,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: climate_normals_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true

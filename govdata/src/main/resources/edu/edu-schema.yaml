@@ -204,7 +204,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -410,7 +411,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -529,7 +531,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -676,7 +679,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -898,7 +902,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1103,7 +1108,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1321,7 +1327,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1570,7 +1577,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1686,7 +1694,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -1879,7 +1888,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
   # ==========================================================================
@@ -2012,7 +2022,8 @@ partitionedTables:
         compression: snappy
       iceberg:
         catalogType: hadoop
-        runMaintenance: false
+        runMaintenance: true
+        snapshotRetentionDays: 1
         runCompaction: false
 
 # ============================================================================

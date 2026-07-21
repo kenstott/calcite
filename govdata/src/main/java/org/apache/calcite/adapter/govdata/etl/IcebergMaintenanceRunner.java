@@ -178,12 +178,7 @@ public class IcebergMaintenanceRunner {
       return 0;
     }
 
-    if (partitionsNeedingCompaction == 0) {
-      System.out.println("No partitions need compaction.");
-      return 0;
-    }
-
-    // Create storage provider for S3/R2
+    // Create storage provider for S3/R2 (needed for both maintenance and compaction)
     Map<String, Object> s3Config = new HashMap<>();
     if (config.s3AccessKey != null) {
       s3Config.put("accessKeyId", config.s3AccessKey);
@@ -199,6 +194,35 @@ public class IcebergMaintenanceRunner {
         : StorageProviderFactory.createFromType("local", null);
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    // Maintenance-only: expire snapshots (orphan-removal only when orphan-days <= 30) and stop,
+    // skipping compaction. Compaction gates on files-per-partition; a table already at ~1 file per
+    // partition needs no rewrite yet can still carry hundreds of superseded snapshots pinning stale
+    // files. This path reclaims those without the churn (and risk) of an unnecessary rewrite.
+    if (config.maintenanceOnly) {
+      System.out.println("\nMaintenance-only: expiring snapshots older than "
+          + config.expireSnapshotsDays + " days (orphan-removal "
+          + (config.orphanFilesDays <= 30 ? "enabled >" + config.orphanFilesDays + "d)" : "disabled)")
+          + ")...");
+      writer.runMaintenance(config.expireSnapshotsDays, config.orphanFilesDays);
+      table.refresh();
+      int liveFiles = 0;
+      for (org.apache.iceberg.FileScanTask task : table.newScan().planFiles()) {
+        liveFiles++;
+      }
+      System.out.println("\n"
+    + "=".repeat(60));
+      System.out.println("Maintenance Complete (no compaction)");
+      System.out.println("=".repeat(60));
+      System.out.println("  Live data files: " + liveFiles);
+      System.out.println("  Snapshots: " + countSnapshots(table));
+      return 0;
+    }
+
+    if (partitionsNeedingCompaction == 0) {
+      System.out.println("No partitions need compaction.");
+      return 0;
+    }
 
     // First expire old snapshots to clean up lineage
     // (RewriteFiles needs valid snapshot lineage to commit)
@@ -259,6 +283,7 @@ public class IcebergMaintenanceRunner {
     System.err.println("  --small-size-mb N       Small file threshold in MB (default: 10)");
     System.err.println("  --expire-days N         Expire snapshots older than N days (default: 3)");
     System.err.println("  --orphan-days N         Remove orphans older than N days (default: 1)");
+    System.err.println("  --maintenance-only      Expire snapshots (+orphans if orphan-days<=30) and stop; no compaction");
     System.err.println("  --dry-run               Report only, no changes");
   }
 
@@ -274,6 +299,7 @@ public class IcebergMaintenanceRunner {
     int expireSnapshotsDays = DEFAULT_EXPIRE_SNAPSHOTS_DAYS;
     int orphanFilesDays = DEFAULT_ORPHAN_FILES_DAYS;
     boolean dryRun = false;
+    boolean maintenanceOnly = false;
 
     static Config fromArgs(String[] args) {
       Config config = new Config();
@@ -311,6 +337,9 @@ public class IcebergMaintenanceRunner {
           break;
         case "--dry-run":
           config.dryRun = true;
+          break;
+        case "--maintenance-only":
+          config.maintenanceOnly = true;
           break;
         case "--help":
           printUsage();

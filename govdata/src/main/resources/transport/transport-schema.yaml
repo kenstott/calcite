@@ -254,6 +254,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: vehicle_recalls
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -422,6 +424,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: safety_complaints
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -573,6 +577,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: fatal_crashes
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -766,6 +772,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: airline_ontime
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -892,6 +900,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: airports
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1022,6 +1032,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: transit_ridership
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1154,6 +1166,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: t100_segments
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1240,6 +1254,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: vehicle_registrations
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1413,6 +1429,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: fmcsa_carriers
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1643,6 +1661,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: faa_aircraft_master
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1755,6 +1775,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: faa_aircraft_reference
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1831,6 +1853,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: faa_engine_reference
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1993,6 +2017,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: ntsb_aviation_accidents
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -2148,6 +2174,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: cfs_shipments
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728

@@ -169,6 +169,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: national_forests
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionMinFiles: 1
@@ -290,6 +292,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: timber_sales
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -369,6 +373,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_inventory
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -453,6 +459,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: forest_metrics
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -551,6 +559,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: fia_plots
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -637,6 +647,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: fia_tree_grm
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -713,6 +725,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: fia_seedlings
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -786,6 +800,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: fia_down_woody_debris
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -858,6 +874,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: fia_invasives
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -939,6 +957,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: fia_pop_evaluations
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1014,6 +1034,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: nps_units
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionMinFiles: 1
@@ -1085,6 +1107,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: nps_visitation
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1152,6 +1176,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: blm_field_offices
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionMinFiles: 1
@@ -1260,6 +1286,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
         tableName: onrr_revenues
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728

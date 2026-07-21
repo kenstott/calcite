@@ -313,6 +313,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_population
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -381,6 +383,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_income
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -464,6 +468,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_housing
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -556,6 +562,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_education
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -636,6 +644,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_employment
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -704,6 +714,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_poverty
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -795,6 +807,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: decennial_population
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -891,6 +905,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_race_ethnicity
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -966,6 +982,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_age
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1057,6 +1075,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_commuting
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1134,6 +1154,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_health_insurance
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1219,6 +1241,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_language
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1301,6 +1325,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_disability
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1376,6 +1402,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_veterans
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1458,6 +1486,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_migration
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1538,6 +1568,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_occupation
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1658,6 +1690,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_industry
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1740,6 +1774,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_internet
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1815,6 +1851,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_nativity
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1931,6 +1969,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_marital_status
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2021,6 +2061,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_household_type
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2101,6 +2143,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_housing_tenure
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2193,6 +2237,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs_income_distribution
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2268,6 +2314,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: decennial_housing
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2360,6 +2408,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: pep_population
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2446,6 +2496,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: cbp_establishments
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2521,6 +2573,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs1_population
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2580,6 +2634,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: acs1_income
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2687,6 +2743,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: economic_census
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2774,6 +2832,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: saipe_poverty
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2855,6 +2915,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: sahie_insurance
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -2945,6 +3007,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: bds_dynamics
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -3025,6 +3089,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: abs_characteristics
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -3117,6 +3183,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: nonemployer_statistics
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -3233,6 +3301,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: building_permits
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -3340,6 +3410,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: qwi_employment
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -3492,6 +3564,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: lodes_workplace
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728

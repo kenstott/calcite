@@ -241,6 +241,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: patent_grants
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -313,6 +315,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_assignees
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -380,6 +384,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_inventors
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -447,6 +453,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_cpc_classes
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -492,6 +500,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_abstracts
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -541,6 +551,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_applications
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -591,6 +603,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_figures
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -656,6 +670,8 @@ partitionedTables:
       iceberg:
         <<: *patents_snapshot_iceberg_common
         tableName: patent_locations
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
@@ -725,6 +741,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: patent_claims
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -778,6 +796,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: patent_summaries
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -927,6 +947,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: trademark_case_file
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -978,6 +1000,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: trademark_owner
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1021,6 +1045,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: trademark_classification
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1056,6 +1082,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: trademark_intl_class
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1094,6 +1122,8 @@ partitionedTables:
       iceberg:
         <<: *patents_iceberg_common
         tableName: trademark_statement
+        runMaintenance: true
+        snapshotRetentionDays: 1
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 

@@ -765,7 +765,7 @@ partitionedTables:
   # the geo FIPS spine. See docs/data-plans/ag.md. Streamed by FaostatTransformer.
   # Domain codes + bulk column names PENDING LIVE VERIFICATION.
   - name: faostat_production
-    pattern: "type=faostat/domain=*/year=*/*.parquet"
+    pattern: "type=faostat/domain=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -773,8 +773,6 @@ partitionedTables:
           type: VARCHAR
         - name: domain
           type: VARCHAR
-        - name: year
-          type: INTEGER
     comment: >
       UN FAO FAOSTAT production, land use, and food-balance statistics per area
       (country) x item x element x year. Tall — the international analog of the USDA
@@ -854,9 +852,9 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=faostat/domain=*/year=*/"
+        pattern: "type=faostat/domain=*/"
       partition:
-        columns: [type, domain, year]
+        columns: [type, domain]
       options:
         compression: snappy
         batchSize: 50000
@@ -864,6 +862,11 @@ partitionedTables:
       iceberg:
         <<: *nass_iceberg
         overwritePartitions: true
+        # Fetch/partition unit is the domain (one bulk zip = all years); override the
+        # anchor's year-keyed batching/incremental so a batch maps to one whole domain
+        # partition (year-keyed batching would replace-partition per year → clobber).
+        batchPartitionColumns: [domain]
+        incrementalKeys: [domain]
 
 # ============================================================================
 # CONSTRAINTS

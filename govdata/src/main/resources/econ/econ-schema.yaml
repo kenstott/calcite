@@ -5266,7 +5266,7 @@ partitionedTables:
     # depends on the gate, only efficiency).
     freshness:
       type: last_modified
-    pattern: "type=ilostat/indicator=*/year=*/*.parquet"
+    pattern: "type=ilostat/indicator=*/*.parquet"
     partitions:
       style: hive
       columns:
@@ -5274,8 +5274,6 @@ partitionedTables:
           type: string
         - name: indicator
           type: string
-        - name: year
-          type: integer
     comment: >
       UN ILO ILOSTAT labor indicators: value per country x indicator x sex x
       classification x year. Tall — the international analog of the econ BLS tables
@@ -5353,9 +5351,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=ilostat/indicator=*/year=*/"
+        pattern: "type=ilostat/indicator=*/"
       partition:
-        columns: [type, indicator, year]
+        columns: [type, indicator]
       options:
         compression: snappy
         batchSize: 50000
@@ -5363,7 +5361,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728
-        batchPartitionColumns: [year]
+        batchPartitionColumns: [indicator]
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7

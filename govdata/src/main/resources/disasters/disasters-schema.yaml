@@ -231,6 +231,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: disaster_declarations
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -359,6 +361,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: public_assistance_projects
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -483,6 +487,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: hazard_mitigation_projects
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -613,6 +619,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: nfip_claims
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -744,6 +752,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: nfip_policies
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -870,6 +880,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: storm_events
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -980,6 +992,8 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: wildfire_perimeters
+        runMaintenance: true
+        snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
