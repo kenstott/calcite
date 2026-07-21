@@ -53,9 +53,16 @@ import java.util.regex.Pattern;
  */
 final class UsageMetering {
 
-  private static final String API_BASE =
-      firstNonEmpty(System.getenv("ASKAMERICA_API_URL"), "https://api.askamerica.ai");
   private static final int SAMPLE_ROWS = 100;
+
+  /** Metering endpoint base — overridable (system property wins, then env, then prod). */
+  private static String apiBase() {
+    String p = System.getProperty("askamerica.api.url");
+    if (p != null && !p.isEmpty()) {
+      return p;
+    }
+    return firstNonEmpty(System.getenv("ASKAMERICA_API_URL"), "https://api.askamerica.ai");
+  }
 
   private static final ExecutorService REPORTER =
       Executors.newSingleThreadExecutor(new ThreadFactory() {
@@ -230,19 +237,18 @@ final class UsageMetering {
         return;
       }
       reported = true;
-      long egress;
       if (rowCount == 0) {
-        egress = 0;
-      } else if (rowCount <= SAMPLE_ROWS) {
-        egress = sampleBytes;
-      } else {
-        long sampled = Math.min(rowCount, SAMPLE_ROWS);
-        egress = (long) ((double) sampleBytes / sampled * rowCount);
+        return;
       }
-      if (egress > 0) {
-        reportUsageAsync(apiKey, sql, rowCount, egress,
-            System.currentTimeMillis() - startMs);
-      }
+      long est = (rowCount <= SAMPLE_ROWS)
+          ? sampleBytes
+          : (long) ((double) sampleBytes / SAMPLE_ROWS * rowCount);
+      // Floor at one byte per cell so a byte-sampling hiccup never drops a
+      // non-empty result from metering entirely.
+      long cols = columnCount > 0 ? columnCount : 1;
+      long egress = Math.max(est, rowCount * cols);
+      reportUsageAsync(apiKey, sql, rowCount, egress,
+          System.currentTimeMillis() - startMs);
     }
   }
 
@@ -250,43 +256,54 @@ final class UsageMetering {
 
   private static void reportUsageAsync(final String apiKey, final String sql,
       final long rowCount, final long egressBytes, final long durationMs) {
-    REPORTER.submit(new Runnable() {
+    Runnable task = new Runnable() {
       @Override public void run() {
-        HttpURLConnection c = null;
-        try {
-          URL url = new URL(API_BASE + "/v1/metering/usage");
-          c = (HttpURLConnection) url.openConnection();
-          c.setRequestMethod("POST");
-          c.setConnectTimeout(5000);
-          c.setReadTimeout(5000);
-          c.setDoOutput(true);
-          c.setRequestProperty("Content-Type", "application/json");
-          c.setRequestProperty("X-API-Key", apiKey);
-          String body = "{"
-              + "\"query_id\":\"" + UUID.randomUUID() + "\","
-              + "\"table\":" + jsonString(extractTable(sql)) + ","
-              + "\"planned_bytes\":" + egressBytes + ","
-              + "\"actual_bytes\":" + egressBytes + ","
-              + "\"row_count\":" + rowCount + ","
-              + "\"duration_ms\":" + durationMs + ","
-              + "\"query_text\":" + jsonString(truncate(sql, 1024))
-              + "}";
-          OutputStream os = c.getOutputStream();
-          try {
-            os.write(body.getBytes(StandardCharsets.UTF_8));
-          } finally {
-            os.close();
-          }
-          c.getResponseCode(); // drive the request; response body is ignored
-        } catch (Throwable ignore) {
-          // metering is best-effort — never surface to the caller
-        } finally {
-          if (c != null) {
-            c.disconnect();
-          }
-        }
+        postUsage(apiKey, sql, rowCount, egressBytes, durationMs);
       }
-    });
+    };
+    // Tests can force a synchronous send for a deterministic assertion.
+    if ("true".equals(System.getProperty("askamerica.metering.sync"))) {
+      task.run();
+    } else {
+      REPORTER.submit(task);
+    }
+  }
+
+  private static void postUsage(String apiKey, String sql, long rowCount,
+      long egressBytes, long durationMs) {
+    HttpURLConnection c = null;
+    try {
+      URL url = new URL(apiBase() + "/v1/metering/usage");
+      c = (HttpURLConnection) url.openConnection();
+      c.setRequestMethod("POST");
+      c.setConnectTimeout(5000);
+      c.setReadTimeout(5000);
+      c.setDoOutput(true);
+      c.setRequestProperty("Content-Type", "application/json");
+      c.setRequestProperty("X-API-Key", apiKey);
+      String body = "{"
+          + "\"query_id\":\"" + UUID.randomUUID() + "\","
+          + "\"table\":" + jsonString(extractTable(sql)) + ","
+          + "\"planned_bytes\":" + egressBytes + ","
+          + "\"actual_bytes\":" + egressBytes + ","
+          + "\"row_count\":" + rowCount + ","
+          + "\"duration_ms\":" + durationMs + ","
+          + "\"query_text\":" + jsonString(truncate(sql, 1024))
+          + "}";
+      OutputStream os = c.getOutputStream();
+      try {
+        os.write(body.getBytes(StandardCharsets.UTF_8));
+      } finally {
+        os.close();
+      }
+      c.getResponseCode(); // drive the request; response body is ignored
+    } catch (Throwable ignore) {
+      // metering is best-effort — never surface to the caller
+    } finally {
+      if (c != null) {
+        c.disconnect();
+      }
+    }
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
