@@ -124,6 +124,28 @@ When dropping a col, also override the inherited `batchPartitionColumns` /
 `incrementalKeys` to the new fetch/partition unit (year-keyed batching under a
 year-less partition would replace-partition per year → clobber).
 
+## Compaction pass — large fragmented partitions (merge small → ~128 MB)
+
+The "too-large" tables from the audit are actually **large partitions split into many
+small files** (e.g. `safety_complaints` = 18 GB in 591×30 MB files; `patent_cpc_classes`
+= 496 MB in 2,991×0.17 MB files). Their partitions exceed 128 MB, so compaction *can*
+build full-size files — unlike the tiny tables where it can't. `runCompaction` merges
+small files within a partition up toward the target regardless of whether the partition
+exceeds 128 MB, so it also cuts file count on medium fragmented tables.
+
+Audit of `runCompaction` across all 332 iceberg tables found 48 without it. Fixes:
+- **Flipped `runCompaction: false`→`true` in edu (11), health (15), patents (1 anchor →
+  covers all 7 patents tables)** — real-data tables wrongly disabled, incl. the big
+  single-partition offenders (`patent_cpc_classes`/`inventors`/`abstracts`/`assignees`,
+  `health.cms_open_payments` 941 MB, `medicaid_drug_utilization` 354 MB).
+- **`fec.individual_contributions`: `compactionMinFiles` 2000 → 5** — 2000 mathematically
+  disabled compaction (partition has ~611 files « 2000); the 1.7 GB/partition table never
+  compacted its ~611 small files. Now merges to ~14×128 MB.
+- **Left the 18 `runCompaction: None` static reference dims** (econ-reference/geo/ref) —
+  already 1 file each; compaction would be a pointless no-op.
+
+No purge/re-ingest needed for compaction — it merges existing files on the next ETL run.
+
 ## Per-table decisions
 
 | Table | Decision | Grain change | Rationale |
@@ -146,9 +168,9 @@ year-less partition would replace-partition per year → clobber).
 - **Consolidated jar rebuild** before any re-ingest (bundles all grain changes; last
   rebuild predates `ilostat`). ETL is currently stopped.
 - Re-ingest of the 4 repartitioned tables (regenerates data at new grain).
-- **Too-large tables** (opposite problem, not yet addressed): `transport.safety_complaints`
-  (18 GB/1 partition), `fec.individual_contributions` (1.7 GB/part), single-partition
-  `patents.*`, `sec.vectorized_chunks` — need the write to emit ~128 MB files.
+- ~~**Too-large tables**~~ — **ADDRESSED via compaction** (see below). These weren't
+  single giant files but large partitions fragmented into many small files; the fix is
+  `runCompaction` (merges small files up toward 128 MB), not repartitioning.
 - **High-value clean coarsening is now exhausted** (ghcnd, who_gho, faostat, ilostat,
   nsf_national_rd done). Remaining `droppable` scan hits are either:
   - *tiny/marginal* — already ~1 live file after the snapshot fix: `econ.state_gdp`,

@@ -138,7 +138,7 @@ column_templates:
   patents_snapshot_iceberg_common: &patents_snapshot_iceberg_common
     warehousePath: "${GOVDATA_PARQUET_DIR}/patents"
     catalogType: hadoop
-    runCompaction: false
+    runCompaction: true
 
   raw_cache_enabled: &raw_cache_enabled
     enabled: true

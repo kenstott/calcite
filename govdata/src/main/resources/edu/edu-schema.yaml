@@ -206,7 +206,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CCD SCHOOLS — NCES individual school directory, annual
@@ -413,7 +413,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # NAEP SCORES — Nation's Report Card state-level assessment results
@@ -533,7 +533,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # NAEP ACHIEVEMENT LEVELS — proficiency distribution from ALD stattype calls
@@ -681,7 +681,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CRDC SCHOOLS — Civil Rights Data Collection, biennial equity metrics
@@ -904,7 +904,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # IPEDS INSTITUTIONS — NCES HD survey, annual
@@ -1110,7 +1110,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # IPEDS COMPLETIONS — NCES C survey, degrees awarded by field of study
@@ -1329,7 +1329,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # IPEDS FINANCIALS — NCES F survey, revenues and expenditures
@@ -1579,7 +1579,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # IPEDS TUITION — NCES IC_AY survey, annual published tuition and fees
@@ -1696,7 +1696,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # COLLEGE SCORECARD — Institution-level post-enrollment outcomes
@@ -1890,7 +1890,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # COLLEGE SCORECARD PROGRAMS — program-level earnings by CIP code
@@ -2024,7 +2024,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
 # ============================================================================
 # Views

@@ -157,7 +157,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # FDA DRUG APPROVALS — NDA/BLA/ANDA application records (~29k)
@@ -280,7 +280,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # FDA DRUG RECALLS — Class I/II/III enforcement actions
@@ -418,7 +418,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # FDA ADVERSE EVENTS — FAERS reports, bulk partition ZIPs (download.open.fda.gov)
@@ -547,7 +547,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # FDA DEVICE RECALLS — medical device enforcement actions
@@ -681,7 +681,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CLINICAL TRIALS (clinicaltrials.gov) — ~500k studies, token-based pagination
@@ -815,7 +815,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CLINICAL TRIAL CONDITIONS — derived from clinical_trials, one row per condition
@@ -900,7 +900,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CLINICAL TRIAL INTERVENTIONS — derived from clinical_trials, one row per intervention
@@ -993,7 +993,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CDC COVID-19 VACCINATIONS — Socrata SODA API, ~ongoing updates
@@ -1098,7 +1098,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # CMS HOSPITAL QUALITY METRICS — Socrata SODA API, ~5,426 facilities
@@ -1242,7 +1242,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # MEDICAID DRUG UTILIZATION — Socrata SODA API, ~2.5M records/year
@@ -1382,7 +1382,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
 # ============================================================================
 # Health Schema — Phase 3: CDC Mortality, CDC BRFSS, CMS Open Payments, RxNorm
@@ -1474,7 +1474,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   - name: cdc_brfss
     releaseWindow:
@@ -1581,7 +1581,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   - name: cms_open_payments
     releaseWindow:
@@ -1730,7 +1730,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   - name: rxnorm_drugs
     # Freshness: rxnav has no version endpoint; hash the downloaded body (single
@@ -1793,7 +1793,7 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
-        runCompaction: false
+        runCompaction: true
 
   # ==========================================================================
   # INTERNATIONAL / UN FEED — WHO Global Health Observatory
