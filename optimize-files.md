@@ -180,9 +180,14 @@ No purge/re-ingest needed for compaction — it merges existing files on the nex
     low payoff);
   - *keep* — well-sized: `ag.ers_farm_income` (108 MB/yr); `sec.stock_prices`;
   - *snapshot-date partitions* — not droppable: cyber-threat `ioc_*`, `ref.sec_company_tickers`;
-  - *complex / verify-first* — `econ.world_indicators` & `econ-reference.nipa_tables`
-    (partition omits the fetch dimension — possible existing clobber/bug), `cyber-vuln.*`
-    (deferred; NVD resolver upper-bound).
+  - *investigated + fixed* — `econ.world_indicators` was a **data-corruption bug**: fetched
+    per-indicator but had no `indicator` column and partitioned `[type,frequency,year]`
+    (no indicator) with `overwritePartitions`, so `value` was unidentifiable AND clobbered
+    to last-indicator-wins. Fixed to `[type, indicator]` + `batchPartitionColumns:[indicator]`
+    (ilostat pattern); `yearFilter` still trims via responsePartitioning. Purged.
+    `econ-reference.nipa_tables` was NOT corruption — a static catalog fetched via a constant
+    URL; removed the redundant `year` dimension so it fetches once. Purged.
+  - *deferred* — `cyber-vuln.*` (NVD resolver upper-bound).
 
 # Snapshot retention + history modeling
 

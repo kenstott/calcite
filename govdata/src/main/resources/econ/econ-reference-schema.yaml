@@ -446,11 +446,12 @@ partitionedTables:
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
 
-    # Dimension for ETL iteration
+    # Dimension for ETL iteration. No year: the source is a constant GetParameterValues
+    # call returning the full static NIPA table catalog — a year crawl just re-fetched the
+    # same list N times (and section partitions were overwritten same-with-same each pass).
     dimensions:
       type:
         - nipa_tables
-      year: *econ_reference_year_range
 
     # Materialization configuration
     materialize:

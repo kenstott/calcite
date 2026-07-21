@@ -2421,8 +2421,14 @@ partitionedTables:
   - name: world_indicators
     freshness:
       type: last_modified
-    pattern: "type=indicators/frequency=*/year=*/world_indicators.parquet"
-    partitions: *standard_partitions
+    pattern: "type=indicators/indicator=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: string
+        - name: indicator
+          type: string
     comment: >
       International economic indicators from World Bank for all countries. Includes GDP, inflation,
       unemployment, government debt, and population statistics. Uses bulk download with response
@@ -2510,9 +2516,12 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=indicators/frequency=*/year=*/"
+        pattern: "type=indicators/indicator=*/"
       partition:
-        columns: [type, frequency, year]  # NO country_code - avoids small file problem
+        columns: [type, indicator]  # one partition per indicator: identifies value + prevents
+                                     # cross-indicator clobber (was [type,frequency,year] with no
+                                     # indicator col — value was unidentifiable). year stays a data
+                                     # column (date); yearFilter still trims via responsePartitioning.
       options:
         compression: snappy
         batchSize: 50000
@@ -2520,8 +2529,8 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
-        batchPartitionColumns: [year]
-        # Bulk table: each run overwrites the year partitions wholesale (replace, not append).
+        batchPartitionColumns: [indicator]
+        # Per-indicator fetch: each run replaces that indicator's partition wholesale (all years).
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
