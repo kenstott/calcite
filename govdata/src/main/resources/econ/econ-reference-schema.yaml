@@ -365,11 +365,11 @@ partitionedTables:
 
   # --- REFERENCE NIPA TABLES ---
   - name: nipa_tables
-    pattern: "section=*/*.parquet"
+    pattern: "type=nipa_tables/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
-        - name: section
+        - name: type
           type: VARCHAR
     comment: >
       BEA NIPA (National Income and Product Accounts) table reference catalog with section categorization. NIPA tables are organized into 8 sections: 1=Domestic Product & Income, 2=Personal Income & Outlays, 3=Government, 4=Foreign Transactions, 5=Saving & Investment, 6=Industry, 7=Supplemental, 8=Not Seasonally Adjusted. Downloaded early to enable dynamic table discovery and complete NIPA data collection.
@@ -458,9 +458,9 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "section=*/"
+        pattern: "type=nipa_tables/"
       partition:
-        columns: [section]
+        columns: [type]
       options:
         compression: snappy
         batchSize: 50000
