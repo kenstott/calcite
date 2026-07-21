@@ -10,6 +10,9 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -22,11 +25,14 @@ import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -127,6 +133,68 @@ final class UsageMetering {
     }
   }
 
+  // ── quota enforcement ──────────────────────────────────────────────────────
+  private static final Map<String, long[]> QUOTA_CACHE =
+      new ConcurrentHashMap<String, long[]>();
+  private static final long QUOTA_TTL_MS = 60_000L;
+
+  /** Block the query when the user is out of quota (mirrors the Python/MCP gate). */
+  private static void enforceQuota(String apiKey) throws SQLException {
+    if (quotaExhausted(apiKey)) {
+      throw new SQLException(
+          "AskAmerica monthly quota exceeded. Upgrade at https://askamerica.ai/upgrade");
+    }
+  }
+
+  private static boolean quotaExhausted(String apiKey) {
+    long now = System.currentTimeMillis();
+    long[] cached = QUOTA_CACHE.get(apiKey);
+    if (cached != null && cached[1] > now) {
+      return cached[0] == 1L;
+    }
+    boolean over = fetchQuotaExhausted(apiKey);
+    QUOTA_CACHE.put(apiKey, new long[] { over ? 1L : 0L, now + QUOTA_TTL_MS });
+    return over;
+  }
+
+  private static boolean fetchQuotaExhausted(String apiKey) {
+    HttpURLConnection c = null;
+    try {
+      URL url = new URL(apiBase() + "/v1/quota");
+      c = (HttpURLConnection) url.openConnection();
+      c.setRequestMethod("GET");
+      c.setConnectTimeout(5000);
+      c.setReadTimeout(5000);
+      c.setRequestProperty("X-API-Key", apiKey);
+      if (c.getResponseCode() != 200) {
+        return false; // fail open — never block on an infra hiccup
+      }
+      Long remaining = jsonLong(readAll(c.getInputStream()), "remaining_bytes");
+      return remaining != null && remaining <= 0L;
+    } catch (Throwable t) {
+      return false; // fail open
+    } finally {
+      if (c != null) {
+        c.disconnect();
+      }
+    }
+  }
+
+  private static String readAll(InputStream in) throws IOException {
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    byte[] buf = new byte[4096];
+    int n;
+    while ((n = in.read(buf)) != -1) {
+      out.write(buf, 0, n);
+    }
+    return new String(out.toByteArray(), StandardCharsets.UTF_8);
+  }
+
+  private static Long jsonLong(String body, String key) {
+    Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*(-?\\d+)").matcher(body);
+    return m.find() ? Long.valueOf(m.group(1)) : null;
+  }
+
   // ── proxy handlers ─────────────────────────────────────────────────────────
 
   private static final class ConnectionHandler implements InvocationHandler {
@@ -166,8 +234,13 @@ final class UsageMetering {
     }
     @Override public Object invoke(Object proxy, Method method, Object[] args)
         throws Throwable {
-      Object result = invokeTarget(method, target, args);
       String name = method.getName();
+      // Enforce quota before running, so JDBC clients are blocked when out of
+      // data just like the Python client and MCP.
+      if (name.startsWith("execute")) {
+        enforceQuota(apiKey);
+      }
+      Object result = invokeTarget(method, target, args);
       if (result instanceof ResultSet
           && (name.equals("executeQuery") || name.equals("getResultSet"))) {
         String sql = (args != null && args.length > 0 && args[0] instanceof String)

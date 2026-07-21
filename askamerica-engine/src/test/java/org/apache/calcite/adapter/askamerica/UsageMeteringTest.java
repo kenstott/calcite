@@ -10,6 +10,8 @@ import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -28,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,12 +43,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * system properties are guaranteed set on the same thread immediately before the
  * connection is wrapped.
  */
+@Execution(ExecutionMode.SAME_THREAD)  // shares global system properties (stub URL) — must not run in parallel
 class UsageMeteringTest {
 
   private final BlockingQueue<String> bodies = new LinkedBlockingQueue<String>();
+  private volatile long quotaRemaining = Long.MAX_VALUE;
 
   private HttpServer startStub() throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/v1/quota", exchange -> {
+      byte[] resp = ("{\"remaining_bytes\":" + quotaRemaining
+          + ",\"limit_bytes\":53687091200,\"used_bytes\":0,\"tier\":\"starter\",\"period\":\"2026-07\"}")
+          .getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, resp.length);
+      try (OutputStream os = exchange.getResponseBody()) {
+        os.write(resp);
+      }
+    });
     server.createContext("/v1/metering/usage", exchange -> {
       bodies.offer(new String(readAll(exchange.getRequestBody()), StandardCharsets.UTF_8));
       byte[] resp = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
@@ -99,6 +113,43 @@ class UsageMeteringTest {
       assertTrue(body.contains("sec_filings"), body);
       assertTrue(body.matches("(?s).*\"actual_bytes\":[1-9][0-9]*.*"),
           "actual_bytes should be a positive egress estimate: " + body);
+    } finally {
+      stopStub(server);
+    }
+  }
+
+  @Test void blocksQueryWhenQuotaExhausted() throws Exception {
+    HttpServer server = startStub();
+    quotaRemaining = 0;  // out of data
+    try {
+      Connection conn = UsageMetering.wrap(freshDuck(), "aa_live_test_over");
+      Statement st = conn.createStatement();
+      java.sql.SQLException ex = assertThrows(java.sql.SQLException.class,
+          () -> st.executeQuery("SELECT cik, name FROM sec_filings"));
+      assertTrue(ex.getMessage().toLowerCase().contains("quota"), ex.getMessage());
+      assertNull(bodies.poll(1, TimeUnit.SECONDS), "a blocked query must not be metered");
+      st.close();
+      conn.close();
+    } finally {
+      stopStub(server);
+    }
+  }
+
+  @Test void allowsQueryWhenQuotaAvailable() throws Exception {
+    HttpServer server = startStub();
+    quotaRemaining = 40L * 1024 * 1024 * 1024;  // plenty
+    try {
+      Connection conn = UsageMetering.wrap(freshDuck(), "aa_live_test_under");
+      try (Statement st = conn.createStatement();
+           ResultSet rs = st.executeQuery("SELECT cik, name FROM sec_filings")) {
+        int rows = 0;
+        while (rs.next()) {
+          rows++;
+        }
+        assertEquals(3, rows);
+      }
+      conn.close();
+      assertNotNull(bodies.poll(10, TimeUnit.SECONDS), "an allowed query should meter");
     } finally {
       stopStub(server);
     }
