@@ -2437,6 +2437,8 @@ partitionedTables:
     # Dimensions for batch iteration - only indicator drives API calls
     # Country and year are derived from response data via responsePartitioning
     dimensions:
+      type:
+        - indicators
       indicator:
         type: json_catalog
         source: "/worldbank/worldbank-indicators.json"
