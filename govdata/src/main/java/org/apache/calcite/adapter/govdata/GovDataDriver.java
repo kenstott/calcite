@@ -371,7 +371,13 @@ public class GovDataDriver extends Driver {
       sessionToken = System.getenv("AWS_SESSION_TOKEN");
       LOGGER.info("Using object-store endpoint from environment (AWS_ENDPOINT_OVERRIDE): {}", endpoint);
     } else {
-      Map<String, String> creds = R2CredentialProvider.resolve();
+      Map<String, String> creds;
+      try {
+        creds = R2CredentialProvider.resolveOrFetch(System.getenv("ASKAMERICA_API_KEY"));
+      } catch (java.io.IOException e) {
+        throw new IllegalStateException(
+            "No R2 credentials available and credential fetch failed: " + e.getMessage(), e);
+      }
       accessKeyId = creds.get("accessKeyId");
       secretAccessKey = creds.get("secretAccessKey");
       endpoint = creds.get("endpoint");

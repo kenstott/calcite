@@ -70,8 +70,30 @@ public final class R2CredentialProvider {
       LOGGER.debug("R2CredentialProvider: using disk-cached credentials");
       return cached;
     }
-    LOGGER.debug("R2CredentialProvider: using baked-in default credentials");
-    return loadDefaults();
+    Map<String, String> defaults = loadDefaults();
+    if (defaults != null) {
+      LOGGER.debug("R2CredentialProvider: using baked-in default credentials");
+      return defaults;
+    }
+    // No cache and no baked defaults — credentials must be fetched with an API key
+    // (see resolveOrFetch). Return an empty map so callers that read individual
+    // fields degrade gracefully instead of NPE-ing.
+    return new LinkedHashMap<String, String>();
+  }
+
+  /**
+   * Returns complete credentials, fetching them from the AskAmerica API when neither
+   * the disk cache nor baked defaults can supply a complete set.
+   *
+   * @param apiKey caller's ASKAMERICA_API_KEY (required only when a fetch is needed)
+   * @throws IOException if a fetch is required and fails (missing/invalid key, etc.)
+   */
+  public static Map<String, String> resolveOrFetch(String apiKey) throws IOException {
+    Map<String, String> creds = resolve();
+    if (isComplete(creds)) {
+      return creds;
+    }
+    return refresh(apiKey);
   }
 
   /**
@@ -135,18 +157,13 @@ public final class R2CredentialProvider {
   private static Map<String, String> loadDefaults() {
     try (InputStream in = R2CredentialProvider.class.getResourceAsStream(RESOURCE_PATH)) {
       if (in == null) {
-        throw new IllegalStateException(
-            "R2 defaults resource not found at " + RESOURCE_PATH
-            + " — JAR was not built with credentials embedded");
+        return null;
       }
       Map<String, String> creds = MAPPER.readValue(in, MAP_TYPE);
-      if (!isComplete(creds)) {
-        throw new IllegalStateException(
-            "R2 defaults resource is missing required fields");
-      }
-      return creds;
+      return isComplete(creds) ? creds : null;
     } catch (IOException e) {
-      throw new IllegalStateException("Failed to load R2 defaults: " + e.getMessage(), e);
+      LOGGER.debug("R2CredentialProvider: could not read baked defaults: {}", e.getMessage());
+      return null;
     }
   }
 
