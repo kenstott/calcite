@@ -1008,11 +1008,16 @@ partitionedTables:
   # EIA STATE ENERGY CONSUMPTION - SEDS State Energy Data System
   # ---------------------------------------------------------------------------
   - name: eia_state_energy_consumption
-    pattern: "type=eia_seds/year=*/*.parquet"
+    pattern: "type=eia_seds/*.parquet"
     # DQ sample cap (GOVDATA_DQ mode): the bulk SEDS.zip is one cumulative fetch of the full
     # history (millions of state × MSN × year rows). Cap the stream so DQ samples fast; prod full.
     dqRowLimit: 25000
-    partitions: *standard_partitions
+    # Single cumulative fetch (all years in one SEDS.zip) → one [type] partition = one file.
+    # year stays a data column for filtering; partitioning by it just fragmented (~1.7k files).
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
     comment: >
       EIA API v2 State Energy Data System (SEDS). Annual energy consumption, expenditure,
       and price by state, sector, fuel type, and MSN (energy series code). The MSN code
@@ -1095,9 +1100,9 @@ partitionedTables:
     materialize:
       format: iceberg
       output:
-        pattern: "type=eia_seds/year=*/"
+        pattern: "type=eia_seds/"
       partition:
-        columns: [type, year]
+        columns: [type]
       iceberg:
         <<: *iceberg_common
         tableName: eia_state_energy_consumption
