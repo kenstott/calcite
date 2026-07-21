@@ -117,7 +117,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -272,7 +272,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -382,7 +382,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -491,7 +491,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -557,7 +557,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -689,7 +689,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -809,7 +809,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -910,7 +910,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # Iceberg time-travel history depth (deep, per design)
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5

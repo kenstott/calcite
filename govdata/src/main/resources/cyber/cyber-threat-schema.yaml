@@ -141,7 +141,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -253,7 +253,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -380,7 +380,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -482,7 +482,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -616,7 +616,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -708,7 +708,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -796,7 +796,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -893,7 +893,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -976,7 +976,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -1075,7 +1075,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -1200,7 +1200,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         overwritePartitions: true   # default + historical/DQ: replace each first_seen partition
         # Production daily appends instead — accumulating pulse version history in each first_seen

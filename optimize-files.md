@@ -182,3 +182,31 @@ No purge/re-ingest needed for compaction — it merges existing files on the nex
   - *complex / verify-first* — `econ.world_indicators` & `econ-reference.nipa_tables`
     (partition omits the fetch dimension — possible existing clobber/bug), `cyber-vuln.*`
     (deferred; NVD resolver upper-bound).
+
+# Snapshot retention + history modeling
+
+**Retention was being (mis)used to hold business history.** 41 tables had
+`snapshotRetentionDays: 1825` (5 years) — cyber (19), plus static/reference dims in
+ref/econ-reference/geo (22). The intent was Iceberg time-travel for "period-correct"
+reads, but that mechanism is commit-driven (not change-driven), unwired into the read
+path, and couples GC to modeling → unbounded snapshot bloat. **Lowered all 41 to `1`.**
+
+**History belongs in the data, two patterns:**
+- **Source-timestamped, high-churn → `computed_delta` + append.** `ref.gleif_entities`
+  is the model: the GLEIF golden copy carries `last_update`; each run appends only rows
+  whose `last_update` advanced past the HWM (`overwritePartitions: false`), so the table
+  is an append-only changelog. "Current" = latest `last_update` per `lei`. No deletion.
+  Its 1825 retention was therefore redundant (history is in rows the current snapshot
+  references) — safely lowered.
+- **Discrete editions, no row timestamp → explicit `vintage` column.** Built for NAICS
+  (revises ~every 5 yrs; `ref.naics` held only 2022):
+  - `ref.naics_vintage` — one row per code PER edition (`vintage`), partitioned by
+    `[type, vintage]`, PK `(vintage, naics_code)`. Real data loaded: **2017 + 2022**
+    (4,315 rows) via Census per-edition xlsx (2002–2012 use a different archived URL —
+    additive later).
+  - `ref.naics_vintage_map` — `data_year → naics_vintage` (2010–2027). Join
+    `fact.year → map → naics_vintage`, then `(naics_vintage, naics_code)`.
+  - `ref.naics` kept as the current-edition FK spine (non-breaking).
+  - `build-refs.py`: `_parse_naics` extracted; `build_naics_vintage` +
+    `build_naics_vintage_map` added (`NAICS_EDITIONS = [2017, 2022]`).
+  - **SIC left alone** — frozen since 1987, correctly non-vintaged.

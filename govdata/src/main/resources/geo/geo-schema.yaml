@@ -339,7 +339,7 @@ partitionedTables:
         tableName: state_ref
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
 
   # --------------------------------------------------------------------------
   # Census regions / divisions — conformed geographic dimensions
@@ -393,7 +393,7 @@ partitionedTables:
         tableName: census_regions
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
 
   - name: census_divisions
     pattern: "census_divisions.parquet"
@@ -447,7 +447,7 @@ partitionedTables:
         tableName: census_divisions
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
 
   # --------------------------------------------------------------------------
   # ZCTA reference — conformed, non-vintaged ZIP-code-tabulation-area dimension
@@ -517,7 +517,7 @@ partitionedTables:
         tableName: zcta_ref
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
 
   # --------------------------------------------------------------------------
   # Counties - U.S. county boundaries

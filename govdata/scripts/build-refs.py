@@ -24,6 +24,9 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " \
      "(KHTML, like Gecko) Chrome/120 Safari/537.36"
 
 NAICS_URL = "https://www.census.gov/naics/2022NAICS/2-6%20digit_2022_Codes.xlsx"
+# NAICS revises in ~5-year editions. Only 2017+ are published at this Census URL layout;
+# 2002/2007/2012 live at different archived paths — add them here once sourced.
+NAICS_EDITIONS = [2017, 2022]
 CURR_URL = "https://raw.githubusercontent.com/datasets/currency-codes/main/data/codes-all.csv"
 SIC_URL = "https://www.sec.gov/info/edgar/siccodes.htm"
 # archive.org fallback (SEC edge blocks datacenter IPs with 403)
@@ -72,8 +75,8 @@ def write_yaml(name, root_key, rows, cols, header, schema="ref"):
     print("wrote %s (%d rows)" % (path, len(rows)))
 
 
-def build_naics():
-    raw = fetch(NAICS_URL)
+def _parse_naics(raw):
+    """Parse a Census NAICS '2-6 digit Codes' xlsx into [{naics_code, naics_title, level}]."""
     z = zipfile.ZipFile(__import__("io").BytesIO(raw))
     shared = []
     if "xl/sharedStrings.xml" in z.namelist():
@@ -103,9 +106,47 @@ def build_naics():
             out.append({"naics_code": code,
                         "naics_title": title.rstrip("T ").strip(),
                         "level": len(code.split("-")[0])})
-    write_yaml("naics-codes.yaml", "naics", out,
+    return out
+
+
+def build_naics():
+    write_yaml("naics-codes.yaml", "naics", _parse_naics(fetch(NAICS_URL)),
                ["naics_code", "naics_title", "level"],
                "Census 2022 NAICS 2-6 digit industry classification.")
+
+
+def build_naics_vintage():
+    """Multi-edition NAICS: one row per code PER vintage (edition year). Consumers join a
+    fact to the edition in effect for its period via ref.naics_vintage_map."""
+    rows = []
+    for year in NAICS_EDITIONS:
+        url = "https://www.census.gov/naics/%dNAICS/2-6%%20digit_%d_Codes.xlsx" % (year, year)
+        ed = _parse_naics(fetch(url))
+        for r in ed:
+            rows.append({"vintage": year, "naics_code": r["naics_code"],
+                         "naics_title": r["naics_title"], "level": r["level"]})
+        print("  naics vintage %d: %d codes" % (year, len(ed)))
+    write_yaml("naics-vintage-codes.yaml", "naics_vintage", rows,
+               ["vintage", "naics_code", "naics_title", "level"],
+               "Census NAICS editions " + ",".join(str(y) for y in NAICS_EDITIONS)
+               + " (2-6 digit), one row per code per vintage.")
+
+
+def build_naics_vintage_map():
+    """Data-year -> applicable NAICS edition. Edition E is in effect for years [E, nextE-1];
+    years before the earliest loaded edition use that earliest edition (documented fallback)."""
+    eds = sorted(NAICS_EDITIONS)
+    rows = []
+    for y in range(2010, 2028):
+        v = eds[0]
+        for e in eds:
+            if y >= e:
+                v = e
+        rows.append({"data_year": y, "naics_vintage": v})
+    write_yaml("naics-vintage-map.yaml", "naics_vintage_map", rows,
+               ["data_year", "naics_vintage"],
+               "Data-year -> NAICS edition in effect (loaded editions: "
+               + ",".join(str(e) for e in eds) + "; pre-earliest years use the earliest).")
 
 
 def build_currency():
@@ -188,6 +229,8 @@ def build_zcta():
 
 if __name__ == "__main__":
     build_naics()
+    build_naics_vintage()
+    build_naics_vintage_map()
     build_currency()
     build_sic()
     build_zcta()

@@ -239,7 +239,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows; replace-partition would drop all prior LEI history
         runMaintenance: true
-        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -312,7 +312,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -400,7 +400,7 @@ partitionedTables:
         # preserved — the table accumulates a per-day history keyed by as_of.
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -510,7 +510,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -640,7 +640,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1825   # deep: freshness-gated reference table — snapshots ARE the time-travel history
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -700,7 +700,121 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
+
+  # ==========================================================================
+  # NAICS_VINTAGE — multi-edition NAICS for period-correct industry lookups
+  # ==========================================================================
+  # NAICS revises in ~5-year editions (…2012/2017/2022). ref.naics holds only the
+  # current edition (unique FK spine); this table holds one row per code PER edition so a
+  # fact from year Y can be joined to the edition in effect for Y (via naics_vintage_map).
+  # This is the correct "history in the data" pattern — see gleif_entities (SCD by source
+  # last_update) for the high-churn analogue; NAICS has no per-row timestamp so it uses an
+  # explicit vintage column instead. Editions loaded: 2017, 2022 (build-refs.py).
+  - name: naics_vintage
+    pattern: "type=naics_vintage/vintage=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: vintage
+          type: INTEGER
+    comment: >
+      Multi-edition NAICS classification: one row per 2-6 digit code PER vintage (edition
+      year). Use for period-correct industry lookups — join fact.year to
+      ref.naics_vintage_map to pick the edition, then join on (naics_vintage, naics_code).
+      For the single current-edition FK spine use ref.naics. Source: Census per-edition
+      code lists (editions 2017, 2022).
+
+    columns:
+      - name: vintage
+        type: integer
+        nullable: false
+        comment: NAICS edition year (e.g. 2017, 2022)
+      - name: naics_code
+        type: string
+        nullable: false
+        comment: 2-6 digit NAICS code (sectors may be a range, e.g. '31-33')
+      - name: naics_title
+        type: string
+        nullable: false
+        comment: Industry title for this code in this edition
+      - name: level
+        type: integer
+        nullable: false
+        comment: Hierarchy depth = number of digits in the base code (2=sector … 6=national industry)
+
+    source:
+      type: constants
+      file: "/ref/naics-vintage-codes.yaml"
+      path: "naics_vintage"
+
+    dimensions:
+      type:
+        - naics_vintage
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=naics_vintage/vintage=*/"
+      partition:
+        columns: [type, vintage]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1
+
+  # ==========================================================================
+  # NAICS_VINTAGE_MAP — data-year -> applicable NAICS edition
+  # ==========================================================================
+  - name: naics_vintage_map
+    pattern: "naics_vintage_map.parquet"
+    comment: >
+      Data-year to applicable NAICS edition. Join fact.year = naics_vintage_map.data_year to
+      resolve naics_vintage, then join ref.naics_vintage on (naics_vintage, naics_code) for
+      the period-correct title. Loaded editions: 2017, 2022; years before the earliest loaded
+      edition map to it (documented fallback — refine when older editions are sourced).
+
+    columns:
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Calendar/data year
+      - name: naics_vintage
+        type: integer
+        nullable: false
+        comment: NAICS edition year in effect for data_year (matches ref.naics_vintage.vintage)
+
+    source:
+      type: constants
+      file: "/ref/naics-vintage-map.yaml"
+      path: "naics_vintage_map"
+
+    dimensions:
+      type:
+        - naics_vintage_map
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1
 
   # ==========================================================================
   # SIC — SEC EDGAR Standard Industrial Classification list
@@ -754,7 +868,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
 
   # ==========================================================================
   # CURRENCIES — ISO 4217 active currency codes
@@ -812,7 +926,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1825   # static reference table — snapshots ARE the history
+        snapshotRetentionDays: 1
 
   # ==========================================================================
   # CALENDAR — daily date spine (2010 → current+2yr) with every ISO form + parts
@@ -1026,7 +1140,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows (new days); never rewrite history
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -1136,7 +1250,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
 
   # ==========================================================================
   # HOLIDAYS — multi-country public holidays (Nager.Date, ~110 countries)
@@ -1237,7 +1351,7 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1825
+        snapshotRetentionDays: 1
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -1251,6 +1365,14 @@ constraints:
   naics:
     primaryKey: [naics_code]
     comment: NAICS code is the canonical FK target for naics_code across schemas.
+
+  naics_vintage:
+    primaryKey: [vintage, naics_code]
+    comment: One code per edition; (vintage, naics_code) is unique. Period-correct lookup table.
+
+  naics_vintage_map:
+    primaryKey: [data_year]
+    comment: Data-year to NAICS edition; naics_vintage matches ref.naics_vintage.vintage.
 
   sic:
     primaryKey: [sic_code]
@@ -1371,3 +1493,28 @@ views:
       FROM figi_instruments fi
       LEFT JOIN sec_company_tickers sct ON fi.ticker = sct.ticker
       WHERE fi.ticker IS NOT NULL
+
+  - name: current_naics
+    comment: >
+      Current NAICS edition — the latest vintage in naics_vintage. Tracks the newest loaded
+      edition automatically (ref.naics remains the materialized current-edition FK spine; use
+      this view when working from the vintage table). See naics_vintage_map for period-correct
+      (non-current) edition selection.
+    sql: >
+      SELECT vintage, naics_code, naics_title, level
+      FROM naics_vintage
+      WHERE vintage = (SELECT MAX(vintage) FROM naics_vintage)
+
+  - name: current_gleif_entities
+    comment: >
+      Current-state GLEIF entities: the latest row per LEI (max last_update) from the
+      append-only gleif_entities changelog. Use for "as-now" lookups; query gleif_entities
+      directly (group by last_update) for point-in-time / history.
+    sql: >
+      SELECT e.*
+      FROM gleif_entities e
+      JOIN (
+        SELECT lei, MAX(last_update) AS max_last_update
+        FROM gleif_entities
+        GROUP BY lei
+      ) latest ON e.lei = latest.lei AND e.last_update = latest.max_last_update
