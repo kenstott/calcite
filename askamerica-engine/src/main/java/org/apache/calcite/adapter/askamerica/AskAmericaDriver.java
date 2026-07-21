@@ -72,7 +72,9 @@ public class AskAmericaDriver extends BaseDriverWrapper {
                     new java.io.File(duckdbDir, "catalog.duckdb").getAbsolutePath());
             }
         }
-        return super.connect(url, info);
+        // Meter at the Calcite/JDBC layer — the one point every client-compute path
+        // (raw JDBC, Python, MCP) funnels through — so all are metered uniformly.
+        return UsageMetering.wrap(super.connect(url, info), UsageMetering.resolveApiKey(info));
     }
 
 }

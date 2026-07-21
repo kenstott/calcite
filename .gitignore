@@ -130,3 +130,6 @@ runs/
 *.pyc
 *.out
 *.wal
+
+*.local.md
+askamerica-engine/.env
