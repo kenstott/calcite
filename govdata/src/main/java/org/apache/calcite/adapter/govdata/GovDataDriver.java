@@ -359,6 +359,7 @@ public class GovDataDriver extends Driver {
     String envEndpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
     String envAccessKey = System.getenv("AWS_ACCESS_KEY_ID");
     String envSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
+    String sessionToken = null;
     if (envEndpoint != null && !envEndpoint.isEmpty()
         && envAccessKey != null && !envAccessKey.isEmpty()
         && envSecretKey != null && !envSecretKey.isEmpty()) {
@@ -367,6 +368,7 @@ public class GovDataDriver extends Driver {
       endpoint = envEndpoint;
       String envRegion = System.getenv("AWS_REGION");
       region = (envRegion != null && !envRegion.isEmpty()) ? envRegion : "auto";
+      sessionToken = System.getenv("AWS_SESSION_TOKEN");
       LOGGER.info("Using object-store endpoint from environment (AWS_ENDPOINT_OVERRIDE): {}", endpoint);
     } else {
       Map<String, String> creds = R2CredentialProvider.resolve();
@@ -374,12 +376,16 @@ public class GovDataDriver extends Driver {
       secretAccessKey = creds.get("secretAccessKey");
       endpoint = creds.get("endpoint");
       region = creds.get("region");
+      sessionToken = creds.get("sessionToken");
     }
 
     String credBlock = "        \"accessKeyId\": \"" + accessKeyId + "\","
         + "\n        \"secretAccessKey\": \"" + secretAccessKey + "\","
         + "\n        \"endpoint\": \"" + endpoint + "\","
         + "\n        \"region\": \"" + region + "\"";
+    if (sessionToken != null && !sessionToken.isEmpty()) {
+      credBlock += ",\n        \"sessionToken\": \"" + sessionToken + "\"";
+    }
 
     return ",\n      \"s3Config\": {\n" + credBlock + "\n      }"
         + ",\n      \"storageConfig\": {\n" + credBlock + "\n      }";

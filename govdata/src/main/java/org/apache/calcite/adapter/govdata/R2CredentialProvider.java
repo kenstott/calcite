@@ -181,6 +181,11 @@ public final class R2CredentialProvider {
     creds.put("secretAccessKey", stringVal(raw, "secret_access_key"));
     creds.put("endpoint",        stringVal(raw, "endpoint"));
     creds.put("region",          stringVal(raw, "region", "auto"));
+    // Temporary (scoped, short-lived) credentials also carry a session token.
+    String sess = stringVal(raw, "session_token");
+    if (sess != null && !sess.isEmpty()) {
+      creds.put("sessionToken", sess);
+    }
     return creds;
   }
 

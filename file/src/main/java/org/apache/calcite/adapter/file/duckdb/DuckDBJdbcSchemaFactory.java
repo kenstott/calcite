@@ -314,6 +314,7 @@ public class DuckDBJdbcSchemaFactory {
       String s3Region = null;
       String s3AccessKey = null;
       String s3SecretKey = null;
+      String s3SessionToken = null;
       String s3Endpoint = null;
       String endpointHostPort = null;
       Boolean useSSL = null;
@@ -333,6 +334,7 @@ public class DuckDBJdbcSchemaFactory {
           s3Region = (String) storageConfig.get("region");
           s3AccessKey = (String) storageConfig.get("accessKeyId");
           s3SecretKey = (String) storageConfig.get("secretAccessKey");
+          s3SessionToken = (String) storageConfig.get("sessionToken");
           s3Endpoint = (String) storageConfig.get("endpoint");
           if (s3AccessKey != null && s3SecretKey != null) {
             LOGGER.info("Using S3 credentials from schema operands");
@@ -367,6 +369,11 @@ public class DuckDBJdbcSchemaFactory {
           secretSQL.append("PROVIDER config, ");
           secretSQL.append("KEY_ID '").append(s3AccessKey).append("', ");
           secretSQL.append("SECRET '").append(s3SecretKey).append("'");
+
+          // Temporary (scoped, short-lived) R2/S3 credentials carry a session token.
+          if (s3SessionToken != null && !s3SessionToken.isEmpty()) {
+            secretSQL.append(", SESSION_TOKEN '").append(s3SessionToken).append("'");
+          }
 
           if (s3Region != null) {
             secretSQL.append(", REGION '").append(s3Region).append("'");
