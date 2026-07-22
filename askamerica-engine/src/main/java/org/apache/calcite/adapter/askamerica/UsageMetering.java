@@ -160,7 +160,7 @@ final class UsageMetering {
   private static boolean fetchQuotaExhausted(String apiKey) {
     HttpURLConnection c = null;
     try {
-      URL url = new URL(apiBase() + "/v1/quota");
+      URL url = java.net.URI.create(apiBase() + "/v1/quota").toURL();
       c = (HttpURLConnection) url.openConnection();
       c.setRequestMethod("GET");
       c.setConnectTimeout(5000);
@@ -346,7 +346,7 @@ final class UsageMetering {
       long egressBytes, long durationMs) {
     HttpURLConnection c = null;
     try {
-      URL url = new URL(apiBase() + "/v1/metering/usage");
+      URL url = java.net.URI.create(apiBase() + "/v1/metering/usage").toURL();
       c = (HttpURLConnection) url.openConnection();
       c.setRequestMethod("POST");
       c.setConnectTimeout(5000);
