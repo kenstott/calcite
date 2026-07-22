@@ -323,32 +323,21 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
     try {
       LOGGER.info("[ICEBERG COUNT*] Loading Iceberg table at: {}", tableLocation);
 
-      // Configure Hadoop for S3 access if using S3 storage
-      org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+      // Load the Iceberg table. For S3 storage use Iceberg S3FileIO (AWS SDK v2) — no
+      // hadoop S3AFileSystem; for local/HDFS keep HadoopTables (hadoop-common only). The
+      // StorageProvider type is the storage signal (not a path-scheme literal).
+      org.apache.iceberg.Table icebergTable;
       if (storageProvider instanceof org.apache.calcite.adapter.file.storage.S3StorageProvider) {
-        org.apache.calcite.adapter.file.storage.S3StorageProvider s3Provider =
-            (org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider;
-        java.util.Map<String, String> s3Config = s3Provider.getS3Config();
-        if (s3Config != null) {
-          hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
-          hadoopConf.set("fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
-          if (s3Config.get("accessKeyId") != null) {
-            hadoopConf.set("fs.s3a.access.key", s3Config.get("accessKeyId"));
-          }
-          if (s3Config.get("secretAccessKey") != null) {
-            hadoopConf.set("fs.s3a.secret.key", s3Config.get("secretAccessKey"));
-          }
-          if (s3Config.get("endpoint") != null) {
-            hadoopConf.set("fs.s3a.endpoint", s3Config.get("endpoint"));
-            hadoopConf.set("fs.s3a.path.style.access", "true");
-          }
-          LOGGER.debug("[ICEBERG COUNT*] Configured S3A filesystem for Iceberg access");
-        }
+        java.util.Map<String, String> s3Config =
+            ((org.apache.calcite.adapter.file.storage.S3StorageProvider) storageProvider).getS3Config();
+        icebergTable =
+            org.apache.calcite.adapter.file.iceberg.S3FileIOTables.load(tableLocation, s3Config);
+      } else {
+        org.apache.hadoop.conf.Configuration hadoopConf =
+            new org.apache.hadoop.conf.Configuration();
+        icebergTable =
+            new org.apache.iceberg.hadoop.HadoopTables(hadoopConf).load(tableLocation);
       }
-
-      // Load Iceberg table using HadoopTables with configured credentials
-      org.apache.iceberg.hadoop.HadoopTables tables = new org.apache.iceberg.hadoop.HadoopTables(hadoopConf);
-      org.apache.iceberg.Table icebergTable = tables.load(tableLocation);
 
       org.apache.iceberg.Snapshot snapshot = icebergTable.currentSnapshot();
       if (snapshot == null) {

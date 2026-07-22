@@ -59,29 +59,44 @@ public final class S3FileIOTables {
     return new BaseTable(ops, tableName(root));
   }
 
-  /** Translates hadoop {@code fs.s3a.*} keys to Iceberg S3FileIO {@code s3.*} properties. */
-  static Map<String, String> toS3Properties(Map<String, String> s3a) {
+  /**
+   * Translates a credential map to Iceberg S3FileIO {@code s3.*} properties. Accepts
+   * either hadoop {@code fs.s3a.*} keys (as FileSchema builds) or the plain
+   * {@code accessKeyId}/{@code secretAccessKey}/{@code endpoint} keys (as the file
+   * adapter's S3StorageProvider config uses).
+   */
+  static Map<String, String> toS3Properties(Map<String, String> src) {
     Map<String, String> props = new HashMap<>();
-    if (s3a == null) {
+    if (src == null) {
       return props;
     }
-    putIfPresent(s3a, "fs.s3a.access.key", props, "s3.access-key-id");
-    putIfPresent(s3a, "fs.s3a.secret.key", props, "s3.secret-access-key");
-    putIfPresent(s3a, "fs.s3a.endpoint", props, "s3.endpoint");
-    String pathStyle = s3a.get("fs.s3a.path.style.access");
+    putFirst(props, "s3.access-key-id", src, "fs.s3a.access.key", "accessKeyId");
+    putFirst(props, "s3.secret-access-key", src, "fs.s3a.secret.key", "secretAccessKey");
+    putFirst(props, "s3.endpoint", src, "fs.s3a.endpoint", "endpoint");
+    String pathStyle = firstNonEmpty(src, "fs.s3a.path.style.access", "pathStyleAccess");
     props.put("s3.path-style-access", pathStyle != null ? pathStyle : "true");
     // AWS SDK v2 requires a region even against a custom endpoint; MinIO/R2 ignore it.
-    String region = s3a.get("fs.s3a.endpoint.region");
+    String region = firstNonEmpty(src, "fs.s3a.endpoint.region", "region");
     props.put("client.region", region != null && !region.isEmpty() ? region : "us-east-1");
     return props;
   }
 
-  private static void putIfPresent(Map<String, String> src, String srcKey,
-      Map<String, String> dst, String dstKey) {
-    String v = src.get(srcKey);
-    if (v != null && !v.isEmpty()) {
+  private static void putFirst(Map<String, String> dst, String dstKey,
+      Map<String, String> src, String... srcKeys) {
+    String v = firstNonEmpty(src, srcKeys);
+    if (v != null) {
       dst.put(dstKey, v);
     }
+  }
+
+  private static String firstNonEmpty(Map<String, String> src, String... keys) {
+    for (String k : keys) {
+      String v = src.get(k);
+      if (v != null && !v.isEmpty()) {
+        return v;
+      }
+    }
+    return null;
   }
 
   private static String readVersionHint(FileIO io, String root) {
