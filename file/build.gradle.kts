@@ -87,6 +87,12 @@ dependencies {
     // iceberg-aws's default AWS client factory references STS (assume-role support) at
     // class-load time; it is optional in iceberg-aws's POM so pull it explicitly.
     implementation("software.amazon.awssdk:sts:2.28.3")
+    // AWS SDK v2 S3 client + Apache HTTP client — the one JVM S3 stack. S3StorageProvider
+    // uses these (consolidating off AWS SDK v1 AmazonS3 + hadoop s3a). BOM-pinned so every
+    // awssdk module (s3, sts, auth, regions, apache-client) resolves to one version.
+    implementation(platform("software.amazon.awssdk:bom:2.28.3"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:apache-client")
 
     testImplementation(project(":testkit"))
     // DuckDB for performance comparison tests and optional execution engine

@@ -14,34 +14,51 @@ package org.apache.calcite.adapter.file.storage;
 import org.apache.calcite.adapter.file.storage.cache.PersistentStorageCache;
 import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
-import com.amazonaws.services.s3.model.BucketLifecycleConfiguration;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
-import com.amazonaws.services.s3.model.CopyObjectRequest;
-import com.amazonaws.services.s3.model.DeleteObjectRequest;
-import com.amazonaws.services.s3.model.DeleteObjectsRequest;
-import com.amazonaws.services.s3.model.DeleteObjectsResult;
-import com.amazonaws.services.s3.model.GetObjectRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
-import com.amazonaws.services.s3.model.ListObjectsV2Request;
-import com.amazonaws.services.s3.model.ListObjectsV2Result;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.amazonaws.services.s3.model.UploadPartRequest;
-import com.amazonaws.services.s3.model.lifecycle.LifecycleFilter;
-import com.amazonaws.services.s3.model.lifecycle.LifecyclePrefixPredicate;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.retry.RetryPolicy;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.BucketLifecycleConfiguration;
+import software.amazon.awssdk.services.s3.model.CommonPrefix;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.ExpirationStatus;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.LifecycleExpiration;
+import software.amazon.awssdk.services.s3.model.LifecycleRule;
+import software.amazon.awssdk.services.s3.model.LifecycleRuleFilter;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -50,16 +67,21 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Storage provider implementation for Amazon S3.
+ * Storage provider implementation for Amazon S3, on AWS SDK v2 ({@link S3Client}).
+ *
+ * <p>This is the single JVM-side S3 stack for the file adapter — it replaces the AWS
+ * SDK v1 {@code AmazonS3} client and, together with Iceberg's {@code S3FileIO} (also
+ * AWS SDK v2), removes the need for hadoop-aws's {@code S3AFileSystem} (AWS SDK v1).
  */
 public class S3StorageProvider implements StorageProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3StorageProvider.class);
 
-  private final AmazonS3 s3Client;
+  private final S3Client s3Client;
 
   // Persistent cache for restart-survivable caching
   private final PersistentStorageCache persistentCache;
@@ -70,7 +92,7 @@ public class S3StorageProvider implements StorageProvider {
   // S3 configuration for DuckDB access (credentials, endpoint, region)
   private final java.util.Map<String, String> s3Config;
 
-  public S3StorageProvider(AmazonS3 s3Client) {
+  public S3StorageProvider(S3Client s3Client) {
     this(s3Client, null);
   }
 
@@ -85,32 +107,9 @@ public class S3StorageProvider implements StorageProvider {
   /**
    * Internal constructor with both s3Client and config.
    */
-  private S3StorageProvider(AmazonS3 s3Client, java.util.Map<String, Object> config) {
+  private S3StorageProvider(S3Client s3Client, java.util.Map<String, Object> config) {
     // Build or use provided S3 client
     if (s3Client == null) {
-      // Configure client with longer timeouts for large file uploads (e.g., 100MB+ parquet files)
-      // Socket timeout: 15 minutes (sufficient for large files over slow connections)
-      // Connection timeout: 60 seconds (DNS + TCP handshake)
-      // Max connections: 200 (default 50 is too low for heavy ETL with many concurrent requests)
-      ClientConfiguration clientConfig = new ClientConfiguration();
-      clientConfig.setSocketTimeout(15 * 60 * 1000);    // 15 minutes for data transfer
-      clientConfig.setConnectionTimeout(60 * 1000);     // 60 seconds for TCP handshake
-      clientConfig.setConnectionMaxIdleMillis(60_000);  // Close idle connections after 1 minute
-      clientConfig.setMaxConnections(200);              // Support heavy ETL workloads
-      // Retry transient failures — 5xx, throttling, AND connection-level errors such as
-      // "Connection reset" — with the SDK's exponential backoff. Works for any S3 server
-      // (MinIO, R2, AWS). The default of 3 is too few under heavy concurrent ETL load.
-      clientConfig.setMaxErrorRetry(8);
-      // Re-validate a pooled connection that has been idle >2s before reusing it. Under heavy
-      // concurrent load the server (e.g. MinIO) silently drops idle keep-alive sockets; reusing a
-      // stale one throws "Connection reset" — the root cause seen on cftc. Validation refreshes the
-      // socket instead of failing the request (and is what makes the retries above effective rather
-      // than immediately re-resetting on the same dead connection).
-      clientConfig.setValidateAfterInactivityMillis(2000);
-
-      AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-          .withClientConfiguration(clientConfig);
-
       if (config == null) {
         throw new IllegalArgumentException(
             "S3StorageProvider requires explicit configuration via model.json operand. "
@@ -128,27 +127,49 @@ public class S3StorageProvider implements StorageProvider {
             + "Provided config keys: " + config.keySet());
       }
 
-      builder.withCredentials(
-          new com.amazonaws.auth.AWSStaticCredentialsProvider(
-          new com.amazonaws.auth.BasicAWSCredentials(accessKeyId, secretAccessKey)));
-
       // Endpoint from config only (no env var fallback)
       String endpoint = (String) config.get("endpoint");
 
       // Region from config only, default to us-east-1 if absent
       String region = (String) config.get("region");
-      if (region == null) {
+      if (region == null || region.isEmpty() || "auto".equalsIgnoreCase(region)) {
         region = "us-east-1";
       }
 
-      // If custom endpoint is provided, use endpoint configuration
+      // Configure the HTTP client with longer timeouts for large file uploads (e.g. 100MB+
+      // parquet files) and a large connection pool for heavy concurrent ETL. Socket timeout
+      // 15 min (data transfer over slow links); connection timeout 60s (DNS + TCP handshake);
+      // max 200 connections (default is too low for heavy ETL). Re-validate a pooled
+      // connection after 2s idle — under heavy load the server (e.g. MinIO) silently drops
+      // idle keep-alive sockets, and reusing a stale one throws "Connection reset".
+      ApacheHttpClient.Builder httpClient = ApacheHttpClient.builder()
+          .socketTimeout(Duration.ofMinutes(15))
+          .connectionTimeout(Duration.ofSeconds(60))
+          .connectionMaxIdleTime(Duration.ofSeconds(60))
+          .connectionAcquisitionTimeout(Duration.ofSeconds(60))
+          .maxConnections(200);
+
+      // Retry transient failures — 5xx, throttling, and connection-level errors such as
+      // "Connection reset" — with the SDK's exponential backoff. Works for any S3 server
+      // (MinIO, R2, AWS). The default is too few under heavy concurrent ETL load.
+      ClientOverrideConfiguration overrideConfig = ClientOverrideConfiguration.builder()
+          .retryPolicy(RetryPolicy.builder().numRetries(8).build())
+          .build();
+
+      software.amazon.awssdk.services.s3.S3ClientBuilder builder = S3Client.builder()
+          .httpClientBuilder(httpClient)
+          .overrideConfiguration(overrideConfig)
+          .region(Region.of(region))
+          .credentialsProvider(
+              StaticCredentialsProvider.create(
+                  AwsBasicCredentials.create(accessKeyId, secretAccessKey)));
+
+      // If custom endpoint is provided, use it with path-style access (MinIO/R2).
       if (endpoint != null) {
-        builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region));
-        // Enable path-style access for S3-compatible services like MinIO
-        builder.withPathStyleAccessEnabled(true);
-      } else {
-        // Standard AWS S3 - use region only
-        builder.withRegion(region);
+        builder.endpointOverride(URI.create(endpoint))
+            .serviceConfiguration(S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .build());
       }
 
       this.s3Client = builder.build();
@@ -185,21 +206,15 @@ public class S3StorageProvider implements StorageProvider {
       java.util.Map<String, String> s3ConfigMap = new java.util.HashMap<>();
       if (config.get("accessKeyId") != null) {
         s3ConfigMap.put("accessKeyId", (String) config.get("accessKeyId"));
-        LOGGER.debug("S3StorageProvider: Found accessKeyId (length={})",
-            ((String) config.get("accessKeyId")).length());
       }
       if (config.get("secretAccessKey") != null) {
         s3ConfigMap.put("secretAccessKey", (String) config.get("secretAccessKey"));
-        LOGGER.debug("S3StorageProvider: Found secretAccessKey (length={})",
-            ((String) config.get("secretAccessKey")).length());
       }
       if (config.get("region") != null) {
         s3ConfigMap.put("region", (String) config.get("region"));
-        LOGGER.debug("S3StorageProvider: Found region={}", config.get("region"));
       }
       if (config.get("endpoint") != null) {
         s3ConfigMap.put("endpoint", (String) config.get("endpoint"));
-        LOGGER.debug("S3StorageProvider: Found endpoint={}", config.get("endpoint"));
       }
       this.s3Config = s3ConfigMap.isEmpty() ? null : s3ConfigMap;
 
@@ -227,60 +242,64 @@ public class S3StorageProvider implements StorageProvider {
       S3Uri s3Uri = parseS3Uri(s3Path);
       String bucketName = s3Uri.bucket;
 
-      // Check if bucket exists
-      if (!s3Client.doesBucketExistV2(bucketName)) {
-        LOGGER.info("Creating S3 bucket: {}", bucketName);
-        s3Client.createBucket(bucketName);
-        LOGGER.info("Successfully created S3 bucket: {}", bucketName);
-      } else {
+      // Check if bucket exists via HEAD; create it if absent.
+      try {
+        s3Client.headBucket(HeadBucketRequest.builder().bucket(bucketName).build());
         LOGGER.debug("S3 bucket already exists: {}", bucketName);
+      } catch (NoSuchBucketException notFound) {
+        LOGGER.info("Creating S3 bucket: {}", bucketName);
+        s3Client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
+        LOGGER.info("Successfully created S3 bucket: {}", bucketName);
       }
-    } catch (AmazonServiceException e) {
+    } catch (S3Exception e) {
       // Log but don't fail - the bucket might exist but we don't have permission to check,
       // or it might be created by another process. Let subsequent operations fail if needed.
       LOGGER.warn("Unable to verify or create S3 bucket from path {}: {} ({})",
-          s3Path, e.getMessage(), e.getErrorCode());
+          s3Path, e.getMessage(), e.awsErrorDetails() != null ? e.awsErrorDetails().errorCode() : "");
     } catch (IOException e) {
       LOGGER.warn("Unable to parse S3 path for bucket creation: {}", s3Path, e);
     }
   }
 
-  @SuppressWarnings("JavaUtilDate")
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
     List<FileEntry> entries = new ArrayList<>();
 
-    ListObjectsV2Request request = new ListObjectsV2Request()
-        .withBucketName(s3Uri.bucket)
-        .withPrefix(s3Uri.key);
-
+    ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder()
+        .bucket(s3Uri.bucket)
+        .prefix(s3Uri.key);
     if (!recursive) {
-      request.withDelimiter("/");
+      requestBuilder.delimiter("/");
     }
 
-    ListObjectsV2Result result;
+    String continuationToken = null;
     int page = 0;
+    ListObjectsV2Response result;
     do {
-      result = s3Client.listObjectsV2(request);
+      if (continuationToken != null) {
+        requestBuilder.continuationToken(continuationToken);
+      }
+      result = s3Client.listObjectsV2(requestBuilder.build());
       page++;
 
-      for (S3ObjectSummary summary : result.getObjectSummaries()) {
-        if (!summary.getKey().equals(s3Uri.key)) { // Skip the directory itself
+      for (S3Object summary : result.contents()) {
+        if (!summary.key().equals(s3Uri.key)) { // Skip the directory itself
           entries.add(
               new FileEntry(
-              "s3://" + s3Uri.bucket + "/" + summary.getKey(),
-              getFileName(summary.getKey()),
+              "s3://" + s3Uri.bucket + "/" + summary.key(),
+              getFileName(summary.key()),
               false,
-              summary.getSize(),
-              summary.getLastModified().getTime()));
+              summary.size(),
+              summary.lastModified() != null ? summary.lastModified().toEpochMilli() : 0));
         }
       }
 
       // Add directories when not recursive
-      if (!recursive && result.getCommonPrefixes() != null) {
-        for (String prefix : result.getCommonPrefixes()) {
+      if (!recursive && result.commonPrefixes() != null) {
+        for (CommonPrefix cp : result.commonPrefixes()) {
+          String prefix = cp.prefix();
           entries.add(
               new FileEntry(
               "s3://" + s3Uri.bucket + "/" + prefix,
@@ -292,34 +311,32 @@ public class S3StorageProvider implements StorageProvider {
         }
       }
 
-      if (result.isTruncated() && page % 5 == 0) {
+      if (Boolean.TRUE.equals(result.isTruncated()) && page % 5 == 0) {
         LOGGER.info("S3 LIST {}: {} entries so far (page {})", s3Uri.key, entries.size(), page);
       }
 
-      request.setContinuationToken(result.getNextContinuationToken());
-    } while (result.isTruncated());
+      continuationToken = result.nextContinuationToken();
+    } while (Boolean.TRUE.equals(result.isTruncated()));
 
     return entries;
   }
 
-  @SuppressWarnings("JavaUtilDate")
   @Override public FileMetadata getMetadata(String path) throws IOException {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
 
-    com.amazonaws.services.s3.model.ObjectMetadata metadata =
-        s3Client.getObjectMetadata(s3Uri.bucket, s3Uri.key);
+    HeadObjectResponse metadata = s3Client.headObject(
+        HeadObjectRequest.builder().bucket(s3Uri.bucket).key(s3Uri.key).build());
 
     return new FileMetadata(
         path,
-        metadata.getContentLength(),
-        metadata.getLastModified().getTime(),
-        metadata.getContentType(),
-        metadata.getETag());
+        metadata.contentLength(),
+        metadata.lastModified() != null ? metadata.lastModified().toEpochMilli() : 0,
+        metadata.contentType(),
+        metadata.eTag());
   }
 
-  @SuppressWarnings("JavaUtilDate")
   @Override public InputStream openInputStream(String path) throws IOException {
     // Check persistent cache first if available
     // Use original path as cache key for consistency
@@ -343,36 +360,39 @@ public class S3StorageProvider implements StorageProvider {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
-    GetObjectRequest request = new GetObjectRequest(s3Uri.bucket, s3Uri.key);
-    S3Object object = s3Client.getObject(request);
+    GetObjectRequest request =
+        GetObjectRequest.builder().bucket(s3Uri.bucket).key(s3Uri.key).build();
+    ResponseInputStream<GetObjectResponse> object = s3Client.getObject(request);
 
     // If persistent cache is available, read data and cache it
     if (persistentCache != null) {
-      byte[] data = readAllBytes(object.getObjectContent());
+      GetObjectResponse resp = object.response();
+      byte[] data = readAllBytes(object);
       object.close();
 
-      // Get file metadata for caching (use S3 object metadata)
       // Use original path as cache key for consistency
       FileMetadata metadata =
-          new FileMetadata(path, object.getObjectMetadata().getContentLength(),
-          object.getObjectMetadata().getLastModified().getTime(),
-          object.getObjectMetadata().getContentType(),
-          object.getObjectMetadata().getETag());
+          new FileMetadata(path, resp.contentLength(),
+          resp.lastModified() != null ? resp.lastModified().toEpochMilli() : 0,
+          resp.contentType(),
+          resp.eTag());
       persistentCache.cacheData(path, data, metadata, 0); // No TTL for S3
 
       return new java.io.ByteArrayInputStream(data);
     }
 
-    return object.getObjectContent();
+    return object;
   }
 
   @Override public byte[] readRange(String path, long offset, long length) throws IOException {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
-    GetObjectRequest request = new GetObjectRequest(s3Uri.bucket, s3Uri.key)
-        .withRange(offset, offset + length - 1);
-    S3Object object = s3Client.getObject(request);
-    try (InputStream is = object.getObjectContent()) {
+    GetObjectRequest request = GetObjectRequest.builder()
+        .bucket(s3Uri.bucket)
+        .key(s3Uri.key)
+        .range("bytes=" + offset + "-" + (offset + length - 1))
+        .build();
+    try (InputStream is = s3Client.getObject(request)) {
       return readAllBytes(is);
     }
   }
@@ -389,25 +409,16 @@ public class S3StorageProvider implements StorageProvider {
 
       // Check if path contains glob patterns
       if (s3Uri.key.contains("*")) {
-        // Use prefix-based listing for glob patterns
-        // Extract the most specific prefix possible
-        // For pattern like "year=*/0000320193_xxx_*.parquet", we want to find
-        // a more specific prefix after the wildcard if possible
+        // Use prefix-based listing for glob patterns.
         String globPattern = s3Uri.key;
 
-        // Find the part after the wildcard that's constant (e.g., the CIK/accession)
-        // Pattern: year=*/0000320193_0000320193-24-000132_*.parquet
-        // We can search for "year=2020/...", "year=2021/...", etc.
         int wildcardIndex = globPattern.indexOf('*');
         String beforeWildcard = globPattern.substring(0, wildcardIndex);
         String afterWildcard = globPattern.substring(wildcardIndex + 1);
 
-        // If afterWildcard starts with a constant part, use it for better filtering
-        // e.g., "/0000320193_0000320193-24-000132_"
         int nextSlash = afterWildcard.indexOf('/');
         String constantPart = "";
         if (nextSlash >= 0) {
-          // Extract the constant filename prefix after the slash
           String filenamePattern = afterWildcard.substring(nextSlash + 1);
           int filenameWildcard = filenamePattern.indexOf('*');
           if (filenameWildcard > 0) {
@@ -425,15 +436,15 @@ public class S3StorageProvider implements StorageProvider {
         for (int year = currentYear; year >= 2016; year--) {
           String yearPrefix = beforeWildcard + year + afterWildcard.substring(0, nextSlash >= 0 ? nextSlash + 1 : 0) + constantPart;
 
-          ListObjectsV2Request request = new ListObjectsV2Request()
-              .withBucketName(s3Uri.bucket)
-              .withPrefix(yearPrefix)
-              .withMaxKeys(10);
-
-          ListObjectsV2Result result = s3Client.listObjectsV2(request);
-          for (S3ObjectSummary obj : result.getObjectSummaries()) {
-            if (obj.getKey().matches(regex)) {
-              LOGGER.debug("S3 exists check (glob): {} -> true (matched {})", path, obj.getKey());
+          ListObjectsV2Response result = s3Client.listObjectsV2(
+              ListObjectsV2Request.builder()
+                  .bucket(s3Uri.bucket)
+                  .prefix(yearPrefix)
+                  .maxKeys(10)
+                  .build());
+          for (S3Object obj : result.contents()) {
+            if (obj.key().matches(regex)) {
+              LOGGER.debug("S3 exists check (glob): {} -> true (matched {})", path, obj.key());
               return true;
             }
           }
@@ -442,17 +453,27 @@ public class S3StorageProvider implements StorageProvider {
         return false;
       }
 
-      // Standard exact path check
-      boolean exists = s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key);
+      // Standard exact path check via HEAD
+      boolean exists = objectExists(s3Uri.bucket, s3Uri.key);
       LOGGER.debug("S3 exists check: {} -> {}", path, exists);
       return exists;
+    } catch (IOException e) {
+      throw e;
     } catch (Exception e) {
       // Do NOT silently assume the object is absent. A transient/connection error (e.g. a
       // "Connection reset" that survived the SDK retries) would otherwise be read as "not cached" —
-      // causing a needless re-download of an already-cached file and polluting the pipeline's error
-      // list (which then blocks the table-completion marker, the cftc reprocess-forever trap).
-      // Surface it so the caller retries/fails instead of bypassing the cache.
+      // causing a needless re-download and polluting the pipeline's error list. Surface it.
       throw new IOException("S3 exists check failed for " + path, e);
+    }
+  }
+
+  /** HEAD-based object existence check (v2 has no doesObjectExist). */
+  private boolean objectExists(String bucket, String key) {
+    try {
+      s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+      return true;
+    } catch (NoSuchKeyException notFound) {
+      return false;
     }
   }
 
@@ -462,13 +483,13 @@ public class S3StorageProvider implements StorageProvider {
     S3Uri s3Uri = parseS3Uri(fullPath);
 
     // In S3, directories are conceptual. Check if there are objects with this prefix
-    ListObjectsV2Request request = new ListObjectsV2Request()
-        .withBucketName(s3Uri.bucket)
-        .withPrefix(s3Uri.key.endsWith("/") ? s3Uri.key : s3Uri.key + "/")
-        .withMaxKeys(1);
-
-    ListObjectsV2Result result = s3Client.listObjectsV2(request);
-    return result.getKeyCount() > 0;
+    ListObjectsV2Response result = s3Client.listObjectsV2(
+        ListObjectsV2Request.builder()
+            .bucket(s3Uri.bucket)
+            .prefix(s3Uri.key.endsWith("/") ? s3Uri.key : s3Uri.key + "/")
+            .maxKeys(1)
+            .build());
+    return result.keyCount() != null && result.keyCount() > 0;
   }
 
   @Override public String getStorageType() {
@@ -573,26 +594,25 @@ public class S3StorageProvider implements StorageProvider {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
 
-    ObjectMetadata metadata = new ObjectMetadata();
-    metadata.setContentLength(content.length);
-
-    // Set content type based on file extension
+    PutObjectRequest.Builder requestBuilder = PutObjectRequest.builder()
+        .bucket(s3Uri.bucket)
+        .key(s3Uri.key)
+        .contentLength((long) content.length);
     String contentType = guessContentType(path);
     if (contentType != null) {
-      metadata.setContentType(contentType);
+      requestBuilder.contentType(contentType);
     }
 
     int maxRetries = 3;
     for (int attempt = 0; attempt < maxRetries; attempt++) {
-      try (InputStream input = new ByteArrayInputStream(content)) {
-        PutObjectRequest request = new PutObjectRequest(s3Uri.bucket, s3Uri.key, input, metadata);
-        s3Client.putObject(request);
+      try {
+        s3Client.putObject(requestBuilder.build(), RequestBody.fromBytes(content));
         return;
-      } catch (AmazonServiceException e) {
+      } catch (S3Exception e) {
         if (isRetryableS3Error(e) && attempt < maxRetries - 1) {
           long delay = 1000L * (1L << attempt);
           LOGGER.warn("S3 write failed for {} (HTTP {}): {} — retrying in {}ms (attempt {}/{})",
-              path, e.getStatusCode(), e.getErrorCode(), delay, attempt + 1, maxRetries);
+              path, e.statusCode(), errorCode(e), delay, attempt + 1, maxRetries);
           sleepQuietly(delay);
         } else {
           throw new IOException("Failed to write file to S3: " + path, e);
@@ -615,11 +635,7 @@ public class S3StorageProvider implements StorageProvider {
     S3Uri s3Uri = parseS3Uri(fullPath);
     final int partSize = 16 * 1024 * 1024; // 16 MB parts
 
-    ObjectMetadata objectMetadata = new ObjectMetadata();
     String contentType = guessContentType(path);
-    if (contentType != null) {
-      objectMetadata.setContentType(contentType);
-    }
 
     // Read first part to check if content is empty
     byte[] partBuf = new byte[partSize];
@@ -627,46 +643,51 @@ public class S3StorageProvider implements StorageProvider {
 
     if (firstPartLen <= 0) {
       // Zero-byte object: simple put
-      objectMetadata.setContentLength(0);
-      try (InputStream empty = new ByteArrayInputStream(new byte[0])) {
-        s3Client.putObject(
-            new PutObjectRequest(s3Uri.bucket, s3Uri.key, empty, objectMetadata));
+      PutObjectRequest.Builder pb = PutObjectRequest.builder()
+          .bucket(s3Uri.bucket).key(s3Uri.key).contentLength(0L);
+      if (contentType != null) {
+        pb.contentType(contentType);
       }
+      s3Client.putObject(pb.build(), RequestBody.fromBytes(new byte[0]));
       return;
     }
 
     // If content fits in one part and is < 5MB, use simple put (multipart min is 5MB)
     boolean streamDone = firstPartLen < partSize;
     if (streamDone && firstPartLen < 5 * 1024 * 1024) {
-      objectMetadata.setContentLength(firstPartLen);
-      try (InputStream partStream = new ByteArrayInputStream(partBuf, 0, firstPartLen)) {
-        s3Client.putObject(
-            new PutObjectRequest(s3Uri.bucket, s3Uri.key, partStream, objectMetadata));
+      PutObjectRequest.Builder pb = PutObjectRequest.builder()
+          .bucket(s3Uri.bucket).key(s3Uri.key).contentLength((long) firstPartLen);
+      if (contentType != null) {
+        pb.contentType(contentType);
       }
+      s3Client.putObject(pb.build(),
+          RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, firstPartLen), firstPartLen));
       return;
     }
 
     // Multipart upload — stream parts as we read them
-    InitiateMultipartUploadRequest initRequest =
-        new InitiateMultipartUploadRequest(s3Uri.bucket, s3Uri.key)
-            .withObjectMetadata(objectMetadata);
-    InitiateMultipartUploadResult initResponse =
-        s3Client.initiateMultipartUpload(initRequest);
-    String uploadId = initResponse.getUploadId();
+    CreateMultipartUploadRequest.Builder initBuilder = CreateMultipartUploadRequest.builder()
+        .bucket(s3Uri.bucket).key(s3Uri.key);
+    if (contentType != null) {
+      initBuilder.contentType(contentType);
+    }
+    CreateMultipartUploadResponse initResponse =
+        s3Client.createMultipartUpload(initBuilder.build());
+    String uploadId = initResponse.uploadId();
 
     try {
-      List<PartETag> partETags = new ArrayList<>();
+      List<CompletedPart> completedParts = new ArrayList<>();
       int partNumber = 1;
 
       // Upload first part
-      UploadPartRequest uploadRequest = new UploadPartRequest()
-          .withBucketName(s3Uri.bucket)
-          .withKey(s3Uri.key)
-          .withUploadId(uploadId)
-          .withPartNumber(partNumber++)
-          .withInputStream(new ByteArrayInputStream(partBuf, 0, firstPartLen))
-          .withPartSize(firstPartLen);
-      partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
+      int firstPart = partNumber++;
+      String firstETag = s3Client.uploadPart(
+          UploadPartRequest.builder()
+              .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
+              .partNumber(firstPart).contentLength((long) firstPartLen).build(),
+          RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, firstPartLen), firstPartLen))
+          .eTag();
+      completedParts.add(CompletedPart.builder().partNumber(firstPart).eTag(firstETag).build());
 
       // Stream remaining parts
       while (!streamDone) {
@@ -676,24 +697,28 @@ public class S3StorageProvider implements StorageProvider {
         }
         streamDone = partLen < partSize;
 
-        uploadRequest = new UploadPartRequest()
-            .withBucketName(s3Uri.bucket)
-            .withKey(s3Uri.key)
-            .withUploadId(uploadId)
-            .withPartNumber(partNumber++)
-            .withInputStream(new ByteArrayInputStream(partBuf, 0, partLen))
-            .withPartSize(partLen);
-        partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
+        int pn = partNumber++;
+        String etag = s3Client.uploadPart(
+            UploadPartRequest.builder()
+                .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
+                .partNumber(pn).contentLength((long) partLen).build(),
+            RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, partLen), partLen))
+            .eTag();
+        completedParts.add(CompletedPart.builder().partNumber(pn).eTag(etag).build());
       }
 
       // Complete
       s3Client.completeMultipartUpload(
-          new CompleteMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId, partETags));
+          CompleteMultipartUploadRequest.builder()
+              .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
+              .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+              .build());
 
     } catch (Exception e) {
       try {
         s3Client.abortMultipartUpload(
-            new AbortMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId));
+            AbortMultipartUploadRequest.builder()
+                .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId).build());
       } catch (Exception abortEx) {
         LOGGER.warn("Failed to abort multipart upload for s3://{}/{}: {}",
             s3Uri.bucket, s3Uri.key, abortEx.toString());
@@ -722,108 +747,16 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   /**
-   * Writes data to S3 using multipart upload with retry on transient errors.
-   * Each retry restarts the entire multipart upload from scratch.
-   */
-  @SuppressWarnings("UnusedMethod")
-  private void writeMultipartWithRetry(String path, byte[] data) throws IOException {
-    String fullPath = toFullPath(path);
-    S3Uri s3Uri = parseS3Uri(fullPath);
-
-    // Choose part size (must be >= 5 MB for multipart). Use 16 MB by default.
-    final int partSize = 16 * 1024 * 1024;
-
-    // Prepare metadata
-    ObjectMetadata objectMetadata = new ObjectMetadata();
-    String contentType = guessContentType(path);
-    if (contentType != null) {
-      objectMetadata.setContentType(contentType);
-    }
-
-    int maxRetries = 3;
-    for (int attempt = 0; attempt < maxRetries; attempt++) {
-      List<PartETag> partETags = new ArrayList<>();
-      String uploadId = null;
-
-      try {
-        if (data.length == 0) {
-          // Zero-byte object: simple put
-          objectMetadata.setContentLength(0);
-          try (InputStream empty = new ByteArrayInputStream(new byte[0])) {
-            PutObjectRequest req =
-                new PutObjectRequest(s3Uri.bucket, s3Uri.key, empty, objectMetadata);
-            s3Client.putObject(req);
-          }
-          return;
-        }
-
-        // Initiate multipart upload
-        InitiateMultipartUploadRequest initRequest =
-            new InitiateMultipartUploadRequest(s3Uri.bucket, s3Uri.key)
-                .withObjectMetadata(objectMetadata);
-        InitiateMultipartUploadResult initResponse =
-            s3Client.initiateMultipartUpload(initRequest);
-        uploadId = initResponse.getUploadId();
-
-        int partNumber = 1;
-        int offset = 0;
-        while (offset < data.length) {
-          int len = Math.min(partSize, data.length - offset);
-
-          UploadPartRequest uploadRequest = new UploadPartRequest()
-              .withBucketName(s3Uri.bucket)
-              .withKey(s3Uri.key)
-              .withUploadId(uploadId)
-              .withPartNumber(partNumber++)
-              .withInputStream(new ByteArrayInputStream(data, offset, len))
-              .withPartSize(len);
-
-          partETags.add(s3Client.uploadPart(uploadRequest).getPartETag());
-          offset += len;
-        }
-
-        // Complete multipart upload
-        CompleteMultipartUploadRequest compRequest =
-            new CompleteMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId, partETags);
-        s3Client.completeMultipartUpload(compRequest);
-        return;
-
-      } catch (AmazonServiceException e) {
-        // Abort multipart upload on failure
-        if (uploadId != null) {
-          try {
-            s3Client.abortMultipartUpload(
-                new AbortMultipartUploadRequest(s3Uri.bucket, s3Uri.key, uploadId));
-          } catch (Exception abortEx) {
-            LOGGER.warn("Failed to abort multipart upload for s3://{}/{}: {}",
-                s3Uri.bucket, s3Uri.key, abortEx.toString());
-          }
-        }
-
-        if (isRetryableS3Error(e) && attempt < maxRetries - 1) {
-          long delay = 1000L * (1L << attempt);
-          LOGGER.warn("S3 multipart write failed for {} (HTTP {}): {} — retrying in {}ms "
-                  + "(attempt {}/{})",
-              path, e.getStatusCode(), e.getErrorCode(), delay, attempt + 1, maxRetries);
-          sleepQuietly(delay);
-        } else {
-          throw new IOException("Failed to write file to S3: " + path, e);
-        }
-      }
-    }
-  }
-
-  /**
    * Returns whether an S3 error is transient and worth retrying.
    * Covers server errors (500, 502, 503, 504), throttling (429),
    * and known transient error codes from S3/R2.
    */
-  private static boolean isRetryableS3Error(AmazonServiceException e) {
-    int status = e.getStatusCode();
+  private static boolean isRetryableS3Error(S3Exception e) {
+    int status = e.statusCode();
     if (status == 429 || status == 500 || status == 502 || status == 503 || status == 504) {
       return true;
     }
-    String code = e.getErrorCode();
+    String code = errorCode(e);
     if (code == null) {
       return false;
     }
@@ -832,6 +765,10 @@ public class S3StorageProvider implements StorageProvider {
         || "RequestTimeout".equals(code)
         || "SlowDown".equals(code)
         || "ServiceUnavailable".equals(code);
+  }
+
+  private static String errorCode(S3Exception e) {
+    return e.awsErrorDetails() != null ? e.awsErrorDetails().errorCode() : null;
   }
 
   private static void sleepQuietly(long millis) {
@@ -843,9 +780,8 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public void createDirectories(String path) throws IOException {
-    // S3 doesn't have real directories, they're just prefixes
-    // We can create a marker object if needed, but it's often not necessary
-    // For compatibility, we'll create an empty object with a trailing slash
+    // S3 doesn't have real directories, they're just prefixes. For compatibility we create
+    // an empty marker object with a trailing slash.
 
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
@@ -855,16 +791,14 @@ public class S3StorageProvider implements StorageProvider {
 
     S3Uri s3Uri = parseS3Uri(fullPath);
 
-    // Create an empty marker object
-    ObjectMetadata metadata = new ObjectMetadata();
-    metadata.setContentLength(0);
-
-    try (InputStream emptyContent = new ByteArrayInputStream(new byte[0])) {
-      PutObjectRequest request = new PutObjectRequest(s3Uri.bucket, s3Uri.key, emptyContent, metadata);
-      s3Client.putObject(request);
-    } catch (AmazonServiceException e) {
+    try {
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(s3Uri.bucket).key(s3Uri.key).contentLength(0L).build(),
+          RequestBody.fromBytes(new byte[0]));
+    } catch (S3Exception e) {
       // Ignore if it already exists
-      if (e.getStatusCode() != 409) { // 409 = Conflict
+      if (e.statusCode() != 409) { // 409 = Conflict
         throw new IOException("Failed to create directory marker in S3: " + path, e);
       }
     }
@@ -877,15 +811,15 @@ public class S3StorageProvider implements StorageProvider {
 
     try {
       // Check if an object exists first
-      if (!s3Client.doesObjectExist(s3Uri.bucket, s3Uri.key)) {
+      if (!objectExists(s3Uri.bucket, s3Uri.key)) {
         return false;
       }
 
       // Delete the object
-      DeleteObjectRequest request = new DeleteObjectRequest(s3Uri.bucket, s3Uri.key);
-      s3Client.deleteObject(request);
+      s3Client.deleteObject(
+          DeleteObjectRequest.builder().bucket(s3Uri.bucket).key(s3Uri.key).build());
       return true;
-    } catch (AmazonServiceException e) {
+    } catch (S3Exception e) {
       throw new IOException("Failed to delete S3 object: " + path, e);
     }
   }
@@ -902,35 +836,35 @@ public class S3StorageProvider implements StorageProvider {
     int totalDeleted = 0;
 
     // Group paths by bucket (all should be same bucket, but be safe)
-    java.util.Map<String, List<DeleteObjectsRequest.KeyVersion>> bucketKeys =
-        new java.util.HashMap<>();
+    java.util.Map<String, List<ObjectIdentifier>> bucketKeys = new java.util.HashMap<>();
 
     for (String path : paths) {
       // Convert relative path to full S3 URI if needed
       String fullPath = toFullPath(path);
       S3Uri s3Uri = parseS3Uri(fullPath);
       bucketKeys.computeIfAbsent(s3Uri.bucket, k -> new ArrayList<>())
-          .add(new DeleteObjectsRequest.KeyVersion(s3Uri.key));
+          .add(ObjectIdentifier.builder().key(s3Uri.key).build());
     }
 
     // Delete in batches of 1000 (S3 limit)
-    for (java.util.Map.Entry<String, List<DeleteObjectsRequest.KeyVersion>> entry
-        : bucketKeys.entrySet()) {
+    for (java.util.Map.Entry<String, List<ObjectIdentifier>> entry : bucketKeys.entrySet()) {
       String bucket = entry.getKey();
-      List<DeleteObjectsRequest.KeyVersion> keys = entry.getValue();
+      List<ObjectIdentifier> keys = entry.getValue();
 
       for (int i = 0; i < keys.size(); i += 1000) {
         int end = Math.min(i + 1000, keys.size());
-        List<DeleteObjectsRequest.KeyVersion> batch = keys.subList(i, end);
+        List<ObjectIdentifier> batch = keys.subList(i, end);
 
         try {
-          DeleteObjectsRequest request = new DeleteObjectsRequest(bucket)
-              .withKeys(batch)
-              .withQuiet(true);  // Don't return list of deleted objects
-          DeleteObjectsResult result = s3Client.deleteObjects(request);
-          totalDeleted += batch.size() - (result.getDeletedObjects() == null ? 0
-              : batch.size() - result.getDeletedObjects().size());
-        } catch (AmazonServiceException e) {
+          DeleteObjectsResponse result = s3Client.deleteObjects(
+              DeleteObjectsRequest.builder()
+                  .bucket(bucket)
+                  .delete(Delete.builder().objects(batch).quiet(true).build())
+                  .build());
+          // With quiet=true, deleted objects are not returned; count errors instead.
+          int failed = result.errors() == null ? 0 : result.errors().size();
+          totalDeleted += batch.size() - failed;
+        } catch (S3Exception e) {
           LOGGER.warn("Batch delete partially failed for bucket {}: {}", bucket, e.getMessage());
           // Continue with remaining batches
         }
@@ -942,7 +876,6 @@ public class S3StorageProvider implements StorageProvider {
 
   /**
    * Ensures a lifecycle rule exists for auto-expiring objects with a given prefix.
-   * Used to auto-clean temp files without manual deletion.
    *
    * @param prefix The S3 key prefix (e.g., "source=econ/type=regional_income/_temp_reorg/")
    * @param expirationDays Number of days after which objects expire (minimum 1)
@@ -962,42 +895,43 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     try {
-      // Get existing lifecycle configuration
-      BucketLifecycleConfiguration config = s3Client.getBucketLifecycleConfiguration(bucket);
-      List<BucketLifecycleConfiguration.Rule> rules;
-
-      if (config == null || config.getRules() == null) {
-        rules = new ArrayList<>();
-      } else {
-        rules = new ArrayList<>(config.getRules());
-      }
-
-      // Check if rule already exists
-      boolean ruleExists = false;
-      for (BucketLifecycleConfiguration.Rule rule : rules) {
-        if (ruleId.equals(rule.getId())) {
-          ruleExists = true;
-          LOGGER.debug("Lifecycle rule '{}' already exists for prefix '{}'", ruleId, fullPrefix);
-          break;
+      // Get existing lifecycle configuration (empty if none set)
+      List<LifecycleRule> rules = new ArrayList<>();
+      try {
+        rules.addAll(s3Client.getBucketLifecycleConfiguration(
+            b -> b.bucket(bucket)).rules());
+      } catch (S3Exception e) {
+        // NoSuchLifecycleConfiguration → start with an empty rule set.
+        if (!"NoSuchLifecycleConfiguration".equals(errorCode(e))) {
+          throw e;
         }
       }
 
-      if (!ruleExists) {
-        // Create new rule
-        BucketLifecycleConfiguration.Rule newRule = new BucketLifecycleConfiguration.Rule()
-            .withId(ruleId)
-            .withFilter(new LifecycleFilter(new LifecyclePrefixPredicate(fullPrefix)))
-            .withExpirationInDays(expirationDays)
-            .withStatus(BucketLifecycleConfiguration.ENABLED);
-
-        rules.add(newRule);
-
-        BucketLifecycleConfiguration newConfig = new BucketLifecycleConfiguration().withRules(rules);
-        s3Client.setBucketLifecycleConfiguration(bucket, newConfig);
-        LOGGER.info("Created lifecycle rule '{}': prefix='{}' expires in {} days",
-            ruleId, fullPrefix, expirationDays);
+      // Check if rule already exists
+      for (LifecycleRule rule : rules) {
+        if (ruleId.equals(rule.id())) {
+          LOGGER.debug("Lifecycle rule '{}' already exists for prefix '{}'", ruleId, fullPrefix);
+          return;
+        }
       }
-    } catch (AmazonServiceException e) {
+
+      // Create new rule
+      LifecycleRule newRule = LifecycleRule.builder()
+          .id(ruleId)
+          .filter(LifecycleRuleFilter.builder().prefix(fullPrefix).build())
+          .expiration(LifecycleExpiration.builder().days(expirationDays).build())
+          .status(ExpirationStatus.ENABLED)
+          .build();
+
+      List<LifecycleRule> newRules = new ArrayList<>(rules);
+      newRules.add(newRule);
+
+      s3Client.putBucketLifecycleConfiguration(b -> b
+          .bucket(bucket)
+          .lifecycleConfiguration(BucketLifecycleConfiguration.builder().rules(newRules).build()));
+      LOGGER.info("Created lifecycle rule '{}': prefix='{}' expires in {} days",
+          ruleId, fullPrefix, expirationDays);
+    } catch (S3Exception e) {
       // Log warning but don't fail - lifecycle is a cleanup optimization, not critical
       LOGGER.warn("Failed to set lifecycle rule for prefix '{}': {}", fullPrefix, e.getMessage());
     }
@@ -1005,10 +939,6 @@ public class S3StorageProvider implements StorageProvider {
 
   /**
    * Gets a staging directory for temporary files with automatic cleanup via S3 lifecycle rules.
-   *
-   * <p>For S3 storage, this returns a .staging/ prefix under the base path and ensures
-   * a lifecycle rule exists to auto-expire objects after 1 day. This provides a safety
-   * net for orphaned staging files.
    *
    * @param purpose Subdirectory name to isolate different staging uses (e.g., "iceberg", "etl")
    * @return S3 path to staging directory with auto-cleanup guarantee
@@ -1046,17 +976,16 @@ public class S3StorageProvider implements StorageProvider {
 
     try {
       // Check if source exists
-      if (!s3Client.doesObjectExist(sourceUri.bucket, sourceUri.key)) {
+      if (!objectExists(sourceUri.bucket, sourceUri.key)) {
         throw new IOException("Source file does not exist in S3: " + source);
       }
 
       // Perform the copy
-      CopyObjectRequest copyRequest =
-          new CopyObjectRequest(sourceUri.bucket, sourceUri.key,
-          destUri.bucket, destUri.key);
-
-      s3Client.copyObject(copyRequest);
-    } catch (AmazonServiceException e) {
+      s3Client.copyObject(CopyObjectRequest.builder()
+          .sourceBucket(sourceUri.bucket).sourceKey(sourceUri.key)
+          .destinationBucket(destUri.bucket).destinationKey(destUri.key)
+          .build());
+    } catch (S3Exception e) {
       throw new IOException("Failed to copy S3 object from " + source + " to " + destination, e);
     }
   }

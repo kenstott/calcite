@@ -13,7 +13,7 @@ package org.apache.calcite.adapter.file.storage;
 
 import org.apache.calcite.adapter.file.iceberg.IcebergStorageProvider;
 
-import com.amazonaws.services.s3.AmazonS3;
+import software.amazon.awssdk.services.s3.S3Client;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -116,7 +116,7 @@ public class StorageProviderFactory {
       case "s3":
         if (config != null && config.containsKey("s3Client")) {
           // Custom S3 client provided
-          return new S3StorageProvider((AmazonS3) config.get("s3Client"));
+          return new S3StorageProvider((S3Client) config.get("s3Client"));
         } else if (config != null && !config.isEmpty()) {
           // Configuration map provided with credentials/region
           return new S3StorageProvider(config);
