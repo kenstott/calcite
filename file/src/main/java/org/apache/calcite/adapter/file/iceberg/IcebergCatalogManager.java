@@ -9,6 +9,7 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.file.iceberg;
+// storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.PartitionSpec;
@@ -59,6 +60,10 @@ public class IcebergCatalogManager {
    * @return The loaded Iceberg table
    */
   public static Table loadTable(Map<String, Object> config, String tablePath) {
+    if (isS3Warehouse(config)) {
+      String path = s3TablePath(config, tablePath);
+      return S3FileIOTables.loadWritable(path, s3Creds(config));
+    }
     // Check if this is a direct file path (starts with / or contains file://)
     if (tablePath.startsWith("/") || tablePath.startsWith("file://") || tablePath.contains("warehouse")) {
       // Direct path loading - load table directly from filesystem
@@ -305,6 +310,24 @@ public class IcebergCatalogManager {
    */
   public static Table createTable(Map<String, Object> config, String tableId,
       Schema schema, PartitionSpec partitionSpec) {
+    if (isS3Warehouse(config)) {
+      String path = s3TablePath(config, tableId);
+      Map<String, String> creds = s3Creds(config);
+      if (S3FileIOTables.exists(path, creds)) {
+        LOGGER.info("Table {} already exists, loading existing table (S3FileIO)", path);
+        return S3FileIOTables.loadWritable(path, creds);
+      }
+      LOGGER.info("Creating Iceberg table (S3FileIO): {}", path);
+      Table table = S3FileIOTables.create(path, creds, schema, partitionSpec, null);
+      // Commit an initial EMPTY snapshot so the table is always queryable (0 rows) even before the
+      // first data append — see the non-S3 branch below for the full rationale.
+      table.newAppend().commit();
+      table.refresh();
+      LOGGER.info("Created Iceberg table at location: {} (initial empty snapshot committed)",
+          table.location());
+      return table;
+    }
+
     String catalogType = (String) config.get("catalog");
     if (catalogType == null) {
       catalogType = "hadoop";
@@ -586,6 +609,9 @@ public class IcebergCatalogManager {
    * @return true if the table exists
    */
   public static boolean tableExists(Map<String, Object> config, String tableId) {
+    if (isS3Warehouse(config)) {
+      return S3FileIOTables.exists(s3TablePath(config, tableId), s3Creds(config));
+    }
     String catalogType = (String) config.get("catalog");
     if (catalogType == null) {
       catalogType = "hadoop";
@@ -594,6 +620,65 @@ public class IcebergCatalogManager {
     Catalog catalog = getCatalog(catalogType, config);
     TableIdentifier identifier = parseTableIdentifier(tableId, config);
     return catalog.tableExists(identifier);
+  }
+
+  /**
+   * Returns the configured warehouse root ({@code warehouse} or {@code warehousePath}), or null.
+   */
+  private static String warehouseOf(Map<String, Object> config) {
+    String warehouse = (String) config.get("warehouse");
+    if (warehouse == null) {
+      warehouse = (String) config.get("warehousePath");
+    }
+    return warehouse;
+  }
+
+  /**
+   * Whether this catalog config targets an S3/MinIO/R2 warehouse — either the warehouse path uses
+   * the {@code s3://}/{@code s3a://} scheme, or an {@code fs.s3a.*}/{@code accessKeyId} credential
+   * map is present. S3 warehouses use {@link S3FileIOTables} (Iceberg {@code S3FileIO}, AWS SDK v2)
+   * instead of {@code HadoopCatalog}/{@code HadoopTables}.
+   */
+  private static boolean isS3Warehouse(Map<String, Object> config) {
+    String warehouse = warehouseOf(config);
+    if (warehouse != null) {
+      String lower = warehouse.toLowerCase(Locale.ROOT);
+      int schemeEnd = lower.indexOf("://");
+      if (schemeEnd > 0) {
+        String scheme = lower.substring(0, schemeEnd);
+        if (scheme.equals("s3") || scheme.equals("s3a")) {
+          return true;
+        }
+      }
+    }
+    Map<String, String> creds = s3Creds(config);
+    return creds != null
+        && (creds.containsKey("fs.s3a.access.key") || creds.containsKey("accessKeyId"));
+  }
+
+  /**
+   * Extracts the S3 credential map ({@code hadoopConfig}, with {@code fs.s3a.*} keys) from the
+   * catalog config. May be null; {@link S3FileIOTables#toS3Properties} tolerates a null/partial map.
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, String> s3Creds(Map<String, Object> config) {
+    return (Map<String, String>) config.get("hadoopConfig");
+  }
+
+  /**
+   * Builds the physical Iceberg table root for an S3 warehouse: {@code warehouse/tableId}, with any
+   * {@code namespace.table} dotted identifier flattened to {@code namespace/table} (matching the
+   * {@code HadoopCatalog} on-disk layout the read path expects).
+   */
+  private static String s3TablePath(Map<String, Object> config, String tableId) {
+    String warehouse = warehouseOf(config);
+    if (warehouse == null) {
+      throw new IllegalArgumentException(
+          "S3 Iceberg warehouse requires 'warehouse' or 'warehousePath' configuration");
+    }
+    String base = warehouse.endsWith("/")
+        ? warehouse.substring(0, warehouse.length() - 1) : warehouse;
+    return base + "/" + tableId.replace('.', '/');
   }
 
   /**

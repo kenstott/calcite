@@ -11,8 +11,11 @@
 package org.apache.calcite.adapter.file.iceberg;
 
 import org.apache.iceberg.BaseTable;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.StaticTableOperations;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.TableMetadata;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.io.FileIO;
 
@@ -50,13 +53,88 @@ public final class S3FileIOTables {
    * @return a read-only Iceberg {@link Table}
    */
   public static Table load(String tablePath, Map<String, String> s3aConfig) {
-    S3FileIO io = new S3FileIO();
-    io.initialize(toS3Properties(s3aConfig));
+    S3FileIO io = newIO(s3aConfig);
     String root = stripTrailingSlash(tablePath);
     String version = readVersionHint(io, root);
     String metadataLocation = root + "/metadata/v" + version + ".metadata.json";
     StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
     return new BaseTable(ops, tableName(root));
+  }
+
+  /**
+   * Builds and initializes an {@link S3FileIO} from a credential map (either hadoop
+   * {@code fs.s3a.*} keys or the plain {@code accessKeyId}/{@code secretAccessKey}/{@code endpoint}
+   * keys). Shared by the read-only and writable table paths.
+   */
+  static S3FileIO newIO(Map<String, String> s3Config) {
+    S3FileIO io = new S3FileIO();
+    io.initialize(toS3Properties(s3Config));
+    return io;
+  }
+
+  /**
+   * Creates a new writable Iceberg table at {@code tablePath} via S3FileIO (AWS SDK v2), writing the
+   * initial {@code v0.metadata.json} + {@code version-hint.text} directly — no HadoopCatalog.
+   *
+   * @param tablePath table root, e.g. {@code s3://bucket/schema/table}
+   * @param s3Config the credential map (may be null)
+   * @param schema the table schema
+   * @param spec the partition spec (unpartitioned when null)
+   * @param properties table properties (empty when null)
+   * @return an appendable Iceberg {@link Table}
+   */
+  public static Table create(String tablePath, Map<String, String> s3Config, Schema schema,
+      PartitionSpec spec, Map<String, String> properties) {
+    S3FileIO io = newIO(s3Config);
+    String root = stripTrailingSlash(tablePath);
+    S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
+    TableMetadata metadata =
+        TableMetadata.newTableMetadata(schema,
+            spec != null ? spec : PartitionSpec.unpartitioned(),
+            root,
+            properties != null ? properties : java.util.Collections.<String, String>emptyMap());
+    ops.commit(null, metadata);
+    return new BaseTable(ops, tableName(root));
+  }
+
+  /**
+   * Loads an existing Iceberg table as a writable/appendable table via S3FileIO — unlike the
+   * read-only {@link #load} (which uses {@link StaticTableOperations}), the returned table supports
+   * {@code newAppend()}/{@code commit()} because it is backed by {@link S3FileIOTableOperations}.
+   *
+   * @param tablePath table root, e.g. {@code s3://bucket/schema/table}
+   * @param s3Config the credential map (may be null)
+   * @return an appendable Iceberg {@link Table}
+   */
+  public static Table loadWritable(String tablePath, Map<String, String> s3Config) {
+    S3FileIO io = newIO(s3Config);
+    String root = stripTrailingSlash(tablePath);
+    S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
+    ops.refresh();
+    return new BaseTable(ops, tableName(root));
+  }
+
+  /**
+   * Returns whether an Iceberg table exists at {@code tablePath}, by probing for
+   * {@code metadata/version-hint.text}.
+   *
+   * @param tablePath table root, e.g. {@code s3://bucket/schema/table}
+   * @param s3Config the credential map (may be null)
+   * @return true if the version hint is present, false if it is absent
+   */
+  public static boolean exists(String tablePath, Map<String, String> s3Config) {
+    S3FileIO io = newIO(s3Config);
+    String root = stripTrailingSlash(tablePath);
+    String hintPath = root + "/metadata/version-hint.text";
+    try (InputStream is = io.newInputFile(hintPath).newStream();
+         BufferedReader reader =
+             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      String line = reader.readLine();
+      return line != null && !line.trim().isEmpty();
+    } catch (Exception e) {
+      // Absent hint file (no table yet).
+      return false;
+    }
   }
 
   /**
