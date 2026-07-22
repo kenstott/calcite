@@ -66,6 +66,20 @@ import java.util.concurrent.TimeUnit;
 public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
 
+  /**
+   * Floor on the per-record byte estimate used to size compaction output files. The estimate is
+   * derived from COMPRESSED on-disk bytes, which for a highly-compressible table (e.g. FAOSTAT at
+   * ~0.25 on-disk bytes/record) yields a records-per-file target in the hundreds of millions —
+   * defeating file rolling so tens of millions of records stream through a single Parquet writer,
+   * whose row-group buffers then spike RSS and OOM the worker. Flooring bytes/record at an
+   * uncompressed-ish 64B caps a 128MB-target compaction at ~2M records/file. Paired with
+   * {@link #MAX_RECORDS_PER_COMPACTION_FILE} as a hard ceiling for any target size.
+   */
+  private static final double MIN_COMPACTION_BYTES_PER_RECORD = 64.0;
+
+  /** Absolute ceiling on records per compacted output file, independent of the byte estimate. */
+  private static final int MAX_RECORDS_PER_COMPACTION_FILE = 2_000_000;
+
   private final Table table;
   private final StorageProvider storageProvider;
 
@@ -1172,6 +1186,27 @@ public class IcebergTableWriter {
    * without loading all records into memory. This allows compaction of partitions
    * with millions of records that would otherwise cause OutOfMemoryError.
    */
+  /**
+   * Number of records to write per compacted output file before rolling to a new one.
+   *
+   * <p>Derived from the average bytes-per-record, but the estimate uses COMPRESSED on-disk bytes,
+   * so a highly-compressible table (FAOSTAT at ~0.25 on-disk bytes/record) would yield a target in
+   * the hundreds of millions — defeating file rolling and streaming the whole partition through a
+   * single Parquet writer, whose row-group buffers then spike RSS and OOM the worker. The estimate
+   * is floored at {@link #MIN_COMPACTION_BYTES_PER_RECORD} and the result capped at
+   * {@link #MAX_RECORDS_PER_COMPACTION_FILE}, so a 128MB target rolls at ~2M records regardless of
+   * compressibility. Also floored at 1000 so a wide/sparse table still batches sensibly.
+   */
+  static int computeRecordsPerFile(long totalBytes, long totalRecords, long targetFileSizeBytes) {
+    if (totalRecords <= 0) {
+      return 1000;
+    }
+    double avgBytesPerRecord =
+        Math.max((double) totalBytes / totalRecords, MIN_COMPACTION_BYTES_PER_RECORD);
+    long estimate = (long) (targetFileSizeBytes / avgBytesPerRecord);
+    return (int) Math.max(1000L, Math.min((long) MAX_RECORDS_PER_COMPACTION_FILE, estimate));
+  }
+
   private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes)
       throws IOException {
     if (smallFiles.isEmpty()) {
@@ -1201,8 +1236,7 @@ public class IcebergTableWriter {
     PartitionKey partitionKey = new PartitionKey(spec, schema);
     copyPartitionValues(partitionKey, partitionData, spec);
 
-    double avgBytesPerRecord = (double) totalBytes / totalRecords;
-    int recordsPerFile = Math.max(1000, (int) (targetFileSizeBytes / avgBytesPerRecord));
+    int recordsPerFile = computeRecordsPerFile(totalBytes, totalRecords, targetFileSizeBytes);
 
     LOGGER.info("Java compaction: {} records from {} files, ~{} records per output file",
         totalRecords, smallFiles.size(), recordsPerFile);
