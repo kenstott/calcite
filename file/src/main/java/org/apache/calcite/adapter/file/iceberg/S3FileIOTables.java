@@ -1,0 +1,110 @@
+/*
+ * Copyright (c) 2026 Kenneth Stott
+ *
+ * This source code is licensed under the Business Source License 1.1
+ * found in the LICENSE-BSL.txt file in the root directory of this source tree.
+ *
+ * NOTICE: Use of this software for training artificial intelligence or
+ * machine learning models is strictly prohibited without explicit written
+ * permission from the copyright holder.
+ */
+package org.apache.calcite.adapter.file.iceberg;
+
+import org.apache.iceberg.BaseTable;
+import org.apache.iceberg.StaticTableOperations;
+import org.apache.iceberg.Table;
+import org.apache.iceberg.aws.s3.S3FileIO;
+import org.apache.iceberg.io.FileIO;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Loads path-based Iceberg tables from S3/MinIO using Iceberg's {@link S3FileIO}
+ * (AWS SDK v2), so the read path needs neither hadoop-aws nor the AWS SDK v1
+ * {@code S3AFileSystem}.
+ *
+ * <p>This mirrors the {@code HadoopTables} layout — {@code metadata/version-hint.text}
+ * holds the current version number {@code N}, and the table metadata lives at
+ * {@code metadata/v{N}.metadata.json}. The metadata's internal paths are written as
+ * {@code s3a://} by the HadoopFileIO ETL writer; {@code S3FileIO} accepts the
+ * {@code s3}/{@code s3a}/{@code s3n} schemes interchangeably, so a table written via
+ * HadoopFileIO reads back unchanged through S3FileIO.
+ *
+ * <p>Read-only: uses {@link StaticTableOperations}, which never writes metadata.
+ */
+public final class S3FileIOTables {
+  private S3FileIOTables() {
+  }
+
+  /**
+   * Loads an Iceberg table from an {@code s3://} (or {@code s3a://}) path via S3FileIO.
+   *
+   * @param tablePath table root, e.g. {@code s3://bucket/schema/table}
+   * @param s3aConfig the {@code fs.s3a.*} credential map built by FileSchema (may be null)
+   * @return a read-only Iceberg {@link Table}
+   */
+  public static Table load(String tablePath, Map<String, String> s3aConfig) {
+    S3FileIO io = new S3FileIO();
+    io.initialize(toS3Properties(s3aConfig));
+    String root = stripTrailingSlash(tablePath);
+    String version = readVersionHint(io, root);
+    String metadataLocation = root + "/metadata/v" + version + ".metadata.json";
+    StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
+    return new BaseTable(ops, tableName(root));
+  }
+
+  /** Translates hadoop {@code fs.s3a.*} keys to Iceberg S3FileIO {@code s3.*} properties. */
+  static Map<String, String> toS3Properties(Map<String, String> s3a) {
+    Map<String, String> props = new HashMap<>();
+    if (s3a == null) {
+      return props;
+    }
+    putIfPresent(s3a, "fs.s3a.access.key", props, "s3.access-key-id");
+    putIfPresent(s3a, "fs.s3a.secret.key", props, "s3.secret-access-key");
+    putIfPresent(s3a, "fs.s3a.endpoint", props, "s3.endpoint");
+    String pathStyle = s3a.get("fs.s3a.path.style.access");
+    props.put("s3.path-style-access", pathStyle != null ? pathStyle : "true");
+    // AWS SDK v2 requires a region even against a custom endpoint; MinIO/R2 ignore it.
+    String region = s3a.get("fs.s3a.endpoint.region");
+    props.put("client.region", region != null && !region.isEmpty() ? region : "us-east-1");
+    return props;
+  }
+
+  private static void putIfPresent(Map<String, String> src, String srcKey,
+      Map<String, String> dst, String dstKey) {
+    String v = src.get(srcKey);
+    if (v != null && !v.isEmpty()) {
+      dst.put(dstKey, v);
+    }
+  }
+
+  private static String readVersionHint(FileIO io, String root) {
+    String hintPath = root + "/metadata/version-hint.text";
+    try (InputStream is = io.newInputFile(hintPath).newStream();
+         BufferedReader reader =
+             new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+      String line = reader.readLine();
+      if (line == null || line.trim().isEmpty()) {
+        throw new IllegalStateException("Empty Iceberg version-hint.text at " + hintPath);
+      }
+      return line.trim();
+    } catch (IOException e) {
+      throw new RuntimeException("Failed to read Iceberg version-hint.text at " + hintPath, e);
+    }
+  }
+
+  private static String stripTrailingSlash(String path) {
+    return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+  }
+
+  private static String tableName(String root) {
+    int slash = root.lastIndexOf('/');
+    return slash >= 0 ? root.substring(slash + 1) : root;
+  }
+}

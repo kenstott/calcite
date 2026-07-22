@@ -93,33 +93,33 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
 
     // Initialize the Iceberg table
     String tablePath = source.path();
-    // Translate s3:// to s3a:// for Hadoop S3A filesystem compatibility
-    String hadoopPath = tablePath.startsWith("s3://")
-        ? "s3a://" + tablePath.substring(5)
-        : tablePath;
-
-    Configuration hadoopConf = new Configuration();
-    // When loaded via URLClassLoader (McpServerLauncher), the thread context classloader is
-    // the system classloader and cannot see classes inside the engine JAR. Hadoop's
-    // Configuration.getClassByName() uses getClassLoader(), which defaults to the context
-    // classloader. Explicitly set it to IcebergTable's own loader so S3AFileSystem
-    // (which is in the same JAR) is always resolvable regardless of launch mode.
-    hadoopConf.setClassLoader(IcebergTable.class.getClassLoader());
-    // Register S3A filesystem explicitly — core-default.xml registration is unreliable in fat JARs
-    hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
-    // Use SimpleAWSCredentialsProvider to avoid EC2 instance metadata lookups on non-AWS hosts
-    hadoopConf.set("fs.s3a.aws.credentials.provider",
-        "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider");
-    // Apply S3 credentials from config if present
     @SuppressWarnings("unchecked")
     Map<String, String> hadoopConfig = (Map<String, String>) config.get("hadoopConfig");
+
+    // A non-null hadoopConfig means FileSchema resolved S3 credentials for this table via
+    // its StorageProvider — i.e. the table is object-store backed. That is the storage
+    // signal (not a path-scheme literal) that selects the S3FileIO loader.
     if (hadoopConfig != null) {
-      for (Map.Entry<String, String> entry : hadoopConfig.entrySet()) {
-        hadoopConf.set(entry.getKey(), entry.getValue());
+      // Object store (S3 / MinIO / R2): load via Iceberg S3FileIO (AWS SDK v2). This
+      // avoids the hadoop S3AFileSystem (AWS SDK v1) entirely — S3FileIO accepts the
+      // s3a:// paths stored in metadata written by the HadoopFileIO ETL writer, so the
+      // read is unchanged.
+      this.icebergTable = S3FileIOTables.load(tablePath, hadoopConfig);
+    } else {
+      // Local filesystem / HDFS: keep the HadoopTables loader (uses hadoop-common only).
+      Configuration hadoopConf = new Configuration();
+      // When loaded via URLClassLoader (McpServerLauncher), the thread context classloader
+      // is the system classloader and cannot see classes inside the engine JAR. Set the
+      // loader explicitly so filesystem impls in the same JAR are resolvable.
+      hadoopConf.setClassLoader(IcebergTable.class.getClassLoader());
+      if (hadoopConfig != null) {
+        for (Map.Entry<String, String> entry : hadoopConfig.entrySet()) {
+          hadoopConf.set(entry.getKey(), entry.getValue());
+        }
       }
+      HadoopTables tables = new HadoopTables(hadoopConf);
+      this.icebergTable = tables.load(tablePath);
     }
-    HadoopTables tables = new HadoopTables(hadoopConf);
-    this.icebergTable = tables.load(hadoopPath);
   }
 
   /**

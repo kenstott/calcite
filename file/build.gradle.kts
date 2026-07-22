@@ -81,6 +81,12 @@ dependencies {
     implementation("org.apache.iceberg:iceberg-common:1.4.0")
     implementation("org.apache.iceberg:iceberg-parquet:1.4.0")
     implementation("org.apache.iceberg:iceberg-data:1.4.0")
+    // iceberg-aws provides S3FileIO (AWS SDK v2) so the read path can load Iceberg
+    // tables from S3/MinIO without hadoop-aws + the AWS SDK v1 bundle (S3AFileSystem).
+    implementation("org.apache.iceberg:iceberg-aws:1.4.0")
+    // iceberg-aws's default AWS client factory references STS (assume-role support) at
+    // class-load time; it is optional in iceberg-aws's POM so pull it explicitly.
+    implementation("software.amazon.awssdk:sts:2.28.3")
 
     testImplementation(project(":testkit"))
     // DuckDB for performance comparison tests and optional execution engine
