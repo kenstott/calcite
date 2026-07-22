@@ -308,6 +308,31 @@ Follow-up (not in this pass):
   the fat-jar AWS-v1 reduction both become safe. The Iceberg-loader migration is a
   committed, validated step toward this; it is necessary but not sufficient on its own.
 
+### S3 stack consolidation (approved) — standardize the JVM on AWS SDK v2
+
+Root cause of the redundancy: three JVM S3 stacks doing overlapping work — AWS SDK v1
+(`S3StorageProvider` + hadoop-aws's `S3AFileSystem`), AWS SDK v2 (Iceberg `S3FileIO`),
+and hadoop `s3a`. It isn't fixable by "upgrade to the newest versions": hadoop 3.3.6's
+`S3AFileSystem` is hardwired to AWS SDK v1 (hadoop moved s3a to v2 only in 3.4.0), and
+we don't want a hadoop upgrade (Iceberg/Parquet expect 3.3.x). The fix is to *remove*
+hadoop-s3a, not upgrade it, and put every JVM S3 op on AWS SDK v2. DuckDB's native
+`httpfs` legitimately stays separate (it's DuckDB's own S3 for the parquet scan).
+
+Plan (each step MinIO-validated on read **and** write, since `S3StorageProvider` is
+shared):
+1. Rewrite `S3StorageProvider` (1094 lines) from `AmazonS3` (v1) to `S3Client` (v2) —
+   list/get/put/multipart/delete/copy/lifecycle.
+2. Migrate `S3HivePipelineTracker` (v1) to v2, or exclude it from the read-only engine.
+3. Update `StorageProviderFactory` construction.
+4. Route `FileSchema` partitioned-table discovery/globbing through `S3StorageProvider`
+   instead of `FileSystem.get(s3a://…)`.
+5. Drop hadoop-aws + all `com.amazonaws` + the 297 MB bundle; pin one AWS SDK v2 BOM.
+6. End state: one JVM S3 client (AWS SDK v2) + DuckDB httpfs. Fat jar −192 MB; jar-set
+   loses the 297 MB bundle → `<100 MB` wheel partition unblocked.
+
+Risk: `S3StorageProvider` backs reads *and* ETL writes — a half-done rewrite breaks
+both, so it lands complete and is validated on both paths in one pass.
+
 ## Known gaps / verification still needed
 
 1. **Python wheel downloads the JAR at runtime** (`README` in `kenstott/askamerica`):
