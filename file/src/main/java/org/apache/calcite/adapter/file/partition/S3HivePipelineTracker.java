@@ -11,25 +11,33 @@
 package org.apache.calcite.adapter.file.partition;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.AmazonS3Exception;
-import com.amazonaws.services.s3.model.DeleteObjectsRequest;
-import com.amazonaws.services.s3.model.ListObjectsV2Request;
-import com.amazonaws.services.s3.model.ListObjectsV2Result;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -99,7 +107,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
   private final Object connectionLock = new Object();
   private boolean initialized;
   /** Lazy-initialized S3 client for ListObjectsV2 file listing. */
-  private AmazonS3 s3Client;
+  private S3Client s3Client;
   /** Cached result of probing for any tracker data; null = not yet checked. */
   @SuppressWarnings("UnusedVariable")
   private Boolean hasAnyTrackerData;
@@ -191,37 +199,37 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    * Get or create the AWS S3 client for file listing (ListObjectsV2).
    * Uses the same credentials as DuckDB httpfs.
    */
-  private AmazonS3 getS3Client() {
+  private S3Client getS3Client() {
     if (s3Client != null) {
       return s3Client;
     }
-    ClientConfiguration clientConfig = new ClientConfiguration();
-    clientConfig.setSocketTimeout(60 * 1000);
-    clientConfig.setConnectionTimeout(30 * 1000);
+    ApacheHttpClient.Builder httpClient = ApacheHttpClient.builder()
+        .socketTimeout(Duration.ofSeconds(60))
+        .connectionTimeout(Duration.ofSeconds(30));
 
-    AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
-        .withClientConfiguration(clientConfig);
+    // Region default us-east-1; treat "auto"/empty as us-east-1 (v2 requires a real region).
+    String region = config.get("region");
+    if (region == null || region.isEmpty() || "auto".equalsIgnoreCase(region)) {
+      region = "us-east-1";
+    }
+
+    software.amazon.awssdk.services.s3.S3ClientBuilder builder = S3Client.builder()
+        .httpClientBuilder(httpClient)
+        .region(Region.of(region));
 
     String accessKey = config.get("accessKeyId");
     String secretKey = config.get("secretAccessKey");
     if (accessKey != null && secretKey != null) {
-      builder.withCredentials(
-          new com.amazonaws.auth.AWSStaticCredentialsProvider(
-              new com.amazonaws.auth.BasicAWSCredentials(accessKey, secretKey)));
-    }
-
-    String region = config.get("region");
-    if (region == null) {
-      region = "us-east-1";
+      builder.credentialsProvider(
+          StaticCredentialsProvider.create(
+              AwsBasicCredentials.create(accessKey, secretKey)));
     }
 
     if (endpoint != null && !endpoint.isEmpty()) {
-      String cleanEndpoint = endpoint;
-      builder.withEndpointConfiguration(
-          new EndpointConfiguration(cleanEndpoint, region));
-      builder.withPathStyleAccessEnabled(true);
-    } else {
-      builder.withRegion(region);
+      builder.endpointOverride(java.net.URI.create(endpoint))
+          .serviceConfiguration(S3Configuration.builder()
+              .pathStyleAccessEnabled(true)
+              .build());
     }
 
     s3Client = builder.build();
@@ -243,18 +251,22 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String keyPrefix = slash > 0 ? path.substring(slash + 1) + "/" + prefix : prefix;
 
     List<String> files = new ArrayList<String>();
-    ListObjectsV2Request request = new ListObjectsV2Request()
-        .withBucketName(bucket)
-        .withPrefix(keyPrefix);
+    ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder()
+        .bucket(bucket)
+        .prefix(keyPrefix);
 
     int pages = 0;
-    ListObjectsV2Result result;
+    String continuationToken = null;
+    ListObjectsV2Response result;
     do {
-      result = getS3Client().listObjectsV2(request);
+      if (continuationToken != null) {
+        requestBuilder.continuationToken(continuationToken);
+      }
+      result = getS3Client().listObjectsV2(requestBuilder.build());
       pages++;
 
-      for (S3ObjectSummary summary : result.getObjectSummaries()) {
-        String key = summary.getKey();
+      for (S3Object summary : result.contents()) {
+        String key = summary.key();
         if (key.endsWith(".parquet") && !key.contains("_compacted/")) {
           files.add("s3://" + bucket + "/" + key);
         }
@@ -264,8 +276,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         LOGGER.info("Listed {} files so far ({} pages)...", files.size(), pages);
       }
 
-      request.setContinuationToken(result.getNextContinuationToken());
-    } while (result.isTruncated());
+      continuationToken = result.nextContinuationToken();
+    } while (Boolean.TRUE.equals(result.isTruncated()));
 
     LOGGER.info("Listed {} tracker files under {} ({} pages)",
         files.size(), prefix, pages);
@@ -742,7 +754,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     tempDir.delete();
     tempDir.mkdirs();
 
-    AmazonS3 client = getS3Client();
+    S3Client client = getS3Client();
     int threads = Math.min(50, s3Files.size());
     java.util.concurrent.ExecutorService pool =
         java.util.concurrent.Executors.newFixedThreadPool(threads);
@@ -772,26 +784,22 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
             String bucket = path.substring(0, slash);
             String key = path.substring(slash + 1);
 
-            com.amazonaws.services.s3.model.S3Object obj =
-                client.getObject(bucket, key);
+            ResponseInputStream<GetObjectResponse> in =
+                client.getObject(
+                    GetObjectRequest.builder().bucket(bucket).key(key).build());
             try {
-              java.io.InputStream in = obj.getObjectContent();
+              java.io.FileOutputStream out = new java.io.FileOutputStream(localFile);
               try {
-                java.io.FileOutputStream out = new java.io.FileOutputStream(localFile);
-                try {
-                  byte[] buf = new byte[8192];
-                  int n;
-                  while ((n = in.read(buf)) > 0) {
-                    out.write(buf, 0, n);
-                  }
-                } finally {
-                  out.close();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                  out.write(buf, 0, n);
                 }
               } finally {
-                in.close();
+                out.close();
               }
             } finally {
-              obj.close();
+              in.close();
             }
 
             int done = completed.incrementAndGet();
@@ -1075,27 +1083,28 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       if (files.isEmpty()) {
         return;
       }
-      AmazonS3 client = getS3Client();
+      S3Client client = getS3Client();
       String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
       int slash = path.indexOf('/');
       String bucket = slash > 0 ? path.substring(0, slash) : path;
 
-      List<DeleteObjectsRequest.KeyVersion> batch =
-          new ArrayList<DeleteObjectsRequest.KeyVersion>();
+      List<ObjectIdentifier> batch = new ArrayList<ObjectIdentifier>();
       for (String file : files) {
         String filePath = file.startsWith("s3://") ? file.substring(5) : file;
         int fileSlash = filePath.indexOf('/');
         String key = filePath.substring(fileSlash + 1);
-        batch.add(new DeleteObjectsRequest.KeyVersion(key));
+        batch.add(ObjectIdentifier.builder().key(key).build());
         if (batch.size() >= 1000) {
           client.deleteObjects(
-              new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+              DeleteObjectsRequest.builder().bucket(bucket)
+                  .delete(Delete.builder().objects(batch).quiet(true).build()).build());
           batch.clear();
         }
       }
       if (!batch.isEmpty()) {
         client.deleteObjects(
-            new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+            DeleteObjectsRequest.builder().bucket(bucket)
+                .delete(Delete.builder().objects(batch).quiet(true).build()).build());
       }
       LOGGER.info("Deleted {} compacted files for year={}", files.size(), year);
     } catch (Exception e) {
@@ -1110,14 +1119,13 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
    */
   private void deleteSpecificFiles(List<String> s3Files, String year) {
     try {
-      AmazonS3 client = getS3Client();
+      S3Client client = getS3Client();
       String path = bucketPath.startsWith("s3://") ? bucketPath.substring(5) : bucketPath;
       int slash = path.indexOf('/');
       String bucket = slash > 0 ? path.substring(0, slash) : path;
 
       // Batch delete: up to 1000 keys per S3 DeleteObjects request
-      List<DeleteObjectsRequest.KeyVersion> batch =
-          new ArrayList<DeleteObjectsRequest.KeyVersion>();
+      List<ObjectIdentifier> batch = new ArrayList<ObjectIdentifier>();
       int deleted = 0;
       for (String file : s3Files) {
         // Compaction invariant (delete chokepoint): a value-bearing freshness token's individual
@@ -1130,10 +1138,11 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         String filePath = file.startsWith("s3://") ? file.substring(5) : file;
         int fileSlash = filePath.indexOf('/');
         String key = filePath.substring(fileSlash + 1);
-        batch.add(new DeleteObjectsRequest.KeyVersion(key));
+        batch.add(ObjectIdentifier.builder().key(key).build());
         if (batch.size() >= 1000) {
           client.deleteObjects(
-              new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+              DeleteObjectsRequest.builder().bucket(bucket)
+                  .delete(Delete.builder().objects(batch).quiet(true).build()).build());
           deleted += batch.size();
           batch.clear();
           if (deleted % 10000 == 0) {
@@ -1144,7 +1153,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       }
       if (!batch.isEmpty()) {
         client.deleteObjects(
-            new DeleteObjectsRequest(bucket).withKeys(batch).withQuiet(true));
+            DeleteObjectsRequest.builder().bucket(bucket)
+                .delete(Delete.builder().objects(batch).quiet(true).build()).build());
         deleted += batch.size();
       }
       LOGGER.info("Deleted {} individual tracker files for year={} (compacted)",
@@ -1191,21 +1201,25 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String keyPrefix = slash > 0 ? path.substring(slash + 1) + "/" + prefix : prefix;
 
     List<String> files = new ArrayList<String>();
-    ListObjectsV2Request request = new ListObjectsV2Request()
-        .withBucketName(bucket)
-        .withPrefix(keyPrefix);
+    ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder()
+        .bucket(bucket)
+        .prefix(keyPrefix);
 
-    ListObjectsV2Result result;
+    String continuationToken = null;
+    ListObjectsV2Response result;
     do {
-      result = getS3Client().listObjectsV2(request);
-      for (S3ObjectSummary summary : result.getObjectSummaries()) {
-        String key = summary.getKey();
+      if (continuationToken != null) {
+        requestBuilder.continuationToken(continuationToken);
+      }
+      result = getS3Client().listObjectsV2(requestBuilder.build());
+      for (S3Object summary : result.contents()) {
+        String key = summary.key();
         if (key.endsWith(".parquet")) {
           files.add("s3://" + bucket + "/" + key);
         }
       }
-      request.setContinuationToken(result.getNextContinuationToken());
-    } while (result.isTruncated());
+      continuationToken = result.nextContinuationToken();
+    } while (Boolean.TRUE.equals(result.isTruncated()));
 
     return files;
   }
@@ -2710,11 +2724,12 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     // and --etl-resume could not skip finished partitions. Re-open the stream each attempt.
     Exception lastError = null;
     for (int attempt = 1; attempt <= 3; attempt++) {
-      com.amazonaws.services.s3.model.ObjectMetadata metadata =
-          new com.amazonaws.services.s3.model.ObjectMetadata();
-      metadata.setContentLength(tempFile.length());
+      long contentLength = tempFile.length();
       try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile)) {
-        getS3Client().putObject(bucket, key, fis, metadata);
+        getS3Client().putObject(
+            PutObjectRequest.builder().bucket(bucket).key(key)
+                .contentLength(contentLength).build(),
+            RequestBody.fromInputStream(fis, contentLength));
         return;
       } catch (RuntimeException e) {
         lastError = e;
@@ -2794,8 +2809,8 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
     String s3Key = (keyPrefix.isEmpty() ? "" : keyPrefix + "/")
         + "_meta/etl_hwm/" + runKey + ".txt";
     try {
-      S3Object obj = getS3Client().getObject(bucket, s3Key);
-      try (InputStream is = obj.getObjectContent()) {
+      try (InputStream is = getS3Client().getObject(
+          GetObjectRequest.builder().bucket(bucket).key(s3Key).build())) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buf = new byte[64];
         int n;
@@ -2804,8 +2819,9 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         }
         return LocalDate.parse(baos.toString(StandardCharsets.UTF_8.name()).trim());
       }
-    } catch (AmazonS3Exception e) {
-      if ("NoSuchKey".equals(e.getErrorCode())) {
+    } catch (S3Exception e) {
+      String errorCode = e.awsErrorDetails() != null ? e.awsErrorDetails().errorCode() : null;
+      if ("NoSuchKey".equals(errorCode)) {
         return null;
       }
       LOGGER.warn("Failed to read ETL high-water mark ({}): {}", runKey, e.getMessage());
@@ -2831,10 +2847,10 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
         + "_meta/etl_hwm/" + runKey + ".txt";
     try {
       byte[] bytes = date.toString().getBytes(StandardCharsets.UTF_8);
-      ObjectMetadata meta = new ObjectMetadata();
-      meta.setContentLength(bytes.length);
-      meta.setContentType("text/plain");
-      getS3Client().putObject(bucket, s3Key, new ByteArrayInputStream(bytes), meta);
+      getS3Client().putObject(
+          PutObjectRequest.builder().bucket(bucket).key(s3Key)
+              .contentLength((long) bytes.length).contentType("text/plain").build(),
+          RequestBody.fromBytes(bytes));
       LOGGER.info("Wrote ETL high-water mark ({}): {}", runKey, date);
     } catch (Exception e) {
       LOGGER.warn("Failed to write ETL high-water mark ({}): {}", runKey, e.getMessage());
@@ -2872,7 +2888,7 @@ public class S3HivePipelineTracker implements PipelineTracker, AutoCloseable {
       }
       if (s3Client != null) {
         try {
-          s3Client.shutdown();
+          s3Client.close();
         } catch (Exception e) {
           // ignore
         }
