@@ -33,6 +33,18 @@ GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 WINDOW_SECS=43200        # 12h per mode on weekdays
 WEEKEND_WINDOW_SECS=79200 # 22h on weekends, so the ~20h weekend VSS embed (vss-local.py) fits
 RESTART_DELAY=30    # seconds to wait after a crash before restarting
+# When a `timeout` fires (exit 124) we can't tell a clean window-elapse from a
+# wedged run-pool.sh by the exit code alone — both are 124. run-pool prints a
+# status block every ~10s, so its window log is touched continuously while it is
+# alive and working. If that log has been stale longer than this at the moment
+# the timeout fires, run-pool itself was hung, not merely still-working.
+POOL_STALL_SECS="${POOL_STALL_SECS:-300}"
+# Cap on how many times a genuinely-crashed pool (process died mid-queue, e.g.
+# OOM/137 or a set -e abort — NOT a partial-failure exit 2, which never restarts)
+# may be relaunched within one window. A deterministic crash used to relaunch
+# unconditionally every RESTART_DELAY seconds, storming the whole window; this
+# bounds it, then abandons the mode so the next window can try fresh.
+MAX_POOL_RESTARTS="${MAX_POOL_RESTARTS:-5}"
 
 # Concurrency throttle passed to run-pool.sh's -j. run-pool otherwise admits
 # workers up to the memory budget alone (MAX_WORKERS=99), which lets ~6 JVMs pound
@@ -137,7 +149,8 @@ fi
 # ── Window runner ─────────────────────────────────────────────────────────────
 #
 # Runs the pool in the given mode for up to WINDOW_SECS.
-# On non-zero / non-SIGTERM exit: logs to errors.log, waits RESTART_DELAY, restarts.
+# On a crash (non-zero, and not the 124/143 window-timeout codes): logs to
+# errors.log, waits RESTART_DELAY, restarts within the remaining window.
 
 run_window() {
   local mode="$1"
@@ -149,6 +162,7 @@ run_window() {
   [ "$(date +%u)" -ge 6 ] && win_secs="$WEEKEND_WINDOW_SECS"
   local window_end=$(( $(date +%s) + win_secs ))
   local attempt=0
+  local restarts=0           # crash relaunches only (not completions/fills); capped by MAX_POOL_RESTARTS
   local current="$mode"      # mode currently running; may switch to fill_mode after an early finish
 
   {
@@ -182,23 +196,62 @@ run_window() {
     ACTIVE_POOL_PID=""
     set -e
 
-    if [ "$EXIT_CODE" -eq 0 ]; then
-      # Pool completed all schemas for the current mode before the window elapsed.
-      echo "[$(ts)] $current pool completed all schemas (exit 0)" >> "$window_log"
+    if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 2 ]; then
+      # The pool drained its entire queue before the window elapsed. exit 0 = all
+      # schemas OK; exit 2 = queue completed but some workers failed (run-pool.sh).
+      # Neither is a crash, so neither restarts the whole pool — a completed run is
+      # done. Failed schemas from exit 2 retry on the next window via the tracker;
+      # re-running ~360 slots here just to reattempt a couple that will fail again
+      # would burn the window (this was the restart-on-partial-failure pathology).
+      if [ "$EXIT_CODE" -eq 2 ]; then
+        log_error "WARNING: $current pool completed WITH worker failures (attempt $attempt) — not restarting; failed schemas retry next $current window"
+        echo "[$(ts)] $current pool completed with worker failures (exit 2) — see $ERROR_LOG" >> "$window_log"
+      else
+        echo "[$(ts)] $current pool completed all schemas (exit 0)" >> "$window_log"
+      fi
       if [ -n "$fill_mode" ] && [ "$current" != "$fill_mode" ]; then
-        echo "[$(ts)] $current finished early — filling remaining window with $fill_mode" | tee -a "$window_log"
+        echo "[$(ts)] $current finished — filling remaining window with $fill_mode" | tee -a "$window_log"
         current="$fill_mode"
         continue
       fi
       break
-    elif [ "$EXIT_CODE" -eq 143 ]; then
-      # SIGTERM from timeout — the window elapsed.
-      echo "[$(ts)] $current pool ended on window timeout (exit 143)" >> "$window_log"
+    elif [ "$EXIT_CODE" -eq 124 ] || [ "$EXIT_CODE" -eq 143 ]; then
+      # The allotted window/attempt time elapsed. GNU/uutils timeout(1) reports
+      # 124 when it fires and kills the child; 143 (128+SIGTERM) only appears if
+      # the child was SIGTERM'd from elsewhere or timeout ran --preserve-status.
+      # Either way this is the normal end of a window, NOT a crash — do not
+      # restart. (The prior code only matched 143, so every real timeout fell
+      # through to the crash branch and spuriously logged/restarted.)
+      #
+      # Improvement: distinguish a clean elapse from a wedge of run-pool.sh
+      # itself. Both exit 124, but a live run-pool touches $window_log every ~10s;
+      # if that log has gone stale past POOL_STALL_SECS at timeout, run-pool was
+      # hung. Flag it (the window is over, so there is nothing to restart into,
+      # but a wedge is worth surfacing in errors.log) rather than reporting a
+      # clean finish.
+      now=$(date +%s)
+      last_mod=$(stat -L -c '%Y' "$window_log" 2>/dev/null || echo "$now")
+      stale=$(( now - last_mod ))
+      if [ "$stale" -ge "$POOL_STALL_SECS" ]; then
+        log_error "WARNING: $current pool timed out (exit $EXIT_CODE) with ${stale}s of no output — run-pool.sh appears wedged, not just window-elapsed"
+        echo "[$(ts)] $current pool timed out with stale log (${stale}s ≥ ${POOL_STALL_SECS}s) — possible run-pool wedge" >> "$window_log"
+      else
+        echo "[$(ts)] $current pool ended on window timeout (exit $EXIT_CODE)" >> "$window_log"
+      fi
       break
     else
-      # Crash / OOM — log to error log and restart within remaining window time
-      log_error "ERROR: $current pool exited with code $EXIT_CODE (attempt $attempt) — restarting in ${RESTART_DELAY}s"
-      echo "[$(ts)] ERROR: pool exit $EXIT_CODE — restarting; see $ERROR_LOG" >> "$window_log"
+      # Genuine crash — run-pool died mid-queue (OOM/137, set -e abort, etc). The
+      # queue is unfinished, so restarting to resume is appropriate — but bound it,
+      # so a DETERMINISTIC crash cannot relaunch every RESTART_DELAY seconds for the
+      # whole window. Past the cap, abandon the mode; the next window starts fresh.
+      restarts=$(( restarts + 1 ))
+      if [ "$restarts" -ge "$MAX_POOL_RESTARTS" ]; then
+        log_error "ERROR: $current pool crashed (exit $EXIT_CODE) — hit restart cap ($MAX_POOL_RESTARTS); abandoning $current for this window"
+        echo "[$(ts)] ERROR: pool exit $EXIT_CODE — restart cap ($MAX_POOL_RESTARTS) reached, ending window; see $ERROR_LOG" >> "$window_log"
+        break
+      fi
+      log_error "ERROR: $current pool crashed (exit $EXIT_CODE) (restart $restarts/$MAX_POOL_RESTARTS) — restarting in ${RESTART_DELAY}s"
+      echo "[$(ts)] ERROR: pool exit $EXIT_CODE — restart $restarts/$MAX_POOL_RESTARTS in ${RESTART_DELAY}s; see $ERROR_LOG" >> "$window_log"
       sleep "$RESTART_DELAY"
     fi
   done

@@ -891,7 +891,14 @@ echo "=== Pool Complete ==="
 echo "Total: $total  Done: $done_count  Failed: $failed_count  Restarts: $restart_count"
 if [ "$failed_count" -gt 0 ]; then
   echo "Failed workers: ${failed_list[*]}"
-  exit 1
+  # Exit 2 == "queue fully drained, but N workers failed after their in-pool
+  # retries" — a COMPLETED run, distinct from a crash (the pool process dying
+  # mid-queue, e.g. OOM/137 or a set -e abort, which leaves exit 1/137/etc).
+  # run-scheduled.sh keys off this: a completed-with-failures run must NOT
+  # restart the whole pool (re-running ~360 slots to retry a couple that will
+  # deterministically fail again just burns the window); the failed schemas
+  # retry on the next window via the ETL tracker. A true crash still restarts.
+  exit 2
 fi
 
 # ── Embeddings (daily only) ───────────────────────────────────────────────────

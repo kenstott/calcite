@@ -6,7 +6,16 @@
 
 `run-scheduled.sh` is the long-running production process. It never exits on its own. It alternates between `historical` and `daily` run-pool windows, each lasting up to 12 hours (`WINDOW_SECS=43200`). When a window ends the mode flips and the next window starts immediately.
 
-Within a window, if `run-pool.sh` exits with a non-zero code (crash, OOM), the runner logs the failure to `runs/errors.log`, waits 30 seconds, then relaunches the pool for the remaining window time. A clean exit (code 0) or a timeout signal (code 143) ends the window normally.
+Within a window the runner classifies `run-pool.sh`'s exit code:
+
+| Exit code | Meaning | Runner action |
+|-----------|---------|---------------|
+| `0` | Queue drained, all schemas OK | End window (or fill remaining time with the other mode) |
+| `2` | Queue drained, some workers failed | End window — **no restart**; failed schemas retry next window via the tracker |
+| `124` (or `143`) | `timeout` fired — the window/attempt elapsed | End window normally. If `run-pool`'s window log had gone stale > `POOL_STALL_SECS` (300s), a `run-pool.sh appears wedged` WARNING is logged |
+| anything else | Genuine crash (OOM/137, `set -e` abort) — queue unfinished | Log to `runs/errors.log`, wait `RESTART_DELAY` (30s), relaunch to resume — bounded to `MAX_POOL_RESTARTS` (5) crashes per window, then abandon the mode |
+
+Note: `timeout` reports **124** on expiry (not 143) — the historical backfill is a ~360-slot queue that legitimately spans many windows, so a mid-backfill 124 is the normal window boundary, not a failure. Restarting on it (the old behavior, which only recognized 143) was a bug.
 
 **Mode selection.** If no argument is given, the starting mode is determined by the current hour: 08:00–19:59 → `daily`, 20:00–07:59 → `historical`. Pass `daily` or `historical` explicitly to override.
 
