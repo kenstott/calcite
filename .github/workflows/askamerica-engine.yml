@@ -160,12 +160,17 @@ jobs:
             c=$(echo "$entries" | grep -cE "^${pat}" || true)
             [ "$c" -eq 0 ] || { echo "FAIL: orphan '$pat' present ($c)"; fail=1; }
           done
+          # Tier-3: Arrow Gandiva must be stripped (reached only via reflective .arrow path).
+          for pat in 'gandiva_jni/' 'org/apache/arrow/gandiva/'; do
+            c=$(echo "$entries" | grep -cE "^${pat}" || true)
+            [ "$c" -eq 0 ] || { echo "FAIL: gandiva '$pat' present ($c)"; fail=1; }
+          done
           # Regression guard: the govdata resource under config/ must be preserved
           # (proves the models/*.json exclude did not over-match).
           k=$(echo "$entries" | grep -cE '^config/djia-wiki-model\.json$' || true)
           [ "$k" -eq 1 ] || { echo "FAIL: config/djia-wiki-model.json missing (over-broad exclude)"; fail=1; }
-          # Size ceiling — catches a bloat regression (current ~559 MB).
-          sz=$(stat -c%s "$JAR"); ceil=$((650*1024*1024))
+          # Size ceiling — catches a bloat regression (current ~441 MB after Tier-1/2a/3).
+          sz=$(stat -c%s "$JAR"); ceil=$((500*1024*1024))
           echo "JAR size: $((sz/1024/1024)) MB (ceiling $((ceil/1024/1024)) MB)"
           [ "$sz" -le "$ceil" ] || { echo "FAIL: jar exceeds size ceiling"; fail=1; }
           [ "$fail" -eq 0 ] && echo "All slimming guards passed." || exit 1

@@ -115,6 +115,16 @@ tasks.shadowJar {
     exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB ONNX embedding model
     exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives
 
+    // Arrow Gandiva (~118 MB, almost all native libs) — the LLVM expression compiler
+    // is reached only through FileSchema.createArrowTable(), which (a) fires only for
+    // .arrow file sources and (b) loads the arrow adapter by reflection ("to avoid hard
+    // dependency"). govdata datasets are parquet/iceberg read via DuckDB and never
+    // declare .arrow sources, so this path is never taken — no NoClassDefFoundError on
+    // the read path, at most a caught ClassNotFoundException inside that .arrow-only
+    // method. (Tier-3 slimming.)
+    exclude("gandiva_jni/**")                 // native libs (linux/osx x86_64+aarch64)
+    exclude("org/apache/arrow/gandiva/**")    // gandiva Java classes
+
     // AWS SDK v1 codegen artifacts — the intermediate/model JSON under models/ are
     // build-time service descriptors, never loaded at runtime (the SDK reads compiled
     // classes). ~68 MB on disk. Flat models/*.json only — do NOT use **/*-model.json,
@@ -152,6 +162,14 @@ tasks.shadowJar {
 // read-only engine never loads, mirroring the shadowJar excludes at the jar level.
 //   Run: ./gradlew :askamerica-engine:stageEngineRuntime
 //   Output: build/engine-runtime/*.jar  → bundled into the wheel as engine_jars/
+//
+// KNOWN LIMITATION (follow-up): govdata → :file resolves to file's OWN shadow jar
+// (`sih-aperio`, ~641 MB, itself shaded with Gandiva etc.), so the staged set is
+// currently [shaded sih-aperio + duplicated deps] ~1.15 GB, not a clean unshaded set.
+// The dependency-level dropPrefixes below cannot slim what is baked inside sih-aperio.
+// A truly slim/deduped set requires depending on :file's plain `jar` instead of its
+// shadow jar. The set still BOOTS (sih-aperio is self-contained), so this validates the
+// side-by-side-jars thesis; the <100 MB wheel partition needs the plain-jar change first.
 val stageEngineRuntime by tasks.registering(Sync::class) {
     group = "distribution"
     description = "Stage the unshaded runtime jar-set for the Python wheel"
@@ -163,6 +181,7 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
     val dropPrefixes = listOf(
         "onnxruntime", "pdfbox", "fontbox", "xmpbox", "poi", "jsoup",
         "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
+        "arrow-gandiva", // LLVM expr compiler — reached only via reflective .arrow path (govdata has none)
     )
 
     from(tasks.named("jar"))   // askamerica-engine's own classes

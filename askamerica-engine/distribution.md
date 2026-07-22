@@ -122,7 +122,7 @@ Removal tiers:
 | **1 — do now** | orphaned ONNX + tokenizer natives + AWS-v1 codegen JSON | 163 MB | ~560 MB | zero — consuming code already excluded / JSON never loaded |
 | **2 — blocked** | drop AWS SDK v1 classes | +192 MB | ~370 MB | **BLOCKED** — the read path uses hadoop `s3a` (AWS v1) via `IcebergTable`/`HadoopTables`; needs an `S3FileIO` (v2) migration first (see below) |
 | **2a — safe now** | AWS-v1 codegen JSON only (`models/*-{intermediate,model}.json`) | +68 MB | ~490 MB | none — build artifacts, never loaded at runtime; the v1 classes stay |
-| **3** | Arrow Gandiva natives | +118 MB | ~250 MB | verify not used on read path |
+| **3 — applied** | Arrow Gandiva (natives + classes) | +118 MB | ~441 MB | none on the read path — reached only via `FileSchema.createArrowTable()`, which is `.arrow`-file-only and loads the arrow adapter by **reflection** ("to avoid hard dependency"); govdata has no `.arrow` sources |
 | **4** | strip non-target-platform natives | +~130 MB | ~120–150 MB | single-platform deploy only |
 
 **Tier-2 verification result (blocked).** The Iceberg *read* path uses hadoop `s3a`
@@ -248,10 +248,11 @@ procured enterprise.
 
 Landed and validated locally:
 
-- **Slimming Tier-1 + Tier-2a** in `askamerica-engine/build.gradle.kts`: 722 MB → **559
-  MB**. Excludes the orphaned ONNX model + tokenizer natives and the AWS-v1 codegen
-  JSON (`models/*.json`, flat pattern — the govdata `config/djia-wiki-model.json` is
-  preserved). AWS-v1 classes stay (read path needs s3a).
+- **Slimming Tier-1 + Tier-2a + Tier-3** in `askamerica-engine/build.gradle.kts`: 722 MB
+  → **~441 MB**. Excludes the orphaned ONNX model + tokenizer natives, the AWS-v1
+  codegen JSON (`models/*.json`, flat pattern — the govdata `config/djia-wiki-model.json`
+  is preserved), and Arrow Gandiva (natives + classes; reached only via the reflective
+  `.arrow`-only path govdata never takes). AWS-v1 classes stay (read path needs s3a).
 - **Driver-load smoke test PASSED** on the slimmed fat jar (jshell: `AskAmericaDriver`
   + `GovDataDriver` load and register, `acceptsURL=true`, no `NoClassDefFoundError`).
 - **`stageEngineRuntime` gradle task**: emits the unshaded runtime jar-set (244 jars),
@@ -270,13 +271,16 @@ Landed and validated locally:
 
 Follow-up (not in this pass):
 
-- **Wheel partition to <100 MB + PyPI publish.** The staged jar-set is ~1.15 GB — AWS
-  v1 is duplicated (`aws-java-sdk-bundle` from hadoop-aws *and* the split
-  `aws-java-sdk-s3/core/kms`), and the bundle still carries the codegen JSON inside the
-  jar. Dedup the AWS jars, strip the codegen JSON from the staged set, then bin into
-  universal + per-platform wheels each <100 MB and wire `publish-python` to bundle them.
+- **Wheel partition to <100 MB + PyPI publish.** The staged jar-set is ~1.15 GB and is
+  **not yet truly unshaded**: `govdata → :file` resolves to file's OWN shadow jar
+  (`sih-aperio`, ~641 MB, itself shaded — Gandiva/AWS/etc. baked in), so the set is
+  `[sih-aperio + duplicated deps]`. The dependency-level dropPrefixes cannot slim what
+  is inside sih-aperio (e.g. the fat-jar Gandiva removal does not shrink the set). Real
+  fix: stage against :file's plain `jar` (not its shadow), then dedup AWS v1 (bundle vs
+  split s3/core/kms), strip the codegen JSON, and bin into universal + per-platform
+  wheels each <100 MB, wiring `publish-python` to bundle them. The set BOOTS today
+  (sih-aperio is self-contained), which is what validates the side-by-side thesis.
 - **Tier-2** (drop the 192 MB AWS-v1 classes) needs the Iceberg `S3FileIO` migration.
-- **Gandiva** (118 MB) needs read-path usage confirmation.
 
 ## Known gaps / verification still needed
 
@@ -290,8 +294,9 @@ Follow-up (not in this pass):
    Tier-2 cut is blocked until `IcebergTable` + `IcebergCatalogManager` are migrated
    to Iceberg `S3FileIO` (v2). Tracked as a follow-up; Tier-2a (68 MB codegen JSON) is
    applied now.
-3. **Gandiva usage** — confirm not invoked on the DuckDB read path before removing
-   (Tier 3, 118 MB).
+3. **Gandiva usage — RESOLVED: not on the read path.** Reached only via
+   `FileSchema.createArrowTable()`, which is `.arrow`-file-only and loads the arrow
+   adapter by reflection; govdata has no `.arrow` sources. Removed in Tier-3.
 4. **Exact per-platform native sizes** — build a linux-only stripped jar and measure
    to replace the ±20 MB estimates.
 
