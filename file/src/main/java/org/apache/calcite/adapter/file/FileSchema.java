@@ -4482,49 +4482,21 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       icebergTableName = tableName;
     }
 
-    // Build the config map for IcebergCatalogManager
-    // Convert s3:// to s3a:// for Hadoop compatibility
-    String normalizedWarehouse = warehousePath;
-    if (normalizedWarehouse != null && normalizedWarehouse.startsWith("s3://")) {
-      normalizedWarehouse = "s3a://" + normalizedWarehouse.substring(5);
-    }
-
-    Map<String, Object> catalogConfig = new HashMap<>();
-    catalogConfig.put("catalog", icebergConfig.getOrDefault("catalogType", "hadoop"));
-    catalogConfig.put("warehousePath", normalizedWarehouse);
-
-    // Add S3 credentials as Hadoop configuration if available from storage provider
-    if (storageProvider != null) {
-      Map<String, String> s3Config = storageProvider.getS3Config();
-      if (s3Config != null) {
-        Map<String, String> hadoopConfig = new HashMap<>();
-        if (s3Config.containsKey("accessKeyId")) {
-          hadoopConfig.put("fs.s3a.access.key", s3Config.get("accessKeyId"));
-        }
-        if (s3Config.containsKey("secretAccessKey")) {
-          hadoopConfig.put("fs.s3a.secret.key", s3Config.get("secretAccessKey"));
-        }
-        if (s3Config.containsKey("endpoint")) {
-          hadoopConfig.put("fs.s3a.endpoint", s3Config.get("endpoint"));
-          // For custom endpoints like R2, we need path-style access
-          hadoopConfig.put("fs.s3a.path.style.access", "true");
-        }
-        if (!hadoopConfig.isEmpty()) {
-          catalogConfig.put("hadoopConfig", hadoopConfig);
-        }
-      }
-    }
-
     try {
-      // Check if the Iceberg table exists
-      if (IcebergCatalogManager.tableExists(catalogConfig, icebergTableName)) {
-        // Build the full table location path using original s3:// format for consistency
-        String tableLocation = warehousePath;
-        if (!tableLocation.endsWith("/")) {
-          tableLocation = tableLocation + "/";
-        }
-        tableLocation = tableLocation + icebergTableName;
+      // Build the full table location path using original s3:// format for consistency
+      String tableLocation = warehousePath;
+      if (!tableLocation.endsWith("/")) {
+        tableLocation = tableLocation + "/";
+      }
+      tableLocation = tableLocation + icebergTableName;
 
+      // Check the Iceberg table exists via its metadata pointer using the StorageProvider
+      // (AWS SDK v2 for S3, or local FS) rather than a HadoopCatalog — this keeps the
+      // read/discovery path off hadoop's S3AFileSystem (AWS SDK v1).
+      boolean icebergTableExists = storageProvider != null
+          && storageProvider.exists(tableLocation + "/metadata/version-hint.text");
+
+      if (icebergTableExists) {
         LOGGER.info("Discovered existing Iceberg table '{}' at: {}", tableName, tableLocation);
 
         // Update the conversion record to ICEBERG_PARQUET

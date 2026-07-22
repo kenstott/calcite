@@ -205,12 +205,11 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
         "onnxruntime", "pdfbox", "fontbox", "xmpbox", "poi", "jsoup",
         "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
         "arrow-gandiva", // LLVM expr compiler — reached only via reflective .arrow path (govdata has none)
-        // NOTE: hadoop-aws + the 297 MB aws-java-sdk-bundle CANNOT be dropped yet. The
-        // Iceberg read loaders are migrated to S3FileIO (AWS v2), but a full-driver MinIO
-        // query proved the partitioned-table discovery/globbing path in FileSchema still
-        // instantiates hadoop's S3AFileSystem for S3 file listing. Dropping the bundle
-        // needs those S3 filesystem operations migrated off s3a (onto S3StorageProvider)
-        // first — tracked in distribution.md.
+        // hadoop-aws (S3AFileSystem) + its 297 MB aws-java-sdk-bundle. The whole read path
+        // is now off hadoop s3a: Iceberg loaders use S3FileIO (AWS v2), and partitioned-
+        // table discovery checks existence via S3StorageProvider (AWS v2). The small split
+        // aws-java-sdk-s3/core/kms stays for the still-v1 S3HivePipelineTracker (ETL).
+        "hadoop-aws", "aws-java-sdk-bundle",
     )
 
     from(tasks.named("jar"))   // askamerica-engine's own classes
