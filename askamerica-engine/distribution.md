@@ -292,21 +292,25 @@ Follow-up (not in this pass):
   192 MB). (2) **PyPI file-size increase** — ship the bundle in its own wheel (works on
   Artifactory today, community PyPI with a granted bump).
 
-- **Path 2 — partially done, and bigger than just Iceberg.** The Iceberg read loaders
-  ARE migrated to `S3FileIO` (AWS v2) and validated against a live MinIO — `IcebergTable`
-  and `DuckDBIcebergCountStarRule` load path-based tables via `S3FileIOTables`
-  (version-hint → `StaticTableOperations` → `BaseTable`), read parity proven (identical
-  12 cols / 460,534 rows vs HadoopTables). But a **full JDBC-driver query against MinIO
-  with the bundle dropped** revealed hadoop `s3a` is used **beyond** Iceberg loading:
-  `FileSchema`'s partitioned-table discovery / S3 file globbing (`recordTableMetadata` →
-  `discoverExistingIcebergTable`, and the `matchingFiles` listing) instantiates
-  `S3AFileSystem` during schema init. So dropping hadoop-aws now breaks schema load
-  (`ClassNotFoundException: S3AFileSystem`). **Remaining work:** route the file adapter's
-  S3 filesystem operations (list/glob/exists used by partitioned-table discovery) through
-  `S3StorageProvider` (AWS v1 split, already on the classpath) instead of hadoop `s3a`.
-  Once no read-path code calls `FileSystem.get(s3a://…)`, the bundle drop (jar-set) and
-  the fat-jar AWS-v1 reduction both become safe. The Iceberg-loader migration is a
-  committed, validated step toward this; it is necessary but not sufficient on its own.
+- **Read-path hadoop-`s3a` removal — DONE and validated; the 297 MB bundle is dropped.**
+  Three landed pieces put the entire read path on AWS SDK v2: (1) Iceberg loaders on
+  `S3FileIO` via `S3FileIOTables` (parity proven, 12 cols / 460,534 rows); (2)
+  `S3StorageProvider` rewritten v1→v2 (`S3Client`), validated read+write incl. a 40 MB
+  multipart round-trip; (3) `FileSchema.discoverExistingIcebergTable` now checks the
+  metadata pointer via `storageProvider.exists(.../metadata/version-hint.text)` instead
+  of a `HadoopCatalog` (`recordTableMetadata`'s discovery no longer touches
+  `S3AFileSystem`). The jar-set drops hadoop-aws + the 297 MB `aws-java-sdk-bundle`
+  (keeping the 3 MB split for the still-v1 `S3HivePipelineTracker`). **Validated on live
+  MinIO:** the full JDBC-driver query `SELECT COUNT(*) FROM ag.ers_farm_income` returns
+  460,534 with hadoop-aws **gone** — the same query that previously failed with
+  `ClassNotFoundException: S3AFileSystem`. **Jar-set 604 → 308 MB, no jar over 100 MB →
+  the `<100 MB` wheel partition is unblocked.**
+
+  Remaining follow-ups (not blocking the wheel): migrate the legacy
+  `S3HivePipelineTracker` (v1, ETL-only, being retired for `PGPipelineTracker`) to v2 to
+  drop the last 3 MB split and reach one-lib purity; and the fat-jar (Maven/JDBC) AWS-v1
+  reduction, where the bundle's `com.amazonaws` is shade-merged with the split (needs a
+  service-level exclude or the tracker migration first).
 
 ### S3 stack consolidation (approved) — standardize the JVM on AWS SDK v2
 
