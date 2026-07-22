@@ -98,54 +98,6 @@ public class ParquetConversionUtil {
   }
 
   /**
-   * Check if a path represents an S3 location.
-   */
-  private static boolean isS3Path(String path) {
-    return path != null && path.startsWith("s3://");
-  }
-
-  /**
-   * Helper method to detect if a path is an S3 URI and convert it to S3A format for Hadoop.
-   */
-  private static String getHadoopPath(String path) {
-    if (path != null && path.startsWith("s3://")) {
-      return path.replace("s3://", "s3a://");
-    }
-    return path;
-  }
-
-  /**
-   * Configure Hadoop Configuration for S3A access using AWS SDK credentials chain.
-   */
-  private static void configureS3Access(org.apache.hadoop.conf.Configuration conf) {
-    // Use AWS SDK default credential provider chain (same as S3StorageProvider)
-    conf.set("fs.s3a.aws.credentials.provider",
-        "com.amazonaws.auth.DefaultAWSCredentialsProviderChain");
-
-    // Try to get region from AWS SDK default chain
-    try {
-      com.amazonaws.regions.DefaultAwsRegionProviderChain regionProvider =
-          new com.amazonaws.regions.DefaultAwsRegionProviderChain();
-      String region = regionProvider.getRegion();
-      if (region != null) {
-        conf.set("fs.s3a.endpoint.region", region);
-        LOGGER.debug("Configured S3A region: {}", region);
-      }
-    } catch (Exception e) {
-      LOGGER.debug("Could not auto-detect AWS region, using default: {}", e.getMessage());
-      // Fallback to us-west-1 (same as S3StorageProvider)
-      conf.set("fs.s3a.endpoint.region", "us-west-1");
-    }
-
-    // Performance optimizations for Parquet writing
-    conf.set("fs.s3a.multipart.size", "64M");
-    conf.set("fs.s3a.multipart.threshold", "128M");
-    conf.set("fs.s3a.fast.upload", "true");
-
-    LOGGER.info("Configured Hadoop for S3A access using AWS credentials chain");
-  }
-
-  /**
    * Convert source to Parquet using StorageProviderFile abstraction.
    * This method supports both local filesystem and S3 storage.
    */
@@ -279,18 +231,17 @@ public class ParquetConversionUtil {
 
     LOGGER.debug("Starting remote Parquet conversion for table: {}", tableName);
 
-    // For remote storage, we'll perform the conversion locally first, then upload
+    // For remote storage, run the exact same local conversion into a local temp file,
+    // then upload the finished Parquet file through the StorageProvider (AWS SDK v2).
     java.io.File tempFile = java.io.File.createTempFile("parquet-conv-", ".parquet");
     try {
-      // Use direct conversion to temp file
-      if (!tryDirectConversion(table, tempFile, schemaName)) {
-        throw new RuntimeException("Table does not support direct scanning: " + tableName +
-            ". Only ScannableTable implementations are supported for Parquet conversion.");
-      }
+      // Reuse the local conversion so the Parquet content written is identical to the
+      // local path (same performConversion used by convertWithLocking).
+      performConversion(source, tableName, table, tempFile, parentSchema, schemaName);
 
-      // Upload temp file to target location
-      try (java.io.InputStream input = java.nio.file.Files.newInputStream(tempFile.toPath())) {
-        targetFile.writeInputStream(input);
+      // Upload the completed local temp file to the target location via the StorageProvider.
+      try (java.io.FileInputStream input = new java.io.FileInputStream(tempFile)) {
+        targetFile.getStorageProvider().writeFile(targetFile.getPath(), input);
       }
 
       LOGGER.info("Remote Parquet conversion completed: {}", targetFile.getPath());
@@ -462,32 +413,18 @@ public class ParquetConversionUtil {
       throw e;
     }
 
-    // Determine the output path and configure Hadoop accordingly
-    String outputPath;
-    String targetFilePath = targetFile.getAbsolutePath();
-
-    // Check if we're working with an S3 path (cache directory could be S3)
-    if (isS3Path(targetFilePath)) {
-      outputPath = getHadoopPath(targetFilePath);
-      LOGGER.info("Writing Parquet file to S3: {}", outputPath);
-    } else {
-      // Delete existing local file if it exists
-      if (targetFile.exists()) {
-        targetFile.delete();
-      }
-      outputPath = targetFilePath;
-      LOGGER.debug("Writing Parquet file locally: {}", outputPath);
+    // Remote targets are converted to a local temp file first (see performRemoteConversion),
+    // so this writer only ever targets a genuinely-local path.
+    if (targetFile.exists()) {
+      targetFile.delete();
     }
+    String outputPath = targetFile.getAbsolutePath();
+    LOGGER.debug("Writing Parquet file locally: {}", outputPath);
 
     // Write to Parquet using direct writer
     org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(outputPath);
     org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
     conf.set("parquet.enable.vectorized.reader", "true");
-
-    // Configure S3A access if needed
-    if (isS3Path(targetFilePath)) {
-      configureS3Access(conf);
-    }
 
     org.apache.parquet.hadoop.example.GroupWriteSupport.setSchema(schema, conf);
 
