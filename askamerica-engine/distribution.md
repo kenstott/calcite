@@ -271,15 +271,18 @@ Landed and validated locally:
 
 Follow-up (not in this pass):
 
-- **Wheel partition to <100 MB + PyPI publish.** The staged jar-set is ~1.15 GB and is
-  **not yet truly unshaded**: `govdata → :file` resolves to file's OWN shadow jar
-  (`sih-aperio`, ~641 MB, itself shaded — Gandiva/AWS/etc. baked in), so the set is
-  `[sih-aperio + duplicated deps]`. The dependency-level dropPrefixes cannot slim what
-  is inside sih-aperio (e.g. the fat-jar Gandiva removal does not shrink the set). Real
-  fix: stage against :file's plain `jar` (not its shadow), then dedup AWS v1 (bundle vs
-  split s3/core/kms), strip the codegen JSON, and bin into universal + per-platform
-  wheels each <100 MB, wiring `publish-python` to bundle them. The set BOOTS today
-  (sih-aperio is self-contained), which is what validates the side-by-side thesis.
+- **Jar-set now truly unshaded (~604 MB, boots).** Root cause of the earlier 1.15 GB
+  bloat: `:file` targets Java 11 but its consumers inherit Calcite's Java 8 target, so
+  Gradle rejected file's plain (Java 11) `calcite-file` variant as incompatible and fell
+  back to file's shadow jar (`sih-aperio`, ~641 MB). Fixed **scoped to askamerica**: an
+  `engineWheelClasspath` config requesting `jvm.version=11` + `bundling=external` makes
+  `stageEngineRuntime` resolve plain `calcite-file` + its individual dependency jars.
+  Result: `sih-aperio` gone, deps individual, `arrow-gandiva` dropped by the prefix
+  filter, no Gandiva natives anywhere, set boots (driver + GovDataDriver resolve). No
+  other consumer changed (govdata/Trino still resolve as before). Remaining before the
+  `<100 MB` wheel partition + `publish-python` wiring: dedup AWS v1 (the 297 MB
+  `aws-java-sdk-bundle` from hadoop-aws vs the split `aws-java-sdk-s3/core/kms`) and
+  strip the codegen JSON, then bin into universal + per-platform wheels.
 - **Tier-2** (drop the 192 MB AWS-v1 classes) needs the Iceberg `S3FileIO` migration.
 
 ## Known gaps / verification still needed

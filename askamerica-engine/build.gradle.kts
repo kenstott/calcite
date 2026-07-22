@@ -170,6 +170,29 @@ tasks.shadowJar {
 // A truly slim/deduped set requires depending on :file's plain `jar` instead of its
 // shadow jar. The set still BOOTS (sih-aperio is self-contained), so this validates the
 // side-by-side-jars thesis; the <100 MB wheel partition needs the plain-jar change first.
+// Unshaded classpath for the wheel jar-set. Plain runtimeClasspath resolves :file to
+// its shadow jar (sih-aperio, ~641 MB) because :file targets Java 11 while this module
+// inherits Calcite's Java 8 target, so Gradle rejects file's plain (Java 11) variant and
+// falls back to the shadowed one (which carries no Java-11 constraint). Requesting
+// jvm.version=11 + bundling=external here makes the plain calcite-file jar and its
+// transitive dependency jars resolve instead — a genuinely unshaded, slimmable set.
+val engineWheelClasspath by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = false
+    extendsFrom(configurations.runtimeClasspath.get())
+    attributes {
+        attribute(org.gradle.api.attributes.Usage.USAGE_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Usage::class.java, org.gradle.api.attributes.Usage.JAVA_RUNTIME))
+        attribute(org.gradle.api.attributes.Category.CATEGORY_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Category::class.java, org.gradle.api.attributes.Category.LIBRARY))
+        attribute(org.gradle.api.attributes.LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.LibraryElements::class.java, org.gradle.api.attributes.LibraryElements.JAR))
+        attribute(org.gradle.api.attributes.Bundling.BUNDLING_ATTRIBUTE,
+            objects.named(org.gradle.api.attributes.Bundling::class.java, org.gradle.api.attributes.Bundling.EXTERNAL))
+        attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 11)
+    }
+}
+
 val stageEngineRuntime by tasks.registering(Sync::class) {
     group = "distribution"
     description = "Stage the unshaded runtime jar-set for the Python wheel"
@@ -185,7 +208,7 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
     )
 
     from(tasks.named("jar"))   // askamerica-engine's own classes
-    from(configurations.getByName("runtimeClasspath").filter { f ->
+    from(engineWheelClasspath.filter { f ->
         val n = f.name.lowercase()
         val isDjl = f.absolutePath.replace('\\', '/').contains("/ai.djl/")
         !isDjl && dropPrefixes.none { n.startsWith(it) }
