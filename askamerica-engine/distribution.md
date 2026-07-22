@@ -287,12 +287,26 @@ Follow-up (not in this pass):
   `aws-java-sdk-s3/core/kms` (~3 MB) — the split ships 3 services vs the bundle's 329,
   and hadoop-aws's S3A needs many of them (sts, dynamodb, …); a blind swap risks a
   runtime `NoClassDefFoundError` on the s3a read path, unverifiable without live creds.
-  So there are two real ways past it: (1) **Path 2 — migrate the read path to Iceberg
-  `S3FileIO` (v2)**, which drops hadoop-aws + the 297 MB bundle entirely (and also frees
-  the fat jar's 192 MB); needs a live Iceberg read to validate. (2) **PyPI file-size
-  increase** — ship the bundle in its own wheel (works on Artifactory today, community
-  PyPI with a granted bump). Path 1 is the clean permanent fix.
-- **Tier-2** (drop the 192 MB AWS-v1 classes) needs the Iceberg `S3FileIO` migration.
+  So there are two real ways past it: (1) **Path 2 — migrate the read path off hadoop
+  `s3a`**, which lets hadoop-aws + the 297 MB bundle drop (and also frees the fat jar's
+  192 MB). (2) **PyPI file-size increase** — ship the bundle in its own wheel (works on
+  Artifactory today, community PyPI with a granted bump).
+
+- **Path 2 — partially done, and bigger than just Iceberg.** The Iceberg read loaders
+  ARE migrated to `S3FileIO` (AWS v2) and validated against a live MinIO — `IcebergTable`
+  and `DuckDBIcebergCountStarRule` load path-based tables via `S3FileIOTables`
+  (version-hint → `StaticTableOperations` → `BaseTable`), read parity proven (identical
+  12 cols / 460,534 rows vs HadoopTables). But a **full JDBC-driver query against MinIO
+  with the bundle dropped** revealed hadoop `s3a` is used **beyond** Iceberg loading:
+  `FileSchema`'s partitioned-table discovery / S3 file globbing (`recordTableMetadata` →
+  `discoverExistingIcebergTable`, and the `matchingFiles` listing) instantiates
+  `S3AFileSystem` during schema init. So dropping hadoop-aws now breaks schema load
+  (`ClassNotFoundException: S3AFileSystem`). **Remaining work:** route the file adapter's
+  S3 filesystem operations (list/glob/exists used by partitioned-table discovery) through
+  `S3StorageProvider` (AWS v1 split, already on the classpath) instead of hadoop `s3a`.
+  Once no read-path code calls `FileSystem.get(s3a://…)`, the bundle drop (jar-set) and
+  the fat-jar AWS-v1 reduction both become safe. The Iceberg-loader migration is a
+  committed, validated step toward this; it is necessary but not sufficient on its own.
 
 ## Known gaps / verification still needed
 
