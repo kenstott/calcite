@@ -145,6 +145,41 @@ jobs:
           # Rename to a stable name for the release asset
           cp "$JAR" askamerica-engine/build/libs/askamerica-engine.jar
 
+      - name: Slimming guards (distribution.md)
+        # Lock in the read-only slimming so a transitive dep can't silently reintroduce
+        # bloat. Fail the build rather than ship a regressed asset.
+        run: |
+          JAR=askamerica-engine/build/libs/askamerica-engine.jar
+          fail=0
+          entries=$(unzip -l "$JAR" | awk '{print $4}')
+          # Tier-2a: AWS SDK v1 codegen JSON must be stripped (flat models/*.json only).
+          n=$(echo "$entries" | grep -cE '^models/.*-(intermediate|model)\.json$' || true)
+          [ "$n" -eq 0 ] || { echo "FAIL: $n AWS codegen JSON entries under models/"; fail=1; }
+          # Tier-1: orphaned ML resources must be stripped.
+          for pat in 'models/all-MiniLM' 'native/lib/'; do
+            c=$(echo "$entries" | grep -cE "^${pat}" || true)
+            [ "$c" -eq 0 ] || { echo "FAIL: orphan '$pat' present ($c)"; fail=1; }
+          done
+          # Regression guard: the govdata resource under config/ must be preserved
+          # (proves the models/*.json exclude did not over-match).
+          k=$(echo "$entries" | grep -cE '^config/djia-wiki-model\.json$' || true)
+          [ "$k" -eq 1 ] || { echo "FAIL: config/djia-wiki-model.json missing (over-broad exclude)"; fail=1; }
+          # Size ceiling — catches a bloat regression (current ~559 MB).
+          sz=$(stat -c%s "$JAR"); ceil=$((650*1024*1024))
+          echo "JAR size: $((sz/1024/1024)) MB (ceiling $((ceil/1024/1024)) MB)"
+          [ "$sz" -le "$ceil" ] || { echo "FAIL: jar exceeds size ceiling"; fail=1; }
+          [ "$fail" -eq 0 ] && echo "All slimming guards passed." || exit 1
+
+      - name: Stage unshaded jar-set (smoke)
+        # distribution.md wheel path: prove the unshaded runtime jar-set builds in CI.
+        # Not yet uploaded — the <100 MB wheel partition is the tracked follow-up.
+        run: |
+          ./gradlew :askamerica-engine:stageEngineRuntime --no-daemon
+          DIR=askamerica-engine/build/engine-runtime
+          echo "jar-set: $(ls "$DIR"/*.jar | wc -l) jars, $(du -sh "$DIR" | cut -f1)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:

@@ -110,6 +110,20 @@ tasks.shadowJar {
     exclude("ai/djl/**")
     exclude("ai/onnxruntime/**")
 
+    // Orphaned ML resources — the DJL/ONNX code that loads these is excluded above,
+    // so they are dead weight in the read-only engine (Tier-1 slimming).
+    exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB ONNX embedding model
+    exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives
+
+    // AWS SDK v1 codegen artifacts — the intermediate/model JSON under models/ are
+    // build-time service descriptors, never loaded at runtime (the SDK reads compiled
+    // classes). ~68 MB on disk. Flat models/*.json only — do NOT use **/*-model.json,
+    // which would wrongly catch config/djia-wiki-model.json (a govdata resource).
+    // The AWS v1 *classes* stay: the Iceberg read path still needs s3a (com.amazonaws)
+    // until IcebergTable/IcebergCatalogManager move to S3FileIO (v2). (Tier-2a slimming.)
+    exclude("models/*-intermediate.json")
+    exclude("models/*-model.json")
+
     // Hadoop — DuckDB handles S3 natively; hadoop-common Configuration
     // class is imported but never instantiated in the read path.
     exclude("org/apache/hadoop/mapreduce/**")
@@ -128,6 +142,43 @@ tasks.shadowJar {
     // HTTP client — keep; needed at query time for schema initialization
 
     // No main class — this is a pure JDBC driver JAR loaded via JPype or classpath
+}
+
+// ─── Unshaded runtime jar-set (Python wheel packaging) ───────────────────────
+// distribution.md: the pip / MCP path runs its own dedicated JVM via JPype, so it
+// needs no shaded fat jar — it loads the plain runtime jars side by side on the
+// classpath (verified: no relocation / mergeServiceFiles reliance). This stages that
+// unshaded jar-set (engine jar + runtime deps) minus the ETL/ML-only jars the
+// read-only engine never loads, mirroring the shadowJar excludes at the jar level.
+//   Run: ./gradlew :askamerica-engine:stageEngineRuntime
+//   Output: build/engine-runtime/*.jar  → bundled into the wheel as engine_jars/
+val stageEngineRuntime by tasks.registering(Sync::class) {
+    group = "distribution"
+    description = "Stage the unshaded runtime jar-set for the Python wheel"
+    dependsOn(tasks.named("jar"))
+
+    // ETL/ML-only dependency jars — the read path never loads these (loaders are
+    // excluded from the fat jar too). Keeps AWS SDK v1: the Iceberg s3a read path
+    // still needs com.amazonaws until IcebergTable moves to S3FileIO (v2).
+    val dropPrefixes = listOf(
+        "onnxruntime", "pdfbox", "fontbox", "xmpbox", "poi", "jsoup",
+        "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
+    )
+
+    from(tasks.named("jar"))   // askamerica-engine's own classes
+    from(configurations.getByName("runtimeClasspath").filter { f ->
+        val n = f.name.lowercase()
+        val isDjl = f.absolutePath.replace('\\', '/').contains("/ai.djl/")
+        !isDjl && dropPrefixes.none { n.startsWith(it) }
+    })
+    into(layout.buildDirectory.dir("engine-runtime"))
+
+    doLast {
+        val dir = layout.buildDirectory.dir("engine-runtime").get().asFile
+        val jars = dir.listFiles { f -> f.name.endsWith(".jar") }?.size ?: 0
+        val mb = (dir.listFiles()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L) / 1048576
+        logger.lifecycle("Staged engine jar-set: $jars jars, $mb MB → $dir")
+    }
 }
 
 // ─── Maven publishing (GitHub Packages) ──────────────────────────────────────
