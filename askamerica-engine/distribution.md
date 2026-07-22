@@ -279,10 +279,19 @@ Follow-up (not in this pass):
   `stageEngineRuntime` resolve plain `calcite-file` + its individual dependency jars.
   Result: `sih-aperio` gone, deps individual, `arrow-gandiva` dropped by the prefix
   filter, no Gandiva natives anywhere, set boots (driver + GovDataDriver resolve). No
-  other consumer changed (govdata/Trino still resolve as before). Remaining before the
-  `<100 MB` wheel partition + `publish-python` wiring: dedup AWS v1 (the 297 MB
-  `aws-java-sdk-bundle` from hadoop-aws vs the split `aws-java-sdk-s3/core/kms`) and
-  strip the codegen JSON, then bin into universal + per-platform wheels.
+  other consumer changed (govdata/Trino still resolve as before).
+- **The `<100 MB` partition is blocked by exactly one jar.** In the 604 MB set, the
+  **only** file over 100 MB is `aws-java-sdk-bundle-1.12.367.jar` (297 MB); every other
+  jar (calcite-file 82 MB, duckdb 77 MB, …) bins into wheels trivially. The bundle
+  cannot be split (a jar is atomic) and cannot be safely swapped for the tiny split
+  `aws-java-sdk-s3/core/kms` (~3 MB) — the split ships 3 services vs the bundle's 329,
+  and hadoop-aws's S3A needs many of them (sts, dynamodb, …); a blind swap risks a
+  runtime `NoClassDefFoundError` on the s3a read path, unverifiable without live creds.
+  So there are two real ways past it: (1) **Path 2 — migrate the read path to Iceberg
+  `S3FileIO` (v2)**, which drops hadoop-aws + the 297 MB bundle entirely (and also frees
+  the fat jar's 192 MB); needs a live Iceberg read to validate. (2) **PyPI file-size
+  increase** — ship the bundle in its own wheel (works on Artifactory today, community
+  PyPI with a granted bump). Path 1 is the clean permanent fix.
 - **Tier-2** (drop the 192 MB AWS-v1 classes) needs the Iceberg `S3FileIO` migration.
 
 ## Known gaps / verification still needed
