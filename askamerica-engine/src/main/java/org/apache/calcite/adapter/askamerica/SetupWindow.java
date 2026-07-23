@@ -328,6 +328,12 @@ public class SetupWindow {
     }
 
     private static String executablePath() {
+        // The launcher records the exact executable it was started from — use it so
+        // Claude Desktop is pointed at the real binary regardless of install location.
+        String actual = System.getProperty("askamerica.launcher.command");
+        if (actual != null && !actual.isBlank()) {
+            return actual;
+        }
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("mac")) {
             return "/Applications/AskAmerica MCP.app/Contents/MacOS/AskAmerica MCP";

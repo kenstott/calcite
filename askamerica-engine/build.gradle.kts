@@ -333,6 +333,8 @@ val launcherJar by tasks.registering(Jar::class) {
     archiveClassifier.set("")
     from(sourceSets.main.get().output) {
         include("**/McpServerLauncher.class")
+        include("**/EngineInstaller.class")
+        include("**/EngineInstaller\$*.class")
     }
     manifest {
         attributes["Main-Class"] = "org.apache.calcite.adapter.askamerica.McpServerLauncher"
@@ -351,7 +353,11 @@ tasks.register<Exec>("jlinkRuntime") {
     commandLine(
         jlinkTool,
         "--module-path", "${System.getProperty("java.home")}/jmods",
-        "--add-modules", "java.base,java.logging,java.net.http,java.sql,java.xml",
+        // java.desktop → Swing (setup wizard + download progress window);
+        // jdk.crypto.ec → TLS ciphers for the HTTPS engine download.
+        "--add-modules",
+        "java.base,java.desktop,java.logging,java.naming,java.net.http,java.sql,"
+            + "java.xml,jdk.crypto.ec",
         "--strip-debug",
         "--no-header-files",
         "--no-man-pages",
@@ -406,6 +412,15 @@ tasks.register<Exec>("jpackage") {
         "--dest", jpackageDirFile.absolutePath,
         "--java-options", "-Xms256m -Xmx2g",
         "--java-options", "-Dfile.encoding=UTF-8",
+        // Windows: without these the MSI installs silently with no way to launch
+        // the setup wizard. Start-menu entry + optional desktop shortcut.
+        *(if (os.contains("win"))
+            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut")
+        else emptyArray()),
+        // Linux: add an application-menu entry for the setup wizard.
+        *(if (!isMac && !os.contains("win"))
+            arrayOf("--linux-shortcut")
+        else emptyArray()),
         *(if (isMac) arrayOf("--runtime-image", jlinkRuntimeDirFile.absolutePath) else emptyArray()),
         *(if (isMac) arrayOf("--resource-dir", macResourceDir) else emptyArray()),
         *(if (isMac && !System.getenv("ASKAMERICA_SIGN_IDENTITY").isNullOrEmpty())

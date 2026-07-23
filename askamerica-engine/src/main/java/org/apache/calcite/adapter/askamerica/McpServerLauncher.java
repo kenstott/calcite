@@ -14,6 +14,7 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -23,14 +24,16 @@ import java.util.ServiceLoader;
 /**
  * Thin launcher entry point for the jpackage app bundle.
  *
- * The PKG installer is small — it bundles only the JRE and this launcher.
- * The postinstall script downloads askamerica-engine.jar from GitHub Releases
- * and places it alongside this launcher in Contents/app/.
+ * The installer is small — it bundles only the JRE and this launcher. The fat
+ * askamerica-engine.jar is resolved (and, on first run, downloaded) at startup by
+ * {@link EngineInstaller} into the shared cache ~/.askamerica/engine/, so the same
+ * copy is shared with the pip client and no per-platform postinstall hook is needed.
  *
  * --mcp flag (passed by Claude Desktop via mcpServers config): run as MCP server.
- * No flag (launched from dock/Applications): show the first-run setup wizard.
+ * No flag (launched from dock/Start menu/Applications): show the first-run wizard.
  *
- * Enterprise deployments can set ASKAMERICA_ENGINE_URL to a private mirror.
+ * Enterprise deployments can set ASKAMERICA_ENGINE_URL to a private mirror, or
+ * ASKAMERICA_ENGINE_JAR to an already-present jar.
  */
 public class McpServerLauncher {
     @SuppressWarnings("EmptyCatch")
@@ -38,12 +41,28 @@ public class McpServerLauncher {
         File launcherJar =
             new File(McpServerLauncher.class.getProtectionDomain()
                 .getCodeSource().getLocation().toURI());
-        File engineJar = new File(launcherJar.getParentFile(), "askamerica-engine.jar");
-        if (!engineJar.exists()) {
-            System.err.println("AskAmerica engine not found: " + engineJar.getAbsolutePath());
-            System.err.println("Reinstall AskAmerica MCP to trigger engine download.");
+
+        boolean mcpMode = Arrays.asList(args).contains("--mcp");
+
+        // Record the actual launcher executable so the setup wizard can point
+        // Claude Desktop at the right binary, whatever the install location.
+        ProcessHandle.current().info().command()
+            .ifPresent(cmd -> System.setProperty("askamerica.launcher.command", cmd));
+
+        // Resolve — downloading if necessary — the fat engine jar. In server mode
+        // this is a headless (stderr) download; interactively it shows a progress
+        // window. Normally the wizard has already cached it, so this is a no-op.
+        Path engineJarPath;
+        try {
+            engineJarPath = EngineInstaller.ensure(launcherJar.getParentFile(), mcpMode);
+        } catch (Exception e) {
+            System.err.println("Could not obtain the AskAmerica engine: " + e.getMessage());
+            System.err.println("Check your network connection and try again, or set "
+                + "ASKAMERICA_ENGINE_JAR to a local askamerica-engine.jar.");
             System.exit(1);
+            return;
         }
+        File engineJar = engineJarPath.toFile();
         URLClassLoader loader =
             new URLClassLoader(new URL[]{engineJar.toURI().toURL()},
             Thread.currentThread().getContextClassLoader());
@@ -57,8 +76,6 @@ public class McpServerLauncher {
             } catch (SQLException ignored) {
             }
         }
-
-        boolean mcpMode = Arrays.asList(args).contains("--mcp");
 
         if (mcpMode) {
             Class<?> cls =
