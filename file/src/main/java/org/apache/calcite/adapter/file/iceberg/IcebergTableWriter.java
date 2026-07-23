@@ -886,7 +886,14 @@ public class IcebergTableWriter {
 
     LOGGER.info("Running Iceberg maintenance for table {}", table.name());
 
-    // Expire old snapshots
+    // Expire old snapshots. Steady state is a single (current) snapshot; the only reason to keep
+    // any older one is to drain readers that already planned against it, so retention is purely
+    // TIME-based (expireOlderThan). The window must exceed the longest-running reader/scan — pulling
+    // a file out from under an in-flight reader is what 404s a live query — hence the 7-day floor on
+    // expireSnapshotsDays, matching DEFAULT_POST_COMPACTION_RETENTION_DAYS. No count-based
+    // retainLast: pinning the last N snapshots regardless of age keeps N tables' worth of data files
+    // forever and does nothing extra for reader safety (a snapshot younger than the window is already
+    // kept no matter how many newer commits land).
     try {
       underCommitLock(() -> {
         table.expireSnapshots()

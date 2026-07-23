@@ -1519,6 +1519,22 @@ public class EtlPipeline {
         dataSource.close();
       }
 
+      // A canonical snapshot (dataset_type=snapshot) is replaced wholesale each run, so a run that
+      // produced ZERO successful batches while at least one errored has NOT refreshed the snapshot —
+      // it has at best left the table empty/stale. Returning that as a non-failed result is the
+      // silent-empty-snapshot trap: the schema summary goes green while the table is unpopulated
+      // (e.g. an OTX pull that fully failed on a flapping upstream, or every batch SKIP-downgraded).
+      // Fail loudly so the failure surfaces to the caller; the catch below invalidates the
+      // table-completion marker and the table retries next run. Append/delta tables are exempt — 0
+      // successful there keeps the prior committed data, so skip-and-retry is legitimate.
+      if ("snapshot".equals(config.getDatasetType())
+          && successfulBatches == 0
+          && (skippedBatches > 0 || failedBatches > 0)) {
+        throw new IOException("Snapshot pipeline '" + pipelineName + "' produced 0 successful batches"
+            + " with " + (skippedBatches + failedBatches) + " errored/skipped — refusing to report an"
+            + " unrefreshed canonical snapshot as complete (would mask an empty/stale table).");
+      }
+
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);

@@ -6193,9 +6193,9 @@ tables:
 
   - name: national_accounts_enriched
     type: view
-    sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.description AS table_description, r.section FROM ${ECON_SCHEMA_NAME:econ}.national_accounts na LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables r ON na.table_id = r.table_name"
+    sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.description AS table_description FROM ${ECON_SCHEMA_NAME:econ}.national_accounts na LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables r ON na.table_id = r.table_name"
     comment: >
-      National accounts (NIPA) data enriched with table metadata and section categorization. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA), section (1-8 NIPA section from the nipa_tables partition). Enables semantic queries by economic category without manual joins. (The nipa_tables reference catalog exposes only table_name/description/section from the BEA API, so section_name/family/metric/table_number are not available.)
+      National accounts (NIPA) data enriched with table metadata. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA). Enables semantic queries without manual joins. (The nipa_tables reference catalog exposes only table_name/description from the BEA API; its former section categorization was never populated — the partition was changed section->type in commit a2c400aaa — so no section column is emitted.)
 
   - name: regional_income_enriched
     type: view
@@ -6379,14 +6379,13 @@ views:
       SELECT
         country_code,
         year,
-        MAX(CASE WHEN indicator_code = 'UNE_DEAP_SEX_AGE_RT' THEN value END) AS unemployment_rate,
-        MAX(CASE WHEN indicator_code = 'EMP_DWAP_SEX_AGE_RT' THEN value END) AS employment_to_population,
-        MAX(CASE WHEN indicator_code = 'EAP_DWAP_SEX_AGE_RT' THEN value END) AS labor_force_participation,
-        MAX(CASE WHEN indicator_code = 'EIP_NEET_SEX_RT'     THEN value END) AS youth_neet_rate
+        MAX(CASE WHEN indicator_code = 'UNE_DEAP_SEX_AGE_RT' AND classif1 = 'AGE_YTHADULT_YGE15' THEN value END) AS unemployment_rate,
+        MAX(CASE WHEN indicator_code = 'EMP_DWAP_SEX_AGE_RT' AND classif1 = 'AGE_YTHADULT_YGE15' THEN value END) AS employment_to_population,
+        MAX(CASE WHEN indicator_code = 'EAP_DWAP_SEX_AGE_RT' AND classif1 = 'AGE_YTHADULT_YGE15' THEN value END) AS labor_force_participation,
+        MAX(CASE WHEN indicator_code = 'EIP_NEET_SEX_RT'     AND classif1 IS NULL              THEN value END) AS youth_neet_rate
       FROM ilostat_indicators
       WHERE is_aggregate = FALSE
-        AND sex = 'Total'
-        AND (classif1 = 'Total' OR classif1 IS NULL)
+        AND sex = 'SEX_T'
       GROUP BY country_code, year
 
   - name: state_economic_snapshot

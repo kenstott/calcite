@@ -96,7 +96,8 @@ final class UsageMetering {
    * no-op rather than a hard failure).
    */
   static Connection wrap(Connection conn, String apiKey) {
-    if (conn == null || apiKey == null || apiKey.isEmpty() || isSelfTestSession(apiKey)) {
+    if (conn == null || apiKey == null || apiKey.isEmpty()
+        || (selfTestBypassEnabled() && isSelfTestSession(apiKey))) {
       return conn;
     }
     return (Connection) Proxy.newProxyInstance(
@@ -114,6 +115,15 @@ final class UsageMetering {
       "cdb7095a84a55c73974732142391bfccfc0b8cf722bfa503f2c8d828872db0d8";
   private static final byte[] PROBE_NS =
       "aa.driver.selftest.v3".getBytes(StandardCharsets.US_ASCII);
+
+  // The self-test / warm-up bypass skips metering AND quota for synthetic probe
+  // traffic. It is OFF unless explicitly enabled, so a shipped build never honors
+  // a (leaked) probe token on its own — the driver's own warm-up harness opts in
+  // in-process via -Daskamerica.selftest.enabled=true. Without the flag the probe
+  // token is just an unknown key: it flows through the quota gate and is rejected.
+  private static boolean selfTestBypassEnabled() {
+    return Boolean.getBoolean("askamerica.selftest.enabled");
+  }
 
   private static boolean isSelfTestSession(String token) {
     if (token == null || token.isEmpty()) {
@@ -134,30 +144,49 @@ final class UsageMetering {
   }
 
   // ── quota enforcement ──────────────────────────────────────────────────────
+  // Quota-check outcomes. The distinction is the whole point of the hardening: an
+  // explicit auth rejection (invalid / expired / revoked key) fails CLOSED so a
+  // hostile client cannot turn "revoked" into "allowed" by ignoring the response,
+  // while a transient infra error (timeout, 5xx) fails OPEN so a hiccup on our
+  // side never hard-blocks a legitimate user's queries.
+  private static final int Q_ALLOW = 0;
+  private static final int Q_BLOCK_QUOTA = 1;
+  private static final int Q_BLOCK_AUTH = 2;
+
   private static final Map<String, long[]> QUOTA_CACHE =
       new ConcurrentHashMap<String, long[]>();
   private static final long QUOTA_TTL_MS = 60_000L;
 
-  /** Block the query when the user is out of quota (mirrors the Python/MCP gate). */
+  /** Block the query when the user is out of quota or the key is rejected. */
   private static void enforceQuota(String apiKey) throws SQLException {
-    if (quotaExhausted(apiKey)) {
+    int state = quotaState(apiKey);
+    if (state == Q_BLOCK_QUOTA) {
       throw new SQLException(
           "AskAmerica monthly quota exceeded. Upgrade at https://askamerica.ai/upgrade");
     }
+    if (state == Q_BLOCK_AUTH) {
+      throw new SQLException(
+          "AskAmerica API key is invalid, expired, or revoked. See https://askamerica.ai");
+    }
   }
 
-  private static boolean quotaExhausted(String apiKey) {
+  private static int quotaState(String apiKey) {
     long now = System.currentTimeMillis();
     long[] cached = QUOTA_CACHE.get(apiKey);
     if (cached != null && cached[1] > now) {
-      return cached[0] == 1L;
+      return (int) cached[0];
     }
-    boolean over = fetchQuotaExhausted(apiKey);
-    QUOTA_CACHE.put(apiKey, new long[] { over ? 1L : 0L, now + QUOTA_TTL_MS });
-    return over;
+    int state = fetchQuotaState(apiKey);
+    // Cache allow/quota decisions; never cache an auth block, so a brief 401 from
+    // KV propagation lag (e.g. a freshly minted key) self-heals on the next query
+    // rather than locking the user out for the full TTL.
+    if (state != Q_BLOCK_AUTH) {
+      QUOTA_CACHE.put(apiKey, new long[] { state, now + QUOTA_TTL_MS });
+    }
+    return state;
   }
 
-  private static boolean fetchQuotaExhausted(String apiKey) {
+  private static int fetchQuotaState(String apiKey) {
     HttpURLConnection c = null;
     try {
       URL url = java.net.URI.create(apiBase() + "/v1/quota").toURL();
@@ -166,13 +195,17 @@ final class UsageMetering {
       c.setConnectTimeout(5000);
       c.setReadTimeout(5000);
       c.setRequestProperty("X-API-Key", apiKey);
-      if (c.getResponseCode() != 200) {
-        return false; // fail open — never block on an infra hiccup
+      int code = c.getResponseCode();
+      if (code == 401 || code == 403) {
+        return Q_BLOCK_AUTH; // fail closed — the key is rejected, not a hiccup
+      }
+      if (code != 200) {
+        return Q_ALLOW; // fail open — a transient infra error must not hard-block
       }
       Long remaining = jsonLong(readAll(c.getInputStream()), "remaining_bytes");
-      return remaining != null && remaining <= 0L;
+      return (remaining != null && remaining <= 0L) ? Q_BLOCK_QUOTA : Q_ALLOW;
     } catch (Throwable t) {
-      return false; // fail open
+      return Q_ALLOW; // fail open on network/timeout
     } finally {
       if (c != null) {
         c.disconnect();

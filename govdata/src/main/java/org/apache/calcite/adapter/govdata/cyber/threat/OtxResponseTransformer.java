@@ -16,9 +16,9 @@ import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
@@ -75,9 +75,24 @@ public class OtxResponseTransformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(OtxResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private static final int TIMEOUT_MS = 60_000;
+  // Per-attempt connect/read timeout. Deliberately short (was 60s): under a flapping OTX
+  // (502/503/reset) a long per-attempt timeout parks the single pull thread for up to a minute per
+  // failed attempt with almost no log output — looking hung. 20s fails a bad attempt fast so the
+  // retry/backoff loop cycles quickly.
+  private static final int TIMEOUT_MS = 20_000;
   private static final long RATE_DELAY_MS = 500L;
   private static final int MAX_RETRIES = 5;
+
+  // Whole-pull wall-clock budget. The rate-limited full pull is inherently long (~1300 pages x
+  // 500ms), so this bounds a BAD (flapping) run, not a healthy one: on exceed the accumulated pages
+  // are checkpointed and the pull fails loudly (never truncates) — the next run resumes from the
+  // checkpoint rather than page 1. 0 disables.
+  private static final long OVERALL_DEADLINE_MS = 45L * 60_000L;
+
+  // Persist pagination progress ({baseUrl, nextUrl, pages, rows}) to the cache store every N pages,
+  // so a killed / timed-out / deadline-failed run resumes near the last good page instead of
+  // refetching the whole subscribed list from page 1.
+  private static final int CHECKPOINT_EVERY_PAGES = 25;
 
   /** Fetch variable carrying the recovered incremental watermark (freshness {@code watermark_var}). */
   private static final String OTX_WATERMARK_VAR = "otxModifiedSince";
@@ -135,12 +150,6 @@ public class OtxResponseTransformer implements ResponseTransformer {
     }
 
     try {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream(4 * 1024 * 1024);
-      JsonGenerator gen = MAPPER.getFactory().createGenerator(baos);
-      gen.writeStartArray();
-
-      int[] count = {0};
-
       // Incremental bound, keyed on cyber_threat.otxWriteMode (set by the launch script; mirrors
       // the Iceberg write so fetch and write never disagree):
       //   - append (production daily, warm): fetch only pulses modified since the prior run's
@@ -162,49 +171,76 @@ public class OtxResponseTransformer implements ResponseTransformer {
       } else {
         LOGGER.info("OTX: daily append cold start (no watermark) — full load");
       }
-
-      // First page: reuse the source-provided response only in full-load mode. In delta
-      // mode the source already fetched the UNFILTERED first page (the source URL has no
-      // modified_since), so its `next` cursor walks the entire subscribed list. Re-fetch the
-      // modified_since baseUrl instead so pagination follows the bounded, filtered chain.
       boolean deltaActive = baseUrl.contains("modified_since=");
-      String firstPage = (!deltaActive && response != null && !response.trim().isEmpty())
-          ? response : fetchPage(baseUrl, apiKey);
 
-      if (firstPage == null) {
-        gen.writeEndArray();
-        gen.close();
-        String emptyResult = baos.toString("UTF-8");
-        if (cacheTtlMs > 0) {
-          writeCacheQuietly(sp, cachePath, emptyResult);
+      // Resumable pagination: the rate-limited full pull is ~1300 pages, so a kill / pool timeout /
+      // deadline must not force restarting from page 1. Progress is checkpointed to the cache store
+      // and resumed here when the checkpoint is for the same population (same baseUrl => same
+      // mode/filter). Rows accumulate in an in-memory ArrayNode (same memory profile as the prior
+      // ByteArrayOutputStream assembly) so the partial array can be serialized into the checkpoint.
+      String checkpointPath = sp.resolvePath(
+          sp.resolvePath(StorageProviderFactory.getGovDataCacheDir(), "cyber_threat"),
+          "otx_pulses_" + cacheMode + ".checkpoint.json");
+
+      ArrayNode rows;
+      String nextUrl;
+      int pages;
+      ObjectNode resumed = readCheckpoint(sp, checkpointPath, baseUrl);
+      if (resumed != null) {
+        rows = (ArrayNode) resumed.get("rows");
+        nextUrl = textOrNull(resumed, "nextUrl");
+        pages = resumed.path("pages").asInt(0);
+        LOGGER.info("OTX: resuming pull from checkpoint — {} rows, {} pages already fetched, "
+            + "next={}", rows.size(), pages, nextUrl);
+      } else {
+        rows = MAPPER.createArrayNode();
+        // First page: reuse the source-provided response only in full-load mode. In delta mode the
+        // source already fetched the UNFILTERED first page (the source URL has no modified_since),
+        // so its `next` cursor walks the entire subscribed list. Re-fetch the modified_since
+        // baseUrl instead so pagination follows the bounded, filtered chain.
+        String firstPage = (!deltaActive && response != null && !response.trim().isEmpty())
+            ? response : fetchPage(baseUrl, apiKey);
+        if (firstPage == null) {
+          String emptyResult = "[]";
+          if (cacheTtlMs > 0) {
+            writeCacheQuietly(sp, cachePath, emptyResult);
+          }
+          return emptyResult;
         }
-        return emptyResult;
+        nextUrl = processPage(firstPage, rows);
+        pages = 1;
       }
-
-      String nextUrl = processPage(firstPage, gen, count);
 
       // fetchPage retries transient failures internally and THROWS if it exhausts them — a
       // partial "canonical snapshot" must fail the pull, never be written as if complete.
-      int pages = 1;
+      long startMs = System.currentTimeMillis();
       int loggedAt = 0;
       while (nextUrl != null) {
+        if (OVERALL_DEADLINE_MS > 0 && System.currentTimeMillis() - startMs > OVERALL_DEADLINE_MS) {
+          // Fail loudly rather than truncate, but checkpoint first so the next run resumes here.
+          writeCheckpoint(sp, checkpointPath, baseUrl, nextUrl, pages, rows);
+          throw new IOException("OTX: pull exceeded " + (OVERALL_DEADLINE_MS / 60_000L)
+              + "min wall-clock deadline at page " + pages + " (" + rows.size()
+              + " rows) — checkpointed; the next run resumes from here rather than page 1.");
+        }
         sleepQuietly(RATE_DELAY_MS);
         String page = fetchPage(nextUrl, apiKey);
-        nextUrl = processPage(page, gen, count);
+        nextUrl = processPage(page, rows);
         pages++;
+        if (pages % CHECKPOINT_EVERY_PAGES == 0) {
+          writeCheckpoint(sp, checkpointPath, baseUrl, nextUrl, pages, rows);
+        }
         // Log each time we cross another 1000 rows (robust to non-exact multiples), with the
         // page count, so a slow-but-progressing pull is distinguishable from a stall.
-        if (count[0] - loggedAt >= 1000) {
-          loggedAt = count[0];
-          LOGGER.info("OTX: accumulated {} pulse rows across {} pages", count[0], pages);
+        if (rows.size() - loggedAt >= 1000) {
+          loggedAt = rows.size();
+          LOGGER.info("OTX: accumulated {} pulse rows across {} pages", rows.size(), pages);
         }
       }
 
-      gen.writeEndArray();
-      gen.close();
-
-      LOGGER.info("OTX: returning {} threat_pulses rows", count[0]);
-      String assembled = baos.toString("UTF-8");
+      LOGGER.info("OTX: returning {} threat_pulses rows", rows.size());
+      String assembled = MAPPER.writeValueAsString(rows);
+      deleteCheckpointQuietly(sp, checkpointPath);
       if (cacheTtlMs > 0) {
         writeCacheQuietly(sp, cachePath, assembled);
       }
@@ -226,9 +262,10 @@ public class OtxResponseTransformer implements ResponseTransformer {
   }
 
   /**
-   * Processes one page of results. Returns the {@code next} URL, or null if no more pages.
+   * Processes one page of results, appending flattened rows to {@code out}. Returns the
+   * {@code next} URL, or null if no more pages.
    */
-  private String processPage(String pageJson, JsonGenerator gen, int[] count) throws Exception {
+  private String processPage(String pageJson, ArrayNode out) throws Exception {
     JsonNode root = MAPPER.readTree(pageJson);
 
     JsonNode results = root.path("results");
@@ -267,12 +304,79 @@ public class OtxResponseTransformer implements ResponseTransformer {
       row.put("source", "otx");
       row.put("first_seen", extractDate(created));
 
-      gen.writeTree(row);
-      count[0]++;
+      out.add(row);
     }
 
     String next = textOrNull(root, "next");
     return (next != null && next.startsWith("http")) ? next : null;
+  }
+
+  /**
+   * Reads a resumable pagination checkpoint if one exists and is for the current pull. Returns the
+   * checkpoint object ({@code rows}, {@code nextUrl}, {@code pages}) or null to start fresh. A
+   * checkpoint whose {@code baseUrl} differs from the current pull (mode/watermark changed) or that
+   * is malformed is ignored — resuming onto a different population would corrupt the snapshot.
+   */
+  private ObjectNode readCheckpoint(StorageProvider sp, String path, String baseUrl) {
+    try {
+      if (!sp.exists(path)) {
+        return null;
+      }
+      byte[] bytes;
+      try (InputStream in = sp.openInputStream(path)) {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) {
+          b.write(buf, 0, n);
+        }
+        bytes = b.toByteArray();
+      }
+      JsonNode node = MAPPER.readTree(bytes);
+      if (!node.isObject() || !node.path("rows").isArray()) {
+        LOGGER.warn("OTX: ignoring malformed checkpoint {} — starting fresh", path);
+        return null;
+      }
+      String savedBase = textOrNull(node, "baseUrl");
+      if (savedBase == null || !savedBase.equals(baseUrl)) {
+        LOGGER.info("OTX: checkpoint is for a different pull ({} != {}) — starting fresh",
+            savedBase, baseUrl);
+        return null;
+      }
+      return (ObjectNode) node;
+    } catch (Exception e) {
+      LOGGER.warn("OTX: checkpoint read failed ({}) — starting fresh", e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Persists pagination progress. Best-effort: a checkpoint write failure must never fail the pull
+   * (it only costs resume granularity), so it logs and continues rather than throwing.
+   */
+  private void writeCheckpoint(StorageProvider sp, String path, String baseUrl, String nextUrl,
+      int pages, ArrayNode rows) {
+    try {
+      ObjectNode cp = MAPPER.createObjectNode();
+      cp.put("baseUrl", baseUrl);
+      cp.put("nextUrl", nextUrl);
+      cp.put("pages", pages);
+      cp.set("rows", rows);
+      sp.writeFile(path, MAPPER.writeValueAsBytes(cp));
+    } catch (Exception e) {
+      LOGGER.debug("OTX: checkpoint write failed ({}), continuing", e.getMessage());
+    }
+  }
+
+  /** Removes the checkpoint after a successful, complete pull. Best-effort. */
+  private void deleteCheckpointQuietly(StorageProvider sp, String path) {
+    try {
+      if (sp.exists(path)) {
+        sp.delete(path);
+      }
+    } catch (Exception e) {
+      LOGGER.debug("OTX: checkpoint delete failed ({}), continuing", e.getMessage());
+    }
   }
 
   /** Joins a JSON string array into a pipe-delimited string. */

@@ -48,14 +48,18 @@ class UsageMeteringTest {
 
   private final BlockingQueue<String> bodies = new LinkedBlockingQueue<String>();
   private volatile long quotaRemaining = Long.MAX_VALUE;
+  private volatile int quotaStatus = 200;  // HTTP status the /v1/quota stub returns
 
   private HttpServer startStub() throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/v1/quota", exchange -> {
-      byte[] resp = ("{\"remaining_bytes\":" + quotaRemaining
-          + ",\"limit_bytes\":53687091200,\"used_bytes\":0,\"tier\":\"starter\",\"period\":\"2026-07\"}")
-          .getBytes(StandardCharsets.UTF_8);
-      exchange.sendResponseHeaders(200, resp.length);
+      int status = quotaStatus;
+      byte[] resp = status == 200
+          ? ("{\"remaining_bytes\":" + quotaRemaining
+              + ",\"limit_bytes\":53687091200,\"used_bytes\":0,\"tier\":\"starter\",\"period\":\"2026-07\"}")
+              .getBytes(StandardCharsets.UTF_8)
+          : "{\"error\":\"rejected\"}".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(status, resp.length);
       try (OutputStream os = exchange.getResponseBody()) {
         os.write(resp);
       }
@@ -155,7 +159,49 @@ class UsageMeteringTest {
     }
   }
 
-  @Test void bypassKeyDisablesMetering() throws Exception {
+  @Test void blocksAndUnmetersWhenKeyRejected() throws Exception {
+    // An explicit 401/403 from /v1/quota means the key is invalid, expired, or
+    // revoked — the client must fail CLOSED (block), not fail open.
+    HttpServer server = startStub();
+    quotaStatus = 401;
+    try {
+      Connection conn = UsageMetering.wrap(freshDuck(), "aa_live_test_revoked");
+      Statement st = conn.createStatement();
+      java.sql.SQLException ex = assertThrows(java.sql.SQLException.class,
+          () -> st.executeQuery("SELECT cik, name FROM sec_filings"));
+      String msg = ex.getMessage().toLowerCase();
+      assertTrue(msg.contains("invalid") || msg.contains("expired") || msg.contains("revoked"),
+          ex.getMessage());
+      assertNull(bodies.poll(1, TimeUnit.SECONDS), "a rejected query must not be metered");
+      st.close();
+      conn.close();
+    } finally {
+      stopStub(server);
+    }
+  }
+
+  @Test void allowsQueryWhenQuotaServerErrors() throws Exception {
+    // A transient infra error (5xx) must fail OPEN so a hiccup on our side never
+    // hard-blocks a legitimate user.
+    HttpServer server = startStub();
+    quotaStatus = 503;
+    try {
+      Connection conn = UsageMetering.wrap(freshDuck(), "aa_live_test_5xx");
+      try (Statement st = conn.createStatement();
+           ResultSet rs = st.executeQuery("SELECT cik, name FROM sec_filings")) {
+        int rows = 0;
+        while (rs.next()) {
+          rows++;
+        }
+        assertEquals(3, rows);
+      }
+      conn.close();
+    } finally {
+      stopStub(server);
+    }
+  }
+
+  @Test void bypassKeyDisablesMeteringOnlyWhenEnabled() throws Exception {
     // The bypass key is a secret; it is supplied to the runner, never committed.
     String bypass = System.getProperty("askamerica.test.bypass.key",
         System.getenv("ASKAMERICA_TEST_BYPASS_KEY"));
@@ -164,17 +210,33 @@ class UsageMeteringTest {
 
     HttpServer server = startStub();
     try {
-      Connection conn = UsageMetering.wrap(freshDuck(), bypass);
-      try (Statement st = conn.createStatement();
+      // Without the opt-in flag the probe token is treated as an ordinary key:
+      // it goes through the quota gate and its query is metered.
+      Connection normal = UsageMetering.wrap(freshDuck(), bypass);
+      try (Statement st = normal.createStatement();
            ResultSet rs = st.executeQuery("SELECT cik, name FROM sec_filings")) {
         while (rs.next()) {
           // drain
         }
       }
-      conn.close();
+      normal.close();
+      assertNotNull(bodies.poll(10, TimeUnit.SECONDS),
+          "without the flag, the probe token must NOT bypass metering");
+
+      // With the flag set, the same token bypasses metering + quota entirely.
+      System.setProperty("askamerica.selftest.enabled", "true");
+      Connection bypassed = UsageMetering.wrap(freshDuck(), bypass);
+      try (Statement st = bypassed.createStatement();
+           ResultSet rs = st.executeQuery("SELECT cik, name FROM sec_filings")) {
+        while (rs.next()) {
+          // drain
+        }
+      }
+      bypassed.close();
       assertNull(bodies.poll(1, TimeUnit.SECONDS),
-          "a bypass (self-test) session must not report usage");
+          "with the flag, a self-test session must not report usage");
     } finally {
+      System.clearProperty("askamerica.selftest.enabled");
       stopStub(server);
     }
   }

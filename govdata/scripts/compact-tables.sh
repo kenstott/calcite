@@ -106,8 +106,8 @@ for entry in "${TABLES[@]}"; do
     --min-files "$min_files" \
     --small-size-mb 10 \
     --target-size-mb 128 \
-    --expire-days 1 \
-    --orphan-days 1 \
+    --expire-days 7 \
+    --orphan-days 7 \
     $S3_ARGS \
     $DRY_RUN \
     2>&1 | grep -v "^log4j:\|WARN.*hadoop\|WARN.*Metrics\|^$"

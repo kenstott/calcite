@@ -66,8 +66,12 @@ public class IcebergMaintenanceRunner {
   private static final long DEFAULT_TARGET_FILE_SIZE = 128 * 1024 * 1024; // 128MB
   private static final int DEFAULT_MIN_FILES_TO_COMPACT = 10;
   private static final long DEFAULT_SMALL_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  private static final int DEFAULT_EXPIRE_SNAPSHOTS_DAYS = 3;
-  private static final int DEFAULT_ORPHAN_FILES_DAYS = 1;
+  // Retention floors matching IcebergTableWriter.DEFAULT_POST_COMPACTION_RETENTION_DAYS (7): the
+  // reader-drain window a scan may hold a planned snapshot for. Expiring/deleting inside that window
+  // pulls files out from under an in-flight reader. A 1-day orphan/expire window (the old default)
+  // was the operational trigger for dangling-reference 404s, so both floors are 7 days.
+  private static final int DEFAULT_EXPIRE_SNAPSHOTS_DAYS = 7;
+  private static final int DEFAULT_ORPHAN_FILES_DAYS = 7;
 
   public static void main(String[] args) {
     int exitCode = 2;
@@ -281,8 +285,8 @@ public class IcebergMaintenanceRunner {
     System.err.println("  --target-size-mb N      Target compacted file size (default: 128)");
     System.err.println("  --min-files N           Min files to trigger compaction (default: 10)");
     System.err.println("  --small-size-mb N       Small file threshold in MB (default: 10)");
-    System.err.println("  --expire-days N         Expire snapshots older than N days (default: 3)");
-    System.err.println("  --orphan-days N         Remove orphans older than N days (default: 1)");
+    System.err.println("  --expire-days N         Expire snapshots older than N days (default: 7)");
+    System.err.println("  --orphan-days N         Remove orphans older than N days (default: 7)");
     System.err.println("  --maintenance-only      Expire snapshots (+orphans if orphan-days<=30) and stop; no compaction");
     System.err.println("  --dry-run               Report only, no changes");
   }
