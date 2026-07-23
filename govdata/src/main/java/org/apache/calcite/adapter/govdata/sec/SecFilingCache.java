@@ -101,6 +101,24 @@ public class SecFilingCache implements AutoCloseable {
    */
   private volatile java.util.Map<String, String> s3FileCacheByName = null;
 
+  /**
+   * Tertiary index: accession number → set of output types present in storage, keyed by
+   * accession ALONE (any CIK). Populated alongside {@link #s3FileCacheByName}.
+   *
+   * <p>Rationale: an accession number identifies exactly one EDGAR submission, but EDGAR's
+   * full index lists ownership filings (Forms 3/4/5, SC 13D/G) once per CIK involved — the
+   * issuer AND every reporting owner. The ETL stores each filing only under the ISSUER CIK,
+   * so a reporting-owner candidate's {@code cik_accession_type.parquet} never matches the
+   * CIK-keyed {@link #s3FileCacheByName}, and the filing is falsely seen as missing and
+   * reprocessed on every run. Because the accession is globally unique to one filing, matching
+   * existence on (accession, type) regardless of CIK is correct and heals that miss.
+   */
+  private volatile java.util.Map<String, java.util.Set<String>> s3AccessionTypes = null;
+
+  /** Parses a virtual/individual parquet filename into (accession, outputType). */
+  private static final Pattern FILE_NAME_PATTERN =
+      Pattern.compile("^\\d+_(\\d{10}-\\d{2}-\\d{6})_(.+)\\.parquet$");
+
   /** Lazily-initialized DuckDB connection used to read batch parquet files during preload. */
   private Connection duckdbConn = null;
 
@@ -265,12 +283,31 @@ public class SecFilingCache implements AutoCloseable {
       return;
     }
 
+    // Build the accession-keyed presence index from the collected filenames so ownership
+    // filings stored under the issuer CIK are found regardless of which CIK a candidate carries.
+    java.util.Map<String, java.util.Set<String>> byAccession =
+        new java.util.HashMap<String, java.util.Set<String>>();
+    for (String name : byName.keySet()) {
+      Matcher am = FILE_NAME_PATTERN.matcher(name);
+      if (am.matches()) {
+        String accession = am.group(1);
+        String type = am.group(2);
+        java.util.Set<String> types = byAccession.get(accession);
+        if (types == null) {
+          types = new java.util.HashSet<String>();
+          byAccession.put(accession, types);
+        }
+        types.add(type);
+      }
+    }
+
     this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
+    this.s3AccessionTypes = java.util.Collections.unmodifiableMap(byAccession);
     this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
     long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("preloadFileInventory: cached {} virtual entries from {} batch files "
-        + "(years {}-{}) in {}ms",
-        totalVirtual, totalBatchFiles, startYear, endYear, elapsed);
+    LOGGER.info("preloadFileInventory: cached {} virtual entries ({} distinct accessions) "
+        + "from {} batch files (years {}-{}) in {}ms",
+        totalVirtual, byAccession.size(), totalBatchFiles, startYear, endYear, elapsed);
   }
 
   /**
@@ -477,6 +514,7 @@ public class SecFilingCache implements AutoCloseable {
     int cntTrackerComplete = 0;
     int cntTrackerBaseComplete = 0;
     int cntTrackerIncomplete = 0;
+    int cntTrackerHealed = 0;
     int cntS3Complete = 0;
     int cntS3Partial = 0;
     int cntNoFiles = 0;
@@ -526,6 +564,24 @@ public class SecFilingCache implements AutoCloseable {
           cntTrackerBaseComplete++;
           continue;
         }
+        // Tracker markers are incomplete, but the missing outputs may already exist in
+        // storage: a completion marker can be lost (tracker/storage divergence) while the
+        // parquet survives, so reprocessing on tracker state alone reconverts a filing whose
+        // output is already in S3/R2 on EVERY run (e.g. insider forms marked 'insider' but
+        // missing 'metadata'). Consult the preloaded storage inventory (in-memory, zero LIST
+        // ops) before giving up: if the union of tracker + storage satisfies the form's
+        // expected outputs, self-heal the absent markers from storage and skip. This extends
+        // the existence-heal below (which only fires for accessions with NO tracker record) to
+        // the partial-tracker case.
+        FileInventory storageInv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
+        FileInventory healed = unionInventory(inv, storageInv);
+        if (healed.isComplete(form, vectorizationEnabled)
+            || (healed.isComplete(form, false)
+                && (!chunksBackfill || healed.isComplete(form, true)))) {
+          toSelfHeal.add(ie);
+          cntTrackerHealed++;
+          continue;
+        }
         cntTrackerIncomplete++;
         toProcess.add(ie);
         continue;
@@ -557,9 +613,11 @@ public class SecFilingCache implements AutoCloseable {
 
     LOGGER.info(
         "filterAndSelfHeal: candidates={} noXbrl={} trackerFull={} trackerBaseOnly={} "
-            + "trackerIncomplete={} s3Complete={} s3Partial={} noFiles={} toProcess={}",
+            + "trackerIncomplete={} trackerHealed={} s3Complete={} s3Partial={} noFiles={} "
+            + "toProcess={}",
         candidates.size(), cntNoXbrl, cntTrackerComplete, cntTrackerBaseComplete,
-        cntTrackerIncomplete, cntS3Complete, cntS3Partial, cntNoFiles, toProcess.size());
+        cntTrackerIncomplete, cntTrackerHealed, cntS3Complete, cntS3Partial, cntNoFiles,
+        toProcess.size());
 
     if (!toSelfHeal.isEmpty()) {
       int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
@@ -848,7 +906,20 @@ public class SecFilingCache implements AutoCloseable {
       // where existing files live at a different directory than the current secDir).
       java.util.Map<String, String> byName = this.s3FileCacheByName;
       if (byName != null) {
-        return byName.containsKey(fileName);
+        if (byName.containsKey(fileName)) {
+          return true;
+        }
+        // CIK-keyed miss: fall back to the accession-keyed index. An accession identifies one
+        // filing, so if this output type exists under ANY CIK the filing is present. This heals
+        // ownership-form candidates (Forms 3/4/5, SC 13D/G) that EDGAR indexes under a reporting
+        // owner's CIK while the ETL stored the output under the issuer's CIK — without which those
+        // candidates are perpetually seen as missing and reprocessed every run.
+        java.util.Map<String, java.util.Set<String>> byAccession = this.s3AccessionTypes;
+        if (byAccession != null) {
+          java.util.Set<String> types = byAccession.get(accession);
+          return types != null && types.contains(suffix);
+        }
+        return false;
       }
       // byName not populated; fall back to linear scan.
       for (String path : cache) {
@@ -1166,6 +1237,22 @@ public class SecFilingCache implements AutoCloseable {
   /**
    * Build a FileInventory from a set of completed table names.
    */
+  /** Union of two inventories: an output type is present if either source reports it. */
+  private static FileInventory unionInventory(FileInventory a, FileInventory b) {
+    return FileInventory.builder()
+        .hasMetadata(a.hasMetadata() || b.hasMetadata())
+        .hasFacts(a.hasFacts() || b.hasFacts())
+        .hasContexts(a.hasContexts() || b.hasContexts())
+        .hasRelationships(a.hasRelationships() || b.hasRelationships())
+        .hasMda(a.hasMda() || b.hasMda())
+        .hasInsider(a.hasInsider() || b.hasInsider())
+        .hasEarnings(a.hasEarnings() || b.hasEarnings())
+        .hasChunks(a.hasChunks() || b.hasChunks())
+        .hasInstitutionalHoldings(a.hasInstitutionalHoldings() || b.hasInstitutionalHoldings())
+        .hasBeneficialOwnership(a.hasBeneficialOwnership() || b.hasBeneficialOwnership())
+        .build();
+  }
+
   private FileInventory inventoryFromCompletedTables(Set<String> tables) {
     return FileInventory.builder()
         .hasMetadata(tables.contains("metadata"))

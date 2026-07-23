@@ -145,6 +145,42 @@ public class SecFilingCacheFileInventoryTest {
   }
 
   // -------------------------------------------------------------------------
+  // 3b. Ownership-form self-heal: EDGAR indexes Forms 3/4/5 under BOTH the issuer and each
+  //     reporting owner, but the ETL stores output only under the issuer CIK. A self-heal
+  //     candidate carrying a reporting owner's CIK must still find the issuer-stored files via
+  //     the accession-keyed index — otherwise the filing is reprocessed on every run.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void preloadedCache_findsOwnershipFilingUnderIssuerCikViaReportingOwnerCik() throws IOException {
+    String issuerCik = "0000883241";           // stored under the issuer
+    String reportingOwnerCik = "0001693085";   // EDGAR index also lists it under the reporting owner
+    String accession = "0001517737-25-000064"; // one Form 4, two index CIKs
+
+    // Output exists ONLY under the issuer CIK (what XbrlToParquetConverter writes).
+    List<String> knownPaths = buildExpectedPaths(issuerCik, accession, "2025");
+
+    TrackingStorageProvider provider = new TrackingStorageProvider(knownPaths);
+    SecFilingCache cache = new SecFilingCache(
+        new InMemoryPipelineTracker(), provider, PARQUET_BASE);
+    cache.preloadFileInventory(2025, 2025);
+    provider.resetCounters();
+
+    // Query with the REPORTING OWNER's CIK — the CIK-keyed name never matches, but the
+    // accession-keyed fallback must still report the filing as present.
+    FileInventory viaOwner = cache.checkS3Files(reportingOwnerCik, accession, "2025-08-29");
+    assertTrue(viaOwner.hasMetadata(), "metadata must be found via accession index under issuer CIK");
+    assertTrue(viaOwner.hasInsider(), "insider must be found via accession index under issuer CIK");
+    assertTrue(viaOwner.hasChunks(), "chunks must be found via accession index under issuer CIK");
+    assertEquals(0, provider.existsCallCount(),
+        "accession-index fallback must not trigger live exists() calls");
+
+    // Sanity: a genuinely-absent accession still returns false via the same fallback path.
+    FileInventory absent = cache.checkS3Files(reportingOwnerCik, "0000000000-25-000000", "2025-08-29");
+    assertFalse(absent.hasMetadata(), "unknown accession must not be found via accession index");
+  }
+
+  // -------------------------------------------------------------------------
   // 4. No cache + filingDate → exact year= path, NOT year=* glob
   // -------------------------------------------------------------------------
 
