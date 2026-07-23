@@ -390,7 +390,10 @@ tasks.register<Exec>("jpackage") {
         os.contains("win") -> "msi"
         else -> "deb"
     }
-    val version = project.version.toString().replace("-SNAPSHOT", "")
+    // Use the engine release version (from -PreleaseVersion, set by CI from the
+    // engine-v<X.Y.Z> tag), NOT the Calcite project.version — otherwise installer
+    // filenames carry the unrelated Calcite version (e.g. 1.42.0).
+    val version = publishVersion
         .replace("[^0-9.]".toRegex(), "")
         .ifEmpty { "1.0.0" }
     val macResourceDir = project.file("src/packaging/mac").absolutePath

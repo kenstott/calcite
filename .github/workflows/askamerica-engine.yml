@@ -318,7 +318,10 @@ jobs:
 
       - name: Build jpackage installer
         shell: bash
-        run: ./gradlew :askamerica-engine:jpackage --no-daemon
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          ./gradlew :askamerica-engine:jpackage --no-daemon -PreleaseVersion="$VERSION"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
@@ -330,7 +333,8 @@ jobs:
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
         run: |
           APP=$(find askamerica-engine/build/jpackage -name "*.app" -maxdepth 1 | head -1)
-          VERSION=$(defaults read "$APP/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo "1.0.0")
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
           PKG="askamerica-engine/build/jpackage/AskAmerica-MCP-${VERSION}.pkg"
           pkgbuild \
             --component "$APP" \
