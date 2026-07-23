@@ -1931,7 +1931,6 @@ views:
         registry_id,
         facility_name,
         state_abbr,
-        county_fips,
         compliance_status,
         snc_flag,
         inspection_count,
