@@ -1175,3 +1175,13 @@ run_etl_inline() {
 log_info() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
+
+# Error counterpart to log_info, routed to stderr. Scripts that source common.sh
+# but are launched standalone (e.g. sync-to-r2.sh via run-scheduled.sh's subprocess,
+# or run-pool.sh's R2 loop) need this here — otherwise a genuine error is masked by
+# "log_error: command not found". run-scheduled.sh sources common.sh first, then
+# defines its own richer $ERROR_LOG-teeing log_error, so last-wins preserves that
+# version in its context; this is the fallback everywhere else.
+log_error() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2
+}
