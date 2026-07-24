@@ -316,6 +316,19 @@ jobs:
             security set-keychain-settings -t 7200 build.keychain
           fi
 
+      # jpackage builds the Windows MSI with WiX 3 (candle.exe/light.exe). Newer
+      # windows-latest images ship WiX 4 (no candle.exe), so candle exits 104.
+      # Put WiX 3.14 binaries first on PATH so jpackage finds the tools it expects.
+      - name: Install WiX Toolset 3.14 (Windows only)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\wix.zip"
+          Expand-Archive "$env:RUNNER_TEMP\wix.zip" -DestinationPath "$env:RUNNER_TEMP\wix314" -Force
+          if (-not (Test-Path "$env:RUNNER_TEMP\wix314\candle.exe")) { throw "candle.exe missing after WiX extract" }
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\wix314"
+
       - name: Build jpackage installer
         shell: bash
         run: |
