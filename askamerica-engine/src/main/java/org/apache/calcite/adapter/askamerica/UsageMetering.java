@@ -112,7 +112,7 @@ final class UsageMetering {
   // so they don't skew analytics. The signature is derived (not stored literally)
   // to keep it stable across builds and independent of the namespace revision.
   private static final String PROBE_SIG =
-      "cdb7095a84a55c73974732142391bfccfc0b8cf722bfa503f2c8d828872db0d8";
+      "e902538d082df8996ee95a5980184565e5fc0ec1032995e19091dfd7288f0174";
   private static final byte[] PROBE_NS =
       "aa.driver.selftest.v3".getBytes(StandardCharsets.US_ASCII);
 
