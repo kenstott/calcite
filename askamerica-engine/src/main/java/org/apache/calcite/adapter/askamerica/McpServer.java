@@ -68,7 +68,7 @@ public class McpServer {
     // Telemetry opt-in state loaded from ~/.askamerica/telemetry.json, refreshed on set.
     private static volatile boolean telemetryOptIn = loadTelemetryOptIn();
 
-    private static final String DEFAULT_SCHEMAS =
+    static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
         + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal";
@@ -245,13 +245,28 @@ public class McpServer {
                 .put("type", "object")
                 .<ObjectNode>set("properties", MAPPER.createObjectNode())));
 
+        ObjectNode searchProps = MAPPER.createObjectNode();
+        searchProps.set(
+            "query", prop("string",
+            "Keywords describing the data you need — e.g. 'senate campaign contributions', "
+            + "'unemployment rate', 'CIK', 'drought'. Matched against schema, table, and "
+            + "column names and their descriptions across all 420+ datasets."));
+        searchProps.set(
+            "limit", prop("integer", "Max matches to return (default 40, max 200)."));
+        tools.add(
+            tool("search_catalog",
+            "Search the full data catalog by keyword to discover which schemas, tables, and "
+            + "columns are relevant — each match includes its description. Call this FIRST when "
+            + "you don't already know the exact table, then confirm with describe_table.",
+            schema(searchProps, new String[]{"query"})));
+
         ObjectNode listTablesProps = MAPPER.createObjectNode();
         listTablesProps.set(
             "schema", prop("string",
             "Schema name, e.g. 'sec', 'geo', 'census'. Case-insensitive."));
         tools.add(
             tool("list_tables",
-            "List all tables and views in a schema.",
+            "List all tables and views in a schema, each with its description.",
             schema(listTablesProps, new String[]{"schema"})));
 
         ObjectNode describeProps = MAPPER.createObjectNode();
@@ -412,6 +427,15 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=list_schemas");
                     text = listSchemas();
                     break;
+                case "search_catalog": {
+                    String q = args.path("query").asText();
+                    int lim = args.has("limit")
+                        ? Math.min(Math.max(1, args.get("limit").asInt()), 200)
+                        : 40;
+                    log.println("[askamerica-mcp] tool=search_catalog query=" + q);
+                    text = searchCatalog(q, lim);
+                    break;
+                }
                 case "list_tables": {
                     String schema = args.path("schema").asText();
                     log.println("[askamerica-mcp] tool=list_tables schema=" + schema);
@@ -510,106 +534,171 @@ public class McpServer {
 
     // ── Tool implementations ──────────────────────────────────────────────────
 
-    private static String listSchemas() {
-        String allowed = System.getenv("ASKAMERICA_SCHEMAS");
-        if (allowed == null || allowed.trim().isEmpty()) {
-            allowed = DEFAULT_SCHEMAS;
+    /** The effective set of schema names (env override, else the built-in default set). */
+    private static java.util.Set<String> allowedSchemas() {
+        String env = System.getenv("ASKAMERICA_SCHEMAS");
+        String src = (env == null || env.trim().isEmpty()) ? DEFAULT_SCHEMAS : env;
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        for (String s : src.split(",")) {
+            String t = s.trim().toLowerCase();
+            if (!t.isEmpty()) {
+                out.add(t);
+            }
         }
+        return out;
+    }
+
+    /**
+     * One connection scoped to all selected sources, for metadata (information_schema)
+     * queries. Views only materialize when every schema they reference is selected, so a
+     * single all-sources connection yields the complete, runtime-accurate catalog.
+     */
+    private static Connection getCatalogConnection() throws Exception {
+        return getSchemaConnection(String.join(",", allowedSchemas()));
+    }
+
+    /** Reduce a caller-supplied identifier to a safe [a-z0-9_] literal for meta queries. */
+    private static String safeIdent(String s) {
+        return s == null ? "" : s.replaceAll("[^A-Za-z0-9_]", "").toLowerCase();
+    }
+
+    private static String listSchemas() throws Exception {
+        java.util.Set<String> allowed = allowedSchemas();
         ArrayNode arr = MAPPER.createArrayNode();
-        for (String s : allowed.split(",")) {
-            arr.add(s.trim());
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        try {
+            Connection c = getCatalogConnection();
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery(
+                     "SELECT schema_name, remarks FROM information_schema.schemata "
+                     + "ORDER BY schema_name")) {
+                while (rs.next()) {
+                    String name = rs.getString(1);
+                    if (name == null) {
+                        continue;
+                    }
+                    String lower = name.toLowerCase();
+                    if (!allowed.contains(lower)) {
+                        continue;
+                    }
+                    seen.add(lower);
+                    arr.add(schemaEntry(lower, rs.getString(2)));
+                }
+            }
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] list_schemas information_schema failed: " + e.getMessage());
+        }
+        // Guarantee every allowed schema appears even if information_schema didn't list it.
+        for (String s : allowed) {
+            if (!seen.contains(s)) {
+                arr.add(schemaEntry(s, null));
+            }
         }
         return arr.toString();
     }
 
-    private static String listTables(String schema) throws Exception {
-        String lower = schema.toLowerCase();
-        Connection c = getSchemaConnection(lower);
-        DatabaseMetaData meta = c.getMetaData();
-        ResultSet rs = meta.getTables(null, lower, "%", null);
-        ArrayNode arr = MAPPER.createArrayNode();
-        while (rs.next()) {
-            ObjectNode row = MAPPER.createObjectNode();
-            row.put("table", rs.getString("TABLE_NAME"));
-            row.put("type", rs.getString("TABLE_TYPE"));
-            arr.add(row);
+    private static ObjectNode schemaEntry(String schema, String remarks) {
+        ObjectNode o = MAPPER.createObjectNode();
+        o.put("schema", schema);
+        // Prefer the full authored description; information_schema truncates it to 80 chars.
+        String desc = Catalog.schemaDescription(schema);
+        if (desc == null || desc.isEmpty()) {
+            desc = remarks;
         }
-        rs.close();
+        if (desc != null && !desc.isEmpty()) {
+            o.put("description", desc);
+        }
+        return o;
+    }
+
+    private static String searchCatalog(String query, int limit) {
+        if (query == null || query.trim().isEmpty() || !Catalog.available()) {
+            return "[]";
+        }
+        return Catalog.search(query.trim(), limit).toString();
+    }
+
+    private static String listTables(String schema) throws Exception {
+        String s = safeIdent(schema);
+        Connection c = getCatalogConnection();
+        ArrayNode arr = MAPPER.createArrayNode();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT table_name, table_type, remarks FROM information_schema.tables "
+                 + "WHERE lower(table_schema) = '" + s + "' ORDER BY table_name")) {
+            while (rs.next()) {
+                String tname = rs.getString(1);
+                ObjectNode o = MAPPER.createObjectNode();
+                o.put("table", tname);
+                o.put("type", rs.getString(2));
+                // Prefer authored description; fill from REMARKS (covers runtime-only tables).
+                String desc = Catalog.tableDescription(s, tname);
+                if (desc == null || desc.isEmpty()) {
+                    desc = rs.getString(3);
+                }
+                if (desc != null && !desc.isEmpty()) {
+                    o.put("description", desc);
+                }
+                arr.add(o);
+            }
+        }
         return arr.toString();
     }
 
     private static String describeTable(String schema, String table) throws Exception {
-        String lowerSchema = schema.toLowerCase();
-        String lowerTable = table.toLowerCase();
-        Connection c = getSchemaConnection(lowerSchema);
-        DatabaseMetaData meta = c.getMetaData();
+        String s = safeIdent(schema);
+        String t = safeIdent(table);
+        Connection c = getCatalogConnection();
 
-        // Diagnostic: log actual schema names visible to metadata
-        ResultSet schemas = meta.getSchemas();
-        StringBuilder schemaNames = new StringBuilder();
-        while (schemas.next()) {
-            if (schemaNames.length() > 0) schemaNames.append(',');
-            schemaNames.append(schemas.getString("TABLE_SCHEM"));
-        }
-        schemas.close();
-        log.println("[askamerica-mcp] describe_table meta.getSchemas()=[" + schemaNames + "]");
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("schema", s);
+        out.put("table", t);
 
-        // Diagnostic: exact-name getTables (same pattern getColumns uses internally)
-        ResultSet exactTable = meta.getTables(null, lowerSchema, lowerTable, null);
-        boolean tableFound = exactTable.next();
-        exactTable.close();
-        log.println("[askamerica-mcp] describe_table getTables(exact=" + lowerTable + ") found=" + tableFound);
-
-        // Diagnostic: get column count from SELECT * FETCH FIRST 0 ROWS ONLY
-        try {
-            Statement diagStmt = c.createStatement();
-            ResultSet diagRs =
-                diagStmt.executeQuery("SELECT * FROM " + lowerSchema + "." + lowerTable + " FETCH FIRST 0 ROWS ONLY");
-            int colCount = diagRs.getMetaData().getColumnCount();
-            log.println("[askamerica-mcp] describe_table SELECT* colCount=" + colCount);
-            diagRs.close();
-            diagStmt.close();
-        } catch (Exception diagEx) {
-            log.println("[askamerica-mcp] describe_table SELECT* error=" + diagEx.getMessage());
-        }
-
-        // Resolve CommentableTable for column comments — JDBC REMARKS is not populated by Calcite
-        CommentableTable commentable = null;
-        try {
-            CalciteConnection cc = c.unwrap(CalciteConnection.class);
-            SchemaPlus root = cc.getRootSchema();
-            @SuppressWarnings("deprecation")
-            SchemaPlus sp = root.getSubSchema(lowerSchema);
-            if (sp != null) {
-                @SuppressWarnings("deprecation")
-                Table t = sp.getTable(lowerTable);
-                if (t instanceof CommentableTable) {
-                    commentable = (CommentableTable) t;
+        // Table type + description (information_schema resolves both base tables and views).
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT table_type, remarks FROM information_schema.tables "
+                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
+            if (rs.next()) {
+                out.put("type", rs.getString(1));
+                String tdesc = Catalog.tableDescription(s, t);
+                if (tdesc == null || tdesc.isEmpty()) {
+                    tdesc = rs.getString(2);
+                }
+                if (tdesc != null && !tdesc.isEmpty()) {
+                    out.put("description", tdesc);
                 }
             }
-        } catch (Exception e) {
-            log.println("[askamerica-mcp] describe_table comment lookup failed: " + e.getMessage());
         }
 
-        ResultSet rs = meta.getColumns(null, lowerSchema, lowerTable, "%");
-        ArrayNode arr = MAPPER.createArrayNode();
-        while (rs.next()) {
-            String colName = rs.getString("COLUMN_NAME");
-            ObjectNode col = MAPPER.createObjectNode();
-            col.put("name", colName);
-            col.put("type", rs.getString("TYPE_NAME"));
-            col.put("nullable", rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable);
-            if (commentable != null) {
-                String comment = commentable.getColumnComment(colName);
-                if (comment != null && !comment.isEmpty()) {
-                    col.put("comment", comment);
+        // Columns — resolved by Calcite, so view row types come through correctly.
+        ArrayNode cols = MAPPER.createArrayNode();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT column_name, data_type, is_nullable, remarks "
+                 + "FROM information_schema.columns "
+                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "' "
+                 + "ORDER BY ordinal_position")) {
+            while (rs.next()) {
+                String cname = rs.getString(1);
+                ObjectNode col = MAPPER.createObjectNode();
+                col.put("name", cname);
+                col.put("type", rs.getString(2));
+                col.put("nullable", "YES".equalsIgnoreCase(rs.getString(3)));
+                String cdesc = Catalog.columnDescription(s, t, cname);
+                if (cdesc == null || cdesc.isEmpty()) {
+                    cdesc = rs.getString(4);
                 }
+                if (cdesc != null && !cdesc.isEmpty()) {
+                    col.put("description", cdesc);
+                }
+                cols.add(col);
             }
-            arr.add(col);
         }
-        rs.close();
-        log.println("[askamerica-mcp] describe_table getColumns returned " + arr.size() + " columns");
-        return arr.toString();
+        out.set("columns", cols);
+        log.println("[askamerica-mcp] describe_table " + s + "." + t
+            + " columns=" + cols.size());
+        return out.toString();
     }
 
     // Calcite Oracle-lex treats these schema names as reserved words; quote them.
