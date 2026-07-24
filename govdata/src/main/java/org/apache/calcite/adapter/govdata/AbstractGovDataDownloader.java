@@ -2650,7 +2650,7 @@ public abstract class AbstractGovDataDownloader {
    * @param conn DuckDB connection to load extensions into
    */
   private static void loadConversionExtensions(Connection conn) {
-    String[] extensions = {"spatial", "h3", "excel", "fts"};
+    String[] extensions = {"spatial", "fts"};
 
     for (String ext : extensions) {
       try {
