@@ -389,7 +389,8 @@ public class McpServer {
                     // uses — metering belongs on the calcite/govdata path, not only on the
                     // jdbc:askamerica driver. wrap() is a no-op when no API key is present, and
                     // returns the connection unwrapped for a self-test bypass key (presented as
-                    // ASKAMERICA_API_KEY with -Daskamerica.selftest.enabled=true).
+                    // ASKAMERICA_API_KEY with -Daskamerica.selftest.enabled=true or
+                    // ASKAMERICA_SELFTEST_ENABLED=true).
                     c = UsageMetering.wrap(c, UsageMetering.resolveApiKey(null));
                     schemaConns.put(k, c);
                     log.println("[askamerica-mcp] Schema ready: " + k);

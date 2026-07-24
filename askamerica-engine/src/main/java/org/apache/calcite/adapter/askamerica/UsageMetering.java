@@ -118,11 +118,15 @@ final class UsageMetering {
 
   // The self-test / warm-up bypass skips metering AND quota for synthetic probe
   // traffic. It is OFF unless explicitly enabled, so a shipped build never honors
-  // a (leaked) probe token on its own — the driver's own warm-up harness opts in
-  // in-process via -Daskamerica.selftest.enabled=true. Without the flag the probe
-  // token is just an unknown key: it flows through the quota gate and is rejected.
+  // a (leaked) probe token on its own — the harness opts in via either the JVM system
+  // property -Daskamerica.selftest.enabled=true OR the environment variable
+  // ASKAMERICA_SELFTEST_ENABLED=true. The env var is the reliable path when a wrapper or
+  // launcher spawns the engine JVM and a -D flag on the parent does not propagate to the
+  // child. Without the flag the probe token is just an unknown key: it flows through the
+  // quota gate and is rejected.
   private static boolean selfTestBypassEnabled() {
-    return Boolean.getBoolean("askamerica.selftest.enabled");
+    return Boolean.getBoolean("askamerica.selftest.enabled")
+        || "true".equalsIgnoreCase(System.getenv("ASKAMERICA_SELFTEST_ENABLED"));
   }
 
   private static boolean isSelfTestSession(String token) {
