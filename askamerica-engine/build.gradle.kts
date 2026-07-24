@@ -406,6 +406,7 @@ tasks.register<Exec>("jpackage") {
         engineVersion
     }
     val macResourceDir = project.file("src/packaging/mac").absolutePath
+    val winResourceDir = project.file("src/packaging/windows").absolutePath
 
     if (isMac) {
         dependsOn("jlinkRuntime")
@@ -425,9 +426,14 @@ tasks.register<Exec>("jpackage") {
         "--java-options", "-Xms256m -Xmx2g",
         "--java-options", "-Dfile.encoding=UTF-8",
         // Windows: without these the MSI installs silently with no way to launch
-        // the setup wizard. Start-menu entry + optional desktop shortcut.
+        // the setup wizard. Start-menu entry + optional desktop shortcut. The
+        // resource-dir supplies overrides.wxi, which adds a finish-page message and
+        // a "launch now" checkbox so the user is told to run the app (which collects
+        // the API key and writes the Claude Desktop config) rather than being left
+        // at a silent "Finish" with nothing configured.
         *(if (os.contains("win"))
-            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut")
+            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut",
+                    "--resource-dir", winResourceDir)
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
         *(if (!isMac && !os.contains("win"))
