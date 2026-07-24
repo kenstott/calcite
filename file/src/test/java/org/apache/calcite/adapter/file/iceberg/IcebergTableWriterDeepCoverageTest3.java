@@ -401,7 +401,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
   @Test void testRunMaintenanceOnEmptyTable() {
     writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw
-    writer.runMaintenance(7, 1);
+    writer.runMaintenance(7);
   }
 
   @Test void testRunMaintenanceAfterWrite() throws Exception {
@@ -422,7 +422,7 @@ public class IcebergTableWriterDeepCoverageTest3 {
     writer.bulkCommitDataFiles(files);
 
     // Should not throw
-    writer.runMaintenance(1, 1);
+    writer.runMaintenance(1);
   }
 
   // ====================================================================

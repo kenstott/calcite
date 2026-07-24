@@ -81,7 +81,7 @@ public class IcebergTableWriterTest {
   @Test void testMaintenanceDoesNotThrow() {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw even on empty table
-    writer.runMaintenance(7, 1);
+    writer.runMaintenance(7);
   }
 
   @Test void testCommitFromStagingEmptyDirectory() throws Exception {

@@ -191,7 +191,7 @@ public class PartitionAlternatesIntegrationTest {
     assertNotNull(writer.getTable());
 
     // Run maintenance on empty table - should not throw
-    writer.runMaintenance(7, 1);
+    writer.runMaintenance(7);
   }
 
   @Test void testMaterializerConfigBuilder() {

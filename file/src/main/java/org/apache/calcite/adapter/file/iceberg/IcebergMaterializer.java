@@ -736,7 +736,7 @@ public class IcebergMaterializer {
 
     // Run maintenance and record completion if we actually wrote data
     if (result.isFullySuccessful() && totalRowsWritten > 0) {
-      writer.runMaintenance(7, 365);  // 365 days for orphans = effectively disabled for append-only
+      writer.runMaintenance(7);  // expire snapshots older than 7d; expiry is the only reclaimer
 
       // Compact small files to reduce metadata overhead for iceberg_scan queries
       try {

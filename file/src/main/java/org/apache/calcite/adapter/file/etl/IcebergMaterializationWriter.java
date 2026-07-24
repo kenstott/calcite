@@ -2162,7 +2162,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (tableWriter != null && icebergConfig != null && icebergConfig.isRunMaintenance()) {
       int retentionDays = icebergConfig.getSnapshotRetentionDays();
       LOGGER.info("Running Iceberg maintenance with {}d snapshot retention", retentionDays);
-      tableWriter.runMaintenance(retentionDays, 1);
+      tableWriter.runMaintenance(retentionDays);
     }
 
     LOGGER.info("Iceberg commit complete: {} rows in {} batches",
@@ -2212,42 +2212,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       LOGGER.error("SIGTERM: emergency commit failed: {}", e.getMessage());
     }
   }
-
-  /**
-   * Self-heals the tracker for a partition by detecting parquet files that exist on storage
-   * but are not registered in the Iceberg catalog. If found, commits them to the catalog so
-   * the tracker can be marked complete without re-fetching from source.
-   *
-   * <p>Processing results are immutable — the same source inputs always produce the same
-   * output — so existing staged files are always safe to re-register.
-   *
-   * @param partitionVariables dimension variables for the partition (e.g. {year=2025, month=4})
-   * @return estimated row count of re-registered files, or 0 if no orphaned files were found
-   */
-  public long selfHealPartition(Map<String, String> partitionVariables) throws IOException {
-    if (!initialized) {
-      return 0;
-    }
-    if (tableWriter == null) {
-      // Deferred-schema materialize that has not yet written a batch — no table to heal against.
-      return 0;
-    }
-    List<org.apache.iceberg.DataFile> orphaned = tableWriter.findOrphanedDataFiles(partitionVariables);
-    if (orphaned.isEmpty()) {
-      return 0;
-    }
-    LOGGER.info("Self-heal: found {} orphaned data files for partition {} — re-registering in catalog",
-        orphaned.size(), partitionVariables);
-    tableWriter.bulkCommitDataFiles(orphaned);
-    long estimated = 0;
-    for (org.apache.iceberg.DataFile f : orphaned) {
-      estimated += f.recordCount();
-    }
-    LOGGER.info("Self-heal complete for partition {}: {} files re-registered (~{} rows)",
-        partitionVariables, orphaned.size(), estimated);
-    return estimated;
-  }
-
 
   @Override public long getTotalRowsWritten() {
     return totalRowsWritten;

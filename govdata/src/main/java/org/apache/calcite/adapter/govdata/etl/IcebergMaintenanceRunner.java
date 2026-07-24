@@ -199,16 +199,15 @@ public class IcebergMaintenanceRunner {
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
-    // Maintenance-only: expire snapshots (orphan-removal only when orphan-days <= 30) and stop,
-    // skipping compaction. Compaction gates on files-per-partition; a table already at ~1 file per
-    // partition needs no rewrite yet can still carry hundreds of superseded snapshots pinning stale
-    // files. This path reclaims those without the churn (and risk) of an unnecessary rewrite.
+    // Maintenance-only: expire snapshots and stop, skipping compaction. Compaction gates on
+    // files-per-partition; a table already at ~1 file per partition needs no rewrite yet can still
+    // carry hundreds of superseded snapshots pinning stale files. expireSnapshots transactionally
+    // reclaims those without the churn (and risk) of an unnecessary rewrite.
     if (config.maintenanceOnly) {
       System.out.println("\nMaintenance-only: expiring snapshots older than "
-          + config.expireSnapshotsDays + " days (orphan-removal "
-          + (config.orphanFilesDays <= 30 ? "enabled >" + config.orphanFilesDays + "d)" : "disabled)")
-          + ")...");
-      writer.runMaintenance(config.expireSnapshotsDays, config.orphanFilesDays);
+          + config.expireSnapshotsDays + " days (expiry transactionally reclaims unreachable "
+          + "files; no hand-rolled orphan deletion)...");
+      writer.runMaintenance(config.expireSnapshotsDays);
       table.refresh();
       int liveFiles = 0;
       for (org.apache.iceberg.FileScanTask task : table.newScan().planFiles()) {
@@ -231,7 +230,7 @@ public class IcebergMaintenanceRunner {
     // First expire old snapshots to clean up lineage
     // (RewriteFiles needs valid snapshot lineage to commit)
     System.out.println("\nExpiring old snapshots first (required for compaction)...");
-    writer.runMaintenance(config.expireSnapshotsDays, config.orphanFilesDays);
+    writer.runMaintenance(config.expireSnapshotsDays);
     table.refresh();
     System.out.println("  Snapshots after cleanup: " + countSnapshots(table));
 

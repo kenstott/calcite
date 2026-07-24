@@ -852,14 +852,7 @@ public class IcebergTableWriterDeepCoverageTest2 {
     Table table = createSimpleTable("rm_empty_test");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw on empty table
-    writer.runMaintenance(7, 1);
-  }
-
-  @Test void testRunMaintenanceSkipsOrphanDetection() {
-    Table table = createSimpleTable("rm_skip_orphan_test");
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-    // orphanFilesDays > 30 should skip orphan detection
-    writer.runMaintenance(7, 31);
+    writer.runMaintenance(7);
   }
 
   @Test void testRunMaintenanceWithSnapshots() throws IOException {
@@ -879,7 +872,7 @@ public class IcebergTableWriterDeepCoverageTest2 {
     writer.commitDataFiles(files, null);
 
     // Now run maintenance
-    writer.runMaintenance(7, 1);
+    writer.runMaintenance(7);
   }
 
   // ===== compactSmallFiles tests =====

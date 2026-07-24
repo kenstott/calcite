@@ -515,14 +515,7 @@ public class IcebergTableWriterCoverageTest {
     Table table = createSimpleTable("maint_empty");
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     // Should not throw
-    writer.runMaintenance(7, 1);
-  }
-
-  @Test void testMaintenanceSkipsOrphanDetectionForLargeThreshold() {
-    Table table = createSimpleTable("maint_skip_orphan");
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-    // orphanFilesDays > 30 should skip orphan detection
-    writer.runMaintenance(7, 31);
+    writer.runMaintenance(7);
   }
 
   @Test void testMaintenanceWithData() throws Exception {
@@ -544,7 +537,51 @@ public class IcebergTableWriterCoverageTest {
     writer.commitDataFiles(files, null);
 
     // Run maintenance on table with data
-    writer.runMaintenance(7, 1);
+    writer.runMaintenance(7);
+  }
+
+  /**
+   * Regression: maintenance (snapshot expiry) must NEVER delete a data file that is still
+   * reachable from the current snapshot, even under the most aggressive window. A hand-rolled
+   * orphan deleter previously removed live-referenced files, producing dangling-reference 404s;
+   * expiry alone (the sanctioned reclaimer) cannot. Two commits create an ancestor + current
+   * snapshot; runMaintenance(0) expires everything older than "now" (the ancestor), then every
+   * file the current snapshot references must still physically exist.
+   */
+  @Test void testMaintenanceKeepsAllCurrentSnapshotFiles() throws Exception {
+    Table table = createPartitionedTable("maint_keep_current");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    for (int year = 2024; year <= 2025; year++) {
+      List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
+      Map<String, Object> row = new HashMap<String, Object>();
+      row.put("id", year);
+      row.put("data", "row-" + year);
+      row.put("year", year);
+      records.add(row);
+      Map<String, String> partVals = new HashMap<String, String>();
+      partVals.put("year", Integer.toString(year));
+      DataFile df = writer.writeRecords(records, partVals);
+      List<DataFile> files = new ArrayList<DataFile>();
+      files.add(df);
+      writer.commitDataFiles(files, null);
+    }
+
+    // Most aggressive expiry: expire every snapshot older than now (the ancestor commit).
+    writer.runMaintenance(0);
+
+    table.refresh();
+    int liveFiles = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.FileScanTask> tasks =
+        table.newScan().planFiles()) {
+      for (org.apache.iceberg.FileScanTask task : tasks) {
+        String path = task.file().path().toString();
+        assertTrue(table.io().newInputFile(path).exists(),
+            "maintenance deleted a live current-snapshot file: " + path);
+        liveFiles++;
+      }
+    }
+    assertEquals(2, liveFiles);
   }
 
   // ---- compactSmallFiles tests ----
@@ -981,45 +1018,6 @@ public class IcebergTableWriterCoverageTest {
     Method m = IcebergTableWriter.class.getDeclaredMethod("ensureVersionHint");
     m.setAccessible(true);
     m.invoke(writer);
-  }
-
-  // ---- removeOrphanFiles tests ----
-
-  @Test void testRemoveOrphanFilesEmptyTable() throws Exception {
-    Table table = createSimpleTable("orphan_empty");
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-    // removeOrphanFiles is private; invoke via reflection
-    java.lang.reflect.Method removeMethod =
-        IcebergTableWriter.class.getDeclaredMethod("removeOrphanFiles", long.class);
-    removeMethod.setAccessible(true);
-    int removed = (Integer) removeMethod.invoke(writer, System.currentTimeMillis());
-    assertEquals(0, removed);
-  }
-
-  @Test void testRemoveOrphanFilesTableWithData() throws Exception {
-    Table table = createPartitionedTable("orphan_data");
-    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-
-    // Write and commit data
-    List<Map<String, Object>> records = new ArrayList<Map<String, Object>>();
-    Map<String, Object> row = new HashMap<String, Object>();
-    row.put("id", 1);
-    row.put("data", "test");
-    row.put("year", 2024);
-    records.add(row);
-    Map<String, String> partVals = new HashMap<String, String>();
-    partVals.put("year", "2024");
-    DataFile df = writer.writeRecords(records, partVals);
-    List<DataFile> files = new ArrayList<DataFile>();
-    files.add(df);
-    writer.commitDataFiles(files, null);
-
-    // All files are referenced so none should be orphans
-    java.lang.reflect.Method removeMethod2 =
-        IcebergTableWriter.class.getDeclaredMethod("removeOrphanFiles", long.class);
-    removeMethod2.setAccessible(true);
-    int removed = (Integer) removeMethod2.invoke(writer, System.currentTimeMillis());
-    assertEquals(0, removed);
   }
 
   // ---- coercePartitionValue via reflection ----

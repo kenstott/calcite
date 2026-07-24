@@ -627,7 +627,7 @@ public class IcebergIntegrationTest {
       writer.commitDataFiles(Collections.singletonList(df), null);
     }
 
-    writer.runMaintenance(0, 0);
+    writer.runMaintenance(0);
     assertTrue(countRecords(table) >= 3);
   }
 
@@ -639,7 +639,7 @@ public class IcebergIntegrationTest {
         IcebergCatalogManager.createTable(catalogConfig, "maint_skip_orphan_int", schema,
         PartitionSpec.unpartitioned());
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
-    writer.runMaintenance(7, 365);
+    writer.runMaintenance(7);
   }
 
   @Test void testCompactSmallFilesEmptyTable() throws Exception {

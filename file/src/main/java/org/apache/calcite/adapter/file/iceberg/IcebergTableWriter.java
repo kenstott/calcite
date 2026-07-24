@@ -463,60 +463,6 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Finds parquet files that exist on storage for the given partition but are not registered
-   * in the current Iceberg snapshot. Used for tracker self-healing: if a partition's data
-   * files exist on S3 but the catalog was cleared, we can re-register them without re-fetching
-   * from the source.
-   *
-   * @param partitionVariables dimension variables for the partition (e.g. {year=2025, month=4})
-   * @return DataFile list of orphaned files ready to commit; empty if none found
-   */
-  public List<DataFile> findOrphanedDataFiles(Map<String, String> partitionVariables)
-      throws IOException {
-    String hivePath = buildHivePartitionPath(partitionVariables);
-    String dataDir = table.location() + "/data"
-        + (hivePath.isEmpty() ? "" : "/" + hivePath);
-
-    List<StorageProvider.FileEntry> entries;
-    try {
-      entries = storageProvider.listFiles(dataDir, true);
-    } catch (IOException e) {
-      LOGGER.debug("Self-heal: no files at {}: {}", dataDir, e.getMessage());
-      return new ArrayList<DataFile>();
-    }
-    if (entries == null || entries.isEmpty()) {
-      return new ArrayList<DataFile>();
-    }
-
-    // Build set of paths already tracked by the current snapshot so we don't double-register.
-    Set<String> catalogPaths = new HashSet<String>();
-    if (table.currentSnapshot() != null) {
-      try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
-        for (FileScanTask task : tasks) {
-          String p = task.file().path().toString();
-          int sl = p.lastIndexOf('/');
-          catalogPaths.add(sl >= 0 ? p.substring(sl + 1) : p);
-        }
-      } catch (Exception e) {
-        LOGGER.debug("Self-heal: could not scan catalog for {}: {}", dataDir, e.getMessage());
-      }
-    }
-
-    List<DataFile> orphaned = new ArrayList<DataFile>();
-    for (StorageProvider.FileEntry entry : entries) {
-      String path = entry.getPath();
-      if (!path.endsWith(".parquet")) {
-        continue;
-      }
-      String fileName = path.substring(path.lastIndexOf('/') + 1);
-      if (!catalogPaths.contains(fileName)) {
-        orphaned.add(buildDataFile(path, entry.getSize()));
-      }
-    }
-    return orphaned;
-  }
-
-  /**
    * Builds a Hive-style partition path (e.g. {@code year=2025/month=4}) from partition
    * variables, using the table's partition spec field order.
    */
@@ -872,28 +818,30 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Runs maintenance operations on the table.
-   * Should be called at the end of ingestion.
+   * Runs sanctioned Iceberg maintenance: expires snapshots older than {@code expireSnapshotsDays}.
    *
-   * @param expireSnapshotsDays Number of days after which to expire snapshots (default: 7)
-   * @param orphanFilesDays Number of days after which to remove orphan files (default: 1)
+   * <p>Snapshot expiry is the ONLY file-reclamation path. Iceberg's {@code expireSnapshots}
+   * transactionally deletes exactly the data/manifest files that become unreachable from the
+   * retained snapshots, and by construction never removes a file reachable from the current
+   * snapshot — at any age, no window tuning required. There is deliberately no hand-rolled
+   * filesystem-scan orphan deletion: that bypassed Iceberg's guarantees (basename matching against
+   * a self-computed keep-set, raw non-transactional deletes) and physically removed live-referenced
+   * files, producing dangling-reference 404s. Files left by failed (never-committed) writes, should
+   * they ever accumulate, are reclaimed by a separate, infrequent Iceberg RemoveOrphanFiles run —
+   * never here and never on the ingest hot path.
+   *
+   * @param expireSnapshotsDays Age (days) beyond which non-current snapshots are expired
    */
-  public void runMaintenance(int expireSnapshotsDays, int orphanFilesDays) {
+  public void runMaintenance(int expireSnapshotsDays) {
     long expireSnapshotsMillis = System.currentTimeMillis()
         - TimeUnit.DAYS.toMillis(expireSnapshotsDays);
-    long orphanFilesMillis = System.currentTimeMillis()
-        - TimeUnit.DAYS.toMillis(orphanFilesDays);
 
     LOGGER.info("Running Iceberg maintenance for table {}", table.name());
 
     // Expire old snapshots. Steady state is a single (current) snapshot; the only reason to keep
     // any older one is to drain readers that already planned against it, so retention is purely
-    // TIME-based (expireOlderThan). The window must exceed the longest-running reader/scan — pulling
-    // a file out from under an in-flight reader is what 404s a live query — hence the 7-day floor on
-    // expireSnapshotsDays, matching DEFAULT_POST_COMPACTION_RETENTION_DAYS. No count-based
-    // retainLast: pinning the last N snapshots regardless of age keeps N tables' worth of data files
-    // forever and does nothing extra for reader safety (a snapshot younger than the window is already
-    // kept no matter how many newer commits land).
+    // TIME-based (expireOlderThan). expireSnapshots deletes only files unreachable from the retained
+    // set, so it can never pull a file out from under the CURRENT snapshot regardless of window.
     try {
       underCommitLock(() -> {
         table.expireSnapshots()
@@ -904,152 +852,6 @@ public class IcebergTableWriter {
     } catch (Exception e) {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
     }
-
-    // Remove orphan files using core Iceberg API
-    // Orphans are data files not referenced by any snapshot
-    // Skip if threshold is > 30 days (effectively disabled - scan is expensive)
-    if (orphanFilesDays <= 30) {
-      try {
-        int orphansRemoved = removeOrphanFiles(orphanFilesMillis);
-        if (orphansRemoved > 0) {
-          LOGGER.info("Removed {} orphan files older than {} days", orphansRemoved, orphanFilesDays);
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Failed to remove orphan files: {}", e.getMessage());
-      }
-    } else {
-      LOGGER.debug("Skipping orphan file detection (threshold {} days > 30)", orphanFilesDays);
-    }
-  }
-
-  /**
-   * Removes orphan data files under the per-table commit lock, against freshly-refreshed metadata.
-   *
-   * <p>Orphan cleanup diffs the physical data directory against the set of files referenced by any
-   * snapshot and raw-deletes the difference — a non-transactional delete that Iceberg's optimistic
-   * concurrency does NOT guard. It must therefore hold the same lock as commits and read the current
-   * committed metadata: otherwise a sibling writer's just-committed data file is absent from this
-   * process's stale in-memory snapshot view and is deleted as a false orphan, leaving the live
-   * snapshot pointing at a deleted file (a dangling ref that 404s on read). Holding the lock across
-   * the whole scan+delete also blocks concurrent commits from adding a new file mid-scan, which is
-   * what makes the 0ms threshold used right after compaction safe.
-   *
-   * @param olderThanMillis Only delete orphans older than this timestamp
-   * @return Number of orphan files removed
-   */
-  private int removeOrphanFiles(long olderThanMillis) {
-    final int[] deleted = new int[1];
-    underCommitLock(() -> {
-      table.refresh();
-      deleted[0] = removeOrphanFilesLocked(olderThanMillis);
-    });
-    return deleted[0];
-  }
-
-  /**
-   * Body of {@link #removeOrphanFiles(long)}; must be called while holding the per-table commit lock
-   * and after {@link Table#refresh()}. See that method for why.
-   *
-   * <ol>
-   *   <li>Collect all data file paths referenced by any snapshot</li>
-   *   <li>List all parquet files in the table's data directory</li>
-   *   <li>Delete files that are not referenced and older than the threshold</li>
-   * </ol>
-   */
-  private int removeOrphanFilesLocked(long olderThanMillis) {
-    // Collect all data files referenced by ANY snapshot (including ancestors). This "keep" set
-    // is what protects live data from deletion, so it MUST be complete: if planning any single
-    // snapshot fails, its files are absent from the set and every one of them not also referenced
-    // by another snapshot is deleted as a false orphan — leaving the live snapshot pointing at a
-    // physically-deleted file (404 on read). A partial keep-set must therefore abort the whole
-    // cleanup (delete nothing) rather than silently proceed; orphan reclamation is best-effort and
-    // retried on the next maintenance pass, but a wrong deletion is unrecoverable data loss.
-    Set<String> referencedFiles = new HashSet<>();
-
-    for (org.apache.iceberg.Snapshot snapshot : table.snapshots()) {
-      try (CloseableIterable<FileScanTask> tasks =
-          table.newScan().useSnapshot(snapshot.snapshotId()).planFiles()) {
-        for (FileScanTask task : tasks) {
-          referencedFiles.add(task.file().path().toString());
-        }
-      } catch (Exception e) {
-        throw new IllegalStateException(
-            "Aborting orphan-file cleanup for table " + table.name() + ": failed to plan snapshot "
-            + snapshot.snapshotId() + " (" + e.getMessage() + "). Refusing to delete against an "
-            + "incomplete referenced-file set to avoid deleting live data.", e);
-      }
-    }
-
-    LOGGER.debug("Found {} files referenced by snapshots", referencedFiles.size());
-
-    // Get the data directory path
-    String tableLocation = table.location();
-    String dataDir = tableLocation + "/data";
-
-    // List all parquet files in data directory
-    List<String> allDataFiles = new ArrayList<>();
-    try {
-      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(dataDir, true);
-      for (StorageProvider.FileEntry entry : entries) {
-        if (entry.getPath().endsWith(".parquet")) {
-          allDataFiles.add(entry.getPath());
-        }
-      }
-    } catch (IOException e) {
-      LOGGER.warn("Failed to list data files in {}: {}", dataDir, e.getMessage());
-      return 0;
-    }
-
-    // Build set of referenced file names for fast lookup
-    // Use just the filename (last path component) to avoid s3:// vs s3a:// issues
-    Set<String> referencedFileNames = new HashSet<>();
-    for (String refPath : referencedFiles) {
-      int lastSlash = refPath.lastIndexOf('/');
-      String fileName = lastSlash >= 0 ? refPath.substring(lastSlash + 1) : refPath;
-      referencedFileNames.add(fileName);
-    }
-
-    // Find orphans (files not referenced by any snapshot)
-    List<String> orphanFiles = new ArrayList<>();
-    for (String filePath : allDataFiles) {
-      int lastSlash = filePath.lastIndexOf('/');
-      String fileName = lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
-      boolean isReferenced = referencedFileNames.contains(fileName);
-
-      if (!isReferenced) {
-        // Check file age before adding to orphan list
-        try {
-          StorageProvider.FileMetadata metadata = storageProvider.getMetadata(filePath);
-          if (metadata.getLastModified() < olderThanMillis) {
-            orphanFiles.add(filePath);
-          }
-        } catch (IOException e) {
-          // Age unknown: do NOT delete. An unreferenced-but-recent file is typically an in-flight
-          // commit's data file not yet visible in a snapshot; deleting it on a transient metadata
-          // read failure would corrupt that write. Skip it — the next pass reclaims it once its
-          // age is readable and it is confirmed past the retention window.
-          LOGGER.debug("Skipping orphan candidate {} (age unreadable: {})", filePath, e.getMessage());
-        }
-      }
-    }
-
-    if (orphanFiles.isEmpty()) {
-      LOGGER.debug("No orphan files found");
-      return 0;
-    }
-
-    LOGGER.info("Found {} orphan files to remove", orphanFiles.size());
-
-    // Delete orphan files in batches
-    int deleted = 0;
-    try {
-      storageProvider.deleteBatch(orphanFiles);
-      deleted = orphanFiles.size();
-    } catch (IOException e) {
-      LOGGER.warn("Failed to delete orphan files: {}", e.getMessage());
-    }
-
-    return deleted;
   }
 
   /**
@@ -1168,18 +970,9 @@ public class IcebergTableWriter {
       } catch (Exception e) {
         LOGGER.warn("Failed to expire snapshots after compaction: {}", e.getMessage());
       }
-
-      // Remove only orphans older than the retention window; the just-superseded small files
-      // (age ~0) are intentionally left for a later pass so concurrent readers keep working.
-      try {
-        int orphansRemoved = removeOrphanFiles(retentionCutoff);
-        if (orphansRemoved > 0) {
-          LOGGER.info("Removed {} orphan files older than {} days after compaction",
-              orphansRemoved, retentionDays);
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Failed to remove orphan files after compaction: {}", e.getMessage());
-      }
+      // Superseded small files are reclaimed transactionally by the expireSnapshots above once the
+      // pre-compaction snapshots that reference them age past the retention window — no hand-rolled
+      // filesystem orphan deletion (that removed live-referenced files and 404'd reads).
     } else {
       LOGGER.info("Compaction complete: no partitions needed compaction");
     }
