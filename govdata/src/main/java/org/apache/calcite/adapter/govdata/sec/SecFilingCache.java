@@ -71,6 +71,30 @@ public class SecFilingCache implements AutoCloseable {
   private static final String[] BASE_FILE_TYPES =
       {"metadata", "facts", "contexts", "relationships", "mda"};
 
+  /**
+   * Output-type suffix -&gt; materialized Iceberg table name. The Iceberg tables are the
+   * authoritative record of what was processed: a filing present in a table was processed
+   * for that output type, regardless of whether its staging {@code *_batch_*.parquet} still
+   * exists (staging is removed after materialization and its chunked reads are unreliable).
+   * {@link #populateAccessionIndexFromIceberg} reads these to build the presence index.
+   */
+  private static final java.util.Map<String, String> ICEBERG_TABLE_BY_TYPE;
+
+  static {
+    java.util.Map<String, String> m = new java.util.LinkedHashMap<String, String>();
+    m.put("metadata", "filing_metadata");
+    m.put("facts", "financial_line_items");
+    m.put("contexts", "filing_contexts");
+    m.put("relationships", "xbrl_relationships");
+    m.put("mda", "mda_sections");
+    m.put("insider", "insider_transactions");
+    m.put("earnings", "earnings_transcripts");
+    m.put("chunks", "vectorized_chunks");
+    m.put("13f", "institutional_holdings");
+    m.put("13dg", "beneficial_ownership");
+    ICEBERG_TABLE_BY_TYPE = java.util.Collections.unmodifiableMap(m);
+  }
+
   /** Phase name for SEC staging (initial file creation). */
   private static final String PHASE_STAGING = "staging";
 
@@ -272,42 +296,32 @@ public class SecFilingCache implements AutoCloseable {
       totalBatchFiles += legacyBatchFiles;
     }
 
-    if (totalBatchFiles > 0 && totalVirtual == 0) {
-      // Batch files exist but DuckDB failed to extract any (cik, accession) pairs.
-      // Committing an empty byName would cause fileExists() to return false for every
-      // accession, re-queuing the entire year. Leave s3FileCache = null so the slow
-      // path (DuckDB batch lookup) can still answer queries correctly.
-      LOGGER.error("preloadFileInventory: found {} batch files but DuckDB extracted 0 virtual "
-          + "entries — DuckDB population failed. Leaving cache null for slow-path fallback.",
-          totalBatchFiles);
-      return;
-    }
-
-    // Build the accession-keyed presence index from the collected filenames so ownership
-    // filings stored under the issuer CIK are found regardless of which CIK a candidate carries.
+    // Build the accession-keyed presence index. Authoritative source: the materialized
+    // Iceberg tables (see ICEBERG_TABLE_BY_TYPE) — a filing present in a table was processed
+    // for that output type regardless of whether its staging parquet still exists. Supplement
+    // with any staging filenames still present. Keyed by accession alone (globally unique to
+    // one filing) so ownership filings stored under the issuer CIK are found regardless of
+    // which CIK a candidate carries.
     java.util.Map<String, java.util.Set<String>> byAccession =
         new java.util.HashMap<String, java.util.Set<String>>();
     for (String name : byName.keySet()) {
       Matcher am = FILE_NAME_PATTERN.matcher(name);
       if (am.matches()) {
-        String accession = am.group(1);
-        String type = am.group(2);
-        java.util.Set<String> types = byAccession.get(accession);
-        if (types == null) {
-          types = new java.util.HashSet<String>();
-          byAccession.put(accession, types);
-        }
-        types.add(type);
+        addAccessionType(byAccession, am.group(1), am.group(2));
       }
     }
+    int stagingAccessions = byAccession.size();
+    populateAccessionIndexFromIceberg(scanStart, endYear, byAccession);
 
     this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
     this.s3AccessionTypes = java.util.Collections.unmodifiableMap(byAccession);
     this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
     long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("preloadFileInventory: cached {} virtual entries ({} distinct accessions) "
-        + "from {} batch files (years {}-{}) in {}ms",
-        totalVirtual, byAccession.size(), totalBatchFiles, startYear, endYear, elapsed);
+    LOGGER.info("preloadFileInventory: {} distinct accessions in presence index "
+        + "({} from staging, {} added from Iceberg), {} staging virtual entries, "
+        + "{} batch files (years {}-{}) in {}ms",
+        byAccession.size(), stagingAccessions, byAccession.size() - stagingAccessions,
+        totalVirtual, totalBatchFiles, startYear, endYear, elapsed);
   }
 
   /**
@@ -444,6 +458,75 @@ public class SecFilingCache implements AutoCloseable {
     String path = storageProvider.resolvePath(yearDir, name);
     cache.add(path);
     byName.put(name, path);
+  }
+
+  /** Records that {@code accession} has output {@code type} present, creating the set if needed. */
+  private static void addAccessionType(java.util.Map<String, java.util.Set<String>> byAccession,
+      String accession, String type) {
+    java.util.Set<String> types = byAccession.get(accession);
+    if (types == null) {
+      types = new java.util.HashSet<String>();
+      byAccession.put(accession, types);
+    }
+    types.add(type);
+  }
+
+  /**
+   * Merges the authoritative processed-filing record from the materialized Iceberg tables into
+   * the accession-keyed presence index. For each output type in {@link #ICEBERG_TABLE_BY_TYPE},
+   * reads {@code DISTINCT accession_number} from the table (scoped to the scanned year range via
+   * the {@code year} partition column) and records that each accession has that output type.
+   *
+   * <p>This is the reliable "was it processed?" signal: staging {@code *_batch_*.parquet} files
+   * are removed after materialization and their chunked reads drop accessions on transient
+   * errors, so the file-existence check alone perpetually re-queues already-materialized filings.
+   * The Iceberg table is the source of truth. A per-table failure is logged and skipped so the
+   * remaining types still populate.
+   *
+   * @param startYear   first year partition to include (the fiscal-buffer-adjusted scan start)
+   * @param endYear     last year partition to include (inclusive)
+   * @param byAccession presence index to merge into (accession -&gt; set of output-type suffixes)
+   */
+  private void populateAccessionIndexFromIceberg(int startYear, int endYear,
+      java.util.Map<String, java.util.Set<String>> byAccession) {
+    Connection conn = getOrCreateDuckdbConn();
+    if (conn == null) {
+      LOGGER.warn("populateAccessionIndexFromIceberg: no DuckDB connection — skipping Iceberg "
+          + "presence index; self-heal falls back to staging + tracker only");
+      return;
+    }
+    try (Statement stmt = conn.createStatement()) {
+      stmt.execute("INSTALL iceberg");
+      stmt.execute("LOAD iceberg");
+    } catch (Exception e) {
+      LOGGER.debug("populateAccessionIndexFromIceberg: iceberg extension load note — {}",
+          e.getMessage());
+    }
+    for (Map.Entry<String, String> entry : ICEBERG_TABLE_BY_TYPE.entrySet()) {
+      String type = entry.getKey();
+      String tablePath = storageProvider.resolvePath(parquetBaseDir, entry.getValue());
+      String sql = "SELECT DISTINCT accession_number FROM iceberg_scan('" + tablePath
+          + "', allow_moved_paths=true) WHERE accession_number IS NOT NULL "
+          + "AND year BETWEEN " + startYear + " AND " + endYear;
+      long queryStart = System.currentTimeMillis();
+      int typeCount = 0;
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(sql)) {
+        while (rs.next()) {
+          String accession = rs.getString(1);
+          if (accession != null) {
+            addAccessionType(byAccession, accession, type);
+            typeCount++;
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.warn("populateAccessionIndexFromIceberg: type={} table={} failed — {}",
+            type, entry.getValue(), e.getMessage());
+        continue;
+      }
+      LOGGER.info("populateAccessionIndexFromIceberg: type={} table={} accessions={} in {}ms",
+          type, entry.getValue(), typeCount, System.currentTimeMillis() - queryStart);
+    }
   }
 
   private Connection getOrCreateDuckdbConn() {
