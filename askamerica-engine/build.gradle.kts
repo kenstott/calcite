@@ -418,7 +418,7 @@ tasks.register<Exec>("jpackage") {
         "--name", "AskAmerica MCP",
         "--app-version", version,
         "--vendor", "AskAmerica",
-        "--description", "AskAmerica MCP — query US government data from Claude",
+        "--description", "AskAmerica MCP - query US government data from Claude",
         "--input", jpackageInputDirFile.absolutePath,
         "--main-jar", launcherJar.get().archiveFileName.get(),
         "--main-class", "org.apache.calcite.adapter.askamerica.McpServerLauncher",
