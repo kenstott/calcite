@@ -414,6 +414,7 @@ tasks.register<Exec>("jpackage") {
 
     commandLine(
         jpackageTool,
+        "--verbose",
         "--type", packageType,
         "--name", "AskAmerica MCP",
         "--app-version", version,
