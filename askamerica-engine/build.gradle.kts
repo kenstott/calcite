@@ -393,9 +393,18 @@ tasks.register<Exec>("jpackage") {
     // Use the engine release version (from -PreleaseVersion, set by CI from the
     // engine-v<X.Y.Z> tag), NOT the Calcite project.version — otherwise installer
     // filenames carry the unrelated Calcite version (e.g. 1.42.0).
-    val version = publishVersion
+    val engineVersion = publishVersion
         .replace("[^0-9.]".toRegex(), "")
         .ifEmpty { "1.0.0" }
+    // macOS rejects a CFBundleShortVersionString whose first component is 0, so
+    // give jpackage a mac-safe internal app-version there (0.37.0 -> 1.37.0).
+    // The user-facing PKG filename/version still uses the real engine version —
+    // CI names the PKG from the engine-v<X.Y.Z> tag, not from this value.
+    val version = if (isMac && (engineVersion.substringBefore('.').toIntOrNull() ?: 0) < 1) {
+        "1." + engineVersion.substringAfter('.', "0.0")
+    } else {
+        engineVersion
+    }
     val macResourceDir = project.file("src/packaging/mac").absolutePath
 
     if (isMac) {
