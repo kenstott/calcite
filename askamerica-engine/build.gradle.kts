@@ -409,6 +409,7 @@ tasks.register<Exec>("jpackage") {
         engineVersion
     }
     val macResourceDir = project.file("src/packaging/mac").absolutePath
+    val winResourceDir = project.file("src/packaging/windows").absolutePath
 
     if (isMac) {
         dependsOn("jlinkRuntime")
@@ -433,8 +434,12 @@ tasks.register<Exec>("jpackage") {
         // can open "AskAmerica MCP", which shows SetupWindow to enter the API key.
         // (A finish-page overrides.wxi customization was tried but is structurally
         // incompatible with jpackage 21's WiX layout — dropped; re-add as its own task.)
+        // Windows: Start-menu + desktop shortcut, plus a --resource-dir override of
+        // jpackage's main.wxs that hooks JpUI's ExitDialog to launch the setup wizard
+        // on Finish (Product-scope; overrides.wxi is fragment-scope and can't reach it).
         *(if (os.contains("win"))
-            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut")
+            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut",
+                    "--resource-dir", winResourceDir)
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
         *(if (!isMac && !os.contains("win"))
