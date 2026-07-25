@@ -218,3 +218,29 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'hmda_applicant_demographics' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_applicant_demographics', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'hmda_loans'                 , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_loans', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'hud_subsidized_county'      , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_subsidized_county', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'hud_subsidized_housing'     , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_subsidized_housing', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'opportunity_zones'          , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/opportunity_zones', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'housing', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;

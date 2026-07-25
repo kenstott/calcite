@@ -637,6 +637,30 @@ SELECT 'geo', 'watersheds_huc12', 'expected_values',
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc12', allow_moved_paths := true)
 WHERE area_sq_km IS NOT NULL AND area_sq_km = 0;
 
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'census_divisions' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_divisions', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'census_regions'  , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_regions', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'state_ref'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_ref', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'zcta_ref'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zcta_ref', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'geo', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;
+
 -- ============================================================================
 -- ALL DQ RESULTS
 -- ============================================================================

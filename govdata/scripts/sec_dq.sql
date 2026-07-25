@@ -97,6 +97,26 @@ INSERT INTO dq_results SELECT 'sec','insider_transactions','row_count', CASE WHE
 INSERT INTO dq_results SELECT 'sec','earnings_transcripts','row_count', CASE WHEN n>=10 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10', CASE WHEN n>=10 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts', allow_moved_paths=true)) t;
 INSERT INTO dq_results SELECT 'sec','stock_prices','row_count', CASE WHEN n>=10000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10000', CASE WHEN n>=10000 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices', allow_moved_paths=true)) t;
 
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'beneficial_ownership'   AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'institutional_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'sec', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;
+
 -- ============================================================
 -- REPORT
 -- ============================================================

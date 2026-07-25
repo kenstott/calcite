@@ -68,6 +68,14 @@ dimension_values:
 # PARTITIONED TABLES
 # ============================================================================
 
+# Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
+# override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
+# rather than repeated per table so the schema's compaction policy is stated in exactly one place.
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
 partitionedTables:
 
   # ---------------------------------------------------------------------------
@@ -142,15 +150,6 @@ partitionedTables:
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.fedregister.FedRegisterBulkXmlDataProvider"
 
-    iceberg:
-      catalogType: hadoop
-      warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
-      batchPartitionColumns: [year, month]
-      incrementalKeys: [year, month]
-      overwritePartitions: true
-      runMaintenance: true
-      snapshotRetentionDays: 7
-
     materialize:
       format: iceberg
       # Partition the Iceberg table by the year/month fetch dimensions (added as columns by the
@@ -162,6 +161,19 @@ partitionedTables:
         columns: [year, month]
       output:
         pattern: "year={year}/month={month}/"
+      # Must stay nested under materialize: MaterializeConfig.fromMap reads the iceberg sub-map off
+      # the materialize map only, and EtlPipelineConfig hoists just comment/columnComments from the
+      # table level — a table-level `iceberg:` block is read by nothing and silently drops every
+      # setting below (warehouse path, incremental keys, overwrite, maintenance).
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
 
 # ============================================================================
 # CONSTRAINTS

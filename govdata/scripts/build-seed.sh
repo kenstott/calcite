@@ -94,13 +94,53 @@ fi
 # model-verify.sh connects jdbc:govdata:source=<schema> per schema, which forces GovDataDriver to
 # build the shared catalog + every Iceberg view + .conversions.json. Redirect the operating dir to
 # staging so we package a pristine catalog rather than the developer's working ~/.govdata.
-GOVDATA_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" "${VERIFY_ARGS[@]}"
+# --single-connection mounts EVERY schema on one root. Required here: an inter-schema view can only
+# be defined when both schemas are visible, so the default per-schema loop leaves those views out of
+# the catalog entirely (model-verify correctly reports them MISSING and moves on) — and they are the
+# most expensive ones to build cold, i.e. exactly what the seed exists to avoid.
+#
+# GOVDATA_VERIFY_DATA_DIR, not GOVDATA_DATA_DIR: model-verify.sh hard-overrides GOVDATA_DATA_DIR with
+# ${GOVDATA_VERIFY_DATA_DIR:-$HOME/.govdata-verify} to isolate itself from the ETL pool, so exporting
+# GOVDATA_DATA_DIR here had no effect — generation landed in ~/.govdata-verify and the catalog check
+# below could never find $CATALOG.
+GOVDATA_VERIFY_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" --single-connection "${VERIFY_ARGS[@]}"
 
 CATALOG="$STAGING/.duckdb/govdata.duckdb"
 if [[ ! -f "$CATALOG" ]]; then
     echo "ERROR: generation did not produce $CATALOG — check the model-verify output above." >&2
     exit 1
 fi
+
+# Fold any residual WAL into the catalog file, and prove it reopens cleanly, BEFORE packaging.
+#
+# DuckDBJdbcSchemaFactory already CHECKPOINTs after schema-init view setup, but views that
+# reference cross-schema tables are enqueued for DEFERRED creation and only materialize on first
+# getTable() — i.e. during model-verify's probing, AFTER that checkpoint. That DDL therefore lives
+# in govdata.duckdb.wal and is absorbed only by a clean JVM shutdown. Relying on that left the
+# Gradle task's `if (wal.exists()) throw` as the sole guarantee, which fails ~20 minutes into a run
+# and only at packaging time. Doing it here makes the invariant true rather than hoped-for, and
+# surfaces a torn catalog immediately.
+#
+# Idempotent: when model-verify exited cleanly there is nothing to fold and this is a no-op.
+# Opening the catalog also proves it is readable before we spend time zipping it.
+if ! command -v duckdb >/dev/null 2>&1; then
+    echo "ERROR: duckdb CLI not on PATH — needed to CHECKPOINT the staged catalog." >&2
+    echo "       Install: https://duckdb.org/docs/installation/" >&2
+    exit 1
+fi
+echo "=== build-seed: checkpointing staged catalog ==="
+if ! duckdb "$CATALOG" -c "CHECKPOINT;"; then
+    echo "ERROR: CHECKPOINT of $CATALOG failed — refusing to bundle a torn catalog." >&2
+    exit 1
+fi
+
+WAL="$CATALOG.wal"
+if [[ -f "$WAL" ]]; then
+    echo "ERROR: $WAL still present after CHECKPOINT — the catalog is still held open, or the" >&2
+    echo "       checkpoint did not complete. Refusing to bundle." >&2
+    exit 1
+fi
+echo "Catalog checkpointed, no WAL: $CATALOG"
 
 # --- Phase 2: PACKAGE via the Gradle task ----------------------------------------------------
 echo "=== build-seed: packaging seed zip ==="

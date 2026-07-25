@@ -104,6 +104,25 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * <p>Memoized for the JVM. Throws if the listing cannot be read — without the catalog we do not
    * know the latest vintage, and guessing would reintroduce the stall this method exists to prevent.
    */
+  /**
+   * Earliest TIGER vintage published under the flat per-entity layout this adapter builds URLs for
+   * ({@code TIGER<year>/PLACE/tl_<year>_<fips>_place.zip}). TIGER2009 and earlier use state-named
+   * subdirectories instead — verified against census.gov: {@code TIGER2009/29_MISSOURI/
+   * tl_2009_29_place.zip} returns 206 while the flat {@code TIGER2009/PLACE/tl_2009_29_place.zip}
+   * 404s. Those vintages therefore cannot be fetched with the flat template at all.
+   *
+   * <p>Reachable even though {@code GOVDATA_START_YEAR} is 2010: TIGER ships roughly a year after
+   * the vintage it describes, so the year dimension carries an intentional {@code dataLag: 1} and
+   * the requested vintage is one below the range start ({@code effective_year = year - dataLag},
+   * see {@code DimensionIterator}). That lag is correct — this floor exists only to stop the
+   * resulting range from reaching below the flat-layout era, not to compensate for it.
+   *
+   * <p>Gated for the same reason as {@link #latestPublishedVintage}: census.gov frequently stalls
+   * rather than 404s on a nonexistent path, so each doomed GET burns the full read timeout × retry
+   * budget instead of failing fast.
+   */
+  static final int EARLIEST_FLAT_LAYOUT_VINTAGE = 2010;
+
   static int latestPublishedVintage() throws IOException {
     int cached = cachedLatestVintage;
     if (cached != 0) {
@@ -1018,9 +1037,17 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    * Download ZIP Code Tabulation Areas (ZCTAs) shapefile for a specific year.
    */
   public File downloadZctasForYear(int year) throws IOException {
-    // ZCTA5 (5-digit ZCTAs) were used in 2010, ZCTA520 is used in later years
-    String zctaType = (year == 2010) ? "ZCTA5" : "ZCTA520";
-    String fileSuffix = (year == 2010) ? "zcta510" : "zcta520";
+    // ZCTA naming tracks the CENSUS VINTAGE, not a single cutover year: the 2010-census vintage
+    // (ZCTA5 dir, zcta510 file) is published for every year through 2019, and the 2020-census
+    // vintage (ZCTA520 dir, zcta520 file) starts at 2020. 2010 additionally nests under a /2010/
+    // subdir — see getTiger2010Subdir. Special-casing only year==2010 made 2012-2019 request
+    // ZCTA520/tl_<year>_us_zcta520.zip, which does not exist; census.gov often hangs rather than
+    // 404s on those paths, so each one burned the full 120s read timeout x4 retries. Verified
+    // against census.gov: 2012/2015/2019 ZCTA5+zcta510 -> 206, 2020 ZCTA520+zcta520 -> 206.
+    // Matches the urlRules already documented in geo-schema.yaml (which this code path does not
+    // consult — buildDownloadUrlFromSchema only understands baseUrl+filePattern).
+    String zctaType = (year <= 2019) ? "ZCTA5" : "ZCTA520";
+    String fileSuffix = (year <= 2019) ? "zcta510" : "zcta520";
     String filename = String.format("tl_%d_us_%s.zip", year, fileSuffix);
 
     // Try schema-driven URL first, fall back to hardcoded

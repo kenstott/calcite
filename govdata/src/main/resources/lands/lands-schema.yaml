@@ -173,7 +173,12 @@ partitionedTables:
         snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
-        compactionMinFiles: 1
+        # Must stay >= 2. At 1 a partition holding a single sub-10MB file (the steady state for
+        # these small reference tables) satisfies the threshold on every run, so compaction
+        # rewrites it under a fresh compacted_<uuid> name indefinitely — new snapshot each pass,
+        # superseded file orphaned for the retention window, and a new filename that defeats the
+        # R2 sync's size+modtime skip so the same rows re-upload every time.
+        compactionMinFiles: 5
         compactionTargetFileSizeBytes: 67108864
         overwritePartitions: true
 
@@ -1038,7 +1043,12 @@ partitionedTables:
         snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
-        compactionMinFiles: 1
+        # Must stay >= 2. At 1 a partition holding a single sub-10MB file (the steady state for
+        # these small reference tables) satisfies the threshold on every run, so compaction
+        # rewrites it under a fresh compacted_<uuid> name indefinitely — new snapshot each pass,
+        # superseded file orphaned for the retention window, and a new filename that defeats the
+        # R2 sync's size+modtime skip so the same rows re-upload every time.
+        compactionMinFiles: 5
         compactionTargetFileSizeBytes: 67108864
         overwritePartitions: true
 
@@ -1180,7 +1190,12 @@ partitionedTables:
         snapshotRetentionDays: 1
         catalogType: hadoop
         runCompaction: true
-        compactionMinFiles: 1
+        # Must stay >= 2. At 1 a partition holding a single sub-10MB file (the steady state for
+        # these small reference tables) satisfies the threshold on every run, so compaction
+        # rewrites it under a fresh compacted_<uuid> name indefinitely — new snapshot each pass,
+        # superseded file orphaned for the retention window, and a new filename that defeats the
+        # R2 sync's size+modtime skip so the same rows re-upload every time.
+        compactionMinFiles: 5
         compactionTargetFileSizeBytes: 67108864
         overwritePartitions: true
 

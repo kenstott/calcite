@@ -123,6 +123,19 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       return new ArrayList<Map<String, Object>>().iterator();
     }
 
+    // Lower bound, same rationale as the upper gate and compared against the same VINTAGE value:
+    // TIGER2009 and earlier publish under state-named subdirectories (TIGER2009/29_MISSOURI/...)
+    // rather than the flat per-entity layout these URLs are built for, so the request can never
+    // succeed. Because TIGER lags publication by ~a year (dataLag: 1), a range whose publish year
+    // starts at 2010 asks for vintage 2009 and hits this. Without the gate each such request
+    // stalled instead of 404ing — 37 hard-failed batches and 222 skipped in one geo run.
+    if (requestedVintage < TigerDataDownloader.EARLIEST_FLAT_LAYOUT_VINTAGE) {
+      LOGGER.info("TIGER catalog gate: skipping {} year={} — precedes earliest flat-layout vintage "
+          + "{} (older vintages nest under state-named subdirectories, so the flat URL cannot "
+          + "resolve)", tableName, year, TigerDataDownloader.EARLIEST_FLAT_LAYOUT_VINTAGE);
+      return new ArrayList<Map<String, Object>>().iterator();
+    }
+
     // Build download URL based on table type
     String url = buildDownloadUrl(tableName, year, stateFips);
     if (url == null) {
@@ -387,17 +400,22 @@ public class TigerDataProvider implements StorageAwareDataProvider {
           TIGER_BASE_URL, tigerPath, subdir2010, year, cbsaSuffix);
 
     case "congressional_districts":
-      if (stateFips == null) {
-        return null;
-      }
       // Census labels each TIGER vintage's CD files by the Congress number it actually ships, which
       // is NOT the in-session congress for that calendar year (TIGER2024 ships cd119, not cd118).
-      // Computing the number from the year produced 404s on every state; discover the real suffix
-      // from the CD directory listing (the listing IS the catalog).
+      // Computing the number from the year produced 404s; discover the real suffix from the CD
+      // directory listing (the listing IS the catalog).
+      //
+      // CD is published as ONE NATIONAL file per vintage (tl_<year>_us_cd<NNN>.zip), never per
+      // state — verified against census.gov for 2013/2017/2021, where tl_<year>_<fips>_cd<NNN>.zip
+      // is absent while the _us_ form returns 206. Building a per-state URL therefore requested 51
+      // nonexistent files per year; census.gov stalls rather than 404s on those, so each burned the
+      // full 120s read timeout x4 retries and the table never ingested. The state_fips fan-out was
+      // removed from this table's dimensions to match (see geo-schema.yaml); state remains a
+      // regular column read from the shapefile. Mirrors the cbsa case above.
       String cdDirUrl = String.format("%s/%s/CD%s/", TIGER_BASE_URL, tigerPath, subdir2010);
       String cdSuffix = discoverCdSuffix(cdDirUrl);
-      return String.format("%s/%s/CD%s/tl_%s_%s_%s.zip",
-          TIGER_BASE_URL, tigerPath, subdir2010, year, stateFips, cdSuffix);
+      return String.format("%s/%s/CD%s/tl_%s_us_%s.zip",
+          TIGER_BASE_URL, tigerPath, subdir2010, year, cdSuffix);
 
     case "school_districts":
       if (stateFips == null) {

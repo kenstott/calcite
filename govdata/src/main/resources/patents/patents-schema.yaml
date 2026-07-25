@@ -168,6 +168,14 @@ dimension_values:
 # PARTITIONED TABLES
 # ============================================================================
 
+# Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
+# override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
+# rather than repeated per table so the schema's compaction policy is stated in exactly one place.
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
 partitionedTables:
 
   # ---------------------------------------------------------------------------
@@ -239,6 +247,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: patent_grants
         runMaintenance: true
@@ -313,6 +322,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_assignees
         runMaintenance: true
@@ -382,6 +392,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_inventors
         runMaintenance: true
@@ -451,6 +462,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_cpc_classes
         runMaintenance: true
@@ -498,6 +510,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_abstracts
         runMaintenance: true
@@ -549,6 +562,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_applications
         runMaintenance: true
@@ -601,6 +615,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_figures
         runMaintenance: true
@@ -668,6 +683,7 @@ partitionedTables:
       partition:
         columns: [type, quarter]
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
         tableName: patent_locations
         runMaintenance: true
@@ -739,6 +755,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: patent_claims
         runMaintenance: true
@@ -794,6 +811,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: patent_summaries
         runMaintenance: true
@@ -945,6 +963,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_case_file
         runMaintenance: true
@@ -998,6 +1017,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_owner
         runMaintenance: true
@@ -1043,6 +1063,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_classification
         runMaintenance: true
@@ -1080,6 +1101,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_intl_class
         runMaintenance: true
@@ -1120,6 +1142,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_statement
         runMaintenance: true

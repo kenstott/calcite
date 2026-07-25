@@ -18,6 +18,14 @@ comment: >
   (free API key required). Complements census.acs_education (population attainment)
   — this schema describes the institutions themselves.
 
+# Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
+# override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
+# rather than repeated per table so the schema's compaction policy is stated in exactly one place.
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
 partitionedTables:
 
   # ==========================================================================
@@ -203,6 +211,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -410,6 +419,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -530,6 +540,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -678,6 +689,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -901,6 +913,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -1107,6 +1120,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -1326,6 +1340,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -1576,6 +1591,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -1693,6 +1709,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -1887,6 +1904,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -2021,6 +2039,7 @@ partitionedTables:
       options:
         compression: snappy
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1

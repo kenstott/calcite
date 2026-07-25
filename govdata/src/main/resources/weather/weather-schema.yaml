@@ -1044,7 +1044,7 @@ partitionedTables:
       output:
         pattern: "type=drought_weekly/year=*/state_abbr=*/"
       partition:
-        columns: [type, year, state_abbr]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: drought_monitor_weekly
@@ -1315,7 +1315,7 @@ partitionedTables:
       output:
         pattern: "type=climate_normals/state_fips=*/month=*/"
       partition:
-        columns: [type, state_fips, month]
+        columns: [type]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: climate_normals_monthly

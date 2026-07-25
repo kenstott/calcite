@@ -211,6 +211,14 @@ materializationDefaults:
 # TIGER BOUNDARY TABLES
 # ============================================================================
 
+# Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
+# override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
+# rather than repeated per table so the schema's compaction policy is stated in exactly one place.
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
 partitionedTables:
 
   # --------------------------------------------------------------------------
@@ -268,6 +276,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: states
         runMaintenance: true
@@ -335,6 +344,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_ref
         catalogType: hadoop
@@ -389,6 +399,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: census_regions
         catalogType: hadoop
@@ -443,6 +454,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: census_divisions
         catalogType: hadoop
@@ -513,6 +525,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zcta_ref
         catalogType: hadoop
@@ -571,6 +584,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: counties
         runMaintenance: true
@@ -635,6 +649,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: places
         runMaintenance: true
@@ -711,6 +726,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zctas
         runMaintenance: true
@@ -774,6 +790,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: census_tracts
         runMaintenance: true
@@ -837,6 +854,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: block_groups
         runMaintenance: true
@@ -901,6 +919,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: cbsa
         runMaintenance: true
@@ -945,13 +964,21 @@ partitionedTables:
         start: "2023"
         end: current
         dataLag: 2
-      state_fips: *all_state_fips
+      # No state_fips fan-out: Census publishes CD as ONE NATIONAL file per vintage
+      # (tl_<year>_us_cd<NNN>.zip), never per state — verified 2013/2017/2021, where the
+      # per-state name is absent while the _us_ name returns 206. Fanning out by state
+      # requested 51 nonexistent files per year, and census.gov stalls rather than 404s on
+      # those, so each burned the full read timeout x4 retries. state_fips remains a declared
+      # COLUMN below, read from the shapefile, so per-district state is still available.
+      # Mirrors cbsa, which is national and already dimensioned [type, year].
 
     # TIGER tables use TigerDataProvider for binary shapefile handling
-    # Note: cd118 = 118th Congress (2023-2024), cd119 = 119th Congress (2025-2026)
+    # Note: the cd<NNN> suffix is the Congress number the vintage actually ships (TIGER2024
+    # ships cd119, not the in-session cd118), so TigerDataProvider.discoverCdSuffix reads it
+    # from the CD/ directory listing rather than deriving it from the year.
     source:
       type: http
-      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/tl_{year}_{state_fips}_cd118.zip"
+      url: "https://www2.census.gov/geo/tiger/TIGER{year}/CD/tl_{year}_us_cd118.zip"
       method: GET
       response:
         format: json
@@ -964,8 +991,9 @@ partitionedTables:
       output:
         pattern: "type=boundary/year=*/state_fips=*/"
       partition:
-        columns: [type, year, state_fips]
+        columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: congressional_districts
         runMaintenance: true
@@ -1032,6 +1060,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: school_districts
         runMaintenance: true
@@ -1096,6 +1125,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_legislative_lower
         runMaintenance: true
@@ -1157,6 +1187,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: state_legislative_upper
         runMaintenance: true
@@ -1224,6 +1255,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: county_subdivisions
         runMaintenance: true
@@ -1291,6 +1323,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: tribal_areas
         runMaintenance: true
@@ -1382,6 +1415,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: urban_areas
         runMaintenance: true
@@ -1472,6 +1506,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: pumas
         runMaintenance: true
@@ -1559,6 +1594,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: voting_districts
         runMaintenance: true
@@ -1634,6 +1670,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_county_crosswalk
         runMaintenance: true
@@ -1708,6 +1745,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_cbsa_crosswalk
         runMaintenance: true
@@ -1782,6 +1820,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: tract_zip_crosswalk
         runMaintenance: true
@@ -1857,6 +1896,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_tract_crosswalk
         runMaintenance: true
@@ -1931,6 +1971,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: zip_cd_crosswalk
         runMaintenance: true
@@ -2002,6 +2043,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: county_zip_crosswalk
         runMaintenance: true
@@ -2076,6 +2118,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: cd_zip_crosswalk
         runMaintenance: true
@@ -2153,6 +2196,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: rural_urban_continuum
         runMaintenance: true
@@ -2240,6 +2284,7 @@ partitionedTables:
       partition:
         columns: [type, year]
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: ruca_codes
         runMaintenance: true
@@ -2315,6 +2360,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_counties
         runMaintenance: true
@@ -2400,6 +2446,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_places
         runMaintenance: true
@@ -2476,6 +2523,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: gazetteer_zctas
         runMaintenance: true
@@ -2542,6 +2590,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc2
         runMaintenance: true
@@ -2609,6 +2658,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc4
         runMaintenance: true
@@ -2676,6 +2726,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc8
         runMaintenance: true
@@ -2743,6 +2794,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        <<: *compaction_defaults
         warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
         tableName: watersheds_huc12
         runMaintenance: true

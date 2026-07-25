@@ -4186,7 +4186,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728  # 128MB
-        compactionMinFiles: 10
+        compactionMinFiles: 5
         compactionSmallFileSizeBytes: 10485760  # 10MB
 
   # --- ITA DATA ---
