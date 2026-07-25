@@ -103,6 +103,15 @@ public class PartitionedTableConfig {
   }
 
   /**
+   * Whether this table materializes to Iceberg format. Iceberg's manifest-based file pruning
+   * (per-file partition values and column stats) makes the alternate-partition physical-layout
+   * optimization redundant, so that feature is disabled for Iceberg-format tables.
+   */
+  public boolean isIcebergFormat() {
+    return materialize != null && "iceberg".equals(materialize.get("format"));
+  }
+
+  /**
    * Configuration for partition scheme.
    */
   public static class PartitionConfig {

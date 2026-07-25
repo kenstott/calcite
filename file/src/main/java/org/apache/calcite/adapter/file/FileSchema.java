@@ -3979,7 +3979,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       try {
         PartitionedTableConfig config = PartitionedTableConfig.fromMap(partTableConfig);
         if (config.getAlternatePartitions() != null && !config.getAlternatePartitions().isEmpty()) {
-          tablesWithAlternates.add(config);
+          if (config.isIcebergFormat()) {
+            // Alternate partitions are a physical-layout optimization Iceberg supersedes via
+            // manifest pruning; do not materialize a parallel layout for an Iceberg source.
+            LOGGER.debug("Skipping alternate_partitions for '{}' - source uses format=iceberg",
+                config.getName());
+          } else {
+            tablesWithAlternates.add(config);
+          }
         }
       } catch (Exception e) {
         LOGGER.warn("Error parsing partitioned table config: {}", e.getMessage());
@@ -4531,11 +4538,28 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       return;
     }
 
+    // Iceberg supersedes the alternate-partition physical-layout optimization via manifest
+    // pruning, so the whole feature is ignored for an Iceberg source — no alternate tables,
+    // no staging I/O.
+    if (sourceConfig.isIcebergFormat()) {
+      LOGGER.debug("Ignoring alternate_partitions for '{}' - source uses format=iceberg",
+          sourceConfig.getName());
+      return;
+    }
+
     for (PartitionedTableConfig.AlternatePartitionConfig altConfig
         : sourceConfig.getAlternatePartitions()) {
       String altName = altConfig.getName();
       if (alreadyProcessed.contains(altName)) {
         LOGGER.debug("Skipping alternate partition '{}' - already processed", altName);
+        continue;
+      }
+
+      // A disabled alternate partition must do zero I/O. AlternatePartitionMaterializer
+      // already skips these; without the same guard here, findMatchingFiles below walks the
+      // (shared) baseDirectory and lists sibling schemas' raw partitions.
+      if (!altConfig.isEnabled()) {
+        LOGGER.debug("Skipping disabled alternate partition '{}'", altName);
         continue;
       }
 
@@ -4589,15 +4613,24 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   private void collectFilesAtDepth(StorageProvider storageProvider, String path, int depth,
-      List<StorageProvider.FileEntry> result) {
+      String[] patternParts, List<StorageProvider.FileEntry> result) {
     try {
       List<StorageProvider.FileEntry> entries = storageProvider.listFiles(path, false);
       if (depth == 0) {
         result.addAll(entries);
       } else {
+        // Descend only into directories whose name matches the corresponding pattern
+        // segment. This anchors the bounded walk to the glob's own prefix (e.g.
+        // "type=x/frequency=*/...") so it never crawls sibling directories — critical when
+        // baseDirectory is a shared bucket root holding every schema's prefixes side by side.
+        int segmentIndex = patternParts.length - 1 - depth;
+        PathMatcher segmentMatcher =
+            FileSystems.getDefault().getPathMatcher("glob:" + patternParts[segmentIndex]);
         for (StorageProvider.FileEntry entry : entries) {
-          if (entry.isDirectory()) {
-            collectFilesAtDepth(storageProvider, entry.getPath(), depth - 1, result);
+          // Paths.get here only builds an in-memory Path for glob PathMatcher.matches();
+          // no filesystem access — same idiom as the pattern filter below.
+          if (entry.isDirectory() && segmentMatcher.matches(Paths.get(entry.getName()))) {
+            collectFilesAtDepth(storageProvider, entry.getPath(), depth - 1, patternParts, result);
           }
         }
       }
@@ -4678,7 +4711,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         String[] patternParts = pattern.split("/");
         int dirDepth = patternParts.length - 1;
         allFiles = new ArrayList<>();
-        collectFilesAtDepth(storageProvider, searchPath, dirDepth, allFiles);
+        collectFilesAtDepth(storageProvider, searchPath, dirDepth, patternParts, allFiles);
       } else {
         allFiles = storageProvider.listFiles(searchPath, hasDoubleWildcard);
       }
