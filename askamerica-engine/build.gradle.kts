@@ -417,6 +417,7 @@ tasks.register<Exec>("jpackage") {
 
     commandLine(
         jpackageTool,
+        "--verbose",
         "--type", packageType,
         "--name", "AskAmerica MCP",
         "--app-version", version,
@@ -435,10 +436,13 @@ tasks.register<Exec>("jpackage") {
         // (A finish-page overrides.wxi customization was tried but is structurally
         // incompatible with jpackage 21's WiX layout — dropped; re-add as its own task.)
         // Windows: Start-menu + desktop shortcut, plus a --resource-dir override of
-        // jpackage's main.wxs that hooks JpUI's ExitDialog to launch the setup wizard
-        // on Finish (Product-scope; overrides.wxi is fragment-scope and can't reach it).
+        // jpackage's main.wxs that hooks the ExitDialog to launch the setup wizard on
+        // Finish (Product-scope; overrides.wxi is fragment-scope and can't reach it).
+        // --win-dir-chooser switches jpackage to the full WixUI dialog set (default
+        // JpUI is empty — no finish page), which is what provides ExitDialog.
         *(if (os.contains("win"))
             arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut",
+                    "--win-dir-chooser",
                     "--resource-dir", winResourceDir)
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
