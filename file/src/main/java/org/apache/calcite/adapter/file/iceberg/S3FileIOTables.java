@@ -55,9 +55,14 @@ public final class S3FileIOTables {
   public static Table load(String tablePath, Map<String, String> s3aConfig) {
     S3FileIO io = newIO(s3aConfig);
     String root = stripTrailingSlash(tablePath);
+    // version-hint is MUTABLE — read it live, uncached, so snapshot selection is always current.
     String version = readVersionHint(io, root);
     String metadataLocation = root + "/metadata/v" + version + ".metadata.json";
-    StaticTableOperations ops = new StaticTableOperations(metadataLocation, io);
+    // v{N}.metadata.json is immutable, so it is safe to serve from the local cache. This is the
+    // read that serving Calcite's metadata triggers per table — StaticTableOperations fetches it
+    // lazily on first schema()/snapshot() access.
+    StaticTableOperations ops =
+        new StaticTableOperations(metadataLocation, IcebergMetadataCache.wrap(io));
     return new BaseTable(ops, tableName(root));
   }
 

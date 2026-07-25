@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Deferred DuckDB view registration with retry-until-convergence.
+ * Deferred DuckDB view registration.
  *
  * <p>Views defined in schema YAMLs may reference tables or other views that
  * do not yet exist when the schema is first initialized (e.g. cross-schema
@@ -31,8 +31,21 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * definitions during schema initialization and flushes them lazily on the
  * first query, by which point all schemas and their base tables are registered.
  *
- * <p>The flush loop retries failed views until either all succeed or a full
- * round produces no progress (indicating a genuine error or circular dependency).
+ * <p>Views are CREATEd but never proactively validated. DuckDB defers name resolution at
+ * CREATE time, so {@code CREATE VIEW} is pure local DDL that never contacts the object store
+ * and succeeds for any well-formed statement — including view-on-view chains, in any order.
+ * Proving a view actually resolves requires querying it, and for an {@code iceberg_scan} view
+ * that is an object-store round trip (~29ms against a local MinIO, more over a WAN).
+ *
+ * <p>Validating every deferred view was the single largest component of connect time: N round
+ * trips to answer a question about tables the caller had not asked for. It is not done at all
+ * now, in either the metadata path or the query path — relocating it merely moved the cost
+ * from connect into whichever path ran first.
+ *
+ * <p>Consequence: a view whose references cannot be resolved stays in the catalog and fails
+ * when queried, carrying DuckDB's own error, instead of being dropped at connect and silently
+ * missing from metadata. A view that vanishes is harder to diagnose than one that explains
+ * itself on use.
  */
 public final class DuckDBPendingViews {
 
@@ -104,12 +117,13 @@ public final class DuckDBPendingViews {
   }
 
   /**
-   * Flushes all pending views for the given database file using retry-until-convergence.
+   * Creates all pending views for the given database file, in a single pass.
    *
-   * <p>Each retry round creates as many views as possible. Views that fail due to a
-   * missing dependency (table or view not yet created) are retried in the next round.
-   * The loop terminates when all views succeed or when a full round makes no progress
-   * (circular dependency or genuine SQL error).
+   * <p>One pass suffices: DuckDB resolves names lazily, so {@code CREATE VIEW} succeeds even
+   * when the view references a table or another view that does not exist yet. The previous
+   * retry-until-convergence loop existed only because creation was fused with a validating
+   * SELECT, which genuinely does depend on creation order; with validation gone there is
+   * nothing left for a second pass to resolve.
    *
    * <p>Safe to call from multiple threads — idempotent after first flush.
    */
@@ -125,36 +139,23 @@ public final class DuckDBPendingViews {
         List<PendingView> pending =
             new ArrayList<>(PENDING.getOrDefault(dbPath, new CopyOnWriteArrayList<>()));
 
-        LOGGER.info("Flushing {} deferred SQL views for database '{}'", pending.size(), dbPath);
+        LOGGER.info("Creating {} deferred SQL views for database '{}'", pending.size(), dbPath);
 
-        // Fixpoint: each pass creates as many views as possible; ANY view that fails (its
-        // referenced table/view may simply not be created yet this pass) is retried in the next
-        // pass. Loop until a full pass resolves nothing new — at which point the remainder is
-        // genuinely unresolvable (a missing table/view, a missing column, or a circular reference),
-        // which is a view-design problem, not something more retries can fix.
-        while (!pending.isEmpty()) {
-          List<PendingView> failed = new ArrayList<>();
-          for (PendingView pv : pending) {
-            SQLException err = tryCreateView(conn, pv);
-            if (err == null) {
-              LOGGER.info("✅ Created deferred view: {}.{}", pv.duckdbSchema, pv.viewName);
-            } else {
-              pv.lastError = err;
-              failed.add(pv);
-            }
+        for (PendingView pv : pending) {
+          SQLException err = createView(conn, pv);
+          if (err == null) {
+            LOGGER.debug("Created deferred view: {}.{}", pv.duckdbSchema, pv.viewName);
+          } else {
+            // A CREATE failure is a malformed statement, not an unresolved reference — retrying
+            // cannot help.
+            pv.lastError = err;
+            LOGGER.error("Cannot create view {}.{} — {}. SQL: {}",
+                pv.duckdbSchema, pv.viewName, classifyError(err),
+                pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
           }
-          if (failed.size() == pending.size()) {
-            for (PendingView pv : failed) {
-              LOGGER.error("Cannot create view {}.{} — {}. SQL: {}",
-                  pv.duckdbSchema, pv.viewName, classifyError(pv.lastError),
-                  pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
-            }
-            break;
-          }
-          pending = failed;
         }
 
-        LOGGER.info("Deferred view flush complete for database '{}'", dbPath);
+        LOGGER.info("Deferred view creation complete for database '{}'", dbPath);
       } finally {
         FLUSHED.add(dbPath);
         PENDING.remove(dbPath);
@@ -173,30 +174,16 @@ public final class DuckDBPendingViews {
   }
 
   /**
-   * Creates and validates one deferred view. Returns null on success; otherwise returns the error
-   * and leaves nothing half-created. DuckDB defers name resolution at CREATE time, so a view with
-   * an unresolved reference is created but fails the validating SELECT — it is dropped here so it
-   * never appears in JDBC metadata and so the next pass can retry it cleanly.
+   * Creates one deferred view. Returns null on success, else the error. Local DDL only — DuckDB
+   * defers name resolution, so this succeeds even when the view's references do not exist yet.
    */
-  private static SQLException tryCreateView(Connection conn, PendingView pv) {
+  private static SQLException createView(Connection conn, PendingView pv) {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute(String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
           pv.duckdbSchema, pv.viewName, pv.viewSql));
+      return null;
     } catch (SQLException createEx) {
       return createEx;
-    }
-    try (Statement validateStmt = conn.createStatement()) {
-      validateStmt.execute(String.format("SELECT * FROM \"%s\".\"%s\" LIMIT 0",
-          pv.duckdbSchema, pv.viewName));
-      return null;
-    } catch (SQLException validateEx) {
-      try (Statement dropStmt = conn.createStatement()) {
-        dropStmt.execute(String.format("DROP VIEW IF EXISTS \"%s\".\"%s\"",
-            pv.duckdbSchema, pv.viewName));
-      } catch (SQLException ignored) {
-        // best-effort drop
-      }
-      return validateEx;
     }
   }
 

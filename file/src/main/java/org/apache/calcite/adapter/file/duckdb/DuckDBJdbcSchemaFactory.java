@@ -1086,15 +1086,25 @@ public class DuckDBJdbcSchemaFactory {
     int removed = 0;
     for (File f : entries) {
       String name = f.getName();
-      if (name.contains(".metadata.json") || name.contains("version-hint.text")
-          || name.contains(".avro")) {
+      // Purge ONLY the mutable pointer. version-hint.text is overwritten in place on every
+      // commit, so a cached copy pins an old snapshot and silently serves stale data — that is
+      // the hazard this purge exists for.
+      //
+      // v{N}.metadata.json and the manifest/snapshot .avro objects are immutable: a commit
+      // writes v{N+1} and new manifest files, never rewriting an existing one (see
+      // S3FileIOTableOperations: "read version N, write v{N+1}.metadata.json, then overwrite the
+      // version hint"; rollback likewise commits forward via manageSnapshots()). With the hint
+      // read live, a table that has moved on resolves to a filename that was never cached and
+      // misses naturally. Deleting those entries therefore protects nothing and throws away the
+      // only content worth caching — which is why the cache was always empty of metadata.
+      if (name.contains("version-hint.text")) {
         if (f.delete()) {
           removed++;
         }
       }
     }
     if (removed > 0) {
-      LOGGER.info("cache_httpfs: purged {} stale Iceberg metadata entries from {}",
+      LOGGER.info("cache_httpfs: purged {} stale Iceberg version-hint entries from {}",
           removed, cacheDir.getAbsolutePath());
     }
   }

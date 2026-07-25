@@ -65,7 +65,16 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTable.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private final Table icebergTable;
+  /**
+   * The loaded Iceberg table, or null until first needed.
+   *
+   * <p>Loading reads {@code metadata/version-hint.text} and {@code metadata/v{N}.metadata.json}
+   * from the object store, so it is a network round trip per table. Doing it in the constructor
+   * meant mounting a schema of N tables paid N round trips before any query named a single one
+   * — the dominant cost of connecting to a large model. Access it through {@link #icebergTable()},
+   * never directly, so the load stays on the first caller that genuinely needs table state.
+   */
+  private @Nullable Table icebergTable;
   private final @Nullable Long snapshotId;
   private final @Nullable String asOfTimestamp;
   private final Source source;
@@ -90,8 +99,13 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
         ? ((Number) config.get("snapshotId")).longValue()
         : null;
     this.asOfTimestamp = (String) config.get("asOfTimestamp");
+    // The table itself is NOT loaded here — see the icebergTable field and icebergTable().
+  }
 
-    // Initialize the Iceberg table
+  /**
+   * Loads the Iceberg table from the object store or filesystem. Called once, lazily.
+   */
+  private Table loadIcebergTable() {
     String tablePath = source.path();
     @SuppressWarnings("unchecked")
     Map<String, String> hadoopConfig = (Map<String, String>) config.get("hadoopConfig");
@@ -104,7 +118,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
       // avoids the hadoop S3AFileSystem (AWS SDK v1) entirely — S3FileIO accepts the
       // s3a:// paths stored in metadata written by the HadoopFileIO ETL writer, so the
       // read is unchanged.
-      this.icebergTable = S3FileIOTables.load(tablePath, hadoopConfig);
+      return S3FileIOTables.load(tablePath, hadoopConfig);
     } else {
       // Local filesystem / HDFS: keep the HadoopTables loader (uses hadoop-common only).
       Configuration hadoopConf = new Configuration();
@@ -118,8 +132,21 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
         }
       }
       HadoopTables tables = new HadoopTables(hadoopConf);
-      this.icebergTable = tables.load(tablePath);
+      return tables.load(tablePath);
     }
+  }
+
+  /**
+   * Returns the Iceberg table, loading it on first use.
+   *
+   * <p>Synchronized rather than volatile-double-checked: the load is a network round trip, so
+   * contention on this monitor is irrelevant next to doing the work twice.
+   */
+  private synchronized Table icebergTable() {
+    if (icebergTable == null) {
+      icebergTable = loadIcebergTable();
+    }
+    return icebergTable;
   }
 
   /**
@@ -152,7 +179,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     final List<String> fieldNames = new ArrayList<>();
     final List<RelDataType> fieldTypes = new ArrayList<>();
 
-    Schema icebergSchema = icebergTable.schema();
+    Schema icebergSchema = icebergTable().schema();
     for (Types.NestedField field : icebergSchema.columns()) {
       fieldNames.add(field.name());
       // Honor Iceberg nullability: optional→nullable, required→NOT NULL.
@@ -232,7 +259,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
         try {
           // Use simplified IcebergEnumerator for MVP
           return new IcebergEnumerator(
-              icebergTable,
+              icebergTable(),
               snapshotId,
               asOfTimestamp,
               cancelFlag);
@@ -258,7 +285,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     }
 
     try {
-      Snapshot snapshot = icebergTable.currentSnapshot();
+      Snapshot snapshot = icebergTable().currentSnapshot();
       if (snapshot == null) {
         // Empty table - no snapshots yet
         LOGGER.debug("Iceberg table has no snapshot, returning 0 row count");
@@ -269,7 +296,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
       // Sum record counts from all data files
       long totalRecords = 0;
       try (CloseableIterable<FileScanTask> fileScanTasks =
-               icebergTable.newScan().planFiles()) {
+               icebergTable().newScan().planFiles()) {
         for (FileScanTask task : fileScanTasks) {
           totalRecords += task.file().recordCount();
         }
@@ -292,7 +319,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
           : Statistics.UNKNOWN;
     }
     List<String> columnNames = new ArrayList<>();
-    for (Types.NestedField field : icebergTable.schema().columns()) {
+    for (Types.NestedField field : icebergTable().schema().columns()) {
       columnNames.add(field.name());
     }
     java.util.Map<String, Object> tableConfig = new java.util.LinkedHashMap<>();
@@ -307,7 +334,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
    * @return The Iceberg table
    */
   public Table getIcebergTable() {
-    return icebergTable;
+    return icebergTable();
   }
 
   /**
@@ -344,7 +371,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
    * @return Table comment, or null if not available
    */
   @Override public @Nullable String getTableComment() {
-    return icebergTable.properties().get("comment");
+    return icebergTable().properties().get("comment");
   }
 
   /**
@@ -365,7 +392,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     }
 
     // First try to get from Iceberg schema field doc
-    Schema schema = icebergTable.schema();
+    Schema schema = icebergTable().schema();
     for (Types.NestedField field : schema.columns()) {
       if (field.name().equalsIgnoreCase(columnName)) {
         String doc = field.doc();
@@ -404,7 +431,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
       return cachedColumnComments;
     }
 
-    String json = icebergTable.properties().get("column.comments");
+    String json = icebergTable().properties().get("column.comments");
     if (json == null || json.isEmpty()) {
       cachedColumnComments = Collections.emptyMap();
       return cachedColumnComments;
