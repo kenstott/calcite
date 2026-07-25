@@ -406,7 +406,6 @@ tasks.register<Exec>("jpackage") {
         engineVersion
     }
     val macResourceDir = project.file("src/packaging/mac").absolutePath
-    val winResourceDir = project.file("src/packaging/windows").absolutePath
 
     if (isMac) {
         dependsOn("jlinkRuntime")
@@ -414,7 +413,6 @@ tasks.register<Exec>("jpackage") {
 
     commandLine(
         jpackageTool,
-        "--verbose",
         "--type", packageType,
         "--name", "AskAmerica MCP",
         "--app-version", version,
@@ -426,15 +424,13 @@ tasks.register<Exec>("jpackage") {
         "--dest", jpackageDirFile.absolutePath,
         "--java-options", "-Xms256m -Xmx2g",
         "--java-options", "-Dfile.encoding=UTF-8",
-        // Windows: without these the MSI installs silently with no way to launch
-        // the setup wizard. Start-menu entry + optional desktop shortcut. The
-        // resource-dir supplies overrides.wxi, which adds a finish-page message and
-        // a "launch now" checkbox so the user is told to run the app (which collects
-        // the API key and writes the Claude Desktop config) rather than being left
-        // at a silent "Finish" with nothing configured.
+        // Windows: without these the MSI installs silently with no way to launch the
+        // setup wizard. These add a Start-menu entry (+ desktop shortcut) so the user
+        // can open "AskAmerica MCP", which shows SetupWindow to enter the API key.
+        // (A finish-page overrides.wxi customization was tried but is structurally
+        // incompatible with jpackage 21's WiX layout — dropped; re-add as its own task.)
         *(if (os.contains("win"))
-            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut",
-                    "--resource-dir", winResourceDir)
+            arrayOf("--win-menu", "--win-menu-group", "AskAmerica", "--win-shortcut")
         else emptyArray()),
         // Linux: add an application-menu entry for the setup wizard.
         *(if (!isMac && !os.contains("win"))
