@@ -70,21 +70,25 @@ public final class FileAdapterFunctions {
     while (root.getParentSchema() != null) {
       root = root.getParentSchema();
     }
-    // registerStandardFunctions runs once per schema created; register only once
-    // per root.
-    if (!root.getFunctions("COSINE_SIMILARITY").isEmpty()) {
-      return;
-    }
-    try {
-      SimilarityFunctions.registerFunctions(root);
-    } catch (Exception e) {
-      LOGGER.warn("Failed to register vector/semantic similarity functions: {}", e.getMessage());
+    // registerStandardFunctions runs once per schema created; each family registers
+    // once per root, keyed on its OWN marker function so they stay independent. The
+    // similarity family registers unconditionally while the DuckDB stats register only
+    // on the DuckDB engine — so they must NOT share a guard: otherwise a non-DuckDB (or
+    // earlier) connection that primes similarity first permanently suppresses the stats
+    // for a later DuckDB schema on the same root (e.g. a multi-schema connection opened
+    // before a single-schema query).
+    if (root.getFunctions("COSINE_SIMILARITY").isEmpty()) {
+      try {
+        SimilarityFunctions.registerFunctions(root);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to register vector/semantic similarity functions: {}", e.getMessage());
+      }
     }
     // DuckDB-native statistical aggregates that Calcite core lacks. DuckDB engine ONLY:
     // they are declarations that push down to DuckDB and have no implementation on the
     // other file-adapter engines, so registering them elsewhere would only offer a
     // function that always fails at execution.
-    if (duckDbEngine) {
+    if (duckDbEngine && root.getFunctions("AGG_CORR").isEmpty()) {
       try {
         registerDuckDBStatsAggregates(root);
       } catch (Exception e) {

@@ -231,7 +231,16 @@ public class McpServer {
             + "When exploring or testing a query add FETCH FIRST N ROWS ONLY. "
             + "For analytical or aggregation queries omit the row limit so all "
             + "matching rows are processed. The limit parameter caps the rows "
-            + "returned to the client (default 500, max 5000).");
+            + "returned to the client (default 500, max 5000). "
+            + "STATISTICS RUN IN SQL — push analysis into the query rather than pulling rows "
+            + "to compute by hand. Aggregates: correlation corr(y,x)/covar_pop/covar_samp; "
+            + "regression regr_slope/regr_intercept/regr_r2/regr_count/regr_avgx/regr_avgy/"
+            + "regr_sxy(y,x); distribution median/quantile_cont/quantile_disc/mode/stddev_samp/"
+            + "var_samp; shape skewness/kurtosis/mad; windows lag()/lead() for lagged and "
+            + "cross-correlation analysis. Include COUNT(*) AS n with a corr/regr so significance "
+            + "can be judged; correlation is not causation. For cross-dataset relations use "
+            + "fetch_aligned_series to align series on a shared date grain or FIPS key, and "
+            + "resolve_geo to map place names to FIPS before joining.");
         return result(id, body);
     }
 
@@ -294,7 +303,10 @@ public class McpServer {
             + "FROM fec.individual_contributions "
             + "WHERE \"year\" = '2024' AND memo_cd <> 'X' "
             + "GROUP BY \"year\", \"type\". "
-            + "Add FETCH FIRST N ROWS ONLY when exploring; omit for aggregations."));
+            + "Add FETCH FIRST N ROWS ONLY when exploring; omit for aggregations. "
+            + "Statistical aggregates run in-engine — corr(y,x), regr_slope/regr_intercept/"
+            + "regr_r2(y,x), median(x), quantile_cont(x,p), stddev_samp(x), skewness(x) — so "
+            + "push analysis into the SQL instead of computing over returned rows."));
         queryProps.set(
             "limit", prop("integer",
             "Max rows to return (default 500, max 5000)."));
@@ -302,6 +314,47 @@ public class McpServer {
             tool("query",
             "Execute SQL against US government data. Returns a JSON array of row objects.",
             schema(queryProps, new String[]{"sql"})));
+
+        ObjectNode resolveProps = MAPPER.createObjectNode();
+        resolveProps.set("term", prop("string",
+            "Place text or code: a name ('California'), abbreviation ('CA'), 2-digit state FIPS "
+            + "('06'), 5-digit county FIPS ('06037'), or ZCTA ('90012')."));
+        resolveProps.set("level", prop("string",
+            "'state' (geo.state_ref), 'county' (geo.counties), or 'zcta' (geo.zcta_ref). Default 'state'."));
+        resolveProps.set("within_state", prop("string",
+            "Optional 2-digit state FIPS to disambiguate a county lookup."));
+        tools.add(
+            tool("resolve_geo",
+            "Resolve a free-text place name to canonical FIPS identifiers "
+            + "(state_fips / county_fips / zcta). Call before joining a user-named place to "
+            + "census/econ/geo tables so the join keys on the right code, not a guess.",
+            schema(resolveProps, new String[]{"term"})));
+
+        ObjectNode alignProps = MAPPER.createObjectNode();
+        ObjectNode seriesProp = MAPPER.createObjectNode();
+        seriesProp.put("type", "array");
+        seriesProp.put("description",
+            "List of series specs. Each object: table (schema.table), value (column or SQL expr), "
+            + "optional name, agg (default avg), where; plus ONE key source matching 'on' — "
+            + "time_col (a DATE column), year_col+period_col (BLS year + 'M01'), quarter_col "
+            + "(BEA '2023Q1'), year_only_col (annual tables), or geo_col (a FIPS column when on "
+            + "is state/county/geo).");
+        alignProps.set("series", seriesProp);
+        alignProps.set("on", prop("string",
+            "Alignment key: 'day'|'month'|'quarter'|'year' (time) or 'state'|'county'|'geo' "
+            + "(FIPS geography). Default 'month'."));
+        alignProps.set("stat", prop("string",
+            "Omit for aligned rows; 'corr' -> {r, n}; 'regr' -> {slope, intercept, r2, n} "
+            + "modeling series[1] ~ series[0]. Needs >= 2 series."));
+        alignProps.set("limit", prop("integer",
+            "Row cap for aligned rows (ignored when stat is set)."));
+        tools.add(
+            tool("fetch_aligned_series",
+            "Align two or more US-government series onto a common key (a time grain or a FIPS "
+            + "geography), normalizing the differing govdata date conventions, and optionally "
+            + "compute corr/regr in the engine. Use this for cross-dataset correlation or "
+            + "regression; for a single-table statistic, just call query with corr()/regr_*().",
+            schema(alignProps, new String[]{"series"})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
@@ -478,6 +531,30 @@ public class McpServer {
                     boolean enabled = args.path("enabled").asBoolean(false);
                     log.println("[askamerica-mcp] tool=set_telemetry enabled=" + enabled);
                     text = setTelemetry(enabled);
+                    break;
+                }
+                case "resolve_geo": {
+                    String term = args.path("term").asText();
+                    String level = args.has("level") && !args.get("level").isNull()
+                        ? args.get("level").asText() : "state";
+                    String withinState = args.has("within_state") && !args.get("within_state").isNull()
+                        ? args.get("within_state").asText() : null;
+                    log.println("[askamerica-mcp] tool=resolve_geo term=" + term + " level=" + level);
+                    text = resolveGeo(term, level, withinState);
+                    break;
+                }
+                case "fetch_aligned_series": {
+                    JsonNode seriesNode = args.path("series");
+                    String on = args.has("on") && !args.get("on").isNull()
+                        ? args.get("on").asText() : "month";
+                    String stat = args.has("stat") && !args.get("stat").isNull()
+                        && !args.get("stat").asText().isEmpty() ? args.get("stat").asText() : null;
+                    int alignLimit = args.has("limit")
+                        ? Math.min(Math.max(1, args.get("limit").asInt()), MAX_LIMIT)
+                        : DEFAULT_LIMIT;
+                    log.println("[askamerica-mcp] tool=fetch_aligned_series on=" + on
+                        + " stat=" + stat);
+                    text = fetchAlignedSeries(seriesNode, on, stat, alignLimit);
                     break;
                 }
                 default:
@@ -738,19 +815,27 @@ public class McpServer {
     }
 
     private static String query(String sql, int limit) throws Exception {
-        String effective = quoteReservedSchemas(sql);
-        String lower = effective.toLowerCase();
-        if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
-            effective = effective.replaceAll(";\\s*$", "")
-                + " FETCH FIRST " + limit + " ROWS ONLY";
-        }
         String schema = extractSchema(sql);
         if (schema == null) {
             throw new RuntimeException(
                 "Cannot determine schema from SQL. "
                 + "Reference tables as schema.table, e.g. SELECT * FROM sec.filing_metadata.");
         }
-        Connection c = getSchemaConnection(schema);
+        return runSqlOn(schema, sql, limit);
+    }
+
+    /** Execute SQL on a connection for the given (possibly comma-joined) schema set,
+     *  applying the same reserved-word quoting and default row-limit as query().
+     *  fetch_aligned_series / resolve_geo use this to run generated SQL on an
+     *  explicit schema set (e.g. a cross-schema union) rather than extractSchema. */
+    private static String runSqlOn(String schemaSet, String sql, int limit) throws Exception {
+        String effective = quoteReservedSchemas(sql);
+        String lower = effective.toLowerCase();
+        if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
+            effective = effective.replaceAll(";\\s*$", "")
+                + " FETCH FIRST " + limit + " ROWS ONLY";
+        }
+        Connection c = getSchemaConnection(schemaSet);
         Statement stmt = c.createStatement();
         try {
             ResultSet rs = stmt.executeQuery(effective);
@@ -799,6 +884,208 @@ public class McpServer {
         } finally {
             stmt.close();
         }
+    }
+
+    // ── resolve_geo ──────────────────────────────────────────────────────────
+
+    private static String sqlStr(String v) {
+        return "'" + v.replace("'", "''") + "'";
+    }
+
+    private static String buildResolveSql(String term, String level, String withinState, int limit) {
+        String t = term == null ? "" : term.trim();
+        if (t.isEmpty()) {
+            throw new IllegalArgumentException("term must be non-empty");
+        }
+        String lit = sqlStr(t);
+        String like = sqlStr("%" + t.toLowerCase() + "%");
+        int cap = Math.min(Math.max(1, limit), 500);
+        String lvl = (level == null || level.isEmpty()) ? "state" : level;
+        switch (lvl) {
+            case "state":
+                // geo.state_ref is the canonical state reference (state_fips, state_abbr,
+                // state_name) — the FK target for state joins across all govdata schemas.
+                return "SELECT state_fips, state_abbr, state_name FROM geo.state_ref "
+                    + "WHERE lower(state_abbr) = lower(" + lit + ") "
+                    + "OR state_fips = " + lit + " "
+                    + "OR lower(state_name) LIKE " + like + " "
+                    + "ORDER BY state_fips FETCH FIRST " + cap + " ROWS ONLY";
+            case "county": {
+                String where = "lower(county_name) LIKE " + like + " OR county_fips = " + lit;
+                if (withinState != null && !withinState.isEmpty()) {
+                    where = "(" + where + ") AND state_fips = " + sqlStr(withinState);
+                }
+                return "SELECT DISTINCT county_fips, state_fips, county_name FROM geo.counties "
+                    + "WHERE " + where + " ORDER BY state_fips, county_name "
+                    + "FETCH FIRST " + cap + " ROWS ONLY";
+            }
+            case "zcta":
+                return "SELECT zcta, latitude, longitude FROM geo.zcta_ref "
+                    + "WHERE zcta = " + lit + " FETCH FIRST " + cap + " ROWS ONLY";
+            default:
+                throw new IllegalArgumentException(
+                    "level must be 'state', 'county', or 'zcta'; got " + level);
+        }
+    }
+
+    private static String resolveGeo(String term, String level, String withinState) throws Exception {
+        return runSqlOn("geo", buildResolveSql(term, level, withinState, 50), 50);
+    }
+
+    // ── fetch_aligned_series ─────────────────────────────────────────────────
+
+    private static final java.util.Set<String> TIME_GRAINS =
+        new java.util.HashSet<>(java.util.Arrays.asList("day", "month", "quarter", "year"));
+    private static final java.util.Set<String> GEO_LEVELS =
+        new java.util.HashSet<>(java.util.Arrays.asList("state", "county", "geo"));
+    private static final java.util.Set<String> ALLOWED_AGG =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "avg", "sum", "min", "max", "count", "median", "last", "first"));
+
+    private static String specText(JsonNode spec, String field) {
+        JsonNode v = spec.get(field);
+        return (v != null && !v.isNull()) ? v.asText() : null;
+    }
+
+    private static String checkIdent(String name, String what) {
+        if (name == null || name.isEmpty() || name.length() > 63) {
+            throw new IllegalArgumentException(what + " must be a simple identifier");
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char ch = name.charAt(i);
+            if (!(Character.isLetterOrDigit(ch) || ch == '_')) {
+                throw new IllegalArgumentException(
+                    what + " must be letters/digits/underscore; got " + name);
+            }
+        }
+        return name;
+    }
+
+    private static String keyExpr(JsonNode spec, String on, String label) {
+        if (TIME_GRAINS.contains(on)) {
+            String timeCol = specText(spec, "time_col");
+            if (timeCol != null) {
+                return "date_trunc('" + on + "', " + timeCol + ")";
+            }
+            String yearCol = specText(spec, "year_col");
+            String periodCol = specText(spec, "period_col");
+            if (yearCol != null && periodCol != null) {
+                return "date_trunc('" + on + "', make_date(" + yearCol
+                    + ", CAST(substr(" + periodCol + ", 2) AS INTEGER), 1))";
+            }
+            String quarterCol = specText(spec, "quarter_col");
+            if (quarterCol != null) {
+                return "date_trunc('" + on + "', make_date("
+                    + "CAST(substr(" + quarterCol + ", 1, 4) AS INTEGER), "
+                    + "(CAST(substr(" + quarterCol + ", 6, 1) AS INTEGER) - 1) * 3 + 1, 1))";
+            }
+            String yearOnly = specText(spec, "year_only_col");
+            if (yearOnly != null) {
+                return "date_trunc('" + on + "', make_date(" + yearOnly + ", 1, 1))";
+            }
+            throw new IllegalArgumentException("series " + label + ": for on=" + on
+                + " give time_col | (year_col & period_col) | quarter_col | year_only_col");
+        }
+        if (GEO_LEVELS.contains(on)) {
+            String geoCol = specText(spec, "geo_col");
+            if (geoCol == null) {
+                throw new IllegalArgumentException(
+                    "series " + label + ": for on=" + on + " give geo_col");
+            }
+            return geoCol;
+        }
+        throw new IllegalArgumentException("on must be a time grain or geo level; got " + on);
+    }
+
+    private static String buildAlignedSql(JsonNode series, String on, String stat) {
+        if (series == null || !series.isArray() || series.size() < 1) {
+            throw new IllegalArgumentException("series must be a non-empty array of spec objects");
+        }
+        if (stat != null && !stat.equals("corr") && !stat.equals("regr")) {
+            throw new IllegalArgumentException("stat must be 'corr', 'regr', or null; got " + stat);
+        }
+        if (stat != null && series.size() < 2) {
+            throw new IllegalArgumentException("stat=" + stat + " needs at least two series");
+        }
+        java.util.List<String> ctes = new java.util.ArrayList<>();
+        java.util.List<String> cols = new java.util.ArrayList<>();
+        for (int i = 0; i < series.size(); i++) {
+            JsonNode spec = series.get(i);
+            String table = specText(spec, "table");
+            String value = specText(spec, "value");
+            if (table == null || value == null) {
+                throw new IllegalArgumentException("series[" + i + "] needs 'table' and 'value'");
+            }
+            String name = specText(spec, "name");
+            name = checkIdent(name != null ? name : ("s" + i), "series[" + i + "].name");
+            String agg = specText(spec, "agg");
+            if (agg == null) {
+                agg = "avg";
+            }
+            if (!ALLOWED_AGG.contains(agg)) {
+                throw new IllegalArgumentException("series[" + i + "].agg " + agg + " not allowed");
+            }
+            String key = keyExpr(spec, on, name);
+            String where = specText(spec, "where");
+            String whereClause = (where != null && !where.isEmpty()) ? (" WHERE " + where) : "";
+            // Repeat the key expression in GROUP BY — this Calcite dialect rejects
+            // ordinal GROUP BY (GROUP BY 1).
+            ctes.add("s" + i + " AS (SELECT " + key + " AS k, " + agg + "(" + value + ") AS " + name
+                + " FROM " + table + whereClause + " GROUP BY " + key + ")");
+            cols.add(name);
+        }
+        StringBuilder from = new StringBuilder("s0");
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        seen.add("s0.k");
+        for (int i = 1; i < series.size(); i++) {
+            String left = seen.size() == 1 ? seen.get(0)
+                : ("COALESCE(" + String.join(", ", seen) + ")");
+            from.append(" FULL OUTER JOIN s").append(i).append(" ON ")
+                .append(left).append(" = s").append(i).append(".k");
+            seen.add("s" + i + ".k");
+        }
+        String keySel = (seen.size() == 1 ? seen.get(0)
+            : ("COALESCE(" + String.join(", ", seen) + ")")) + " AS key";
+        String withClause = "WITH " + String.join(", ", ctes);
+        if (stat != null) {
+            String a = cols.get(0);
+            String b = cols.get(1);
+            String expr = stat.equals("corr")
+                ? ("corr(" + a + ", " + b + ") AS r, regr_count(" + a + ", " + b + ") AS n")
+                : ("regr_slope(" + b + ", " + a + ") AS slope, regr_intercept(" + b + ", " + a
+                    + ") AS intercept, regr_r2(" + b + ", " + a + ") AS r2, regr_count("
+                    + b + ", " + a + ") AS n");
+            return withClause + ", aligned AS (SELECT " + keySel + ", " + String.join(", ", cols)
+                + " FROM " + from + ") SELECT " + expr + " FROM aligned";
+        }
+        // no stat: aligned frame (runSqlOn appends the row limit)
+        return withClause + " SELECT " + keySel + ", " + String.join(", ", cols)
+            + " FROM " + from + " ORDER BY key";
+    }
+
+    /** Comma-joined, canonical (sorted) union of the schemas referenced by the series. */
+    private static String schemasOf(JsonNode series) {
+        java.util.TreeSet<String> set = new java.util.TreeSet<>();
+        for (int i = 0; i < series.size(); i++) {
+            String table = specText(series.get(i), "table");
+            if (table != null) {
+                int dot = table.indexOf('.');
+                if (dot > 0) {
+                    set.add(table.substring(0, dot).toLowerCase());
+                }
+            }
+        }
+        if (set.isEmpty()) {
+            throw new IllegalArgumentException("no schema found in series tables");
+        }
+        return String.join(",", set);
+    }
+
+    private static String fetchAlignedSeries(JsonNode series, String on, String stat, int limit)
+            throws Exception {
+        String sql = buildAlignedSql(series, on, stat);
+        // stat returns a single scalar row; a frame gets the caller's limit.
+        return runSqlOn(schemasOf(series), sql, stat != null ? 5 : limit);
     }
 
     private static String reportIssue(String subject, String body) {

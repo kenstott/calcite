@@ -121,6 +121,36 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   @SuppressWarnings("UnusedVariable")
   private List<JsonTable> tableDefinitions;
 
+  /**
+   * Register the file-adapter standard functions AND the standard metadata schemas
+   * (information_schema / pg_catalog) on the CONNECTION ROOT. The file adapter registers
+   * these on its internal ETL root, which the connection never sees — so unqualified
+   * corr/regr/median and information_schema.* would fail to resolve. Here parentSchema IS
+   * the connection root. Idempotent, so it is safe to call on every create() (including the
+   * cached-schema fast path, which a later connection reaches with its own fresh root).
+   */
+  private static void registerConnectionRootExtras(
+      @Nullable SchemaPlus parentSchema, @NonNull Map<String, Object> operand) {
+    if (parentSchema == null) {
+      return;
+    }
+    boolean duckDbEngine = "duckdb".equalsIgnoreCase((String) operand.get("executionEngine"));
+    org.apache.calcite.adapter.file.FileAdapterFunctions.registerStandardFunctions(
+        parentSchema, duckDbEngine);
+    try {
+      if (parentSchema.subSchemas().get("information_schema") == null) {
+        parentSchema.add("information_schema",
+            new org.apache.calcite.adapter.file.metadata.InformationSchema(parentSchema, "CALCITE"));
+      }
+      if (parentSchema.subSchemas().get("pg_catalog") == null) {
+        parentSchema.add("pg_catalog",
+            new org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema(parentSchema, "CALCITE"));
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to register metadata schemas on connection root: {}", e.getMessage());
+    }
+  }
+
   @Override @NonNull public Schema create(@Nullable SchemaPlus parentSchema, @NonNull String name,
       @NonNull Map<String, Object> operand) {
 
@@ -139,6 +169,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (cachedSchema != null) {
       LOGGER.info("Schema '{}' (dataSource={}) already created as dependency, returning cached",
           name, dataSource);
+      // Functions + metadata schemas live on the CONNECTION ROOT, not on the cached data
+      // schema. A new connection reusing a cached schema still needs them on ITS root —
+      // otherwise corr/regr/median and information_schema.* resolve on the connection that
+      // first created the schema but not on later ones (e.g. a multi-schema list_schemas
+      // connection caches the schema before a single-schema query connects).
+      registerConnectionRootExtras(parentSchema, operand);
       return cachedSchema;
     }
 
@@ -265,19 +301,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // (FileSchemaFactory.addMetadataSchemas) in every engine branch, so govdata
     // does not add them here.
 
-    // Register the file adapter's standard SQL UDFs (vector + semantic similarity)
-    // on the connection's ROOT schema. They must live on a mutable schema, and
-    // here parentSchema IS the connection root (the custom data schemas are
-    // immutable, and the file adapter only sees an internal ETL root). Root
-    // functions resolve for unqualified calls from any default schema.
-    if (parentSchema != null) {
-      // DuckDB-only statistical aggregates register only when this connection runs on the
-      // DuckDB engine (the model sets executionEngine=duckdb for S3-backed data).
-      boolean duckDbEngine =
-          "duckdb".equalsIgnoreCase((String) operand.get("executionEngine"));
-      org.apache.calcite.adapter.file.FileAdapterFunctions.registerStandardFunctions(
-          parentSchema, duckDbEngine);
-    }
+    // Register the file-adapter UDFs (incl. DuckDB statistical aggregates) and the standard
+    // metadata schemas (information_schema / pg_catalog) on the connection's ROOT schema.
+    // They must live on a mutable schema, and here parentSchema IS the connection root (the
+    // custom data schemas are immutable, and the file adapter only sees an internal ETL
+    // root). Root registration resolves for unqualified calls from any default schema.
+    registerConnectionRootExtras(parentSchema, operand);
 
     LOGGER.info("Schema '{}' created successfully", name);
     return schema;
