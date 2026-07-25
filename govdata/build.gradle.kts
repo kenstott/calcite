@@ -14,6 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
 plugins {
     id("com.github.johnrengelman.shadow")
     id("maven-publish")
@@ -293,6 +299,73 @@ tasks.register("downloadDuckDbExtensions") {
         println("\nDuckDB extensions download complete!")
         val totalBytes = extensionsDir.walk().sumOf { if (it.isFile) it.length() else 0L }
         println("Total size: ${totalBytes / 1024 / 1024 / 1024} GB (${totalBytes / 1024 / 1024} MB)")
+    }
+}
+
+// Task to package the pre-built shared DuckDB catalog + per-schema .conversions.json trackers as a
+// JAR-bundled seed that accelerates cold time-to-first-query. Run OUT-OF-BAND, after a full
+// materialization run has populated the operating directory (default ~/.govdata). shadowJar then
+// packages whatever src/main/resources/duckdb/seed contains — the JAR build itself needs no S3
+// credentials. The seed must be built against s3:// URIs (govdata's S3 mode) so every view path and
+// .conversions.json record is machine-independent; a local-parquet operating dir is NOT portable.
+tasks.register("bundleGovdataSeed") {
+    group = "build"
+    description = "Zip the materialized shared DuckDB catalog + .conversions.json trackers into a JAR-bundled seed"
+
+    doLast {
+        val basePath = (project.findProperty("seedOperatingDir") as String?)
+            ?: System.getenv("GOVDATA_DATA_DIR")
+            ?: "${System.getProperty("user.home")}/.govdata"
+        val base = file(basePath)
+
+        val catalog = file("$base/.duckdb/govdata.duckdb")
+        val wal = file("$base/.duckdb/govdata.duckdb.wal")
+        val aperio = file("$base/.aperio")
+
+        // Fail loudly on anything that would produce a broken or non-portable seed.
+        if (!catalog.isFile) {
+            throw GradleException("No shared catalog at $catalog — run a full materialization first, "
+                + "or override the base with -PseedOperatingDir=/path.")
+        }
+        if (wal.exists()) {
+            throw GradleException("Uncheckpointed WAL present ($wal) — CHECKPOINT/close the catalog "
+                + "before bundling so the seed is a clean single file.")
+        }
+        val trackers = if (aperio.isDirectory) {
+            aperio.walk().filter { it.isFile && it.name == ".conversions.json" }.toList()
+        } else {
+            emptyList()
+        }
+        if (trackers.isEmpty()) {
+            throw GradleException("No .aperio/*/.conversions.json trackers under $base — nothing to seed.")
+        }
+
+        val seedDir = file("src/main/resources/duckdb/seed")
+        seedDir.mkdirs()
+        val zipFile = file("$seedDir/govdata-seed.zip")
+        val versionFile = file("$seedDir/govdata-seed.version")
+        val version = (project.findProperty("seedVersion") as String?) ?: project.version.toString()
+
+        // (file -> zip entry name, relative to the operating base, forward-slash normalized)
+        val members = ArrayList<Pair<File, String>>()
+        members.add(catalog to ".duckdb/govdata.duckdb")
+        for (t in trackers) {
+            val rel = base.toPath().relativize(t.toPath()).toString()
+                .replace(File.separatorChar, '/')
+            members.add(t to rel)
+        }
+
+        ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
+            for ((f, name) in members) {
+                zos.putNextEntry(ZipEntry(name))
+                f.inputStream().use { it.copyTo(zos) }
+                zos.closeEntry()
+            }
+        }
+        versionFile.writeText(version)
+
+        println("Bundled govdata seed: ${members.size} entries (1 catalog + ${trackers.size} trackers) "
+            + "-> $zipFile (${zipFile.length() / 1024} KB, version $version)")
     }
 }
 

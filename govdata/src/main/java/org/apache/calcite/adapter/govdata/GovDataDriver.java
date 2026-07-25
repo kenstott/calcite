@@ -38,7 +38,7 @@ import java.util.Properties;
  *
  * <p>Usage examples:
  * <pre>
- * // Single schema with downloading enabled
+ * // Single schema (query-only; autoDownload=false — ETL runs via EtlRunner, not this driver)
  * jdbc:govdata:source=sec&ciks=AAPL                    // Apple ticker → CIK 0000320193
  * jdbc:govdata:source=sec&ciks=AAPL,MSFT,GOOGL        // Multiple tickers
  * jdbc:govdata:source=sec&ciks=MAGNIFICENT7            // Predefined group → 7 CIKs
@@ -142,6 +142,12 @@ public class GovDataDriver extends Driver {
           || "true".equalsIgnoreCase(System.getProperty("govdata.rebuild.catalog"));
       if (rebuildCatalog) {
         deleteSharedCatalog();
+      } else {
+        // Seed the shared catalog + .conversions.json trackers from the JAR-bundled artifact
+        // before any DuckDB connection opens (so the catalog file is not overwritten under
+        // DuckDB's single-writer lock). Pure accelerator: a missing/failed seed falls through to
+        // the normal cold path. Skipped when rebuildCatalog forces a from-scratch rebuild.
+        GovDataSeedInstaller.ensureSeeded(System.getProperty("govdata.operating.dir.base"));
       }
 
       // Create model file — supports comma-delimited list of sources
@@ -183,12 +189,14 @@ public class GovDataDriver extends Driver {
   /**
    * Create a Calcite model file for the given source parameter.
    *
-   * <p>When {@code sourceParam} contains a single source that requires downloading (e.g. "sec"),
-   * the model enables autoDownload and passes through ciks/startYear/endYear.
+   * <p>The model is always read-only: {@code autoDownload: false} in both the single-source and
+   * multi-source paths, so a query connection never triggers ETL/downloads. A single source still
+   * passes through ciks/startYear/endYear (they scope the schema's table set), but does not enable
+   * downloading.
    *
    * <p>When {@code sourceParam} is a comma-delimited list of sources, the model includes one
-   * schema entry per source with {@code autoDownload: false}. This is the read-only path
-   * used for schema introspection from external tools (e.g. Python via JayDeBeAPI).
+   * schema entry per source (also {@code autoDownload: false}) — the path used for schema
+   * introspection and querying from external tools (e.g. Python via JayDeBeAPI).
    */
   private String createModelFile(String paramString, String sourceParam) throws IOException {
     String[] sources = sourceParam.split(",");
