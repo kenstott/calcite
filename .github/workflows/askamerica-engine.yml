@@ -340,6 +340,15 @@ jobs:
           ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
 
+      # Diagnostic: dump jpackage's generated main.wxs to see where it splices the
+      # overrides.wxi include (so the auto-launch overrides can be structured to match).
+      - name: Dump generated main.wxs (Windows)
+        if: always() && matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          F=askamerica-engine/build/jpackage-temp/config/main.wxs
+          echo "===== main.wxs ====="; cat -n "$F" 2>/dev/null || echo "NOT FOUND: $F"
+
       - name: Create PKG from app-image (macOS only)
         if: matrix.os == 'macos-latest'
         env:

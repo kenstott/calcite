@@ -326,6 +326,9 @@ val jpackageBuildBase: File = if (isMacOs && isExFat(projectDir)) {
 val jpackageDirFile = File(jpackageBuildBase, "jpackage")
 val jpackageInputDirFile = File(jpackageBuildBase, "jpackage-input")
 val jlinkRuntimeDirFile = File(jpackageBuildBase, "jlink-runtime")
+// Persist jpackage's working files (incl. the generated config/main.wxs) so CI can
+// dump main.wxs to learn where jpackage splices overrides.wxi.
+val jpackageTempFile = File(jpackageBuildBase, "jpackage-temp")
 
 // Thin launcher JAR — only McpServerLauncher; the fat engine JAR is downloaded by postinstall
 val launcherJar by tasks.registering(Jar::class) {
@@ -422,6 +425,7 @@ tasks.register<Exec>("jpackage") {
         "--main-jar", launcherJar.get().archiveFileName.get(),
         "--main-class", "org.apache.calcite.adapter.askamerica.McpServerLauncher",
         "--dest", jpackageDirFile.absolutePath,
+        "--temp", jpackageTempFile.absolutePath,
         "--java-options", "-Xms256m -Xmx2g",
         "--java-options", "-Dfile.encoding=UTF-8",
         // Windows: without these the MSI installs silently with no way to launch the
@@ -449,6 +453,8 @@ tasks.register<Exec>("jpackage") {
 
     doFirst {
         jpackageDirFile.mkdirs()
+        // jpackage requires --temp to be absent/empty.
+        jpackageTempFile.deleteRecursively()
         for (dir in listOf(jpackageInputDirFile, jpackageDirFile)) {
             dir.walkTopDown().filter { it.name.startsWith("._") }.forEach { it.delete() }
         }
