@@ -340,10 +340,12 @@ jobs:
           ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
 
-      # Diagnostic: dump all of jpackage's generated WiX sources (main.wxs + the UI
-      # source that defines JpUI) so the auto-launch can hook JpUI's finish dialog.
-      - name: Dump generated WiX sources (Windows)
-        if: always() && matrix.os == 'windows-latest'
+      # On a Windows failure only, dump jpackage's generated WiX sources (main.wxs +
+      # the ui.wxf that defines JpUI). Kept as a safety net: if a JDK bump changes
+      # jpackage's main.wxs, our --resource-dir override goes stale — this makes
+      # re-syncing it trivial. No output on success, so build logs stay clean.
+      - name: Dump generated WiX sources (Windows, on failure)
+        if: failure() && matrix.os == 'windows-latest'
         shell: bash
         run: |
           T=askamerica-engine/build/jpackage-temp
