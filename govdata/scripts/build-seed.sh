@@ -94,7 +94,16 @@ fi
 # model-verify.sh connects jdbc:govdata:source=<schema> per schema, which forces GovDataDriver to
 # build the shared catalog + every Iceberg view + .conversions.json. Redirect the operating dir to
 # staging so we package a pristine catalog rather than the developer's working ~/.govdata.
-GOVDATA_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" "${VERIFY_ARGS[@]}"
+# --single-connection mounts EVERY schema on one root. Required here: an inter-schema view can only
+# be defined when both schemas are visible, so the default per-schema loop leaves those views out of
+# the catalog entirely (model-verify correctly reports them MISSING and moves on) — and they are the
+# most expensive ones to build cold, i.e. exactly what the seed exists to avoid.
+#
+# GOVDATA_VERIFY_DATA_DIR, not GOVDATA_DATA_DIR: model-verify.sh hard-overrides GOVDATA_DATA_DIR with
+# ${GOVDATA_VERIFY_DATA_DIR:-$HOME/.govdata-verify} to isolate itself from the ETL pool, so exporting
+# GOVDATA_DATA_DIR here had no effect — generation landed in ~/.govdata-verify and the catalog check
+# below could never find $CATALOG.
+GOVDATA_VERIFY_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" --single-connection "${VERIFY_ARGS[@]}"
 
 CATALOG="$STAGING/.duckdb/govdata.duckdb"
 if [[ ! -f "$CATALOG" ]]; then

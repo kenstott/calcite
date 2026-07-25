@@ -57,6 +57,7 @@ ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregiste
 
 SOURCE=""
 LIMIT="1"
+SINGLE_CONNECTION=false
 PROBES_ENABLED=true
 DUP_ARGS=()
 
@@ -66,6 +67,9 @@ while [[ $# -gt 0 ]]; do
         --limit)          LIMIT="$2"; shift 2 ;;
         --no-probes)      PROBES_ENABLED=false; shift ;;
         --no-dup)         DUP_ARGS+=(--no-dup); shift ;;
+        # Mount every selected schema on ONE connection instead of looping one per schema.
+        # Used by build-seed.sh so inter-schema views are actually created in the catalog.
+        --single-connection) SINGLE_CONNECTION=true; shift ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
         -h|--help)        sed -n '17,48p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)                echo "Unknown argument: $1" >&2; exit 2 ;;
@@ -153,10 +157,35 @@ write_probes() {
     esac
 }
 
-# ---- loop: one fast connection per schema ----
 fail=0
 passed=0
 failed_list=""
+
+# ---- single connection mounting EVERY selected schema (seed generation) ----
+# GovDataDriver.createModelFile splits `source` on commas and emits one schema per source into a
+# single model, so this mounts them all on one root. That is REQUIRED for seeding: an inter-schema
+# view can only be defined when both schemas are visible, and the per-schema loop below never has
+# more than one mounted — so those views report MISSING (correctly treated as expected there) and
+# their DDL never reaches the shared catalog. Since every table exists from creation (Iceberg
+# commits an initial empty snapshot so a table is queryable at zero rows), mounting everything up
+# front makes every view definable in one pass.
+#
+# Verification keeps the per-schema loop: it is faster to probe, and a single connection eagerly
+# creates ~130 views before the first probe. Same behaviour, opposite sign — a cost when verifying,
+# the entire deliverable when seeding.
+if [[ "$SINGLE_CONNECTION" == "true" ]]; then
+    joined="$(echo $SELECTED | tr ' ' ',')"
+    echo "===== single connection, all schemas mounted: $joined ====="
+    args=(--source "$joined" --limit "$LIMIT" "${DUP_ARGS[@]}")
+    if java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}"; then
+        echo "  all-schema connection OK"
+        exit 0
+    fi
+    echo "  all-schema connection FAILED" >&2
+    exit 1
+fi
+
+# ---- loop: one fast connection per schema ----
 for s in $SELECTED; do
     echo "========================= $s ========================="
     probe="$(write_probes "$s")"
