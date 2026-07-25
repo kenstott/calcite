@@ -340,14 +340,17 @@ jobs:
           ASKAMERICA_SIGN_IDENTITY: ${{ env.ASKAMERICA_SIGN_IDENTITY }}
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
 
-      # Diagnostic: dump jpackage's generated main.wxs to see where it splices the
-      # overrides.wxi include (so the auto-launch overrides can be structured to match).
-      - name: Dump generated main.wxs (Windows)
+      # Diagnostic: dump all of jpackage's generated WiX sources (main.wxs + the UI
+      # source that defines JpUI) so the auto-launch can hook JpUI's finish dialog.
+      - name: Dump generated WiX sources (Windows)
         if: always() && matrix.os == 'windows-latest'
         shell: bash
         run: |
-          F=askamerica-engine/build/jpackage-temp/config/main.wxs
-          echo "===== main.wxs ====="; cat -n "$F" 2>/dev/null || echo "NOT FOUND: $F"
+          T=askamerica-engine/build/jpackage-temp
+          echo "=== files under jpackage temp ==="; find "$T" -type f 2>/dev/null | head -80
+          for f in $(find "$T" \( -name '*.wxs' -o -name '*.wxi' -o -name '*.wxl' \) 2>/dev/null); do
+            echo "===== FILE: $f ====="; cat -n "$f"
+          done
 
       - name: Create PKG from app-image (macOS only)
         if: matrix.os == 'macos-latest'
