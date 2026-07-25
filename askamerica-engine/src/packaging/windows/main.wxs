@@ -112,7 +112,7 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <Property Id="WixShellExecTarget" Value="[INSTALLDIR]AskAmerica MCP.exe" />
     <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec"
-                  Impersonate="yes" Return="asyncNoWait" />
+                  Impersonate="yes" Return="ignore" />
     <UI>
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction"
                Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
