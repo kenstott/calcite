@@ -395,3 +395,37 @@ FROM (
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'calendar'          AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/calendar', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'countries'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/countries', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'currencies'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/currencies', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'fiscal_year'      , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/fiscal_year', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'holidays'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/holidays', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'naics'            , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'naics_vintage'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics_vintage', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'naics_vintage_map', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics_vintage_map', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'sic'              , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sic', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'ref', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;

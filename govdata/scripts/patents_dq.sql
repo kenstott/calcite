@@ -763,3 +763,29 @@ FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'trademark_case_file'      AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_case_file', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'trademark_classification', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_classification', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'trademark_intl_class'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_intl_class', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'trademark_owner'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_owner', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'trademark_statement'     , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_statement', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'patents', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;

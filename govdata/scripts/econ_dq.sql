@@ -799,6 +799,40 @@ FROM (
   WHERE area_fips LIKE '%000'
 );
 
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'comtrade_flows'        AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'fdi_activities'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'fdi_direct_investment', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_direct_investment', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'iip_positions'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/iip_positions', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'ilostat_indicators'   , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ilostat_indicators', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'jolts_industry'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_industry', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'trade_by_state'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'usitc_tariff_schedule', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariff_schedule', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'usitc_tariffs'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariffs', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'econ', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;
+
 -- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================

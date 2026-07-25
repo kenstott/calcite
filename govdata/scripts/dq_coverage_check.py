@@ -70,6 +70,12 @@ def main(argv):
         key = schema_key(path)
         if only and key not in only:
             continue
+        # Smoke/test fixtures are not production schemas: they exist to exercise a code path
+        # (e.g. cyber-vuln-iceberg-smoke deliberately sets runCompaction: false) and are never
+        # ingested by the pool, so demanding DQ coverage for them would be a permanent false
+        # failure that trains people to ignore this check.
+        if "smoke" in key or key.endswith("_test"):
+            continue
 
         dq_path = os.path.join(SCRIPTS, key + "_dq.sql")
         tables = sorted(

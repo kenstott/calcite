@@ -332,3 +332,31 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+
+-- ============================================================================
+-- T1/T2 — tables previously absent from this file entirely.
+-- A table with no checks emits no dq rows, which reads as healthy rather than as
+-- untested; that is how four zero-row geo tables went unnoticed. Existence +
+-- row_count only — deliberately minimal, to be deepened per table.
+-- ============================================================================
+
+INSERT INTO dq_results
+WITH counts AS (
+  SELECT 'cfs_shipments'           AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_shipments', allow_moved_paths := true) LIMIT 1)) AS n
+  UNION ALL
+  SELECT 'faa_aircraft_master'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_aircraft_master', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'faa_aircraft_reference' , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_aircraft_reference', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'faa_engine_reference'   , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_engine_reference', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'fmcsa_carriers'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/fmcsa_carriers', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'ntsb_aviation_accidents', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/ntsb_aviation_accidents', allow_moved_paths := true) LIMIT 1))
+)
+SELECT 'transport', tbl, 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '>0',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM counts;
