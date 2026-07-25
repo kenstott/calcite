@@ -1885,7 +1885,11 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: Series victimization indicator
+        comment: >
+          NCVS series-victimization indicator — a flag for incidents reported as a series of
+          similar crimes (six or more, too repetitive to recall individually), NOT a time-series
+          identifier. This table is microdata, one row per victimization, so do not treat this
+          column as a series key.
       - name: newwgt
         type: double
         nullable: true
@@ -2122,7 +2126,11 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: Series victimization indicator
+        comment: >
+          NCVS series-victimization indicator — a flag for incidents reported as a series of
+          similar crimes (six or more, too repetitive to recall individually), NOT a time-series
+          identifier. This table is microdata, one row per victimization, so do not treat this
+          column as a series key.
       - name: wgtviccy
         type: double
         nullable: true

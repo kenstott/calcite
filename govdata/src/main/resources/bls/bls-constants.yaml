@@ -82,21 +82,23 @@ blsRegionCodes:
 
 # Metro CPI area codes mapping: Publication Code → CPI Area Code
 # Format for CPI series: CUUR{area_code}SA0
+# CPI area codes verified against https://download.bls.gov/pub/time.series/cu/cu.area
+# Each CPI area code belongs to exactly one metro - codes are never shared.
 metroCpiCodes:
   A100:
-    cpiCode: S35D
+    cpiCode: S12A
     name: New York-Newark-Jersey City, NY-NJ-PA
   A400:
-    cpiCode: S49G
+    cpiCode: S49A
     name: Los Angeles-Long Beach-Anaheim, CA
   A207:
-    cpiCode: S12A
+    cpiCode: S23A
     name: Chicago-Naperville-Elgin, IL-IN-WI
   A425:
     cpiCode: S37B
     name: Houston-The Woodlands-Sugar Land, TX
   A423:
-    cpiCode: S49B
+    cpiCode: S48A
     name: Phoenix-Mesa-Scottsdale, AZ
   A102:
     cpiCode: S12B
@@ -104,34 +106,36 @@ metroCpiCodes:
   A426:
     cpiCode: null
     name: San Antonio-New Braunfels, TX
-    comment: No CPI data available
+    comment: No CPI area published for San Antonio
   A421:
     cpiCode: S49E
     name: San Diego-Carlsbad, CA
   A127:
-    cpiCode: S23A
+    cpiCode: S37A
     name: Dallas-Fort Worth-Arlington, TX
   A429:
-    cpiCode: S49A
+    cpiCode: null
     name: San Jose-Sunnyvale-Santa Clara, CA
+    comment: No CPI area published for San Jose
   A438:
     cpiCode: null
     name: Austin-Round Rock, TX
-    comment: No CPI data available
+    comment: No CPI area published for Austin
   A420:
-    cpiCode: S35C
+    cpiCode: null
     name: Jacksonville, FL
+    comment: No CPI area published for Jacksonville
   A103:
-    cpiCode: S35E
+    cpiCode: S11A
     name: Boston-Cambridge-Newton, MA-NH
   A428:
-    cpiCode: S48B
+    cpiCode: S49D
     name: Seattle-Tacoma-Bellevue, WA
   A427:
-    cpiCode: S48A
+    cpiCode: S48B
     name: Denver-Aurora-Lakewood, CO
   A101:
-    cpiCode: S35B
+    cpiCode: S35A
     name: Washington-Arlington-Alexandria, DC-VA-MD-WV
   A211:
     cpiCode: S23B
@@ -139,37 +143,36 @@ metroCpiCodes:
   A104:
     cpiCode: null
     name: Cleveland-Elyria, OH
-    comment: No CPI data available
+    comment: No CPI area published for Cleveland
   A212:
     cpiCode: S24A
     name: Minneapolis-St. Paul-Bloomington, MN-WI
   A422:
-    cpiCode: S35C
+    cpiCode: S35B
     name: Miami-Fort Lauderdale-West Palm Beach, FL
   A419:
-    cpiCode: S35A
+    cpiCode: S35C
     name: Atlanta-Sandy Springs-Roswell, GA
   A437:
-    cpiCode: S49C
+    cpiCode: null
     name: Portland-Vancouver-Hillsboro, OR-WA
+    comment: No CPI area published for Portland
   A424:
-    cpiCode: S49D
+    cpiCode: S49C
     name: Riverside-San Bernardino-Ontario, CA
   A320:
     cpiCode: S24B
     name: St. Louis, MO-IL
   A319:
-    cpiCode: null
+    cpiCode: S35E
     name: Baltimore-Columbia-Towson, MD
-    comment: No CPI data available
   A433:
     cpiCode: S35D
     name: Tampa-St. Petersburg-Clearwater, FL
-    comment: Shares NYC code
   A440:
     cpiCode: null
     name: Anchorage, AK
-    comment: No CPI data available
+    comment: No CPI area published for Anchorage (S49G is Urban Alaska, statewide, not the metro)
 
 # BLS area codes mapping: Publication Code → State(2) + BLS Area Code(5)
 # Format for SMU/ENU series: State Code (2 digits) + Area Code (5 digits)
@@ -240,6 +243,42 @@ seriesIds:
     unemploymentRate: LNS14000000
     employmentLevel: CES0000000001
     laborForceParticipation: LNS11300000
+    # CPS by educational attainment, 25 years and over (seasonally adjusted)
+    unemploymentRateLessThanHighSchool: LNS14027659
+    unemploymentRateHighSchoolNoCollege: LNS14027660
+    unemploymentRateSomeCollege: LNS14027689
+    unemploymentRateBachelorsOrHigher: LNS14027662
+    laborForceParticipationLessThanHighSchool: LNS11327659
+    laborForceParticipationHighSchoolNoCollege: LNS11327660
+    laborForceParticipationSomeCollege: LNS11327689
+    laborForceParticipationBachelorsOrHigher: LNS11327662
+    employmentPopulationRatioLessThanHighSchool: LNS12327659
+    employmentPopulationRatioHighSchoolNoCollege: LNS12327660
+    employmentPopulationRatioSomeCollege: LNS12327689
+    employmentPopulationRatioBachelorsOrHigher: LNS12327662
+    # CPS headline levels and alternative measures of labor underutilization
+    employmentPopulationRatio: LNS12300000
+    unemploymentRateU6: LNS13327709
+    laborForceLevel: LNS11000000
+    employmentLevelCps: LNS12000000
+    unemploymentLevel: LNS13000000
+    partTimeForEconomicReasons: LNS12032194
+    longTermUnemployedLevel: LNS13008636
+    longTermUnemployedShare: LNS13025703
+    averageWeeksUnemployed: LNS13008275
+    medianWeeksUnemployed: LNS13008276
+    # CPS unemployment rate by race/ethnicity, sex, and age
+    unemploymentRateWhite: LNS14000003
+    unemploymentRateBlack: LNS14000006
+    unemploymentRateHispanic: LNS14000009
+    unemploymentRateAsian: LNS14032183
+    unemploymentRateMen20Plus: LNS14000025
+    unemploymentRateWomen20Plus: LNS14000026
+    unemploymentRateTeenagers: LNS14000012
+    # CES total private employment and average weekly hours
+    privateEmploymentLevel: CES0500000001
+    avgWeeklyHours: CES0500000002
+    avgWeeklyHoursProduction: CES0500000007
   inflation:
     cpiAllUrban: CUUR0000SA0
     cpiCore: CUUR0000SA0L1E

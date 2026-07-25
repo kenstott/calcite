@@ -440,7 +440,7 @@ partitionedTables:
     pattern: "type=employment_statistics/frequency=*/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Updated monthly with seasonal adjustments.
+      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted). Updated monthly with seasonal adjustments.
 
     # Dimension definitions for iteration
     dimensions:
@@ -459,7 +459,37 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series identifier (e.g., 'LNS14000000' for unemployment rate)
+        comment: >
+          BLS series identifier. This table is long-format: one row per (series, period),
+          so ALWAYS filter on series — mixing series in an aggregate mixes incompatible units
+          (percent, thousands of persons, weeks, hours). The 35 series loaded are:
+          LNS14000000 unemployment rate, 16+ (percent);
+          LNS11300000 labor force participation rate, 16+ (percent);
+          LNS12300000 employment-population ratio, 16+ (percent);
+          LNS13327709 U-6 total labor underutilization rate (percent);
+          LNS11000000 civilian labor force level (thousands);
+          LNS12000000 employment level, CPS (thousands);
+          LNS13000000 unemployment level (thousands);
+          LNS12032194 employed part time for economic reasons (thousands);
+          LNS13008636 unemployed 27 weeks and over (thousands);
+          LNS13025703 unemployed 27 weeks and over as percent of unemployed (percent);
+          LNS13008275 average weeks unemployed; LNS13008276 median weeks unemployed;
+          LNS14000003 unemployment rate, White; LNS14000006 Black or African American;
+          LNS14000009 Hispanic or Latino; LNS14032183 Asian;
+          LNS14000025 men 20+; LNS14000026 women 20+; LNS14000012 ages 16-19 (all percent);
+          unemployment rate by educational attainment, 25+ —
+          LNS14027659 less than a high school diploma, LNS14027660 high school graduates no college,
+          LNS14027689 some college or associate degree, LNS14027662 bachelor's degree and higher;
+          labor force participation rate by educational attainment, 25+ —
+          LNS11327659, LNS11327660, LNS11327689, LNS11327662 (same four education groups, in order);
+          employment-population ratio by educational attainment, 25+ —
+          LNS12327659, LNS12327660, LNS12327689, LNS12327662 (same four education groups, in order);
+          CES0000000001 total nonfarm employment (thousands);
+          CES0500000001 total private employment (thousands);
+          CES0500000002 average weekly hours, all employees, total private;
+          CES0500000007 average weekly hours, production and nonsupervisory employees, total private.
+          All LNS (CPS) series are seasonally adjusted. Use SELECT DISTINCT series to see what a
+          given partition actually contains.
       - name: year
         type: integer
         nullable: true
@@ -506,7 +536,45 @@ partitionedTables:
         - "LNS14000000"
         - "CES0000000001"
         - "LNS11300000"
-      rateLimit:  # BLS API limits: 500 daily queries, 25/series per query
+        # CPS unemployment rate by educational attainment, 25 years and over (seasonally adjusted)
+        - "LNS14027659"
+        - "LNS14027660"
+        - "LNS14027689"
+        - "LNS14027662"
+        # CPS labor force participation rate by educational attainment, 25 years and over
+        - "LNS11327659"
+        - "LNS11327660"
+        - "LNS11327689"
+        - "LNS11327662"
+        # CPS employment-population ratio by educational attainment, 25 years and over
+        - "LNS12327659"
+        - "LNS12327660"
+        - "LNS12327689"
+        - "LNS12327662"
+        # CPS headline levels and alternative measures of labor underutilization
+        - "LNS12300000"
+        - "LNS13327709"
+        - "LNS11000000"
+        - "LNS12000000"
+        - "LNS13000000"
+        - "LNS12032194"
+        - "LNS13008636"
+        - "LNS13025703"
+        - "LNS13008275"
+        - "LNS13008276"
+        # CPS unemployment rate by race/ethnicity, sex, and age
+        - "LNS14000003"
+        - "LNS14000006"
+        - "LNS14000009"
+        - "LNS14032183"
+        - "LNS14000025"
+        - "LNS14000026"
+        - "LNS14000012"
+        # CES total private employment and average weekly hours
+        - "CES0500000001"
+        - "CES0500000002"
+        - "CES0500000007"
+      rateLimit:  # BLS API limits (registered v2 key): 500 daily queries, 50 series per query
         minIntervalMs: 1100  # Wait time between requests
         maxRetries: 3
       response:
@@ -525,6 +593,44 @@ partitionedTables:
           - "LNS14000000"   # Unemployment rate
           - "CES0000000001" # Total nonfarm employment
           - "LNS11300000"   # Labor force participation rate
+          # Unemployment rate by educational attainment, 25 years and over (seasonally adjusted)
+          - "LNS14027659"   # Unemployment rate - less than a high school diploma
+          - "LNS14027660"   # Unemployment rate - high school graduates, no college
+          - "LNS14027689"   # Unemployment rate - some college or associate degree
+          - "LNS14027662"   # Unemployment rate - bachelor's degree and higher
+          # Labor force participation rate by educational attainment, 25 years and over
+          - "LNS11327659"   # LFPR - less than a high school diploma
+          - "LNS11327660"   # LFPR - high school graduates, no college
+          - "LNS11327689"   # LFPR - some college or associate degree
+          - "LNS11327662"   # LFPR - bachelor's degree and higher
+          # Employment-population ratio by educational attainment, 25 years and over
+          - "LNS12327659"   # Emp-pop ratio - less than a high school diploma
+          - "LNS12327660"   # Emp-pop ratio - high school graduates, no college
+          - "LNS12327689"   # Emp-pop ratio - some college or associate degree
+          - "LNS12327662"   # Emp-pop ratio - bachelor's degree and higher
+          # CPS headline levels and alternative measures of labor underutilization
+          - "LNS12300000"   # Employment-population ratio, 16 years and over (percent)
+          - "LNS13327709"   # U-6 total unemployed plus marginally attached plus part-time for economic reasons (percent)
+          - "LNS11000000"   # Civilian labor force level (thousands)
+          - "LNS12000000"   # Employment level, CPS (thousands)
+          - "LNS13000000"   # Unemployment level (thousands)
+          - "LNS12032194"   # Employed part time for economic reasons (thousands)
+          - "LNS13008636"   # Unemployed 27 weeks and over (thousands)
+          - "LNS13025703"   # Percent of unemployed 27 weeks and over (percent)
+          - "LNS13008275"   # Average weeks unemployed
+          - "LNS13008276"   # Median weeks unemployed
+          # CPS unemployment rate by race/ethnicity, sex, and age (percent)
+          - "LNS14000003"   # Unemployment rate - White
+          - "LNS14000006"   # Unemployment rate - Black or African American
+          - "LNS14000009"   # Unemployment rate - Hispanic or Latino
+          - "LNS14032183"   # Unemployment rate - Asian
+          - "LNS14000025"   # Unemployment rate - men, 20 years and over
+          - "LNS14000026"   # Unemployment rate - women, 20 years and over
+          - "LNS14000012"   # Unemployment rate - 16 to 19 years
+          # CES total private employment and average weekly hours
+          - "CES0500000001" # Total private employment, all employees (thousands)
+          - "CES0500000002" # Average weekly hours, all employees, total private
+          - "CES0500000007" # Average weekly hours, production and nonsupervisory employees, total private
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
@@ -577,7 +683,13 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series identifier (e.g., 'CUUR0000SA0' for CPI All Urban, 'WPUFD49207' for PPI)
+        comment: >
+          BLS series identifier. This table is long-format: one row per (series, period), and it
+          mixes CPI with PPI, so ALWAYS filter on series. The 3 series loaded are:
+          CUUR0000SA0 CPI-U, U.S. city average, all items, not seasonally adjusted (1982-84=100);
+          CUUR0000SA0L1E CPI-U core, all items less food and energy, not seasonally adjusted;
+          WPUFD49207 PPI final demand, finished goods.
+          All are index levels, not rates — compute inflation as a period-over-period change.
       - name: year
         type: integer
         nullable: true
@@ -701,22 +813,44 @@ partitionedTables:
     comment: >
       Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). Enables regional inflation comparisons and analysis of cost-of-living differences across major geographic areas.
     columns:
-      - *date_column
-      - *series_column
+      - name: date
+        type: date
+        nullable: true
+        comment: >
+          Observation date, first day of the month, derived from the BLS year and period fields
+          (period M01-M12). BlsResponseTransformer emits year and period rather than a date.
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS series identifier. This table is long-format: one row per (series, period), so ALWAYS
+          filter on series. The 4 series loaded are CPI-U all items, not seasonally adjusted, for
+          the four Census regions: CUUR0100SA0 Northeast, CUUR0200SA0 Midwest, CUUR0300SA0 South,
+          CUUR0400SA0 West. Series ID format is CUUR{area}SA0, so the embedded 4 characters are the
+          Census region code. As with metro_cpi, BlsResponseTransformer emits only series, year,
+          period, periodName, value, latest and footnotes — the area_code and area_name columns are
+          not populated by the current ingest. Index levels (1982-84=100), not rates.
       - name: area_code
         type: string
         nullable: true
-        comment: Census region code
+        comment: >
+          Census region code, derived from series positions 5-8 (CUUR{area}SA0):
+          0100 Northeast, 0200 Midwest, 0300 South, 0400 West.
+        expression: "SUBSTRING(series, 5, 4)"
       - name: area_name
         type: string
         nullable: true
-        comment: Census region name
+        comment: >
+          Census region name for the area code, matching econ_reference.bls_geographies.geo_name
+          and the censusRegions map in /bls/bls-constants.yaml.
+        expression: "CASE SUBSTRING(series, 5, 4) WHEN '0100' THEN 'Northeast' WHEN '0200' THEN 'Midwest' WHEN '0300' THEN 'South' WHEN '0400' THEN 'West' ELSE NULL END"
       - name: value
         type: double
         nullable: true
-        comment: CPI value (base period = 100)
-      - *percent_change_month
-      - *percent_change_year
+        comment: >
+          CPI index level for the area (base period 1982-84 = 100), not a rate. Period-over-period
+          inflation is computed in the metro_cpi_inflation / regional_cpi_inflation views.
     dimensions:
       type:
         - regional_cpi
@@ -813,52 +947,92 @@ partitionedTables:
     comment: >
       Consumer Price Index for 20 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.
     columns:
-      - *date_column
-      - *series_column
+      - name: date
+        type: date
+        nullable: true
+        comment: >
+          Observation date, first day of the month, derived from the BLS year and period fields
+          (period M01-M12). BlsResponseTransformer emits year and period rather than a date.
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS series identifier, format CUUR{area}SA0 — the embedded 4 characters are the BLS CPI
+          area code. Filter on series: BlsResponseTransformer emits only series, year, period,
+          periodName, value, latest and footnotes, so the area_code and area_name columns are not
+          populated by the current ingest (SUBSTRING(series, 5, 4) recovers the area code).
+          This table is long-format, one row per (series, period). All 20 series are CPI-U all items, not seasonally adjusted
+          (index, base period = 100), one per metro area: CUURS12ASA0 New York-Newark-Jersey City
+          NY-NJ-PA; CUURS12BSA0 Philadelphia-Camden-Wilmington PA-NJ-DE-MD; CUURS23ASA0
+          Chicago-Naperville-Elgin IL-IN-WI; CUURS23BSA0 Detroit-Warren-Dearborn MI; CUURS24ASA0
+          Minneapolis-St.Paul-Bloomington MN-WI; CUURS24BSA0 St. Louis MO-IL; CUURS35ASA0
+          Washington-Arlington-Alexandria DC-VA-MD-WV; CUURS35BSA0 Miami-Fort Lauderdale-West Palm
+          Beach FL; CUURS35CSA0 Atlanta-Sandy Springs-Roswell GA; CUURS35DSA0 Tampa-St.
+          Petersburg-Clearwater FL; CUURS35ESA0 Baltimore-Columbia-Towson MD; CUURS37BSA0
+          Houston-The Woodlands-Sugar Land TX; CUURS48ASA0 Phoenix-Mesa-Scottsdale AZ; CUURS48BSA0
+          Denver-Aurora-Lakewood CO; CUURS49ASA0 Los Angeles-Long Beach-Anaheim CA; CUURS49BSA0
+          San Francisco-Oakland-Hayward CA; CUURS49CSA0 Riverside-San Bernardino-Ontario CA;
+          CUURS49DSA0 Seattle-Tacoma-Bellevue WA; CUURS49ESA0 San Diego-Carlsbad CA; CUURS49GSA0
+          Urban Alaska. Names follow the authoritative BLS decoder
+          (https://download.bls.gov/pub/time.series/cu/cu.area). Boston (S11A), Dallas-Fort Worth
+          (S37A), and Urban Hawaii (S49F) publish metro CPI but are NOT loaded here. Two loaded
+          codes have no row in econ_reference.bls_geographies, so the area_code foreign key does
+          not resolve for them: S49B (San Francisco, absent from the metro reference list) and
+          S49G (Urban Alaska, a statewide urban area rather than a metro).
       - name: area_code
         type: string
         nullable: true
-        comment: Metro area code
+        comment: >
+          BLS CPI area code, derived from series positions 5-8 (CUUR{area}SA0). Join to
+          econ_reference.bls_geographies (metro_cpi_area_code) for CBSA and publication codes.
+        expression: "SUBSTRING(series, 5, 4)"
       - name: area_name
         type: string
         nullable: true
-        comment: Metro area name
+        comment: >
+          Metro area name for the CPI area code. Spellings follow the BLS CU decoder
+          (https://download.bls.gov/pub/time.series/cu/cu.area), which differs cosmetically from
+          econ_reference.bls_geographies.geo_name in places (e.g. 'St.Paul' vs 'St. Paul') — join
+          bls_geographies on area_code, never on the name.
+        expression: "CASE SUBSTRING(series, 5, 4) WHEN 'S12A' THEN 'New York-Newark-Jersey City, NY-NJ-PA' WHEN 'S12B' THEN 'Philadelphia-Camden-Wilmington, PA-NJ-DE-MD' WHEN 'S23A' THEN 'Chicago-Naperville-Elgin, IL-IN-WI' WHEN 'S23B' THEN 'Detroit-Warren-Dearborn, MI' WHEN 'S24A' THEN 'Minneapolis-St.Paul-Bloomington, MN-WI' WHEN 'S24B' THEN 'St. Louis, MO-IL' WHEN 'S35A' THEN 'Washington-Arlington-Alexandria, DC-VA-MD-WV' WHEN 'S35B' THEN 'Miami-Fort Lauderdale-West Palm Beach, FL' WHEN 'S35C' THEN 'Atlanta-Sandy Springs-Roswell, GA' WHEN 'S35D' THEN 'Tampa-St. Petersburg-Clearwater, FL' WHEN 'S35E' THEN 'Baltimore-Columbia-Towson, MD' WHEN 'S37B' THEN 'Houston-The Woodlands-Sugar Land, TX' WHEN 'S48A' THEN 'Phoenix-Mesa-Scottsdale, AZ' WHEN 'S48B' THEN 'Denver-Aurora-Lakewood, CO' WHEN 'S49A' THEN 'Los Angeles-Long Beach-Anaheim, CA' WHEN 'S49B' THEN 'San Francisco-Oakland-Hayward, CA' WHEN 'S49C' THEN 'Riverside-San Bernardino-Ontario, CA' WHEN 'S49D' THEN 'Seattle-Tacoma-Bellevue, WA' WHEN 'S49E' THEN 'San Diego-Carlsbad, CA' WHEN 'S49G' THEN 'Urban Alaska' ELSE NULL END"
       - name: value
         type: double
         nullable: true
-        comment: CPI value (base period = 100)
-      - *percent_change_month
-      - *percent_change_year
+        comment: >
+          CPI index level for the area (base period 1982-84 = 100), not a rate. Period-over-period
+          inflation is computed in the metro_cpi_inflation / regional_cpi_inflation views.
 
     # API Configuration - series IDs directly in request body
-    # 20 unique area codes covering 22 metros (5 of 27 metros have no CPI data)
-    # Some metros share codes (e.g., Jacksonville/Miami use S35C, NYC/Tampa use S35D)
+    # 20 CPI area codes, one per metro (CPI area codes are never shared between metros).
+    # Boston (S11A), Dallas-Fort Worth (S37A) and Urban Hawaii (S49F) are not loaded.
+    # Names verified against https://download.bls.gov/pub/time.series/cu/cu.area
     download:
       enabled: true
       method: POST
       baseUrl: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
       requestBody:
         seriesid:
-          - CUURS12ASA0  # Chicago-Naperville-Elgin, IL-IN-WI
+          - CUURS12ASA0  # New York-Newark-Jersey City, NY-NJ-PA
           - CUURS12BSA0  # Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
-          - CUURS23ASA0  # Dallas-Fort Worth-Arlington, TX
+          - CUURS23ASA0  # Chicago-Naperville-Elgin, IL-IN-WI
           - CUURS23BSA0  # Detroit-Warren-Dearborn, MI
-          - CUURS24ASA0  # Minneapolis-St. Paul-Bloomington, MN-WI
+          - CUURS24ASA0  # Minneapolis-St.Paul-Bloomington, MN-WI
           - CUURS24BSA0  # St. Louis, MO-IL
-          - CUURS35ASA0  # Atlanta-Sandy Springs-Roswell, GA
-          - CUURS35BSA0  # Washington-Arlington-Alexandria, DC-VA-MD-WV
-          - CUURS35CSA0  # Miami-Fort Lauderdale / Jacksonville, FL
-          - CUURS35DSA0  # New York-Newark-Jersey City / Tampa, FL
-          - CUURS35ESA0  # Boston-Cambridge-Newton, MA-NH
+          - CUURS35ASA0  # Washington-Arlington-Alexandria, DC-VA-MD-WV
+          - CUURS35BSA0  # Miami-Fort Lauderdale-West Palm Beach, FL
+          - CUURS35CSA0  # Atlanta-Sandy Springs-Roswell, GA
+          - CUURS35DSA0  # Tampa-St. Petersburg-Clearwater, FL
+          - CUURS35ESA0  # Baltimore-Columbia-Towson, MD
           - CUURS37BSA0  # Houston-The Woodlands-Sugar Land, TX
-          - CUURS48ASA0  # Denver-Aurora-Lakewood, CO
-          - CUURS48BSA0  # Seattle-Tacoma-Bellevue, WA
-          - CUURS49ASA0  # San Jose-Sunnyvale-Santa Clara, CA
-          - CUURS49BSA0  # Phoenix-Mesa-Scottsdale, AZ
-          - CUURS49CSA0  # Portland-Vancouver-Hillsboro, OR-WA
-          - CUURS49DSA0  # Riverside-San Bernardino-Ontario, CA
+          - CUURS48ASA0  # Phoenix-Mesa-Scottsdale, AZ
+          - CUURS48BSA0  # Denver-Aurora-Lakewood, CO
+          - CUURS49ASA0  # Los Angeles-Long Beach-Anaheim, CA
+          - CUURS49BSA0  # San Francisco-Oakland-Hayward, CA
+          - CUURS49CSA0  # Riverside-San Bernardino-Ontario, CA
+          - CUURS49DSA0  # Seattle-Tacoma-Bellevue, WA
           - CUURS49ESA0  # San Diego-Carlsbad, CA
-          - CUURS49GSA0  # Los Angeles-Long Beach-Anaheim, CA
+          - CUURS49GSA0  # Urban Alaska
         startyear: "{year}"
         endyear: "{year}"
       authentication:
@@ -875,26 +1049,26 @@ partitionedTables:
         Content-Type: "application/json"
       body:
         seriesid:  # Metro CPI series - inlined for HttpSource
-          - CUURS12ASA0  # Chicago-Naperville-Elgin, IL-IN-WI
+          - CUURS12ASA0  # New York-Newark-Jersey City, NY-NJ-PA
           - CUURS12BSA0  # Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
-          - CUURS23ASA0  # Dallas-Fort Worth-Arlington, TX
+          - CUURS23ASA0  # Chicago-Naperville-Elgin, IL-IN-WI
           - CUURS23BSA0  # Detroit-Warren-Dearborn, MI
-          - CUURS24ASA0  # Minneapolis-St. Paul-Bloomington, MN-WI
+          - CUURS24ASA0  # Minneapolis-St.Paul-Bloomington, MN-WI
           - CUURS24BSA0  # St. Louis, MO-IL
-          - CUURS35ASA0  # Atlanta-Sandy Springs-Roswell, GA
-          - CUURS35BSA0  # Washington-Arlington-Alexandria, DC-VA-MD-WV
-          - CUURS35CSA0  # Miami-Fort Lauderdale / Jacksonville, FL
-          - CUURS35DSA0  # New York-Newark-Jersey City / Tampa, FL
-          - CUURS35ESA0  # Boston-Cambridge-Newton, MA-NH
+          - CUURS35ASA0  # Washington-Arlington-Alexandria, DC-VA-MD-WV
+          - CUURS35BSA0  # Miami-Fort Lauderdale-West Palm Beach, FL
+          - CUURS35CSA0  # Atlanta-Sandy Springs-Roswell, GA
+          - CUURS35DSA0  # Tampa-St. Petersburg-Clearwater, FL
+          - CUURS35ESA0  # Baltimore-Columbia-Towson, MD
           - CUURS37BSA0  # Houston-The Woodlands-Sugar Land, TX
-          - CUURS48ASA0  # Denver-Aurora-Lakewood, CO
-          - CUURS48BSA0  # Seattle-Tacoma-Bellevue, WA
-          - CUURS49ASA0  # San Jose-Sunnyvale-Santa Clara, CA
-          - CUURS49BSA0  # Phoenix-Mesa-Scottsdale, AZ
-          - CUURS49CSA0  # Portland-Vancouver-Hillsboro, OR-WA
-          - CUURS49DSA0  # Riverside-San Bernardino-Ontario, CA
+          - CUURS48ASA0  # Phoenix-Mesa-Scottsdale, AZ
+          - CUURS48BSA0  # Denver-Aurora-Lakewood, CO
+          - CUURS49ASA0  # Los Angeles-Long Beach-Anaheim, CA
+          - CUURS49BSA0  # San Francisco-Oakland-Hayward, CA
+          - CUURS49CSA0  # Riverside-San Bernardino-Ontario, CA
+          - CUURS49DSA0  # Seattle-Tacoma-Bellevue, WA
           - CUURS49ESA0  # San Diego-Carlsbad, CA
-          - CUURS49GSA0  # Los Angeles-Long Beach-Anaheim, CA
+          - CUURS49GSA0  # Urban Alaska
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
@@ -959,7 +1133,20 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series ID (e.g., SMU01000000000000001 = Alabama, statewide, total nonfarm, all employees)
+        comment: >
+          BLS State and Metro Area Employment (SM) series identifier, 20 characters:
+          SMU or SMS + state FIPS(2) + area(5) + supersector(2) + industry(6) + data type(2).
+          SMU = not seasonally adjusted, SMS = seasonally adjusted. Data type 01 = all employees
+          in thousands, 02 = average weekly hours, 03 = average hourly earnings,
+          11 = average weekly earnings. Decode the supersector with
+          econ_reference.naics_sectors. This table is long-format: one row per (series, period),
+          so ALWAYS filter on series or the decoded code columns.
+          Rows here are the statewide all-employees slice: series matching
+          ^SMU\d{2}00000\d{2}00000001 — area 00000 (statewide), industry 000000 (supersector
+          totals), data type 01, not seasonally adjusted. That is 51 jurisdictions x 22
+          supersectors = 1,122 series; e.g. SMU01000000000000001 is Alabama, statewide,
+          total nonfarm, all employees. Metro-area rows live in metro_industry and seasonally
+          adjusted (SMS) rows are not loaded.
         source: series_id
       - name: year
         type: integer
@@ -1175,7 +1362,20 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series ID (e.g., SMU36935610000000001 = New York metro, total nonfarm, all employees)
+        comment: >
+          BLS State and Metro Area Employment (SM) series identifier, 20 characters:
+          SMU or SMS + state FIPS(2) + area(5) + supersector(2) + industry(6) + data type(2).
+          SMU = not seasonally adjusted, SMS = seasonally adjusted. Data type 01 = all employees
+          in thousands, 02 = average weekly hours, 03 = average hourly earnings,
+          11 = average weekly earnings. Decode the supersector with
+          econ_reference.naics_sectors. This table is long-format: one row per (series, period),
+          so ALWAYS filter on series or the decoded code columns.
+          Rows here are the metro all-employees slice: series matching
+          ^SMU\d{2}(CBSA)\d{2}00000001 for the 27 published metro CBSA codes at positions 6-10,
+          industry 000000 (supersector totals), data type 01, not seasonally adjusted — 27 metros
+          x 22 supersectors; e.g. SMU36935610000000001 is the New York metro, total nonfarm,
+          all employees. Join the embedded CBSA code to econ_reference.bls_geographies
+          (cbsa_code) for metro names. Statewide rows live in state_industry.
         source: series_id
       - name: year
         type: integer
@@ -1633,7 +1833,8 @@ partitionedTables:
 
     columns:
       # BLS TSV columns: series_id, year, period, value, footnote_codes
-      # Series ID format: JTU{region}{industry}{dataelement} (e.g., JTU00000000JOR)
+      # Series ID format: JTS{industry:4-9}{region:10-11}{area:12-16}{sizeclass:17-18}{element:19-20}{ratelevel:21}
+      # e.g. JTS000000NE00000000JOR = job openings rate, Northeast, total nonfarm
       - name: date
         type: date
         nullable: true
@@ -1643,7 +1844,22 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series identifier
+        comment: >
+          BLS JOLTS series identifier, 21 characters:
+          JTS + industry(6, positions 4-9) + state or region(2, positions 10-11) +
+          area(5, positions 12-16) + size class(2, positions 17-18) +
+          data element(2, positions 19-20) + rate/level(1, position 21).
+          Data element codes: JO job openings, HI hires, TS total separations, QU quits,
+          LD layoffs and discharges, OS other separations, UO unemployed persons per job opening,
+          R1/R2 survey response rates. Rate/level: L = level in thousands, R = rate
+          (percent of employment; job openings rate uses employment plus openings as the base).
+          Decode industry with econ_reference.jolts_industries and the data element with
+          econ_reference.jolts_dataelements. This table is long-format: one row per
+          (series, period), so ALWAYS filter on series (or the decoded code columns) —
+          never aggregate across data elements or across L and R together.
+          Rows here are the national and 4-region slice: series matching
+          ^JTS000000(00|NE|MW|SO|WE) — industry is always 000000 (total nonfarm) and
+          positions 10-11 hold 00 for the U.S. or NE/MW/SO/WE for the Census region.
         source: series_id
       - name: region_code
         type: string
@@ -1786,7 +2002,20 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series identifier
+        comment: >
+          BLS JOLTS series identifier, 21 characters:
+          JTS + industry(6, positions 4-9) + state or region(2, positions 10-11) +
+          area(5, positions 12-16) + size class(2, positions 17-18) +
+          data element(2, positions 19-20) + rate/level(1, position 21).
+          Data element codes: JO job openings, HI hires, TS total separations, QU quits,
+          LD layoffs and discharges, OS other separations, UO unemployed persons per job opening,
+          R1/R2 survey response rates. Rate/level: L = level in thousands, R = rate.
+          Decode industry with econ_reference.jolts_industries and the data element with
+          econ_reference.jolts_dataelements. This table is long-format: one row per
+          (series, period), so ALWAYS filter on series (or the decoded code columns) —
+          never aggregate across data elements or across L and R together.
+          Rows here are the national by-industry slice: series matching ^JTS[1-9][0-9]{5}00 —
+          a non-total industry at positions 4-9 with national geography (00) at 10-11.
         source: series_id
       - name: metric_type
         type: string
@@ -1914,7 +2143,20 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS series identifier
+        comment: >
+          BLS JOLTS series identifier, 21 characters:
+          JTS + industry(6, positions 4-9) + state or region(2, positions 10-11) +
+          area(5, positions 12-16) + size class(2, positions 17-18) +
+          data element(2, positions 19-20) + rate/level(1, position 21).
+          Data element codes: JO job openings, HI hires, TS total separations, QU quits,
+          LD layoffs and discharges, OS other separations, UO unemployed persons per job opening,
+          R1/R2 survey response rates. Rate/level: L = level in thousands, R = rate.
+          Decode industry with econ_reference.jolts_industries and the data element with
+          econ_reference.jolts_dataelements. This table is long-format: one row per
+          (series, period), so ALWAYS filter on series (or the decoded code columns) —
+          never aggregate across data elements or across L and R together.
+          Rows here are the by-state slice: series matching ^JTS000000(0[1-9]|[1-9][0-9]) —
+          industry is always 000000 (total nonfarm) and positions 10-11 hold the state FIPS code.
         source: series_id
       - name: metric_type
         type: string
@@ -1999,11 +2241,24 @@ partitionedTables:
       Average hourly and weekly earnings from BLS Current Employment Statistics (CES).
       Tracks wage growth trends across all private sector employees.
     columns:
-      - *date_column
+      - name: date
+        type: date
+        nullable: true
+        comment: >
+          Observation date, first day of the month, derived from the BLS year and period fields
+          (period M01-M12). BlsResponseTransformer emits year and period rather than a date.
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
       - name: series
         type: string
         nullable: true
-        comment: BLS series identifier for wage/earnings data
+        comment: >
+          BLS CES series identifier. This table is long-format: one row per (series, period), and it
+          mixes hourly with weekly earnings, so ALWAYS filter on series. The 3 series loaded are:
+          CES0500000003 average hourly earnings, all employees, total private (dollars per hour);
+          CES0500000008 average hourly earnings, production and nonsupervisory employees,
+          total private (dollars per hour);
+          CES0500000011 average weekly earnings, all employees, total private (dollars per week).
+          Nominal dollars — deflate with inflation_metrics for real wage growth.
       - name: value
         type: double
         nullable: true
@@ -2114,7 +2369,16 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: BLS LAUS series identifier
+        comment: >
+          BLS Local Area Unemployment Statistics (LAUS) series identifier, format
+          LASST{state FIPS(2)}{area(10)}{measure(2)} — e.g. LASST010000000000003 is the Alabama
+          statewide unemployment rate. The trailing measure code selects the statistic:
+          03 unemployment rate (percent), 04 unemployment level, 05 employment level,
+          06 civilian labor force level (levels in persons). 204 series are loaded =
+          51 jurisdictions x those 4 measures; the full list is in
+          /bls/regional-employment-series.json. This table is long-format: one row per
+          (series, period) and it mixes a percent with three person counts, so ALWAYS filter
+          on series or the derived measure column before aggregating.
       - name: year
         type: integer
         nullable: true
@@ -2551,7 +2815,36 @@ partitionedTables:
       - name: series
         type: string
         nullable: true
-        comment: FRED series identifier (foreign key to reference_fred_series)
+        comment: >
+          FRED series identifier (foreign key to reference_fred_series, which carries the title,
+          units, frequency, and seasonal adjustment for each). This table is long-format:
+          one row per (series, date), so ALWAYS filter on series — units differ per series
+          (percent, index, billions of dollars, thousands of units). The 48 curated series are:
+          rates and monetary policy — DFF effective federal funds rate, FEDFUNDS federal funds
+          target rate, DGS3MO / DGS2 / DGS5 / DGS10 / DGS30 Treasury yields at those maturities,
+          T10Y2Y 10Y-2Y yield spread, T10YIE 10-year breakeven inflation,
+          BAMLC0A0CM investment-grade corporate bond spread;
+          money and Fed balance sheet — M1SL M1, M2SL M2, BOGMBASE monetary base,
+          WALCL Fed total assets;
+          national accounts — GDP nominal GDP, GDPC1 real GDP (chained 2017 dollars);
+          labor — UNRATE unemployment rate, U6RATE U-6 underutilization, PAYEMS nonfarm payrolls,
+          CIVPART labor force participation rate, ICSA initial jobless claims (weekly),
+          CCSA continuing claims, AWHMAN average weekly hours in manufacturing;
+          inflation — CPIAUCSL CPI all items SA, CPIAUCNS CPI all items NSA,
+          CPILFESL core CPI ex food and energy SA, WPUFD49207 PPI finished goods,
+          PCEPI PCE price index, PCEPILFE core PCE price index (the Fed's primary target);
+          consumer — PCE personal consumption expenditures, PI personal income,
+          PSAVERT personal saving rate;
+          production and credit — INDPRO industrial production, TCU capacity utilization,
+          RSXFS advance retail sales, TOTBKCR total bank credit,
+          DRTSCILM senior loan officer survey lending standards;
+          housing — HOUST housing starts, HOUST1F single-family starts, PERMIT building permits,
+          EXHOSLUSM495S existing home sales, CSUSHPISA Case-Shiller national home price index,
+          MSPUS median sales price of houses sold, RRVRUSQ156N rental vacancy rate,
+          MORTGAGE30US 30-year fixed mortgage rate;
+          commodities and FX — DCOILWTICO WTI crude oil price,
+          DTWEXBGS broad trade-weighted dollar index;
+          business cycle — USREC NBER recession indicator (1=recession, 0=expansion).
       - *date_column
       - name: value
         type: double
@@ -2770,7 +3063,7 @@ partitionedTables:
       output:
         pattern: "type=fred_indicators/series=*/year=*/"
       partition:
-        columns: [type, series, year]
+        columns: [type, year]
       options:
         compression: snappy
         batchSize: 50000
@@ -3023,7 +3316,15 @@ partitionedTables:
       - name: line_code
         type: string
         nullable: true
-        comment: BEA line code for specific metric
+        comment: >
+          BEA line code — the row identifier within a BEA regional table. A line_code is only
+          unique within a table, so ALWAYS filter or join on (table_name, line_code): the same
+          line_code means different things in different BEA tables. Each row already carries the
+          line's own label in the description column and its unit in the unit column; for the full
+          catalog, join (table_name, line_code) to econ_reference.regional_linecodes
+          (tablename, key). This table is long-format — one row per
+          (geo_fips, table_name, line_code, year) — so never sum value across line codes: they mix
+          dollars, index numbers, and counts, and many lines are subtotals of other lines.
       - name: industry_classification
         type: string
         nullable: true
@@ -3147,7 +3448,15 @@ partitionedTables:
       - name: line_code
         type: string
         nullable: true
-        comment: BEA line code for specific metric
+        comment: >
+          BEA line code — the row identifier within a BEA regional table. A line_code is only
+          unique within a table, so ALWAYS filter or join on (table_name, line_code): the same
+          line_code means different things in different BEA tables. Each row already carries the
+          line's own label in the description column and its unit in the unit column; for the full
+          catalog, join (table_name, line_code) to econ_reference.regional_linecodes
+          (tablename, key). This table is long-format — one row per
+          (geo_fips, table_name, line_code, year) — so never sum value across line codes: they mix
+          dollars, index numbers, and counts, and many lines are subtotals of other lines.
       - name: industry_classification
         type: string
         nullable: true
@@ -3265,7 +3574,15 @@ partitionedTables:
       - name: line_code
         type: string
         nullable: true
-        comment: BEA line code for specific metric
+        comment: >
+          BEA line code — the row identifier within a BEA regional table. A line_code is only
+          unique within a table, so ALWAYS filter or join on (table_name, line_code): the same
+          line_code means different things in different BEA tables. Each row already carries the
+          line's own label in the description column and its unit in the unit column; for the full
+          catalog, join (table_name, line_code) to econ_reference.regional_linecodes
+          (tablename, key). This table is long-format — one row per
+          (geo_fips, table_name, line_code, year) — so never sum value across line codes: they mix
+          dollars, index numbers, and counts, and many lines are subtotals of other lines.
       - name: industry_classification
         type: string
         nullable: true
@@ -3383,7 +3700,15 @@ partitionedTables:
       - name: line_code
         type: string
         nullable: true
-        comment: BEA line code for specific metric
+        comment: >
+          BEA line code — the row identifier within a BEA regional table. A line_code is only
+          unique within a table, so ALWAYS filter or join on (table_name, line_code): the same
+          line_code means different things in different BEA tables. Each row already carries the
+          line's own label in the description column and its unit in the unit column; for the full
+          catalog, join (table_name, line_code) to econ_reference.regional_linecodes
+          (tablename, key). This table is long-format — one row per
+          (geo_fips, table_name, line_code, year) — so never sum value across line codes: they mix
+          dollars, index numbers, and counts, and many lines are subtotals of other lines.
       - name: industry_classification
         type: string
         nullable: true
@@ -3501,7 +3826,15 @@ partitionedTables:
       - name: line_code
         type: string
         nullable: true
-        comment: BEA line code for specific metric
+        comment: >
+          BEA line code — the row identifier within a BEA regional table. A line_code is only
+          unique within a table, so ALWAYS filter or join on (table_name, line_code): the same
+          line_code means different things in different BEA tables. Each row already carries the
+          line's own label in the description column and its unit in the unit column; for the full
+          catalog, join (table_name, line_code) to econ_reference.regional_linecodes
+          (tablename, key). This table is long-format — one row per
+          (geo_fips, table_name, line_code, year) — so never sum value across line codes: they mix
+          dollars, index numbers, and counts, and many lines are subtotals of other lines.
       - name: industry_classification
         type: string
         nullable: true
@@ -3660,7 +3993,14 @@ partitionedTables:
       - name: line_code
         type: string
         nullable: true
-        comment: BEA line code for specific metric
+        comment: >
+          BEA line code — the row identifier within a BEA regional table, iterated per BEA table
+          during ingestion. A line_code is only unique within a table, so ALWAYS pair it with the
+          tablename column when filtering or joining; join (tablename, line_code) to
+          econ_reference.regional_linecodes (tablename, key) for the line description. Units come
+          from cl_unit and unit_mult, and they differ by line. This table is long-format — one row
+          per (geo_fips, tablename, line_code, time_period) — so never sum data_value across line
+          codes: they mix dollars, counts, and index numbers, and many lines are subtotals.
 
     # API Configuration
     download:
@@ -4079,7 +4419,17 @@ partitionedTables:
         type: string
         source: series_id
         nullable: true
-        comment: BEA MNE series identifier (e.g. 30=U.S. position abroad, 22=foreign position in U.S., 27=direct investment income)
+        comment: >
+          BEA MNE series identifier. The MNE dataset is a long-format cube: one row per
+          (series_id, row_code, column_code, time_period), and each row carries its own label in
+          series_name, so read series_name rather than memorizing codes — there is no separate
+          series reference table. Ingestion requests SeriesID=all, so the loaded domain is whatever
+          BEA publishes for the requested direction and classification; enumerate it with
+          SELECT DISTINCT series_id, series_name. Common values: 30 = U.S. direct investment
+          position abroad, 22 = foreign direct investment position in the U.S.,
+          27 = direct investment income. ALWAYS filter on series_id before aggregating —
+          positions (stocks), income, and financial flows share this column and are not additive.
+          Scale comes from table_scale, not from the raw data_value.
       - name: series_name
         type: string
         source: series_name
@@ -6177,6 +6527,31 @@ tables:
     comment: >
       Real GDP (chained 2017 dollars) with quarter-over-quarter growth rate. Columns: date, real_gdp_billions (real GDP in billions of chained 2017 dollars), prior_quarter_gdp, qoq_growth_pct (percentage change from prior quarter). Use GDPC1 instead of GDP for growth analysis to remove inflation distortion. Two consecutive negative qoq_growth_pct values is the informal recession definition.
 
+  - name: metro_cpi_inflation
+    type: view
+    sql: "SELECT date, series, area_code, area_name, value AS cpi_index, CASE WHEN (EXTRACT(YEAR FROM date) * 12 + EXTRACT(MONTH FROM date)) - (EXTRACT(YEAR FROM LAG(date, 1) OVER (PARTITION BY series ORDER BY date)) * 12 + EXTRACT(MONTH FROM LAG(date, 1) OVER (PARTITION BY series ORDER BY date))) = 1 THEN (value - LAG(value, 1) OVER (PARTITION BY series ORDER BY date)) / NULLIF(LAG(value, 1) OVER (PARTITION BY series ORDER BY date), 0) * 100 END AS percent_change_month, CASE WHEN (EXTRACT(YEAR FROM date) * 12 + EXTRACT(MONTH FROM date)) - (EXTRACT(YEAR FROM LAG(date, 12) OVER (PARTITION BY series ORDER BY date)) * 12 + EXTRACT(MONTH FROM LAG(date, 12) OVER (PARTITION BY series ORDER BY date))) = 12 THEN (value - LAG(value, 12) OVER (PARTITION BY series ORDER BY date)) / NULLIF(LAG(value, 12) OVER (PARTITION BY series ORDER BY date), 0) * 100 END AS percent_change_year FROM ${ECON_SCHEMA_NAME:econ}.metro_cpi"
+    comment: >
+      Metro CPI with month-over-month and year-over-year inflation computed per metro. Columns:
+      date, series, area_code, area_name, cpi_index (CPI-U all items, NSA, 1982-84=100),
+      percent_change_month, percent_change_year (both percent). Replaces the former
+      percent_change_month/percent_change_year columns on metro_cpi, which no ingestion path ever
+      populated. Changes are NULL where the prior month (or same month last year) is missing from
+      the loaded years, so a partition gap reads as unknown rather than as a wrong number — expect
+      NULL percent_change_year for the first loaded year. Series are not seasonally adjusted, so
+      month-over-month carries seasonal noise; prefer percent_change_year for trend.
+
+  - name: regional_cpi_inflation
+    type: view
+    sql: "SELECT date, series, area_code, area_name, value AS cpi_index, CASE WHEN (EXTRACT(YEAR FROM date) * 12 + EXTRACT(MONTH FROM date)) - (EXTRACT(YEAR FROM LAG(date, 1) OVER (PARTITION BY series ORDER BY date)) * 12 + EXTRACT(MONTH FROM LAG(date, 1) OVER (PARTITION BY series ORDER BY date))) = 1 THEN (value - LAG(value, 1) OVER (PARTITION BY series ORDER BY date)) / NULLIF(LAG(value, 1) OVER (PARTITION BY series ORDER BY date), 0) * 100 END AS percent_change_month, CASE WHEN (EXTRACT(YEAR FROM date) * 12 + EXTRACT(MONTH FROM date)) - (EXTRACT(YEAR FROM LAG(date, 12) OVER (PARTITION BY series ORDER BY date)) * 12 + EXTRACT(MONTH FROM LAG(date, 12) OVER (PARTITION BY series ORDER BY date))) = 12 THEN (value - LAG(value, 12) OVER (PARTITION BY series ORDER BY date)) / NULLIF(LAG(value, 12) OVER (PARTITION BY series ORDER BY date), 0) * 100 END AS percent_change_year FROM ${ECON_SCHEMA_NAME:econ}.regional_cpi"
+    comment: >
+      Census-region CPI with month-over-month and year-over-year inflation computed per region.
+      Columns: date, series, area_code (0100 Northeast, 0200 Midwest, 0300 South, 0400 West),
+      area_name, cpi_index (CPI-U all items, NSA, 1982-84=100), percent_change_month,
+      percent_change_year (both percent). Replaces the former percent_change_* columns on
+      regional_cpi, which no ingestion path ever populated. Changes are NULL where the comparison
+      period is missing from the loaded years. Pairs with metro_cpi_inflation for
+      region-versus-metro cost-of-living divergence.
+
   - name: pce_inflation
     type: view
     sql: "SELECT date, MAX(CASE WHEN series = 'PCEPI' THEN value END) AS pce_index, MAX(CASE WHEN series = 'PCEPILFE' THEN value END) AS core_pce_index FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators WHERE series IN ('PCEPI', 'PCEPILFE') GROUP BY date"
@@ -6221,14 +6596,14 @@ tables:
 #   - 16 SQL views for enriched data and analytics
 #
 # ANCHOR USAGE:
-#   - *date_column: 12 uses
-#   - *percent_change_year: 7 uses
-#   - *series_column: 6 uses
-#   - *percent_change_month: 6 uses
-#   - *state_name: 4 uses
-#   - *industry_name: 3 uses
-#   - *state_fips: 2 uses
-#   - *standard_partitions: 18 uses
+#   - *date_column: 1 use
+#   - *percent_change_year: 0 uses (computed in the *_cpi_inflation views instead)
+#   - *series_column: 0 uses (per-table series comments enumerate each table's series instead)
+#   - *percent_change_month: 0 uses (computed in the *_cpi_inflation views instead)
+#   - *state_name: 0 uses
+#   - *industry_name: 0 uses
+#   - *state_fips: 0 uses
+#   - *standard_partitions: 17 uses
 #
 # FILE SIZE: 57KB (49.6% smaller than JSON 113KB)
 #

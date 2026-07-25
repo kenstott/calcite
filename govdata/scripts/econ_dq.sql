@@ -191,16 +191,14 @@ INSERT INTO dq_results
 SELECT 'econ', 'regional_cpi', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi', allow_moved_paths := true))
-WHERE null_percentage = 100.0
-  AND column_name NOT IN ('date', 'area_code', 'area_name', 'percent_change_month', 'percent_change_year');
+WHERE null_percentage = 100.0;
 
 -- metro_cpi
 INSERT INTO dq_results
 SELECT 'econ', 'metro_cpi', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi', allow_moved_paths := true))
-WHERE null_percentage = 100.0
-  AND column_name NOT IN ('date', 'area_code', 'area_name', 'percent_change_month', 'percent_change_year');
+WHERE null_percentage = 100.0;
 
 -- state_industry
 INSERT INTO dq_results
@@ -688,17 +686,26 @@ WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
 -- T7: EXPECTED VALUES — domain-specific sanity checks
 -- ============================================================================
 
--- employment_statistics: unemployment rate series (LNS14000000) value in [0, 100]
+-- employment_statistics: CPS rate/ratio series values in [0, 100]
+-- Headline unemployment rate and LFPR plus the by-educational-attainment breakouts
+-- (unemployment rate LNS140276xx, LFPR LNS113276xx, emp-pop ratio LNS123276xx).
 INSERT INTO dq_results
 SELECT
   'econ', 'employment_statistics', 'expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
   CAST(bad AS VARCHAR), '0',
-  'rows where unemployment rate series value is outside [0,100]'
+  'rows where a CPS rate/ratio series value is outside [0,100]'
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics', allow_moved_paths := true)
-  WHERE series = 'LNS14000000' AND (value < 0 OR value > 100)
+  WHERE series IN (
+      'LNS14000000', 'LNS11300000', 'LNS12300000', 'LNS13327709', 'LNS13025703',
+      'LNS14027659', 'LNS14027660', 'LNS14027689', 'LNS14027662',
+      'LNS11327659', 'LNS11327660', 'LNS11327689', 'LNS11327662',
+      'LNS12327659', 'LNS12327660', 'LNS12327689', 'LNS12327662',
+      'LNS14000003', 'LNS14000006', 'LNS14000009', 'LNS14032183',
+      'LNS14000025', 'LNS14000026', 'LNS14000012')
+    AND (value < 0 OR value > 100)
 );
 
 -- inflation_metrics: CPI All Urban (CUUR0000SA0) index value should be > 0

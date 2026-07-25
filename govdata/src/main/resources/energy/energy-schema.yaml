@@ -958,7 +958,15 @@ partitionedTables:
       - name: series_id
         type: string
         nullable: true
-        comment: EIA time series identifier
+        comment: >
+          EIA API v2 series identifier. Composite key built by EIA from the endpoint's facets —
+          for crude oil production it encodes area plus process (e.g. the state's crude oil
+          production series); the human-readable label is in series_description on the same row,
+          and the decoded parts are in eia_area_code, state_abbr, fuel_type, and process_code.
+          This table is long-format: one row per (series_id, year, month), and it unions crude oil
+          with natural gas production, so ALWAYS filter on series_id or fuel_type before
+          aggregating — production_unit differs between fuels. Enumerate with
+          SELECT DISTINCT series_id, series_description.
       - name: series_description
         type: string
         nullable: true
@@ -1178,7 +1186,13 @@ partitionedTables:
       - name: series_id
         type: string
         nullable: true
-        comment: EIA time series identifier
+        comment: >
+          EIA series identifier from the NG bulk archive. Encodes the storage region plus the
+          storage measure; the decoded parts are in eia_region_code, region, storage_type_code,
+          and storage_type (working gas, base gas, total gas, injections, withdrawals). This table
+          is long-format: one row per (series_id, report_date), so ALWAYS filter on series_id (or
+          storage_type_code) — the archive carries both regional and lower-48 totals, and mixing
+          them double counts. Volumes are in Bcf. Enumerate with SELECT DISTINCT series_id.
 
     # Bulk download: one cumulative NG.zip replaces the per-year paginated EIA API v2 fan-out.
     # The streaming transformer downloads + unzips + explodes the storage series itself.
@@ -1270,7 +1284,14 @@ partitionedTables:
       - name: series_id
         type: string
         nullable: true
-        comment: EIA time series identifier
+        comment: >
+          EIA API v2 series identifier. Composite key encoding area (PADD or U.S.) plus product
+          plus process; the human-readable label is in series_description on the same row, and the
+          decoded parts are in eia_area_code, padd, product_code, and process_code. This table is
+          long-format: one row per (series_id, report_date), so ALWAYS filter on series_id (or
+          product_code plus padd) — national totals and PADD districts coexist here, so summing
+          across series double counts. Stocks are in thousand barrels. Enumerate with
+          SELECT DISTINCT series_id, series_description.
       - name: series_description
         type: string
         nullable: true
@@ -1469,7 +1490,14 @@ partitionedTables:
       - name: series_id
         type: string
         nullable: true
-        comment: EIA time series identifier
+        comment: >
+          EIA API v2 series identifier. Encodes area plus refinery process; the process is also
+          available decoded in process_code with its label in metric_name. Key process codes
+          include CRDISS crude inputs to distillation and operable distillation capacity measures.
+          This table is tall format: one row per (eia_area_code, series_id, year-month), so ALWAYS
+          filter on series_id or process_code — units differ per process (see the units column) and
+          national totals coexist with PADD districts. Enumerate with
+          SELECT DISTINCT series_id, process_code, metric_name.
       - name: process_code
         type: string
         nullable: true

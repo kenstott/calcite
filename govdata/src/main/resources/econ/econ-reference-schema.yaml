@@ -718,7 +718,11 @@ partitionedTables:
         type: string
         nullable: true
         source: id
-        comment: Unique FRED series identifier (e.g., 'UNRATE', 'GDP')
+        comment: >
+          Unique FRED series identifier (e.g. 'UNRATE', 'GDP'). This is the catalog of everything
+          FRED publishes, so use it to decode or discover series; the econ.fred_indicators
+          observations table loads only a curated 48-series subset, enumerated in that table's
+          series column comment.
       - name: title
         type: string
         nullable: true
