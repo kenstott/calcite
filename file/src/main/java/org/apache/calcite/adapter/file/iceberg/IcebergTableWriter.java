@@ -536,8 +536,15 @@ public class IcebergTableWriter {
     // Generate unique file path in data location
     String dataLocation = table.location() + "/data";
     String partitionPath = buildPartitionPath(partitionValues);
-    String filePath = dataLocation + "/" + partitionPath + "/data_"
-        + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+    // buildPartitionPath returns "" for a table whose spec has no fields (materialize.partition.
+    // columns: []). Concatenating a separator on both sides of that empty string yields
+    // "data//data_x.parquet", and S3/MinIO reject the empty path segment with HTTP 400 "Object name
+    // contains unsupported characters" — which failed EVERY write for the unpartitioned geo
+    // reference tables (state_ref, zcta_ref, census_regions, census_divisions), losing the whole
+    // batch each run ("Closing writer with N unflushed partition buffers - data will be lost").
+    String filePath = dataLocation + "/"
+        + (partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + "data_" + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
 
     // Normalize to s3a:// for Iceberg/Hadoop compatibility
     if (filePath.startsWith("s3://")) {
@@ -1063,8 +1070,12 @@ public class IcebergTableWriter {
 
           for (Record record : records) {
             if (currentWriter == null) {
-              String outputPath = dataLocation + "/" + partitionPath + "/compacted_"
-                  + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+              // Same empty-partition-path guard as writeRecords: an unpartitioned spec yields ""
+              // here, and "data//compacted_x.parquet" is rejected by S3/MinIO with HTTP 400.
+              String outputPath = dataLocation + "/"
+                  + (partitionPath.isEmpty() ? "" : partitionPath + "/")
+                  + "compacted_" + java.util.UUID.randomUUID().toString().substring(0, 8)
+                  + ".parquet";
               if (outputPath.startsWith("s3://")) {
                 outputPath = "s3a://" + outputPath.substring(5);
               }

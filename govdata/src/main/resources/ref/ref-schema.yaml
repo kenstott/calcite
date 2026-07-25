@@ -103,6 +103,14 @@ dimension_values:
 # PARTITIONED TABLES
 # ============================================================================
 
+# Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
+# override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
+# rather than repeated per table so the schema's compaction policy is stated in exactly one place.
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
 partitionedTables:
 
   # ==========================================================================
@@ -235,6 +243,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows; replace-partition would drop all prior LEI history
@@ -308,6 +317,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: true
@@ -393,6 +403,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type, as_of]
         # as_of is a partition key, so replace-partitions is scoped to today's snapshot: a re-run
@@ -506,6 +517,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: true
@@ -636,6 +648,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: true
@@ -698,6 +711,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -766,6 +780,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -812,6 +827,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -866,6 +882,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -924,6 +941,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
@@ -1136,6 +1154,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows (new days); never rewrite history
@@ -1246,6 +1265,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: true
@@ -1347,6 +1367,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type, year]
         overwritePartitions: true

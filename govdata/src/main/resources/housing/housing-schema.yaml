@@ -468,7 +468,7 @@ partitionedTables:
       output:
         pattern: "type=fair_market_rents/year=*/state=*/"
       partition:
-        columns: [type, year, state]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: fair_market_rents
@@ -549,7 +549,7 @@ partitionedTables:
       output:
         pattern: "type=income_limits/year=*/state=*/"
       partition:
-        columns: [type, year, state]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: income_limits
@@ -648,7 +648,7 @@ partitionedTables:
       output:
         pattern: "type=income_limits_county/year=*/state=*/"
       partition:
-        columns: [type, year, state]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: income_limits_county
@@ -743,7 +743,7 @@ partitionedTables:
       output:
         pattern: "type=hmda_loans/year=*/state=*/"
       partition:
-        columns: [type, year, state]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: hmda_loans
@@ -837,7 +837,7 @@ partitionedTables:
       output:
         pattern: "type=hmda_applicant_demographics/year=*/state=*/"
       partition:
-        columns: [type, year, state]
+        columns: [type, year]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: hmda_applicant_demographics
