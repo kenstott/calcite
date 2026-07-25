@@ -271,7 +271,12 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // immutable, and the file adapter only sees an internal ETL root). Root
     // functions resolve for unqualified calls from any default schema.
     if (parentSchema != null) {
-      org.apache.calcite.adapter.file.FileAdapterFunctions.registerStandardFunctions(parentSchema);
+      // DuckDB-only statistical aggregates register only when this connection runs on the
+      // DuckDB engine (the model sets executionEngine=duckdb for S3-backed data).
+      boolean duckDbEngine =
+          "duckdb".equalsIgnoreCase((String) operand.get("executionEngine"));
+      org.apache.calcite.adapter.file.FileAdapterFunctions.registerStandardFunctions(
+          parentSchema, duckDbEngine);
     }
 
     LOGGER.info("Schema '{}' created successfully", name);

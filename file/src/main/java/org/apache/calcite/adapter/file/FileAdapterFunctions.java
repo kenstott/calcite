@@ -52,8 +52,12 @@ public final class FileAdapterFunctions {
    * never prevents the schema from being created or the other family from registering.
    *
    * @param schema schema to register the functions on (no-op if null)
+   * @param duckDbEngine whether the schema runs on the DuckDB execution engine; the
+   *     DuckDB-native statistical aggregates are registered ONLY then, since they exist
+   *     purely to push down to DuckDB and have no implementation on the other engines
+   *     (parquet, arrow, linq4j)
    */
-  public static void registerStandardFunctions(SchemaPlus schema) {
+  public static void registerStandardFunctions(SchemaPlus schema, boolean duckDbEngine) {
     if (schema == null) {
       return;
     }
@@ -76,8 +80,52 @@ public final class FileAdapterFunctions {
     } catch (Exception e) {
       LOGGER.warn("Failed to register vector/semantic similarity functions: {}", e.getMessage());
     }
+    // DuckDB-native statistical aggregates that Calcite core lacks. DuckDB engine ONLY:
+    // they are declarations that push down to DuckDB and have no implementation on the
+    // other file-adapter engines, so registering them elsewhere would only offer a
+    // function that always fails at execution.
+    if (duckDbEngine) {
+      try {
+        registerDuckDBStatsAggregates(root);
+      } catch (Exception e) {
+        LOGGER.warn("Failed to register duckdb stats functions: {}", e.getMessage());
+      }
+    }
     // Spatial ST_* are provided by Calcite's built-in SPATIAL library — connect
     // with fun=...,spatial. No schema registration is needed (and reflective
     // registration would duplicate the library operators).
+  }
+
+  /**
+   * Registers the non-reserved DuckDB statistical aggregates on the (root) schema so they
+   * validate and push down to DuckDB. The reserved regression aggregates (corr, regr_*)
+   * are handled separately via a pre-parse alias rewrite, since their names are reserved
+   * parser keywords and cannot be registered under their real names here.
+   */
+  private static void registerDuckDBStatsAggregates(SchemaPlus root) {
+    root.add("MEDIAN", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.MedianUdaf.class));
+    root.add("SKEWNESS", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.SkewnessUdaf.class));
+    root.add("KURTOSIS", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.KurtosisUdaf.class));
+    root.add("MAD", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.MadUdaf.class));
+    root.add("QUANTILE_CONT", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.QuantileContUdaf.class));
+    root.add("QUANTILE_DISC", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.QuantileDiscUdaf.class));
+
+    // Reserved regression aggregates: registered under non-reserved ALIAS names. A
+    // pre-parse rewrite turns the user's corr(...) into agg_corr(...); the DuckDB dialect
+    // (DuckDBFunctionMapping) maps agg_corr -> corr on unparse. One UDAF serves all seven.
+    final Class<?> regr = org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrUdaf.class;
+    root.add("AGG_CORR", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    root.add("AGG_REGR_SLOPE", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    root.add("AGG_REGR_INTERCEPT", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    root.add("AGG_REGR_R2", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    root.add("AGG_REGR_AVGX", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    root.add("AGG_REGR_AVGY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    root.add("AGG_REGR_SXY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
   }
 }

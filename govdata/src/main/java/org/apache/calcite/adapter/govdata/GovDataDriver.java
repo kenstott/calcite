@@ -161,7 +161,16 @@ public class GovDataDriver extends Driver {
       // this.acceptsURL() which checks for "jdbc:govdata:", so it would return
       // null when given "jdbc:calcite:". A separate instance has the correct prefix.
       String calciteUrl = "jdbc:calcite:";
-      return new Driver().connect(calciteUrl, govDataInfo);
+      Connection calciteConn = new Driver().connect(calciteUrl, govDataInfo);
+      // DuckDB engine ONLY (S3-backed data uses executionEngine=duckdb; other engines are
+      // parquet/arrow/linq4j). Transparently rewrite the reserved-keyword statistical
+      // aggregates (corr, regr_*) to their non-reserved aliases before Calcite parses, so
+      // they push down and DuckDB computes them. All logic lives in the file adapter.
+      String resolvedDir = resolveDataDirectory(extractParameter(paramString, "dataDirectory"));
+      boolean duckDbEngine = resolvedDir != null && resolvedDir.startsWith("s3://");
+      return duckDbEngine
+          ? org.apache.calcite.adapter.file.duckdb.DuckDBSqlRewriter.wrap(calciteConn)
+          : calciteConn;
 
     } catch (Exception e) {
       throw new SQLException("Failed to create government data connection: " + e.getMessage(), e);

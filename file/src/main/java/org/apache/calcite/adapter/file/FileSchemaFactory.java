@@ -848,7 +848,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
       // Standard file-adapter UDFs (vector similarity + spatial ST_*) on every
       // schema, so they validate in Calcite and pass through to DuckDB at pushdown.
-      FileAdapterFunctions.registerStandardFunctions(registeredSchema);
+      FileAdapterFunctions.registerStandardFunctions(registeredSchema, isDuckDB);
 
       // Add metadata schemas as sibling schemas
       addMetadataSchemas(parentSchema);

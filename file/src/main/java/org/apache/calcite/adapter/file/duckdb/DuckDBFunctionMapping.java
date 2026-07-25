@@ -60,6 +60,17 @@ public class DuckDBFunctionMapping {
     FUNCTION_MAP.put("GROUP_CONCAT", "STRING_AGG");
     FUNCTION_MAP.put("LISTAGG", "STRING_AGG");
 
+    // Reserved regression aggregates: their real names are reserved Calcite parser
+    // keywords, so they are registered/parsed under non-reserved AGG_* aliases (via a
+    // pre-parse rewrite) and mapped back to the native DuckDB name here on unparse.
+    FUNCTION_MAP.put("AGG_CORR", "corr");
+    FUNCTION_MAP.put("AGG_REGR_SLOPE", "regr_slope");
+    FUNCTION_MAP.put("AGG_REGR_INTERCEPT", "regr_intercept");
+    FUNCTION_MAP.put("AGG_REGR_R2", "regr_r2");
+    FUNCTION_MAP.put("AGG_REGR_AVGX", "regr_avgx");
+    FUNCTION_MAP.put("AGG_REGR_AVGY", "regr_avgy");
+    FUNCTION_MAP.put("AGG_REGR_SXY", "regr_sxy");
+
     // Window functions
     FUNCTION_MAP.put("RANK", "RANK");
     FUNCTION_MAP.put("DENSE_RANK", "DENSE_RANK");
