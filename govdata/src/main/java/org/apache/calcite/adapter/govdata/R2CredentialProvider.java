@@ -47,8 +47,11 @@ public final class R2CredentialProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(R2CredentialProvider.class);
 
+  // api.askamerica.ai, not the apex host: askamerica.ai serves the marketing site and
+  // answers unknown paths with the SPA's HTML at HTTP 200, so the apex URL parsed as
+  // "Unexpected character ('<')" rather than failing outright. Same host UsageMetering uses.
   private static final String CREDENTIALS_URL =
-      "https://askamerica.ai/v1/catalog/credentials";
+      "https://api.askamerica.ai/v1/catalog/credentials";
   private static final String CACHE_FILE =
       System.getProperty("user.home") + "/.askamerica/credentials.json";
   private static final String RESOURCE_PATH = "/config/r2-defaults.json";
