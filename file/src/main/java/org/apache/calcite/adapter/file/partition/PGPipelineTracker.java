@@ -20,13 +20,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * PostgreSQL-backed PipelineTracker for shared, multi-worker pipeline state.
@@ -79,6 +82,26 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
   private Connection connection;
   private final Object connectionLock = new Object();
   private boolean initialized;
+
+  /**
+   * In-memory cache of completed tables per (sourceKey, phase), key format
+   * {@code sourceKey\0phase}. Populated by {@link #bulkGetCompletedTables} so the
+   * {@link #isComplete} / {@link #getCompletedTables} calls that follow a bulk preload are O(1)
+   * memory lookups instead of one round-trip each — the contract
+   * {@link PipelineTracker#bulkGetCompletedTables} documents and that
+   * {@link S3HivePipelineTracker} already implements.
+   *
+   * <p>A key present with an empty set means "bulk-queried, genuinely no completed tables"; that is
+   * exact as of the bulk query, which is the same snapshot semantics every caller of a bulk preload
+   * already relies on. Writes through this tracker keep the entry in step (see
+   * {@link #markComplete} / {@link #markCleared}); markers another worker writes afterwards are not
+   * reflected, which is why only explicitly bulk-loaded keys are cached.
+   */
+  private final Map<String, Set<String>> stageCache =
+      new ConcurrentHashMap<String, Set<String>>();
+
+  /** Max source keys per bulk {@code = ANY(?)} query — bounds the array parameter size. */
+  private static final int BULK_CHUNK_SIZE = 10_000;
 
   public PGPipelineTracker(String jdbcUrl, String user, String password) {
     this(jdbcUrl, user, password, null);
@@ -175,6 +198,10 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
   // ===== PipelineTracker Implementation =====
 
   @Override public boolean isComplete(String sourceKey, String tableName, String phase) {
+    Set<String> cached = stageCache.get(stageCacheKey(sourceKey, phase));
+    if (cached != null) {
+      return cached.contains(tableName);
+    }
     String sql = "SELECT state FROM pipeline_tracker "
         + "WHERE source_key = ? AND table_name = ? AND phase = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
@@ -193,14 +220,114 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     return false;
   }
 
+  /**
+   * Bulk-loads completed tables for every source key in one query per
+   * {@link #BULK_CHUNK_SIZE} chunk and caches the result, so the per-key
+   * {@link #isComplete} / {@link #getCompletedTables} calls that follow are served from memory.
+   *
+   * <p>The inherited default looped {@link #getCompletedTables}, which for the SEC all-filer path
+   * meant ~460k individual {@code SELECT}s whose results were then discarded — 80s of preload that
+   * bought nothing, followed by the same queries again during filtering.
+   */
+  @Override public Map<String, Set<String>> bulkGetCompletedTables(
+      Collection<String> sourceKeys, String phase) {
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+    if (sourceKeys.isEmpty()) {
+      return result;
+    }
+    // Distinct, and skip keys a previous bulk call already cached.
+    List<String> uncached = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    for (String sourceKey : sourceKeys) {
+      if (!seen.add(sourceKey)) {
+        continue;
+      }
+      Set<String> cached = stageCache.get(stageCacheKey(sourceKey, phase));
+      if (cached != null) {
+        if (!cached.isEmpty()) {
+          result.put(sourceKey, cached);
+        }
+      } else {
+        uncached.add(sourceKey);
+      }
+    }
+    if (uncached.isEmpty()) {
+      return result;
+    }
+
+    long start = System.currentTimeMillis();
+    String sql = "SELECT source_key, table_name FROM pipeline_tracker "
+        + "WHERE phase = ? AND state = 'complete' AND source_key = ANY(?)";
+    int queries = 0;
+    for (int offset = 0; offset < uncached.size(); offset += BULK_CHUNK_SIZE) {
+      List<String> chunk =
+          uncached.subList(offset, Math.min(offset + BULK_CHUNK_SIZE, uncached.size()));
+      try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+        stmt.setString(1, phase);
+        stmt.setArray(2,
+            getConnection().createArrayOf("varchar", chunk.toArray(new String[0])));
+        try (ResultSet rs = stmt.executeQuery()) {
+          while (rs.next()) {
+            String sourceKey = rs.getString(1);
+            Set<String> tables = result.get(sourceKey);
+            if (tables == null) {
+              tables = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+              result.put(sourceKey, tables);
+            }
+            tables.add(rs.getString(2));
+          }
+        }
+      } catch (SQLException e) {
+        throw new RuntimeException("PG tracker bulk read failed (phase=" + phase
+            + ", chunk of " + chunk.size() + " keys): " + e.getMessage(), e);
+      }
+      queries++;
+      // Cache every key in the chunk, including those with no rows — the query above is
+      // authoritative for the whole chunk, so absence means "no completed tables".
+      for (String sourceKey : chunk) {
+        Set<String> tables = result.get(sourceKey);
+        if (tables == null) {
+          tables = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+        }
+        stageCache.put(stageCacheKey(sourceKey, phase), tables);
+      }
+    }
+    // Match the documented contract: keys with no tracker data are absent from the return value.
+    java.util.Iterator<Map.Entry<String, Set<String>>> it = result.entrySet().iterator();
+    while (it.hasNext()) {
+      if (it.next().getValue().isEmpty()) {
+        it.remove();
+      }
+    }
+    LOGGER.info("Bulk-loaded completed tables for {} source keys (phase={}, {} queries, "
+        + "{} already cached) in {}ms",
+        uncached.size(), phase, queries, seen.size() - uncached.size(),
+        System.currentTimeMillis() - start);
+    return result;
+  }
+
+  /** Cache key for the per-(sourceKey, phase) completed-table set. */
+  private static String stageCacheKey(String sourceKey, String phase) {
+    return sourceKey + "\0" + phase;
+  }
+
   @Override public void markComplete(String sourceKey, String tableName, String phase,
       long rowCount) {
     upsertState(sourceKey, tableName, phase, "complete", rowCount, null, null, null);
+    Set<String> cached = stageCache.get(stageCacheKey(sourceKey, phase));
+    if (cached != null) {
+      cached.add(tableName);
+    }
   }
 
   @Override public void markError(String sourceKey, String tableName, String phase,
       String error) {
     upsertState(sourceKey, tableName, phase, "error", 0, null, null, error);
+    // State is no longer 'complete', so drop it from the completed-table set.
+    Set<String> cached = stageCache.get(stageCacheKey(sourceKey, phase));
+    if (cached != null) {
+      cached.remove(tableName);
+    }
   }
 
   @Override public void markCleared(String sourceKey, String tableName, String phase) {
@@ -215,9 +342,17 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       throw new RuntimeException("PG tracker write failed (markCleared) for "
           + sourceKey + "/" + tableName + "/" + phase + ": " + e.getMessage(), e);
     }
+    Set<String> cached = stageCache.get(stageCacheKey(sourceKey, phase));
+    if (cached != null) {
+      cached.remove(tableName);
+    }
   }
 
   @Override public Set<String> getCompletedTables(String sourceKey, String phase) {
+    Set<String> cached = stageCache.get(stageCacheKey(sourceKey, phase));
+    if (cached != null) {
+      return cached;
+    }
     Set<String> tables = new LinkedHashSet<>();
     String sql = "SELECT table_name FROM pipeline_tracker "
         + "WHERE source_key = ? AND phase = ? AND state = 'complete'";

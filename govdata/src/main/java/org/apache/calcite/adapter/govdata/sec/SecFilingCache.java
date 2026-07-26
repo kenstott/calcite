@@ -147,6 +147,16 @@ public class SecFilingCache implements AutoCloseable {
   private Connection duckdbConn = null;
 
   /**
+   * Year range registered by {@link #registerFileInventoryRange} for the deferred inventory scan,
+   * or null when no range was registered (callers must invoke {@link #preloadFileInventory}
+   * directly).
+   */
+  private volatile int[] inventoryRange = null;
+
+  /** True once the file inventory has been built (eagerly or on first demand). */
+  private volatile boolean inventoryLoaded = false;
+
+  /**
    * Create a new filing cache backed by a PipelineTracker.
    *
    * @param tracker PipelineTracker for state persistence
@@ -257,8 +267,58 @@ public class SecFilingCache implements AutoCloseable {
    * @param startYear first year partition to include (e.g. 2026)
    * @param endYear   last year partition to include (inclusive)
    */
+  /**
+   * Registers the year range for a deferred {@link #preloadFileInventory} without performing any
+   * I/O, so the scan only happens if a storage-existence question is actually asked.
+   *
+   * <p>The inventory scan is expensive — a recursive LIST of every {@code sec/year=YYYY/} partition
+   * in the range plus a DuckDB read of every batch parquet file found (12+ minutes for a full year
+   * of all-filer SEC data). It exists solely to answer {@link #checkS3Files} from memory instead of
+   * per-filing LIST ops. In the steady state, tracker state alone resolves every candidate in
+   * {@link #filterAndSelfHeal} and {@code checkS3Files} is never reached, so paying that cost up
+   * front is pure startup latency. Registering the range instead defers the scan to the first
+   * {@code checkS3Files} call — which, on a run with no tracker gaps, never comes.
+   *
+   * @param startYear first year partition the deferred scan should include
+   * @param endYear   last year partition the deferred scan should include (inclusive)
+   */
+  public void registerFileInventoryRange(int startYear, int endYear) {
+    this.inventoryRange = new int[]{startYear, endYear};
+    LOGGER.info("File inventory scan deferred for years {}-{} — will run on first storage "
+        + "existence check (skipped entirely when tracker state resolves every filing)",
+        startYear, endYear);
+  }
+
+  /**
+   * Builds the file inventory on first demand for the range registered by
+   * {@link #registerFileInventoryRange}. Idempotent and safe to call from the parallel self-heal
+   * pool: the scan runs at most once.
+   */
+  private void ensureFileInventory() {
+    // Volatile read first: checkS3Files is called once per candidate, and the self-heal pool runs
+    // 50 threads through it, so the steady-state path must not touch the monitor at all.
+    if (inventoryLoaded) {
+      return;
+    }
+    synchronized (this) {
+      if (inventoryLoaded) {
+        return;
+      }
+      int[] range = this.inventoryRange;
+      if (range == null) {
+        // No range registered — the caller owns inventory loading (tests, backfill tools). Marking
+        // it loaded keeps fileExists() on its documented live-S3 fallback instead of looping here.
+        inventoryLoaded = true;
+        return;
+      }
+      LOGGER.info("First storage existence check reached — running deferred file inventory scan");
+      preloadFileInventory(range[0], range[1]);
+    }
+  }
+
   public void preloadFileInventory(int startYear, int endYear) {
     long start = System.currentTimeMillis();
+    inventoryLoaded = true;
     String secDir = parquetBaseDir;
     // Scan one year before startYear to catch Jan–Apr 10-K/Q filings whose output was written
     // to year=(startYear-1) by getPartitionYear's fiscal-year heuristic.
@@ -611,7 +671,11 @@ public class SecFilingCache implements AutoCloseable {
         // Reprocess-only mode: skip all candidates not explicitly listed.
         continue;
       }
-      if (tracker.isComplete(filingKey(ie.accession), TABLE_NO_XBRL, PHASE_STAGING)) {
+      // One tracker read per candidate: the no_xbrl marker is just another completed table, so
+      // reading the whole set once answers both questions below. Two separate reads doubled the
+      // tracker round-trips for every one of the ~460k candidates in an all-filer year.
+      Set<String> completed = tracker.getCompletedTables(filingKey(ie.accession), PHASE_STAGING);
+      if (completed.contains(TABLE_NO_XBRL)) {
         // Insider forms (3/4/5) were previously mis-classified as no_xbrl due to a
         // converter bug that downloaded the xslF345X HTML viewer instead of the XML.
         // Clear the stale marker and reprocess so they produce _insider.parquet output.
@@ -632,7 +696,6 @@ public class SecFilingCache implements AutoCloseable {
         cntNoXbrl++;
         continue;
       }
-      Set<String> completed = tracker.getCompletedTables(filingKey(ie.accession), PHASE_STAGING);
       if (!completed.isEmpty()) {
         FormType form = FormType.fromString(ie.formType);
         FileInventory inv = inventoryFromCompletedTables(completed);
@@ -878,6 +941,7 @@ public class SecFilingCache implements AutoCloseable {
    *                   10 Class A LIST ops per call). Pass null to fall back to the year=* glob.
    */
   public FileInventory checkS3Files(String cik, String accession, String filingDate) {
+    ensureFileInventory();
     String secDir = parquetBaseDir;
 
     FileInventory.Builder builder = FileInventory.builder();

@@ -339,6 +339,110 @@ public class SecFilingCacheFileInventoryTest {
   }
 
   // -------------------------------------------------------------------------
+  // 10. Deferred inventory scan: registering a range does no I/O, and the scan runs
+  //     on the first storage question — exactly once.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void registerFileInventoryRange_defersScanUntilFirstStorageCheck() throws IOException {
+    String cik = "0000320193";
+    String accession = "0000320193-24-000006";
+    List<String> knownPaths = buildExpectedPaths(cik, accession, "2024");
+
+    TrackingStorageProvider provider = new TrackingStorageProvider(knownPaths);
+    SecFilingCache cache = new SecFilingCache(
+        new InMemoryPipelineTracker(), provider, PARQUET_BASE);
+
+    cache.registerFileInventoryRange(2024, 2024);
+    assertEquals(0, provider.listFilesCallCount(),
+        "Registering the range must not scan — the scan is what costs 12 minutes on a full year");
+
+    // First storage question triggers the scan (2 years x primary + legacy = 4 listFiles).
+    FileInventory inventory = cache.checkS3Files(cik, accession, "2024-03-15");
+    assertEquals(4, provider.listFilesCallCount(),
+        "First checkS3Files must run the deferred scan");
+    assertTrue(inventory.hasMetadata(), "deferred scan must populate the cache");
+    assertEquals(0, provider.existsCallCount(),
+        "deferred scan must answer from memory, not per-file exists()");
+
+    // Subsequent questions reuse the scan.
+    cache.checkS3Files(cik, accession, "2024-03-15");
+    cache.checkS3Files("0000789019", "0000789019-24-000001", "2024-06-01");
+    assertEquals(4, provider.listFilesCallCount(),
+        "Deferred scan must run at most once");
+  }
+
+  // -------------------------------------------------------------------------
+  // 11. The regression this guards: when tracker state resolves every candidate,
+  //     filterAndSelfHeal must not touch storage at all.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void filterAndSelfHeal_skipsInventoryScanWhenTrackerResolvesEveryCandidate()
+      throws IOException {
+    String cik = "0000320193";
+    String filingDate = "2024-03-15";
+    TrackingStorageProvider provider = new TrackingStorageProvider(
+        Collections.<String>emptyList());
+    InMemoryPipelineTracker tracker = new InMemoryPipelineTracker();
+    SecFilingCache cache = new SecFilingCache(tracker, provider, PARQUET_BASE);
+    cache.registerFileInventoryRange(2024, 2024);
+
+    // Three 10-K filings, each already fully marked complete in the tracker.
+    List<EdgarFullIndexCache.IndexEntry> candidates =
+        new ArrayList<EdgarFullIndexCache.IndexEntry>();
+    for (int i = 1; i <= 3; i++) {
+      String accession = String.format("0000320193-24-%06d", i);
+      candidates.add(new EdgarFullIndexCache.IndexEntry(
+          "APPLE INC", "10-K", cik, filingDate, accession, 2024, 1));
+      cache.markComplete(cik, accession, "10-K", filingDate, false,
+          FileInventory.builder()
+              .hasMetadata(true).hasFacts(true).hasContexts(true)
+              .hasRelationships(true).hasMda(true)
+              .build());
+    }
+
+    List<EdgarFullIndexCache.IndexEntry> toProcess =
+        cache.filterAndSelfHeal(candidates, false, 4);
+
+    assertTrue(toProcess.isEmpty(), "Fully-tracked filings must not be re-queued");
+    assertEquals(0, provider.listFilesCallCount(),
+        "Tracker state resolved every candidate — the inventory scan must never run");
+    assertEquals(0, provider.existsCallCount(),
+        "Tracker state resolved every candidate — no storage existence checks either");
+  }
+
+  // -------------------------------------------------------------------------
+  // 12. Conversely, a candidate the tracker cannot resolve must still trigger the scan.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void filterAndSelfHeal_runsDeferredScanForCandidateMissingFromTracker() throws IOException {
+    String cik = "0000320193";
+    String accession = "0000320193-24-000006";
+    String filingDate = "2024-03-15";
+
+    // Files exist in storage but the tracker has no record — the self-heal case.
+    TrackingStorageProvider provider =
+        new TrackingStorageProvider(buildExpectedPaths(cik, accession, "2024"));
+    SecFilingCache cache = new SecFilingCache(
+        new InMemoryPipelineTracker(), provider, PARQUET_BASE);
+    cache.registerFileInventoryRange(2024, 2024);
+
+    List<EdgarFullIndexCache.IndexEntry> candidates =
+        Collections.singletonList(new EdgarFullIndexCache.IndexEntry(
+            "APPLE INC", "10-K", cik, filingDate, accession, 2024, 1));
+
+    List<EdgarFullIndexCache.IndexEntry> toProcess =
+        cache.filterAndSelfHeal(candidates, false, 4);
+
+    assertEquals(4, provider.listFilesCallCount(),
+        "A candidate with no tracker record must trigger the deferred inventory scan");
+    assertTrue(toProcess.isEmpty(),
+        "Files present in storage → self-heal the markers, do not reprocess");
+  }
+
+  // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
 

@@ -903,14 +903,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             if (!allAccessions.isEmpty()) {
               cache.preload(allAccessions);
             }
-            // Bulk-scan only the worker's year partitions once so that self-healing
-            // file-existence checks cost zero Class A LIST ops (answered from in-memory set).
-            cache.preloadFileInventory(startYear, endYear);
+            // Register (do not run) the year-partition scan that lets self-healing
+            // file-existence checks cost zero Class A LIST ops. It runs on the first such check;
+            // when tracker state resolves every candidate there is no check and no scan.
+            cache.registerFileInventoryRange(startYear, endYear);
           }
 
-          // Ensure file inventory is pre-loaded even when indexCache is unavailable
+          // Register the deferred scan even when indexCache is unavailable
           if (indexCache == null && cache != null) {
-            cache.preloadFileInventory(startYear, endYear);
+            cache.registerFileInventoryRange(startYear, endYear);
           }
 
           // Create processor - pass cache directory as String to support S3 paths
