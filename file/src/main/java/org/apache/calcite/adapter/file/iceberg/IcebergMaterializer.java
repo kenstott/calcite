@@ -705,8 +705,8 @@ public class IcebergMaterializer {
 
     // Fast-path: check if source files have been modified since last run
     if (enableSourceWatermark && currentSourceWatermark > 0) {
-      IncrementalTracker.CachedCompletion cached =
-          incrementalTracker.getCachedCompletion(config.getTargetTableId());
+      // Reuse the record already read above rather than querying the tracker a second time.
+      IncrementalTracker.CachedCompletion cached = priorCompletion;
       if (cached != null && cached.sourceFileWatermark > 0
           && !cached.isSourceFilesModified(currentSourceWatermark)) {
         long durationMs = System.currentTimeMillis() - startTime;
