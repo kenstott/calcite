@@ -356,11 +356,21 @@ tasks.register<Exec>("jlinkRuntime") {
     commandLine(
         jlinkTool,
         "--module-path", "${System.getProperty("java.home")}/jmods",
+        // Module set is the output of
+        //   jdeps --multi-release 17 --print-module-deps --ignore-missing-deps <shadow jar>
+        // plus jdk.crypto.ec, which jdeps cannot see (loaded as a security provider).
+        // Re-run that jdeps command whenever a dependency is added: a module missing
+        // here fails only at runtime, as a NoClassDefFoundError deep inside a library
+        // (e.g. java.management → AwsSdkMetrics → every S3StorageProvider construction).
         // java.desktop → Swing (setup wizard + download progress window);
+        // java.management → AWS SDK v1 JMX metrics registration (AmazonS3Client <clinit>);
+        // jdk.unsupported → sun.misc.Unsafe (Arrow, Netty, Guava);
         // jdk.crypto.ec → TLS ciphers for the HTTPS engine download.
         "--add-modules",
-        "java.base,java.desktop,java.logging,java.naming,java.net.http,java.sql,"
-            + "java.xml,jdk.crypto.ec",
+        "java.base,java.compiler,java.desktop,java.instrument,java.logging,java.management,"
+            + "java.naming,java.net.http,java.rmi,java.scripting,java.security.jgss,"
+            + "java.security.sasl,java.sql,java.xml,jdk.crypto.ec,jdk.httpserver,"
+            + "jdk.unsupported",
         "--strip-debug",
         "--no-header-files",
         "--no-man-pages",
