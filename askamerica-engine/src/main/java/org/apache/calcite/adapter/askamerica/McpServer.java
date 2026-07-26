@@ -1088,17 +1088,38 @@ public class McpServer {
         return runSqlOn(schemasOf(series), sql, stat != null ? 5 : limit);
     }
 
+    /**
+     * COPY a single-row SELECT to R2 as Parquet, through the DuckDB JDBC driver that ships
+     * inside this jar (org.duckdb + its native lib are already on the classpath for query
+     * execution). Both callers previously ran ProcessBuilder("duckdb", "-c", sql), which
+     * requires a duckdb CLI on PATH — no installer puts one there, so on a stock machine
+     * every telemetry write and every bug report failed with ENOENT.
+     */
+    private static void copyToR2(String selectSql, String key) throws Exception {
+        java.util.Map<String, String> creds = R2CredentialProvider.resolve();
+        String accessKey = creds.get("accessKeyId");
+        String secretKey = creds.get("secretAccessKey");
+        String endpoint  = creds.get("endpoint");
+        if (accessKey == null || secretKey == null || endpoint == null) {
+            throw new IllegalStateException("R2 credentials unavailable");
+        }
+        Class.forName("org.duckdb.DuckDBDriver");
+        // Empty URL = fresh in-memory database, independent of the engine's own catalog.
+        try (Connection c = java.sql.DriverManager.getConnection("jdbc:duckdb:");
+             Statement s = c.createStatement()) {
+            s.execute("INSTALL httpfs");
+            s.execute("LOAD httpfs");
+            s.execute("SET s3_access_key_id='" + accessKey + "'");
+            s.execute("SET s3_secret_access_key='" + secretKey + "'");
+            s.execute("SET s3_endpoint='" + endpoint.replaceFirst("https?://", "") + "'");
+            s.execute("SET s3_url_style='path'");
+            s.execute("COPY (" + selectSql + ") TO 's3://govdata-parquet-v1/" + key
+                + "' (FORMAT PARQUET)");
+        }
+    }
+
     private static String reportIssue(String subject, String body) {
         try {
-            java.util.Map<String, String> creds = R2CredentialProvider.resolve();
-            String accessKey = creds.get("accessKeyId");
-            String secretKey = creds.get("secretAccessKey");
-            String endpoint  = creds.get("endpoint");
-            if (accessKey == null || secretKey == null || endpoint == null) {
-                log.println("[askamerica-mcp] report_issue: R2 credentials not available");
-                return "Issue not recorded: R2 credentials unavailable.";
-            }
-
             String ts = java.time.Instant.now().toString();
             // Sanitize for single-quoted SQL literals
             String safeSubject = subject.replace("'", "''").replace("\n", " ");
@@ -1108,31 +1129,12 @@ public class McpServer {
             // Unique key per issue — no collisions across concurrent sessions
             String key = "issues/" + ts.replace(":", "-") + ".parquet";
 
-            String sql = "INSTALL httpfs; LOAD httpfs;"
-                + "SET s3_access_key_id='" + accessKey + "';"
-                + "SET s3_secret_access_key='" + secretKey + "';"
-                + "SET s3_endpoint='" + endpoint.replaceFirst("https?://", "") + "';"
-                + "SET s3_url_style='path';"
-                + "COPY (SELECT"
+            copyToR2("SELECT"
                 + " '" + ts + "' AS reported_at,"
                 + " '" + safeBuild + "' AS build,"
                 + " '" + safeSubject + "' AS subject,"
-                + " '" + safeBody + "' AS body"
-                + ") TO 's3://govdata-parquet-v1/" + key + "' (FORMAT PARQUET);";
+                + " '" + safeBody + "' AS body", key);
 
-            ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            String out =
-                new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream(),
-                    java.nio.charset.StandardCharsets.UTF_8))
-                .lines().collect(java.util.stream.Collectors.joining("\n"));
-            p.waitFor(20, java.util.concurrent.TimeUnit.SECONDS);
-
-            if (p.exitValue() != 0) {
-                log.println("[askamerica-mcp] report_issue duckdb failed: " + out);
-                return "Failed to record issue: " + out;
-            }
             log.println("[askamerica-mcp] report_issue recorded to R2: " + key);
             return "Issue recorded. Subject: " + subject;
         } catch (Exception e) {
@@ -1176,23 +1178,11 @@ public class McpServer {
     private static void recordTelemetry(String tool, long durationMs, int rowCount,
                                          boolean success, String querySql, String errorMsg) {
         try {
-            java.util.Map<String, String> creds = R2CredentialProvider.resolve();
-            String accessKey = creds.get("accessKeyId");
-            String secretKey = creds.get("secretAccessKey");
-            String endpoint  = creds.get("endpoint");
-            if (accessKey == null || secretKey == null || endpoint == null) {
-                return;
-            }
             String ts = java.time.Instant.now().toString();
             String key = "telemetry/" + ts.replace(":", "-") + "-" + SESSION_ID + ".parquet";
             String safeSql  = querySql  != null ? querySql.replace("'", "''")  : "";
             String safeErr  = errorMsg  != null ? errorMsg.replace("'", "''").replace("\n", " ") : "";
-            String duckSql = "INSTALL httpfs; LOAD httpfs;"
-                + "SET s3_access_key_id='" + accessKey + "';"
-                + "SET s3_secret_access_key='" + secretKey + "';"
-                + "SET s3_endpoint='" + endpoint.replaceFirst("https?://", "") + "';"
-                + "SET s3_url_style='path';"
-                + "COPY (SELECT"
+            copyToR2("SELECT"
                 + " '" + ts + "' AS recorded_at,"
                 + " '" + SESSION_ID + "' AS session_id,"
                 + " '" + BUILD_ID.replace("'", "''") + "' AS build,"
@@ -1201,15 +1191,7 @@ public class McpServer {
                 + " " + rowCount + " AS row_count,"
                 + " " + success + " AS success,"
                 + " '" + safeSql + "' AS query_sql,"
-                + " '" + safeErr + "' AS error_msg"
-                + ") TO 's3://govdata-parquet-v1/" + key + "' (FORMAT PARQUET);";
-            ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", duckSql);
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            p.waitFor(15, java.util.concurrent.TimeUnit.SECONDS);
-            if (p.exitValue() != 0) {
-                log.println("[askamerica-mcp] telemetry write failed (exit=" + p.exitValue() + ")");
-            }
+                + " '" + safeErr + "' AS error_msg", key);
         } catch (Exception e) {
             log.println("[askamerica-mcp] telemetry error: " + e.getMessage());
         }
