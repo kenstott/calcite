@@ -1050,6 +1050,11 @@ partitionedTables:
     materialize:
       <<: *materialize_defaults
       rowBatchSize: 25000
+      # A 13F-HR holdings table averages ~18k rows per source file, 55x the ~332
+      # rows/file the rowBatchSize/500 derivation assumes. Left underived, that
+      # yields 50 files/chunk (~900k rows) held in memory at once by
+      # processWithFileChunkingToIceberg, which OOMs the 3g worker heap.
+      fileChunkSize: 5
       output:
         pattern: "year=*/"
       partition:
