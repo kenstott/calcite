@@ -41,6 +41,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -210,6 +214,33 @@ class PGPipelineTrackerCoverageTest {
    * "nothing changed" would skip materialization that was actually needed. SQL NULL (no markers
    * at all) and a failed query must both report -1, never 0.
    */
+  /**
+   * The distinction the whole skip decision rests on: a marker recovered for a file that already
+   * existed is bookkeeping, not new source data, so it must leave source_as_of alone. Verified at
+   * the SQL layer because that is where the COALESCE lives.
+   */
+  @Test void testMarkCompleteRecordsSourceWriteTimestamp() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+
+    tracker.markComplete("src1", "metadata", "staging", 1);
+
+    // Parameter 10 is source_as_of; a genuine write stamps it.
+    verify(pstmt).setLong(eq(10), anyLong());
+    verify(pstmt, never()).setNull(eq(10), anyInt());
+  }
+
+  @Test void testHealDoesNotAdvanceSourceWriteTimestamp() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+
+    tracker.markComplete("src1", "metadata", "staging", 1, false);
+
+    // NULL, so the ON CONFLICT COALESCE preserves whatever the real write recorded.
+    verify(pstmt).setNull(eq(10), anyInt());
+    verify(pstmt, never()).setLong(eq(10), anyLong());
+  }
+
   @Test void testGetMaxActivityAtReturnsTimestampWhenMarkersExist() throws Exception {
     PreparedStatement pstmt = mock(PreparedStatement.class);
     ResultSet rs = mock(ResultSet.class);

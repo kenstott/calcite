@@ -1038,7 +1038,7 @@ public class SecFilingCache implements AutoCloseable {
         @SuppressWarnings("FutureReturnValueIgnored")
         java.util.concurrent.Future<?> ignored = pool.submit(new Runnable() {
           @Override public void run() {
-            recordInventory(ie.accession, inv);
+            recordInventory(ie.accession, inv, false);
           }
         });
       }
@@ -1099,21 +1099,21 @@ public class SecFilingCache implements AutoCloseable {
       FileInventory inventory = checkS3Files(cik, accession, filingDate);
       if (inventory.isComplete(form, vectorizationEnabled)) {
         // Files exist, heal tracker
-        recordInventory(accession, inventory);
+        recordInventory(accession, inventory, false);
         LOGGER.info("Self-healed tracker for {}:{} - files exist in S3", cik, accession);
         return ProcessingDecision.skip("Self-healed: files exist");
       }
       if (inventory.hasAnyFiles()) {
         // Check if only chunks are missing (vectorization upgrade)
         if (vectorizationEnabled && inventory.isComplete(form, false) && !inventory.hasChunks()) {
-          recordInventory(accession, inventory);
+          recordInventory(accession, inventory, false);
           LOGGER.info("Self-healed tracker for {}:{} - needs vectorization upgrade",
               cik, accession);
           return ProcessingDecision.processChunksOnly(
               "Self-healed: vectorization upgrade needed");
         }
         // Partial files exist - record what we found and request completion
-        recordInventory(accession, inventory);
+        recordInventory(accession, inventory, false);
         LOGGER.debug("Partial files for {}:{} - needs completion", cik, accession);
         return ProcessingDecision.process("Partial files, need completion");
       }
@@ -1136,7 +1136,7 @@ public class SecFilingCache implements AutoCloseable {
     // Partial state in tracker - verify against S3 (self-healing for partial)
     FileInventory s3Inventory = checkS3Files(cik, accession, filingDate);
     if (s3Inventory.isComplete(form, vectorizationEnabled)) {
-      recordInventory(accession, s3Inventory);
+      recordInventory(accession, s3Inventory, false);
       return ProcessingDecision.skip("Self-healed: now complete");
     }
 
@@ -1432,7 +1432,7 @@ public class SecFilingCache implements AutoCloseable {
    */
   public void markComplete(String cik, String accession, String formType, String filingDate,
       boolean vectorizationEnabled, FileInventory inventory) {
-    recordInventory(accession, inventory);
+    recordInventory(accession, inventory, true);
     // Store filing metadata
     tracker.markComplete(filingKey(accession), TABLE_FILING_META, PHASE_STAGING, 1);
     // Clear any previous error state
@@ -1551,7 +1551,7 @@ public class SecFilingCache implements AutoCloseable {
   public void updateStatus(String cik, String accession, String status,
       FileInventory inventory) {
     if ("complete".equals(status)) {
-      recordInventory(accession, inventory);
+      recordInventory(accession, inventory, true);
       clearError(accession);
     }
   }
@@ -1609,43 +1609,50 @@ public class SecFilingCache implements AutoCloseable {
   /**
    * Record a FileInventory as individual tracker entries.
    */
-  private void recordInventory(String accession, FileInventory inventory) {
+  /**
+   * @param sourceFileWritten true when this run produced the files being recorded; false when the
+   *        inventory was read back from storage to recover markers the tracker lost. A heal
+   *        describes files that already existed, so it must not read as new source data — see
+   *        {@link org.apache.calcite.adapter.file.partition.PipelineTracker#getMaxActivityAt}.
+   */
+  private void recordInventory(String accession, FileInventory inventory,
+      boolean sourceFileWritten) {
     String key = filingKey(accession);
     // The no_xbrl sentinel is tracker state like any other output. Omitting it here meant a filing
     // whose sentinel survived in storage but whose tracker marker was lost never got the marker
     // back, so it fell to the storage path on every subsequent run and the tracker never converged.
     if (inventory.hasNoXbrl()) {
-      tracker.markComplete(key, TABLE_NO_XBRL, PHASE_STAGING, 0);
+      tracker.markComplete(key, TABLE_NO_XBRL, PHASE_STAGING, 0, sourceFileWritten);
     }
     if (inventory.hasMetadata()) {
-      tracker.markComplete(key, "metadata", PHASE_STAGING, 1);
+      tracker.markComplete(key, "metadata", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasFacts()) {
-      tracker.markComplete(key, "facts", PHASE_STAGING, 1);
+      tracker.markComplete(key, "facts", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasContexts()) {
-      tracker.markComplete(key, "contexts", PHASE_STAGING, 1);
+      tracker.markComplete(key, "contexts", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasRelationships()) {
-      tracker.markComplete(key, "relationships", PHASE_STAGING, 1);
+      tracker.markComplete(key, "relationships", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasMda()) {
-      tracker.markComplete(key, "mda", PHASE_STAGING, 1);
+      tracker.markComplete(key, "mda", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasInsider()) {
-      tracker.markComplete(key, "insider", PHASE_STAGING, 1);
+      tracker.markComplete(key, "insider", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasEarnings()) {
-      tracker.markComplete(key, "earnings", PHASE_STAGING, 1);
+      tracker.markComplete(key, "earnings", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasChunks()) {
-      tracker.markComplete(key, "chunks", PHASE_STAGING, 1);
+      tracker.markComplete(key, "chunks", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasInstitutionalHoldings()) {
-      tracker.markComplete(key, "13f", PHASE_STAGING, 1);
+      tracker.markComplete(key, "13f", PHASE_STAGING, 1, sourceFileWritten);
     }
     if (inventory.hasBeneficialOwnership()) {
-      tracker.markComplete(key, "13dg", PHASE_STAGING, 1);
+      tracker.markComplete(key, "13dg", PHASE_STAGING, 1, sourceFileWritten);
     }
   }
 

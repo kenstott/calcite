@@ -68,6 +68,24 @@ public interface PipelineTracker extends IncrementalTracker {
   }
 
   /**
+   * Mark a combination complete, stating whether this records a source file the caller just wrote.
+   *
+   * <p>Recovering a marker for a file that already existed is bookkeeping, not new source data.
+   * Trackers that expose {@link #getMaxActivityAt} must not let a heal advance that timestamp, or
+   * no consumer could ever conclude "nothing changed since I last ran". Callers performing
+   * self-heal pass {@code false}; callers that just produced a file pass {@code true}.
+   *
+   * <p>The default ignores the distinction and delegates, so trackers that do not model it behave
+   * exactly as before.
+   *
+   * @param sourceFileWritten true when the caller wrote the underlying source file in this run
+   */
+  default void markComplete(String sourceKey, String tableName, String phase,
+      long rowCount, boolean sourceFileWritten) {
+    markComplete(sourceKey, tableName, phase, rowCount);
+  }
+
+  /**
    * Mark a (sourceKey, tableName, phase) combination as errored.
    *
    * @param sourceKey  Accession number or dimension value
