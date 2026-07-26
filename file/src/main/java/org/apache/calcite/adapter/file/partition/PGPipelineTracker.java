@@ -393,8 +393,9 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     if (phase == null) {
       return -1L;
     }
-    // source_as_of, not as_of: only genuine source-file writes count as a change. Heals and other
-    // bookkeeping leave it untouched, so a quiet phase stays quiet and consumers can skip work.
+    // source_as_of, not as_of: only genuine source-file writes count as a change, so heals and
+    // other bookkeeping leave a quiet phase quiet. Rows predating the column are NULL and max()
+    // ignores them; a phase where every row is NULL yields NULL and reports -1 below.
     String sql = "SELECT max(source_as_of) FROM pipeline_tracker WHERE phase = ?";
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, phase);
@@ -446,6 +447,14 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       String state, long rowCount, String configHash, String signature,
       String errorMessage, boolean sourceFileWritten) {
     long now = System.currentTimeMillis();
+    // A genuine write always stamps source_as_of. A heal keeps whatever is already recorded and
+    // only falls back to now when the row is new: discovering a marker we never had is the one
+    // case where the file's real write time is unknown, so it must force one materialization pass
+    // rather than assert the file is old. Once the tracker has converged there are no new heals,
+    // source_as_of stops moving, and the skip engages.
+    String conflictSourceAsOf = sourceFileWritten
+        ? "source_as_of = EXCLUDED.source_as_of"
+        : "source_as_of = COALESCE(pipeline_tracker.source_as_of, EXCLUDED.source_as_of)";
     String sql = "INSERT INTO pipeline_tracker "
         + "(source_key, table_name, phase, state, row_count, config_hash, "
         + "signature, error_message, as_of, source_as_of) "
@@ -454,9 +463,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         + "state = EXCLUDED.state, row_count = EXCLUDED.row_count, "
         + "config_hash = EXCLUDED.config_hash, signature = EXCLUDED.signature, "
         + "error_message = EXCLUDED.error_message, as_of = EXCLUDED.as_of, "
-        // COALESCE keeps the prior value when this write is a heal (NULL), so recovering a
-        // marker never rewrites history for a file that was written long ago.
-        + "source_as_of = COALESCE(EXCLUDED.source_as_of, pipeline_tracker.source_as_of)";
+        + conflictSourceAsOf;
 
     try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
       stmt.setString(1, sourceKey);
@@ -469,11 +476,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setString(8, errorMessage != null
           ? errorMessage.substring(0, Math.min(1000, errorMessage.length())) : null);
       stmt.setLong(9, now);
-      if (sourceFileWritten) {
-        stmt.setLong(10, now);
-      } else {
-        stmt.setNull(10, java.sql.Types.BIGINT);
-      }
+      stmt.setLong(10, now);
       stmt.executeUpdate();
     } catch (SQLException e) {
       // Fail loud: a tracker write that does not persist means ETL would write data without

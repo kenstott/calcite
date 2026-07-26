@@ -225,9 +225,10 @@ class PGPipelineTrackerCoverageTest {
 
     tracker.markComplete("src1", "metadata", "staging", 1);
 
-    // Parameter 10 is source_as_of; a genuine write stamps it.
-    verify(pstmt).setLong(eq(10), anyLong());
-    verify(pstmt, never()).setNull(eq(10), anyInt());
+    org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(mockConnection).prepareStatement(sql.capture());
+    assertTrue(sql.getValue().contains("source_as_of = EXCLUDED.source_as_of"),
+        "A genuine write must stamp source_as_of unconditionally: " + sql.getValue());
   }
 
   @Test void testHealDoesNotAdvanceSourceWriteTimestamp() throws Exception {
@@ -236,9 +237,12 @@ class PGPipelineTrackerCoverageTest {
 
     tracker.markComplete("src1", "metadata", "staging", 1, false);
 
-    // NULL, so the ON CONFLICT COALESCE preserves whatever the real write recorded.
-    verify(pstmt).setNull(eq(10), anyInt());
-    verify(pstmt, never()).setLong(eq(10), anyLong());
+    org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(mockConnection).prepareStatement(sql.capture());
+    assertTrue(
+        sql.getValue().contains(
+            "source_as_of = COALESCE(pipeline_tracker.source_as_of, EXCLUDED.source_as_of)"),
+        "A heal must preserve the recorded write time, not overwrite it: " + sql.getValue());
   }
 
   @Test void testGetMaxActivityAtReturnsTimestampWhenMarkersExist() throws Exception {
