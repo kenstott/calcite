@@ -1973,4 +1973,81 @@ public class IcebergMaterializerCoverageTest {
     // Cartesian product: 2 years x 2 regions = 4 combinations
     assertEquals(4, result.size());
   }
+
+  // ===== Year-scoped source file watermark =====
+
+  /** Records every path handed to listFiles and serves entries from a fixed layout. */
+  private List<String> stubYearPartitionLayout() throws IOException {
+    final List<String> listed = new ArrayList<String>();
+    final Map<String, List<StorageProvider.FileEntry>> byPath =
+        new HashMap<String, List<StorageProvider.FileEntry>>();
+    byPath.put("s3://bucket/sec/year=2025/",
+        Arrays.asList(
+            new StorageProvider.FileEntry("s3://bucket/sec/year=2025/0001_acc1_facts.parquet",
+                "0001_acc1_facts.parquet", false, 100, 1000L)));
+    byPath.put("s3://bucket/sec/year=2026/",
+        Arrays.asList(
+            new StorageProvider.FileEntry("s3://bucket/sec/year=2026/0001_acc2_facts.parquet",
+                "0001_acc2_facts.parquet", false, 100, 5000L),
+            // Nested one level deeper: counts toward the watermark, but is not a direct child
+            // of the partition and so must not enter the accession index.
+            new StorageProvider.FileEntry(
+                "s3://bucket/sec/year=2026/geography=US/0002_acc3_facts.parquet",
+                "0002_acc3_facts.parquet", false, 100, 9000L)));
+    when(mockStorageProvider.listFiles(anyString(), anyBoolean())).thenAnswer(invocation -> {
+      String path = invocation.getArgument(0);
+      listed.add(path);
+      List<StorageProvider.FileEntry> entries = byPath.get(path);
+      return entries != null ? entries : new ArrayList<StorageProvider.FileEntry>();
+    });
+    return listed;
+  }
+
+  @Test void testS3WatermarkListsOnlyConfiguredYears() throws Exception {
+    List<String> listed = stubYearPartitionLayout();
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(tempDir.toString(), mockStorageProvider, mockTracker);
+
+    long watermark =
+        materializer.getSourceFileWatermark("s3://bucket/sec/year=*/*_facts.parquet",
+            IcebergMaterializer.SourceFormat.PARQUET, 2025, 2026);
+
+    assertEquals(9000L, watermark);
+    assertEquals(Arrays.asList("s3://bucket/sec/year=2025/", "s3://bucket/sec/year=2026/"), listed);
+  }
+
+  @Test void testS3WatermarkWithoutYearRangeListsWholePrefix() throws Exception {
+    List<String> listed = stubYearPartitionLayout();
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(tempDir.toString(), mockStorageProvider, mockTracker);
+
+    materializer.getSourceFileWatermark("s3://bucket/sec/year=*/*_facts.parquet",
+        IcebergMaterializer.SourceFormat.PARQUET);
+
+    assertEquals(Collections.singletonList("s3://bucket/sec/"), listed);
+  }
+
+  @Test void testYearPartitionListingSharedWithSourceAccessions() throws Exception {
+    List<String> listed = stubYearPartitionLayout();
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(tempDir.toString(), mockStorageProvider, mockTracker);
+
+    materializer.getSourceFileWatermark("s3://bucket/sec/year=*/*_facts.parquet",
+        IcebergMaterializer.SourceFormat.PARQUET, 2026, 2026);
+
+    Method method =
+        IcebergMaterializer.class.getDeclaredMethod("getSourceAccessions", String.class,
+            String.class);
+    method.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    Map<String, Set<String>> accessions =
+        (Map<String, Set<String>>) method.invoke(materializer,
+            "s3://bucket/sec/year=*/*_facts.parquet", "2026");
+
+    // The accession index reuses the watermark's listing: one LIST for the partition, not two.
+    assertEquals(Collections.singletonList("s3://bucket/sec/year=2026/"), listed);
+    // Only the direct child of year=2026/ is indexed; the nested file is excluded.
+    assertEquals(1, accessions.size());
+    assertTrue(accessions.get("0001").contains("acc2"));
+  }
 }

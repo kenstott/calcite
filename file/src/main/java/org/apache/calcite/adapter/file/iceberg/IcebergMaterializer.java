@@ -128,8 +128,16 @@ public class IcebergMaterializer {
   /** Cache of the S3 source-file watermark per (basePath, ext). The non-wildcard base of a
    *  {@code year=*} source pattern collapses to the whole schema prefix (e.g. {@code sec/}), so
    *  every table in a materialize pass would otherwise do an identical full-bucket recursive LIST.
-   *  Key: "basePath:ext", Value: max lastModified. Stable within a run (source files are pre-staged). */
+   *  Key: "basePath:startYear-endYear:ext", Value: max lastModified. Stable within a run
+   *  (source files are pre-staged). */
   private final Map<String, Long> s3WatermarkCache = new HashMap<String, Long>();
+
+  /** Cache of recursive listings of a single {@code year=YYYY/} source partition, keyed by the
+   *  resolved year-directory path. Both the source-accession index and the source-file watermark
+   *  need the contents of the same year partition, so each partition is listed exactly once per
+   *  run and both consumers read from this map. */
+  private final Map<String, List<StorageProvider.FileEntry>> yearListingCache =
+      new HashMap<String, List<StorageProvider.FileEntry>>();
 
   /**
    * Creates a materializer with default retry settings.
@@ -655,7 +663,8 @@ public class IcebergMaterializer {
     boolean enableSourceWatermark = isSourceWatermarkEnabled(config);
     if (enableSourceWatermark) {
       currentSourceWatermark =
-          getSourceFileWatermark(config.getSourcePattern(), config.getSourceFormat());
+          getSourceFileWatermark(config.getSourcePattern(), config.getSourceFormat(),
+              config.getStartYear(), config.getEndYear());
       LOGGER.debug("Current source file watermark: {}", currentSourceWatermark);
     }
 
@@ -2127,9 +2136,20 @@ public class IcebergMaterializer {
         return null;
       }
 
-      // List files in the year directory
-      List<StorageProvider.FileEntry> files = storageProvider.listFiles(basePath, false);
+      // List files in the year directory. The listing is recursive and shared with the source-file
+      // watermark; entries below the partition's own level are dropped here so this method sees
+      // exactly what a non-recursive listing of basePath would have returned.
+      String yearMarker = "year=" + year + "/";
+      List<StorageProvider.FileEntry> files = listYearPartition(basePath);
       for (StorageProvider.FileEntry file : files) {
+        if (file.isDirectory()) {
+          continue;
+        }
+        int markerIdx = file.getPath().indexOf(yearMarker);
+        if (markerIdx >= 0
+            && file.getPath().indexOf('/', markerIdx + yearMarker.length()) >= 0) {
+          continue;
+        }
         String fileName = file.getName();
         // Only process files matching the table's suffix (e.g., _facts.parquet, _metadata.parquet)
         if (suffixParts != null) {
@@ -2645,6 +2665,25 @@ public class IcebergMaterializer {
    * @return Max lastModified timestamp in milliseconds, or 0 if no files or error
    */
   public long getSourceFileWatermark(String sourcePattern, SourceFormat sourceFormat) {
+    return getSourceFileWatermark(sourcePattern, sourceFormat, 0, 0);
+  }
+
+  /**
+   * Computes the max lastModified timestamp from source files, scoped to a year range.
+   *
+   * <p>For an S3 {@code year=*} pattern the year range bounds the listing to the partitions
+   * this run will actually process, instead of walking the whole schema prefix. The watermark
+   * then answers exactly the question the caller asks — "did anything change in the years I am
+   * about to materialize?" — and reuses the per-year listing the accession index already needs.
+   *
+   * @param sourcePattern Glob pattern for source files
+   * @param sourceFormat Format of source files (JSON or PARQUET)
+   * @param startYear First year partition to include, or 0 when the config carries no year range
+   * @param endYear Last year partition to include (inclusive)
+   * @return Max lastModified timestamp in milliseconds, or 0 if no files or error
+   */
+  public long getSourceFileWatermark(String sourcePattern, SourceFormat sourceFormat,
+      int startYear, int endYear) {
     long maxLastModified = 0;
 
     try (Connection conn = getDuckDBConnection(1);
@@ -2661,7 +2700,7 @@ public class IcebergMaterializer {
 
       boolean isS3 = globPattern.startsWith("s3://") || globPattern.startsWith("s3a://");
       if (isS3) {
-        return getS3SourceFileWatermark(globPattern, ext);
+        return getS3SourceFileWatermark(globPattern, ext, startYear, endYear);
       }
 
       String sql = "SELECT file, last_modified FROM glob('" + globPattern + "')";
@@ -2693,9 +2732,15 @@ public class IcebergMaterializer {
    *
    * @param globPattern S3 glob pattern (e.g., "s3://bucket/prefix/year=*&#47;*.parquet")
    * @param ext File extension to filter by (e.g., ".parquet")
+   * @param startYear First year partition to include, or 0 when no year range is available
+   * @param endYear Last year partition to include (inclusive)
    * @return Max lastModified timestamp in milliseconds, or 0 on error
    */
-  private long getS3SourceFileWatermark(String globPattern, String ext) {
+  private long getS3SourceFileWatermark(String globPattern, String ext,
+      int startYear, int endYear) {
+    int yearWildcardIdx = globPattern.indexOf("year=*");
+    boolean yearScoped = yearWildcardIdx > 0 && startYear > 0 && endYear >= startYear;
+
     // Extract the non-wildcard prefix to use as the S3 listing base path
     String basePath = globPattern;
     int wildcardIdx = basePath.indexOf('*');
@@ -2706,34 +2751,75 @@ public class IcebergMaterializer {
         basePath = basePath.substring(0, lastSlash + 1);
       }
     }
-    // The recursive LIST below walks the whole basePath subtree (for a year=* pattern that is the
-    // entire schema prefix, e.g. sec/). The result is identical for every table sharing that
-    // basePath, so cache it per (basePath, ext) to collapse N per-table full-bucket walks into one.
-    String wmKey = basePath + ":" + ext;
+    // Without a year range the LIST below walks the whole basePath subtree (for a year=* pattern
+    // that is the entire schema prefix, e.g. sec/). The result is identical for every table
+    // sharing that basePath and year range, so cache it to collapse N per-table walks into one.
+    String wmKey = basePath + ":" + startYear + "-" + endYear + ":" + ext;
     Long cachedWm = s3WatermarkCache.get(wmKey);
     if (cachedWm != null) {
       return cachedWm;
     }
-    LOGGER.debug("Computing S3 source file watermark for base path: {}", basePath);
     long maxLastModified = 0;
+    int scanned = 0;
     try {
-      List<StorageProvider.FileEntry> files = storageProvider.listFiles(basePath, true);
-      for (StorageProvider.FileEntry entry : files) {
-        if (!entry.isDirectory() && entry.getPath().endsWith(ext)) {
-          long lastMod = entry.getLastModified();
-          if (lastMod > maxLastModified) {
-            maxLastModified = lastMod;
+      if (yearScoped) {
+        String yearPrefix = globPattern.substring(0, yearWildcardIdx);
+        for (int year = startYear; year <= endYear; year++) {
+          List<StorageProvider.FileEntry> files =
+              listYearPartition(yearPrefix + "year=" + year + "/");
+          scanned += files.size();
+          for (StorageProvider.FileEntry entry : files) {
+            if (!entry.isDirectory() && entry.getPath().endsWith(ext)) {
+              long lastMod = entry.getLastModified();
+              if (lastMod > maxLastModified) {
+                maxLastModified = lastMod;
+              }
+            }
           }
         }
+        LOGGER.debug("S3 source file watermark: {} ({} objects scanned, years {}-{} under {})",
+            maxLastModified, scanned, startYear, endYear, yearPrefix);
+      } else {
+        LOGGER.debug("Computing S3 source file watermark for base path: {}", basePath);
+        List<StorageProvider.FileEntry> files = storageProvider.listFiles(basePath, true);
+        scanned = files.size();
+        for (StorageProvider.FileEntry entry : files) {
+          if (!entry.isDirectory() && entry.getPath().endsWith(ext)) {
+            long lastMod = entry.getLastModified();
+            if (lastMod > maxLastModified) {
+              maxLastModified = lastMod;
+            }
+          }
+        }
+        LOGGER.debug("S3 source file watermark: {} ({} objects scanned, base: {})",
+            maxLastModified, scanned, basePath);
       }
       s3WatermarkCache.put(wmKey, maxLastModified);
-      LOGGER.debug("S3 source file watermark: {} ({} objects scanned, base: {})",
-          maxLastModified, files.size(), basePath);
     } catch (IOException e) {
       LOGGER.warn("Failed to compute S3 source file watermark for {}: {}", basePath, e.getMessage());
       return 0;
     }
     return maxLastModified;
+  }
+
+  /**
+   * Lists one {@code year=YYYY/} source partition recursively, caching the result for the run.
+   *
+   * <p>The same partition backs both the source-accession index and the source-file watermark;
+   * routing both through this method means each partition is listed once per materialize pass.
+   *
+   * @param yearDirPath Resolved year-partition path, ending in {@code /}
+   * @return All entries under the partition (empty when the partition does not exist yet)
+   */
+  private List<StorageProvider.FileEntry> listYearPartition(String yearDirPath)
+      throws IOException {
+    List<StorageProvider.FileEntry> cached = yearListingCache.get(yearDirPath);
+    if (cached != null) {
+      return cached;
+    }
+    List<StorageProvider.FileEntry> files = storageProvider.listFiles(yearDirPath, true);
+    yearListingCache.put(yearDirPath, files);
+    return files;
   }
 
   /**
