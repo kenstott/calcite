@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.SchemaParser;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopTables;
@@ -83,6 +84,9 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
   private @Nullable Double cachedRowCount;
   private @Nullable Map<String, String> cachedColumnComments;
   private @Nullable Map<String, Object> constraintConfig;
+  private @Nullable Schema resolvedSchema;
+  private IcebergSchemaCache.@Nullable TableSchema schemaCacheEntry;
+  private boolean schemaCacheConsulted;
 
   /**
    * Creates an IcebergTable from a path.
@@ -149,6 +153,56 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     return icebergTable;
   }
 
+  /** The S3 credential map, present only for object-store-backed tables. */
+  @SuppressWarnings("unchecked")
+  private @Nullable Map<String, String> s3Config() {
+    return (Map<String, String>) config.get("hadoopConfig");
+  }
+
+  /**
+   * Returns this table's entry in the published schema cache, or null on a miss.
+   *
+   * <p>Consulted at most once: a miss is remembered so a large catalog does not re-probe per
+   * accessor. The cache itself reports a miss for every table until it has proven it holds the
+   * published bytes, so null here always means "read it live", never "the schema is empty".
+   */
+  private IcebergSchemaCache.@Nullable TableSchema schemaCacheEntry() {
+    if (!schemaCacheConsulted) {
+      schemaCacheConsulted = true;
+      schemaCacheEntry = IcebergSchemaCache.lookup(source.path(), s3Config());
+    }
+    return schemaCacheEntry;
+  }
+
+  /**
+   * Returns the Iceberg schema — from the cache when one is published and current, otherwise by
+   * loading the table from the object store.
+   *
+   * <p>The cached form is {@code SchemaParser} JSON, which round-trips a schema exactly, so a hit
+   * and a miss produce identical results. A hit avoids the per-table round trip that dominated
+   * catalog enumeration; a live read populates the cache so seed generation can publish it.
+   */
+  private Schema icebergSchema() {
+    if (resolvedSchema != null) {
+      return resolvedSchema;
+    }
+    IcebergSchemaCache.TableSchema entry = schemaCacheEntry();
+    if (entry != null && entry.schemaJson != null) {
+      try {
+        resolvedSchema = SchemaParser.fromJson(entry.schemaJson);
+        return resolvedSchema;
+      } catch (RuntimeException e) {
+        // Unparseable cache entry: fall through to the live read rather than fail the query.
+        LOGGER.warn("Ignoring unparseable cached schema for {}: {}", source.path(), e.getMessage());
+        schemaCacheEntry = null;
+      }
+    }
+    Table table = icebergTable();
+    resolvedSchema = table.schema();
+    IcebergSchemaCache.record(source.path(), resolvedSchema, table.properties(), s3Config());
+    return resolvedSchema;
+  }
+
   /**
    * Creates an IcebergTable from an existing Iceberg Table object.
    *
@@ -179,7 +233,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     final List<String> fieldNames = new ArrayList<>();
     final List<RelDataType> fieldTypes = new ArrayList<>();
 
-    Schema icebergSchema = icebergTable().schema();
+    Schema icebergSchema = icebergSchema();
     for (Types.NestedField field : icebergSchema.columns()) {
       fieldNames.add(field.name());
       // Honor Iceberg nullability: optional→nullable, required→NOT NULL.
@@ -319,7 +373,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
           : Statistics.UNKNOWN;
     }
     List<String> columnNames = new ArrayList<>();
-    for (Types.NestedField field : icebergTable().schema().columns()) {
+    for (Types.NestedField field : icebergSchema().columns()) {
       columnNames.add(field.name());
     }
     java.util.Map<String, Object> tableConfig = new java.util.LinkedHashMap<>();
@@ -371,6 +425,12 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
    * @return Table comment, or null if not available
    */
   @Override public @Nullable String getTableComment() {
+    IcebergSchemaCache.TableSchema entry = schemaCacheEntry();
+    if (entry != null) {
+      // A cached entry with a null comment means the table genuinely has none — the presence of
+      // the ENTRY is what decides, not the presence of the value.
+      return entry.tableComment;
+    }
     return icebergTable().properties().get("comment");
   }
 
@@ -392,7 +452,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
     }
 
     // First try to get from Iceberg schema field doc
-    Schema schema = icebergTable().schema();
+    Schema schema = icebergSchema();
     for (Types.NestedField field : schema.columns()) {
       if (field.name().equalsIgnoreCase(columnName)) {
         String doc = field.doc();
@@ -431,7 +491,10 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
       return cachedColumnComments;
     }
 
-    String json = icebergTable().properties().get("column.comments");
+    IcebergSchemaCache.TableSchema entry = schemaCacheEntry();
+    String json = entry != null
+        ? entry.columnCommentsJson
+        : icebergTable().properties().get("column.comments");
     if (json == null || json.isEmpty()) {
       cachedColumnComments = Collections.emptyMap();
       return cachedColumnComments;

@@ -60,6 +60,7 @@ LIMIT="1"
 SINGLE_CONNECTION=false
 PROBES_ENABLED=true
 DUP_ARGS=()
+PUBLISH_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -70,11 +71,22 @@ while [[ $# -gt 0 ]]; do
         # Mount every selected schema on ONE connection instead of looping one per schema.
         # Used by build-seed.sh so inter-schema views are actually created in the catalog.
         --single-connection) SINGLE_CONNECTION=true; shift ;;
+        # Publish the Iceberg schema cache that this run materializes to the warehouse. Only
+        # meaningful with --single-connection: the enumeration is what fills the cache, and a
+        # per-schema loop would publish 24 partial caches over the top of each other.
+        --publish-schema-cache) PUBLISH_ARGS+=(--publish-schema-cache); shift ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
         -h|--help)        sed -n '17,48p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)                echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+
+if [[ ${#PUBLISH_ARGS[@]} -gt 0 && "$SINGLE_CONNECTION" != "true" ]]; then
+    echo "Error: --publish-schema-cache requires --single-connection." >&2
+    echo "       The per-schema loop would publish one partial cache per schema, each" >&2
+    echo "       overwriting the last, leaving only the final schema's tables published." >&2
+    exit 2
+fi
 
 # Schemas to verify (normalize commas to spaces).
 if [[ -n "$SOURCE" ]]; then
@@ -176,7 +188,7 @@ failed_list=""
 if [[ "$SINGLE_CONNECTION" == "true" ]]; then
     joined="$(echo $SELECTED | tr ' ' ',')"
     echo "===== single connection, all schemas mounted: $joined ====="
-    args=(--source "$joined" --limit "$LIMIT" "${DUP_ARGS[@]}")
+    args=(--source "$joined" --limit "$LIMIT" "${DUP_ARGS[@]}" "${PUBLISH_ARGS[@]}")
     if java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}"; then
         echo "  all-schema connection OK"
         exit 0

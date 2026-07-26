@@ -85,7 +85,7 @@ echo "Warehouse:             $GOVDATA_PARQUET_DIR"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-VERIFY_ARGS=(--no-probes --no-dup)
+VERIFY_ARGS=(--no-probes --no-dup --publish-schema-cache)
 if [[ -n "$SOURCE" ]]; then
     VERIFY_ARGS+=(--source "$SOURCE")
     echo "WARNING: --source given; the resulting seed is PARTIAL (missing schemas cold-start normally)."
@@ -103,7 +103,23 @@ fi
 # ${GOVDATA_VERIFY_DATA_DIR:-$HOME/.govdata-verify} to isolate itself from the ETL pool, so exporting
 # GOVDATA_DATA_DIR here had no effect — generation landed in ~/.govdata-verify and the catalog check
 # below could never find $CATALOG.
+#
+# The Iceberg schema cache is redirected into staging too. It defaults to a per-user directory
+# (~/.aperio/.iceberg_metadata_cache), which for generation would mean reading and rewriting the
+# developer's own cache — so the seed could inherit entries from an unrelated warehouse. Pointing
+# it at the empty staging dir makes the cache this run produces contain exactly the tables this
+# run enumerated, which is what gets published and bundled.
+SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
+export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR"
 GOVDATA_VERIFY_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" --single-connection "${VERIFY_ARGS[@]}"
+
+SCHEMA_CACHE="$SCHEMA_CACHE_DIR/iceberg-schema-cache.json"
+if [[ ! -f "$SCHEMA_CACHE" ]]; then
+    echo "ERROR: generation did not produce $SCHEMA_CACHE — the catalog pull read no Iceberg" >&2
+    echo "       tables live, so there is no schema cache to publish or bundle." >&2
+    exit 1
+fi
+echo "Schema cache generated: $SCHEMA_CACHE ($(wc -c < "$SCHEMA_CACHE") bytes)"
 
 CATALOG="$STAGING/.duckdb/govdata.duckdb"
 if [[ ! -f "$CATALOG" ]]; then

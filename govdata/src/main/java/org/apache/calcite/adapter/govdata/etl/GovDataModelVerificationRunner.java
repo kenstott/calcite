@@ -111,6 +111,9 @@ public final class GovDataModelVerificationRunner {
     // bug), so any table with >= dupThreshold duplicate keyed rows fails the run.
     boolean dupCheck = true;
     int dupThreshold = 1;   // minimum duplicate keyed-row count to flag/fail (>=1 → any duplication)
+    // Publish the Iceberg schema cache this run materialized. Enumerating every table is exactly
+    // what fills that cache, so seed generation reuses this run rather than adding a second pass.
+    boolean publishSchemaCache = false;
   }
 
   /** A table/view defined in a schema YAML, with its category and (for views) dependencies. */
@@ -321,6 +324,25 @@ public final class GovDataModelVerificationRunner {
       int errs = cBase.error + cIntra.error + cInter.error + cOther.error;
       int missingHard = cBase.missing + cIntra.missing;
       int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()) ? 1 : 0;
+
+      if (cfg.publishSchemaCache) {
+        // Enumerating every table above is what materialized the schema cache, so publishing is
+        // just persisting what this run already read. Only a clean run may publish: a run with
+        // errors read some tables successfully and others not at all, and publishing then would
+        // ship a cache that silently omits whatever failed.
+        if (exit != 0) {
+          System.out.println("  schema cache         : NOT published (run exited " + exit + ")");
+        } else {
+          int cached = org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.size();
+          boolean published =
+              org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.publishToWarehouse();
+          System.out.println("  schema cache         : " + cached + " tables, published="
+              + published);
+          if (!published) {
+            exit = 1;
+          }
+        }
+      }
       System.exit(exit);
     } finally {
       try {
@@ -426,6 +448,8 @@ public final class GovDataModelVerificationRunner {
           if (r.error == null) {
             r.error = e.getMessage();
           }
+          // This CLI runner's own stack-trace verbosity, set by model-verify.sh — not adapter
+          // model-operand-guard: allow configuration; there is no schema operand to read it from.
           if (System.getenv("VERIFY_STACK") != null) {
             System.err.println("STACK for " + schema + "." + table + ":");
             e.printStackTrace();
@@ -489,6 +513,8 @@ public final class GovDataModelVerificationRunner {
       r.pkChecked = true;
     } catch (Exception e) {
       r.dupErr = e.getMessage();
+      // This CLI runner's own stack-trace verbosity, set by model-verify.sh — not adapter
+      // model-operand-guard: allow configuration; there is no schema operand to read it from.
       if (System.getenv("VERIFY_STACK") != null) {
         System.err.println("DUP STACK for " + r.schema + "." + r.table + ":");
         e.printStackTrace();
@@ -640,6 +666,8 @@ public final class GovDataModelVerificationRunner {
         cfg.limit = Integer.parseInt(args[++i]);
       } else if ("--no-dup".equals(a)) {
         cfg.dupCheck = false;
+      } else if ("--publish-schema-cache".equals(a)) {
+        cfg.publishSchemaCache = true;
       } else if ("--dup-threshold".equals(a)) {
         cfg.dupThreshold = Integer.parseInt(args[++i]);
       } else if ("--expected".equals(a)) {

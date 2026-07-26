@@ -61,6 +61,7 @@ public final class GovDataSeedInstaller {
   private static final String SEED_ZIP_RESOURCE = "/duckdb/seed/govdata-seed.zip";
   private static final String SEED_VERSION_RESOURCE = "/duckdb/seed/govdata-seed.version";
   private static final String MARKER_RELATIVE = ".duckdb/govdata.duckdb.version";
+  private static final String SCHEMA_CACHE_RESOURCE = "/duckdb/seed/iceberg-schema-cache.json";
 
   /** Seed check is a once-per-JVM operation; connect() is called for every connection. */
   private static volatile boolean checkedThisJvm;
@@ -85,6 +86,8 @@ public final class GovDataSeedInstaller {
     if (operatingBase == null || operatingBase.isEmpty()) {
       return;
     }
+
+    installBundledSchemaCache();
 
     // A JAR built without running bundleGovdataSeed has no seed resource: nothing to do.
     String bundledVersion = readResourceText(SEED_VERSION_RESOURCE);
@@ -118,6 +121,31 @@ public final class GovDataSeedInstaller {
       // A failed seed is recoverable: the runtime rebuilds views/trackers from s3:// on demand.
       LOGGER.warn("Failed to seed govdata catalog into {}: {}", base.getAbsolutePath(),
           e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Installs the bundled Iceberg schema cache into the Iceberg cache directory.
+   *
+   * <p>Deliberately outside the catalog's version gate, because the two artifacts are validated
+   * differently. The catalog is derived from the driver's own model, so a version mismatch means
+   * it would answer wrongly and it must be regenerated. The schema cache is derived from the
+   * warehouse and validated by digest against the published copy, so a mismatch only means it
+   * gets re-downloaded — and a cache miss falls through to the live read regardless. It therefore
+   * needs no version gate, only a place to land before the first connection reads it.
+   */
+  private static void installBundledSchemaCache() {
+    try (InputStream in =
+             GovDataSeedInstaller.class.getResourceAsStream(SCHEMA_CACHE_RESOURCE)) {
+      if (in == null) {
+        LOGGER.debug("No bundled Iceberg schema cache ({}); schemas resolve live or by download",
+            SCHEMA_CACHE_RESOURCE);
+        return;
+      }
+      org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.installBundled(in);
+    } catch (IOException e) {
+      // Purely an accelerator: without it the cache is downloaded, or schemas are read live.
+      LOGGER.warn("Could not install bundled Iceberg schema cache: {}", e.getMessage());
     }
   }
 

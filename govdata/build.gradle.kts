@@ -364,8 +364,22 @@ tasks.register("bundleGovdataSeed") {
         }
         versionFile.writeText(version)
 
+        // The Iceberg schema cache ships as its own resource rather than a zip member. The zip is
+        // extracted into the operating base, but the schema cache is read from the Iceberg cache
+        // directory, which is a different location — a zip entry would land where nothing looks
+        // for it. GovDataSeedInstaller installs this resource into the right directory instead.
+        val schemaCacheSrc = file("$base/.iceberg_metadata_cache/iceberg-schema-cache.json")
+        if (!schemaCacheSrc.isFile) {
+            throw GradleException("No Iceberg schema cache at $schemaCacheSrc — generation did not "
+                + "read any Iceberg table live, so a cold start would have nothing to seed.")
+        }
+        val schemaCacheDest = file("$seedDir/iceberg-schema-cache.json")
+        schemaCacheSrc.copyTo(schemaCacheDest, overwrite = true)
+
         println("Bundled govdata seed: ${members.size} entries (1 catalog + ${trackers.size} trackers) "
             + "-> $zipFile (${zipFile.length() / 1024} KB, version $version)")
+        println("Bundled Iceberg schema cache: $schemaCacheDest "
+            + "(${schemaCacheDest.length() / 1024} KB)")
     }
 }
 

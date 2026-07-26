@@ -576,6 +576,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         }
         result[0] = IcebergCatalogManager.createTableFromColumns(
             catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
+        // The table's columns just changed, so any published schema cache now describes a schema
+        // that no longer exists. Withdraw it: readers fall back to the live read (slower but
+        // correct) until seed generation republishes. Leaving it would serve a wrong row type.
+        withdrawPublishedSchemaCache(result[0]);
       });
       return result[0];
     }
@@ -585,6 +589,26 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         targetTableId, expectedColumns.size(), actualPartitionColumnNames);
     return IcebergCatalogManager.createTableFromColumns(
         catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
+  }
+
+  /**
+   * Deletes the warehouse-wide published Iceberg schema cache after a drift-driven recreate.
+   *
+   * <p>Withdrawal rather than republish is deliberate: this runs inside the per-table commit lock
+   * during ETL, and rebuilding the cache would mean re-reading every other table in the warehouse
+   * while holding it. Deleting one object is cheap, and the cost of being without a cache is only
+   * latency — the next seed build republishes it.
+   *
+   * @param table the freshly recreated table, used to locate the warehouse
+   */
+  @SuppressWarnings("unchecked")
+  private void withdrawPublishedSchemaCache(Table table) {
+    if (table == null) {
+      return;
+    }
+    Map<String, String> hadoopConfig = (Map<String, String>) catalogConfig.get("hadoopConfig");
+    org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.unpublish(
+        table.location(), hadoopConfig);
   }
 
   /**
