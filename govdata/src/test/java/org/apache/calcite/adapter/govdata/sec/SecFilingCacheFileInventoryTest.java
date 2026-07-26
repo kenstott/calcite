@@ -531,6 +531,56 @@ public class SecFilingCacheFileInventoryTest {
   }
 
   // -------------------------------------------------------------------------
+  // 15. The storage path exists to recover lost tracker state, so whatever it learns must be
+  //     written back. A no_xbrl sentinel found in storage was previously counted and discarded,
+  //     so 1,329 filings in SEC 2025 fell to the storage path on EVERY run and the tracker
+  //     never converged. Run twice: the second run must need no storage answer at all.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void filterAndSelfHeal_healsNoXbrlMarkerFromSentinelSoNextRunNeedsNoStorage()
+      throws IOException {
+    String cik = "0001234567";
+    String accession = "0001234567-25-000042";
+    String filingDate = "2025-03-10";
+    // Sentinel survives in storage; the tracker has no record of this filing at all.
+    String sentinelPath =
+        PARQUET_BASE + "/year=2025/" + cik + "_" + accession + "_no_xbrl.parquet";
+
+    TrackingStorageProvider provider = new TrackingStorageProvider(
+        Collections.singletonList(sentinelPath));
+    InMemoryPipelineTracker tracker = new InMemoryPipelineTracker();
+    SecFilingCache cache = new SecFilingCache(tracker, provider, PARQUET_BASE);
+    cache.registerFileInventoryRange(2025, 2025);
+
+    List<EdgarFullIndexCache.IndexEntry> candidates =
+        Collections.singletonList(new EdgarFullIndexCache.IndexEntry(
+            "SOME CO", "8-K", cik, filingDate, accession, 2025, 1));
+
+    List<EdgarFullIndexCache.IndexEntry> firstRun =
+        cache.filterAndSelfHeal(candidates, false, 4);
+    assertTrue(firstRun.isEmpty(), "A filing with a no_xbrl sentinel must not be reprocessed");
+    assertTrue(provider.existsCallCount() > 0,
+        "First run has no tracker state, so it must consult storage");
+
+    // The marker must now be in the tracker — that is the whole point of the storage fallback.
+    assertTrue(
+        tracker.getCompletedTables("accession_number=" + accession + "__year=2025", "staging")
+            .contains("_no_xbrl"),
+        "Sentinel found in storage must be written back as a tracker marker");
+
+    // Second run against the healed tracker: decided in memory, zero storage operations.
+    provider.resetCounters();
+    List<EdgarFullIndexCache.IndexEntry> secondRun =
+        cache.filterAndSelfHeal(candidates, false, 4);
+    assertTrue(secondRun.isEmpty(), "Still must not be reprocessed");
+    assertEquals(0, provider.existsCallCount(),
+        "With the tracker healed, the second run must not touch storage");
+    assertEquals(0, provider.listFilesCallCount(),
+        "With the tracker healed, the second run must not list storage");
+  }
+
+  // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
 

@@ -992,8 +992,10 @@ public class SecFilingCache implements AutoCloseable {
         continue;
       }
       if (storageInv.hasNoXbrl()) {
-        // no_xbrl sentinel file found in S3 — filing was processed, has no XBRL data.
-        // Skip without adding to self-heal queue (no parquet to record).
+        // no_xbrl sentinel file found in S3 — filing was processed, has no XBRL data. Heal the
+        // missing tracker marker from it: the storage path exists to recover lost tracker state,
+        // so an answer it produces has to be written back or the next run pays for it again.
+        toSelfHeal.add(ie);
         cntNoXbrl++;
       } else if (storageInv.hasAnyFiles()) {
         toSelfHeal.add(ie);
@@ -1609,6 +1611,12 @@ public class SecFilingCache implements AutoCloseable {
    */
   private void recordInventory(String accession, FileInventory inventory) {
     String key = filingKey(accession);
+    // The no_xbrl sentinel is tracker state like any other output. Omitting it here meant a filing
+    // whose sentinel survived in storage but whose tracker marker was lost never got the marker
+    // back, so it fell to the storage path on every subsequent run and the tracker never converged.
+    if (inventory.hasNoXbrl()) {
+      tracker.markComplete(key, TABLE_NO_XBRL, PHASE_STAGING, 0);
+    }
     if (inventory.hasMetadata()) {
       tracker.markComplete(key, "metadata", PHASE_STAGING, 1);
     }
