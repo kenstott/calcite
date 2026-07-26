@@ -652,10 +652,6 @@ jobs:
           p = pathlib.Path("askamerica/__init__.py")
           p.write_text(re.sub(r'^__version__ = ".*"', f'__version__ = "{v}"', p.read_text(), flags=re.MULTILINE))
 
-          # engine.py — BUNDLED_ENGINE_VERSION
-          p = pathlib.Path("askamerica/engine.py")
-          p.write_text(re.sub(r'^BUNDLED_ENGINE_VERSION = ".*"', f'BUNDLED_ENGINE_VERSION = "{v}"', p.read_text(), flags=re.MULTILINE))
-
           print(f"Bumped all version strings to {v}")
           EOF
 
@@ -666,7 +662,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml askamerica/__init__.py askamerica/engine.py
+          git add pyproject.toml askamerica/__init__.py
           # Idempotent: a re-run of an already-released version has nothing to bump.
           if git diff --cached --quiet; then
             echo "Version already at ${VERSION}; nothing to commit."
