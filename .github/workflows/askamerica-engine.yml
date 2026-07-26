@@ -373,12 +373,19 @@ jobs:
           COMPONENT="$COMPONENT_DIR/AskAmerica-MCP-component.pkg"
           rm -rf "$COMPONENT_DIR" && mkdir -p "$COMPONENT_DIR"
 
+          # pkgbuild rejects --component-plist unless the payload is given as --root,
+          # so stage the signed .app at the root of its own tree. ditto (not cp) keeps
+          # the code signature's extended attributes intact.
+          PKG_ROOT="askamerica-engine/build/pkg-root"
+          rm -rf "$PKG_ROOT" && mkdir -p "$PKG_ROOT"
+          ditto "$APP" "$PKG_ROOT/$(basename "$APP")"
+
           # --component-plist sets BundleIsRelocatable=false. Without it macOS
           # Installer Spotlight-searches for the bundle id and installs over any copy
           # it finds — e.g. a local `./gradlew jpackage` output — instead of
           # /Applications, while still reporting success.
           pkgbuild \
-            --component "$APP" \
+            --root "$PKG_ROOT" \
             --install-location /Applications \
             --scripts askamerica-engine/src/packaging/mac \
             --component-plist askamerica-engine/src/packaging/mac-pkg/component.plist \
@@ -410,7 +417,7 @@ jobs:
             --package-path "$COMPONENT_DIR" \
             --resources askamerica-engine/src/packaging/mac-pkg/resources \
             "$PKG"
-          rm -rf "$COMPONENT_DIR"
+          rm -rf "$COMPONENT_DIR" "$PKG_ROOT"
           echo "Created: $PKG"
           KEYCHAIN="${ASKAMERICA_SIGN_KEYCHAIN:-}"
           INSTALLER_ID=""
