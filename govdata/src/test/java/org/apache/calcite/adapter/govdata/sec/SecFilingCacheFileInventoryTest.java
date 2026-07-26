@@ -437,9 +437,52 @@ public class SecFilingCacheFileInventoryTest {
         cache.filterAndSelfHeal(candidates, false, 4);
 
     assertEquals(4, provider.listFilesCallCount(),
-        "A candidate with no tracker record must trigger the deferred inventory scan");
+        "A candidate with no tracker record must trigger the deferred inventory scan, and the "
+            + "self-heal write must reuse the inventory already resolved rather than re-listing");
     assertTrue(toProcess.isEmpty(),
         "Files present in storage → self-heal the markers, do not reprocess");
+  }
+
+  // -------------------------------------------------------------------------
+  // 13. EDGAR lists ownership filings once per CIK (issuer + every reporting owner). Those
+  //     repeat rows must be decided once. Regression: the first row cleared the stale no_xbrl
+  //     marker, so each repeat row saw empty tracker state and fell through to a storage
+  //     check — dragging in a full year-partition scan on an otherwise fully-tracked year.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void filterAndSelfHeal_decidesRepeatedAccessionOnceWithoutTouchingStorage() throws IOException {
+    String issuerCik = "0000883241";
+    String reportingOwnerCik = "0001693085";
+    String accession = "0001517737-25-000064";
+    String filingDate = "2025-08-29";
+
+    TrackingStorageProvider provider = new TrackingStorageProvider(
+        Collections.<String>emptyList());
+    InMemoryPipelineTracker tracker = new InMemoryPipelineTracker();
+    // Form 4 carrying only a stale _no_xbrl marker — the case that calls clearNoXbrl.
+    tracker.markComplete("accession_number=" + accession + "__year=2025",
+        "_no_xbrl", "staging", 0);
+
+    SecFilingCache cache = new SecFilingCache(tracker, provider, PARQUET_BASE);
+    cache.registerFileInventoryRange(2025, 2025);
+
+    // The same Form 4, indexed under the issuer and under the reporting owner.
+    List<EdgarFullIndexCache.IndexEntry> candidates = new ArrayList<>();
+    candidates.add(new EdgarFullIndexCache.IndexEntry(
+        "ISSUER CO", "4", issuerCik, filingDate, accession, 2025, 3));
+    candidates.add(new EdgarFullIndexCache.IndexEntry(
+        "REPORTING OWNER", "4", reportingOwnerCik, filingDate, accession, 2025, 3));
+
+    List<EdgarFullIndexCache.IndexEntry> toProcess =
+        cache.filterAndSelfHeal(candidates, false, 4);
+
+    assertEquals(1, toProcess.size(),
+        "One accession is one EDGAR submission — it must be queued exactly once");
+    assertEquals(0, provider.listFilesCallCount(),
+        "Deciding a repeated accession must not trigger the year-partition scan");
+    assertEquals(0, provider.existsCallCount(),
+        "Deciding a repeated accession must not issue storage existence checks");
   }
 
   // -------------------------------------------------------------------------

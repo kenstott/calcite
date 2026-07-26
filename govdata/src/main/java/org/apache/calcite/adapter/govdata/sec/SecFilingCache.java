@@ -641,6 +641,91 @@ public class SecFilingCache implements AutoCloseable {
         java.util.Collections.<String>emptySet());
   }
 
+  /**
+   * A candidate pass 1 could not decide from tracker state, carrying the partial tracker inventory
+   * that pass 2 must union with storage ({@code null} when the tracker had no record at all).
+   */
+  private static final class PendingStorageCheck {
+    private final EdgarFullIndexCache.IndexEntry entry;
+    private final FileInventory trackerInventory;
+
+    PendingStorageCheck(EdgarFullIndexCache.IndexEntry entry, FileInventory trackerInventory) {
+      this.entry = entry;
+      this.trackerInventory = trackerInventory;
+    }
+  }
+
+  /**
+   * Builds the file inventory iff there is at least one storage question to answer.
+   *
+   * <p>There is no "just check those few filings directly" shortcut: with the inventory unbuilt,
+   * {@link #fileExists} falls to {@link #existsInBatchFiles}, which lists the whole year directory
+   * and DuckDB-reads batch parquet files — once per output type, so ~11 year-directory LISTs per
+   * filing. Past about twenty filings that already costs more than the one bulk scan it would
+   * replace, so the only decision worth making here is scan versus don't.
+   *
+   * @param pendingStorageChecks number of filings pass 1 could not decide from tracker state
+   */
+  private void prepareFileInventory(int pendingStorageChecks) {
+    if (pendingStorageChecks == 0) {
+      inventoryLoaded = true;
+      LOGGER.info("Tracker state resolved every candidate — file inventory scan skipped entirely");
+      return;
+    }
+    LOGGER.info("{} filings need a storage answer — building the file inventory",
+        pendingStorageChecks);
+    ensureFileInventory();
+  }
+
+  /**
+   * Resolves the storage inventory for every pending candidate, concurrently.
+   *
+   * <p>Parallelism is what makes the direct-check strategy viable: serially, a few thousand filings
+   * x 11 round-trips each would cost more than the scan it replaces. When the bulk scan did run
+   * these are pure memory lookups and the pool simply drains immediately.
+   *
+   * @return accession → inventory, one entry per pending candidate (accessions are unique here)
+   */
+  private Map<String, FileInventory> gatherStorageInventories(
+      List<PendingStorageCheck> pending, int selfHealThreads) {
+    final Map<String, FileInventory> inventories =
+        new java.util.concurrent.ConcurrentHashMap<String, FileInventory>();
+    if (pending.isEmpty()) {
+      return inventories;
+    }
+    long start = System.currentTimeMillis();
+    int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
+    java.util.concurrent.ExecutorService pool =
+        java.util.concurrent.Executors.newFixedThreadPool(poolSize);
+    List<java.util.concurrent.Future<?>> futures =
+        new ArrayList<java.util.concurrent.Future<?>>(pending.size());
+    for (final PendingStorageCheck check : pending) {
+      futures.add(pool.submit(new Runnable() {
+        @Override public void run() {
+          inventories.put(check.entry.accession,
+              checkS3Files(check.entry.cik, check.entry.accession, check.entry.filingDate));
+        }
+      }));
+    }
+    pool.shutdown();
+    try {
+      for (java.util.concurrent.Future<?> future : futures) {
+        // get() rethrows a task failure. A missing inventory would silently look like "no files in
+        // storage" and re-queue an already-processed filing, so surface it instead.
+        future.get();
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Interrupted resolving storage inventories", e);
+    } catch (java.util.concurrent.ExecutionException e) {
+      throw new IllegalStateException(
+          "Failed to resolve storage inventory: " + e.getCause().getMessage(), e.getCause());
+    }
+    LOGGER.info("Resolved storage inventory for {} filings with {} threads in {}ms",
+        pending.size(), poolSize, System.currentTimeMillis() - start);
+    return inventories;
+  }
+
   public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
       List<EdgarFullIndexCache.IndexEntry> candidates,
       boolean vectorizationEnabled,
@@ -653,6 +738,10 @@ public class SecFilingCache implements AutoCloseable {
     final List<EdgarFullIndexCache.IndexEntry> toSelfHeal =
         new ArrayList<EdgarFullIndexCache.IndexEntry>();
 
+    // Candidates pass 1 cannot decide from tracker state alone; each needs one storage answer.
+    List<PendingStorageCheck> pending = new ArrayList<PendingStorageCheck>();
+
+    int cntDuplicate = 0;
     int cntNoXbrl = 0;
     int cntTrackerComplete = 0;
     int cntTrackerBaseComplete = 0;
@@ -662,7 +751,20 @@ public class SecFilingCache implements AutoCloseable {
     int cntS3Partial = 0;
     int cntNoFiles = 0;
 
+    // ---- Pass 1: tracker state only. Pure memory after the bulk preload, no storage ops. ----
+    java.util.Set<String> seenAccessions = new java.util.HashSet<String>();
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      // EDGAR's full index lists ownership filings (Forms 3/4/5, SC 13D/G) once per CIK involved —
+      // the issuer AND every reporting owner — so ~43% of an all-filer year's rows repeat a filing
+      // already decided (454,073 candidates for 2025 cover only 258,803 distinct accessions). An
+      // accession is exactly one EDGAR submission and one unit of work, so decide it once.
+      // Re-deciding was not merely wasted work, it produced a wrong answer: the first row clears a
+      // stale no_xbrl marker, so the repeat row saw no tracker state at all and fell through to a
+      // storage check that dragged in a full year-partition scan.
+      if (!seenAccessions.add(ie.accession)) {
+        cntDuplicate++;
+        continue;
+      }
       if (!forceAccessions.isEmpty() && forceAccessions.contains(ie.accession)) {
         toProcess.add(ie);
         continue;
@@ -714,13 +816,28 @@ public class SecFilingCache implements AutoCloseable {
         // storage: a completion marker can be lost (tracker/storage divergence) while the
         // parquet survives, so reprocessing on tracker state alone reconverts a filing whose
         // output is already in S3/R2 on EVERY run (e.g. insider forms marked 'insider' but
-        // missing 'metadata'). Consult the preloaded storage inventory (in-memory, zero LIST
-        // ops) before giving up: if the union of tracker + storage satisfies the form's
-        // expected outputs, self-heal the absent markers from storage and skip. This extends
-        // the existence-heal below (which only fires for accessions with NO tracker record) to
-        // the partial-tracker case.
-        FileInventory storageInv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
-        FileInventory healed = unionInventory(inv, storageInv);
+        // missing 'metadata'). Consult storage before giving up: if the union of tracker +
+        // storage satisfies the form's expected outputs, self-heal the absent markers from
+        // storage and skip. This extends the existence-heal below (which only fires for
+        // accessions with NO tracker record) to the partial-tracker case.
+        pending.add(new PendingStorageCheck(ie, inv));
+        continue;
+      }
+      pending.add(new PendingStorageCheck(ie, null));
+    }
+
+    // ---- Now that the outstanding question count is known, pick how to answer it, then do so. ----
+    prepareFileInventory(pending.size());
+    Map<String, FileInventory> storageInventories =
+        gatherStorageInventories(pending, selfHealThreads);
+
+    // ---- Pass 2: classify the leftovers against storage. ----
+    for (PendingStorageCheck check : pending) {
+      EdgarFullIndexCache.IndexEntry ie = check.entry;
+      FormType form = FormType.fromString(ie.formType);
+      FileInventory storageInv = storageInventories.get(ie.accession);
+      if (check.trackerInventory != null) {
+        FileInventory healed = unionInventory(check.trackerInventory, storageInv);
         if (healed.isComplete(form, vectorizationEnabled)
             || (healed.isComplete(form, false)
                 && (!chunksBackfill || healed.isComplete(form, true)))) {
@@ -732,20 +849,18 @@ public class SecFilingCache implements AutoCloseable {
         toProcess.add(ie);
         continue;
       }
-      FileInventory s3Inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
-      if (s3Inv.hasNoXbrl()) {
+      if (storageInv.hasNoXbrl()) {
         // no_xbrl sentinel file found in S3 — filing was processed, has no XBRL data.
         // Skip without adding to self-heal queue (no parquet to record).
         cntNoXbrl++;
-      } else if (s3Inv.hasAnyFiles()) {
+      } else if (storageInv.hasAnyFiles()) {
         toSelfHeal.add(ie);
-        FormType form = FormType.fromString(ie.formType);
         // Only process if base staging files are also incomplete, not just chunks.
-        if (!s3Inv.isComplete(form, false)) {
+        if (!storageInv.isComplete(form, false)) {
           cntS3Partial++;
           if (cntS3Partial <= 5) {
             LOGGER.info("s3Partial sample: accession={} formType={} inventory={}",
-                ie.accession, ie.formType, s3Inv);
+                ie.accession, ie.formType, storageInv);
           }
           toProcess.add(ie);
         } else {
@@ -758,12 +873,12 @@ public class SecFilingCache implements AutoCloseable {
     }
 
     LOGGER.info(
-        "filterAndSelfHeal: candidates={} noXbrl={} trackerFull={} trackerBaseOnly={} "
-            + "trackerIncomplete={} trackerHealed={} s3Complete={} s3Partial={} noFiles={} "
-            + "toProcess={}",
-        candidates.size(), cntNoXbrl, cntTrackerComplete, cntTrackerBaseComplete,
-        cntTrackerIncomplete, cntTrackerHealed, cntS3Complete, cntS3Partial, cntNoFiles,
-        toProcess.size());
+        "filterAndSelfHeal: candidates={} duplicateAccessions={} noXbrl={} trackerFull={} "
+            + "trackerBaseOnly={} storageChecked={} trackerIncomplete={} trackerHealed={} "
+            + "s3Complete={} s3Partial={} noFiles={} toProcess={}",
+        candidates.size(), cntDuplicate, cntNoXbrl, cntTrackerComplete, cntTrackerBaseComplete,
+        pending.size(), cntTrackerIncomplete, cntTrackerHealed, cntS3Complete, cntS3Partial,
+        cntNoFiles, toProcess.size());
 
     if (!toSelfHeal.isEmpty()) {
       int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
@@ -772,10 +887,13 @@ public class SecFilingCache implements AutoCloseable {
       java.util.concurrent.ExecutorService pool =
           java.util.concurrent.Executors.newFixedThreadPool(poolSize);
       for (final EdgarFullIndexCache.IndexEntry ie : toSelfHeal) {
+        // Reuse the inventory pass 2 already resolved for this accession. Re-deriving it here
+        // doubled the storage work for every healed filing, and on the uncached path that is
+        // ~11 year-directory LISTs each.
+        final FileInventory inv = storageInventories.get(ie.accession);
         @SuppressWarnings("FutureReturnValueIgnored")
         java.util.concurrent.Future<?> ignored = pool.submit(new Runnable() {
           @Override public void run() {
-            FileInventory inv = checkS3Files(ie.cik, ie.accession, ie.filingDate);
             recordInventory(ie.accession, inv);
           }
         });
