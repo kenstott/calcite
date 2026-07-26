@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import org.apache.calcite.adapter.file.etl.VariableResolver;
+
 import java.util.List;
 import java.util.Map;
 
@@ -105,10 +107,23 @@ public class PartitionedTableConfig {
   /**
    * Whether this table materializes to Iceberg format. Iceberg's manifest-based file pruning
    * (per-file partition values and column stats) makes the alternate-partition physical-layout
-   * optimization redundant, so that feature is disabled for Iceberg-format tables.
+   * optimization redundant, so that feature is disabled for Iceberg-format tables. It also
+   * means the staging glob is not the read path, so it must not be enumerated.
+   *
+   * <p>The value is resolved through {@link VariableResolver} because schema YAML may declare it
+   * as {@code ${VAR:default}} (sec-schema.yaml uses {@code ${MATERIALIZE_FORMAT:iceberg}}), and
+   * nothing on the read path resolves the {@code partitionedTables} config maps — env expansion
+   * upstream is applied only to the named {@code name}/{@code sourceDirectory}/
+   * {@code materializeDirectory} keys. Comparing the raw value would silently classify every such
+   * table as non-Iceberg.
    */
   public boolean isIcebergFormat() {
-    return materialize != null && "iceberg".equals(materialize.get("format"));
+    if (materialize == null) {
+      return false;
+    }
+    Object format = materialize.get("format");
+    return format instanceof String
+        && "iceberg".equals(VariableResolver.resolveEnvVars((String) format));
   }
 
   /**

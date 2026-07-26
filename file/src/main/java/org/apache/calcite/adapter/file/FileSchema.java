@@ -4112,8 +4112,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
         // Determine up front whether this table uses iceberg format (needed later to decide
         // whether empty matchingFiles is intentional vs. a missing-data condition)
-        Map<String, Object> materializeConfig = config.getMaterialize();
-        boolean isIcebergFormat = materializeConfig != null && "iceberg".equals(materializeConfig.get("format"));
+        boolean isIcebergFormat = config.isIcebergFormat();
 
         // Find all files matching the pattern (skip for lazy-initialized tables)
         List<String> matchingFiles;
