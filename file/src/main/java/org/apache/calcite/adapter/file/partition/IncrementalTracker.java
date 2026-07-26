@@ -337,6 +337,21 @@ public interface IncrementalTracker {
    * modified since the last successful processing. This enables true incremental
    * processing where only new/changed source files trigger re-processing.
    */
+  /**
+   * Latest marker timestamp in {@code phase}, i.e. when source data was last written.
+   *
+   * <p>This is the tracker's own answer to "has anything changed since I last materialized?", so a
+   * caller holding a completion timestamp can decide to skip without listing object storage. The
+   * tracker is authoritative; storage is only for recovering state the tracker lost.
+   *
+   * @param phase Caller-defined step label, or null when the caller cannot name a scope
+   * @return latest marker timestamp, or {@code -1} when unknown — callers MUST treat -1 as "cannot
+   *         prove quiescence" and fall back to inspecting storage, never as "nothing changed"
+   */
+  default long getMaxActivityAt(String phase) {
+    return -1L;
+  }
+
   class CachedCompletion {
     public final String configHash;
     public final String signature;

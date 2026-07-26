@@ -205,6 +205,49 @@ class PGPipelineTrackerCoverageTest {
 
   // ===== getCompletedTables =====
 
+  /**
+   * The -1 contract is safety-critical: a caller that mistakes "tracker cannot answer" for
+   * "nothing changed" would skip materialization that was actually needed. SQL NULL (no markers
+   * at all) and a failed query must both report -1, never 0.
+   */
+  @Test void testGetMaxActivityAtReturnsTimestampWhenMarkersExist() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    ResultSet rs = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+    when(pstmt.executeQuery()).thenReturn(rs);
+    when(rs.next()).thenReturn(true);
+    when(rs.getLong(1)).thenReturn(1785090430325L);
+    when(rs.wasNull()).thenReturn(false);
+
+    assertEquals(1785090430325L, tracker.getMaxActivityAt("staging"));
+  }
+
+  @Test void testGetMaxActivityAtReturnsMinusOneWhenNoMarkers() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    ResultSet rs = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+    when(pstmt.executeQuery()).thenReturn(rs);
+    when(rs.next()).thenReturn(true);
+    when(rs.getLong(1)).thenReturn(0L);
+    when(rs.wasNull()).thenReturn(true);
+
+    assertEquals(-1L, tracker.getMaxActivityAt("staging"),
+        "SQL NULL means no markers exist, which is not proof that nothing changed");
+  }
+
+  @Test void testGetMaxActivityAtReturnsMinusOneForNullPhase() {
+    assertEquals(-1L, tracker.getMaxActivityAt(null),
+        "An unnamed scope cannot prove quiescence");
+  }
+
+  @Test void testGetMaxActivityAtHandlesSQLException() throws Exception {
+    when(mockConnection.prepareStatement(anyString()))
+        .thenThrow(new java.sql.SQLException("boom"));
+
+    assertEquals(-1L, tracker.getMaxActivityAt("staging"),
+        "A failed query must not read as quiescent");
+  }
+
   @Test void testGetCompletedTables() throws Exception {
     PreparedStatement pstmt = mock(PreparedStatement.class);
     ResultSet rs = mock(ResultSet.class);

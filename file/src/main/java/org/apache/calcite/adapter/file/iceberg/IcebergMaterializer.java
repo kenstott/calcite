@@ -132,6 +132,20 @@ public class IcebergMaterializer {
    *  (source files are pre-staged). */
   private final Map<String, Long> s3WatermarkCache = new HashMap<String, Long>();
 
+  /**
+   * Tracker phase whose markers record writes of this materializer's source data, or null when the
+   * caller cannot name one. Set it only when every marker in the phase genuinely corresponds to
+   * source data for these tables: a phase shared with unrelated pipelines would keep reporting
+   * fresh activity and simply never permit a skip, while a phase that misses writes would skip
+   * materialization that was actually needed. Null keeps the storage-listing behaviour.
+   */
+  private volatile String sourceActivityPhase = null;
+
+  /** @see #sourceActivityPhase */
+  public void setSourceActivityPhase(String phase) {
+    this.sourceActivityPhase = phase;
+  }
+
   /** Cache of recursive listings of a single {@code year=YYYY/} source partition, keyed by the
    *  resolved year-directory path. Both the source-accession index and the source-file watermark
    *  need the contents of the same year partition, so each partition is listed exactly once per
@@ -657,6 +671,27 @@ public class IcebergMaterializer {
     totalRowsWritten = 0;  // Reset per call
     LOGGER.info("Starting materialization for '{}' -> '{}'",
         config.getDescription(), config.getTargetTableId());
+
+    // Tracker first: it is authoritative for "was anything written since I last materialized?".
+    // Answering that by listing object storage costs a recursive LIST of the whole source year
+    // range (20k+ objects for SEC 2025, over ten minutes when several workers list at once) and
+    // it ran unconditionally — the expensive fallback was the precondition for taking the cheap
+    // path. When the tracker can prove quiescence, storage is never touched.
+    IncrementalTracker.CachedCompletion priorCompletion =
+        incrementalTracker.getCachedCompletion(config.getTargetTableId());
+    if (priorCompletion != null && priorCompletion.completedAt > 0) {
+      long lastSourceActivity = incrementalTracker.getMaxActivityAt(sourceActivityPhase);
+      // -1 means the tracker cannot answer for this scope; that is NOT proof of quiescence, so
+      // fall through to the storage listing rather than skipping work that may be needed.
+      if (lastSourceActivity >= 0 && lastSourceActivity <= priorCompletion.completedAt) {
+        long durationMs = System.currentTimeMillis() - startTime;
+        LOGGER.info("Skipping materialization for '{}' — tracker shows no source writes in phase "
+            + "'{}' since it was materialized (last write {}, completed {}); storage not listed",
+            config.getTargetTableId(), sourceActivityPhase, lastSourceActivity,
+            priorCompletion.completedAt);
+        return new MaterializationResult(config.getTargetTableId(), 0, 0, 1, durationMs);
+      }
+    }
 
     // Compute current source file watermark (0 if watermarking disabled)
     long currentSourceWatermark = 0;

@@ -1145,6 +1145,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // Create IcebergMaterializer with incremental tracker
     IcebergMaterializer materializer = new IcebergMaterializer(
         warehousePath, storageProvider, incrementalTracker);
+    // Every SEC source parquet is written under a "staging" marker, and that phase carries no
+    // other pipeline's markers, so it is an exact record of when this warehouse's source data last
+    // changed. Naming it lets the materializer answer "anything new?" from the tracker instead of
+    // recursively listing the year partitions on every run.
+    materializer.setSourceActivityPhase("staging");
 
     int tablesProcessed = 0;
     int totalBatchesSuccessful = 0;

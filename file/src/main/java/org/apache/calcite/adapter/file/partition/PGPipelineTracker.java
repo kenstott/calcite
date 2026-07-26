@@ -371,6 +371,27 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     return tables;
   }
 
+  @Override public long getMaxActivityAt(String phase) {
+    if (phase == null) {
+      return -1L;
+    }
+    String sql = "SELECT max(as_of) FROM pipeline_tracker WHERE phase = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, phase);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          long maxAsOf = rs.getLong(1);
+          // SQL NULL (no markers at all) reads as 0; that is "cannot prove quiescence", not
+          // "nothing changed" — returning -1 keeps the caller on its storage fallback.
+          return rs.wasNull() ? -1L : maxAsOf;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Failed reading max activity for phase {}: {}", phase, e.getMessage());
+    }
+    return -1L;
+  }
+
   @Override public Set<String> getSourceKeysForPhase(String phase) {
     Set<String> keys = new LinkedHashSet<>();
     String sql = "SELECT DISTINCT source_key FROM pipeline_tracker "
