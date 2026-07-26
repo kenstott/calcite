@@ -25,10 +25,13 @@ import java.awt.Insets;
 import java.awt.Toolkit;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -241,8 +244,9 @@ public class SetupWindow {
         setStatus("Writing configuration…", null);
 
         try {
-            Path configPath = claudeConfigPath();
-            writeClaudeConfig(configPath, apiKey);
+            for (Path configPath : claudeConfigPaths()) {
+                writeClaudeConfig(configPath, apiKey);
+            }
             saveTelemetryOptIn(telemetryCheckbox.isSelected());
             setStatus("Done! Restart Claude Desktop to activate.", true);
             configureBtn.setText("Configure again");
@@ -310,21 +314,71 @@ public class SetupWindow {
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(configPath.toFile(), root);
     }
 
-    private static Path claudeConfigPath() {
+    /**
+     * Every Claude Desktop config file that should receive the mcpServers entry.
+     *
+     * <p>On Windows there are two install flavours and they do not share a config
+     * file:
+     *
+     * <ul>
+     *   <li>the standalone build reads {@code %APPDATA%\Claude};</li>
+     *   <li>the MSIX / Microsoft Store build runs inside an app container, where
+     *       {@code %APPDATA%} is virtualised to
+     *       {@code %LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude}.
+     *       This wizard runs outside that container, so its own {@code %APPDATA%}
+     *       resolves to the un-redirected path: writing there creates a file the
+     *       packaged app never reads, and the connector silently never appears.</li>
+     * </ul>
+     *
+     * <p>So probe for the config directories that actually exist instead of assuming
+     * a layout, and write to each one. If none exist, Claude Desktop has never been
+     * launched (or isn't installed) and there is no correct file to write — say so
+     * rather than guessing a path and then reporting success.
+     */
+    private static List<Path> claudeConfigPaths() throws IOException {
         String os = System.getProperty("os.name", "").toLowerCase();
+        List<Path> candidates = new ArrayList<>();
         if (os.contains("mac")) {
-            return Paths.get(System.getProperty("user.home"),
-                "Library", "Application Support", "Claude", "claude_desktop_config.json");
+            candidates.add(Paths.get(System.getProperty("user.home"),
+                "Library", "Application Support", "Claude"));
         } else if (os.contains("win")) {
-            String appData = System.getenv("APPDATA");
-            if (appData == null) {
-                appData = System.getProperty("user.home");
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData != null) {
+                Path packages = Paths.get(localAppData, "Packages");
+                if (Files.isDirectory(packages)) {
+                    DirectoryStream<Path> pkgs =
+                        Files.newDirectoryStream(packages, "Claude_*");
+                    try {
+                        for (Path pkg : pkgs) {
+                            candidates.add(pkg.resolve("LocalCache")
+                                .resolve("Roaming").resolve("Claude"));
+                        }
+                    } finally {
+                        pkgs.close();
+                    }
+                }
             }
-            return Paths.get(appData, "Claude", "claude_desktop_config.json");
+            String appData = System.getenv("APPDATA");
+            if (appData != null) {
+                candidates.add(Paths.get(appData, "Claude"));
+            }
         } else {
-            return Paths.get(System.getProperty("user.home"),
-                ".config", "Claude", "claude_desktop_config.json");
+            candidates.add(
+                Paths.get(System.getProperty("user.home"), ".config", "Claude"));
         }
+
+        List<Path> configs = new ArrayList<>();
+        for (Path dir : candidates) {
+            if (Files.isDirectory(dir)) {
+                configs.add(dir.resolve("claude_desktop_config.json"));
+            }
+        }
+        if (configs.isEmpty()) {
+            throw new IOException("Claude Desktop's config folder was not found (looked in "
+                + candidates + "). Install Claude Desktop and launch it once, "
+                + "then click Configure again.");
+        }
+        return configs;
     }
 
     /**
