@@ -303,6 +303,28 @@ public final class GovDataModelVerificationRunner {
         }
       }
 
+      // ---- scan-plan audit ----
+      // Every partitioned table in every schema YAML declares `materialize:`, so every one must
+      // register in DuckDB as iceberg_scan(<table>) and resolve its files from the Iceberg
+      // manifests. A view that instead registers as parquet_scan('<glob>') re-expands that glob
+      // with an object-store LIST on every scan — including scans driven by a join to the table
+      // from another schema, where the cost is invisible in single-table probes. Auditing the
+      // registered view SQL catches the misclassification directly, with no S3 tracing.
+      List<org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory.GlobbingView> globbing =
+          org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory.findGlobbingViews();
+      if (!globbing.isEmpty()) {
+        System.out.println();
+        System.out.println("-- GLOBBING SCANS (" + globbing.size()
+            + ") — view LISTs the object store instead of reading Iceberg metadata --");
+        System.out.printf("  %-15s %-34s %s%n", "SCHEMA", "VIEW", "SCAN");
+        for (int i = 0; i < globbing.size(); i++) {
+          org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory.GlobbingView g =
+              globbing.get(i);
+          System.out.printf("  %-15s %-34s %s%n",
+              g.getSchema(), trunc(g.getView(), 34), trunc(g.getSql(), 160));
+        }
+      }
+
       System.out.println();
       System.out.println("================ SUMMARY ================");
       System.out.println("  base tables          : " + cBase.line());
@@ -316,14 +338,16 @@ public final class GovDataModelVerificationRunner {
       System.out.println("  feature-probe failures: " + probeFailures);
       System.out.println("  duplicate-PK tables  : " + dupped.size()
           + (cfg.dupCheck ? "" : "   (dup-check disabled)"));
+      System.out.println("  globbing scans       : " + globbing.size());
       System.out.println("  elapsed ms           : " + (System.currentTimeMillis() - t0));
 
       // Inter-schema views missing because their dependency was not mounted are expected, not a
       // failure. Only errors, genuinely-missing base tables / intra-schema views, probe failures,
-      // and non-unique declared primary keys fail the run.
+      // non-unique declared primary keys, and globbing scans fail the run.
       int errs = cBase.error + cIntra.error + cInter.error + cOther.error;
       int missingHard = cBase.missing + cIntra.missing;
-      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()) ? 1 : 0;
+      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()
+          || !globbing.isEmpty()) ? 1 : 0;
 
       if (cfg.publishSchemaCache) {
         // Enumerating every table above is what materialized the schema cache, so publishing is

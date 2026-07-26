@@ -67,6 +67,99 @@ public class DuckDBJdbcSchemaFactory {
   private static final int MAX_CATALOG_LOCK_FALLBACKS = 16;
 
   /**
+   * A registered DuckDB view whose scan re-resolves a glob against the object store on every
+   * query instead of reading a resolved file list from Iceberg metadata.
+   *
+   * @see #findGlobbingViews()
+   */
+  public static final class GlobbingView {
+    private final String schema;
+    private final String view;
+    private final String sql;
+
+    GlobbingView(String schema, String view, String sql) {
+      this.schema = schema;
+      this.view = view;
+      this.sql = sql;
+    }
+
+    public String getSchema() {
+      return schema;
+    }
+
+    public String getView() {
+      return view;
+    }
+
+    public String getSql() {
+      return sql;
+    }
+  }
+
+  /**
+   * Audits every view registered in the open DuckDB catalogs and returns those whose scan is a
+   * globbing {@code parquet_scan}/{@code read_parquet}.
+   *
+   * <p>A table backed by Iceberg is registered as {@code iceberg_scan(<table path>)}, which
+   * resolves its file list from the table's manifests. When a table is misclassified as
+   * non-Iceberg it is instead registered as {@code parquet_scan('<pattern>')} over a staging glob,
+   * and DuckDB re-expands that glob with an object-store LIST on <em>every</em> scan of the view —
+   * including a scan driven by a join to another table. Plain SQL views (which call neither scan
+   * function) and explicit file arrays such as {@code parquet_scan(['a','b'])} (no glob to
+   * expand, so no LIST) are not reported.
+   *
+   * @return the offending views, empty if every view resolves without globbing
+   */
+  public static List<GlobbingView> findGlobbingViews() throws SQLException {
+    List<GlobbingView> globbing = new ArrayList<>();
+    for (SharedDatabaseInfo info : DATABASE_POOL.values()) {
+      try (Connection conn = info.dataSource.getConnection();
+           Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(
+               "SELECT schema_name, view_name, sql FROM duckdb_views() WHERE internal = false")) {
+        while (rs.next()) {
+          String sql = rs.getString("sql");
+          if (isGlobbingScan(sql)) {
+            globbing.add(new GlobbingView(rs.getString("schema_name"),
+                rs.getString("view_name"), sql));
+          }
+        }
+      }
+    }
+    return globbing;
+  }
+
+  /**
+   * Whether a view definition scans files through a glob pattern rather than a resolved file list.
+   */
+  private static boolean isGlobbingScan(String viewSql) {
+    if (viewSql == null) {
+      return false;
+    }
+    String lower = viewSql.toLowerCase(java.util.Locale.ROOT);
+    if (!lower.contains("parquet_scan(") && !lower.contains("read_parquet(")) {
+      return false;
+    }
+    // Only a wildcard inside the scanned path literal forces DuckDB to LIST; a bare `SELECT *`
+    // projection does not, so look for the wildcard within quoted path arguments only.
+    int from = lower.indexOf("parquet_scan(");
+    if (from < 0) {
+      from = lower.indexOf("read_parquet(");
+    }
+    for (int i = viewSql.indexOf('\'', from); i >= 0; i = viewSql.indexOf('\'', i + 1)) {
+      int end = viewSql.indexOf('\'', i + 1);
+      if (end < 0) {
+        break;
+      }
+      if (viewSql.substring(i + 1, end).indexOf('*') >= 0) {
+        return true;
+      }
+      i = end;
+    }
+    return false;
+  }
+
+  /**
    * Information about a shared database instance.
    */
   private static class SharedDatabaseInfo {
