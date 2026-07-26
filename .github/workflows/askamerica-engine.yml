@@ -359,16 +359,58 @@ jobs:
         env:
           ASKAMERICA_SIGN_KEYCHAIN: ${{ env.ASKAMERICA_SIGN_KEYCHAIN }}
         run: |
+          # No pipefail: `find | head -1` can SIGPIPE find and would fail the step.
+          set -eu
           APP=$(find askamerica-engine/build/jpackage -name "*.app" -maxdepth 1 | head -1)
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#engine-v}"
           PKG="askamerica-engine/build/jpackage/AskAmerica-MCP-${VERSION}.pkg"
+
+          # The component pkg is an intermediate — build it OUTSIDE build/jpackage so
+          # neither the *.pkg upload glob nor the release job's recursive `find` can
+          # mistake it for the shippable installer.
+          COMPONENT_DIR="askamerica-engine/build/pkg-component"
+          COMPONENT="$COMPONENT_DIR/AskAmerica-MCP-component.pkg"
+          rm -rf "$COMPONENT_DIR" && mkdir -p "$COMPONENT_DIR"
+
+          # --component-plist sets BundleIsRelocatable=false. Without it macOS
+          # Installer Spotlight-searches for the bundle id and installs over any copy
+          # it finds — e.g. a local `./gradlew jpackage` output — instead of
+          # /Applications, while still reporting success.
           pkgbuild \
             --component "$APP" \
             --install-location /Applications \
             --scripts askamerica-engine/src/packaging/mac \
+            --component-plist askamerica-engine/src/packaging/mac-pkg/component.plist \
             --version "$VERSION" \
+            "$COMPONENT"
+          echo "Created component: $COMPONENT"
+
+          # Assert the artifact, not the intent: a <relocate> block in PackageInfo means
+          # relocation is still live (e.g. RootRelativeBundlePath no longer matches the
+          # bundle name, so pkgbuild ignored the plist). Fail the build, don't ship it.
+          rm -rf /tmp/pkgcheck
+          pkgutil --expand "$COMPONENT" /tmp/pkgcheck
+          if grep -q '<relocate>' /tmp/pkgcheck/PackageInfo; then
+            echo "::error::Component pkg is still relocatable — component.plist did not apply."
+            grep -A3 '<relocate>' /tmp/pkgcheck/PackageInfo
+            exit 1
+          fi
+          echo "Verified: bundle is non-relocatable (installs to /Applications)"
+
+          # productbuild wraps the component to add the conclusion pane. pkgbuild output
+          # has no UI beyond a progress bar, so a user whose wizard fails to auto-launch
+          # gets "installed successfully" and no instructions.
+          DIST=/tmp/distribution.xml
+          sed -e "s|__VERSION__|${VERSION}|g" \
+              -e "s|__COMPONENT_PKG__|$(basename "$COMPONENT")|g" \
+              askamerica-engine/src/packaging/mac-pkg/distribution.xml > "$DIST"
+          productbuild \
+            --distribution "$DIST" \
+            --package-path "$COMPONENT_DIR" \
+            --resources askamerica-engine/src/packaging/mac-pkg/resources \
             "$PKG"
+          rm -rf "$COMPONENT_DIR"
           echo "Created: $PKG"
           KEYCHAIN="${ASKAMERICA_SIGN_KEYCHAIN:-}"
           INSTALLER_ID=""
@@ -768,7 +810,7 @@ jobs:
             | Linux    | `askamerica-mcp_*.deb` |
             | Windows  | `AskAmerica MCP-*.msi` |
 
-            **macOS:** Double-click the `.pkg` and follow the installer (installs to Applications), then open AskAmerica MCP to enter your API key. Unsigned build: if Gatekeeper blocks it, right-click → Open, or run `xattr -dr com.apple.quarantine` on the app.
+            **macOS:** Double-click the `.pkg` (installs to `/Applications`). The installer opens the setup wizard — paste your API key, click **Configure Claude Desktop**, then quit and reopen Claude Desktop. If the wizard doesn't appear, open **AskAmerica MCP** from Applications yourself. First launch caches the engine in `~/.askamerica/engine` (~450 MB, one time). Signing/notarization is best-effort in CI; if Gatekeeper blocks an unsigned build, right-click → Open.
             **Linux:** `sudo dpkg -i askamerica-mcp_*.deb`, then run `askamerica-mcp` to configure.
             **Windows:** Double-click the `.msi`, then open AskAmerica MCP from the Start Menu to configure.
 

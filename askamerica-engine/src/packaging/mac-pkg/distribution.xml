@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+  Distribution definition for the AskAmerica MCP product package.
+
+  pkgbuild alone produces a component package, which has no installer UI beyond
+  the progress bar — so a user whose setup wizard fails to auto-launch is told
+  nothing at all. productbuild wraps the component and adds the conclusion pane
+  (resources/conclusion.html) that states the two manual steps.
+
+  __VERSION__ and __COMPONENT_PKG__ are substituted by the "Create PKG from
+  app-image" step in .github/workflows/askamerica-engine.yml.
+-->
+<installer-gui-script minSpecVersion="1">
+    <title>AskAmerica MCP</title>
+    <organization>ai.askamerica</organization>
+    <domains enable_localSystem="true"/>
+    <options customize="never" require-scripts="false"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <pkg-ref id="org.apache.calcite.adapter.askamerica"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="org.apache.calcite.adapter.askamerica"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="org.apache.calcite.adapter.askamerica" visible="false">
+        <pkg-ref id="org.apache.calcite.adapter.askamerica"/>
+    </choice>
+    <pkg-ref id="org.apache.calcite.adapter.askamerica"
+             version="__VERSION__"
+             onConclusion="none">__COMPONENT_PKG__</pkg-ref>
+</installer-gui-script>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    body   { font: 13px -apple-system, "Helvetica Neue", sans-serif; color: #1d1d1f; margin: 0; }
+    h2     { font-size: 15px; margin: 0 0 10px; }
+    ol     { margin: 0 0 14px 18px; padding: 0; }
+    li     { margin-bottom: 8px; }
+    code   { font: 12px "SF Mono", Menlo, monospace; }
+    .note  { color: #6e6e73; }
+  </style>
+</head>
+<body>
+
+<h2>Two steps left</h2>
+
+<ol>
+  <li>
+    Open <b>AskAmerica MCP</b> from your Applications folder, paste your API key
+    (free key at <b>askamerica.ai</b>), and click <b>Configure Claude Desktop</b>.
+    The setup window may have opened already — if so, just use it.
+  </li>
+  <li>
+    <b>Quit and reopen Claude Desktop.</b> AskAmerica then shows up as a connected
+    tool, with <code>list_schemas</code>, <code>list_tables</code>,
+    <code>describe_table</code>, and <code>query</code>.
+  </li>
+</ol>
+
+<p class="note">
+  The first launch downloads the query engine (about 450 MB) to
+  <code>~/.askamerica/engine</code> and shows a progress window. This happens once;
+  the pip package shares the same copy.
+</p>
+
+</body>
+</html>

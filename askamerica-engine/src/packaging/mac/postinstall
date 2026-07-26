@@ -1,23 +1,97 @@
 #!/bin/bash
+#
+# postinstall for the AskAmerica MCP component package.
+#
+# Two jobs: pre-warm the engine jar into the shared cache, and open the setup
+# wizard so the user can enter an API key and configure Claude Desktop.
+#
+# The jar goes to ~/.askamerica/engine, NOT inside the app bundle. Writing into
+# a Developer ID-signed, notarized bundle invalidates its CodeResources seal,
+# and ~/.askamerica/engine is where EngineInstaller and the pip client already
+# look — so both installs share one copy.
+#
+# Installer script arguments: $1 = package path, $2 = install destination.
+# Use $2 rather than a hardcoded /Applications; the destination is only fixed
+# because mac-pkg/component.plist sets BundleIsRelocatable=false, and if that
+# guarantee is ever broken this script fails loudly instead of writing nowhere.
 
-APP_DIR="/Applications/AskAmerica MCP.app/Contents/app"
-ENGINE_JAR="$APP_DIR/askamerica-engine.jar"
-ENGINE_URL="${ASKAMERICA_ENGINE_URL:-https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar}"
+set -u
 
-echo "AskAmerica MCP: downloading engine from $ENGINE_URL"
-if curl -fsSL --connect-timeout 30 --max-time 600 \
-    "$ENGINE_URL" -o "$ENGINE_JAR"; then
-  chmod 644 "$ENGINE_JAR"
-  echo "AskAmerica MCP: engine download complete"
-else
-  echo "AskAmerica MCP: engine download failed — app will show an error on first launch" >&2
+log()  { echo "AskAmerica MCP: $*"; }
+fail() { echo "AskAmerica MCP: ERROR: $*" >&2; }
+
+DEST="${2:-/Applications}"
+APP="$DEST/AskAmerica MCP.app"
+LAUNCHER="$APP/Contents/MacOS/AskAmerica MCP"
+
+if [ ! -x "$LAUNCHER" ]; then
+  fail "no app at $APP — the payload did not land where the installer said it would."
+  fail "If PackageKit logged 'relocated to', the component plist lost BundleIsRelocatable=false."
+  exit 1
 fi
 
-# Launch setup wizard as the logged-in user (postinstall runs as root).
-# Use full path — Launch Services may not have indexed the app yet.
-LOGGED_IN_USER=$(stat -f "%Su" /dev/console 2>/dev/null || true)
-if [ -n "$LOGGED_IN_USER" ] && [ "$LOGGED_IN_USER" != "root" ]; then
-  sudo -u "$LOGGED_IN_USER" open "/Applications/AskAmerica MCP.app" &
+# The GUI user, not root: the cache is per-user and the wizard must run in that
+# user's session. postinstall itself runs as root.
+USER_NAME=$(stat -f "%Su" /dev/console 2>/dev/null)
+if [ -z "$USER_NAME" ] || [ "$USER_NAME" = "root" ]; then
+  fail "no logged-in GUI user at /dev/console — cannot cache the engine or open setup."
+  exit 1
+fi
+if ! USER_UID=$(id -u "$USER_NAME" 2>/dev/null); then
+  fail "console user '$USER_NAME' is not a known account."
+  exit 1
+fi
+USER_GROUP=$(id -gn "$USER_UID")
+USER_HOME=$(dscl . -read "/Users/$USER_NAME" NFSHomeDirectory 2>/dev/null \
+  | sed 's/^NFSHomeDirectory: //')
+if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
+  fail "could not resolve a home directory for $USER_NAME (got '$USER_HOME')."
+  exit 1
+fi
+
+# ── Pre-warm the engine jar ──────────────────────────────────────────────────
+# Not fatal on failure: McpServerLauncher downloads the jar on first launch with
+# a progress window. This only saves the user that wait.
+
+CACHE_DIR="$USER_HOME/.askamerica/engine"
+JAR="$CACHE_DIR/askamerica-engine.jar"
+URL="${ASKAMERICA_ENGINE_URL:-https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar}"
+
+if [ -f "$JAR" ]; then
+  log "engine already cached at $JAR — skipping download"
+else
+  install -d -o "$USER_NAME" -g "$USER_GROUP" -m 755 \
+    "$USER_HOME/.askamerica" "$CACHE_DIR"
+  PART="$CACHE_DIR/askamerica-engine.jar.part"
+  log "downloading engine from $URL"
+  HTTP=$(curl -fsSL --connect-timeout 30 --max-time 900 \
+    -w '%{http_code}' -o "$PART" "$URL")
+  CURL_RC=$?
+  if [ "$CURL_RC" -eq 0 ]; then
+    # Move into place only once complete, so a partial file is never mistaken
+    # for a usable engine.
+    mv -f "$PART" "$JAR"
+    chown "$USER_NAME:$USER_GROUP" "$JAR"
+    chmod 644 "$JAR"
+    log "engine cached at $JAR"
+  else
+    rm -f "$PART"
+    fail "engine download failed: curl exit $CURL_RC, HTTP ${HTTP:-none}, url $URL"
+    fail "Recoverable — the app downloads the engine on first launch instead."
+  fi
+fi
+
+# ── Open the setup wizard ────────────────────────────────────────────────────
+# `launchctl asuser` puts the call in the user's GUI bootstrap namespace; a bare
+# `sudo -u ... open` from root's namespace fails with LSOpenURLsWithRole -600.
+# Not backgrounded, so the exit status is real and gets logged.
+
+log "opening setup wizard as $USER_NAME"
+if launchctl asuser "$USER_UID" sudo -u "$USER_NAME" open "$APP"; then
+  log "setup wizard launched"
+else
+  fail "could not open the setup wizard (launchctl asuser exit $?)."
+  fail "Recoverable — the installer's final pane tells the user to open the app manually."
 fi
 
 exit 0

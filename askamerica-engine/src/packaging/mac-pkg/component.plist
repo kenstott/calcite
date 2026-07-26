@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Component properties for the AskAmerica MCP app bundle.
+
+  BundleIsRelocatable=false is the whole point of this file. Without it, macOS
+  Installer looks up the bundle identifier via Spotlight and installs over any
+  existing copy it finds instead of /Applications. On a machine that has ever
+  run `./gradlew :askamerica-engine:jpackage` locally, that target is the gradle
+  build output — the installer reports success while the app lands in
+  ~/.gradle/askamerica-engine-build/jpackage and postinstall's paths miss.
+
+  RootRelativeBundlePath must match the bundle name pkgbuild is given as its
+  component. The CI step asserts the built pkg carries no relocate block, so a
+  stale name here fails the build rather than silently re-enabling relocation.
+-->
+<plist version="1.0">
+<array>
+  <dict>
+    <key>BundleHasStrictIdentifier</key>
+    <true/>
+    <key>BundleIsRelocatable</key>
+    <false/>
+    <key>BundleIsVersionChecked</key>
+    <true/>
+    <key>BundleOverwriteAction</key>
+    <string>upgrade</string>
+    <key>RootRelativeBundlePath</key>
+    <string>AskAmerica MCP.app</string>
+  </dict>
+</array>
+</plist>

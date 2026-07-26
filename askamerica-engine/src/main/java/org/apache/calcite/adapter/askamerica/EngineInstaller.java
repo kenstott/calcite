@@ -60,8 +60,9 @@ final class EngineInstaller {
 
     /**
      * First existing jar among: {@code ASKAMERICA_ENGINE_JAR} override, a jar sitting
-     * beside the launcher (mac postinstall pre-warm), then the shared cache.
-     * Returns null if none is present yet.
+     * beside the launcher (an operator dropping one into the app bundle), then the
+     * shared cache — which is where the mac postinstall pre-warms it. Returns null if
+     * none is present yet.
      */
     static Path resolveExisting(File launcherDir) {
         String env = System.getenv("ASKAMERICA_ENGINE_JAR");
