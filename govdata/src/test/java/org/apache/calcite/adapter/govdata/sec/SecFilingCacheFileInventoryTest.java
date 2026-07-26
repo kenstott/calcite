@@ -417,7 +417,7 @@ public class SecFilingCacheFileInventoryTest {
   // -------------------------------------------------------------------------
 
   @Test
-  void filterAndSelfHeal_runsDeferredScanForCandidateMissingFromTracker() throws IOException {
+  void filterAndSelfHeal_fallsBackToFullScanWhenGapExceedsTargetedLimit() throws IOException {
     String cik = "0000320193";
     String accession = "0000320193-24-000006";
     String filingDate = "2024-03-15";
@@ -433,14 +433,59 @@ public class SecFilingCacheFileInventoryTest {
         Collections.singletonList(new EdgarFullIndexCache.IndexEntry(
             "APPLE INC", "10-K", cik, filingDate, accession, 2024, 1));
 
-    List<EdgarFullIndexCache.IndexEntry> toProcess =
-        cache.filterAndSelfHeal(candidates, false, 4);
+    // 0 disables the targeted path, so any gap takes the full year-partition scan.
+    String previous = System.setProperty("calcite.sec.targetedInventoryMax", "0");
+    List<EdgarFullIndexCache.IndexEntry> toProcess;
+    try {
+      toProcess = cache.filterAndSelfHeal(candidates, false, 4);
+    } finally {
+      if (previous == null) {
+        System.clearProperty("calcite.sec.targetedInventoryMax");
+      } else {
+        System.setProperty("calcite.sec.targetedInventoryMax", previous);
+      }
+    }
 
     assertEquals(4, provider.listFilesCallCount(),
-        "A candidate with no tracker record must trigger the deferred inventory scan, and the "
-            + "self-heal write must reuse the inventory already resolved rather than re-listing");
+        "Above the targeted limit the deferred full scan must run, and the self-heal write must "
+            + "reuse the inventory already resolved rather than re-listing");
     assertTrue(toProcess.isEmpty(),
         "Files present in storage → self-heal the markers, do not reprocess");
+  }
+
+  // -------------------------------------------------------------------------
+  // 14. A small gap must NOT drag in the year-partition scan. That scan costs 448s of LISTs
+  //     plus 224s of batch reads for SEC 2025 and degrades badly when several sec workers
+  //     hit the same prefix, so answering a handful of filings that way is the bug.
+  // -------------------------------------------------------------------------
+
+  @Test
+  void filterAndSelfHeal_usesTargetedInventoryForSmallGap() throws IOException {
+    String cik = "0000320193";
+    String accession = "0000320193-24-000006";
+    String filingDate = "2024-03-15";
+
+    TrackingStorageProvider provider =
+        new TrackingStorageProvider(buildExpectedPaths(cik, accession, "2024"));
+    SecFilingCache cache = new SecFilingCache(
+        new InMemoryPipelineTracker(), provider, PARQUET_BASE);
+    cache.registerFileInventoryRange(2024, 2024);
+
+    List<EdgarFullIndexCache.IndexEntry> candidates =
+        Collections.singletonList(new EdgarFullIndexCache.IndexEntry(
+            "APPLE INC", "10-K", cik, filingDate, accession, 2024, 1));
+
+    cache.filterAndSelfHeal(candidates, false, 4);
+
+    assertEquals(0, provider.listFilesCallCount(),
+        "One outstanding filing must not trigger a recursive scan of whole year partitions");
+    // The no_xbrl sentinel is the one suffix Iceberg cannot answer, so it is probed by exact path.
+    for (String queried : provider.queriedExistsPaths()) {
+      assertTrue(queried.endsWith("_no_xbrl.parquet"),
+          "Targeted path must only probe the no_xbrl sentinel, got: " + queried);
+      assertFalse(queried.contains("year=*"),
+          "Sentinel probe must use the exact year partition, got: " + queried);
+    }
   }
 
   // -------------------------------------------------------------------------

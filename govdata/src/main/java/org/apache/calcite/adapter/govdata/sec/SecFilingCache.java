@@ -549,6 +549,16 @@ public class SecFilingCache implements AutoCloseable {
    */
   private void populateAccessionIndexFromIceberg(int startYear, int endYear,
       java.util.Map<String, java.util.Set<String>> byAccession) {
+    populateAccessionIndexFromIceberg(startYear, endYear, byAccession, null);
+  }
+
+  /**
+   * @param onlyAccessions when non-null, restrict each query to these accessions instead of
+   *                       reading every DISTINCT value in the table
+   */
+  private void populateAccessionIndexFromIceberg(int startYear, int endYear,
+      java.util.Map<String, java.util.Set<String>> byAccession,
+      List<String> onlyAccessions) {
     Connection conn = getOrCreateDuckdbConn();
     if (conn == null) {
       LOGGER.warn("populateAccessionIndexFromIceberg: no DuckDB connection — skipping Iceberg "
@@ -565,18 +575,22 @@ public class SecFilingCache implements AutoCloseable {
     for (Map.Entry<String, String> entry : ICEBERG_TABLE_BY_TYPE.entrySet()) {
       String type = entry.getKey();
       String tablePath = storageProvider.resolvePath(parquetBaseDir, entry.getValue());
-      String sql = "SELECT DISTINCT accession_number FROM iceberg_scan('" + tablePath
+      String baseSql = "SELECT DISTINCT accession_number FROM iceberg_scan('" + tablePath
           + "', allow_moved_paths=true) WHERE accession_number IS NOT NULL "
           + "AND year BETWEEN " + startYear + " AND " + endYear;
       long queryStart = System.currentTimeMillis();
       int typeCount = 0;
-      try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(sql)) {
-        while (rs.next()) {
-          String accession = rs.getString(1);
-          if (accession != null) {
-            addAccessionType(byAccession, accession, type);
-            typeCount++;
+      try {
+        for (String sql : scopedQueries(baseSql, onlyAccessions)) {
+          try (Statement stmt = conn.createStatement();
+               ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+              String accession = rs.getString(1);
+              if (accession != null) {
+                addAccessionType(byAccession, accession, type);
+                typeCount++;
+              }
+            }
           }
         }
       } catch (Exception e) {
@@ -586,6 +600,117 @@ public class SecFilingCache implements AutoCloseable {
       }
       LOGGER.info("populateAccessionIndexFromIceberg: type={} table={} accessions={} in {}ms",
           type, entry.getValue(), typeCount, System.currentTimeMillis() - queryStart);
+    }
+  }
+
+  /** Accessions per {@code IN} list, keeping any single generated statement a sane size. */
+  private static final int ICEBERG_IN_LIST_CHUNK = 5000;
+
+  /**
+   * Expands {@code baseSql} into one statement per {@code IN} chunk, or a single unrestricted
+   * statement when {@code onlyAccessions} is null.
+   */
+  private static List<String> scopedQueries(String baseSql, List<String> onlyAccessions) {
+    List<String> queries = new ArrayList<String>();
+    if (onlyAccessions == null) {
+      queries.add(baseSql);
+      return queries;
+    }
+    for (int offset = 0; offset < onlyAccessions.size(); offset += ICEBERG_IN_LIST_CHUNK) {
+      List<String> chunk = onlyAccessions.subList(offset,
+          Math.min(offset + ICEBERG_IN_LIST_CHUNK, onlyAccessions.size()));
+      StringBuilder sb = new StringBuilder(baseSql).append(" AND accession_number IN (");
+      for (int i = 0; i < chunk.size(); i++) {
+        if (i > 0) {
+          sb.append(',');
+        }
+        sb.append('\'').append(chunk.get(i).replace("'", "''")).append('\'');
+      }
+      queries.add(sb.append(')').toString());
+    }
+    return queries;
+  }
+
+  /**
+   * Answers a small set of storage questions without scanning the year partitions.
+   *
+   * <p>The full scan's cost is almost entirely the staging side: for SEC 2025 the recursive LISTs
+   * took 448s and the DuckDB reads of 18,650 batch files another 224s, against 67s for the Iceberg
+   * presence queries — and the LISTs degrade badly when several sec workers scan the same prefix at
+   * once (5,000 objects in 6.5 minutes with three running). The Iceberg tables are the authoritative
+   * record of what was processed, so for a handful of filings the presence index alone answers the
+   * question, scoped by accession so each query reads far less.
+   *
+   * <p>Gap this accepts: {@link #ICEBERG_TABLE_BY_TYPE} has no entry for the {@code no_xbrl}
+   * sentinel, so that one suffix is probed directly per filing (a single exact-path {@code exists()}
+   * each, run concurrently) rather than inferred. Staging parquet that exists but has neither been
+   * materialised to Iceberg nor recorded in the tracker is not seen here and gets reprocessed —
+   * a filing in that state has no completion marker either, so the tracker cannot vouch for it.
+   */
+  private void buildTargetedInventory(List<PendingStorageCheck> pending, int startYear, int endYear,
+      int threads) {
+    long start = System.currentTimeMillis();
+    List<String> accessions = new ArrayList<String>(pending.size());
+    for (PendingStorageCheck check : pending) {
+      accessions.add(check.entry.accession);
+    }
+    java.util.Map<String, java.util.Set<String>> byAccession =
+        new java.util.HashMap<String, java.util.Set<String>>();
+    // Same fiscal buffer as the full scan: Jan-Apr filings land in the prior year's partition.
+    populateAccessionIndexFromIceberg(startYear - 1, endYear, byAccession, accessions);
+
+    final java.util.Set<String> sentinels =
+        java.util.Collections.newSetFromMap(
+            new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+    probeNoXbrlSentinels(pending, sentinels, threads);
+
+    this.s3AccessionTypes = java.util.Collections.unmodifiableMap(byAccession);
+    this.s3FileCacheByName =
+        java.util.Collections.unmodifiableMap(new java.util.HashMap<String, String>());
+    this.s3FileCache = java.util.Collections.unmodifiableSet(sentinels);
+    inventoryLoaded = true;
+    LOGGER.info("Targeted inventory for {} filings: {} found in Iceberg, {} no_xbrl sentinels, "
+        + "in {}ms (year-partition scan skipped)",
+        pending.size(), byAccession.size(), sentinels.size(),
+        System.currentTimeMillis() - start);
+  }
+
+  /** Probes the {@code no_xbrl} sentinel path for each pending filing, concurrently. */
+  private void probeNoXbrlSentinels(List<PendingStorageCheck> pending,
+      final java.util.Set<String> found, int threads) {
+    int poolSize = Math.min(threads > 0 ? threads : 1, 50);
+    java.util.concurrent.ExecutorService pool =
+        java.util.concurrent.Executors.newFixedThreadPool(poolSize);
+    for (final PendingStorageCheck check : pending) {
+      final EdgarFullIndexCache.IndexEntry ie = check.entry;
+      String year = yearFromFilingDate(ie.filingDate);
+      if (year == null) {
+        year = yearFromAccession(ie.accession);
+      }
+      if (year == null) {
+        continue;
+      }
+      final String path = storageProvider.resolvePath(parquetBaseDir,
+          "year=" + year + "/" + ie.cik + "_" + ie.accession + "_no_xbrl.parquet");
+      @SuppressWarnings("FutureReturnValueIgnored")
+      java.util.concurrent.Future<?> ignored = pool.submit(new Runnable() {
+        @Override public void run() {
+          try {
+            if (storageProvider.exists(path)) {
+              found.add(path);
+            }
+          } catch (IOException e) {
+            LOGGER.debug("no_xbrl sentinel probe failed for {} — {}", path, e.getMessage());
+          }
+        }
+      });
+    }
+    pool.shutdown();
+    try {
+      pool.awaitTermination(10, java.util.concurrent.TimeUnit.MINUTES);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      LOGGER.warn("no_xbrl sentinel probe interrupted");
     }
   }
 
@@ -656,24 +781,41 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
-   * Builds the file inventory iff there is at least one storage question to answer.
+   * Outstanding storage questions above which the full year-partition scan is worth its cost.
+   * Tune with {@code -Dcalcite.sec.targetedInventoryMax=N}; 0 disables the targeted path.
    *
-   * <p>There is no "just check those few filings directly" shortcut: with the inventory unbuilt,
+   * <p>Note there is no "check those few filings directly" option: with no inventory at all,
    * {@link #fileExists} falls to {@link #existsInBatchFiles}, which lists the whole year directory
-   * and DuckDB-reads batch parquet files — once per output type, so ~11 year-directory LISTs per
-   * filing. Past about twenty filings that already costs more than the one bulk scan it would
-   * replace, so the only decision worth making here is scan versus don't.
-   *
-   * @param pendingStorageChecks number of filings pass 1 could not decide from tracker state
+   * once per output type — ~11 year-directory LISTs per filing. The choice is between the full scan
+   * and {@link #buildTargetedInventory}.
    */
-  private void prepareFileInventory(int pendingStorageChecks) {
-    if (pendingStorageChecks == 0) {
+  private static int targetedInventoryMax() {
+    return Integer.getInteger("calcite.sec.targetedInventoryMax", 25_000);
+  }
+
+  /**
+   * Decides how the outstanding storage questions get answered, and answers them.
+   *
+   * @param pending  filings pass 1 could not decide from tracker state
+   * @param threads  concurrency for the targeted path's sentinel probes
+   */
+  private void prepareFileInventory(List<PendingStorageCheck> pending, int threads) {
+    if (pending.isEmpty()) {
       inventoryLoaded = true;
       LOGGER.info("Tracker state resolved every candidate — file inventory scan skipped entirely");
       return;
     }
-    LOGGER.info("{} filings need a storage answer — building the file inventory",
-        pendingStorageChecks);
+    int[] range = this.inventoryRange;
+    int targetedMax = targetedInventoryMax();
+    if (range != null && pending.size() <= targetedMax) {
+      LOGGER.info("{} filings need a storage answer (targeted limit {}) — resolving them from the "
+          + "Iceberg presence record instead of scanning year partitions",
+          pending.size(), targetedMax);
+      buildTargetedInventory(pending, range[0], range[1], threads);
+      return;
+    }
+    LOGGER.info("{} filings need a storage answer — building the full file inventory",
+        pending.size());
     ensureFileInventory();
   }
 
@@ -827,7 +969,7 @@ public class SecFilingCache implements AutoCloseable {
     }
 
     // ---- Now that the outstanding question count is known, pick how to answer it, then do so. ----
-    prepareFileInventory(pending.size());
+    prepareFileInventory(pending, selfHealThreads);
     Map<String, FileInventory> storageInventories =
         gatherStorageInventories(pending, selfHealThreads);
 
