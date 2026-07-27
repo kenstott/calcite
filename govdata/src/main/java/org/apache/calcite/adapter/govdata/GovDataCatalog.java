@@ -78,9 +78,12 @@ public final class GovDataCatalog {
       putText(sc, "comment", root.get("comment"));
       ArrayNode tables = MAPPER.createArrayNode();
       Set<String> seen = new HashSet<>();
-      addTables(tables, seen, root.get("partitionedTables"), "table");
-      addTables(tables, seen, root.get("tables"), "table");
-      addTables(tables, seen, root.get("views"), "view");
+      // The schema-level lag is the ceiling for any partitioned table that does not
+      // declare a year range of its own — the same value GovDataUtils.getEndYear reads.
+      JsonNode schemaLag = root.get("dataLagYears");
+      addTables(tables, seen, root.get("partitionedTables"), "table", schemaLag);
+      addTables(tables, seen, root.get("tables"), "table", null);
+      addTables(tables, seen, root.get("views"), "view", null);
       sc.set("tables", tables);
       out.add(sc);
     }
@@ -98,7 +101,8 @@ public final class GovDataCatalog {
     }
   }
 
-  private static void addTables(ArrayNode out, Set<String> seen, JsonNode arr, String type) {
+  private static void addTables(ArrayNode out, Set<String> seen, JsonNode arr, String type,
+      JsonNode schemaLag) {
     if (arr == null || !arr.isArray()) {
       return;
     }
@@ -111,6 +115,7 @@ public final class GovDataCatalog {
       to.put("name", name);
       to.put("type", type);
       putText(to, "comment", t.get("comment"));
+      putCoverage(to, t, schemaLag);
       ArrayNode cols = MAPPER.createArrayNode();
       JsonNode columns = t.get("columns");
       if (columns != null && columns.isArray()) {
@@ -125,6 +130,77 @@ public final class GovDataCatalog {
       }
       to.set("columns", cols);
       out.add(to);
+    }
+  }
+
+  /**
+   * Copy the table's declared {@code year} bounds as a {@code coverage} node.
+   *
+   * <p>Emitted verbatim from the YAML — {@code start} may still hold an unresolved
+   * {@code ${VAR:default}} reference, and {@code end} may be the literal
+   * {@code "current"}. Callers resolve those against the running environment; keeping
+   * this layer declarative means the catalog states what the schema author wrote, not
+   * what one particular JVM computed.
+   *
+   * <p>The schemas declare a year three different ways, and all three are real coverage:
+   * a {@code yearRange} dimension, an explicit list of years, or nothing but a
+   * {@code year} hive partition column — the last meaning the table rides the global
+   * start/end with the schema's own {@code dataLagYears} as its ceiling. A table with no
+   * year in any of those positions gets no coverage node, which is the honest answer for
+   * the ~83 partitioned by something other than time.
+   */
+  private static void putCoverage(ObjectNode to, JsonNode t, JsonNode schemaLag) {
+    JsonNode year = t.path("dimensions").path("year");
+
+    if (year.isObject() && "yearRange".equals(text(year.get("type")))) {
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", "year");
+      cov.put("form", "yearRange");
+      putText(cov, "start", year.get("start"));
+      putText(cov, "end", year.get("end"));
+      putInt(cov, "minYear", year.get("minYear"));
+      putInt(cov, "maxYear", year.get("maxYear"));
+      // A dimension without its own lag still inherits the schema's.
+      putInt(cov, "dataLag", year.hasNonNull("dataLag") ? year.get("dataLag") : schemaLag);
+      to.set("coverage", cov);
+      return;
+    }
+
+    // An explicit list of years is the tightest declaration there is — both bounds are
+    // stated outright, so take the ends verbatim and let the caller resolve them.
+    if (year.isArray() && year.size() > 0) {
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", "year");
+      cov.put("form", "list");
+      putText(cov, "start", year.get(0));
+      putText(cov, "end", year.get(year.size() - 1));
+      to.set("coverage", cov);
+      return;
+    }
+
+    if (hasYearPartitionColumn(t)) {
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", "year");
+      cov.put("form", "partitionColumn");
+      // No floor is declared anywhere for these — the global start governs, and the
+      // caller omits first_year rather than inventing one. The ceiling is real.
+      putInt(cov, "dataLag", schemaLag);
+      to.set("coverage", cov);
+    }
+  }
+
+  private static boolean hasYearPartitionColumn(JsonNode t) {
+    for (JsonNode c : t.path("partitions").path("columnDefinitions")) {
+      if ("year".equalsIgnoreCase(text(c.get("name")))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static void putInt(ObjectNode o, String field, JsonNode n) {
+    if (n != null && n.isNumber()) {
+      o.put(field, n.intValue());
     }
   }
 
