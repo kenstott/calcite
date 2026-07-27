@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
@@ -127,6 +128,12 @@ public class S3StorageProvider implements StorageProvider {
             + "Provided config keys: " + config.keySet());
       }
 
+      // Temporary (STS-style) credentials carry a session token that must be part of the
+      // request signature. Without it the server recomputes a different signature and
+      // rejects every call with 403 SignatureDoesNotMatch — which is what short-lived R2
+      // catalog credentials produced when only the key pair was passed through.
+      String sessionToken = (String) config.get("sessionToken");
+
       // Endpoint from config only (no env var fallback)
       String endpoint = (String) config.get("endpoint");
 
@@ -162,7 +169,9 @@ public class S3StorageProvider implements StorageProvider {
           .region(Region.of(region))
           .credentialsProvider(
               StaticCredentialsProvider.create(
-                  AwsBasicCredentials.create(accessKeyId, secretAccessKey)));
+                  sessionToken != null && !sessionToken.isEmpty()
+                      ? AwsSessionCredentials.create(accessKeyId, secretAccessKey, sessionToken)
+                      : AwsBasicCredentials.create(accessKeyId, secretAccessKey)));
 
       // If custom endpoint is provided, use it with path-style access (MinIO/R2).
       if (endpoint != null) {
@@ -216,11 +225,17 @@ public class S3StorageProvider implements StorageProvider {
       if (config.get("endpoint") != null) {
         s3ConfigMap.put("endpoint", (String) config.get("endpoint"));
       }
+      // DuckDB/Iceberg read the object store directly, so temporary credentials must carry
+      // the session token here too — omitting it fails the signature exactly as it does on
+      // the SDK path above.
+      if (config.get("sessionToken") != null) {
+        s3ConfigMap.put("sessionToken", (String) config.get("sessionToken"));
+      }
       this.s3Config = s3ConfigMap.isEmpty() ? null : s3ConfigMap;
 
       if (s3ConfigMap.isEmpty()) {
         LOGGER.warn("S3StorageProvider: Config was provided but no recognized keys found. "
-            + "Expected keys: accessKeyId, secretAccessKey, region, endpoint. "
+            + "Expected keys: accessKeyId, secretAccessKey, region, endpoint, sessionToken. "
             + "Provided keys: {}", config.keySet());
       } else {
         LOGGER.info("S3StorageProvider: Stored {} credentials for DuckDB/Iceberg access",

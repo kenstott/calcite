@@ -56,12 +56,34 @@ public final class R2CredentialProvider {
       System.getProperty("user.home") + "/.askamerica/credentials.json";
   private static final String RESOURCE_PATH = "/config/r2-defaults.json";
   private static final int TIMEOUT_MS = 10_000;
+  /** Refresh this long before the stated expiry so a slow mount can't straddle it. */
+  private static final long EXPIRY_MARGIN_MS = 60_000L;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final TypeReference<Map<String, String>> MAP_TYPE =
       new TypeReference<Map<String, String>>() {};
 
   private R2CredentialProvider() {}
+
+  /**
+   * The API key used to fetch catalog credentials.
+   *
+   * <p>{@code FREE_ASKAMERICA_KEY} wins when set: {@code ASKAMERICA_API_KEY} may hold a
+   * self-test metering-bypass key, which the catalog endpoint rejects with
+   * {@code invalid_api_key}. The two are distinct credentials for distinct services —
+   * metering versus catalog access — and conflating them is what produced the HTTP 401.
+   * This is explicit precedence, not a fallback on failure.
+   *
+   * @return the key to present as {@code X-API-Key}, or null when neither is set
+   */
+  public static String credentialApiKey() {
+    // model-operand-guard: allow — service credential wired to no schema source, owned by the launch env.
+    String free = System.getenv("FREE_ASKAMERICA_KEY");
+    if (free != null && !free.isEmpty()) {
+      return free;
+    }
+    return System.getenv("ASKAMERICA_API_KEY");
+  }
 
   /**
    * Returns the best available credentials without making a network call.
@@ -150,7 +172,14 @@ public final class R2CredentialProvider {
         return null;
       }
       Map<String, String> creds = MAPPER.readValue(f, MAP_TYPE);
-      return isComplete(creds) ? creds : null;
+      if (!isComplete(creds)) {
+        return null;
+      }
+      if (isExpired(creds)) {
+        LOGGER.info("R2CredentialProvider: cached credentials expired — ignoring cache");
+        return null;
+      }
+      return creds;
     } catch (Exception e) {
       LOGGER.debug("R2CredentialProvider: could not read disk cache: {}", e.getMessage());
       return null;
@@ -206,7 +235,40 @@ public final class R2CredentialProvider {
     if (sess != null && !sess.isEmpty()) {
       creds.put("sessionToken", sess);
     }
+    // The API issues short-lived credentials (expires_in seconds). Stamp the absolute
+    // expiry so the disk cache can be rejected once stale — without this a cached set
+    // stays "complete" forever and every S3 call 403s an hour after the fetch with
+    // nothing triggering a refresh.
+    String expiresIn = stringVal(raw, "expires_in");
+    if (expiresIn != null && !expiresIn.isEmpty()) {
+      try {
+        long seconds = (long) Double.parseDouble(expiresIn);
+        creds.put("expiresAtMillis",
+            Long.toString(System.currentTimeMillis() + seconds * 1000L));
+      } catch (NumberFormatException e) {
+        LOGGER.warn("R2CredentialProvider: unparseable expires_in '{}' — treating credentials "
+            + "as non-cacheable", expiresIn);
+        creds.put("expiresAtMillis", "0");
+      }
+    }
     return creds;
+  }
+
+  /**
+   * True when the credential set carries an expiry that has passed (or is within the
+   * refresh margin). Credentials with no expiry stamp are treated as non-expiring.
+   */
+  private static boolean isExpired(Map<String, String> creds) {
+    String at = creds.get("expiresAtMillis");
+    if (at == null || at.isEmpty()) {
+      return false;
+    }
+    try {
+      // Refresh a minute early so a long-running mount cannot straddle the expiry.
+      return System.currentTimeMillis() >= Long.parseLong(at) - EXPIRY_MARGIN_MS;
+    } catch (NumberFormatException e) {
+      return true;
+    }
   }
 
   private static String stringVal(Map<String, Object> map, String key) {

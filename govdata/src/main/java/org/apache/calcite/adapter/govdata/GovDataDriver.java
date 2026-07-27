@@ -369,17 +369,31 @@ public class GovDataDriver extends Driver {
     String endpoint;
     String region;
 
-    // Honor an explicit object-store endpoint from the environment (AWS_* in .env.prod — e.g. a
-    // local MinIO) over the bundled R2 defaults. This makes the configured store work with no
-    // credentials file and regardless of which home directory the JVM resolves. AWS_* are
-    // launch/infra flags, exempt from the model-operand rule.
+    // Honor an explicit object-store endpoint from the environment (AWS_* — e.g. a local
+    // MinIO) ONLY under the self-test flag. In production the object store is always R2,
+    // reached with credentials fetched for the caller's API key; a stray AWS_* in the
+    // process environment must never silently redirect a production connection to another
+    // store. AWS_* are launch/infra flags, exempt from the model-operand rule.
+    // model-operand-guard: allow — self-test gate owned by the launch script, not a schema operand.
+    String selfTestEnv = System.getenv("ASKAMERICA_SELFTEST_ENABLED");
+    boolean selfTest = Boolean.getBoolean("askamerica.selftest.enabled")
+        || "true".equalsIgnoreCase(selfTestEnv);
     String envEndpoint = System.getenv("AWS_ENDPOINT_OVERRIDE");
     String envAccessKey = System.getenv("AWS_ACCESS_KEY_ID");
     String envSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
     String sessionToken = null;
-    if (envEndpoint != null && !envEndpoint.isEmpty()
+    boolean envComplete = envEndpoint != null && !envEndpoint.isEmpty()
         && envAccessKey != null && !envAccessKey.isEmpty()
-        && envSecretKey != null && !envSecretKey.isEmpty()) {
+        && envSecretKey != null && !envSecretKey.isEmpty();
+    if (envComplete && !selfTest) {
+      // Say so rather than quietly ignoring them — an operator who exported AWS_* and did
+      // not get them needs to see why, and this is exactly the case that used to send a
+      // production run at the wrong bucket.
+      LOGGER.warn("AWS_* object-store overrides are present but ignored: they are honored "
+          + "only under the self-test flag (-Daskamerica.selftest.enabled=true or "
+          + "ASKAMERICA_SELFTEST_ENABLED=true). Using R2 credentials.");
+    }
+    if (envComplete && selfTest) {
       accessKeyId = envAccessKey;
       secretAccessKey = envSecretKey;
       endpoint = envEndpoint;
@@ -390,7 +404,7 @@ public class GovDataDriver extends Driver {
     } else {
       Map<String, String> creds;
       try {
-        creds = R2CredentialProvider.resolveOrFetch(System.getenv("ASKAMERICA_API_KEY"));
+        creds = R2CredentialProvider.resolveOrFetch(R2CredentialProvider.credentialApiKey());
       } catch (java.io.IOException e) {
         throw new IllegalStateException(
             "No R2 credentials available and credential fetch failed: " + e.getMessage(), e);

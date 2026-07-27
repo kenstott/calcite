@@ -590,6 +590,9 @@ public final class IcebergSchemaCache {
     Map<String, Object> config = new HashMap<>();
     copyFirst(config, "accessKeyId", s3Config, "fs.s3a.access.key", "accessKeyId");
     copyFirst(config, "secretAccessKey", s3Config, "fs.s3a.secret.key", "secretAccessKey");
+    // Short-lived credentials sign with a session token; a provider built without it
+    // fails every request with 403 SignatureDoesNotMatch.
+    copyFirst(config, "sessionToken", s3Config, "fs.s3a.session.token", "sessionToken");
     copyFirst(config, "endpoint", s3Config, "fs.s3a.endpoint", "endpoint");
     copyFirst(config, "region", s3Config, "fs.s3a.endpoint.region", "region");
     if (!config.containsKey("region")) {

@@ -155,6 +155,9 @@ public final class S3FileIOTables {
     }
     putFirst(props, "s3.access-key-id", src, "fs.s3a.access.key", "accessKeyId");
     putFirst(props, "s3.secret-access-key", src, "fs.s3a.secret.key", "secretAccessKey");
+    // Short-lived credentials must sign with their session token; dropping it here made
+    // every Iceberg metadata read fail with 403 SignatureDoesNotMatch.
+    putFirst(props, "s3.session-token", src, "fs.s3a.session.token", "sessionToken");
     putFirst(props, "s3.endpoint", src, "fs.s3a.endpoint", "endpoint");
     String pathStyle = firstNonEmpty(src, "fs.s3a.path.style.access", "pathStyleAccess");
     props.put("s3.path-style-access", pathStyle != null ? pathStyle : "true");
