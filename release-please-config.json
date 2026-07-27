@@ -5,7 +5,7 @@
       "release-type": "simple",
       "tag-name": "engine-v${version}",
       "changelog-path": "CHANGELOG.md",
-      "bump-minor-pre-major": false,
+      "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false
     }
   }
