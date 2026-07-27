@@ -2148,7 +2148,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
       // HTML tables are now handled as JSON files created by convertHtmlFilesToJson
       // The JSON files will be picked up in the regular file scanning below
-    } else if (storageProvider != null) {
+    } else if (storageProvider != null && !skipStorageDiscovery()) {
       // Convert xlsx, html, and other convertible files to JSON before processing
       // For local storage, convert directly from the data directory
       // For remote storage (S3, etc.), download and convert via storage provider
@@ -4275,6 +4275,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               if (s3Creds.containsKey("secretAccessKey")) {
                 hadoopConfig.put("fs.s3a.secret.key", s3Creds.get("secretAccessKey"));
               }
+              // Short-lived credentials must carry their session token into the Iceberg
+              // config, or every metadata read signs wrong and 403s.
+              if (s3Creds.containsKey("sessionToken")) {
+                hadoopConfig.put("fs.s3a.session.token", s3Creds.get("sessionToken"));
+              }
               if (s3Creds.containsKey("endpoint")) {
                 hadoopConfig.put("fs.s3a.endpoint", s3Creds.get("endpoint"));
                 hadoopConfig.put("fs.s3a.path.style.access", "true");
@@ -5104,6 +5109,27 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       // If we can't read it, assume it's not a model file
       return false;
     }
+  }
+
+  /**
+   * True when ad-hoc storage discovery must be skipped for this schema.
+   *
+   * <p>Discovery recursively lists the object store to find undeclared files. That is an
+   * expensive Class A operation per LIST, and it yields nothing for a schema that already
+   * declares every table in {@code partitionedTables} — those resolve their files from
+   * Iceberg metadata via the catalog, never from a listing. Read-only connections (the MCP
+   * serving path) therefore never list; writable connections (ETL, dev) keep discovery so
+   * newly landed files are still picked up.
+   */
+  private boolean skipStorageDiscovery() {
+    boolean declaresTables = partitionedTables != null && !partitionedTables.isEmpty();
+    if (declaresTables && !materializeWritable) {
+      LOGGER.info("Skipping storage discovery for schema '{}': {} declared partitioned tables "
+          + "and this connection is read-only, so no object-store LIST is issued.",
+          name, partitionedTables.size());
+      return true;
+    }
+    return false;
   }
 
   /**

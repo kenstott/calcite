@@ -44,7 +44,11 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
-TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
+
+# Postgres is the canonical ETL state store; its tracker schema is derived from the parquet bucket.
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/tracker_pg.sh"
+PG_NS="$(pg_ns_from_bucket "$S3_BUCKET")" || exit 2
 
 ICEBERG_BASE="$S3_BUCKET/sec"
 # rclone uses r2: prefix instead of s3:// — convert once for all path operations
@@ -64,7 +68,7 @@ echo "=============================================="
 echo "Reset All SEC Iceberg Tables"
 echo "=============================================="
 echo "Iceberg base: $ICEBERG_BASE"
-echo "Tracker:      $TRACKER_BUCKET"
+echo "Tracker:      $PG_NS (postgres)"
 echo "Tables:       ${SEC_TABLES[*]}"
 echo ""
 
@@ -89,67 +93,30 @@ done
 echo ""
 
 # -----------------------------------------------
-# Step 2: Write table_completion "cleared" markers via DuckDB CLI
-# Mirrors S3HivePipelineTracker.invalidateTableCompletion().
+# Step 2: Invalidate each table's completion record in the tracker.
 # This breaks the watermark fast-path so the next run re-materializes.
 #
 # Incremental partition markers are NOT cleared here. The materialization
 # code treats a missing Iceberg table as "no committed accessions" and
 # ignores the tracker entirely, so stale incremental entries are harmless.
 # -----------------------------------------------
-echo "Step 2: Writing table_completion cleared markers..."
+echo "Step 2: Clearing table_completion records in ${PG_NS}..."
 
-# Strip protocol from endpoint for DuckDB s3_endpoint setting
-DUCKDB_ENDPOINT="${S3_ENDPOINT:-}"
-DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#https://}"
-DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#http://}"
-
-# Build DuckDB S3 config block
-S3_CONFIG="INSTALL httpfs; LOAD httpfs;"
-S3_CONFIG="$S3_CONFIG SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';"
-S3_CONFIG="$S3_CONFIG SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';"
-if [[ -n "$DUCKDB_ENDPOINT" ]]; then
-    S3_CONFIG="$S3_CONFIG SET s3_url_style='path'; SET s3_endpoint='${DUCKDB_ENDPOINT}';"
-fi
-if [[ -n "${AWS_DEFAULT_REGION:-}" ]]; then
-    S3_CONFIG="$S3_CONFIG SET s3_region='${AWS_DEFAULT_REGION}';"
-fi
-
-if $DRY_RUN; then
-    echo "  [DRY RUN] Would write table_completion cleared markers for: ${SEC_TABLES[*]}"
-else
-    ERRORS=0
-    AS_OF=$(date +%s%3N)   # epoch millis
-
-    for table in "${SEC_TABLES[@]}"; do
-        UUID_VAL=$(python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null \
-                   || cat /proc/sys/kernel/random/uuid 2>/dev/null \
-                   || uuidgen | tr '[:upper:]' '[:lower:]')
-
-        COMPLETION_PATH="${TRACKER_BUCKET}/year=0/source_key=_table_complete/${UUID_VAL}.parquet"
-        duckdb -c "${S3_CONFIG}
-            COPY (
-                SELECT
-                    '_table_complete'::VARCHAR  AS source_key,
-                    '${table}'::VARCHAR         AS table_name,
-                    'table_completion'::VARCHAR AS phase,
-                    'cleared'::VARCHAR          AS state,
-                    0::BIGINT                   AS row_count,
-                    NULL::VARCHAR               AS config_hash,
-                    NULL::VARCHAR               AS signature,
-                    NULL::VARCHAR               AS error_message,
-                    ${AS_OF}::BIGINT            AS as_of
-            ) TO '${COMPLETION_PATH}' (FORMAT PARQUET);" \
-            && echo "  ${table}: OK" \
-            || { echo "  ERROR: failed for ${table}"; ERRORS=$((ERRORS+1)); }
-    done
-
-    if [[ $ERRORS -gt 0 ]]; then
-        echo "Completed with $ERRORS error(s). Check output above."
-        exit 1
+ERRORS=0
+for table in "${SEC_TABLES[@]}"; do
+    if pg_tracker_clear_completion "$PG_NS" "$table" "$($DRY_RUN && echo true || echo false)"; then
+        :
+    else
+        echo "  ERROR: failed for ${table}"
+        ERRORS=$((ERRORS+1))
     fi
-    echo "All cleared markers written successfully."
+done
+
+if [[ $ERRORS -gt 0 ]]; then
+    echo "Completed with $ERRORS error(s). Check output above."
+    exit 1
 fi
+$DRY_RUN || echo "All completion records cleared successfully."
 
 echo ""
 echo "=============================================="

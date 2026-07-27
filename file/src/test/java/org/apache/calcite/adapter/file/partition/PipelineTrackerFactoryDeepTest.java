@@ -43,23 +43,18 @@ public class PipelineTrackerFactoryDeepTest {
 
   // ===== S3 backend errors =====
 
-  @Test void testCreateS3BackendNoBucketThrows() {
-    assertThrows(IllegalArgumentException.class, () ->
-        PipelineTrackerFactory.create("s3", "/tmp/test", Collections.<String, String>emptyMap()));
-  }
-
-  @Test void testCreateS3BackendWithBucketInConfig() {
+  /**
+   * The s3 backend was removed — Postgres is the canonical ETL state store. An operand still
+   * naming it must fail loudly: silently handing back a read-only or no-op tracker would let a
+   * run write data while recording no completion state.
+   */
+  @Test void testCreateS3BackendIsRejected() {
     Map<String, String> config = new HashMap<>();
     config.put("bucket", "my-bucket");
-    // This will create an S3HivePipelineTracker - it may throw if S3 is not available
-    // but the factory selection code is tested
-    try {
-      PipelineTracker tracker = PipelineTrackerFactory.create("s3", "/tmp/test", config);
-      assertNotNull(tracker);
-    } catch (Exception e) {
-      // S3 connectivity issues are expected in unit tests
-      assertTrue(e.getMessage() != null);
-    }
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
+        PipelineTrackerFactory.create("s3", "/tmp/test", config));
+    assertTrue(e.getMessage().contains("s3"),
+        "Rejection must name the removed backend, got: " + e.getMessage());
   }
 
   // ===== PG backend errors =====

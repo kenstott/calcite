@@ -34,6 +34,18 @@ PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
 GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=768m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary -Xlog:gc}"
 
+# ── Worker scratch directory (must be disk-backed, not tmpfs) ──────────────────
+# Workers stage GB-scale artifacts in the JVM temp dir: source ZIPs (patents ships
+# a 384MB one), raw HTTP page caches, SEC staging batches, and DuckDB sort/join
+# spill (temp_directory is set to java.io.tmpdir). On a distro where /tmp is a
+# tmpfs that scratch is RAM: it competes with -Xmx for the pool budget and, once
+# full, surfaces as "No space left on device" mid-write. Point it at ext4 instead.
+# TMPDIR covers native/child processes, -Djava.io.tmpdir the JVM itself.
+GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
+mkdir -p "$GOVDATA_TMPDIR"
+export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
+GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djava.io.tmpdir=$GOVDATA_TMPDIR"
+
 # Load base credentials from govdata/.env.prod, then parallel overrides.
 # Caller-exported variables take precedence: if GOVDATA_START_YEAR or
 # GOVDATA_CACHE_DIR are already set in the calling environment, .env.prod
@@ -48,16 +60,13 @@ load_env() {
     local _pre_start_year="${GOVDATA_START_YEAR+set}"
     local _pre_cache_dir="${GOVDATA_CACHE_DIR+set}"
     local _pre_parquet_dir="${GOVDATA_PARQUET_DIR+set}"
-    local _pre_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET+set}"
     local _pre_raw_cache="${ETL_LOCAL_RAW_CACHE+set}"
     local _saved_start_year="${GOVDATA_START_YEAR:-}"
     local _saved_cache_dir="${GOVDATA_CACHE_DIR:-}"
     local _saved_parquet_dir="${GOVDATA_PARQUET_DIR:-}"
-    local _saved_tracker_bucket="${CALCITE_TRACKER_S3_BUCKET:-}"
     local _saved_raw_cache="${ETL_LOCAL_RAW_CACHE:-}"
-    # Tracker backend + PG creds: a caller opting into the Postgres tracker
-    # (CALCITE_TRACKER_BACKEND=pg GOVDATA_TRACKER_PG_URL=... run-pool.sh ...) must win over
-    # .env.prod's hardcoded CALCITE_TRACKER_BACKEND=s3 — otherwise the opt-in is silently ignored.
+    # Tracker backend + PG creds: a caller-supplied override must win over .env.prod's value,
+    # otherwise the opt-in is silently ignored.
     local _pre_tracker_backend="${CALCITE_TRACKER_BACKEND+set}"
     local _pre_pg_url="${GOVDATA_TRACKER_PG_URL+set}"
     local _pre_pg_user="${GOVDATA_TRACKER_PG_USER+set}"
@@ -75,14 +84,12 @@ load_env() {
     source <(tr -d '\r' < "$env_prod")
     set +a
 
-    # Restore caller-provided overrides. CALCITE_TRACKER_S3_BUCKET must be preserved alongside
-    # GOVDATA_PARQUET_DIR: a DQ orchestrator points both at the -dq buckets, and if the tracker
-    # bucket falls back to prod the tracker reads stale prod completions and skips every table
-    # ("table complete") while writing to a bucket that doesn't exist on the DQ endpoint.
+    # Restore caller-provided overrides. A DQ orchestrator points GOVDATA_PARQUET_DIR at the -dq
+    # bucket; the PG tracker derives its schema namespace from that directory, so preserving it
+    # also isolates DQ tracker state from prod.
     [ "${_pre_start_year}" = "set" ] && export GOVDATA_START_YEAR="$_saved_start_year"
     [ "${_pre_cache_dir}" = "set" ] && export GOVDATA_CACHE_DIR="$_saved_cache_dir"
     [ "${_pre_parquet_dir}" = "set" ] && export GOVDATA_PARQUET_DIR="$_saved_parquet_dir"
-    [ "${_pre_tracker_bucket}" = "set" ] && export CALCITE_TRACKER_S3_BUCKET="$_saved_tracker_bucket"
     # ETL_LOCAL_RAW_CACHE: .env.prod hardcodes /tmp; preserve a caller/overlay override
     # (e.g. .env.preprod's durable ext4 path) so worker staging survives reboots/crashes.
     [ "${_pre_raw_cache}" = "set" ] && export ETL_LOCAL_RAW_CACHE="$_saved_raw_cache"
@@ -117,36 +124,31 @@ load_env() {
     export GOVDATA_START_YEAR="${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}"
   fi
 
-  # Default tracker to s3 for parallel operation
-  export CALCITE_TRACKER_BACKEND="${CALCITE_TRACKER_BACKEND:-s3}"
-  export CALCITE_TRACKER_S3_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
-  # Postgres tracker (opt-in: set CALCITE_TRACKER_BACKEND=pg). Empty by default so the
-  # s3 path is byte-for-byte unchanged. Staged cutover example:
-  #   CALCITE_TRACKER_BACKEND=pg GOVDATA_TRACKER_PG_URL=jdbc:postgresql://localhost:5432/govdata \
-  #   GOVDATA_TRACKER_PG_USER=govdata GOVDATA_TRACKER_PG_PASSWORD=govdata \
-  #   bash scripts/parallel/run-pool.sh --schema fec daily
+  # Postgres is the canonical (and only) ETL state store — see govdata/scripts/tracker-backup.sh
+  # for the backup that makes depending on it safe. The connection settings normally come from
+  # .env.prod; defaulting them to empty here keeps a missing value a loud failure at connect time
+  # rather than a silent switch to some other store.
+  export CALCITE_TRACKER_BACKEND="${CALCITE_TRACKER_BACKEND:-pg}"
   export GOVDATA_TRACKER_PG_URL="${GOVDATA_TRACKER_PG_URL:-}"
   export GOVDATA_TRACKER_PG_USER="${GOVDATA_TRACKER_PG_USER:-}"
   export GOVDATA_TRACKER_PG_PASSWORD="${GOVDATA_TRACKER_PG_PASSWORD:-}"
 }
 
-# Emit the JSON operand fragment for the tracker backend, read from the CURRENT environment
-# (so a late override such as the DQ tracker bucket in run-pool.sh is honored). The default
-# is the s3 block — identical to the historical hardcoded value — so existing runs are
-# unchanged. Setting CALCITE_TRACKER_BACKEND=pg switches to the multi-writer Postgres block.
+# Emit the JSON operand fragment for the tracker backend, read from the CURRENT environment.
+# Postgres is the only backend; an explicit non-pg value is rejected rather than quietly emitted,
+# because an unknown backend makes the JVM throw at schema-open time with a far less obvious error.
 # Emitted WITHOUT a trailing comma; callers append the comma in the heredoc.
 tracker_operand_json() {
-  case "${CALCITE_TRACKER_BACKEND:-s3}" in
-    pg|postgres)
-      printf '"trackerBackend": "%s", "trackerConfig": { "jdbcUrl": "%s", "user": "%s", "password": "%s" }' \
-        "${CALCITE_TRACKER_BACKEND}" "${GOVDATA_TRACKER_PG_URL:-}" \
-        "${GOVDATA_TRACKER_PG_USER:-}" "${GOVDATA_TRACKER_PG_PASSWORD:-}"
-      ;;
+  case "${CALCITE_TRACKER_BACKEND:-pg}" in
+    pg|postgres) ;;
     *)
-      printf '"trackerBackend": "%s", "trackerConfig": { "bucket": "%s", "endpoint": "%s" }' \
-        "${CALCITE_TRACKER_BACKEND:-s3}" "${CALCITE_TRACKER_S3_BUCKET:-}" "${AWS_ENDPOINT_OVERRIDE:-}"
+      echo "FATAL: CALCITE_TRACKER_BACKEND='${CALCITE_TRACKER_BACKEND}' is not supported;" \
+           "Postgres (pg) is the only tracker backend." >&2
+      return 1
       ;;
   esac
+  printf '"trackerBackend": "pg", "trackerConfig": { "jdbcUrl": "%s", "user": "%s", "password": "%s" }' \
+    "${GOVDATA_TRACKER_PG_URL:-}" "${GOVDATA_TRACKER_PG_USER:-}" "${GOVDATA_TRACKER_PG_PASSWORD:-}"
 }
 
 # Configure an ad-hoc rclone remote named 'r2' from the PROD_* R2 credentials in
@@ -424,7 +426,7 @@ ENDJSON
 }
 
 # Generate a SEC reprocess model JSON targeting specific accessions.
-# Sets forceAccessions so filterAndSelfHeal bypasses tracker state for listed accessions.
+# Sets forceAccessions so filterUnprocessed bypasses tracker state for listed accessions.
 # Uses _ALL_EDGAR_FILERS so the full EDGAR index is loaded regardless of who filed.
 # Usage: generate_sec_reprocess_model <accessions_space_separated> <start_year> <end_year> <output_file>
 generate_sec_reprocess_model() {
@@ -465,7 +467,7 @@ ENDJSON
 }
 
 # Generate a SEC chunks-backfill model JSON for a year range.
-# Identical to the primary model but sets chunksBackfill=true so filterAndSelfHeal
+# Identical to the primary model but sets chunksBackfill=true so filterUnprocessed
 # routes base-complete (no chunks) accessions to reprocessing instead of skipping them.
 # Usage: generate_sec_chunks_backfill_model <start_year> <end_year> <output_file>
 generate_sec_chunks_backfill_model() {

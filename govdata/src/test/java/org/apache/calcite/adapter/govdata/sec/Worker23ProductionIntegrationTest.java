@@ -16,10 +16,9 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.partition.PGPipelineTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
-import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
-import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,12 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.Reader;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,23 +35,25 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration tests that verify worker-23 does not reprocess previously
- * processed SEC filings when tested against the production S3 tracker backend.
+ * Integration tests that verify worker-23 does not reprocess previously processed SEC filings.
  *
- * <p>These tests require the following environment variables to be set:
+ * <p>The guarantee under test is that completion state survives the worker process: a filing
+ * marked complete by one tracker instance must read back as SKIP from a brand-new instance that
+ * holds no in-memory cache. Postgres is the canonical (and only) ETL state store, so this is the
+ * property that keeps a re-run from redoing finished work.
+ *
+ * <p>These tests require the tracker database connection to be set:
  * <ul>
- *   <li>{@code CALCITE_TRACKER_S3_BUCKET} — S3/R2 bucket for tracker data</li>
- *   <li>{@code AWS_ACCESS_KEY_ID} — S3-compatible access key</li>
- *   <li>{@code AWS_SECRET_ACCESS_KEY} — S3-compatible secret key</li>
- *   <li>{@code AWS_ENDPOINT_OVERRIDE} — S3-compatible endpoint (Cloudflare R2, MinIO, etc.)</li>
+ *   <li>{@code GOVDATA_TRACKER_PG_URL} — e.g. {@code jdbc:postgresql://localhost:5432/govdata}</li>
+ *   <li>{@code GOVDATA_TRACKER_PG_USER}</li>
+ *   <li>{@code GOVDATA_TRACKER_PG_PASSWORD}</li>
  * </ul>
  *
- * <p>Each test writes a synthetic accession ({@code 0099999999-26-ITXXXXXXXX}) to
- * the tracker, recreates the tracker from scratch to simulate a fresh worker-23
- * invocation, and verifies that the accession is correctly returned as SKIP.
- * Test entries are cleaned up in {@link #tearDown()} by marking them as cleared.
+ * <p>Writes go to a dedicated tracker schema ({@link #TEST_NAMESPACE}, created on demand) rather
+ * than the production namespace, so a failed run can never leave a synthetic accession in the
+ * state the real ETL reads. Test entries are cleared in {@link #tearDown()} regardless.
  *
- * <p>If any of the above env vars are absent the tests are silently skipped.
+ * <p>If any of the above env vars are absent the tests are skipped.
  */
 @Tag("integration")
 public class Worker23ProductionIntegrationTest {
@@ -71,6 +67,12 @@ public class Worker23ProductionIntegrationTest {
       "SC 13G", "SC 13G/A"
   };
 
+  /** Tables SecFilingCache may write for the form types above; cleared between runs. */
+  private static final String[] TEST_TABLE_NAMES = {
+      "metadata", "facts", "contexts", "relationships",
+      "mda", "insider", "earnings", "13f", "13dg", "_filing_meta"
+  };
+
   /**
    * Synthetic test accession.
    * CIK 0099999999 is not a valid EDGAR filer; year=26→2026 is a safe tracker partition.
@@ -80,21 +82,29 @@ public class Worker23ProductionIntegrationTest {
   private static final String TEST_ACCESSION = "0099999999-26-IT000001";
   private static final String TEST_FILING_DATE = "2026-01-01";
 
+  /**
+   * Tracker schema for this test. PGPipelineTracker derives its namespace from the operand's
+   * {@code directory}, so pointing that at a test-only bucket name isolates these writes from
+   * the production {@code govdata_parquet_v1} tables.
+   */
+  private static final String TEST_NAMESPACE = "s3://govdata-worker23-it";
+
   private Map<String, Object> trackerOperand;
-  private S3HivePipelineTracker activeTracker;
+  private PGPipelineTracker activeTracker;
 
   @TempDir
   File tempDir;
 
   @BeforeEach
   void setUp() {
-    assumeTrue(hasProductionCredentials(),
-        "Skipping: production S3 credentials not set "
-            + "(CALCITE_TRACKER_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, "
-            + "AWS_ENDPOINT_OVERRIDE)");
+    assumeTrue(hasTrackerCredentials(),
+        "Skipping: tracker database not configured "
+            + "(GOVDATA_TRACKER_PG_URL, GOVDATA_TRACKER_PG_USER, GOVDATA_TRACKER_PG_PASSWORD)");
 
     trackerOperand = buildTrackerOperand();
     activeTracker = openTracker();
+    // A previous failed run may have left the synthetic accession behind; start from a known state.
+    cleanupTestEntry();
   }
 
   @AfterEach
@@ -102,18 +112,7 @@ public class Worker23ProductionIntegrationTest {
     if (activeTracker == null) {
       return;
     }
-    // Mark all test tables as cleared to remove the test entry from the tracker.
-    String[] tableNames = {
-        "metadata", "facts", "contexts", "relationships",
-        "mda", "insider", "earnings", "_filing_meta"
-    };
-    for (String table : tableNames) {
-      try {
-        activeTracker.markCleared(TEST_ACCESSION, table, "staging");
-      } catch (Exception ignored) {
-        // Best-effort cleanup
-      }
-    }
+    cleanupTestEntry();
     try {
       activeTracker.close();
     } catch (Exception ignored) {
@@ -122,7 +121,7 @@ public class Worker23ProductionIntegrationTest {
   }
 
   // -----------------------------------------------------------------------
-  // Core no-reprocess guarantee via production tracker
+  // Core no-reprocess guarantee
   // -----------------------------------------------------------------------
 
   /**
@@ -130,18 +129,18 @@ public class Worker23ProductionIntegrationTest {
    * <ol>
    *   <li>Create a fresh tracker (instance A) — simulates the first worker-23 run.</li>
    *   <li>Mark the test filing complete in A.</li>
-   *   <li>Close A and open a new tracker instance B — simulates a subsequent worker-23 run.</li>
+   *   <li>Open a new tracker instance B — simulates a subsequent worker-23 run.</li>
    *   <li>Verify that {@link SecFilingCache#checkFiling} returns SKIP in B.</li>
    * </ol>
    *
-   * <p>If this test fails with PROCESS instead of SKIP, the tracker is not persisting
-   * state across worker invocations — confirming the suspected reprocessing bug.
+   * <p>If this test fails with PROCESS instead of SKIP, the tracker is not persisting state
+   * across worker invocations, which is exactly the reprocessing bug.
    */
   @Test
   void trackerPersistsAcrossWorkerInvocations() throws Exception {
     for (String formTypeName : WORKER_23_FORM_TYPES) {
       // --- Run 1: process and mark complete ---
-      SecFilingCache cacheA = new SecFilingCache(activeTracker, noopStorage(), "/parquet");
+      SecFilingCache cacheA = new SecFilingCache(activeTracker);
 
       ProcessingDecision firstCheck =
           cacheA.checkFiling(TEST_CIK, TEST_ACCESSION, formTypeName, TEST_FILING_DATE, false);
@@ -154,20 +153,17 @@ public class Worker23ProductionIntegrationTest {
           inventory);
 
       // --- Run 2: fresh tracker instance (as worker-23 does on the next run) ---
-      // Flush buffered states to S3 before opening the fresh tracker, simulating
-      // the real worker-23 shutdown boundary (flushPendingStates is called on close).
-      activeTracker.flushPendingStates();
-      S3HivePipelineTracker freshTracker = openTracker();
+      PGPipelineTracker freshTracker = openTracker();
       try {
-        SecFilingCache cacheB = new SecFilingCache(freshTracker, noopStorage(), "/parquet");
+        SecFilingCache cacheB = new SecFilingCache(freshTracker);
 
         ProcessingDecision secondCheck =
             cacheB.checkFiling(TEST_CIK, TEST_ACCESSION, formTypeName, TEST_FILING_DATE, false);
 
         assertEquals(ProcessingDecision.Action.SKIP, secondCheck.getAction(),
-            "Form " + formTypeName + " must not be reprocessed: "
-                + "tracker state must survive closing and reopening the S3 tracker. "
-                + "If this fails, worker-23 IS reprocessing previously completed filings.");
+            "Form " + formTypeName + " must not be reprocessed: tracker state must survive "
+                + "closing and reopening the tracker. If this fails, worker-23 IS reprocessing "
+                + "previously completed filings.");
         assertFalse(secondCheck.shouldProcess(),
             "shouldProcess() must return false for " + formTypeName + " on second run");
       } finally {
@@ -180,62 +176,51 @@ public class Worker23ProductionIntegrationTest {
   }
 
   /**
-   * Verifies that even the first invocation of a fresh tracker instance correctly
-   * loads pre-existing state from S3 for a filing that was completed in a prior
-   * tracker instance (written separately before this test).
-   *
-   * <p>This test writes state via a tracker instance, flushes, closes, and then
-   * opens a brand-new instance that must read that state from S3 without any
-   * in-memory cache.
+   * Verifies that a brand-new tracker instance loads pre-existing state from the database with no
+   * help from an in-memory cache: state is written through instance A, A is closed, and a fresh
+   * instance B must still answer SKIP.
    */
   @Test
-  void freshTrackerInstanceReadsPersistedStateFromS3() throws Exception {
-    // Write state via instance A and ensure it is flushed to S3.
-    SecFilingCache cacheA = new SecFilingCache(activeTracker, noopStorage(), "/parquet");
+  void freshTrackerInstanceReadsPersistedState() throws Exception {
+    SecFilingCache cacheA = new SecFilingCache(activeTracker);
     FormType form = FormType.fromString("8-K");
     FileInventory inventory = completeInventoryFor(form);
     cacheA.markComplete(TEST_CIK, TEST_ACCESSION, "8-K", TEST_FILING_DATE, false, inventory);
 
-    // Flush all pending writes to S3 before closing.
-    activeTracker.flushPendingStates();
     activeTracker.close();
     activeTracker = null;
 
-    // Open a completely fresh tracker — no in-memory cache from the previous run.
-    S3HivePipelineTracker freshTracker = openTracker();
+    // Open a completely fresh tracker — no in-memory cache from the previous instance.
+    PGPipelineTracker freshTracker = openTracker();
     activeTracker = freshTracker;
 
-    SecFilingCache cacheB = new SecFilingCache(freshTracker, noopStorage(), "/parquet");
+    SecFilingCache cacheB = new SecFilingCache(freshTracker);
 
     ProcessingDecision decision =
         cacheB.checkFiling(TEST_CIK, TEST_ACCESSION, "8-K", TEST_FILING_DATE, false);
 
     assertEquals(ProcessingDecision.Action.SKIP, decision.getAction(),
-        "A fresh S3HivePipelineTracker instance must read previously persisted state. "
-            + "If PROCESS is returned, the tracker is not loading S3 state on startup — "
-            + "this is the root cause of the worker-23 reprocessing bug.");
+        "A fresh tracker instance must read previously persisted state. If PROCESS is returned, "
+            + "the tracker is not loading state on startup — the root cause of the worker-23 "
+            + "reprocessing bug.");
   }
 
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
 
-  private S3HivePipelineTracker openTracker() {
+  private PGPipelineTracker openTracker() {
     PipelineTracker t = PipelineTrackerFactory.createFromOperand(trackerOperand,
         tempDir.getAbsolutePath());
-    if (!(t instanceof S3HivePipelineTracker)) {
+    if (!(t instanceof PGPipelineTracker)) {
       throw new IllegalStateException(
-          "Expected S3HivePipelineTracker but got: " + t.getClass().getName());
+          "Expected PGPipelineTracker but got: " + t.getClass().getName());
     }
-    return (S3HivePipelineTracker) t;
+    return (PGPipelineTracker) t;
   }
 
   private void cleanupTestEntry() {
-    String[] tableNames = {
-        "metadata", "facts", "contexts", "relationships",
-        "mda", "insider", "earnings", "_filing_meta"
-    };
-    for (String table : tableNames) {
+    for (String table : TEST_TABLE_NAMES) {
       try {
         activeTracker.markCleared(TEST_ACCESSION, table, "staging");
       } catch (Exception ignored) {
@@ -243,7 +228,8 @@ public class Worker23ProductionIntegrationTest {
       }
     }
     try {
-      activeTracker.flushPendingStates();
+      activeTracker.markCleared(TEST_ACCESSION, "_no_xbrl", "staging");
+      activeTracker.markCleared(TEST_ACCESSION, "_error_count", "staging");
     } catch (Exception ignored) {
       // Best-effort
     }
@@ -258,87 +244,34 @@ public class Worker23ProductionIntegrationTest {
         .hasMda(form.expectsMda())
         .hasInsider(form.expectsInsider())
         .hasEarnings(form.expectsEarnings())
+        .hasInstitutionalHoldings(form.expectsInstitutionalHoldings())
+        .hasBeneficialOwnership(form.expectsBeneficialOwnership())
         // chunks omitted: vectorizationEnabled=false
         .build();
   }
 
   private static Map<String, Object> buildTrackerOperand() {
     Map<String, String> trackerConfig = new HashMap<String, String>();
-    trackerConfig.put("bucket", System.getenv("CALCITE_TRACKER_S3_BUCKET"));
-    trackerConfig.put("endpoint", System.getenv("AWS_ENDPOINT_OVERRIDE"));
-
-    Map<String, String> s3Config = new HashMap<String, String>();
-    s3Config.put("accessKeyId", System.getenv("AWS_ACCESS_KEY_ID"));
-    s3Config.put("secretAccessKey", System.getenv("AWS_SECRET_ACCESS_KEY"));
-    s3Config.put("endpoint", System.getenv("AWS_ENDPOINT_OVERRIDE"));
+    trackerConfig.put("jdbcUrl", System.getenv("GOVDATA_TRACKER_PG_URL"));
+    trackerConfig.put("user", System.getenv("GOVDATA_TRACKER_PG_USER"));
+    trackerConfig.put("password", System.getenv("GOVDATA_TRACKER_PG_PASSWORD"));
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("trackerBackend", "s3");
+    operand.put("trackerBackend", "pg");
     operand.put("trackerConfig", trackerConfig);
-    operand.put("s3Config", s3Config);
+    // Drives PGPipelineTracker's schema namespace — keeps these writes out of the prod tables.
+    operand.put("directory", TEST_NAMESPACE);
     return operand;
   }
 
-  private static boolean hasProductionCredentials() {
-    return isSet("CALCITE_TRACKER_S3_BUCKET")
-        && isSet("AWS_ACCESS_KEY_ID")
-        && isSet("AWS_SECRET_ACCESS_KEY")
-        && isSet("AWS_ENDPOINT_OVERRIDE");
+  private static boolean hasTrackerCredentials() {
+    return isSet("GOVDATA_TRACKER_PG_URL")
+        && isSet("GOVDATA_TRACKER_PG_USER")
+        && isSet("GOVDATA_TRACKER_PG_PASSWORD");
   }
 
   private static boolean isSet(String envVar) {
     String val = System.getenv(envVar);
     return val != null && !val.isEmpty();
-  }
-
-  private static StorageProvider noopStorage() {
-    return new NoopStorageProvider();
-  }
-
-  // -----------------------------------------------------------------------
-  // No-op StorageProvider (disables S3 self-healing in SecFilingCache)
-  // -----------------------------------------------------------------------
-
-  private static final class NoopStorageProvider implements StorageProvider {
-
-    @Override
-    public List<StorageProvider.FileEntry> listFiles(String path, boolean recursive) {
-      return Collections.emptyList();
-    }
-
-    @Override
-    public StorageProvider.FileMetadata getMetadata(String path) throws IOException {
-      throw new IOException("NoopStorageProvider: " + path);
-    }
-
-    @Override
-    public InputStream openInputStream(String path) throws IOException {
-      throw new IOException("NoopStorageProvider: " + path);
-    }
-
-    @Override
-    public Reader openReader(String path) throws IOException {
-      throw new IOException("NoopStorageProvider: " + path);
-    }
-
-    @Override
-    public boolean exists(String path) {
-      return false;
-    }
-
-    @Override
-    public boolean isDirectory(String path) {
-      return false;
-    }
-
-    @Override
-    public String getStorageType() {
-      return "noop";
-    }
-
-    @Override
-    public String resolvePath(String basePath, String relativePath) {
-      return basePath + "/" + relativePath;
-    }
   }
 }

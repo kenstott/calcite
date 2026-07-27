@@ -119,15 +119,6 @@ fi
 # Build queue of "schema:mode" slots
 queue=()
 
-# Compact every queued schema's tracker SERIALLY before the pool fans out. SIGKILL/OOM bypass
-# the JVM shutdown-hook compaction, stranding per-combo markers as individual files in the
-# current-year partition; over killed runs they accumulate into tens of thousands of tiny files
-# that make every tracker read download the whole pile (e.g. crime: 65k files, 38s/read). The
-# per-worker compaction (worker-dq-run.sh) would clear them too, but it runs once PER worker —
-# i.e. up to -j in parallel, each a JVM — which is the memory spike we are avoiding. Doing it
-# once, serially, up front keeps the footprint to a single JVM. On by default; --no-compact-first
-# skips it.
-COMPACT_FIRST=1
 
 # Helper: append historical SEC primary year slots (current year - 1 down to 2010).
 # The current year is daily's slot — historical backfills completed years only, so
@@ -306,14 +297,6 @@ for arg in "$@"; do
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
       ;;
 
-    --compact-first)
-      COMPACT_FIRST=1
-      ;;
-
-    --no-compact-first)
-      COMPACT_FIRST=0
-      ;;
-
     *:*)
       # Explicit "schema:mode" slot
       queue+=("$arg")
@@ -337,80 +320,6 @@ if [ -n "$SCHEMA_FILTER" ]; then
   done
   log_info "Schema filter '$SCHEMA_FILTER': ${#queue[@]} → ${#filtered[@]} slots (${filtered[*]:-none})"
   queue=("${filtered[@]+"${filtered[@]}"}")
-fi
-
-# Serial pre-pool tracker compaction (default on; --no-compact-first to skip). For each UNIQUE
-# queued schema, compact the FULL tracker range — year=0 (table-complete/freshness markers) plus
-# every data year 2000..current — because SIGKILL/OOM strand individual markers in whichever year
-# was active (per-year for backfill schemas like census, the current year for daily ones). The
-# floor is 2000, NOT the publish start (2010): dataLag stores markers under effective_year =
-# year - dataLag, so census ACS markers live under year=2007/2008/2009 — below 2010, and missed
-# entirely by a 2010 floor. A historical-mode model with START_YEAR=2000 and
-# INCREMENTAL_START_YEAR=current+1 yields startYear=2000, endYear=current so compactYearRange covers
-# them all. Runs EtlRunner --compact-only one JVM at a time. Reuses
-# generate_single_schema_model (handles every schema, incl. DQ-only ones); the per-schema tracker
-# bucket is namespaced, so each scan touches only its own schema. Best-effort: a failure is logged
-# and never blocks the pool.
-compact_trackers_first() {
-  local seen=" " slot schema model log_file compacted=0 failed=0 jar _cy
-  # Compaction merges tiny S3 marker files; it is meaningless for the Postgres backend (a real DB
-  # with upserts — no marker files). EtlRunner --compact-only already no-ops for pg, but only after
-  # spawning one JVM per schema. Skip the whole serial sweep so a pg pool run does not waste ~1 JVM
-  # startup per schema on every launch. Also disables the per-worker pre-ETL compaction.
-  case "${CALCITE_TRACKER_BACKEND:-s3}" in
-    pg|postgres)
-      log_info "Pre-pool tracker compaction: skipped (tracker backend '${CALCITE_TRACKER_BACKEND}' has no marker files)"
-      export GOVDATA_DQ_SKIP_PRECOMPACT=true
-      return 0
-      ;;
-  esac
-  jar=$(resolve_classpath)
-  _cy=$(date +%Y)
-  # In a DQ context (run-all-dq sourced .env.dq) the plain model build does not point the tracker
-  # at the -dq bucket — set it here, mirroring worker-dq-run.sh. Outside DQ these stay unset and
-  # the model falls back to the prod buckets.
-  if [ -n "${GOVDATA_DQ_TRACKER_BUCKET:-}" ]; then
-    export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
-    [ -n "${GOVDATA_DQ_BUCKET:-}" ] && export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
-  fi
-  log_info "Pre-pool tracker compaction: sweeping schemas serially (year=0 + 2000..${_cy})…"
-  for slot in "${queue[@]}"; do
-    schema="${slot%%:*}"
-    # sec_primary/sec_secondary/sec_13f/sec_prices are workload splits of the single "sec"
-    # schema sharing one "sec" tracker — collapse them to "sec" so the tracker is compacted
-    # exactly once (not 4x, each a heavy 38k-file merge that can OOM) with a model that
-    # generate_single_schema_model actually recognizes.
-    case "$schema" in sec_*) schema="sec" ;; esac
-    case "$seen" in *" $schema "*) continue ;; esac
-    seen="$seen$schema "
-    model=$(mktemp "/tmp/compact-${schema}-XXXXXX.json" 2>/dev/null) \
-      || { log_info "  skip $schema (mktemp failed)"; failed=$((failed + 1)); continue; }
-    log_file="$SCRIPT_DIR/runs/compact-${schema}.log"
-    if GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR=2000 GOVDATA_INCREMENTAL_START_YEAR=$((_cy + 1)) \
-        generate_single_schema_model "$schema" "$model" 2>/dev/null; then
-      log_info "  compacting tracker: $schema -> $log_file"
-      if java -cp "$jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
-          --compact-only --model "$model" > "$log_file" 2>&1; then
-        compacted=$((compacted + 1))
-      else
-        failed=$((failed + 1))
-        log_info "  WARN: compaction for $schema failed (non-fatal) — see $log_file"
-      fi
-    else
-      failed=$((failed + 1))
-      log_info "  WARN: model generation for $schema failed — skipping"
-    fi
-    rm -f "$model" 2>/dev/null || true
-  done
-  # The per-worker PRE-ETL compaction (worker-dq-run.sh) is now redundant and would re-introduce
-  # the parallel memory spike this serial sweep exists to avoid — skip it. The per-worker POST-ETL
-  # compaction still runs, draining whatever each worker writes during this run.
-  export GOVDATA_DQ_SKIP_PRECOMPACT=true
-  log_info "Pre-pool compaction done: $compacted compacted, $failed failed"
-}
-
-if [ "$COMPACT_FIRST" = "1" ] && [ "${#queue[@]}" -gt 0 ]; then
-  compact_trackers_first
 fi
 
 # No pool-level "completed" checkpoint. The pool always runs every queued slot; --etl-resume

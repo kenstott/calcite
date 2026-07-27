@@ -390,13 +390,14 @@ fi  # end iceberg/data teardown (only when --rebuild)
 
   # DQ ETL is just the STANDARD daily/historical workers, parameterized by DQ variables:
   #   object storage          → AWS_ENDPOINT_OVERRIDE (from .env.dq)
-  #   bucket names            → GOVDATA_PARQUET_DIR + CALCITE_TRACKER_S3_BUCKET (DQ buckets)
+  #   bucket names            → GOVDATA_PARQUET_DIR (DQ bucket); the PG tracker derives its
+  #                             schema namespace from that directory, so DQ tracker state is
+  #                             isolated from prod without a second bucket to keep in step
   #   truncated year range    → GOVDATA_START_YEAR (get_dq_start_year) .. current year
   # No DQ-specific ETL path — the exact prod code path runs, so DQ validates what prod
   # produces. Resumption is governed by the tracker + source freshness only (no force/fresh).
   # load_env preserves the caller-exported GOVDATA_PARQUET_DIR.
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
-  export CALCITE_TRACKER_S3_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
   export GOVDATA_INCREMENTAL_START_YEAR="$(date +%Y)"
   # DQ sample mode: activates per-table dqRowLimit caps in EtlPipeline so huge tables
   # (e.g. cms_open_payments) ingest a bounded per-period sample. Prod never sets this.
@@ -428,52 +429,10 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # ── pre-ETL tracker compaction ──────────────────────────────────────────────
   # Guarantee every DQ run starts from a compacted tracker so the active-year partition
   # cannot accumulate unbounded straggler markers. Belt-and-suspenders alongside the
-  # per-batch worker-path compaction in S3HivePipelineTracker (which drains incrementally).
+  # per-batch worker-path writes through the Postgres tracker.
   # Best-effort: a compaction failure (mktemp/model-gen/EtlRunner) never blocks the ETL/DQ
   # run. The model is built in daily mode, so compactYearRange targets year=0 (table-complete
   # markers) + the current year — the two bloat-prone partitions — keeping it fast.
-  # Escape hatch: a no-year schema (e.g. cyber) generates a full 2010-current compaction range
-  # and the per-year scan lists EVERY schema's markers in each year partition (the tracker is
-  # not namespaced by schema), so it chokes on another schema's bloated year (e.g. econ/edu's
-  # ~581k year=2024 markers) for zero benefit — cyber's own markers live at year=0. The in-ETL
-  # per-batch compaction still drains the active year, so skipping this bulk pass is safe.
-  # Compact the schema's tracker partitions. Called at BOTH ETL start and end so the
-  # active-year partition is drained each run and never accumulates stragglers. Best-effort:
-  # any failure (mktemp/model-gen/EtlRunner) is non-fatal. $1 is a phase label for the log.
-  _compact_tracker() {
-    local _phase="$1"
-    # Compaction merges tiny S3 marker files; the Postgres backend has none, so skip it (otherwise
-    # a JVM spawns just to have EtlRunner --compact-only no-op for pg).
-    case "${CALCITE_TRACKER_BACKEND:-s3}" in
-      pg|postgres)
-        log_info "$WORKER_ID: tracker compaction skipped (${_phase}-ETL; backend '${CALCITE_TRACKER_BACKEND}' has no marker files)"
-        return 0
-        ;;
-    esac
-    local _compact_model
-    _compact_model="$(mktemp "/tmp/dq-compact-${SCHEMA}-XXXXXX.json" 2>/dev/null)" || _compact_model=""
-    if [ -n "$_compact_model" ] && generate_single_schema_model "$SCHEMA" "$_compact_model"; then
-      local _compact_jar="${GOVDATA_JAR:-$GOVDATA_ROOT/build/libs/sih-govdata.jar}"
-      local _compact_log="$SCRIPT_DIR/runs/compact-${SCHEMA}.log"
-      log_info "$WORKER_ID: compacting tracker for schema=$SCHEMA (${_phase}-ETL; log: $_compact_log)"
-      if java -cp "$_compact_jar" org.apache.calcite.adapter.govdata.etl.EtlRunner \
-           --compact-only --model "$_compact_model" > "$_compact_log" 2>&1; then
-        log_info "$WORKER_ID: tracker compaction complete (${_phase}-ETL)"
-      else
-        log_info "$WORKER_ID: tracker compaction failed (${_phase}-ETL, non-fatal) — see $_compact_log"
-      fi
-    else
-      log_info "$WORKER_ID: tracker compaction skipped (${_phase}-ETL; mktemp/model generation failed)"
-    fi
-    rm -f "$_compact_model" 2>/dev/null || true
-  }
-
-  if [ "${GOVDATA_DQ_SKIP_PRECOMPACT:-false}" = "true" ]; then
-    log_info "$WORKER_ID: pre-ETL tracker compaction skipped (GOVDATA_DQ_SKIP_PRECOMPACT=true)"
-  else
-    _compact_tracker pre
-  fi
-
   # One descending sequence from today: daily (current year) first, then historical (older
   # years, newest→oldest via the schema's year_range `descending: true`).
   # Resumption is governed purely by the tracker (already-done units) and source freshness
@@ -486,12 +445,6 @@ fi  # end iceberg/data teardown (only when --rebuild)
   log_info "$WORKER_ID: DQ ETL — standard HISTORICAL worker (years ${_dq_start_year}–$((GOVDATA_INCREMENTAL_START_YEAR - 1)), desc) for schema=$SCHEMA"
   GOVDATA_RUN_MODE=historical GOVDATA_START_YEAR="$_dq_start_year" bash "$SCRIPT_DIR/worker.sh" "$SCHEMA" historical
   ETL_LOG_DIR="$SCRIPT_DIR/runs/worker-${SCHEMA}-historical"
-
-  # Post-ETL compaction: drain the markers this run just wrote so the active-year partition
-  # is left compacted (one file) for the next run's preload. Mirrors the pre-ETL pass.
-  if [ "${GOVDATA_DQ_SKIP_PRECOMPACT:-false}" != "true" ]; then
-    _compact_tracker post
-  fi
 
   log_info "$WORKER_ID: DQ ETL complete (standard workers) — proceeding to DQ"
 fi

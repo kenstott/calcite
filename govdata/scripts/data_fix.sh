@@ -112,18 +112,22 @@ fi
 # ── Derived variables ─────────────────────────────────────────────────────────
 if [[ "$ENV_NAME" == "dq" ]]; then
   : "${GOVDATA_DQ_BUCKET:?GOVDATA_DQ_BUCKET not set (check .env.dq)}"
-  : "${GOVDATA_DQ_TRACKER_BUCKET:?GOVDATA_DQ_TRACKER_BUCKET not set (check .env.dq)}"
   : "${GOVDATA_DQ_RCLONE_REMOTE:?GOVDATA_DQ_RCLONE_REMOTE not set (check .env.dq)}"
   PARQUET_BUCKET="s3://${GOVDATA_DQ_BUCKET}"
-  TRACKER_BUCKET="s3://${GOVDATA_DQ_TRACKER_BUCKET}"
   RAW_BUCKET="${GOVDATA_RAW_DIR:-s3://govdata-raw-v1}"
   RCLONE_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE}"
 else
   PARQUET_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
   RAW_BUCKET="${GOVDATA_RAW_DIR:-s3://govdata-raw-v1}"
-  TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-s3://govdata-tracker-v1}"
   RCLONE_REMOTE="r2"
 fi
+
+# ── Tracker ───────────────────────────────────────────────────────────────────
+# Postgres is the canonical record of ETL state; there is no second copy to keep in step.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/tracker_pg.sh"
+PG_NS="$(pg_ns_from_bucket "$PARQUET_BUCKET")" || exit 2
+echo "Tracker schema: ${PG_NS}"
 
 s3_to_rclone() {
   local path="${1#s3://}"
@@ -134,24 +138,6 @@ RCLONE_PARQUET="$(s3_to_rclone "$PARQUET_BUCKET")"
 RCLONE_RAW="$(s3_to_rclone "$RAW_BUCKET")"
 ICEBERG_PATH="${RCLONE_PARQUET}${SCHEMA}/${TABLE}"
 
-DUCKDB_ENDPOINT_RAW="${S3_ENDPOINT:-${AWS_ENDPOINT_OVERRIDE:-}}"
-DUCKDB_USE_SSL="true"
-case "$DUCKDB_ENDPOINT_RAW" in
-  http://*)  DUCKDB_USE_SSL="false" ;;
-  https://*) DUCKDB_USE_SSL="true" ;;
-esac
-DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT_RAW#https://}"
-DUCKDB_ENDPOINT="${DUCKDB_ENDPOINT#http://}"
-S3_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-auto}}"
-
-S3_CONFIG="INSTALL httpfs; LOAD httpfs;"
-S3_CONFIG="${S3_CONFIG} SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';"
-S3_CONFIG="${S3_CONFIG} SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';"
-if [[ -n "$DUCKDB_ENDPOINT" ]]; then
-  S3_CONFIG="${S3_CONFIG} SET s3_url_style='path'; SET s3_endpoint='${DUCKDB_ENDPOINT}'; SET s3_use_ssl=${DUCKDB_USE_SSL};"
-fi
-S3_CONFIG="${S3_CONFIG} SET s3_region='${S3_REGION}';"
-
 # ── Banner ────────────────────────────────────────────────────────────────────
 echo "=================================================="
 echo "data_fix.sh"
@@ -160,7 +146,7 @@ echo "  Env:       $ENV_NAME (rclone remote: ${RCLONE_REMOTE})"
 echo "  Schema:    $SCHEMA"
 echo "  Table:     $TABLE"
 echo "  Iceberg:   ${PARQUET_BUCKET}/${SCHEMA}/${TABLE}"
-echo "  Tracker:   $TRACKER_BUCKET"
+echo "  Tracker:   ${PG_NS} (postgres)"
 if $DELETE_RAW; then
   echo "  Raw cache: ${RAW_BUCKET}/objects/${SCHEMA}/${TABLE}/ (years ${START_YEAR}-${STOP_YEAR})"
 fi
@@ -186,29 +172,7 @@ echo ""
 
 # ── Step 2: Invalidate tracker completion marker ──────────────────────────────
 echo "Step 2: Invalidating tracker completion marker for '${TABLE}'..."
-if $DRY_RUN; then
-  echo "  [DRY RUN] Would write cleared marker to ${TRACKER_BUCKET}/year=0/source_key=_table_complete/"
-else
-  UUID_VAL=$(python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null \
-             || uuidgen | tr '[:upper:]' '[:lower:]')
-  AS_OF=$(python3 -c "import time; print(int(time.time() * 1000))" 2>/dev/null \
-          || date +%s000)
-  COMPLETION_PATH="${TRACKER_BUCKET}/year=0/source_key=_table_complete/${UUID_VAL}.parquet"
-  duckdb -c "${S3_CONFIG}
-    COPY (
-      SELECT
-        '_table_complete'::VARCHAR  AS source_key,
-        '${TABLE}'::VARCHAR         AS table_name,
-        'table_completion'::VARCHAR AS phase,
-        'cleared'::VARCHAR          AS state,
-        0::BIGINT                   AS row_count,
-        NULL::VARCHAR               AS config_hash,
-        NULL::VARCHAR               AS signature,
-        NULL::VARCHAR               AS error_message,
-        ${AS_OF}::BIGINT            AS as_of
-    ) TO '${COMPLETION_PATH}' (FORMAT PARQUET);"
-  echo "  Written: $COMPLETION_PATH"
-fi
+pg_tracker_clear_completion "$PG_NS" "$TABLE" "$($DRY_RUN && echo true || echo false)" || exit 2
 echo ""
 
 # ── Step 3: Delete raw cache for year range (optional) ───────────────────────

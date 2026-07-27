@@ -27,65 +27,43 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# Load the matching env (object-store creds + tracker bucket + rclone remote).
+# Load the matching env (tracker database connection).
 ENV_FILE="$ROOT/.env.${ENV_NAME}"
 [ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE not found" >&2; exit 1; }
 set -a; source "$ENV_FILE"; set +a
 
+# Postgres is the canonical ETL state store. Its tracker tables live in a schema derived from the
+# parquet bucket (PGPipelineTracker.sanitizeNamespace), which is what keeps dq and prod separate.
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/tracker_pg.sh"
 if [ "$ENV_NAME" = "prod" ]; then
-  BUCKET="${CALCITE_TRACKER_S3_BUCKET:?CALCITE_TRACKER_S3_BUCKET not set}"
-  REMOTE="${GOVDATA_PROD_RCLONE_REMOTE:-r2:}"
+  PARQUET_DIR="${GOVDATA_PARQUET_DIR:?GOVDATA_PARQUET_DIR not set}"
 else
-  BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:?GOVDATA_DQ_TRACKER_BUCKET not set}"
-  REMOTE="${GOVDATA_DQ_RCLONE_REMOTE:-minio:}"
+  PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET:?GOVDATA_DQ_BUCKET not set}"
 fi
-# Normalize to exactly one trailing ':' (the env var may omit it).
-REMOTE="${REMOTE%:}:"
+PG_NS="$(pg_ns_from_bucket "$PARQUET_DIR")" || exit 2
 
-# Pull the recent-year tracker markers local and query them with DuckDB over local files.
-# Why local: reading the markers directly over MinIO via httpfs hits a DuckDB S3 range-read bug,
-# and inlining object-store creds into a `duckdb -c` command leaks them into `ps`. Copying local
-# with rclone avoids both. A 404 "unavailable" marker only occurs on a current/future period (an
-# already-published past year does not 404), so a recent-year window is both complete and fast.
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-CUR="$(date +%Y)"
-INCLUDES=()
-for y in $((CUR - 1)) "$CUR" $((CUR + 1)) $((CUR + 2)); do
-  INCLUDES+=(--include "*/year=${y}/**/*.parquet")
-done
-echo "Fetching recent-year tracker markers from ${REMOTE}${BUCKET} (years $((CUR-1))-$((CUR+2))) ..." >&2
-rclone copy "${REMOTE}${BUCKET}/" "$TMP/" "${INCLUDES[@]}" --transfers 16 --checkers 16 2>/dev/null || true
-
-if ! find "$TMP" -name '*.parquet' -print -quit 2>/dev/null | grep -q .; then
-  echo "No recent-year tracker markers found — nothing to report."
-  exit 0
-fi
-
-# Latest marker per (source_key, table_name); 'incremental' is the per-combo phase.
-SETUP="CREATE OR REPLACE TEMP VIEW latest AS
-SELECT * FROM (
-  SELECT source_key, table_name, state, as_of, error_message,
-         ROW_NUMBER() OVER (PARTITION BY source_key, table_name ORDER BY as_of DESC) AS rn
-  FROM read_parquet('${TMP}/**/*.parquet', union_by_name=true)
-  WHERE phase = 'incremental'
-) WHERE rn = 1;
-CREATE OR REPLACE TEMP VIEW parsed AS
-SELECT table_name, source_key, state, as_of, error_message,
-       TRY_CAST(regexp_extract(source_key, 'year=([0-9]+)', 1) AS INTEGER) AS yr
-FROM latest;"
+# One row per (source_key, table_name, phase) — the tracker upserts, so there is no marker history
+# to reduce over and no year window to bound: the query below IS the current state.
+# 'incremental' is the per-combo phase; the year lives inside source_key as "year=YYYY".
+PARSED="WITH parsed AS (
+  SELECT table_name, source_key, state, as_of, error_message,
+         CAST(substring(source_key from 'year=([0-9]+)') AS INTEGER) AS yr
+    FROM \"${PG_NS}\".pipeline_tracker
+   WHERE phase = 'incremental'
+)"
 
 echo "=============================================================================="
-echo " UNAVAILABLE (HTTP 404, backed off) — tracker bucket: ${BUCKET}  [env=${ENV_NAME}]"
+echo " UNAVAILABLE (HTTP 404, backed off) — tracker schema: ${PG_NS}  [env=${ENV_NAME}]"
 echo "=============================================================================="
-duckdb -box -c "${SETUP}
+pg_tracker_exec "${PARSED}
 SELECT table_name,
        source_key,
-       strftime(make_timestamp(as_of * 1000), '%Y-%m-%d %H:%M') AS marked_at,
+       to_char(to_timestamp(as_of / 1000.0), 'YYYY-MM-DD HH24:MI') AS marked_at,
        substr(coalesce(error_message, ''), 1, 70) AS reason
-FROM parsed
-WHERE state = 'unavailable'
-ORDER BY table_name, yr DESC NULLS LAST, source_key;"
+  FROM parsed
+ WHERE state = 'unavailable'
+ ORDER BY table_name, yr DESC NULLS LAST, source_key;" || exit 2
 
 echo
 echo "=============================================================================="
@@ -93,24 +71,24 @@ echo " DIMENSION TIGHTEN-CANDIDATES"
 echo "   leading_edge_unavailable = the newest requested year is 404 -> cap the dimension"
 echo "   every_period_unavailable = ALL requested periods 404 -> URL-template bug, not a dimension"
 echo "=============================================================================="
-duckdb -box -c "${SETUP}
-WITH per_table AS (
+pg_tracker_exec "${PARSED},
+per_table AS (
   SELECT table_name, MAX(yr) AS max_year, COUNT(*) AS total_combos,
          COUNT(*) FILTER (WHERE state = 'unavailable') AS unavailable_combos,
          bool_and(state = 'unavailable') AS every_period_unavailable
-  FROM parsed GROUP BY table_name
+    FROM parsed GROUP BY table_name
 ),
 edge AS (
   SELECT p.table_name,
          bool_and(p.state = 'unavailable') AS leading_edge_unavailable
-  FROM parsed p JOIN per_table t
-    ON p.table_name = t.table_name AND p.yr = t.max_year
-  GROUP BY p.table_name
+    FROM parsed p JOIN per_table t
+      ON p.table_name = t.table_name AND p.yr = t.max_year
+   GROUP BY p.table_name
 )
 SELECT t.table_name, t.max_year,
        t.unavailable_combos, t.total_combos,
        coalesce(e.leading_edge_unavailable, false) AS leading_edge_unavailable,
        t.every_period_unavailable
-FROM per_table t LEFT JOIN edge e ON t.table_name = e.table_name
-WHERE t.unavailable_combos > 0
-ORDER BY t.every_period_unavailable DESC, leading_edge_unavailable DESC, t.table_name;"
+  FROM per_table t LEFT JOIN edge e ON t.table_name = e.table_name
+ WHERE t.unavailable_combos > 0
+ ORDER BY t.every_period_unavailable DESC, leading_edge_unavailable DESC, t.table_name;" || exit 2

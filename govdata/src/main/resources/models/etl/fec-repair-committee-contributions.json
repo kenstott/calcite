@@ -12,10 +12,11 @@
       "startYear": 2024,
       "cacheDirectory": "s3://govdata-raw-v1",
       "forceReprocessTables": ["committee_contributions"],
-      "trackerBackend": "s3",
+      "trackerBackend": "pg",
       "trackerConfig": {
-        "bucket": "s3://govdata-tracker-v1",
-        "endpoint": "https://21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com"
+        "jdbcUrl": "${GOVDATA_TRACKER_PG_URL}",
+        "user": "${GOVDATA_TRACKER_PG_USER}",
+        "password": "${GOVDATA_TRACKER_PG_PASSWORD}"
       },
       "s3Config": {
         "accessKeyId": "${AWS_ACCESS_KEY_ID}",

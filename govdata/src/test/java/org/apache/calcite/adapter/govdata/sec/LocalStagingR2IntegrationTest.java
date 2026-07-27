@@ -43,7 +43,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Class A operations (PUT requests) against the real Cloudflare R2 backend.
  *
  * <p>Requires the same env vars as {@link Worker23ProductionIntegrationTest}:
- * {@code CALCITE_TRACKER_S3_BUCKET}, {@code AWS_ACCESS_KEY_ID},
+ * {@code GOVDATA_TEST_R2_BUCKET} (a scratch bucket — the test writes throwaway objects
+ * under {@value #TEST_PREFIX}), {@code AWS_ACCESS_KEY_ID},
  * {@code AWS_SECRET_ACCESS_KEY}, {@code AWS_ENDPOINT_OVERRIDE}.
  *
  * <p>The test simulates 10 per-filing parquet writes (as XbrlToParquetConverter would
@@ -89,14 +90,14 @@ class LocalStagingR2IntegrationTest {
   void setUp() {
     Assumptions.assumeTrue(hasCredentials(),
         "Skipping: R2 credentials not set "
-            + "(CALCITE_TRACKER_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, "
+            + "(GOVDATA_TEST_R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, "
             + "AWS_ENDPOINT_OVERRIDE)");
 
     Map<String, Object> config = new HashMap<String, Object>();
     config.put("accessKeyId", System.getenv("AWS_ACCESS_KEY_ID"));
     config.put("secretAccessKey", System.getenv("AWS_SECRET_ACCESS_KEY"));
     config.put("endpoint", System.getenv("AWS_ENDPOINT_OVERRIDE"));
-    config.put("bucket", System.getenv("CALCITE_TRACKER_S3_BUCKET"));
+    config.put("bucket", System.getenv("GOVDATA_TEST_R2_BUCKET"));
     config.put("directory", "");
 
     r2Provider = StorageProviderFactory.createFromType("s3", config);
@@ -128,7 +129,7 @@ class LocalStagingR2IntegrationTest {
    */
   @Test
   void nFilingWritesProduceSingleR2Put() throws IOException {
-    String bucket = System.getenv("CALCITE_TRACKER_S3_BUCKET");
+    String bucket = System.getenv("GOVDATA_TEST_R2_BUCKET");
     String r2Base = bucket + "/" + TEST_PREFIX;
 
     int totalRecords = 0;
@@ -168,7 +169,7 @@ class LocalStagingR2IntegrationTest {
    */
   @Test
   void differentTableTypesProduceSeparateR2Puts() throws IOException {
-    String bucket = System.getenv("CALCITE_TRACKER_S3_BUCKET");
+    String bucket = System.getenv("GOVDATA_TEST_R2_BUCKET");
     String r2Base = bucket + "/" + TEST_PREFIX;
 
     int filings = 5;
@@ -229,7 +230,7 @@ class LocalStagingR2IntegrationTest {
   }
 
   private static boolean hasCredentials() {
-    return isSet("CALCITE_TRACKER_S3_BUCKET")
+    return isSet("GOVDATA_TEST_R2_BUCKET")
         && isSet("AWS_ACCESS_KEY_ID")
         && isSet("AWS_SECRET_ACCESS_KEY")
         && isSet("AWS_ENDPOINT_OVERRIDE");

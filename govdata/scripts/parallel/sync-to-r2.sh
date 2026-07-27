@@ -58,7 +58,7 @@ BUCKETS=(
   "govdata-parquet-v1"
 )
 
-SLICE="${GOVDATA_R2_SYNC_SLICE:-21600}"   # slice width in seconds (default 6h)
+SLICE="${GOVDATA_R2_SYNC_SLICE:-86400}"   # slice width in seconds (default 24h)
 BUFFER=120                                # overlap between slices so a file written at a
                                           # slice boundary is never dropped (rclone
                                           # idempotently skips the re-listed overlap)

@@ -39,8 +39,6 @@ public class EtlRunConfig {
   private final File modelFile;
   private final String inlineJson;
   private final boolean compact;
-  private final boolean compactOnly;
-  private final boolean noCompact;
   private final boolean dryRun;
   private final boolean verbose;
   private final int parallelThreads;
@@ -52,8 +50,6 @@ public class EtlRunConfig {
     this.modelFile = builder.modelFile;
     this.inlineJson = builder.inlineJson;
     this.compact = builder.compact;
-    this.compactOnly = builder.compactOnly;
-    this.noCompact = builder.noCompact;
     this.dryRun = builder.dryRun;
     this.verbose = builder.verbose;
     this.parallelThreads = builder.parallelThreads;
@@ -102,12 +98,6 @@ public class EtlRunConfig {
         case "--compact":
           builder.compact(true);
           break;
-        case "--compact-only":
-          builder.compactOnly(true);
-          break;
-        case "--no-compact":
-          builder.noCompact(true);
-          break;
         case "--dry-run":
           builder.dryRun(true);
           break;
@@ -155,8 +145,6 @@ public class EtlRunConfig {
     System.out.println("  --source <schema> Schema name; reads all config from env vars");
     System.out.println("                    (GOVDATA_PARQUET_DIR, GOVDATA_START_YEAR, etc.)");
     System.out.println("  --compact         Minimal output for scripting");
-    System.out.println("  --compact-only    Scan and compact tracker data only (no ETL)");
-    System.out.println("  --no-compact      Disable compaction on first read (for parallel workers)");
     System.out.println("  --threads <N>     Parallel entity threads within a worker (default: 1)");
     System.out.println("  --dry-run         Validate model without executing ETL");
     System.out.println("  --verbose         Detailed progress output");
@@ -248,14 +236,6 @@ public class EtlRunConfig {
     return compact;
   }
 
-  public boolean isCompactOnly() {
-    return compactOnly;
-  }
-
-  public boolean isNoCompact() {
-    return noCompact;
-  }
-
   public int getParallelThreads() {
     return parallelThreads;
   }
@@ -330,8 +310,6 @@ public class EtlRunConfig {
     private File modelFile;
     private String inlineJson;
     private boolean compact = false;
-    private boolean compactOnly = false;
-    private boolean noCompact = false;
     private boolean dryRun = false;
     private boolean verbose = false;
     private int parallelThreads = 1;
@@ -349,16 +327,6 @@ public class EtlRunConfig {
 
     public Builder compact(boolean compact) {
       this.compact = compact;
-      return this;
-    }
-
-    public Builder compactOnly(boolean compactOnly) {
-      this.compactOnly = compactOnly;
-      return this;
-    }
-
-    public Builder noCompact(boolean noCompact) {
-      this.noCompact = noCompact;
       return this;
     }
 

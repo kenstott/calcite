@@ -21,71 +21,42 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-TRACKER_BUCKET="${CALCITE_TRACKER_S3_BUCKET:-}"
-if [ -z "$TRACKER_BUCKET" ]; then
-  echo "ERROR: CALCITE_TRACKER_S3_BUCKET not set. Source .env.sh or export it."
-  exit 1
-fi
-
-# Check for duckdb CLI
-if ! command -v duckdb &> /dev/null; then
-  echo "ERROR: duckdb CLI not found. Install it from https://duckdb.org"
-  exit 1
-fi
-
-# Build S3 config for DuckDB
-S3_OPTS=""
-if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
-  S3_OPTS="SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';"
-fi
-if [ -n "${AWS_DEFAULT_REGION:-}" ]; then
-  S3_OPTS="${S3_OPTS} SET s3_region='${AWS_DEFAULT_REGION}';"
-fi
-if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
-  S3_OPTS="${S3_OPTS} SET s3_endpoint='${AWS_ENDPOINT_OVERRIDE}'; SET s3_url_style='path';"
-fi
+# Postgres is the canonical ETL state store; the tracker tables live in a schema derived from
+# the parquet bucket (PGPipelineTracker.sanitizeNamespace), so dq and prod never mix.
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/../tracker_pg.sh"
+PG_NS="$(pg_ns_from_bucket "${GOVDATA_PARQUET_DIR:?GOVDATA_PARQUET_DIR not set}")" || exit 2
 
 echo "=== Pipeline Tracker Status ==="
-echo "Bucket: $TRACKER_BUCKET"
+echo "Tracker schema: ${PG_NS} (postgres)"
 echo ""
 
-# Summary by phase and state
 echo "--- By Phase / State ---"
-duckdb -c "
-  INSTALL httpfs; LOAD httpfs;
-  ${S3_OPTS}
+pg_tracker_exec "
   SELECT phase, state, count(*) AS cnt, sum(row_count) AS total_rows
-  FROM read_parquet('${TRACKER_BUCKET}/**/*.parquet', hive_partitioning=true)
-  GROUP BY phase, state
-  ORDER BY phase, state;
-" 2>/dev/null || echo "(no tracker data found)"
+    FROM \"${PG_NS}\".pipeline_tracker
+   GROUP BY phase, state
+   ORDER BY phase, state;" || exit 2
 
 echo ""
 
-# Summary by year (from source_key partitioning)
+# Year lives inside source_key ("...__year=YYYY" or "year=YYYY"), not as its own column.
 echo "--- By Year ---"
-duckdb -c "
-  INSTALL httpfs; LOAD httpfs;
-  ${S3_OPTS}
-  SELECT year, phase, state, count(*) AS cnt
-  FROM read_parquet('${TRACKER_BUCKET}/**/*.parquet', hive_partitioning=true)
-  GROUP BY year, phase, state
-  ORDER BY year, phase, state;
-" 2>/dev/null || echo "(no tracker data found)"
+pg_tracker_exec "
+  SELECT substring(source_key from 'year=([0-9]{4})') AS year, phase, state, count(*) AS cnt
+    FROM \"${PG_NS}\".pipeline_tracker
+   GROUP BY 1, phase, state
+   ORDER BY 1, phase, state;" || exit 2
 
 echo ""
 
-# Errors
 echo "--- Errors ---"
-duckdb -c "
-  INSTALL httpfs; LOAD httpfs;
-  ${S3_OPTS}
-  SELECT year, source_key, table_name, phase, error_message
-  FROM read_parquet('${TRACKER_BUCKET}/**/*.parquet', hive_partitioning=true)
-  WHERE state = 'error'
-  ORDER BY as_of DESC
-  LIMIT 20;
-" 2>/dev/null || echo "(no errors)"
+pg_tracker_exec "
+  SELECT source_key, table_name, phase, error_message
+    FROM \"${PG_NS}\".pipeline_tracker
+   WHERE state = 'error'
+   ORDER BY as_of DESC
+   LIMIT 20;" || exit 2
 
 echo ""
 

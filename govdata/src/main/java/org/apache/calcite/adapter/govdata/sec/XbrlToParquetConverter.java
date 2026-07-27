@@ -4865,6 +4865,25 @@ public class XbrlToParquetConverter implements FileConverter {
    * Process an 8-K filing as plain HTML (no XBRL required).
    * Reads override metadata from ConversionMetadata hints with path-based fallbacks.
    */
+  /**
+   * Builds the failure for a filing whose identity could not be established.
+   *
+   * <p>Returning an empty output list instead is indistinguishable from "this filing
+   * contains no XBRL", which is how the caller marks a filing permanently complete — so a
+   * filing we cannot identify would be recorded as an empty one and never looked at again.
+   * It is a defect to investigate, and the message carries what an investigation needs:
+   * which hint was absent, what the path fallback resolved to, and the source path.
+   */
+  private static IOException unidentifiedFiling(String formLabel, String reason,
+      String sourceFilePath, String hintCik, String hintForm, String hintDate,
+      String hintAccession, String cik, String accession) {
+    return new IOException(formLabel + ": " + reason
+        + " — sourcePath=" + sourceFilePath
+        + ", hints{cik=" + hintCik + ", form=" + hintForm
+        + ", filingDate=" + hintDate + ", accession=" + hintAccession + "}"
+        + ", resolved{cik=" + cik + ", accession=" + accession + "}");
+  }
+
   private List<String> process8KHtml(String sourceFilePath, String targetDirectoryPath,
       ConversionMetadata metadata) throws IOException {
     List<String> outputFiles = new ArrayList<>();
@@ -4881,12 +4900,12 @@ public class XbrlToParquetConverter implements FileConverter {
         : extractAccessionFromPath(sourceFilePath);
 
     if (cik == null || cik.equals("0000000000")) {
-      LOGGER.warn("Skipping 8-K HTML processing - invalid CIK from: {}", sourceFilePath);
-      return outputFiles;
+      throw unidentifiedFiling("8-K HTML", "cannot resolve CIK", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
     }
     if (filingDate == null) {
-      LOGGER.warn("Skipping 8-K HTML processing - no filing date for: {}", sourceFilePath);
-      return outputFiles;
+      throw unidentifiedFiling("8-K HTML", "no filing date", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
     }
 
     LOGGER.info("Processing 8-K as plain HTML: cik={}, date={}, accession={}", cik, filingDate, accession);
@@ -6527,12 +6546,12 @@ public class XbrlToParquetConverter implements FileConverter {
         : extractAccessionFromPath(sourceFilePath);
 
     if (cik == null || cik.equals("0000000000")) {
-      LOGGER.warn("Skipping 13F processing - invalid CIK from: {}", sourceFilePath);
-      return outputFiles;
+      throw unidentifiedFiling("13F", "cannot resolve CIK", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
     }
     if (filingDate == null) {
-      LOGGER.warn("Skipping 13F processing - no filing date for: {}", sourceFilePath);
-      return outputFiles;
+      throw unidentifiedFiling("13F", "no filing date", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
     }
 
     LOGGER.info("Processing 13F-HR: cik={}, date={}, accession={}", cik, filingDate, accession);
@@ -6655,8 +6674,15 @@ public class XbrlToParquetConverter implements FileConverter {
 
     } catch (IncompleteFetchException e) {
       throw e;
+    } catch (IOException e) {
+      throw e;
     } catch (Exception e) {
-      LOGGER.warn("Failed to process 13F form: " + e.getMessage());
+      // Never swallow: an empty outputFiles list is how the caller learns a filing has
+      // no XBRL, so returning it after a *write* failure records a filing that does have
+      // holdings as permanently "no data". A failure here must reach the per-filing
+      // handler, which writes a FAILED manifest entry and retries on the next run.
+      throw new IOException("Failed to process 13F form for cik=" + cik
+          + " accession=" + accession, e);
     }
 
     return outputFiles;
@@ -6924,12 +6950,12 @@ public class XbrlToParquetConverter implements FileConverter {
         : extractAccessionFromPath(sourceFilePath);
 
     if (cik == null || cik.equals("0000000000")) {
-      LOGGER.warn("Skipping 13D/G processing - invalid CIK from: {}", sourceFilePath);
-      return outputFiles;
+      throw unidentifiedFiling("13D/G", "cannot resolve CIK", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
     }
     if (filingDate == null) {
-      LOGGER.warn("Skipping 13D/G processing - no filing date for: {}", sourceFilePath);
-      return outputFiles;
+      throw unidentifiedFiling("13D/G", "no filing date", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
     }
 
     LOGGER.info("Processing {}: cik={}, date={}, accession={}", filingType, cik, filingDate, accession);
@@ -7018,8 +7044,13 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
+    } catch (IOException e) {
+      throw e;
     } catch (Exception e) {
-      LOGGER.warn("Failed to process 13D/G form: " + e.getMessage());
+      // Same contract as process13FForm: an empty outputFiles list means "no XBRL", so a
+      // swallowed write failure records a filing that does have data as permanently no_xbrl.
+      throw new IOException("Failed to process 13D/G form for cik=" + cik
+          + " accession=" + accession, e);
     }
 
     return outputFiles;

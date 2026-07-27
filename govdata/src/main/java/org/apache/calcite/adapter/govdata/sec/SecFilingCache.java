@@ -9,43 +9,29 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata.sec;
-// storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
-import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
-import org.apache.calcite.adapter.file.storage.StorageProvider;
-import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * SEC-specific facade for filing processing state.
  *
- * <p>Delegates all processing state to a {@link PipelineTracker}, which can be
- * backed by DuckDB (local), S3 (distributed), or PostgreSQL (shared).
+ * <p>Delegates all processing state to a {@link PipelineTracker}, backed by PostgreSQL —
+ * the canonical and only record of ETL state. Object storage is never consulted to decide
+ * whether a filing was processed: the tracker answers that question alone, so a run's
+ * decision cost is one indexed query rather than a recursive listing of every year partition.
  *
  * <p>This class provides SEC-specific logic:
  * <ul>
- *   <li>{@link #checkFiling} — decision logic with self-healing from S3</li>
- *   <li>{@link #checkS3Files} — S3 file inventory checks</li>
+ *   <li>{@link #checkFiling} — decision logic driven entirely by tracker state</li>
  *   <li>Form-type-aware completeness checking via {@link FormType}</li>
  * </ul>
  *
@@ -63,38 +49,6 @@ public class SecFilingCache implements AutoCloseable {
 
   private static final int MAX_ERROR_RETRIES = 3;
 
-  /** Matches batch-merged parquet files written by LocalStagingStorageProvider. */
-  private static final Pattern BATCH_FILE_PATTERN =
-      Pattern.compile("^([a-z_]+)_batch_(\\d+)\\.parquet$", Pattern.CASE_INSENSITIVE);
-
-  /** Base table types always expected for a complete 10-K/10-Q filing. */
-  private static final String[] BASE_FILE_TYPES =
-      {"metadata", "facts", "contexts", "relationships", "mda"};
-
-  /**
-   * Output-type suffix -&gt; materialized Iceberg table name. The Iceberg tables are the
-   * authoritative record of what was processed: a filing present in a table was processed
-   * for that output type, regardless of whether its staging {@code *_batch_*.parquet} still
-   * exists (staging is removed after materialization and its chunked reads are unreliable).
-   * {@link #populateAccessionIndexFromIceberg} reads these to build the presence index.
-   */
-  private static final java.util.Map<String, String> ICEBERG_TABLE_BY_TYPE;
-
-  static {
-    java.util.Map<String, String> m = new java.util.LinkedHashMap<String, String>();
-    m.put("metadata", "filing_metadata");
-    m.put("facts", "financial_line_items");
-    m.put("contexts", "filing_contexts");
-    m.put("relationships", "xbrl_relationships");
-    m.put("mda", "mda_sections");
-    m.put("insider", "insider_transactions");
-    m.put("earnings", "earnings_transcripts");
-    m.put("chunks", "vectorized_chunks");
-    m.put("13f", "institutional_holdings");
-    m.put("13dg", "beneficial_ownership");
-    ICEBERG_TABLE_BY_TYPE = java.util.Collections.unmodifiableMap(m);
-  }
-
   /** Phase name for SEC staging (initial file creation). */
   private static final String PHASE_STAGING = "staging";
 
@@ -108,66 +62,21 @@ public class SecFilingCache implements AutoCloseable {
   private static final String TABLE_FILING_META = "_filing_meta";
 
   private final PipelineTracker tracker;
-  private final StorageProvider storageProvider;
-  private final String parquetBaseDir;
-
-  /**
-   * In-memory cache of known parquet file paths in S3.
-   * Populated by {@link #preloadFileInventory(int, int)} to eliminate per-file LIST ops during
-   * self-healing checks.  When null, fileExists() falls back to live S3 queries.
-   */
-  private volatile java.util.Set<String> s3FileCache = null;
-
-  /**
-   * Secondary index: parquet filename (without directory) → full S3 path.
-   * Populated alongside {@link #s3FileCache} to enable O(1) lookups when the
-   * filing date (and therefore year partition) is unknown.
-   */
-  private volatile java.util.Map<String, String> s3FileCacheByName = null;
-
-  /**
-   * Tertiary index: accession number → set of output types present in storage, keyed by
-   * accession ALONE (any CIK). Populated alongside {@link #s3FileCacheByName}.
-   *
-   * <p>Rationale: an accession number identifies exactly one EDGAR submission, but EDGAR's
-   * full index lists ownership filings (Forms 3/4/5, SC 13D/G) once per CIK involved — the
-   * issuer AND every reporting owner. The ETL stores each filing only under the ISSUER CIK,
-   * so a reporting-owner candidate's {@code cik_accession_type.parquet} never matches the
-   * CIK-keyed {@link #s3FileCacheByName}, and the filing is falsely seen as missing and
-   * reprocessed on every run. Because the accession is globally unique to one filing, matching
-   * existence on (accession, type) regardless of CIK is correct and heals that miss.
-   */
-  private volatile java.util.Map<String, java.util.Set<String>> s3AccessionTypes = null;
-
-  /** Parses a virtual/individual parquet filename into (accession, outputType). */
-  private static final Pattern FILE_NAME_PATTERN =
-      Pattern.compile("^\\d+_(\\d{10}-\\d{2}-\\d{6})_(.+)\\.parquet$");
-
-  /** Lazily-initialized DuckDB connection used to read batch parquet files during preload. */
-  private Connection duckdbConn = null;
-
-  /**
-   * Year range registered by {@link #registerFileInventoryRange} for the deferred inventory scan,
-   * or null when no range was registered (callers must invoke {@link #preloadFileInventory}
-   * directly).
-   */
-  private volatile int[] inventoryRange = null;
-
-  /** True once the file inventory has been built (eagerly or on first demand). */
-  private volatile boolean inventoryLoaded = false;
 
   /**
    * Create a new filing cache backed by a PipelineTracker.
    *
+   * <p>The tracker is the only collaborator by design. This class previously also held a
+   * {@link org.apache.calcite.adapter.file.storage.StorageProvider} and a parquet base directory
+   * so it could rebuild lost tracker state by listing object storage; that cost a recursive
+   * listing of every year partition on each run. Postgres is now the canonical record and is
+   * protected by backup instead, so having no storage handle here makes it structurally
+   * impossible for a processed/not-processed decision to issue a LIST.
+   *
    * @param tracker PipelineTracker for state persistence
-   * @param storageProvider Storage provider for S3 file checks
-   * @param parquetBaseDir Base directory for parquet files
    */
-  public SecFilingCache(PipelineTracker tracker, StorageProvider storageProvider,
-      String parquetBaseDir) {
+  public SecFilingCache(PipelineTracker tracker) {
     this.tracker = tracker;
-    this.storageProvider = storageProvider;
-    this.parquetBaseDir = parquetBaseDir;
     LOGGER.info("Initialized SEC filing cache with {} tracker", tracker.getClass().getSimpleName());
   }
 
@@ -175,7 +84,7 @@ public class SecFilingCache implements AutoCloseable {
    * Bulk-preload tracker state for all given accessions into the in-memory cache.
    *
    * <p>After this call, subsequent {@link #checkFiling} calls for these accessions
-   * will use cached data instead of individual S3 queries.
+   * are answered from memory.
    *
    * @param accessions all accession numbers to preload
    */
@@ -199,701 +108,50 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
-   * Backfills no_xbrl sentinel parquet files to S3 for filings already marked
-   * {@code _no_xbrl} in the tracker but lacking a sentinel file in S3.
+   * Filter index candidates down to the ones that still need ETL processing.
    *
-   * <p>The original {@link #writeNoXbrlSentinel} had a bug where it returned early when
-   * {@code filingDate} was empty, so historical no_xbrl filings were never written to S3.
-   * This one-time backfill corrects that gap so the self-heal path can skip no_xbrl
-   * filings without needing a tracker.
-   *
-   * <p>Requires that {@link #preloadFileInventory} has already been called so the
-   * in-memory byName cache can be used to skip sentinels that already exist.
-   *
-   * @param candidates index entries to inspect (typically all EDGAR year candidates)
-   * @return number of sentinels newly written to S3
-   */
-  public int backfillNoXbrlSentinels(List<EdgarFullIndexCache.IndexEntry> candidates) {
-    if (candidates.isEmpty()) {
-      return 0;
-    }
-    List<String> accessions = new ArrayList<String>(candidates.size());
-    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
-      accessions.add(ie.accession);
-    }
-    Map<String, Set<String>> bulk = tracker.bulkGetCompletedTables(filingKeys(accessions), PHASE_STAGING);
-    int written = 0;
-    int alreadyExists = 0;
-    int notNoXbrl = 0;
-    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
-      Set<String> tables = bulk.get(filingKey(ie.accession));
-      if (tables == null || !tables.contains(TABLE_NO_XBRL)) {
-        notNoXbrl++;
-        continue;
-      }
-      String fileName = ie.cik + "_" + ie.accession + "_no_xbrl.parquet";
-      java.util.Map<String, String> byName = this.s3FileCacheByName;
-      if (byName != null && byName.containsKey(fileName)) {
-        alreadyExists++;
-        continue;
-      }
-      writeNoXbrlSentinel(ie.cik, ie.accession, ie.filingDate);
-      written++;
-    }
-    LOGGER.info(
-        "backfillNoXbrlSentinels: {} sentinels written, {} already existed, {} not no_xbrl",
-        written, alreadyExists, notNoXbrl);
-    return written;
-  }
-
-  /**
-   * Scans only the {@code sec/year=YYYY/} partitions for {@code startYear..endYear}
-   * and caches all known file paths in memory.
-   *
-   * <p>After this call, {@link #checkS3Files} answers existence queries from the
-   * in-memory set — zero additional Class A LIST ops per filing check.
-   *
-   * <p>Cost: one paginated {@code ListObjectsV2} scan per year partition
-   * (roughly 1 Class A op per 1 000 files in each year).  Scoping to the worker's
-   * actual year range avoids listing the full sec/}
-   * prefix that would otherwise cost 1 000+ Class A ops and take many minutes.
-   *
-   * <p>Thread-safety note: both caches are replaced atomically.  Workers operating on
-   * disjoint filing ranges see the same consistent snapshot.  Files written by other
-   * workers AFTER this scan are not in the cache; they will not be visible via the
-   * cache but the tracker will have marked them complete before self-healing would
-   * ever run for those filings.
-   *
-   * @param startYear first year partition to include (e.g. 2026)
-   * @param endYear   last year partition to include (inclusive)
-   */
-  /**
-   * Registers the year range for a deferred {@link #preloadFileInventory} without performing any
-   * I/O, so the scan only happens if a storage-existence question is actually asked.
-   *
-   * <p>The inventory scan is expensive — a recursive LIST of every {@code sec/year=YYYY/} partition
-   * in the range plus a DuckDB read of every batch parquet file found (12+ minutes for a full year
-   * of all-filer SEC data). It exists solely to answer {@link #checkS3Files} from memory instead of
-   * per-filing LIST ops. In the steady state, tracker state alone resolves every candidate in
-   * {@link #filterAndSelfHeal} and {@code checkS3Files} is never reached, so paying that cost up
-   * front is pure startup latency. Registering the range instead defers the scan to the first
-   * {@code checkS3Files} call — which, on a run with no tracker gaps, never comes.
-   *
-   * @param startYear first year partition the deferred scan should include
-   * @param endYear   last year partition the deferred scan should include (inclusive)
-   */
-  public void registerFileInventoryRange(int startYear, int endYear) {
-    this.inventoryRange = new int[]{startYear, endYear};
-    LOGGER.info("File inventory scan deferred for years {}-{} — will run on first storage "
-        + "existence check (skipped entirely when tracker state resolves every filing)",
-        startYear, endYear);
-  }
-
-  /**
-   * Builds the file inventory on first demand for the range registered by
-   * {@link #registerFileInventoryRange}. Idempotent and safe to call from the parallel self-heal
-   * pool: the scan runs at most once.
-   */
-  private void ensureFileInventory() {
-    // Volatile read first: checkS3Files is called once per candidate, and the self-heal pool runs
-    // 50 threads through it, so the steady-state path must not touch the monitor at all.
-    if (inventoryLoaded) {
-      return;
-    }
-    synchronized (this) {
-      if (inventoryLoaded) {
-        return;
-      }
-      int[] range = this.inventoryRange;
-      if (range == null) {
-        // No range registered — the caller owns inventory loading (tests, backfill tools). Marking
-        // it loaded keeps fileExists() on its documented live-S3 fallback instead of looping here.
-        inventoryLoaded = true;
-        return;
-      }
-      LOGGER.info("First storage existence check reached — running deferred file inventory scan");
-      preloadFileInventory(range[0], range[1]);
-    }
-  }
-
-  public void preloadFileInventory(int startYear, int endYear) {
-    long start = System.currentTimeMillis();
-    inventoryLoaded = true;
-    String secDir = parquetBaseDir;
-    // Scan one year before startYear to catch Jan–Apr 10-K/Q filings whose output was written
-    // to year=(startYear-1) by getPartitionYear's fiscal-year heuristic.
-    int scanStart = startYear - 1;
-    LOGGER.info("preloadFileInventory: scanning secDir={} years {}-{} (fiscal buffer from {})",
-        secDir, startYear, endYear, scanStart);
-    java.util.Set<String> cache = new java.util.HashSet<String>();
-    java.util.Map<String, String> byName = new java.util.HashMap<String, String>();
-    int totalVirtual = 0;
-    int totalBatchFiles = 0;
-    for (int year = scanStart; year <= endYear; year++) {
-      String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
-      int[] result = scanYearIntoCache(yearDir, year, cache, byName);
-      totalVirtual += result[0];
-      totalBatchFiles += result[1];
-    }
-
-    // Legacy fallback: previous builds wrote staging to sec/sec/ due to a
-    // double-append bug. Scan that subtree too so self-healing can find those files.
-    String legacySecDir = storageProvider.resolvePath(parquetBaseDir, "sec");
-    if (!legacySecDir.equals(secDir)) {
-      int legacyVirtual = 0;
-      int legacyBatchFiles = 0;
-      for (int year = scanStart; year <= endYear; year++) {
-        String legacyYearDir = storageProvider.resolvePath(legacySecDir, "year=" + year);
-        int[] result = scanYearIntoCache(legacyYearDir, year, cache, byName);
-        legacyVirtual += result[0];
-        legacyBatchFiles += result[1];
-      }
-      if (legacyVirtual > 0) {
-        LOGGER.info("preloadFileInventory: found {} virtual entries at legacy double-path {}",
-            legacyVirtual, legacySecDir);
-      }
-      totalVirtual += legacyVirtual;
-      totalBatchFiles += legacyBatchFiles;
-    }
-
-    // Build the accession-keyed presence index. Authoritative source: the materialized
-    // Iceberg tables (see ICEBERG_TABLE_BY_TYPE) — a filing present in a table was processed
-    // for that output type regardless of whether its staging parquet still exists. Supplement
-    // with any staging filenames still present. Keyed by accession alone (globally unique to
-    // one filing) so ownership filings stored under the issuer CIK are found regardless of
-    // which CIK a candidate carries.
-    java.util.Map<String, java.util.Set<String>> byAccession =
-        new java.util.HashMap<String, java.util.Set<String>>();
-    for (String name : byName.keySet()) {
-      Matcher am = FILE_NAME_PATTERN.matcher(name);
-      if (am.matches()) {
-        addAccessionType(byAccession, am.group(1), am.group(2));
-      }
-    }
-    int stagingAccessions = byAccession.size();
-    populateAccessionIndexFromIceberg(scanStart, endYear, byAccession);
-
-    this.s3FileCacheByName = java.util.Collections.unmodifiableMap(byName);
-    this.s3AccessionTypes = java.util.Collections.unmodifiableMap(byAccession);
-    this.s3FileCache = java.util.Collections.unmodifiableSet(cache);
-    long elapsed = System.currentTimeMillis() - start;
-    LOGGER.info("preloadFileInventory: {} distinct accessions in presence index "
-        + "({} from staging, {} added from Iceberg), {} staging virtual entries, "
-        + "{} batch files (years {}-{}) in {}ms",
-        byAccession.size(), stagingAccessions, byAccession.size() - stagingAccessions,
-        totalVirtual, totalBatchFiles, startYear, endYear, elapsed);
-  }
-
-  /**
-   * Scans one year partition into the in-memory cache.
-   *
-   * @return int[]{virtualEntriesAdded, batchFilesFound}
-   */
-  private int[] scanYearIntoCache(String yearDir, int year,
-      java.util.Set<String> cache, java.util.Map<String, String> byName) {
-    try {
-      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, true);
-      java.util.Map<String, List<String>> batchByType =
-          new java.util.LinkedHashMap<String, List<String>>();
-      int yearCount = 0;
-      int batchCount = 0;
-      for (StorageProvider.FileEntry entry : entries) {
-        if (!entry.isDirectory()) {
-          String path = entry.getPath();
-          int slash = path.lastIndexOf('/');
-          String name = (slash >= 0) ? path.substring(slash + 1) : path;
-          Matcher m = BATCH_FILE_PATTERN.matcher(name);
-          if (m.matches()) {
-            String tableType = m.group(1).toLowerCase();
-            List<String> paths = batchByType.get(tableType);
-            if (paths == null) {
-              paths = new ArrayList<String>();
-              batchByType.put(tableType, paths);
-            }
-            paths.add(path);
-            batchCount++;
-          } else {
-            cache.add(path);
-            byName.put(name, path);
-            yearCount++;
-          }
-        }
-      }
-      for (Map.Entry<String, List<String>> batchEntry : batchByType.entrySet()) {
-        yearCount += populateCacheFromBatchFiles(
-            batchEntry.getKey(), batchEntry.getValue(), yearDir, year, cache, byName);
-      }
-      LOGGER.debug("preloadFileInventory: yearDir={} loaded {} virtual entries from {} batch files",
-          yearDir, yearCount, batchCount);
-      return new int[]{yearCount, batchCount};
-    } catch (IOException e) {
-      LOGGER.warn("preloadFileInventory: year={} scan failed — {}", year, e.getMessage());
-      return new int[]{0, 0};
-    }
-  }
-
-  /** Chunk size for DuckDB batch-parquet reads. Small to avoid R2/SSL connection drops. */
-  private static final int DUCKDB_BATCH_CHUNK_SIZE = 5;
-
-  private int populateCacheFromBatchFiles(String tableType, List<String> batchPaths,
-      String yearDir, int year, java.util.Set<String> cache,
-      java.util.Map<String, String> byName) {
-    int total = 0;
-    int chunkStart = 0;
-    while (chunkStart < batchPaths.size()) {
-      int chunkEnd = Math.min(chunkStart + DUCKDB_BATCH_CHUNK_SIZE, batchPaths.size());
-      List<String> chunk = batchPaths.subList(chunkStart, chunkEnd);
-      total += populateCacheFromChunk(tableType, chunk, yearDir, year, cache, byName);
-      chunkStart = chunkEnd;
-    }
-    LOGGER.info("populateCacheFromBatchFiles: type={} batchFiles={} accessions={}",
-        tableType, batchPaths.size(), total);
-    return total;
-  }
-
-  private int populateCacheFromChunk(String tableType, List<String> chunk,
-      String yearDir, int year, java.util.Set<String> cache,
-      java.util.Map<String, String> byName) {
-    int result = tryPopulateChunk(tableType, chunk, yearDir, year, cache, byName);
-    if (result == 0 && !chunk.isEmpty()) {
-      // Retry once with a fresh DuckDB connection in case the old one was broken by an SSL drop.
-      resetDuckdbConn();
-      result = tryPopulateChunk(tableType, chunk, yearDir, year, cache, byName);
-      if (result > 0) {
-        LOGGER.info("populateCacheFromChunk: retry succeeded for type={} year={} chunk-size={}",
-            tableType, year, chunk.size());
-      }
-    }
-    return result;
-  }
-
-  private int tryPopulateChunk(String tableType, List<String> chunk,
-      String yearDir, int year, java.util.Set<String> cache,
-      java.util.Map<String, String> byName) {
-    Connection conn = getOrCreateDuckdbConn();
-    if (conn == null) {
-      LOGGER.warn("tryPopulateChunk: no DuckDB connection, skipping type={}", tableType);
-      return 0;
-    }
-    try {
-      StringBuilder pathList = new StringBuilder();
-      for (int i = 0; i < chunk.size(); i++) {
-        if (i > 0) {
-          pathList.append(", ");
-        }
-        pathList.append("'").append(chunk.get(i)).append("'");
-      }
-      String sql = "SELECT DISTINCT cik, accession_number FROM read_parquet(["
-          + pathList + "], union_by_name=true)";
-      int count = 0;
-      try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(sql)) {
-        while (rs.next()) {
-          String cik = rs.getString("cik");
-          String accession = rs.getString("accession_number");
-          if (cik == null || accession == null) {
-            continue;
-          }
-          addVirtualEntry(yearDir, cik, accession, tableType, cache, byName);
-          count++;
-          if ("chunks".equalsIgnoreCase(tableType)) {
-            for (String baseType : BASE_FILE_TYPES) {
-              addVirtualEntry(yearDir, cik, accession, baseType, cache, byName);
-            }
-          }
-        }
-      }
-      return count;
-    } catch (Exception e) {
-      LOGGER.warn("tryPopulateChunk: type={} year={} chunk-size={} failed — {}",
-          tableType, year, chunk.size(), e.getMessage());
-      resetDuckdbConn();
-      return 0;
-    }
-  }
-
-  private void addVirtualEntry(String yearDir, String cik, String accession,
-      String tableType, java.util.Set<String> cache, java.util.Map<String, String> byName) {
-    String name = cik + "_" + accession + "_" + tableType + ".parquet";
-    String path = storageProvider.resolvePath(yearDir, name);
-    cache.add(path);
-    byName.put(name, path);
-  }
-
-  /** Records that {@code accession} has output {@code type} present, creating the set if needed. */
-  private static void addAccessionType(java.util.Map<String, java.util.Set<String>> byAccession,
-      String accession, String type) {
-    java.util.Set<String> types = byAccession.get(accession);
-    if (types == null) {
-      types = new java.util.HashSet<String>();
-      byAccession.put(accession, types);
-    }
-    types.add(type);
-  }
-
-  /**
-   * Merges the authoritative processed-filing record from the materialized Iceberg tables into
-   * the accession-keyed presence index. For each output type in {@link #ICEBERG_TABLE_BY_TYPE},
-   * reads {@code DISTINCT accession_number} from the table (scoped to the scanned year range via
-   * the {@code year} partition column) and records that each accession has that output type.
-   *
-   * <p>This is the reliable "was it processed?" signal: staging {@code *_batch_*.parquet} files
-   * are removed after materialization and their chunked reads drop accessions on transient
-   * errors, so the file-existence check alone perpetually re-queues already-materialized filings.
-   * The Iceberg table is the source of truth. A per-table failure is logged and skipped so the
-   * remaining types still populate.
-   *
-   * @param startYear   first year partition to include (the fiscal-buffer-adjusted scan start)
-   * @param endYear     last year partition to include (inclusive)
-   * @param byAccession presence index to merge into (accession -&gt; set of output-type suffixes)
-   */
-  private void populateAccessionIndexFromIceberg(int startYear, int endYear,
-      java.util.Map<String, java.util.Set<String>> byAccession) {
-    populateAccessionIndexFromIceberg(startYear, endYear, byAccession, null);
-  }
-
-  /**
-   * @param onlyAccessions when non-null, restrict each query to these accessions instead of
-   *                       reading every DISTINCT value in the table
-   */
-  private void populateAccessionIndexFromIceberg(int startYear, int endYear,
-      java.util.Map<String, java.util.Set<String>> byAccession,
-      List<String> onlyAccessions) {
-    Connection conn = getOrCreateDuckdbConn();
-    if (conn == null) {
-      LOGGER.warn("populateAccessionIndexFromIceberg: no DuckDB connection — skipping Iceberg "
-          + "presence index; self-heal falls back to staging + tracker only");
-      return;
-    }
-    try (Statement stmt = conn.createStatement()) {
-      stmt.execute("INSTALL iceberg");
-      stmt.execute("LOAD iceberg");
-    } catch (Exception e) {
-      LOGGER.debug("populateAccessionIndexFromIceberg: iceberg extension load note — {}",
-          e.getMessage());
-    }
-    for (Map.Entry<String, String> entry : ICEBERG_TABLE_BY_TYPE.entrySet()) {
-      String type = entry.getKey();
-      String tablePath = storageProvider.resolvePath(parquetBaseDir, entry.getValue());
-      String baseSql = "SELECT DISTINCT accession_number FROM iceberg_scan('" + tablePath
-          + "', allow_moved_paths=true) WHERE accession_number IS NOT NULL "
-          + "AND year BETWEEN " + startYear + " AND " + endYear;
-      long queryStart = System.currentTimeMillis();
-      int typeCount = 0;
-      try {
-        for (String sql : scopedQueries(baseSql, onlyAccessions)) {
-          try (Statement stmt = conn.createStatement();
-               ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-              String accession = rs.getString(1);
-              if (accession != null) {
-                addAccessionType(byAccession, accession, type);
-                typeCount++;
-              }
-            }
-          }
-        }
-      } catch (Exception e) {
-        LOGGER.warn("populateAccessionIndexFromIceberg: type={} table={} failed — {}",
-            type, entry.getValue(), e.getMessage());
-        continue;
-      }
-      LOGGER.info("populateAccessionIndexFromIceberg: type={} table={} accessions={} in {}ms",
-          type, entry.getValue(), typeCount, System.currentTimeMillis() - queryStart);
-    }
-  }
-
-  /** Accessions per {@code IN} list, keeping any single generated statement a sane size. */
-  private static final int ICEBERG_IN_LIST_CHUNK = 5000;
-
-  /**
-   * Expands {@code baseSql} into one statement per {@code IN} chunk, or a single unrestricted
-   * statement when {@code onlyAccessions} is null.
-   */
-  private static List<String> scopedQueries(String baseSql, List<String> onlyAccessions) {
-    List<String> queries = new ArrayList<String>();
-    if (onlyAccessions == null) {
-      queries.add(baseSql);
-      return queries;
-    }
-    for (int offset = 0; offset < onlyAccessions.size(); offset += ICEBERG_IN_LIST_CHUNK) {
-      List<String> chunk = onlyAccessions.subList(offset,
-          Math.min(offset + ICEBERG_IN_LIST_CHUNK, onlyAccessions.size()));
-      StringBuilder sb = new StringBuilder(baseSql).append(" AND accession_number IN (");
-      for (int i = 0; i < chunk.size(); i++) {
-        if (i > 0) {
-          sb.append(',');
-        }
-        sb.append('\'').append(chunk.get(i).replace("'", "''")).append('\'');
-      }
-      queries.add(sb.append(')').toString());
-    }
-    return queries;
-  }
-
-  /**
-   * Answers a small set of storage questions without scanning the year partitions.
-   *
-   * <p>The full scan's cost is almost entirely the staging side: for SEC 2025 the recursive LISTs
-   * took 448s and the DuckDB reads of 18,650 batch files another 224s, against 67s for the Iceberg
-   * presence queries — and the LISTs degrade badly when several sec workers scan the same prefix at
-   * once (5,000 objects in 6.5 minutes with three running). The Iceberg tables are the authoritative
-   * record of what was processed, so for a handful of filings the presence index alone answers the
-   * question, scoped by accession so each query reads far less.
-   *
-   * <p>Gap this accepts: {@link #ICEBERG_TABLE_BY_TYPE} has no entry for the {@code no_xbrl}
-   * sentinel, so that one suffix is probed directly per filing (a single exact-path {@code exists()}
-   * each, run concurrently) rather than inferred. Staging parquet that exists but has neither been
-   * materialised to Iceberg nor recorded in the tracker is not seen here and gets reprocessed —
-   * a filing in that state has no completion marker either, so the tracker cannot vouch for it.
-   */
-  private void buildTargetedInventory(List<PendingStorageCheck> pending, int startYear, int endYear,
-      int threads) {
-    long start = System.currentTimeMillis();
-    List<String> accessions = new ArrayList<String>(pending.size());
-    for (PendingStorageCheck check : pending) {
-      accessions.add(check.entry.accession);
-    }
-    java.util.Map<String, java.util.Set<String>> byAccession =
-        new java.util.HashMap<String, java.util.Set<String>>();
-    // Same fiscal buffer as the full scan: Jan-Apr filings land in the prior year's partition.
-    populateAccessionIndexFromIceberg(startYear - 1, endYear, byAccession, accessions);
-
-    final java.util.Set<String> sentinels =
-        java.util.Collections.newSetFromMap(
-            new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
-    probeNoXbrlSentinels(pending, sentinels, threads);
-
-    this.s3AccessionTypes = java.util.Collections.unmodifiableMap(byAccession);
-    this.s3FileCacheByName =
-        java.util.Collections.unmodifiableMap(new java.util.HashMap<String, String>());
-    this.s3FileCache = java.util.Collections.unmodifiableSet(sentinels);
-    inventoryLoaded = true;
-    LOGGER.info("Targeted inventory for {} filings: {} found in Iceberg, {} no_xbrl sentinels, "
-        + "in {}ms (year-partition scan skipped)",
-        pending.size(), byAccession.size(), sentinels.size(),
-        System.currentTimeMillis() - start);
-  }
-
-  /** Probes the {@code no_xbrl} sentinel path for each pending filing, concurrently. */
-  private void probeNoXbrlSentinels(List<PendingStorageCheck> pending,
-      final java.util.Set<String> found, int threads) {
-    int poolSize = Math.min(threads > 0 ? threads : 1, 50);
-    java.util.concurrent.ExecutorService pool =
-        java.util.concurrent.Executors.newFixedThreadPool(poolSize);
-    for (final PendingStorageCheck check : pending) {
-      final EdgarFullIndexCache.IndexEntry ie = check.entry;
-      String year = yearFromFilingDate(ie.filingDate);
-      if (year == null) {
-        year = yearFromAccession(ie.accession);
-      }
-      if (year == null) {
-        continue;
-      }
-      final String path = storageProvider.resolvePath(parquetBaseDir,
-          "year=" + year + "/" + ie.cik + "_" + ie.accession + "_no_xbrl.parquet");
-      @SuppressWarnings("FutureReturnValueIgnored")
-      java.util.concurrent.Future<?> ignored = pool.submit(new Runnable() {
-        @Override public void run() {
-          try {
-            if (storageProvider.exists(path)) {
-              found.add(path);
-            }
-          } catch (IOException e) {
-            LOGGER.debug("no_xbrl sentinel probe failed for {} — {}", path, e.getMessage());
-          }
-        }
-      });
-    }
-    pool.shutdown();
-    try {
-      pool.awaitTermination(10, java.util.concurrent.TimeUnit.MINUTES);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      LOGGER.warn("no_xbrl sentinel probe interrupted");
-    }
-  }
-
-  private Connection getOrCreateDuckdbConn() {
-    if (duckdbConn == null) {
-      try {
-        duckdbConn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
-      } catch (Exception e) {
-        LOGGER.warn("getOrCreateDuckdbConn: failed to initialize DuckDB — {}", e.getMessage());
-      }
-    }
-    return duckdbConn;
-  }
-
-  private void resetDuckdbConn() {
-    if (duckdbConn != null) {
-      try {
-        duckdbConn.close();
-      } catch (Exception ignored) {
-        // best-effort close
-      }
-      duckdbConn = null;
-    }
-  }
-
-  /**
-   * Filter index candidates to the unprocessed work queue, self-healing tracker state in
-   * parallel for accessions whose S3 files exist but have no tracker entry.
-   *
-   * <p>Pass 1 is pure in-memory (uses preloaded tracker + file inventory — no R2 ops).
-   * Pass 2 writes self-heal tracker entries concurrently, reducing wall-clock time from
-   * O(n &times; R2_latency) to O(n / threads &times; R2_latency).
+   * <p>Decided entirely from tracker state, which is pure memory after
+   * {@link #preload}: Postgres is the canonical record of what has been processed,
+   * so a candidate the tracker cannot account for is unprocessed. Nothing here touches object
+   * storage — an earlier storage-inventory pass existed only to rebuild lost tracker state, and
+   * paid a recursive listing of the whole year partition on every run to do it. The tracker is
+   * kept safe by backup instead (see {@code govdata/scripts/tracker-backup.sh}).
    *
    * @param candidates           index entries already filtered by year and form type
    * @param vectorizationEnabled whether vectorized chunks are required for completeness
-   * @param selfHealThreads      thread-pool size for parallel self-heal writes (capped at 50)
    * @return entries that still need ETL processing
    */
-  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+  public List<EdgarFullIndexCache.IndexEntry> filterUnprocessed(
       List<EdgarFullIndexCache.IndexEntry> candidates,
-      boolean vectorizationEnabled,
-      int selfHealThreads) {
-    return filterAndSelfHeal(candidates, vectorizationEnabled, selfHealThreads, false,
+      boolean vectorizationEnabled) {
+    return filterUnprocessed(candidates, vectorizationEnabled, false,
         java.util.Collections.<String>emptySet());
   }
 
-  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+  public List<EdgarFullIndexCache.IndexEntry> filterUnprocessed(
       List<EdgarFullIndexCache.IndexEntry> candidates,
       boolean vectorizationEnabled,
-      int selfHealThreads,
       boolean chunksBackfill) {
-    return filterAndSelfHeal(candidates, vectorizationEnabled, selfHealThreads, chunksBackfill,
+    return filterUnprocessed(candidates, vectorizationEnabled, chunksBackfill,
         java.util.Collections.<String>emptySet());
   }
 
-  /**
-   * A candidate pass 1 could not decide from tracker state, carrying the partial tracker inventory
-   * that pass 2 must union with storage ({@code null} when the tracker had no record at all).
-   */
-  private static final class PendingStorageCheck {
-    private final EdgarFullIndexCache.IndexEntry entry;
-    private final FileInventory trackerInventory;
 
-    PendingStorageCheck(EdgarFullIndexCache.IndexEntry entry, FileInventory trackerInventory) {
-      this.entry = entry;
-      this.trackerInventory = trackerInventory;
-    }
-  }
-
-  /**
-   * Outstanding storage questions above which the full year-partition scan is worth its cost.
-   * Tune with {@code -Dcalcite.sec.targetedInventoryMax=N}; 0 disables the targeted path.
-   *
-   * <p>Note there is no "check those few filings directly" option: with no inventory at all,
-   * {@link #fileExists} falls to {@link #existsInBatchFiles}, which lists the whole year directory
-   * once per output type — ~11 year-directory LISTs per filing. The choice is between the full scan
-   * and {@link #buildTargetedInventory}.
-   */
-  private static int targetedInventoryMax() {
-    return Integer.getInteger("calcite.sec.targetedInventoryMax", 25_000);
-  }
-
-  /**
-   * Decides how the outstanding storage questions get answered, and answers them.
-   *
-   * @param pending  filings pass 1 could not decide from tracker state
-   * @param threads  concurrency for the targeted path's sentinel probes
-   */
-  private void prepareFileInventory(List<PendingStorageCheck> pending, int threads) {
-    if (pending.isEmpty()) {
-      inventoryLoaded = true;
-      LOGGER.info("Tracker state resolved every candidate — file inventory scan skipped entirely");
-      return;
-    }
-    int[] range = this.inventoryRange;
-    int targetedMax = targetedInventoryMax();
-    if (range != null && pending.size() <= targetedMax) {
-      LOGGER.info("{} filings need a storage answer (targeted limit {}) — resolving them from the "
-          + "Iceberg presence record instead of scanning year partitions",
-          pending.size(), targetedMax);
-      buildTargetedInventory(pending, range[0], range[1], threads);
-      return;
-    }
-    LOGGER.info("{} filings need a storage answer — building the full file inventory",
-        pending.size());
-    ensureFileInventory();
-  }
-
-  /**
-   * Resolves the storage inventory for every pending candidate, concurrently.
-   *
-   * <p>Parallelism is what makes the direct-check strategy viable: serially, a few thousand filings
-   * x 11 round-trips each would cost more than the scan it replaces. When the bulk scan did run
-   * these are pure memory lookups and the pool simply drains immediately.
-   *
-   * @return accession → inventory, one entry per pending candidate (accessions are unique here)
-   */
-  private Map<String, FileInventory> gatherStorageInventories(
-      List<PendingStorageCheck> pending, int selfHealThreads) {
-    final Map<String, FileInventory> inventories =
-        new java.util.concurrent.ConcurrentHashMap<String, FileInventory>();
-    if (pending.isEmpty()) {
-      return inventories;
-    }
-    long start = System.currentTimeMillis();
-    int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
-    java.util.concurrent.ExecutorService pool =
-        java.util.concurrent.Executors.newFixedThreadPool(poolSize);
-    List<java.util.concurrent.Future<?>> futures =
-        new ArrayList<java.util.concurrent.Future<?>>(pending.size());
-    for (final PendingStorageCheck check : pending) {
-      futures.add(pool.submit(new Runnable() {
-        @Override public void run() {
-          inventories.put(check.entry.accession,
-              checkS3Files(check.entry.cik, check.entry.accession, check.entry.filingDate));
-        }
-      }));
-    }
-    pool.shutdown();
-    try {
-      for (java.util.concurrent.Future<?> future : futures) {
-        // get() rethrows a task failure. A missing inventory would silently look like "no files in
-        // storage" and re-queue an already-processed filing, so surface it instead.
-        future.get();
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("Interrupted resolving storage inventories", e);
-    } catch (java.util.concurrent.ExecutionException e) {
-      throw new IllegalStateException(
-          "Failed to resolve storage inventory: " + e.getCause().getMessage(), e.getCause());
-    }
-    LOGGER.info("Resolved storage inventory for {} filings with {} threads in {}ms",
-        pending.size(), poolSize, System.currentTimeMillis() - start);
-    return inventories;
-  }
-
-  public List<EdgarFullIndexCache.IndexEntry> filterAndSelfHeal(
+  public List<EdgarFullIndexCache.IndexEntry> filterUnprocessed(
       List<EdgarFullIndexCache.IndexEntry> candidates,
       boolean vectorizationEnabled,
-      int selfHealThreads,
       boolean chunksBackfill,
       java.util.Set<String> forceAccessions) {
 
     List<EdgarFullIndexCache.IndexEntry> toProcess =
         new ArrayList<EdgarFullIndexCache.IndexEntry>();
-    final List<EdgarFullIndexCache.IndexEntry> toSelfHeal =
-        new ArrayList<EdgarFullIndexCache.IndexEntry>();
-
-    // Candidates pass 1 cannot decide from tracker state alone; each needs one storage answer.
-    List<PendingStorageCheck> pending = new ArrayList<PendingStorageCheck>();
 
     int cntDuplicate = 0;
     int cntNoXbrl = 0;
     int cntTrackerComplete = 0;
     int cntTrackerBaseComplete = 0;
     int cntTrackerIncomplete = 0;
-    int cntTrackerHealed = 0;
-    int cntS3Complete = 0;
-    int cntS3Partial = 0;
-    int cntNoFiles = 0;
 
-    // ---- Pass 1: tracker state only. Pure memory after the bulk preload, no storage ops. ----
     java.util.Set<String> seenAccessions = new java.util.HashSet<String>();
     for (EdgarFullIndexCache.IndexEntry ie : candidates) {
       // EDGAR's full index lists ownership filings (Forms 3/4/5, SC 13D/G) once per CIK involved —
@@ -954,113 +212,26 @@ public class SecFilingCache implements AutoCloseable {
           cntTrackerBaseComplete++;
           continue;
         }
-        // Tracker markers are incomplete, but the missing outputs may already exist in
-        // storage: a completion marker can be lost (tracker/storage divergence) while the
-        // parquet survives, so reprocessing on tracker state alone reconverts a filing whose
-        // output is already in S3/R2 on EVERY run (e.g. insider forms marked 'insider' but
-        // missing 'metadata'). Consult storage before giving up: if the union of tracker +
-        // storage satisfies the form's expected outputs, self-heal the absent markers from
-        // storage and skip. This extends the existence-heal below (which only fires for
-        // accessions with NO tracker record) to the partial-tracker case.
-        pending.add(new PendingStorageCheck(ie, inv));
-        continue;
-      }
-      pending.add(new PendingStorageCheck(ie, null));
-    }
-
-    // ---- Now that the outstanding question count is known, pick how to answer it, then do so. ----
-    prepareFileInventory(pending, selfHealThreads);
-    Map<String, FileInventory> storageInventories =
-        gatherStorageInventories(pending, selfHealThreads);
-
-    // ---- Pass 2: classify the leftovers against storage. ----
-    for (PendingStorageCheck check : pending) {
-      EdgarFullIndexCache.IndexEntry ie = check.entry;
-      FormType form = FormType.fromString(ie.formType);
-      FileInventory storageInv = storageInventories.get(ie.accession);
-      if (check.trackerInventory != null) {
-        FileInventory healed = unionInventory(check.trackerInventory, storageInv);
-        if (healed.isComplete(form, vectorizationEnabled)
-            || (healed.isComplete(form, false)
-                && (!chunksBackfill || healed.isComplete(form, true)))) {
-          toSelfHeal.add(ie);
-          cntTrackerHealed++;
-          continue;
-        }
+        // Tracker markers are present but incomplete — the filing has outputs still to produce.
         cntTrackerIncomplete++;
         toProcess.add(ie);
         continue;
       }
-      if (storageInv.hasNoXbrl()) {
-        // no_xbrl sentinel file found in S3 — filing was processed, has no XBRL data. Heal the
-        // missing tracker marker from it: the storage path exists to recover lost tracker state,
-        // so an answer it produces has to be written back or the next run pays for it again.
-        toSelfHeal.add(ie);
-        cntNoXbrl++;
-      } else if (storageInv.hasAnyFiles()) {
-        toSelfHeal.add(ie);
-        // Only process if base staging files are also incomplete, not just chunks.
-        if (!storageInv.isComplete(form, false)) {
-          cntS3Partial++;
-          if (cntS3Partial <= 5) {
-            LOGGER.info("s3Partial sample: accession={} formType={} inventory={}",
-                ie.accession, ie.formType, storageInv);
-          }
-          toProcess.add(ie);
-        } else {
-          cntS3Complete++;
-        }
-      } else {
-        cntNoFiles++;
-        toProcess.add(ie);
-      }
+      // No tracker record at all: never processed.
+      toProcess.add(ie);
     }
 
     LOGGER.info(
-        "filterAndSelfHeal: candidates={} duplicateAccessions={} noXbrl={} trackerFull={} "
-            + "trackerBaseOnly={} storageChecked={} trackerIncomplete={} trackerHealed={} "
-            + "s3Complete={} s3Partial={} noFiles={} toProcess={}",
+        "filterUnprocessed: candidates={} duplicateAccessions={} noXbrl={} trackerFull={} "
+            + "trackerBaseOnly={} trackerIncomplete={} toProcess={}",
         candidates.size(), cntDuplicate, cntNoXbrl, cntTrackerComplete, cntTrackerBaseComplete,
-        pending.size(), cntTrackerIncomplete, cntTrackerHealed, cntS3Complete, cntS3Partial,
-        cntNoFiles, toProcess.size());
-
-    if (!toSelfHeal.isEmpty()) {
-      int poolSize = Math.min(selfHealThreads > 0 ? selfHealThreads : 1, 50);
-      LOGGER.info("Self-healing {} accessions with {} threads", toSelfHeal.size(), poolSize);
-      long healStart = System.currentTimeMillis();
-      java.util.concurrent.ExecutorService pool =
-          java.util.concurrent.Executors.newFixedThreadPool(poolSize);
-      for (final EdgarFullIndexCache.IndexEntry ie : toSelfHeal) {
-        // Reuse the inventory pass 2 already resolved for this accession. Re-deriving it here
-        // doubled the storage work for every healed filing, and on the uncached path that is
-        // ~11 year-directory LISTs each.
-        final FileInventory inv = storageInventories.get(ie.accession);
-        @SuppressWarnings("FutureReturnValueIgnored")
-        java.util.concurrent.Future<?> ignored = pool.submit(new Runnable() {
-          @Override public void run() {
-            recordInventory(ie.accession, inv, false);
-          }
-        });
-      }
-      pool.shutdown();
-      try {
-        pool.awaitTermination(30, java.util.concurrent.TimeUnit.MINUTES);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        LOGGER.warn("Self-heal batch interrupted");
-      }
-      LOGGER.info("Self-heal complete: {} accessions in {}ms",
-          toSelfHeal.size(), System.currentTimeMillis() - healStart);
-    }
+        cntTrackerIncomplete, toProcess.size());
 
     return toProcess;
   }
 
   /**
-   * Check if a filing needs processing.
-   *
-   * <p>Implements self-healing: if files exist in S3 but tracker has no state,
-   * records the state and returns SKIP.
+   * Check if a filing needs processing, decided from tracker state alone.
    */
   public ProcessingDecision checkFiling(String cik, String accession, String formType,
       String filingDate, boolean vectorizationEnabled) {
@@ -1095,28 +266,8 @@ public class SecFilingCache implements AutoCloseable {
     Set<String> completedTables = tracker.getCompletedTables(filingKey(accession), PHASE_STAGING);
 
     if (completedTables.isEmpty()) {
-      // Not in tracker - check if files exist (self-healing)
-      FileInventory inventory = checkS3Files(cik, accession, filingDate);
-      if (inventory.isComplete(form, vectorizationEnabled)) {
-        // Files exist, heal tracker
-        recordInventory(accession, inventory, false);
-        LOGGER.info("Self-healed tracker for {}:{} - files exist in S3", cik, accession);
-        return ProcessingDecision.skip("Self-healed: files exist");
-      }
-      if (inventory.hasAnyFiles()) {
-        // Check if only chunks are missing (vectorization upgrade)
-        if (vectorizationEnabled && inventory.isComplete(form, false) && !inventory.hasChunks()) {
-          recordInventory(accession, inventory, false);
-          LOGGER.info("Self-healed tracker for {}:{} - needs vectorization upgrade",
-              cik, accession);
-          return ProcessingDecision.processChunksOnly(
-              "Self-healed: vectorization upgrade needed");
-        }
-        // Partial files exist - record what we found and request completion
-        recordInventory(accession, inventory, false);
-        LOGGER.debug("Partial files for {}:{} - needs completion", cik, accession);
-        return ProcessingDecision.process("Partial files, need completion");
-      }
+      // Postgres is the canonical record: no marker means not processed. There is no storage
+      // check here any more — it existed to rebuild markers the tracker had lost.
       // No files, needs full processing
       return ProcessingDecision.process("New filing");
     }
@@ -1133,12 +284,7 @@ public class SecFilingCache implements AutoCloseable {
       return ProcessingDecision.processChunksOnly("Vectorization upgrade needed");
     }
 
-    // Partial state in tracker - verify against S3 (self-healing for partial)
-    FileInventory s3Inventory = checkS3Files(cik, accession, filingDate);
-    if (s3Inventory.isComplete(form, vectorizationEnabled)) {
-      recordInventory(accession, s3Inventory, false);
-      return ProcessingDecision.skip("Self-healed: now complete");
-    }
+    // Partial markers mean the filing is genuinely incomplete; reprocess it.
 
     return ProcessingDecision.process("Completing partial processing");
   }
@@ -1173,7 +319,7 @@ public class SecFilingCache implements AutoCloseable {
       if (completedTables.contains(TABLE_NO_XBRL)) {
         // 13F-HR / SC 13D-G legitimately have no XBRL; a no_xbrl marker on them is a stale
         // artifact from before these forms were modeled. Don't treat the CIK as complete —
-        // force a per-CIK pass so filterAndSelfHeal/checkFiling can clear it and reprocess.
+        // force a per-CIK pass so filterUnprocessed/checkFiling can clear it and reprocess.
         if (form.expectsInstitutionalHoldings() || form.expectsBeneficialOwnership()) {
           return false;
         }
@@ -1188,40 +334,7 @@ public class SecFilingCache implements AutoCloseable {
     return true;
   }
 
-  /**
-   * Check which output files exist in S3.
-   */
-  public FileInventory checkS3Files(String cik, String accession) {
-    return checkS3Files(cik, accession, null);
-  }
 
-  /**
-   * Check which output files exist in S3.
-   *
-   * @param filingDate ISO date string (e.g. "2024-03-15") used to build an exact year= partition
-   *                   path. When non-null this avoids a glob scan across all years (saves
-   *                   10 Class A LIST ops per call). Pass null to fall back to the year=* glob.
-   */
-  public FileInventory checkS3Files(String cik, String accession, String filingDate) {
-    ensureFileInventory();
-    String secDir = parquetBaseDir;
-
-    FileInventory.Builder builder = FileInventory.builder();
-
-    builder.hasNoXbrl(fileExists(secDir, cik, accession, "no_xbrl", filingDate));
-    builder.hasMetadata(fileExists(secDir, cik, accession, "metadata", filingDate));
-    builder.hasFacts(fileExists(secDir, cik, accession, "facts", filingDate));
-    builder.hasContexts(fileExists(secDir, cik, accession, "contexts", filingDate));
-    builder.hasRelationships(fileExists(secDir, cik, accession, "relationships", filingDate));
-    builder.hasMda(fileExists(secDir, cik, accession, "mda", filingDate));
-    builder.hasInsider(fileExists(secDir, cik, accession, "insider", filingDate));
-    builder.hasEarnings(fileExists(secDir, cik, accession, "earnings", filingDate));
-    builder.hasChunks(fileExists(secDir, cik, accession, "chunks", filingDate));
-    builder.hasInstitutionalHoldings(fileExists(secDir, cik, accession, "13f", filingDate));
-    builder.hasBeneficialOwnership(fileExists(secDir, cik, accession, "13dg", filingDate));
-
-    return builder.build();
-  }
 
   /**
    * Returns the 4-digit year string from an ISO filing date ("YYYY-MM-DD").
@@ -1269,7 +382,7 @@ public class SecFilingCache implements AutoCloseable {
    * Canonical tracker source-key for a filing: {@code accession_number=<ACC>__year=<YYYY>}.
    *
    * <p>This is byte-identical to the flattened key the Iceberg materializer writes for its
-   * {@code {accession_number, year}} key map (see {@code S3HivePipelineTracker.flattenKeyValues}:
+   * {@code {accession_number, year}} key map (see {@code IncrementalTracker.flattenKeyValues}:
    * a sorted, {@code __}-joined {@code name=value} encoding). Keying every staging marker through
    * this method means staging and materialize markers share a single source_key format instead of
    * the previous split between composite (materialize) and bare-accession (staging) keys.
@@ -1296,143 +409,12 @@ public class SecFilingCache implements AutoCloseable {
     return keys;
   }
 
-  private boolean fileExists(String secDir, String cik, String accession, String suffix,
-      String filingDate) {
-    String fileName = cik + "_" + accession + "_" + suffix + ".parquet";
-
-    // Fast path: check in-memory cache populated by preloadFileInventory() — zero Class A ops.
-    java.util.Set<String> cache = this.s3FileCache;
-    if (cache != null) {
-      // Try the canonical exact path first (O(1)).
-      String year = yearFromFilingDate(filingDate);
-      if (year != null) {
-        String exactPath = storageProvider.resolvePath(secDir, "year=" + year + "/" + fileName);
-        if (cache.contains(exactPath)) {
-          return true;
-        }
-      }
-      // Fall through to byName — handles files at legacy paths (e.g. after a path-bug fix
-      // where existing files live at a different directory than the current secDir).
-      java.util.Map<String, String> byName = this.s3FileCacheByName;
-      if (byName != null) {
-        if (byName.containsKey(fileName)) {
-          return true;
-        }
-        // CIK-keyed miss: fall back to the accession-keyed index. An accession identifies one
-        // filing, so if this output type exists under ANY CIK the filing is present. This heals
-        // ownership-form candidates (Forms 3/4/5, SC 13D/G) that EDGAR indexes under a reporting
-        // owner's CIK while the ETL stored the output under the issuer's CIK — without which those
-        // candidates are perpetually seen as missing and reprocessed every run.
-        java.util.Map<String, java.util.Set<String>> byAccession = this.s3AccessionTypes;
-        if (byAccession != null) {
-          java.util.Set<String> types = byAccession.get(accession);
-          return types != null && types.contains(suffix);
-        }
-        return false;
-      }
-      // byName not populated; fall back to linear scan.
-      for (String path : cache) {
-        if (path.endsWith("/" + fileName)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    // Slow path: live S3 query.
-    // First try the DuckDB batch-file lookup since production uses batch-only organization
-    // (per-accession files never exist; only {type}_batch_NNNN.parquet files are in S3).
-    String year = yearFromFilingDate(filingDate);
-    if (year != null) {
-      Boolean batchResult = existsInBatchFiles(secDir, cik, accession, suffix, year);
-      if (batchResult != null) {
-        return batchResult;
-      }
-    }
-
-    // Final fallback: check for a per-accession file (legacy / non-batch S3 layout).
-    String yearSegment = (year != null) ? "year=" + year : "year=*";
-    String pattern = storageProvider.resolvePath(secDir, yearSegment + "/" + fileName);
-    try {
-      return storageProvider.exists(pattern);
-    } catch (IOException e) {
-      LOGGER.debug("Error checking file existence: {}", e.getMessage());
-      return false;
-    }
-  }
-
-  /**
-   * Checks whether {@code accession} appears in any {@code {suffix}_batch_*.parquet} file
-   * in {@code secDir/year={year}/}.
-   *
-   * <p>Used as the primary slow-path for production S3 which stores batch-merged parquet
-   * (not individual per-accession files). Only the first few batch files are queried to
-   * keep latency reasonable; if the accession isn't found, returns {@code false}.
-   *
-   * @return {@code true} / {@code false} if batch files exist and DuckDB answered,
-   *         {@code null} if no batch files found (caller should try legacy path)
-   */
-  private Boolean existsInBatchFiles(String secDir, String cik, String accession,
-      String suffix, String year) {
-    String yearDir = storageProvider.resolvePath(secDir, "year=" + year);
-    List<String> batchPaths;
-    try {
-      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearDir, false);
-      batchPaths = new ArrayList<String>();
-      String prefix = suffix.toLowerCase() + "_batch_";
-      for (StorageProvider.FileEntry e : entries) {
-        if (!e.isDirectory()) {
-          String path = e.getPath();
-          int slash = path.lastIndexOf('/');
-          String name = (slash >= 0) ? path.substring(slash + 1) : path;
-          if (name.startsWith(prefix) && name.endsWith(".parquet")) {
-            batchPaths.add(path);
-            if (batchPaths.size() >= DUCKDB_BATCH_CHUNK_SIZE) {
-              break;
-            }
-          }
-        }
-      }
-    } catch (IOException e) {
-      LOGGER.debug("existsInBatchFiles: list failed for {} — {}", yearDir, e.getMessage());
-      return null;
-    }
-    if (batchPaths.isEmpty()) {
-      return null;
-    }
-    Connection conn = getOrCreateDuckdbConn();
-    if (conn == null) {
-      return null;
-    }
-    try {
-      StringBuilder pathList = new StringBuilder();
-      for (int i = 0; i < batchPaths.size(); i++) {
-        if (i > 0) {
-          pathList.append(", ");
-        }
-        pathList.append("'").append(batchPaths.get(i)).append("'");
-      }
-      String safe = accession.replace("'", "''");
-      String sql = "SELECT 1 FROM read_parquet([" + pathList
-          + "]) WHERE accession_number = '" + safe + "' LIMIT 1";
-      try (Statement stmt = conn.createStatement();
-           ResultSet rs = stmt.executeQuery(sql)) {
-        return rs.next();
-      }
-    } catch (Exception e) {
-      LOGGER.debug("existsInBatchFiles: DuckDB query failed for {}/{} — {}", cik, accession,
-          e.getMessage());
-      resetDuckdbConn();
-      return null;
-    }
-  }
-
   /**
    * Mark filing as successfully processed.
    */
   public void markComplete(String cik, String accession, String formType, String filingDate,
       boolean vectorizationEnabled, FileInventory inventory) {
-    recordInventory(accession, inventory, true);
+    recordInventory(accession, inventory);
     // Store filing metadata
     tracker.markComplete(filingKey(accession), TABLE_FILING_META, PHASE_STAGING, 1);
     // Clear any previous error state
@@ -1441,56 +423,13 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
-   * Mark filing as having no XBRL data.
-   *
-   * <p>Also writes a minimal sentinel parquet file to S3 ({@code {cik}_{accession}_no_xbrl.parquet})
-   * so that the self-heal path can detect and skip this filing even without a tracker.
+   * Mark filing as having no XBRL data. Recorded only in the tracker — no storage sentinel.
    */
   public void markNoXbrl(String cik, String accession, String formType, String filingDate) {
     tracker.markComplete(filingKey(accession), TABLE_NO_XBRL, PHASE_STAGING, 0);
-    writeNoXbrlSentinel(cik, accession, filingDate);
     LOGGER.debug("Marked no_xbrl: {}:{}", cik, accession);
   }
 
-  private void writeNoXbrlSentinel(String cik, String accession, String filingDate) {
-    String year = yearFromFilingDate(filingDate);
-    if (year == null) {
-      year = yearFromAccession(accession);
-    }
-    if (year == null) {
-      LOGGER.warn("writeNoXbrlSentinel: cannot determine year for accession={}, skipping", accession);
-      return;
-    }
-    String yearDir = storageProvider.resolvePath(parquetBaseDir, "year=" + year);
-    String fileName = cik + "_" + accession + "_no_xbrl.parquet";
-    String destPath = storageProvider.resolvePath(yearDir, fileName);
-    File tmp = null;
-    try {
-      tmp = File.createTempFile("no_xbrl_sentinel_", ".parquet");
-      Connection conn = getOrCreateDuckdbConn();
-      if (conn == null) {
-        LOGGER.warn("writeNoXbrlSentinel: no DuckDB connection, skipping sentinel for {}", accession);
-        return;
-      }
-      String safeCik = cik.replace("'", "''");
-      String safeAccession = accession.replace("'", "''");
-      try (Statement stmt = conn.createStatement()) {
-        stmt.execute("COPY (SELECT '" + safeCik + "' AS cik, '"
-            + safeAccession + "' AS accession_number) TO '"
-            + tmp.getAbsolutePath().replace("\\", "/") + "' (FORMAT PARQUET)");
-      }
-      try (InputStream in = new FileInputStream(tmp)) {
-        storageProvider.writeFile(destPath, in);
-      }
-      LOGGER.debug("Wrote no_xbrl sentinel: {}", destPath);
-    } catch (Exception e) {
-      LOGGER.warn("writeNoXbrlSentinel: failed for accession={} — {}", accession, e.getMessage());
-    } finally {
-      if (tmp != null) {
-        tmp.delete();
-      }
-    }
-  }
 
   /**
    * Clear the no_xbrl marker so the filing will be reprocessed.
@@ -1504,7 +443,7 @@ public class SecFilingCache implements AutoCloseable {
   /**
    * Clear stale no_xbrl markers for insider forms (3/4/5) in the given candidates.
    *
-   * <p>Unlike {@link #filterAndSelfHeal}, this method does NOT add cleared entries to any
+   * <p>Unlike {@link #filterUnprocessed}, this method does NOT add cleared entries to any
    * processing queue — it is a pure cleanup pass, intended for historical year sweeps where
    * the current worker is not responsible for reprocessing.
    *
@@ -1551,7 +490,7 @@ public class SecFilingCache implements AutoCloseable {
   public void updateStatus(String cik, String accession, String status,
       FileInventory inventory) {
     if ("complete".equals(status)) {
-      recordInventory(accession, inventory, true);
+      recordInventory(accession, inventory);
       clearError(accession);
     }
   }
@@ -1607,54 +546,47 @@ public class SecFilingCache implements AutoCloseable {
   // ===== Internal State Mapping =====
 
   /**
-   * Record a FileInventory as individual tracker entries.
+   * Record a FileInventory as individual tracker entries. Every call records outputs this run
+   * just produced, so each marker stamps {@code source_as_of}.
    */
-  /**
-   * @param sourceFileWritten true when this run produced the files being recorded; false when the
-   *        inventory was read back from storage to recover markers the tracker lost. A heal
-   *        describes files that already existed, so it must not read as new source data — see
-   *        {@link org.apache.calcite.adapter.file.partition.PipelineTracker#getMaxActivityAt}.
-   */
-  private void recordInventory(String accession, FileInventory inventory,
-      boolean sourceFileWritten) {
+  private void recordInventory(String accession, FileInventory inventory) {
     String key = filingKey(accession);
-    // The no_xbrl sentinel is tracker state like any other output. Omitting it here meant a filing
-    // whose sentinel survived in storage but whose tracker marker was lost never got the marker
-    // back, so it fell to the storage path on every subsequent run and the tracker never converged.
+    // The no_xbrl marker is tracker state like any other output, so it is recorded here too.
     if (inventory.hasNoXbrl()) {
-      tracker.markComplete(key, TABLE_NO_XBRL, PHASE_STAGING, 0, sourceFileWritten);
+      tracker.markComplete(key, TABLE_NO_XBRL, PHASE_STAGING, 0);
     }
     if (inventory.hasMetadata()) {
-      tracker.markComplete(key, "metadata", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "metadata", PHASE_STAGING, 1);
     }
     if (inventory.hasFacts()) {
-      tracker.markComplete(key, "facts", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "facts", PHASE_STAGING, 1);
     }
     if (inventory.hasContexts()) {
-      tracker.markComplete(key, "contexts", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "contexts", PHASE_STAGING, 1);
     }
     if (inventory.hasRelationships()) {
-      tracker.markComplete(key, "relationships", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "relationships", PHASE_STAGING, 1);
     }
     if (inventory.hasMda()) {
-      tracker.markComplete(key, "mda", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "mda", PHASE_STAGING, 1);
     }
     if (inventory.hasInsider()) {
-      tracker.markComplete(key, "insider", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "insider", PHASE_STAGING, 1);
     }
     if (inventory.hasEarnings()) {
-      tracker.markComplete(key, "earnings", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "earnings", PHASE_STAGING, 1);
     }
     if (inventory.hasChunks()) {
-      tracker.markComplete(key, "chunks", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "chunks", PHASE_STAGING, 1);
     }
     if (inventory.hasInstitutionalHoldings()) {
-      tracker.markComplete(key, "13f", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "13f", PHASE_STAGING, 1);
     }
     if (inventory.hasBeneficialOwnership()) {
-      tracker.markComplete(key, "13dg", PHASE_STAGING, 1, sourceFileWritten);
+      tracker.markComplete(key, "13dg", PHASE_STAGING, 1);
     }
   }
+
 
   /**
    * Build a FileInventory from a set of completed table names.
@@ -1744,38 +676,6 @@ public class SecFilingCache implements AutoCloseable {
       } catch (Exception e) {
         LOGGER.error("Error closing tracker: {}", e.getMessage());
       }
-    }
-    if (duckdbConn != null) {
-      try {
-        duckdbConn.close();
-      } catch (SQLException e) {
-        LOGGER.error("Error closing DuckDB connection: {}", e.getMessage());
-      }
-      duckdbConn = null;
-    }
-  }
-
-  /**
-   * Returns the ETL high-water mark date for the given run key, or null if not set.
-   *
-   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
-   */
-  public LocalDate readEtlHighWaterMark(String runKey) {
-    if (tracker instanceof S3HivePipelineTracker) {
-      return ((S3HivePipelineTracker) tracker).readEtlHighWaterMark(runKey);
-    }
-    return null;
-  }
-
-  /**
-   * Persists the ETL high-water mark date for the given run key. No-op for non-S3 trackers.
-   *
-   * @param runKey identifies the specific ETL job (e.g. "2026_2026_8-K,4,13F-HR")
-   * @param date   the high-water mark to store
-   */
-  public void writeEtlHighWaterMark(String runKey, LocalDate date) {
-    if (tracker instanceof S3HivePipelineTracker) {
-      ((S3HivePipelineTracker) tracker).writeEtlHighWaterMark(runKey, date);
     }
   }
 

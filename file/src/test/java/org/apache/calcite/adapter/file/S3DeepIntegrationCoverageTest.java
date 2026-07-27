@@ -16,7 +16,6 @@ import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.partition.ParquetReorganizer;
 import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
-import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
 import org.apache.calcite.adapter.file.refresh.RefreshablePartitionedParquetTable;
 import org.apache.calcite.adapter.file.storage.MinioTestContainer;
 import org.apache.calcite.adapter.file.storage.S3StorageProvider;
@@ -81,8 +80,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *       triggered via autoDownload</li>
  *   <li>{@link DuckDBJdbcSchemaFactory} - DuckDB with S3 credentials, httpfs extension,
  *       shared database pool, schema creation</li>
- *   <li>{@link S3HivePipelineTracker} - preloadAllCompletions, processedKeysCache,
- *       bulkGetCompletedTables across keys, flushPendingStates, close()</li>
  *   <li>{@link ParquetReorganizer} - ReorgConfig builder, config accessors</li>
  *   <li>{@link RefreshablePartitionedParquetTable} - refresh context, lazy init,
  *       getRowType, scan</li>
@@ -994,141 +991,6 @@ public class S3DeepIntegrationCoverageTest {
     assertThrows(Exception.class,
         () -> factory.create(parent, "s3notype", operand),
         "Should fail without storageType or directory");
-  }
-
-  // =======================================================================
-  // 7. S3HivePipelineTracker - deeper paths
-  // =======================================================================
-
-  @Test
-  void testPipelineTrackerPreloadAllCompletions() throws Exception {
-    // Exercise: preloadAllCompletions path
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-preload/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      // Mark several completions first
-      tracker.markComplete("preload_2024_001", "table_a", "download", 100);
-      tracker.markComplete("preload_2024_001", "table_b", "download", 200);
-      tracker.markComplete("preload_2024_002", "table_c", "materialized", 300);
-
-      // Check individual completions (should preload on first access)
-      assertTrue(tracker.isComplete("preload_2024_001", "table_a", "download"));
-      assertTrue(tracker.isComplete("preload_2024_001", "table_b", "download"));
-      assertTrue(tracker.isComplete("preload_2024_002", "table_c", "materialized"));
-      assertFalse(tracker.isComplete("preload_2024_003", "table_d", "staging"));
-    }
-  }
-
-  @Test
-  void testPipelineTrackerBulkGetAcrossKeys() throws Exception {
-    // Exercise: bulkGetCompletedTables with many source keys
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-bulkmany/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-
-      // Mark completions across multiple source keys
-      for (int i = 0; i < 10; i++) {
-        String key = "bulk_source_" + String.format("%03d", i);
-        tracker.markComplete(key, "facts", "download", i * 100);
-        if (i % 2 == 0) {
-          tracker.markComplete(key, "facts", "materialized", i * 100);
-        }
-      }
-
-      // Bulk query with a subset of keys
-      List<String> queryKeys = new ArrayList<>();
-      for (int i = 0; i < 5; i++) {
-        queryKeys.add("bulk_source_" + String.format("%03d", i));
-      }
-
-      Map<String, Set<String>> downloadResults =
-          tracker.bulkGetCompletedTables(queryKeys, "download");
-      assertNotNull(downloadResults);
-      assertEquals(5, downloadResults.size(),
-          "Expected 5 keys in download results: " + downloadResults.keySet());
-
-      Map<String, Set<String>> matResults =
-          tracker.bulkGetCompletedTables(queryKeys, "materialized");
-      assertNotNull(matResults);
-      // Only even-numbered keys have materialized status
-    }
-  }
-
-  @Test
-  void testPipelineTrackerFlushAndReread() throws Exception {
-    // Exercise: flushPendingStates and re-read from S3
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-flush/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-
-      // Mark processed with key-value pairs
-      Map<String, String> keyValues = new HashMap<>();
-      keyValues.put("source_key", "flush_test_2024");
-      tracker.markProcessed("alt_name", "source_table", keyValues, "target_pattern");
-      tracker.flushPendingStates();
-
-      // Create a new tracker pointing to same path to verify data was persisted
-      try (S3HivePipelineTracker tracker2 = new S3HivePipelineTracker(
-          trackerPath, ENDPOINT, trackerConfig())) {
-        // The data should be readable from S3
-        assertNotNull(tracker2);
-      }
-    }
-  }
-
-  @Test
-  void testPipelineTrackerGetCompletedTablesEmptyPhase() throws Exception {
-    // Exercise: getCompletedTables for a phase that has no entries
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-empty-phase/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      Set<String> completed = tracker.getCompletedTables(
-          "nonexistent_key", "no_such_phase");
-      assertNotNull(completed);
-      assertTrue(completed.isEmpty(), "Empty phase should return empty set");
-    }
-  }
-
-  @Test
-  void testPipelineTrackerMultipleTablesPerKey() throws Exception {
-    // Exercise: Multiple tables for the same source key
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-multitbl/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      String sourceKey = "src_2024_multi";
-
-      // Mark many tables complete for the same source key
-      for (int i = 0; i < 20; i++) {
-        tracker.markComplete(sourceKey, "table_" + i, "download", i);
-      }
-
-      Set<String> completed = tracker.getCompletedTables(sourceKey, "download");
-      assertNotNull(completed);
-      assertEquals(20, completed.size(),
-          "Expected 20 completed tables, got " + completed.size());
-
-      // Verify specific entries
-      assertTrue(completed.contains("table_0"));
-      assertTrue(completed.contains("table_19"));
-    }
-  }
-
-  @Test
-  void testPipelineTrackerErrorThenComplete() throws Exception {
-    // Exercise: Error state followed by complete state
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-errcomp/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      String key = "errcomp_2024";
-
-      // First mark error
-      tracker.markError(key, "table_x", "download", "Timeout");
-      assertFalse(tracker.isComplete(key, "table_x", "download"));
-
-      // Then mark complete (recovery)
-      tracker.markComplete(key, "table_x", "download", 50);
-      assertTrue(tracker.isComplete(key, "table_x", "download"));
-    }
   }
 
   // =======================================================================

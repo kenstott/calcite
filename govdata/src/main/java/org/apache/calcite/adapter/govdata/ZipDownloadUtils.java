@@ -56,9 +56,14 @@ public final class ZipDownloadUtils {
   public static File downloadZipToTempDir(String url, Map<String, String> headers, String prefix)
       throws IOException {
     File tempZip = File.createTempFile(prefix + "-", ".zip");
-    File tempDir = java.nio.file.Files.createTempDirectory(prefix + "-").toFile();
+    File tempDir = null;
     try {
+      // Download BEFORE creating the extract dir: partitions that legitimately 404
+      // (voting_districts exists only for census vintages) throw here, and a dir
+      // created up front would leak — the caller never receives it, so its cleanup
+      // path has nothing to delete.
       downloadToFile(url, headers, tempZip);
+      tempDir = java.nio.file.Files.createTempDirectory(prefix + "-").toFile();
       try (ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip))) {
         ZipEntry entry;
         while ((entry = zis.getNextEntry()) != null) {
@@ -79,6 +84,10 @@ public final class ZipDownloadUtils {
         }
       }
       return tempDir;
+    } catch (IOException | RuntimeException e) {
+      // A partially extracted dir is unusable and unreachable by the caller — drop it.
+      deleteDirectory(tempDir);
+      throw e;
     } finally {
       if (tempZip.exists()) {
         tempZip.delete();

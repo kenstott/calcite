@@ -12,7 +12,6 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
-import org.apache.calcite.adapter.file.partition.S3HivePipelineTracker;
 import org.apache.calcite.adapter.file.storage.MinioTestContainer;
 import org.apache.calcite.adapter.file.storage.S3StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -70,7 +69,6 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>{@code findMatchingFiles()} - S3 glob/pattern matching</li>
  *   <li>{@code downloadToCache()} - caching S3 files locally</li>
  *   <li>{@code convertStorageProviderFilesToJson()} - Excel/HTML conversion from S3</li>
- *   <li>{@link S3HivePipelineTracker} - pipeline state tracking on S3</li>
  *   <li>{@link ConversionMetadata} - metadata for S3-backed conversions</li>
  * </ul>
  *
@@ -866,180 +864,6 @@ public class S3SchemaIntegrationCoverageTest {
   }
 
   // =======================================================================
-  // 8. S3HivePipelineTracker
-  // =======================================================================
-
-  @Test
-  void testPipelineTrackerConstruction() {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-ctor/");
-    S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig());
-    assertNotNull(tracker);
-  }
-
-  @Test
-  void testPipelineTrackerConstructionWithoutEndpoint() {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-noep/");
-    S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, null, trackerConfig());
-    assertNotNull(tracker);
-  }
-
-  @Test
-  void testPipelineTrackerConstructionTwoArg() {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-2arg/");
-    S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT);
-    assertNotNull(tracker);
-  }
-
-  @Test
-  void testPipelineTrackerMarkAndCheckComplete() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-mark/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      // Mark a table as complete
-      tracker.markComplete("source_2024_001", "my_table", "download", 100);
-
-      // Check if it is complete
-      boolean complete = tracker.isComplete("source_2024_001", "my_table", "download");
-      assertTrue(complete, "Expected table to be marked complete");
-    }
-  }
-
-  @Test
-  void testPipelineTrackerIsCompleteNonExistent() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-noexist/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      boolean complete = tracker.isComplete("nonexistent_key", "table_x", "staging");
-      assertFalse(complete, "Non-existent entry should not be complete");
-    }
-  }
-
-  @Test
-  void testPipelineTrackerMarkError() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-err/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      tracker.markError("err_key_2024", "failed_table", "download", "Connection timeout");
-
-      // After error, should not be complete
-      boolean complete = tracker.isComplete("err_key_2024", "failed_table", "download");
-      assertFalse(complete, "Errored entry should not be complete");
-    }
-  }
-
-  @Test
-  void testPipelineTrackerMarkCleared() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-clear/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      // Mark complete then clear
-      tracker.markComplete("clear_key_2024", "cleared_table", "staging", 50);
-      assertTrue(tracker.isComplete("clear_key_2024", "cleared_table", "staging"));
-
-      tracker.markCleared("clear_key_2024", "cleared_table", "staging");
-      // After clearing, the cache should reflect cleared state
-      // (The actual S3 read may or may not reflect this depending on caching)
-    }
-  }
-
-  @Test
-  void testPipelineTrackerGetCompletedTables() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-get/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      tracker.markComplete("multi_2024_001", "table_a", "materialized", 10);
-      tracker.markComplete("multi_2024_001", "table_b", "materialized", 20);
-      tracker.markComplete("multi_2024_001", "table_c", "materialized", 30);
-
-      Set<String> completed = tracker.getCompletedTables(
-          "multi_2024_001", "materialized");
-      assertNotNull(completed);
-      assertTrue(completed.contains("table_a"),
-          "Expected table_a in completed: " + completed);
-      assertTrue(completed.contains("table_b"),
-          "Expected table_b in completed: " + completed);
-      assertTrue(completed.contains("table_c"),
-          "Expected table_c in completed: " + completed);
-    }
-  }
-
-  @Test
-  void testPipelineTrackerBulkGetCompletedTables() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-bulk/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      tracker.markComplete("bulk_2024_a", "t1", "download", 10);
-      tracker.markComplete("bulk_2024_b", "t2", "download", 20);
-
-      List<String> keys = new ArrayList<>();
-      keys.add("bulk_2024_a");
-      keys.add("bulk_2024_b");
-      keys.add("bulk_2024_c"); // not marked
-
-      Map<String, Set<String>> results =
-          tracker.bulkGetCompletedTables(keys, "download");
-      assertNotNull(results);
-      // bulk_2024_a and bulk_2024_b should have entries
-      assertTrue(results.containsKey("bulk_2024_a"),
-          "Expected bulk_2024_a in results");
-      assertTrue(results.containsKey("bulk_2024_b"),
-          "Expected bulk_2024_b in results");
-    }
-  }
-
-  @Test
-  void testPipelineTrackerBulkEmptyKeys() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-bulke/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      Map<String, Set<String>> results =
-          tracker.bulkGetCompletedTables(Collections.<String>emptyList(), "any");
-      assertNotNull(results);
-      assertTrue(results.isEmpty(), "Empty keys should return empty map");
-    }
-  }
-
-  @Test
-  void testPipelineTrackerMultiplePhases() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-phase/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      String key = "phase_2024_001";
-      tracker.markComplete(key, "facts", "download", 100);
-      tracker.markComplete(key, "facts", "staging", 100);
-      // Do not mark materialized
-
-      assertTrue(tracker.isComplete(key, "facts", "download"));
-      assertTrue(tracker.isComplete(key, "facts", "staging"));
-      assertFalse(tracker.isComplete(key, "facts", "materialized"));
-    }
-  }
-
-  @Test
-  void testPipelineTrackerMarkProcessedWritesState() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-proc/");
-    try (S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig())) {
-      Map<String, String> keyValues = new HashMap<>();
-      keyValues.put("source_key", "test_2024_001");
-
-      // markProcessed bridges to the PipelineTracker via IncrementalTracker
-      // Verify it does not throw and queues state for flush
-      tracker.markProcessed("alt_name", "source_table", keyValues, "target_pattern");
-      tracker.flushPendingStates();
-
-      // Verify via the PipelineTracker API which uses cache:
-      // Mark using pipeline API and confirm via isComplete
-      tracker.markComplete("test_2024_001", "verify_table", "incremental", 1);
-      assertTrue(tracker.isComplete("test_2024_001", "verify_table", "incremental"),
-          "Expected PipelineTracker cache to reflect complete state");
-    }
-  }
-
-  // =======================================================================
   // 9. S3 cache download (exercises downloadToCache)
   // =======================================================================
 
@@ -1572,25 +1396,6 @@ public class S3SchemaIntegrationCoverageTest {
       int count = countResults(conn, "SELECT * FROM nullable");
       assertEquals(3, count, "Expected 3 rows including null");
     }
-  }
-
-  @Test
-  void testS3PipelineTrackerTrailingSlashNormalization() {
-    // Tracker path with trailing slash should be normalized
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-slash/") + "/";
-    S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig());
-    assertNotNull(tracker);
-    // Should not cause issues when writing state
-  }
-
-  @Test
-  void testS3PipelineTrackerClose() throws Exception {
-    String trackerPath = "s3://" + BUCKET + "/" + testKey("tracker-close/");
-    S3HivePipelineTracker tracker = new S3HivePipelineTracker(
-        trackerPath, ENDPOINT, trackerConfig());
-    // Close should not throw
-    tracker.close();
   }
 
   @Test

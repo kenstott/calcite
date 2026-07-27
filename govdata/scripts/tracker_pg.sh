@@ -1,0 +1,114 @@
+#!/bin/bash
+# Postgres tracker helpers shared by data_purge.sh and data_fix.sh.
+#
+# The S3 tracker keeps its state as marker parquet under
+# <tracker bucket>/<schema>/year=*/source_key=*/, so the scripts reach it with path globs and
+# DuckDB rewrites. The Postgres tracker keeps the identical state as rows in pipeline_tracker /
+# table_completion, so the same operations are plain DELETEs — but nothing in the scripts spoke
+# SQL, which meant a pg deployment silently got the Iceberg table dropped with every accession
+# still marked complete. These functions give both scripts the pg half.
+#
+# Mirrors PGPipelineTracker: the tables live in a schema derived from the parquet bucket name so
+# dq and prod never mix, and markCleared is a DELETE (not a state change), which is why purge and
+# fix both express themselves as DELETEs here.
+
+# Derives the PG schema from a parquet bucket, matching PGPipelineTracker.sanitizeNamespace:
+# strip the URI scheme, lowercase, collapse non-alphanumerics to _, trim leading/trailing _.
+#   s3://govdata-parquet-v1 -> govdata_parquet_v1
+pg_ns_from_bucket() {
+  local raw="${1#*://}"
+  raw="$(echo -n "$raw" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g; s/^_+|_+$//g')"
+  if [[ -z "$raw" ]]; then
+    echo "ERROR: cannot derive PG tracker schema from bucket '$1'" >&2
+    return 1
+  fi
+  echo "$raw"
+}
+
+# Runs SQL against the tracker database. Connection comes from the same variables the workers
+# use, so the script and the ETL can never disagree about which tracker they are talking to.
+pg_tracker_exec() {
+  local sql="$1"
+  local url="${GOVDATA_TRACKER_PG_URL:-${CALCITE_TRACKER_PG_URL:-}}"
+  if [[ -z "$url" ]]; then
+    echo "ERROR: tracker backend is pg but GOVDATA_TRACKER_PG_URL is unset" >&2
+    return 1
+  fi
+  # jdbc:postgresql://host:port/db -> host, port, db
+  local hostport="${url#*://}"
+  local db="${hostport#*/}"
+  hostport="${hostport%%/*}"
+  local host="${hostport%%:*}"
+  local port="${hostport##*:}"
+  [[ "$port" == "$host" ]] && port=5432
+  PGPASSWORD="${GOVDATA_TRACKER_PG_PASSWORD:-${CALCITE_TRACKER_PG_PASSWORD:-}}" \
+    psql -h "$host" -p "$port" \
+      -U "${GOVDATA_TRACKER_PG_USER:-${CALCITE_TRACKER_PG_USER:-govdata}}" \
+      -d "$db" -v ON_ERROR_STOP=1 -At -c "$sql"
+}
+
+# Deletes every tracker row for one materialized table: the per-source_key markers and the
+# completion record. Equivalent to the S3 path's "delete marker dirs where table_name=<table>"
+# plus the _table_complete marker.
+pg_tracker_purge_table() {
+  local ns="$1" table="$2" dry_run="$3"
+  local counts
+  counts=$(pg_tracker_exec "
+    SELECT (SELECT count(*) FROM \"${ns}\".pipeline_tracker WHERE table_name = '${table}')
+        || '|'
+        || (SELECT count(*) FROM \"${ns}\".table_completion WHERE pipeline_name = '${table}')") || return 1
+  local markers="${counts%%|*}" completions="${counts##*|}"
+  if [[ "$dry_run" == "true" ]]; then
+    echo "        [DRY RUN] Would delete ${markers} marker row(s) and ${completions} completion row(s) from ${ns}"
+    return 0
+  fi
+  pg_tracker_exec "
+    BEGIN;
+    DELETE FROM \"${ns}\".pipeline_tracker WHERE table_name = '${table}';
+    DELETE FROM \"${ns}\".table_completion WHERE pipeline_name = '${table}';
+    COMMIT;" > /dev/null || return 1
+  echo "        Deleted ${markers} marker row(s) and ${completions} completion row(s) from ${ns}"
+}
+
+# Deletes the per-accession document completions for a document schema. The S3 path rewrites the
+# marker parquet to exclude these table_names; here they are rows.
+#
+# @param in_list comma-separated, single-quoted table names, e.g. 'metadata','facts'
+pg_tracker_purge_accessions() {
+  local ns="$1" in_list="$2" dry_run="$3"
+  local n
+  n=$(pg_tracker_exec "
+    SELECT count(*) FROM \"${ns}\".pipeline_tracker
+     WHERE phase = 'staging' AND table_name IN (${in_list})") || return 1
+  if [[ "$dry_run" == "true" ]]; then
+    echo "        [DRY RUN] Would delete ${n} accession completion row(s) from ${ns}"
+    return 0
+  fi
+  pg_tracker_exec "
+    DELETE FROM \"${ns}\".pipeline_tracker
+     WHERE phase = 'staging' AND table_name IN (${in_list});" > /dev/null || return 1
+  echo "        Deleted ${n} accession completion row(s) from ${ns}"
+}
+
+# Invalidates one table's completion the way data_fix.sh does on S3: there the script appends a
+# marker row with state='cleared'; here the same two facts are the pipeline_tracker row and the
+# separate table_completion record PGPipelineTracker keeps, so both are written.
+pg_tracker_clear_completion() {
+  local ns="$1" table="$2" dry_run="$3"
+  if [[ "$dry_run" == "true" ]]; then
+    echo "  [DRY RUN] Would clear completion for '${table}' in ${ns} (pipeline_tracker + table_completion)"
+    return 0
+  fi
+  local as_of
+  as_of=$(( $(date +%s) * 1000 ))
+  pg_tracker_exec "
+    BEGIN;
+    DELETE FROM \"${ns}\".table_completion WHERE pipeline_name = '${table}';
+    INSERT INTO \"${ns}\".pipeline_tracker
+      (source_key, table_name, phase, state, row_count, as_of)
+    VALUES ('_table_complete', '${table}', 'table_completion', 'cleared', 0, ${as_of})
+    ON CONFLICT (source_key, table_name, phase)
+      DO UPDATE SET state = 'cleared', as_of = EXCLUDED.as_of;
+    COMMIT;" > /dev/null || return 1
+  echo "  Cleared completion for '${table}' in ${ns}"
+}

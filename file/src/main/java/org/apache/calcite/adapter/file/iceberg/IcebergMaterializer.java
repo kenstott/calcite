@@ -1966,6 +1966,13 @@ public class IcebergMaterializer {
    */
   private Set<String> getFilteredSourceAccessions(String sourcePattern, String year,
       String rowFilter) {
+    // NOTE: do not answer this from the tracker. The listing getSourceAccessions performs also
+    // populates sourcePathsCache, which getNewSourceFilePaths reads to drive file-list chunking —
+    // touching only the handful of files that are actually new. Short-circuiting to the tracker
+    // returns the right accessions but leaves that cache empty, so getNewSourceFilePaths returns
+    // null and materialization falls back to a glob scan of the whole year partition with
+    // LIMIT/OFFSET paging. That trade is badly negative: a one-off LIST is far cheaper than
+    // re-reading every source file in the partition to absorb a few dozen new ones.
     Map<String, Set<String>> cikToAccessions = getSourceAccessions(sourcePattern, year);
     if (cikToAccessions == null) {
       return null;
@@ -2023,6 +2030,9 @@ public class IcebergMaterializer {
       return null;
     }
 
+    // The file list cannot come from the tracker: source parquet is absorbed into Iceberg and
+    // compacted away, so most completed markers have no surviving file (mda year=2024: 175k
+    // markers, a few hundred files). Only a listing knows what is actually still there.
     // Trigger S3 LIST (populates both sourceAccessionsCache and sourcePathsCache)
     Set<String> sourceAccessions = getFilteredSourceAccessions(sourcePattern, year, rowFilter);
     if (sourceAccessions == null) {
@@ -2786,6 +2796,22 @@ public class IcebergMaterializer {
         basePath = basePath.substring(0, lastSlash + 1);
       }
     }
+    // The tracker records every source write with a source_as_of timestamp, so it already holds the
+    // watermark this method otherwise recovers by listing tens of thousands of objects. Ask it
+    // first, scoped to this table and year range: the phase-wide question is pinned to "now" by any
+    // concurrent worker, but the scoped one is an exact answer for this table's source data.
+    String trackerTable = trackerTableFromPattern(globPattern);
+    if (sourceActivityPhase != null && trackerTable != null && yearScoped) {
+      long trackerWatermark =
+          incrementalTracker.getMaxActivityAt(sourceActivityPhase, trackerTable, startYear, endYear);
+      if (trackerWatermark >= 0) {
+        LOGGER.info("Source watermark for '{}' answered by tracker ({} in phase '{}', years {}-{}) "
+            + "— storage not listed", trackerTable, trackerWatermark, sourceActivityPhase,
+            startYear, endYear);
+        return trackerWatermark;
+      }
+    }
+
     // Without a year range the LIST below walks the whole basePath subtree (for a year=* pattern
     // that is the entire schema prefix, e.g. sec/). The result is identical for every table
     // sharing that basePath and year range, so cache it to collapse N per-table walks into one.
@@ -2835,6 +2861,31 @@ public class IcebergMaterializer {
       return 0;
     }
     return maxLastModified;
+  }
+
+  /**
+   * Extracts the tracker table name from a source pattern's filename infix.
+   *
+   * <p>A source file is named {@code <cik>_<accession>_<infix>.parquet} and the marker recording
+   * its write is keyed on that same infix, so {@code year=*&#47;*metadata*.parquet} identifies the
+   * {@code metadata} markers. Returns null when the filename carries no infix
+   * ({@code *.parquet}), which is a pattern the tracker cannot be asked about.
+   */
+  private static String trackerTableFromPattern(String sourcePattern) {
+    if (sourcePattern == null) {
+      return null;
+    }
+    String fileName = sourcePattern.substring(sourcePattern.lastIndexOf('/') + 1);
+    int open = fileName.indexOf('*');
+    if (open < 0) {
+      return null;
+    }
+    int close = fileName.indexOf('*', open + 1);
+    if (close < 0) {
+      return null;
+    }
+    String infix = fileName.substring(open + 1, close);
+    return infix.isEmpty() ? null : infix;
   }
 
   /**
@@ -3160,7 +3211,7 @@ public class IcebergMaterializer {
         // ENDPOINT '' which DuckDB ignores, silently falling back to AWS s3.us-east-1 (HTTP 403
         // against S3-compatible stores like MinIO/R2). Derive USE_SSL from the scheme: http
         // endpoints (e.g. MinIO) must use plaintext, https (e.g. R2) must use TLS — mirroring
-        // S3HivePipelineTracker's proven config.
+        // the tracker's proven S3 client config.
         if (endpoint != null && !endpoint.isEmpty()) {
           String endpointHost = endpoint.replaceFirst("^https?://", "");
           secret.append(", ENDPOINT '").append(endpointHost).append("'");

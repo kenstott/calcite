@@ -93,7 +93,7 @@ public class StaleInsiderFlagSweeper {
 
     StorageProvider storageProvider = buildStorageProvider(resolved, directory);
     PipelineTracker tracker = PipelineTrackerFactory.createFromOperand(resolved, cacheDirectory);
-    SecFilingCache filingCache = new SecFilingCache(tracker, storageProvider, directory);
+    SecFilingCache filingCache = new SecFilingCache(tracker);
 
     int totalCleared = 0;
     int totalCandidates = 0;

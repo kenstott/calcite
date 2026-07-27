@@ -206,8 +206,7 @@ public class Worker23NoReprocessTest {
       InMemoryPipelineTracker tracker = new InMemoryPipelineTracker();
       LocalStagingStorageProvider localStaging =
           new LocalStagingStorageProvider(capturingDelegate, stagingDir);
-      SecFilingCache cache =
-          new SecFilingCache(tracker, localStaging, "/parquet");
+      SecFilingCache cache = new SecFilingCache(tracker);
 
       String cik = "0001234567";
       String accession = "0001234567-26-000001";
@@ -276,6 +275,10 @@ public class Worker23NoReprocessTest {
         .hasMda(form.expectsMda())
         .hasInsider(form.expectsInsider())
         .hasEarnings(form.expectsEarnings())
+        // 13F-HR and SC 13D/G produce these instead of XBRL facts; without them the tracker
+        // correctly reports those forms incomplete and the filing is re-queued.
+        .hasInstitutionalHoldings(form.expectsInstitutionalHoldings())
+        .hasBeneficialOwnership(form.expectsBeneficialOwnership())
         // chunks omitted: vectorizationEnabled=false
         .build();
   }

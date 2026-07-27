@@ -11,10 +11,11 @@
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}",
-      "trackerBackend": "s3",
+      "trackerBackend": "pg",
       "trackerConfig": {
-        "bucket": "${CALCITE_TRACKER_S3_BUCKET}",
-        "endpoint": "${AWS_ENDPOINT_OVERRIDE}"
+        "jdbcUrl": "${GOVDATA_TRACKER_PG_URL}",
+        "user": "${GOVDATA_TRACKER_PG_USER}",
+        "password": "${GOVDATA_TRACKER_PG_PASSWORD}"
       },
       "s3Config": {
         "accessKeyId": "${AWS_ACCESS_KEY_ID}",

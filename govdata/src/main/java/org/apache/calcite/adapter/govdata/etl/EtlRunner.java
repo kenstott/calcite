@@ -133,16 +133,6 @@ public class EtlRunner {
       return validateDryRun(schemas);
     }
 
-    if (config.isCompactOnly()) {
-      log("Compact-only mode — scanning and compacting tracker data");
-      return compactTrackerOnly(schemas);
-    }
-
-    if (config.isNoCompact()) {
-      log("No-compact mode — tracker will read but not compact or delete individual files");
-      System.setProperty("calcite.tracker.noCompact", "true");
-    }
-
     if (config.getParallelThreads() > 1) {
       log("Parallel entity threads: " + config.getParallelThreads());
       System.setProperty("calcite.etl.threads",
@@ -218,67 +208,6 @@ public class EtlRunner {
     }
 
     return exitCode;
-  }
-
-  /**
-   * Compact tracker data without running ETL.
-   *
-   * <p>Parses each schema's operand to create an S3 tracker directly,
-   * then scans and compacts all year partitions. No Calcite schema or
-   * JDBC connection is created — this is a lightweight operation that
-   * only touches the tracker's S3 bucket.
-   */
-  private int compactTrackerOnly(List<EtlRunConfig.SchemaConfig> schemas) {
-    int succeeded = 0;
-    int failed = 0;
-
-    for (EtlRunConfig.SchemaConfig schema : schemas) {
-      Map<String, Object> operand = schema.getOperand();
-      String backend = (String) operand.get("trackerBackend");
-      if (!"s3".equals(backend)) {
-        log("Schema " + schema.getName() + " uses tracker backend '"
-            + backend + "', skipping (compact-only supports s3)");
-        continue;
-      }
-
-      // Resolve env vars in config (${AWS_ACCESS_KEY_ID} etc.)
-      Map<String, Object> resolved = resolveOperandEnvVars(operand);
-
-      try {
-        org.apache.calcite.adapter.file.partition.PipelineTracker tracker =
-            org.apache.calcite.adapter.file.partition.PipelineTrackerFactory
-                .createFromOperand(resolved, ".");
-        if (!(tracker instanceof org.apache.calcite.adapter.file.partition.S3HivePipelineTracker)) {
-          log("Schema " + schema.getName() + " tracker is not S3, skipping");
-          continue;
-        }
-
-        org.apache.calcite.adapter.file.partition.S3HivePipelineTracker s3Tracker =
-            (org.apache.calcite.adapter.file.partition.S3HivePipelineTracker) tracker;
-
-        // Determine year range from model operand
-        int startYear = getIntFromOperand(operand, "startYear", 2010);
-        int endYear = getIntFromOperand(operand, "endYear",
-            java.util.Calendar.getInstance().get(java.util.Calendar.YEAR));
-
-        log("Compacting tracker for schema '" + schema.getName()
-            + "' years " + startYear + "-" + endYear);
-        s3Tracker.compactYearRange(startYear, endYear);
-        s3Tracker.close();
-        succeeded++;
-        log("Schema " + schema.getName() + " tracker compaction complete");
-      } catch (Exception e) {
-        failed++;
-        logWarn("Failed to compact tracker for " + schema.getName() + ": " + e.getMessage());
-        if (config.isVerbose()) {
-          e.printStackTrace(System.err);
-        }
-      }
-    }
-
-    log("");
-    log("Compact-only complete: " + succeeded + " succeeded, " + failed + " failed");
-    return failed == 0 ? EXIT_SUCCESS : EXIT_FAILED;
   }
 
   /** Resolve ${ENV_VAR} references in s3Config and trackerConfig values. */

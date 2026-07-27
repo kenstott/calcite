@@ -60,7 +60,8 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
   private static final Logger LOGGER = LoggerFactory.getLogger(PGPipelineTracker.class);
 
   /** Marker state for a genuine empty fetch (HTTP 200, zero rows), re-evaluated against the
-   *  table high-water mark on read. See {@link S3HivePipelineTracker} for the rationale. */
+   *  table high-water mark on read: a period that was legitimately empty when fetched must not be
+   *  treated as permanently done, or data published later is never picked up. */
   private static final String STATE_EMPTY = "empty";
 
   /** Marker state for a SUSPECT empty fetch: rows were scanned but the pipeline's transform/filter
@@ -88,8 +89,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
    * {@code sourceKey\0phase}. Populated by {@link #bulkGetCompletedTables} so the
    * {@link #isComplete} / {@link #getCompletedTables} calls that follow a bulk preload are O(1)
    * memory lookups instead of one round-trip each — the contract
-   * {@link PipelineTracker#bulkGetCompletedTables} documents and that
-   * {@link S3HivePipelineTracker} already implements.
+   * {@link PipelineTracker#bulkGetCompletedTables} documents.
    *
    * <p>A key present with an empty set means "bulk-queried, genuinely no completed tables"; that is
    * exact as of the bulk query, which is the same snapshot semantics every caller of a bulk preload
@@ -181,6 +181,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       // every prior row reads as NULL, getMaxActivityAt reports -1 ("cannot prove quiescence"),
       // and callers keep listing storage until genuine source writes have populated it.
       stmt.execute("ALTER TABLE pipeline_tracker ADD COLUMN IF NOT EXISTS source_as_of BIGINT");
+
 
       stmt.execute(
           "CREATE TABLE IF NOT EXISTS table_completion ("
@@ -411,6 +412,55 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       LOGGER.warn("Failed reading max activity for phase {}: {}", phase, e.getMessage());
     }
     return -1L;
+  }
+
+  @Override public long getMaxActivityAt(String phase, String tableName,
+      int startYear, int endYear) {
+    if (phase == null || tableName == null || startYear <= 0 || endYear < startYear) {
+      return -1L;
+    }
+    StringBuilder sql = new StringBuilder(
+        "SELECT max(source_as_of) FROM pipeline_tracker "
+        + "WHERE phase = ? AND table_name = ? AND (");
+    appendYearSuffixPredicate(sql, startYear, endYear);
+    sql.append(')');
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql.toString())) {
+      stmt.setString(1, phase);
+      stmt.setString(2, tableName);
+      bindYearSuffixes(stmt, 3, startYear, endYear);
+      try (ResultSet rs = stmt.executeQuery()) {
+        if (rs.next()) {
+          long maxAsOf = rs.getLong(1);
+          return rs.wasNull() ? -1L : maxAsOf;
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.warn("Failed reading max activity for phase {} table {}: {}",
+          phase, tableName, e.getMessage());
+    }
+    return -1L;
+  }
+
+
+
+
+  /** Appends {@code source_key LIKE ?} alternatives, one per year in the range. */
+  private static void appendYearSuffixPredicate(StringBuilder sql, int startYear, int endYear) {
+    for (int year = startYear; year <= endYear; year++) {
+      if (year > startYear) {
+        sql.append(" OR ");
+      }
+      sql.append("source_key LIKE ?");
+    }
+  }
+
+  /** Binds the {@code %__year=YYYY} suffix for each year, matching the source-key convention. */
+  private static void bindYearSuffixes(PreparedStatement stmt, int firstIndex,
+      int startYear, int endYear) throws SQLException {
+    int index = firstIndex;
+    for (int year = startYear; year <= endYear; year++) {
+      stmt.setString(index++, "%__year=" + year);
+    }
   }
 
   @Override public Set<String> getSourceKeysForPhase(String phase) {

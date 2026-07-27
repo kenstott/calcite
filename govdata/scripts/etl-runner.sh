@@ -38,8 +38,16 @@ fi
 # JVM options (4GB heap for 8GB+ devices, adjust as needed)
 JVM_OPTS="${JVM_OPTS:--Xmx4g -Xms1g}"
 
+# Scratch directory for source ZIPs, raw page caches, staging batches and DuckDB
+# spill. Must be disk-backed: on a tmpfs /tmp this scratch is RAM and competes
+# with the heap. TMPDIR covers child processes, -Djava.io.tmpdir the JVM.
+GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
+mkdir -p "$GOVDATA_TMPDIR"
+export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
+
 # Additional JVM flags for better GC and crash diagnostics
-JVM_FLAGS="-XX:+HeapDumpOnOutOfMemoryError \
+JVM_FLAGS="-Djava.io.tmpdir=$GOVDATA_TMPDIR \
+           -XX:+HeapDumpOnOutOfMemoryError \
            -XX:HeapDumpPath=$GOVDATA_HOME/runs/heapdump.hprof \
            -XX:ErrorFile=$GOVDATA_HOME/runs/hs_err_pid%p.log"
 

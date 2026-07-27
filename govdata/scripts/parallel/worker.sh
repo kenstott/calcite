@@ -86,29 +86,62 @@ INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 # full-archive tables that ignore the year range (a single :once slot). The pool's
 # historical builder emits `schema:once` + `schema:${year}` (mirroring the lands
 # split); worker.sh fences each slot to its subset via the enabledTables operand so
-# per-year slots never re-fetch the snapshots. Query-time views are NOT ETL tables
-# and are excluded here. Keep these lists in sync with each schema YAML `tables:`.
+# per-year slots never re-fetch the snapshots.
+#
+# The split is DERIVED from the schema YAML bundled in the jar, not hand-maintained here.
+# These lists used to be hardcoded, which made every new table a silent no-op: a table
+# added to a schema YAML registers fine on the read side, then never appears in any
+# worker's enabledTables, so the ETL never ingests it and every query 404s on the missing
+# Iceberg table. Nothing failed and nothing logged — it simply never ran. Auditing the
+# hardcoded lists against the YAMLs found five tables in that state (fiscal
+# usaspending_by_county, ag faostat_production, and three transport faa_* tables).
+#
+# A table is year-addressable when it declares a `year` dimension; everything else is a
+# snapshot/full-archive table for the single :once slot. Query-time views live under
+# `views:` rather than `partitionedTables`, so they are excluded automatically.
+_schema_table_split() {   # <schema> <year|once> → JSON-quoted, comma-separated list
+  local schema="$1" kind="$2" jar
+  jar=$(resolve_classpath) || return 1
+  python3 - "$jar" "$schema" "$kind" <<'PY'
+import subprocess, sys
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write("ERROR: PyYAML required to derive the ETL table split\n")
+    sys.exit(1)
+
+jar, schema, kind = sys.argv[1], sys.argv[2], sys.argv[3]
+res = subprocess.run(["unzip", "-p", jar, "%s/%s-schema.yaml" % (schema, schema)],
+                     capture_output=True)
+if res.returncode != 0 or not res.stdout:
+    sys.stderr.write("ERROR: %s/%s-schema.yaml not found in %s\n" % (schema, schema, jar))
+    sys.exit(1)
+
+doc = yaml.safe_load(res.stdout) or {}
+names = []
+for t in doc.get("partitionedTables") or []:
+    name = t.get("name")
+    if not name:
+        continue
+    dims = t.get("dimensions") or {}
+    if ("year" in dims) == (kind == "year"):
+        names.append(name)
+
+# Fail loudly rather than emitting an empty set: an empty enabledTables would scope the
+# worker to nothing and "succeed", which is the exact silent-skip this change removes.
+if not names:
+    sys.stderr.write("ERROR: no '%s' tables derived for schema '%s'\n" % (kind, schema))
+    sys.exit(1)
+
+print(",".join('"%s"' % n for n in names))
+PY
+}
+
 _split_year_tables() {   # year-addressable base tables → per-year slots
-  case "$1" in
-    housing)     echo '"building_permits","fair_market_rents","income_limits","income_limits_county","hmda_loans","hmda_applicant_demographics","hud_subsidized_county"' ;;
-    transport)   echo '"fatal_crashes","airline_ontime","transit_ridership","t100_segments","vehicle_registrations"' ;;
-    environment) echo '"air_quality_annual","air_quality_daily","tri_releases","ghg_facilities","ghg_emissions","streamflow","water_quality_samples"' ;;
-    ag)          echo '"nass_crop_production","nass_livestock_inventory","rma_crop_insurance","fsa_commodity_payments"' ;;
-    disasters)   echo '"disaster_declarations","public_assistance_projects","hazard_mitigation_projects","nfip_claims","nfip_policies","storm_events"' ;;
-    fiscal)      echo '"soi_income_by_zip","soi_income_by_county","county_migration_flows","exempt_org_990","usaspending_by_agency","usaspending_by_state","ssa_benefits_by_geography","ssa_benefits_by_geography_acs"' ;;
-    *) echo "ERROR: no year-table set for schema '$1'" >&2; return 1 ;;
-  esac
+  _schema_table_split "$1" year
 }
 _split_once_tables() {   # snapshot / full-archive base tables → single :once slot
-  case "$1" in
-    housing)     echo '"house_price_index","hud_subsidized_housing","opportunity_zones"' ;;
-    transport)   echo '"vehicle_recalls","safety_complaints","airports","cfs_shipments","fmcsa_carriers","ntsb_aviation_accidents"' ;;
-    environment) echo '"aqs_monitors","water_sites","drinking_water","epa_facilities","drinking_water_violations","superfund_sites","rcra_facilities"' ;;
-    ag)          echo '"ers_farm_income"' ;;
-    disasters)   echo '"wildfire_perimeters"' ;;
-    fiscal)      echo '"exempt_org_master","sba_loan_approvals"' ;;
-    *) echo "ERROR: no once-table set for schema '$1'" >&2; return 1 ;;
-  esac
+  _schema_table_split "$1" once
 }
 
 case "$SCHEMA" in

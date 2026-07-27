@@ -5,7 +5,10 @@
 # DQ rebuild (run-all-dq.sh) writes to MinIO DQ buckets. This script syncs
 # those validated buckets to R2 production (stripping the -dq suffix):
 #   govdata-parquet-v1-dq  →  govdata-parquet-v1
-#   govdata-tracker-v1-dq  →  govdata-tracker-v1
+#
+# ETL state is NOT promoted: it lives in Postgres, and a DQ run's state describes a
+# reduced-scope rebuild, so copying it over prod state would mark prod work as done
+# that prod never did.
 #
 # Uses rclone sync --checksum — only new/changed files generate Class A
 # PUT operations on R2. Unchanged files are skipped entirely.
@@ -39,7 +42,6 @@ R2_REMOTE="r2"
 # DQ bucket → production bucket mappings (strip -dq suffix for promotion)
 declare -A BUCKET_MAP=(
   ["${GOVDATA_DQ_BUCKET:-govdata-parquet-v1-dq}"]="govdata-parquet-v1"
-  ["${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"]="govdata-tracker-v1"
 )
 
 _rclone_sync() {

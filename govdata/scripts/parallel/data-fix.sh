@@ -126,7 +126,7 @@ if ! $ALL_TABLES; then
   log_info "data-fix: set GOVDATA_FORCE_REPROCESS_TABLES=$TABLES_CSV"
 else
   # freshStart=true causes GovDataSchemaFactory to call tracker.clearAllCompletions(), which writes
-  # a schema-scoped "_all/cleared" sentinel. S3HivePipelineTracker.getCachedCompletion() checks
+  # a schema-scoped "_all/cleared" sentinel. The tracker's cached-completion lookup checks
   # clearedTables.contains("_all") so every table lookup returns null (not complete) for this run.
   export FORCE_FRESH=true
   log_info "data-fix: set FORCE_FRESH=true (freshStart — clears all completions for schema)"

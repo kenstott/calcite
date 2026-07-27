@@ -811,11 +811,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           if (this.filingCache == null && this.secOperatingDirectory != null) {
             org.apache.calcite.adapter.file.partition.PipelineTracker pipelineTracker =
                 PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
-            this.filingCache = new SecFilingCache(pipelineTracker, this.storageProvider, govdataParquetDir);
+            this.filingCache = new SecFilingCache(pipelineTracker);
             LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
           }
 
-          // Create document tracker using SecFilingCache with complete self-healing
+          // Create document tracker using SecFilingCache (tracker-only decisions)
           final SecFilingCache cache = this.filingCache;
           final boolean vectorizationEnabled = isVectorizedChunksEnabled();
           ProcessedDocumentTracker documentTracker = cache != null
@@ -903,15 +903,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             if (!allAccessions.isEmpty()) {
               cache.preload(allAccessions);
             }
-            // Register (do not run) the year-partition scan that lets self-healing
-            // file-existence checks cost zero Class A LIST ops. It runs on the first such check;
-            // when tracker state resolves every candidate there is no check and no scan.
-            cache.registerFileInventoryRange(startYear, endYear);
-          }
-
-          // Register the deferred scan even when indexCache is unavailable
-          if (indexCache == null && cache != null) {
-            cache.registerFileInventoryRange(startYear, endYear);
           }
 
           // Create processor - pass cache directory as String to support S3 paths
@@ -955,8 +946,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                   allEntries.size(), cikFiltered.size(), ciks.size());
               allEntries = cikFiltered;
             }
-            int selfHealThreads = Integer.parseInt(
-                System.getProperty("calcite.etl.selfheal.threads", "50"));
             boolean chunksBackfill = Boolean.TRUE.equals(operand.get("chunksBackfill"));
             Object forceAccObj = operand.get("forceAccessions");
             Set<String> forceAccessions = new HashSet<String>();
@@ -972,7 +961,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                   forceAccessions);
             }
             List<EdgarFullIndexCache.IndexEntry> filtered = (cache != null)
-                ? cache.filterAndSelfHeal(allEntries, isVectorizedChunksEnabled(), selfHealThreads,
+                ? cache.filterUnprocessed(allEntries, isVectorizedChunksEnabled(),
                     chunksBackfill, forceAccessions)
                 : allEntries;
             List<DocumentETLProcessor.AccessionRef> activeAccessions =
@@ -2664,7 +2653,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   // Deprecated methods removed - now using unified SecFilingCache:
   // - indexManifestEntries() - replaced by SecFilingCache.checkFiling()
   // - checkFilingStatusInMemory() - replaced by SecFilingCache.checkFiling()
-  // - hasAllParquetFiles() - replaced by SecFilingCache.checkS3Files()
+  // - hasAllParquetFiles() - replaced by tracker state (SecFilingCache.checkFiling)
 
   private void downloadFilingDocumentWithRateLimit(SecHttpStorageProvider provider, FilingToDownload filing) {
     int maxAttempts = 3;
@@ -3141,9 +3130,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               String secParquetDirPath = govdataParquetDir;
               addToManifest(xbrlPath, secParquetDirPath, new ArrayList<>());
 
-              // Update unified cache - check existing files since this is an upgrade
-              FileInventory inventory = filingCache.checkS3Files(cik, accession);
-              filingCache.markComplete(cik, accession, form, filingDate, vectorizationEnabled, inventory);
+              // The vectorization upgrade wrote chunks for a filing whose base outputs the
+              // tracker already records, so mark chunks complete directly rather than
+              // re-deriving the inventory from storage.
+              filingCache.markComplete(cik, accession, form, filingDate, vectorizationEnabled,
+                  FileInventory.builder().hasChunks(true).build());
 
               if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Upgraded filing to PROCESSED_WITH_VECTORS: {} {}", form, filingDate);

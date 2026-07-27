@@ -352,6 +352,27 @@ public interface IncrementalTracker {
     return -1L;
   }
 
+  /**
+   * Latest marker timestamp for one source table within {@code phase}, restricted to the
+   * {@code __year=YYYY} suffixes in {@code startYear..endYear}.
+   *
+   * <p>This is the scoped form of {@link #getMaxActivityAt(String)} and it is what a materializer
+   * needs: the unscoped phase-wide max is pinned to "now" by any concurrently running worker, so it
+   * can never prove quiescence for one table. Answering it here replaces a recursive listing of the
+   * source year partitions.
+   *
+   * @param phase Caller-defined step label
+   * @param tableName Source table whose markers count, as recorded by markComplete
+   * @param startYear First year partition to include
+   * @param endYear Last year partition to include (inclusive)
+   * @return latest marker timestamp, or {@code -1} when unknown — callers MUST treat -1 as "cannot
+   *         prove quiescence" and fall back to inspecting storage, never as "nothing changed"
+   */
+  default long getMaxActivityAt(String phase, String tableName, int startYear, int endYear) {
+    return -1L;
+  }
+
+
   class CachedCompletion {
     public final String configHash;
     public final String signature;

@@ -29,8 +29,6 @@ import java.util.Map;
  *       {@link PGPipelineTracker}. The multi-writer store for the concurrent pool.</li>
  *   <li>{@code duckdb} - Local DuckDB-based tracking via
  *       {@link DuckDBPartitionStatusStore}. Single-writer; explicit opt-in only.</li>
- *   <li>{@code s3} - S3 hive-partitioned append-only parquet via
- *       {@link S3HivePipelineTracker} (legacy).</li>
  *   <li>{@code noop} - No tracking, writes silently swallowed (forces full
  *       rebuild every time). Distinct from {@code readonly}, which throws on write.</li>
  * </ul>
@@ -59,7 +57,7 @@ public final class PipelineTrackerFactory {
   /**
    * Create a PipelineTracker for the given backend and base directory.
    *
-   * @param backend        Backend type: "duckdb", "s3", "pg", "postgres", "noop"
+   * @param backend        Backend type: "duckdb", "pg", "postgres", "noop"
    * @param baseDirectory  Base directory for local backends (DuckDB file location)
    * @param config         Additional configuration (S3 bucket, PG connection, etc.)
    * @return PipelineTracker instance
@@ -79,9 +77,6 @@ public final class PipelineTrackerFactory {
     case "duckdb":
       return DuckDBPartitionStatusStore.getInstance(baseDirectory);
 
-    case "s3":
-      return createS3Tracker(baseDirectory, config);
-
     case "pg":
     case "postgres":
       return createPGTracker(config);
@@ -92,8 +87,10 @@ public final class PipelineTrackerFactory {
     default:
       throw new IllegalArgumentException(
           "Unknown tracker backend '" + resolvedBackend + "'. Valid backends: "
-          + "readonly (default), pg/postgres, duckdb, s3, noop. Writes require an explicitly "
-          + "configured writable backend; an unknown value is never silently treated as writable.");
+          + "readonly (default), pg/postgres, duckdb, noop. Writes require an explicitly "
+          + "configured writable backend; an unknown value is never silently treated as writable. "
+          + "The 's3' backend was removed: Postgres is the canonical ETL state store and is "
+          + "protected by govdata/scripts/tracker-backup.sh.");
     }
   }
 
@@ -167,27 +164,6 @@ public final class PipelineTrackerFactory {
     // Fail closed: with no backend configured anywhere, hand back a read-only tracker
     // rather than a writable local DuckDB. ETL must opt in to a writable backend.
     return "readonly";
-  }
-
-  @SuppressWarnings("UnusedVariable")
-  private static PipelineTracker createS3Tracker(String baseDirectory,
-      Map<String, String> config) {
-    String bucket = config.get("bucket");
-    if (bucket == null) {
-      bucket = System.getenv("CALCITE_TRACKER_S3_BUCKET");
-    }
-    if (bucket == null) {
-      throw new IllegalArgumentException(
-          "S3 tracker requires 'bucket' in trackerConfig or CALCITE_TRACKER_S3_BUCKET env var");
-    }
-    // Scope the tracker under the schema directory (set by createFromOperand from the operand's
-    // dataSource) so per-key markers never share a flat year partition across schemas.
-    String schema = config.get("schema");
-    if (schema != null && !schema.isEmpty()) {
-      bucket = bucket.endsWith("/") ? bucket + schema : bucket + "/" + schema;
-    }
-    String endpoint = config.get("endpoint");
-    return new S3HivePipelineTracker(bucket, endpoint, config);
   }
 
   private static PipelineTracker createPGTracker(Map<String, String> config) {
