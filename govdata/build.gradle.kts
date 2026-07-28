@@ -31,7 +31,14 @@ publishing {
             artifact(tasks["shadowJar"])
             groupId = "io.simpleishard"
             artifactId = "govdata"
-            version = project.version.toString()
+            // Must honour -PreleaseVersion, as every trino publication does. Without it the POM
+            // carried project.version -- 1.42.0-SNAPSHOT -- while the bundle laid the artifacts
+            // out under the real release version, so Central received a deployment whose POM
+            // version was both a SNAPSHOT and inconsistent with its own coordinates. The upload
+            // still returned 201; validation then rejected it, invisibly.
+            version = (project.findProperty("releaseVersion") as String?
+                ?: project.version.toString().replace("-SNAPSHOT", ""))
+                .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
 
             pom {
                 name.set("GovData")

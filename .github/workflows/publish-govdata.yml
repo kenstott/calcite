@@ -84,8 +84,28 @@ jobs:
           BUNDLE_DIR="bundle/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}"
           mkdir -p "$BUNDLE_DIR"
 
+          # shadowJar sets archiveBaseName = sih-govdata, which differs from the artifactId; the
+          # bundle normalises it to <artifact>-<ver>.jar the same way publish-trino.yml does.
           JAR=$(find govdata/build/libs -name "sih-govdata-*.jar" -o -name "calcite-govdata-*-all.jar" | grep -v sources | grep -v javadoc | head -1)
-          POM=$(find govdata/build/publications -name "*.xml" | head -1)
+          # Name the POM exactly, as publish-trino.yml does: a bare *.xml glob would silently take
+          # whatever sorted first if another publication ever appeared under build/publications.
+          POM=$(find govdata/build/publications -name "pom-default.xml" | head -1)
+
+          if [ -z "$JAR" ] || [ -z "$POM" ]; then
+            echo "ERROR: could not locate jar ($JAR) or pom ($POM) for govdata" >&2
+            ls -l govdata/build/libs govdata/build/publications >&2 || true
+            exit 1
+          fi
+
+          # The POM version must match the coordinates the bundle is laid out under. It carried
+          # project.version (a SNAPSHOT) until the publication was fixed to honour releaseVersion,
+          # and Central rejected the deployment after returning 201 for the upload.
+          POM_VERSION=$(grep -oPm1 "(?<=<version>)[^<]+" "$POM")
+          if [ "$POM_VERSION" != "$VERSION" ]; then
+            echo "ERROR: POM version ($POM_VERSION) != release version ($VERSION)" >&2
+            exit 1
+          fi
+          echo "POM version: $POM_VERSION (matches release)"
 
           cp "$JAR" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar"
           cp "$POM" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom"
