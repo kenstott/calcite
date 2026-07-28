@@ -102,8 +102,8 @@ dependencies {
     implementation("org.apache.parquet:parquet-hadoop:1.15.2")
 
     // Hadoop dependencies needed for Parquet
-    implementation("org.apache.hadoop:hadoop-common:3.3.6")
-    implementation("org.apache.hadoop:hadoop-client:3.3.6")
+    implementation("org.apache.hadoop:hadoop-common:3.4.3")
+    implementation("org.apache.hadoop:hadoop-client:3.4.3")
 
     // HTTP client for SEC EDGAR API
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
@@ -135,8 +135,25 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")
     implementation("org.apache.iceberg:iceberg-core:1.4.0")
-    implementation("org.apache.hadoop:hadoop-aws:3.3.6")
-    testImplementation("org.apache.hadoop:hadoop-aws:3.3.6")
+    // hadoop-aws 3.4.x puts S3AFileSystem on AWS SDK v2; 3.3.x pulled the 296MB SDK v1
+    // uber-bundle and was the sole reason v1 was on the classpath. Its v2 bundle is bigger
+    // still, so it is excluded here in favour of the modular jars declared below.
+    implementation("org.apache.hadoop:hadoop-aws:3.4.3") {
+      exclude(group = "software.amazon.awssdk", module = "bundle")
+    }
+    testImplementation("org.apache.hadoop:hadoop-aws:3.4.3") {
+      exclude(group = "software.amazon.awssdk", module = "bundle")
+    }
+    // AWS SDK v2, BOM-pinned to the version hadoop-project 3.4.3 expects. Declared here
+    // rather than inherited through :file so the modules S3A needs are explicit in the
+    // module that ships the shadow jar.
+    implementation(platform("software.amazon.awssdk:bom:2.35.4"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:sts")
+    implementation("software.amazon.awssdk:kms")
+    implementation("software.amazon.awssdk:apache-client")
+    implementation("software.amazon.awssdk:s3-transfer-manager")
+    implementation("software.amazon.awssdk:netty-nio-client")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
     testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
@@ -228,7 +245,14 @@ tasks.test {
 tasks.shadowJar {
     archiveBaseName.set("sih-govdata")
     archiveClassifier.set("")
-    mergeServiceFiles()
+    // The exclude belongs to the merge transformer, not the task: mergeServiceFiles() rebuilds
+    // META-INF/services from the inputs, so a task-level exclude() is overwritten by it.
+    mergeServiceFiles {
+        exclude("META-INF/services/java.net.spi.InetAddressResolverProvider")
+    }
+    // The transformer only governs what it merges; the provider file also arrives as an ordinary
+    // resource, so it has to be filtered out of the task inputs as well.
+    exclude("META-INF/services/java.net.spi.InetAddressResolverProvider")
 
     // Enable zip64 for large JARs
     isZip64 = true
@@ -237,6 +261,15 @@ tasks.shadowJar {
     exclude("META-INF/*.SF")
     exclude("META-INF/*.DSA")
     exclude("META-INF/*.RSA")
+
+    // hadoop-common 3.4.x brings a dnsjava that registers a JDK InetAddressResolverProvider.
+    // Its implementation class ships only under META-INF/versions/18 (multi-release), and this
+    // shadow jar is not marked Multi-Release, so the JVM cannot load it while ServiceLoader
+    // still reads the merged provider file -- every InetAddress.getLocalHost() then dies with
+    // ServiceConfigurationError, which Log4j triggers during startup. The registration is dropped
+    // in the mergeServiceFiles block above, leaving the JVM's built-in resolver in charge as it
+    // was before the Hadoop upgrade; dnsjava itself stays on the classpath for the Hadoop code
+    // paths that call it directly.
 
     manifest {
         attributes["Main-Class"] = "org.apache.calcite.adapter.govdata.etl.EtlRunner"

@@ -53,6 +53,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
+
 import java.io.File;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -560,18 +563,23 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private static boolean isS3AuthFailure(Throwable t) {
     Throwable cause = t;
     while (cause != null) {
-      if (cause instanceof com.amazonaws.AmazonServiceException) {
-        com.amazonaws.AmazonServiceException ase = (com.amazonaws.AmazonServiceException) cause;
-        int status = ase.getStatusCode();
-        String code = ase.getErrorCode();
-        if (status == 401 || status == 403) {
+      if (cause instanceof AwsServiceException) {
+        AwsServiceException ase = (AwsServiceException) cause;
+        if (ase.statusCode() == 401 || ase.statusCode() == 403) {
           return true;
         }
-        if ("InvalidAccessKeyId".equals(code)
-            || "SignatureDoesNotMatch".equals(code)
-            || "InvalidSecurity".equals(code)
-            || "AccessDenied".equals(code)) {
-          return true;
+        // awsErrorDetails() is null when the throwable never carried a parsed service
+        // response (a client-side signing or connection failure), which is not an auth
+        // failure and so contributes no error code to match on.
+        AwsErrorDetails details = ase.awsErrorDetails();
+        if (details != null) {
+          String code = details.errorCode();
+          if ("InvalidAccessKeyId".equals(code)
+              || "SignatureDoesNotMatch".equals(code)
+              || "InvalidSecurity".equals(code)
+              || "AccessDenied".equals(code)) {
+            return true;
+          }
         }
       }
       cause = cause.getCause();

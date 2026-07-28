@@ -76,8 +76,9 @@ import java.util.List;
  * Storage provider implementation for Amazon S3, on AWS SDK v2 ({@link S3Client}).
  *
  * <p>This is the single JVM-side S3 stack for the file adapter — it replaces the AWS
- * SDK v1 {@code AmazonS3} client and, together with Iceberg's {@code S3FileIO} (also
- * AWS SDK v2), removes the need for hadoop-aws's {@code S3AFileSystem} (AWS SDK v1).
+ * SDK v1 {@code AmazonS3} client. Since hadoop-aws 3.4.x, {@code S3AFileSystem} is itself
+ * built on AWS SDK v2, so this provider, Iceberg's {@code S3FileIO} and the {@code s3a://}
+ * write path all share one SDK; no AWS SDK v1 remains on the classpath.
  */
 public class S3StorageProvider implements StorageProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(S3StorageProvider.class);

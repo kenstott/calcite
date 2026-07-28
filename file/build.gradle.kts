@@ -64,10 +64,17 @@ dependencies {
     implementation("org.apache.parquet:parquet-hadoop:1.15.2")
 
     // Hadoop dependencies for Parquet
-    implementation("org.apache.hadoop:hadoop-common:3.3.6")
-    implementation("org.apache.hadoop:hadoop-client:3.3.6")
-    // Hadoop AWS for S3A FileSystem (required for Iceberg S3 support)
-    implementation("org.apache.hadoop:hadoop-aws:3.3.6")
+    implementation("org.apache.hadoop:hadoop-common:3.4.3")
+    implementation("org.apache.hadoop:hadoop-client:3.4.3")
+    // Hadoop AWS for S3A FileSystem (required for Iceberg S3 support).
+    // 3.4.x is the first release whose S3AFileSystem is built on AWS SDK v2; 3.3.x pulled
+    // com.amazonaws:aws-java-sdk-bundle (296MB, every AWS service) and was the only reason
+    // SDK v1 was on the classpath at all. Its v2 replacement, software.amazon.awssdk:bundle,
+    // is larger still (532MB), so it is excluded in favour of the modular jars declared
+    // below -- s3/sts/kms/transfer/http, ~7MB, which is every awssdk package S3A references.
+    implementation("org.apache.hadoop:hadoop-aws:3.4.3") {
+      exclude(group = "software.amazon.awssdk", module = "bundle")
+    }
 
     // Storage provider dependencies
     implementation("commons-net:commons-net:3.9.0")
@@ -83,15 +90,21 @@ dependencies {
     // iceberg-aws provides S3FileIO (AWS SDK v2) so the read path can load Iceberg
     // tables from S3/MinIO without hadoop-aws + the AWS SDK v1 bundle (S3AFileSystem).
     implementation("org.apache.iceberg:iceberg-aws:1.4.0")
-    // iceberg-aws's default AWS client factory references STS (assume-role support) at
-    // class-load time; it is optional in iceberg-aws's POM so pull it explicitly.
-    implementation("software.amazon.awssdk:sts:2.28.3")
-    // AWS SDK v2 S3 client + Apache HTTP client — the one JVM S3 stack. S3StorageProvider
-    // uses these (consolidating off AWS SDK v1 AmazonS3 + hadoop s3a). BOM-pinned so every
-    // awssdk module (s3, sts, auth, regions, apache-client) resolves to one version.
-    implementation(platform("software.amazon.awssdk:bom:2.28.3"))
+    // AWS SDK v2 — the one JVM S3 stack, shared by S3StorageProvider, Iceberg's S3FileIO and
+    // (since 3.4.x) Hadoop's S3AFileSystem. BOM-pinned so every awssdk module resolves to one
+    // version; 2.35.4 is what hadoop-project 3.4.3 pins, so S3A gets the version it expects.
+    implementation(platform("software.amazon.awssdk:bom:2.35.4"))
     implementation("software.amazon.awssdk:s3")
     implementation("software.amazon.awssdk:apache-client")
+    // sts: iceberg-aws's default client factory references it (assume-role) at class-load
+    // time and it is optional in iceberg-aws's POM; S3A's assumed-role provider needs it too.
+    implementation("software.amazon.awssdk:sts")
+    // The rest are what S3A reaches for once the uber-bundle is excluded: kms for SSE-KMS,
+    // s3-transfer-manager for its transfer/s3 use, netty-nio-client for the async/nio HTTP
+    // path. Derived from the awssdk packages referenced in hadoop-aws-3.4.3.jar.
+    implementation("software.amazon.awssdk:kms")
+    implementation("software.amazon.awssdk:s3-transfer-manager")
+    implementation("software.amazon.awssdk:netty-nio-client")
 
     testImplementation(project(":testkit"))
     // DuckDB for performance comparison tests and optional execution engine
@@ -122,7 +135,7 @@ dependencies {
     }
     // Test dependencies for mock-based tests
     testImplementation("org.mockito:mockito-core:5.11.0")
-    testImplementation("org.apache.hadoop:hadoop-minicluster:3.3.6")
+    testImplementation("org.apache.hadoop:hadoop-minicluster:3.4.3")
     // Testcontainers for live-service storage integration tests (S3/MinIO, FTP, SFTP, ClickHouse).
     // GenericContainer covers all images; these tests are @Tag("integration") and require a Docker daemon.
     testImplementation("org.testcontainers:testcontainers:1.20.4")
