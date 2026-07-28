@@ -15,8 +15,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.govdata.GovDataCatalog;
 
+import java.time.Year;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -136,6 +139,179 @@ final class Catalog {
             }
         }
         return null;
+    }
+
+    /** Table and view names known to the catalog for a schema; empty if unknown. */
+    static List<String> tableNames(String schema) {
+        List<String> out = new ArrayList<>();
+        JsonNode sc = schemaNode(schema);
+        if (sc != null) {
+            for (JsonNode tb : sc.path("tables")) {
+                String name = txt(tb.get("name"));
+                if (!name.isEmpty()) {
+                    out.add(name);
+                }
+            }
+        }
+        return out;
+    }
+
+    // ── Coverage window ───────────────────────────────────────────────────────
+
+    /**
+     * Effective year window for a table, resolved from its declared {@code year}
+     * dimension, or null when the table declares no year range (unpartitioned
+     * reference tables and most views).
+     *
+     * <p>This is the <em>declared</em> window — what the schema says should be
+     * ingested — not a scan of loaded rows. It exists so a caller can tell an
+     * empty result inside the window ("no matching rows") from one outside it
+     * ("the source does not publish that year yet"), which is otherwise
+     * indistinguishable. Bounds that cannot be resolved are omitted rather than
+     * guessed, so a partial window never reads as a confident one.
+     */
+    static ObjectNode coverage(String schema, String table) {
+        JsonNode tb = tableNodeOf(schema, table);
+        if (tb == null) {
+            return null;
+        }
+        JsonNode cov = tb.get("coverage");
+        if (cov == null || !cov.isObject()) {
+            return null;
+        }
+
+        int currentYear = Year.now(ZoneOffset.UTC).getValue();
+        Integer minYear = intOrNull(cov.get("minYear"));
+        Integer maxYear = intOrNull(cov.get("maxYear"));
+        Integer dataLag = intOrNull(cov.get("dataLag"));
+
+        Integer start = resolveYear(cov.path("start").asText(null), currentYear);
+
+        // An omitted end is not an unknown one: GovDataUtils.getEndYear runs the range
+        // through the current year and lets dataLag pull the ceiling back, so most
+        // yearRange blocks simply leave it out. An end that IS declared but will not
+        // resolve stays absent below — that one really is unknown.
+        Integer end;
+        if (!cov.hasNonNull("end")) {
+            end = Integer.valueOf(currentYear);
+        } else {
+            end = resolveYear(cov.path("end").asText(null), currentYear);
+        }
+
+        // Same clamping the ETL dimension iterator applies: the source's own floor and
+        // ceiling win over the configured range, and publication lag caps the ceiling.
+        if (start != null && minYear != null) {
+            start = Math.max(start, minYear);
+        }
+        if (end != null && maxYear != null) {
+            end = Math.min(end, maxYear);
+        }
+        if (end != null && dataLag != null && dataLag > 0) {
+            end = Math.min(end, currentYear - dataLag);
+        }
+
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("column", cov.path("column").asText("year"));
+        if (start != null) {
+            out.put("first_year", start);
+        }
+        if (end != null) {
+            out.put("last_year", end);
+        }
+        if (minYear != null) {
+            out.put("source_earliest_year", minYear);
+        }
+        if (dataLag != null && dataLag > 0) {
+            out.put("publication_lag_years", dataLag);
+        }
+        out.put("basis", "declared");
+        // partitionColumn coverage states a ceiling but no floor — the caller should not
+        // read its absence as "starts at the beginning of time".
+        out.put("declared_from", cov.path("form").asText("yearRange"));
+        out.put("note", coverageNote(start, end, dataLag, currentYear));
+        return out;
+    }
+
+    private static String coverageNote(Integer start, Integer end, Integer dataLag,
+            int currentYear) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Declared ingest window from the schema definition, not a row scan; "
+            + "a year inside it may still be mid-backfill. ");
+        if (start != null && end != null) {
+            sb.append("Query years ").append(start).append('-').append(end).append(". ");
+        }
+        if (dataLag != null && dataLag > 0 && end != null && end < currentYear) {
+            sb.append("The source publishes about ").append(dataLag)
+                .append(dataLag == 1 ? " year" : " years").append(" behind, so ")
+                .append(end + 1);
+            if (end + 1 < currentYear) {
+                sb.append('-').append(currentYear).append(" do not exist");
+            } else {
+                sb.append(" does not exist");
+            }
+            sb.append(" upstream yet — an empty result there is expected, not a gap. ");
+        }
+        sb.append("Report the window when a question falls outside it rather than "
+            + "presenting an empty result as zero. If an 'observed' block is present it is "
+            + "the measured min/max actually loaded — trust it over this declared range, "
+            + "since a backfill can lag what the schema intends; status 'measuring' means "
+            + "the scan has not finished, so call describe_table again for it.");
+        return sb.toString();
+    }
+
+    /**
+     * Resolve a declared bound, which reaches here in any of the forms the schema YAMLs
+     * use: a bare year, a {@code ${VAR:default}} reference, the literal {@code current},
+     * or a {@code ${CURRENT_YEAR}} reference left unresolved because nothing set it.
+     *
+     * <p>The last two both mean "through now" — the same reading
+     * {@code SecSchemaFactory} applies to an unset {@code CURRENT_YEAR}. Anything still
+     * unparseable returns null so the caller omits the bound; a year is never invented.
+     */
+    private static Integer resolveYear(String raw, int currentYear) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        // The YAMLs use three interchangeable spellings for a bound, so all three have to
+        // be run to a fixed point:
+        //   ${VAR:default}      — resolveEnvVars
+        //   {env:VAR:default}   — substitute (a separate resolver entry point)
+        //   ${CURRENT_YEAR}     — left unresolved by both; means the current year
+        // Filling CURRENT_YEAR also un-nests ${GOVDATA_END_YEAR:${CURRENT_YEAR}}, whose
+        // inner braces defeat resolveEnvVars' pattern, into ${GOVDATA_END_YEAR:2026} —
+        // so a GOVDATA_END_YEAR that IS set still wins on the following pass.
+        String resolved = raw.trim();
+        for (int i = 0; i < MAX_RESOLVE_PASSES; i++) {
+            String next = VariableResolver.substitute(resolved, null);
+            next = VariableResolver.resolveEnvVars(next);
+            next = CURRENT_YEAR_REF.matcher(next).replaceAll(String.valueOf(currentYear));
+            if (next.equals(resolved)) {
+                break;
+            }
+            resolved = next;
+        }
+        resolved = resolved.trim();
+        if ("current".equalsIgnoreCase(resolved)) {
+            return Integer.valueOf(currentYear);
+        }
+        try {
+            return Integer.valueOf(resolved);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static final int MAX_RESOLVE_PASSES = 5;
+
+    /**
+     * An unset {@code ${CURRENT_YEAR}} / {@code ${GOVDATA_CURRENT_YEAR}} placeholder,
+     * which means the current year — the same reading {@code SecSchemaFactory} applies.
+     */
+    private static final java.util.regex.Pattern CURRENT_YEAR_REF =
+        java.util.regex.Pattern.compile("\\$\\{(GOVDATA_)?CURRENT_YEAR\\}");
+
+    private static Integer intOrNull(JsonNode n) {
+        return (n != null && n.isNumber()) ? Integer.valueOf(n.intValue()) : null;
     }
 
     /** Keyword search across schema/table/column names + descriptions; ranked, capped. */

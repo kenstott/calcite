@@ -73,12 +73,16 @@ public class McpServer {
         + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
         + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal";
 
-    // Lazy per-schema connections — initialized on first use, not all upfront.
+    // Connections keyed by comma-joined source set. The all-schemas set is warmed at
+    // startup and backs every tool; narrower sets exist only for legacy callers.
     private static final ConcurrentHashMap<String, Connection> schemaConns =
         new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, CountDownLatch> schemaLatches =
         new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Exception> schemaErrors =
+    // Throwable, not Exception: an Error during driver init (NoClassDefFoundError,
+    // ExceptionInInitializerError, OOM in the Parquet/DuckDB native path) must be
+    // recorded too, or the latch releases with no connection and no recorded cause.
+    private static final ConcurrentHashMap<String, Throwable> schemaErrors =
         new ConcurrentHashMap<>();
 
     private static PrintStream log;
@@ -139,6 +143,22 @@ public class McpServer {
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting... build=" + BUILD_ID);
+
+        // Mount every allowed schema on one connection up front, off the request thread.
+        // Every tool runs against this connection, so warming it here means the first
+        // query pays no mount cost and can join across schemas from the outset.
+        Thread warm = new Thread(() -> {
+            try {
+                getCatalogConnection();
+                log.println("[askamerica-mcp] All schemas mounted.");
+            } catch (Throwable e) {
+                log.println("[askamerica-mcp] Schema warm-up failed: "
+                    + e.getClass().getName() + ": " + e.getMessage());
+            }
+        }, "catalog-warmup");
+        warm.setDaemon(true);
+        warm.start();
+
         log.println("[askamerica-mcp] Listening for MCP requests.");
 
         BufferedReader in =
@@ -197,6 +217,17 @@ public class McpServer {
         }
     }
 
+    /**
+     * Log from a background thread. {@code log} is only bound once {@link #main} runs, so
+     * a probe firing under test would otherwise NPE on the way to reporting its result.
+     */
+    static void logLine(String message) {
+        PrintStream out = log;
+        if (out != null) {
+            out.println(message);
+        }
+    }
+
     private static void handleNotification(String method) {
         log.println("[askamerica-mcp] Notification: " + method);
     }
@@ -240,7 +271,12 @@ public class McpServer {
             + "cross-correlation analysis. Include COUNT(*) AS n with a corr/regr so significance "
             + "can be judged; correlation is not causation. For cross-dataset relations use "
             + "fetch_aligned_series to align series on a shared date grain or FIPS key, and "
-            + "resolve_geo to map place names to FIPS before joining.");
+            + "resolve_geo to map place names to FIPS before joining. "
+            + "This is a versioned snapshot, not a live feed: describe_table reports a "
+            + "table's declared coverage window, and an empty result outside that window "
+            + "means the period is not published yet, not zero. Say so rather than "
+            + "substituting an outside figure; suggest_external_sources lists keyless "
+            + "public endpoints for genuine gaps.");
         return result(id, body);
     }
 
@@ -371,6 +407,23 @@ public class McpServer {
             + "or a schema/table is missing. Do not use for routine SQL errors the user can correct.",
             schema(reportProps, new String[]{"subject", "body"})));
 
+        ObjectNode externalProps = MAPPER.createObjectNode();
+        externalProps.set(
+            "topic", prop("string",
+            "What you were unable to answer from askamerica — e.g. 'weather forecast', "
+            + "'filings from last week', 'street address to census tract'. Omit to list "
+            + "every catalogued source."));
+        externalProps.set(
+            "limit", prop("integer", "Max sources to return (default 5, max 20)."));
+        tools.add(
+            tool("suggest_external_sources",
+            "Suggest keyless public government API endpoints that cover a gap askamerica "
+            + "cannot fill. Call this ONLY after search_catalog and describe_table show the "
+            + "data is genuinely absent, or the question falls outside a table's declared "
+            + "coverage window. Returns endpoint pointers and usage caveats — it does not "
+            + "fetch anything, and the results are not askamerica data.",
+            schema(externalProps, new String[]{})));
+
         ObjectNode telemetryProps = MAPPER.createObjectNode();
         telemetryProps.set(
             "enabled",
@@ -400,29 +453,43 @@ public class McpServer {
         log.println("[askamerica-mcp] R2 creds endpoint=" + existing.get("endpoint")
             + " keyId=" + existing.get("accessKeyId"));
 
-        String apiKey = System.getenv("ASKAMERICA_API_KEY");
+        // FREE_ASKAMERICA_KEY takes precedence over ASKAMERICA_API_KEY, which may hold a
+        // metering-bypass self-test key the catalog endpoint rejects. Never log the key.
+        String apiKey = R2CredentialProvider.credentialApiKey();
         if (apiKey == null || apiKey.isEmpty()) {
-            log.println("[askamerica-mcp] ASKAMERICA_API_KEY not set — using baked-in R2 credentials");
+            log.println("[askamerica-mcp] No catalog API key set (FREE_ASKAMERICA_KEY or "
+                + "ASKAMERICA_API_KEY) — cannot fetch R2 credentials.");
             return;
         }
-        log.println("[askamerica-mcp] ASKAMERICA_API_KEY=" + apiKey.substring(0, Math.min(12, apiKey.length())) + "...");
         try {
             java.util.Map<String, String> fresh = R2CredentialProvider.refresh(apiKey);
             log.println("[askamerica-mcp] R2 credentials refreshed endpoint=" + fresh.get("endpoint"));
         } catch (Exception e) {
-            log.println("[askamerica-mcp] R2 credential refresh failed: " + e.getMessage()
-                + " — using baked-in defaults");
+            // Do not claim a working fallback: there are no baked-in defaults
+            // (config/r2-defaults.json ships as "{}"). Log the real failure and let the
+            // driver fail loudly if it genuinely needs R2, rather than proceeding with nulls.
+            log.println("[askamerica-mcp] R2 credential refresh FAILED: " + e.getMessage()
+                + " — no usable R2 credentials from the catalog API.");
         }
     }
 
     /**
      * Get (or start initializing) a per-schema connection.
-     * Returns the connection once ready, or throws if init failed/timed out.
+     * Returns a live connection, or throws with the underlying cause. Never returns null.
      */
-    private static Connection getSchemaConnection(final String schemaName) throws Exception {
+    static Connection getSchemaConnection(final String schemaName) throws Exception {
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {
-            return existing;
+            // A cached-but-dead connection would otherwise be handed out forever, so a
+            // connection that has died since init drops out of the cache and re-inits below.
+            if (existing.isValid(5)) {
+                return existing;
+            }
+            log.println("[askamerica-mcp] Cached connection for '" + schemaName
+                + "' is dead — discarding and re-initializing.");
+            schemaConns.remove(schemaName, existing);
+            schemaLatches.remove(schemaName);
+            schemaErrors.remove(schemaName);
         }
 
         // Atomically start initialization the first time this schema is requested.
@@ -447,10 +514,17 @@ public class McpServer {
                     c = UsageMetering.wrap(c, UsageMetering.resolveApiKey(null));
                     schemaConns.put(k, c);
                     log.println("[askamerica-mcp] Schema ready: " + k);
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     schemaErrors.put(k, e);
                     log.println("[askamerica-mcp] Schema init failed: " + k
-                        + " — " + e.getMessage());
+                        + " — " + e.getClass().getName() + ": " + e.getMessage());
+                    for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+                        log.println("[askamerica-mcp]   caused by: "
+                            + cause.getClass().getName() + ": " + cause.getMessage());
+                    }
+                    for (StackTraceElement f : e.getStackTrace()) {
+                        log.println("[askamerica-mcp]   at " + f);
+                    }
                 } finally {
                     latch.countDown();
                 }
@@ -466,12 +540,27 @@ public class McpServer {
                 "Schema '" + schemaName + "' is still initializing "
                 + "(first use can take several minutes). Please retry.");
         }
-        Exception err = schemaErrors.get(schemaName);
+        Throwable err = schemaErrors.get(schemaName);
         if (err != null) {
+            // Drop the completed latch so the next call genuinely retries init. Leaving it
+            // in place made computeIfAbsent skip initialization forever, so a single
+            // transient failure bricked the schema until the process restarted.
+            schemaLatches.remove(schemaName);
+            schemaErrors.remove(schemaName);
             throw new RuntimeException(
-                "Schema '" + schemaName + "' failed to initialize: " + err.getMessage(), err);
+                "Schema '" + schemaName + "' failed to initialize: "
+                + err.getClass().getName() + ": " + err.getMessage(), err);
         }
-        return schemaConns.get(schemaName);
+        Connection ready = schemaConns.get(schemaName);
+        if (ready == null) {
+            // Init reported neither a connection nor an error. Surface it rather than
+            // returning null and letting the caller NPE on createStatement().
+            schemaLatches.remove(schemaName);
+            throw new IllegalStateException(
+                "Schema '" + schemaName + "' initialization completed without producing a "
+                + "connection and without recording an error.");
+        }
+        return ready;
     }
 
     private static ObjectNode handleToolsCall(JsonNode id, JsonNode params) throws Exception {
@@ -525,6 +614,15 @@ public class McpServer {
                     String issueBody = args.path("body").asText();
                     log.println("[askamerica-mcp] tool=report_issue subject=" + subject);
                     text = reportIssue(subject, issueBody);
+                    break;
+                }
+                case "suggest_external_sources": {
+                    String topic = args.path("topic").asText("");
+                    int lim = args.has("limit")
+                        ? Math.min(Math.max(1, args.get("limit").asInt()), 20)
+                        : 5;
+                    log.println("[askamerica-mcp] tool=suggest_external_sources topic=" + topic);
+                    text = ExternalSources.suggest(topic, lim);
                     break;
                 }
                 case "set_telemetry": {
@@ -637,7 +735,7 @@ public class McpServer {
      * queries. Views only materialize when every schema they reference is selected, so a
      * single all-sources connection yields the complete, runtime-accurate catalog.
      */
-    private static Connection getCatalogConnection() throws Exception {
+    static Connection getCatalogConnection() throws Exception {
         return getSchemaConnection(String.join(",", allowedSchemas()));
     }
 
@@ -780,18 +878,162 @@ public class McpServer {
             }
         }
         out.set("columns", cols);
+
+        // Declared year window, so an empty result outside coverage isn't read as a zero.
+        // The observed window is measured out of band and attached once it lands, since
+        // the declared range can run ahead of an in-progress backfill.
+        ObjectNode cov = Catalog.coverage(s, t);
+        if (cov == null) {
+            // Views declare no dimensions, so nothing above knows their range — but the
+            // resolved row type does, and a view over partitioned data still exposes the
+            // year. Measuring is the only way to state coverage for these, so say only
+            // what the probe finds and never imply a declared window exists.
+            String yearCol = resolvedYearColumn(cols);
+            if (yearCol != null) {
+                cov = MAPPER.createObjectNode();
+                cov.put("column", yearCol);
+                cov.put("basis", "observed-only");
+                cov.put("note",
+                    "No declared coverage window — this table's range is not stated in the "
+                    + "schema, so it can only be measured. Use the 'observed' block when "
+                    + "present; status 'measuring' means the scan has not finished yet.");
+            }
+        }
+        if (cov != null) {
+            ObjectNode obs = IngestedYears.observed(s, t, cov.path("column").asText("year"));
+            if (obs != null) {
+                cov.set("observed", obs);
+            }
+            out.set("coverage", cov);
+        }
+
         log.println("[askamerica-mcp] describe_table " + s + "." + t
-            + " columns=" + cols.size());
+            + " columns=" + cols.size() + " coverage=" + (cov != null));
         return out.toString();
     }
 
-    // Calcite Oracle-lex treats these schema names as reserved words; quote them.
-    private static final java.util.regex.Pattern RESERVED_SCHEMA_PAT =
-        java.util.regex.Pattern.compile(
-            "(?i)\\b(ref)\\.([a-zA-Z_][a-zA-Z0-9_]*)");
+    /**
+     * The year-like column in a resolved row type, or null. Restricted to integral types so
+     * a probe never runs MIN/MAX over a date or over a string that merely happens to be
+     * named "year".
+     */
+    private static String resolvedYearColumn(ArrayNode cols) {
+        for (JsonNode c : cols) {
+            String name = c.path("name").asText("");
+            if (!"year".equalsIgnoreCase(name)) {
+                continue;
+            }
+            String type = c.path("type").asText("").toUpperCase(java.util.Locale.ROOT);
+            // A hive partition column surfaces as VARCHAR on most of these tables, so a
+            // string year is as legitimate as an integer one. Anything else named "year"
+            // (a DATE, a TIMESTAMP) is not a year bound and is left alone.
+            if (type.contains("INT") || type.contains("DECIMAL") || type.contains("NUMERIC")
+                    || type.contains("CHAR")) {
+                return name;
+            }
+        }
+        return null;
+    }
 
-    private static String quoteReservedSchemas(String sql) {
-        return RESERVED_SCHEMA_PAT.matcher(sql).replaceAll("\"$1\".$2");
+    /**
+     * Words Calcite's Oracle lex reserves that are also real schema, table, or column names
+     * in this catalog. Used only to decide whether a token <em>in identifier position</em>
+     * needs quoting — never to rewrite a keyword doing its grammatical job.
+     */
+    private static final java.util.Set<String> RESERVED_IDENTIFIERS =
+        new java.util.HashSet<>(
+            java.util.Arrays.asList(
+            "ref", "year", "date", "time", "timestamp", "type", "value", "name", "status",
+            "level", "key", "rank", "count", "order", "open", "close", "domain", "sequence",
+            "start", "end", "position", "language", "size", "path", "source", "system",
+            "user", "day", "month", "hour", "minute", "second", "range", "period"));
+
+    /**
+     * Quote reserved words used as identifiers, leaving reserved words used as keywords alone.
+     *
+     * <p>Only dot-adjacent tokens are rewritten, because those are the positions where a token
+     * is unambiguously an identifier: the token before a {@code .} is a schema or table
+     * qualifier, the token after a {@code .} is a table or column name. A bare {@code YEAR} is
+     * left untouched — it may be {@code EXTRACT(YEAR FROM d)} or {@code ORDER BY}, and quoting
+     * those breaks a query that would otherwise parse. String literals, quoted identifiers and
+     * comments are skipped: the previous regex rewrote inside them, so
+     * {@code WHERE note = 'see ref.table'} came out malformed.
+     */
+    static String quoteReservedIdentifiers(String sql) {
+        if (sql == null || sql.isEmpty()) {
+            return sql;
+        }
+        StringBuilder out = new StringBuilder(sql.length() + 32);
+        int n = sql.length();
+        int i = 0;
+        boolean afterDot = false;
+        while (i < n) {
+            char ch = sql.charAt(i);
+            if (ch == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                int stop = nl < 0 ? n : nl;
+                out.append(sql, i, stop);
+                i = stop;
+                continue;
+            }
+            if (ch == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                int close = sql.indexOf("*/", i + 2);
+                int stop = close < 0 ? n : close + 2;
+                out.append(sql, i, stop);
+                i = stop;
+                continue;
+            }
+            if (ch == '\'' || ch == '"') {
+                int j = i + 1;
+                while (j < n) {
+                    if (sql.charAt(j) == ch) {
+                        if (j + 1 < n && sql.charAt(j + 1) == ch) {
+                            j += 2;      // doubled quote is an escape, keep scanning
+                            continue;
+                        }
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                out.append(sql, i, Math.min(j, n));
+                i = Math.min(j, n);
+                afterDot = false;
+                continue;
+            }
+            if (Character.isLetter(ch) || ch == '_') {
+                int j = i;
+                while (j < n
+                        && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                    j++;
+                }
+                String word = sql.substring(i, j);
+                int k = j;
+                while (k < n && Character.isWhitespace(sql.charAt(k))) {
+                    k++;
+                }
+                boolean beforeDot = k < n && sql.charAt(k) == '.';
+                boolean isCall = k < n && sql.charAt(k) == '(';
+                if (!isCall && (afterDot || beforeDot)
+                        && RESERVED_IDENTIFIERS.contains(
+                            word.toLowerCase(java.util.Locale.ROOT))) {
+                    out.append('"').append(word).append('"');
+                } else {
+                    out.append(word);
+                }
+                i = j;
+                afterDot = false;
+                continue;
+            }
+            out.append(ch);
+            if (!Character.isWhitespace(ch)) {
+                // A '.' between identifiers marks the next token as an identifier. Guard
+                // against decimals: a '.' preceded by a digit belongs to a number literal.
+                afterDot = ch == '.' && !(i > 0 && Character.isDigit(sql.charAt(i - 1)));
+            }
+            i++;
+        }
+        return out.toString();
     }
 
     // Extract the first govdata schema name from a SQL query (e.g. "FROM sec.filings" → "sec").
@@ -803,6 +1045,8 @@ public class McpServer {
             java.util.Arrays.asList(
             "information_schema", "pg_catalog", "metadata"));
 
+    /** First non-meta schema qualifier in the SQL, or null when it names none. Used only
+     *  to reject unqualified SQL with a useful message — never to scope the connection. */
     private static String extractSchema(String sql) {
         java.util.regex.Matcher m = SQL_SCHEMA_PAT.matcher(sql);
         while (m.find()) {
@@ -815,27 +1059,30 @@ public class McpServer {
     }
 
     private static String query(String sql, int limit) throws Exception {
-        String schema = extractSchema(sql);
-        if (schema == null) {
+        if (extractSchema(sql) == null) {
             throw new RuntimeException(
                 "Cannot determine schema from SQL. "
                 + "Reference tables as schema.table, e.g. SELECT * FROM sec.filing_metadata.");
         }
-        return runSqlOn(schema, sql, limit);
+        // Run against the connection that mounts every allowed schema. Scoping the
+        // connection to a source set derived from the SQL text left any schema past the
+        // first one unmounted, so a census-to-housing join failed with "Object 'census'
+        // not found" even though both schemas were available.
+        return runSqlOn(sql, limit);
     }
 
-    /** Execute SQL on a connection for the given (possibly comma-joined) schema set,
-     *  applying the same reserved-word quoting and default row-limit as query().
-     *  fetch_aligned_series / resolve_geo use this to run generated SQL on an
-     *  explicit schema set (e.g. a cross-schema union) rather than extractSchema. */
-    private static String runSqlOn(String schemaSet, String sql, int limit) throws Exception {
-        String effective = quoteReservedSchemas(sql);
+    /** Execute SQL on the single all-schemas connection, applying the same reserved-word
+     *  quoting and default row-limit as query(). Every tool runs here: a narrower source
+     *  set would mount a second connection and re-open all of that schema's Iceberg
+     *  metadata, so resolve_geo and fetch_aligned_series share this one too. */
+    private static String runSqlOn(String sql, int limit) throws Exception {
+        String effective = quoteReservedIdentifiers(sql);
         String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
             effective = effective.replaceAll(";\\s*$", "")
                 + " FETCH FIRST " + limit + " ROWS ONLY";
         }
-        Connection c = getSchemaConnection(schemaSet);
+        Connection c = getCatalogConnection();
         Statement stmt = c.createStatement();
         try {
             ResultSet rs = stmt.executeQuery(effective);
@@ -929,7 +1176,7 @@ public class McpServer {
     }
 
     private static String resolveGeo(String term, String level, String withinState) throws Exception {
-        return runSqlOn("geo", buildResolveSql(term, level, withinState, 50), 50);
+        return runSqlOn(buildResolveSql(term, level, withinState, 50), 50);
     }
 
     // ── fetch_aligned_series ─────────────────────────────────────────────────
@@ -1084,8 +1331,11 @@ public class McpServer {
     private static String fetchAlignedSeries(JsonNode series, String on, String stat, int limit)
             throws Exception {
         String sql = buildAlignedSql(series, on, stat);
+        // Validates that every series names a schema-qualified table; the result is not used
+        // to scope the connection, which is always the all-schemas one.
+        schemasOf(series);
         // stat returns a single scalar row; a frame gets the caller's limit.
-        return runSqlOn(schemasOf(series), sql, stat != null ? 5 : limit);
+        return runSqlOn(sql, stat != null ? 5 : limit);
     }
 
     /**
