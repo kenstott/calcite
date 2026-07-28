@@ -295,19 +295,19 @@ public class IcebergMaterializationWriterCoverageTest {
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     assertThrows(IllegalStateException.class,
-        () -> writer.writeBatch(data.iterator(), null));
+        () -> writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap()));
   }
 
   @Test void testWriteBatchNullData() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("wb_null");
-    long result = writer.writeBatch(null, null);
+    long result = writer.writeBatch(null, Collections.<String, String>emptyMap());
     assertEquals(0, result);
   }
 
   @Test void testWriteBatchEmptyData() throws Exception {
     IcebergMaterializationWriter writer = createInitializedWriter("wb_empty");
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(0, result);
   }
 
@@ -320,7 +320,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("data", "hello");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
     assertEquals(1, writer.getTotalRowsWritten());
     assertEquals(1, writer.getTotalFilesWritten());
@@ -375,7 +375,7 @@ public class IcebergMaterializationWriterCoverageTest {
       data.add(row);
     }
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(10, result);
     assertEquals(10, writer.getTotalRowsWritten());
   }
@@ -405,7 +405,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("source_name", "Alice");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -437,7 +437,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("data", "hello");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -546,7 +546,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("data", "original");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -576,7 +576,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("str_val", "12345");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -606,7 +606,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("str_val", "3.14");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -636,7 +636,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("price", "1,234,567");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -666,7 +666,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("amount", "1,000,000");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -696,7 +696,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("code", "US-CA-SF");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -726,7 +726,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("code", "ABCDEF");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -756,7 +756,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("code", "AB");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -789,7 +789,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("second", "fallback");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -819,7 +819,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("id", 1);
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -866,7 +866,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("val", "42");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -896,7 +896,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("val", "");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -926,7 +926,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("val", "not_a_number");
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 
@@ -1077,7 +1077,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("data", "commit-test");
     data.add(row);
 
-    writer.writeBatch(data.iterator(), null);
+    writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
     assertEquals(1, writer.getTotalRowsWritten());
   }
@@ -1114,7 +1114,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("id", 1);
     row.put("data", "maint");
     data.add(row);
-    writer.writeBatch(data.iterator(), null);
+    writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
   }
 
@@ -1152,7 +1152,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("id", 1);
     row.put("data", "compact");
     data.add(row);
-    writer.writeBatch(data.iterator(), null);
+    writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
   }
 
@@ -1173,7 +1173,7 @@ public class IcebergMaterializationWriterCoverageTest {
     // (getTableLocation checks table != null, not initialized)
     // Verify close completed without error and writer is no longer initialized
     assertThrows(IllegalStateException.class,
-        () -> writer.writeBatch(Collections.<Map<String, Object>>emptyList().iterator(), null));
+        () -> writer.writeBatch(Collections.<Map<String, Object>>emptyList().iterator(), Collections.<String, String>emptyMap()));
   }
 
   @Test void testCloseWithUnflushedBuffers() throws Exception {
@@ -1184,7 +1184,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("id", 1);
     row.put("data", "unflushed");
     data.add(row);
-    writer.writeBatch(data.iterator(), null);
+    writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
 
     // Close without commit - should warn about unflushed data
     writer.close();
@@ -1222,7 +1222,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("id", 1);
     row.put("data", "props");
     data.add(row);
-    writer.writeBatch(data.iterator(), null);
+    writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
 
     writer.storeEtlProperties("abc123", "dim_sig", 1);
@@ -1272,7 +1272,7 @@ public class IcebergMaterializationWriterCoverageTest {
     Map<String, Object> row = new HashMap<String, Object>();
     row.put("id", 1);
     data.add(row);
-    writer.writeBatch(data.iterator(), null);
+    writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
 
     // Table properties should contain comment
@@ -1373,7 +1373,7 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("name", "test"); // lowercase - should match source "Name"
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), null);
+    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
     assertEquals(1, result);
   }
 

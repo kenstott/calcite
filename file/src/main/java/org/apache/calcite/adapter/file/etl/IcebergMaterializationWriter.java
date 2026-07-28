@@ -733,11 +733,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     LOGGER.info("Writing Iceberg chunk {}: {} rows with partitions: {}",
         chunkNumber, rows.size(), partitionVariables);
 
-    // Process with retry logic
-    boolean success = processBatchWithRetry(rows, partitionVariables);
-    if (!success) {
-      throw new IOException("Failed to write chunk " + chunkNumber + " after " + maxRetries + " attempts");
-    }
+    // Process with retry logic; the failure that ended the last attempt is the thrown cause.
+    processBatchWithRetry(rows, partitionVariables, chunkNumber);
 
     totalRowsWritten += rows.size();
     totalFilesWritten++;
@@ -748,35 +745,40 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Processes a batch with retry logic.
    */
-  private boolean processBatchWithRetry(List<Map<String, Object>> rows,
-      Map<String, String> partitionVariables) {
+  private void processBatchWithRetry(List<Map<String, Object>> rows,
+      Map<String, String> partitionVariables, int chunkNumber) throws IOException {
     int attempts = 0;
+    // The exception that ended the most recent attempt. Retrying discards everything but this
+    // one, and it becomes the cause of the failure thrown below: reporting only "failed after N
+    // attempts" leaves a caller -- in production as much as in a test -- with no way to tell a
+    // schema mismatch from a permissions error from a full disk.
+    Exception lastFailure = null;
 
     while (attempts < maxRetries) {
       attempts++;
       try {
         processBatch(rows, partitionVariables);
-        return true;
+        return;
       } catch (CommitFailedException e) {
         LOGGER.warn("Batch already committed by another writer, treating as success");
-        return true;
+        return;
       } catch (Exception e) {
-        LOGGER.warn("Batch failed (attempt {}/{}): {}",
-            attempts, maxRetries, e.getMessage());
+        lastFailure = e;
+        LOGGER.warn("Batch failed (attempt {}/{})", attempts, maxRetries, e);
 
         if (attempts < maxRetries) {
           try {
             Thread.sleep(retryDelayMs * attempts); // Exponential backoff
           } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            return false;
+            throw new IOException("Interrupted while retrying chunk " + chunkNumber, ie);
           }
         }
       }
     }
 
-    LOGGER.error("Batch failed after {} attempts", maxRetries);
-    return false;
+    throw new IOException("Failed to write chunk " + chunkNumber + " after " + maxRetries
+        + " attempts", lastFailure);
   }
 
   /**
