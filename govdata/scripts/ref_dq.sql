@@ -389,19 +389,16 @@ FROM (
   )
 );
 
--- ─────────────────────────────────────────────────────────────
--- Final results
--- ─────────────────────────────────────────────────────────────
-SELECT schema, tbl, test, status, value, threshold, detail
-FROM dq_results
-ORDER BY schema, tbl, test;
-
-
 -- ============================================================================
 -- T1/T2 — tables previously absent from this file entirely.
 -- A table with no checks emits no dq rows, which reads as healthy rather than as
 -- untested; that is how four zero-row geo tables went unnoticed. Existence +
 -- row_count only — deliberately minimal, to be deepened per table.
+--
+-- Must stay ABOVE the final SELECT: this INSERT sat below it, so these rows
+-- landed in dq_results after the results had already been emitted and no
+-- existence row was ever reported — the same silent-pass this block exists to
+-- prevent.
 -- ============================================================================
 
 INSERT INTO dq_results
@@ -426,6 +423,14 @@ WITH counts AS (
 )
 SELECT 'ref', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
-       CAST(n AS VARCHAR), '>0',
+       n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
+
+
+-- ─────────────────────────────────────────────────────────────
+-- Final results
+-- ─────────────────────────────────────────────────────────────
+SELECT schema, tbl, test, status, value, threshold, detail
+FROM dq_results
+ORDER BY schema, tbl, test;
