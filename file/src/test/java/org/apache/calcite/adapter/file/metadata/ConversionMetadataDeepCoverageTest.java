@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.metadata;
 
+import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.Sources;
@@ -92,6 +93,18 @@ public class ConversionMetadataDeepCoverageTest {
 
   private final java.util.concurrent.atomic.AtomicInteger nextTable =
       new java.util.concurrent.atomic.AtomicInteger();
+
+
+  /**
+   * Whether a set of paths reads as Hive-partitioned, via the public
+   * {@link PartitionDetector#detectPartitionScheme} rather than the deleted
+   * ConversionMetadata.isHivePartitioned. detectPartitionScheme returns null when it finds no
+   * consistent scheme, which is the same answer as "not partitioned".
+   */
+  private static boolean hivePartitioned(List<String> filePaths) {
+    PartitionDetector.PartitionInfo info = PartitionDetector.detectPartitionScheme(filePaths);
+    return info != null && info.isHiveStyle();
+  }
 
   @Test void testIsLocalFileWithHttpUrl() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -1179,35 +1192,30 @@ public class ConversionMetadataDeepCoverageTest {
     assertFalse((Boolean) method.invoke(null, (List<?>) null));
   }
 
-  @Test void testIsHivePartitionedEmpty() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
-    method.setAccessible(true);
-    assertFalse((Boolean) method.invoke(null, Collections.emptyList()));
+  @Test void testIsHivePartitionedEmpty() {
+    assertFalse(hivePartitioned(Collections.emptyList()));
   }
 
-  @Test void testIsHivePartitionedSingleFile() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
-    method.setAccessible(true);
+  @Test void testIsHivePartitionedSingleFile() {
     List<String> singleFile = Collections.singletonList("s3://bucket/year=2020/file.parquet");
-    assertFalse((Boolean) method.invoke(null, singleFile));
+    // The deleted isHivePartitioned required two or more paths before calling a layout
+    // partitioned. PartitionDetector carries no such rule: one hive-style path is enough,
+    // since the columns it declares are unambiguous on their own.
+    assertTrue(hivePartitioned(singleFile));
   }
 
-  @Test void testIsHivePartitionedNonPartitioned() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
-    method.setAccessible(true);
+  @Test void testIsHivePartitionedNonPartitioned() {
     List<String> files = new ArrayList<String>();
     files.add("/data/file1.parquet");
     files.add("/data/file2.parquet");
-    assertFalse((Boolean) method.invoke(null, files));
+    assertFalse(hivePartitioned(files));
   }
 
-  @Test void testIsHivePartitionedTrue() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
-    method.setAccessible(true);
+  @Test void testIsHivePartitionedTrue() {
     List<String> files = new ArrayList<String>();
     files.add("s3://bucket/table/year=2020/file1.parquet");
     files.add("s3://bucket/table/year=2021/file2.parquet");
-    assertTrue((Boolean) method.invoke(null, files));
+    assertTrue(hivePartitioned(files));
   }
 
   // ===================================================================
