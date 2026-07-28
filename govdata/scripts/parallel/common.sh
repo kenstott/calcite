@@ -453,7 +453,7 @@ generate_sec_reprocess_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/sec",
       $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
@@ -490,7 +490,7 @@ generate_sec_chunks_backfill_model() {
       "endYear": ${end_year},
       "autoDownload": true,
       "directory": "${GOVDATA_PARQUET_DIR}",
-      "cacheDirectory": "${GOVDATA_CACHE_DIR}/${schema_name}",
+      "cacheDirectory": "${GOVDATA_CACHE_DIR}/sec",
       $(tracker_operand_json),
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
