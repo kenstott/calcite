@@ -1324,11 +1324,25 @@ public class ConversionMetadataTest {
   /**
    * Invokes the private static method detectTypeFromTestFile via reflection.
    */
-  private static String invokeDetectTypeFromTestFile(String filename) throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
-    return (String) method.invoke(null, filename);
+
+  /**
+   * Source type detected for a file name, via the public {@link ConversionMetadata#recordTable}
+   * path. The detector itself is private, so this reaches it the way production does: recordTable
+   * stores the detected type on the record it keys by table name, and getAllConversions exposes
+   * it. A distinct name per call -- ConversionMetadata reloads its directory on construction and
+   * only fills a null sourceType on an existing record. The table is a mock because recordTable
+   * overrides the detected type for four specific table class names.
+   */
+  private String invokeDetectTypeFromTestFile(String fileName) {
+    String tableName = "t" + nextTable.getAndIncrement();
+    ConversionMetadata metadata = new ConversionMetadata(tempDir);
+    metadata.recordTable(tableName, org.mockito.Mockito.mock(org.apache.calcite.schema.Table.class),
+        org.apache.calcite.util.Sources.of(new java.io.File(tempDir, fileName)), null);
+    return metadata.getAllConversions().get(tableName).sourceType;
   }
+
+  private final java.util.concurrent.atomic.AtomicInteger nextTable =
+      new java.util.concurrent.atomic.AtomicInteger();
 
   /**
    * Invokes the private static method detectTypeFromExtension via reflection.

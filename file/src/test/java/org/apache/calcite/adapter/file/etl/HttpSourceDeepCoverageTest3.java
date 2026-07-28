@@ -1075,13 +1075,11 @@ class HttpSourceDeepCoverageTest3 {
 
   // ======= isLocalPath =======
 
-  @Test void testIsLocalPath() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("isLocalPath", String.class);
-    m.setAccessible(true);
-    assertTrue((Boolean) m.invoke(null, "/tmp/test"));
-    assertFalse((Boolean) m.invoke(null, "s3://b/p"));
-    assertFalse((Boolean) m.invoke(null, "gs://b/p"));
-    assertFalse((Boolean) m.invoke(null, (String) null));
+  @Test void testIsLocalPath() {
+    assertTrue(StorageProvider.isLocalPath("/tmp/test"));
+    assertFalse(StorageProvider.isLocalPath("s3://b/p"));
+    assertFalse(StorageProvider.isLocalPath("gs://b/p"));
+    assertFalse(StorageProvider.isLocalPath(null));
   }
 
   // ======= isRawCacheEnabled =======

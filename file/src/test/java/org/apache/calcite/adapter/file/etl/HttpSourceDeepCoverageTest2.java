@@ -1029,15 +1029,13 @@ public class HttpSourceDeepCoverageTest2 {
 
   // --- isLocalPath via reflection ---
 
-  @Test void testIsLocalPath() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("isLocalPath", String.class);
-    method.setAccessible(true);
+  @Test void testIsLocalPath() {
 
-    assertTrue((boolean) method.invoke(null, "/tmp/cache"));
-    assertTrue((boolean) method.invoke(null, "/home/user/data"));
-    assertFalse((boolean) method.invoke(null, "s3://bucket/path"));
-    assertFalse((boolean) method.invoke(null, "gs://bucket/path"));
-    assertFalse((boolean) method.invoke(null, (String) null));
+    assertTrue(StorageProvider.isLocalPath("/tmp/cache"));
+    assertTrue(StorageProvider.isLocalPath("/home/user/data"));
+    assertFalse(StorageProvider.isLocalPath("s3://bucket/path"));
+    assertFalse(StorageProvider.isLocalPath("gs://bucket/path"));
+    assertFalse(StorageProvider.isLocalPath(null));
   }
 
   // --- isRawCacheEnabled via reflection ---

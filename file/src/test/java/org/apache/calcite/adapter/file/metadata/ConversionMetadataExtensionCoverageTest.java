@@ -63,6 +63,26 @@ class ConversionMetadataExtensionCoverageTest {
   // 1. generateFileExtensions() - covers the full iteration
   // =========================================================================
 
+
+  /**
+   * Source type detected for a file name, via the public {@link ConversionMetadata#recordTable}
+   * path. The detector itself is private, so this reaches it the way production does: recordTable
+   * stores the detected type on the record it keys by table name, and getAllConversions exposes
+   * it. A distinct name per call -- ConversionMetadata reloads its directory on construction and
+   * only fills a null sourceType on an existing record. The table is a mock because recordTable
+   * overrides the detected type for four specific table class names.
+   */
+  private String detectedSourceTypeFor(String fileName) {
+    String tableName = "t" + nextTable.getAndIncrement();
+    ConversionMetadata metadata = new ConversionMetadata(tempDir.toFile());
+    metadata.recordTable(tableName, org.mockito.Mockito.mock(org.apache.calcite.schema.Table.class),
+        org.apache.calcite.util.Sources.of(new java.io.File(tempDir.toFile(), fileName)), null);
+    return metadata.getAllConversions().get(tableName).sourceType;
+  }
+
+  private final java.util.concurrent.atomic.AtomicInteger nextTable =
+      new java.util.concurrent.atomic.AtomicInteger();
+
   @Test void testGenerateFileExtensionsReturnsNonEmptyList() throws Exception {
     Method method =
         ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
@@ -196,10 +216,7 @@ class ConversionMetadataExtensionCoverageTest {
   // 3. detectTypeFromTestFile() - covers the full method
   // =========================================================================
 
-  @Test void testDetectTypeFromTestFileAllCandidateExtensions() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
+  @Test void testDetectTypeFromTestFileAllCandidateExtensions() {
 
     // All candidate extensions from the source code
     String[] candidates = {
@@ -210,7 +227,7 @@ class ConversionMetadataExtensionCoverageTest {
 
     int knownCount = 0;
     for (String ext : candidates) {
-      String result = (String) method.invoke(null, "test." + ext);
+      String result = (String) detectedSourceTypeFor("test." + ext);
       assertNotNull(result,
           "Result for test." + ext + " should not be null");
       if (!"unknown".equals(result)) {
@@ -223,13 +240,10 @@ class ConversionMetadataExtensionCoverageTest {
         "At least 14 extensions should be recognized, got " + knownCount);
   }
 
-  @Test void testDetectTypeFromTestFileUnknownExtension() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
+  @Test void testDetectTypeFromTestFileUnknownExtension() {
 
-    assertEquals("unknown", method.invoke(null, "test.randomext"));
-    assertEquals("unknown", method.invoke(null, "test.pdf"));
+    assertEquals("unknown", detectedSourceTypeFor("test.randomext"));
+    assertEquals("unknown", detectedSourceTypeFor("test.pdf"));
   }
 
   // =========================================================================
@@ -260,45 +274,39 @@ class ConversionMetadataExtensionCoverageTest {
   // 5. detectConvertibleType() and detectDirectType() - branch coverage
   // =========================================================================
 
-  @Test void testDetectConvertibleTypeAllBranches() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
+  @Test void testDetectConvertibleTypeAllBranches() {
 
     // Each branch in order
-    assertEquals("excel", method.invoke(null, "report.xlsx"));
-    assertEquals("excel", method.invoke(null, "report.xls"));
-    assertEquals("html", method.invoke(null, "page.html"));
-    assertEquals("html", method.invoke(null, "page.htm"));
-    assertEquals("xml", method.invoke(null, "data.xml"));
-    assertEquals("markdown", method.invoke(null, "readme.md"));
-    assertEquals("docx", method.invoke(null, "document.docx"));
-    assertEquals("pptx", method.invoke(null, "slides.pptx"));
-    assertEquals("unknown", method.invoke(null, "file.unknown"));
+    assertEquals("excel", detectedSourceTypeFor("report.xlsx"));
+    assertEquals("excel", detectedSourceTypeFor("report.xls"));
+    assertEquals("html", detectedSourceTypeFor("page.html"));
+    assertEquals("html", detectedSourceTypeFor("page.htm"));
+    assertEquals("xml", detectedSourceTypeFor("data.xml"));
+    assertEquals("markdown", detectedSourceTypeFor("readme.md"));
+    assertEquals("docx", detectedSourceTypeFor("document.docx"));
+    assertEquals("pptx", detectedSourceTypeFor("slides.pptx"));
+    assertEquals("unknown", detectedSourceTypeFor("file.unknown"));
 
     // Case insensitive check (uses .toLowerCase())
-    assertEquals("excel", method.invoke(null, "REPORT.XLSX"));
-    assertEquals("html", method.invoke(null, "PAGE.HTML"));
+    assertEquals("excel", detectedSourceTypeFor("REPORT.XLSX"));
+    assertEquals("html", detectedSourceTypeFor("PAGE.HTML"));
   }
 
-  @Test void testDetectDirectTypeAllBranches() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
+  @Test void testDetectDirectTypeAllBranches() {
 
     // Each branch in order
-    assertEquals("csv", method.invoke(null, "data.csv"));
-    assertEquals("tsv", method.invoke(null, "data.tsv"));
-    assertEquals("json", method.invoke(null, "data.json"));
-    assertEquals("parquet", method.invoke(null, "data.parquet"));
-    assertEquals("yaml", method.invoke(null, "config.yaml"));
-    assertEquals("yaml", method.invoke(null, "config.yml"));
-    assertEquals("arrow", method.invoke(null, "data.arrow"));
-    assertEquals("unknown", method.invoke(null, "data.abc"));
+    assertEquals("csv", detectedSourceTypeFor("data.csv"));
+    assertEquals("tsv", detectedSourceTypeFor("data.tsv"));
+    assertEquals("json", detectedSourceTypeFor("data.json"));
+    assertEquals("parquet", detectedSourceTypeFor("data.parquet"));
+    assertEquals("yaml", detectedSourceTypeFor("config.yaml"));
+    assertEquals("yaml", detectedSourceTypeFor("config.yml"));
+    assertEquals("arrow", detectedSourceTypeFor("data.arrow"));
+    assertEquals("unknown", detectedSourceTypeFor("data.abc"));
 
     // Case insensitive check
-    assertEquals("csv", method.invoke(null, "DATA.CSV"));
-    assertEquals("json", method.invoke(null, "DATA.JSON"));
+    assertEquals("csv", detectedSourceTypeFor("DATA.CSV"));
+    assertEquals("json", detectedSourceTypeFor("DATA.JSON"));
   }
 
   // =========================================================================

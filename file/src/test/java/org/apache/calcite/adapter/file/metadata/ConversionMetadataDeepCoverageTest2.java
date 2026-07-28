@@ -54,6 +54,26 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= Constructor tests =======
 
+
+  /**
+   * Source type detected for a file name, via the public {@link ConversionMetadata#recordTable}
+   * path. The detector itself is private, so this reaches it the way production does: recordTable
+   * stores the detected type on the record it keys by table name, and getAllConversions exposes
+   * it. A distinct name per call -- ConversionMetadata reloads its directory on construction and
+   * only fills a null sourceType on an existing record. The table is a mock because recordTable
+   * overrides the detected type for four specific table class names.
+   */
+  private String detectedSourceTypeFor(String fileName) {
+    String tableName = "t" + nextTable.getAndIncrement();
+    ConversionMetadata metadata = new ConversionMetadata(tempDir.toFile());
+    metadata.recordTable(tableName, org.mockito.Mockito.mock(org.apache.calcite.schema.Table.class),
+        org.apache.calcite.util.Sources.of(new java.io.File(tempDir.toFile(), fileName)), null);
+    return metadata.getAllConversions().get(tableName).sourceType;
+  }
+
+  private final java.util.concurrent.atomic.AtomicInteger nextTable =
+      new java.util.concurrent.atomic.AtomicInteger();
+
   @Test void testConstructorWithDirectory() {
     ConversionMetadata cm = new ConversionMetadata(tempDir.toFile());
     assertNotNull(cm);
@@ -847,33 +867,29 @@ class ConversionMetadataDeepCoverageTest2 {
 
   // ======= Static file type detection methods =======
 
-  @Test void testDetectConvertibleType() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
+  @Test void testDetectConvertibleType() {
 
-    assertEquals("excel", method.invoke(null, "test.xlsx"));
-    assertEquals("excel", method.invoke(null, "test.xls"));
-    assertEquals("html", method.invoke(null, "test.html"));
-    assertEquals("html", method.invoke(null, "test.htm"));
-    assertEquals("xml", method.invoke(null, "test.xml"));
-    assertEquals("markdown", method.invoke(null, "test.md"));
-    assertEquals("docx", method.invoke(null, "test.docx"));
-    assertEquals("pptx", method.invoke(null, "test.pptx"));
-    assertEquals("unknown", method.invoke(null, "test.unknown"));
+    assertEquals("excel", detectedSourceTypeFor("test.xlsx"));
+    assertEquals("excel", detectedSourceTypeFor("test.xls"));
+    assertEquals("html", detectedSourceTypeFor("test.html"));
+    assertEquals("html", detectedSourceTypeFor("test.htm"));
+    assertEquals("xml", detectedSourceTypeFor("test.xml"));
+    assertEquals("markdown", detectedSourceTypeFor("test.md"));
+    assertEquals("docx", detectedSourceTypeFor("test.docx"));
+    assertEquals("pptx", detectedSourceTypeFor("test.pptx"));
+    assertEquals("unknown", detectedSourceTypeFor("test.unknown"));
   }
 
-  @Test void testDetectDirectType() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
+  @Test void testDetectDirectType() {
 
-    assertEquals("csv", method.invoke(null, "test.csv"));
-    assertEquals("tsv", method.invoke(null, "test.tsv"));
-    assertEquals("json", method.invoke(null, "test.json"));
-    assertEquals("parquet", method.invoke(null, "test.parquet"));
-    assertEquals("yaml", method.invoke(null, "test.yaml"));
-    assertEquals("yaml", method.invoke(null, "test.yml"));
-    assertEquals("arrow", method.invoke(null, "test.arrow"));
-    assertEquals("unknown", method.invoke(null, "test.unknown"));
+    assertEquals("csv", detectedSourceTypeFor("test.csv"));
+    assertEquals("tsv", detectedSourceTypeFor("test.tsv"));
+    assertEquals("json", detectedSourceTypeFor("test.json"));
+    assertEquals("parquet", detectedSourceTypeFor("test.parquet"));
+    assertEquals("yaml", detectedSourceTypeFor("test.yaml"));
+    assertEquals("yaml", detectedSourceTypeFor("test.yml"));
+    assertEquals("arrow", detectedSourceTypeFor("test.arrow"));
+    assertEquals("unknown", detectedSourceTypeFor("test.unknown"));
   }
 
   @Test void testExtractExtension() throws Exception {

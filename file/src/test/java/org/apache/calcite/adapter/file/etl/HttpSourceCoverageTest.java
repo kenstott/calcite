@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -1428,15 +1429,13 @@ public class HttpSourceCoverageTest {
   // 19. isLocalPath (via reflection, static method)
   // ---------------------------------------------------------------
 
-  @Test void testIsLocalPath() throws Exception {
-    Method method = HttpSource.class.getDeclaredMethod("isLocalPath", String.class);
-    method.setAccessible(true);
+  @Test void testIsLocalPath() {
 
-    assertTrue((boolean) method.invoke(null, "/tmp/file.json"));
-    assertTrue((boolean) method.invoke(null, "/home/user/data.csv"));
-    assertFalse((boolean) method.invoke(null, "s3://bucket/file.json"));
-    assertFalse((boolean) method.invoke(null, "gs://bucket/file.json"));
-    assertFalse((boolean) method.invoke(null, (String) null));
+    assertTrue(StorageProvider.isLocalPath("/tmp/file.json"));
+    assertTrue(StorageProvider.isLocalPath("/home/user/data.csv"));
+    assertFalse(StorageProvider.isLocalPath("s3://bucket/file.json"));
+    assertFalse(StorageProvider.isLocalPath("gs://bucket/file.json"));
+    assertFalse(StorageProvider.isLocalPath(null));
   }
 
   // ---------------------------------------------------------------

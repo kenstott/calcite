@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -300,14 +301,12 @@ class HttpSourceLineCoverageTest {
 
   // ======= isLocalPath tests =======
 
-  @Test void testIsLocalPath() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("isLocalPath", String.class);
-    m.setAccessible(true);
-    assertTrue((Boolean) m.invoke(null, "/tmp/file.json"));
-    assertTrue((Boolean) m.invoke(null, "C:\\file.json"));
-    assertFalse((Boolean) m.invoke(null, "s3://bucket/file.json"));
-    assertFalse((Boolean) m.invoke(null, "gs://bucket/file.json"));
-    assertFalse((Boolean) m.invoke(null, (Object) null));
+  @Test void testIsLocalPath() {
+    assertTrue(StorageProvider.isLocalPath("/tmp/file.json"));
+    assertTrue(StorageProvider.isLocalPath("C:\\file.json"));
+    assertFalse(StorageProvider.isLocalPath("s3://bucket/file.json"));
+    assertFalse(StorageProvider.isLocalPath("gs://bucket/file.json"));
+    assertFalse(StorageProvider.isLocalPath(null));
   }
 
   // ======= sanitizePathComponent tests =======
