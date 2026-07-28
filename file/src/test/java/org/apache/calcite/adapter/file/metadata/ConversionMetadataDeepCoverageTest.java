@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.file.metadata;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.schema.Table;
+import org.apache.calcite.util.Sources;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -65,6 +67,31 @@ public class ConversionMetadataDeepCoverageTest {
   // ===================================================================
   // isLocalFile -- all branches via hasChanged()
   // ===================================================================
+
+
+  /**
+   * Source type detected for a file name, resolved through the public
+   * {@link ConversionMetadata#recordTable} path.
+   *
+   * <p>The detection itself lives in a private method, so it is reached the way production
+   * reaches it: recordTable stores the detected type on the record it keys by table name, and
+   * getAllConversions exposes that record. The table is a plain mock on purpose — recordTable
+   * special-cases four table class names (ParquetTranslatableTable and friends) and overrides
+   * the detected type for them, so a mock keeps the file name as the only input under test.
+   */
+  private String detectedSourceTypeFor(String fileName) {
+    // A distinct table name per call: ConversionMetadata persists to metadataDir and reloads it
+    // on construction, and recordTable only fills sourceType on an existing record when it is
+    // null. Reusing one name would make the second call in a test read back the first's answer.
+    String tableName = "t" + nextTable.getAndIncrement();
+    ConversionMetadata metadata = new ConversionMetadata(metadataDir);
+    metadata.recordTable(tableName, mock(Table.class),
+        Sources.of(new File(metadataDir, fileName)), null);
+    return metadata.getAllConversions().get(tableName).sourceType;
+  }
+
+  private final java.util.concurrent.atomic.AtomicInteger nextTable =
+      new java.util.concurrent.atomic.AtomicInteger();
 
   @Test void testIsLocalFileWithHttpUrl() {
     ConversionMetadata.ConversionRecord record = new ConversionMetadata.ConversionRecord();
@@ -555,162 +582,114 @@ public class ConversionMetadataDeepCoverageTest {
   // detectConvertibleType -- all file type branches via reflection
   // ===================================================================
 
-  @Test void testDetectConvertibleTypeXlsx() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("excel", method.invoke(null, "report.xlsx"));
+  @Test void testDetectConvertibleTypeXlsx() {
+    assertEquals("excel", detectedSourceTypeFor("report.xlsx"));
   }
 
-  @Test void testDetectConvertibleTypeXls() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("excel", method.invoke(null, "legacy.xls"));
+  @Test void testDetectConvertibleTypeXls() {
+    assertEquals("excel", detectedSourceTypeFor("legacy.xls"));
   }
 
-  @Test void testDetectConvertibleTypeHtml() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("html", method.invoke(null, "page.html"));
+  @Test void testDetectConvertibleTypeHtml() {
+    assertEquals("html", detectedSourceTypeFor("page.html"));
   }
 
-  @Test void testDetectConvertibleTypeHtm() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("html", method.invoke(null, "page.htm"));
+  @Test void testDetectConvertibleTypeHtm() {
+    assertEquals("html", detectedSourceTypeFor("page.htm"));
   }
 
-  @Test void testDetectConvertibleTypeXml() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("xml", method.invoke(null, "config.xml"));
+  @Test void testDetectConvertibleTypeXml() {
+    assertEquals("xml", detectedSourceTypeFor("config.xml"));
   }
 
-  @Test void testDetectConvertibleTypeMarkdown() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("markdown", method.invoke(null, "readme.md"));
+  @Test void testDetectConvertibleTypeMarkdown() {
+    assertEquals("markdown", detectedSourceTypeFor("readme.md"));
   }
 
-  @Test void testDetectConvertibleTypeDocx() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("docx", method.invoke(null, "document.docx"));
+  @Test void testDetectConvertibleTypeDocx() {
+    assertEquals("docx", detectedSourceTypeFor("document.docx"));
   }
 
-  @Test void testDetectConvertibleTypePptx() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("pptx", method.invoke(null, "slides.pptx"));
+  @Test void testDetectConvertibleTypePptx() {
+    assertEquals("pptx", detectedSourceTypeFor("slides.pptx"));
   }
 
-  @Test void testDetectConvertibleTypeUnknown() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("unknown", method.invoke(null, "file.xyz"));
+  @Test void testDetectConvertibleTypeUnknown() {
+    assertEquals("unknown", detectedSourceTypeFor("file.xyz"));
   }
 
-  @Test void testDetectConvertibleTypeCaseInsensitive() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectConvertibleType", String.class);
-    method.setAccessible(true);
-    assertEquals("excel", method.invoke(null, "DATA.XLSX"));
-    assertEquals("html", method.invoke(null, "PAGE.HTML"));
+  @Test void testDetectConvertibleTypeCaseInsensitive() {
+    assertEquals("excel", detectedSourceTypeFor("DATA.XLSX"));
+    assertEquals("html", detectedSourceTypeFor("PAGE.HTML"));
   }
 
   // ===================================================================
   // detectDirectType -- all file type branches via reflection
   // ===================================================================
 
-  @Test void testDetectDirectTypeCsv() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("csv", method.invoke(null, "data.csv"));
+  @Test void testDetectDirectTypeCsv() {
+    assertEquals("csv", detectedSourceTypeFor("data.csv"));
   }
 
-  @Test void testDetectDirectTypeTsv() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("tsv", method.invoke(null, "data.tsv"));
+  @Test void testDetectDirectTypeTsv() {
+    assertEquals("tsv", detectedSourceTypeFor("data.tsv"));
   }
 
-  @Test void testDetectDirectTypeJson() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("json", method.invoke(null, "data.json"));
+  @Test void testDetectDirectTypeJson() {
+    assertEquals("json", detectedSourceTypeFor("data.json"));
   }
 
-  @Test void testDetectDirectTypeParquet() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("parquet", method.invoke(null, "data.parquet"));
+  @Test void testDetectDirectTypeParquet() {
+    assertEquals("parquet", detectedSourceTypeFor("data.parquet"));
   }
 
-  @Test void testDetectDirectTypeYaml() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("yaml", method.invoke(null, "config.yaml"));
+  @Test void testDetectDirectTypeYaml() {
+    assertEquals("yaml", detectedSourceTypeFor("config.yaml"));
   }
 
-  @Test void testDetectDirectTypeYml() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("yaml", method.invoke(null, "config.yml"));
+  @Test void testDetectDirectTypeYml() {
+    assertEquals("yaml", detectedSourceTypeFor("config.yml"));
   }
 
-  @Test void testDetectDirectTypeArrow() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("arrow", method.invoke(null, "data.arrow"));
+  @Test void testDetectDirectTypeArrow() {
+    assertEquals("arrow", detectedSourceTypeFor("data.arrow"));
   }
 
-  @Test void testDetectDirectTypeUnknown() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("unknown", method.invoke(null, "data.binary"));
+  @Test void testDetectDirectTypeUnknown() {
+    assertEquals("unknown", detectedSourceTypeFor("data.binary"));
   }
 
-  @Test void testDetectDirectTypeCaseInsensitive() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectDirectType", String.class);
-    method.setAccessible(true);
-    assertEquals("csv", method.invoke(null, "DATA.CSV"));
-    assertEquals("json", method.invoke(null, "FILE.JSON"));
-    assertEquals("parquet", method.invoke(null, "TABLE.PARQUET"));
+  @Test void testDetectDirectTypeCaseInsensitive() {
+    assertEquals("csv", detectedSourceTypeFor("DATA.CSV"));
+    assertEquals("json", detectedSourceTypeFor("FILE.JSON"));
+    assertEquals("parquet", detectedSourceTypeFor("TABLE.PARQUET"));
   }
 
   // ===================================================================
   // detectTypeFromTestFile -- integration of requiresConversion/isDirectlyUsable
   // ===================================================================
 
-  @Test void testDetectTypeFromTestFileConvertible() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
-    assertEquals("excel", method.invoke(null, "test.xlsx"));
-    assertEquals("html", method.invoke(null, "test.html"));
+  @Test void testDetectTypeFromTestFileConvertible() {
+    assertEquals("excel", detectedSourceTypeFor("test.xlsx"));
+    assertEquals("html", detectedSourceTypeFor("test.html"));
   }
 
-  @Test void testDetectTypeFromTestFileDirectlyUsable() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
-    assertEquals("csv", method.invoke(null, "test.csv"));
-    assertEquals("json", method.invoke(null, "test.json"));
-    assertEquals("parquet", method.invoke(null, "test.parquet"));
+  @Test void testDetectTypeFromTestFileDirectlyUsable() {
+    assertEquals("csv", detectedSourceTypeFor("test.csv"));
+    assertEquals("json", detectedSourceTypeFor("test.json"));
+    assertEquals("parquet", detectedSourceTypeFor("test.parquet"));
   }
 
-  @Test void testDetectTypeFromTestFileCompressedCsv() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
-    assertEquals("csv", method.invoke(null, "test.csv.gz"));
+  @Test void testDetectTypeFromTestFileCompressedCsv() {
+    assertEquals("csv", detectedSourceTypeFor("test.csv.gz"));
   }
 
-  @Test void testDetectTypeFromTestFileCompressedJson() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
-    assertEquals("json", method.invoke(null, "test.json.gz"));
+  @Test void testDetectTypeFromTestFileCompressedJson() {
+    assertEquals("json", detectedSourceTypeFor("test.json.gz"));
   }
 
-  @Test void testDetectTypeFromTestFileUnknown() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromTestFile", String.class);
-    method.setAccessible(true);
-    assertEquals("unknown", method.invoke(null, "test.xyz"));
+  @Test void testDetectTypeFromTestFileUnknown() {
+    assertEquals("unknown", detectedSourceTypeFor("test.xyz"));
   }
 
   // ===================================================================
