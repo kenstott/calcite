@@ -38,6 +38,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -99,6 +100,52 @@ class LocalStagingStorageProviderTest {
   }
 
   /**
+   * Concurrent SEC workers must not land different content on the same object path.
+   *
+   * <p>Workers are partitioned by form type, not by table — every form contributes a
+   * filing-metadata row, so sec_primary, sec_secondary and sec_13f all emit the {@code metadata}
+   * table type into one {@code year=} partition. With a per-process counter alone they each start
+   * at batch 0000 and overwrite each other; the loser's accessions stay marked staging-complete,
+   * so its rows are never re-derived. This reproduces two workers writing the same table type,
+   * into the same partition, at the same batch index.
+   */
+  @Test
+  void testConcurrentWorkersDoNotCollideOnBatchPaths() throws IOException {
+    String partition = "/r2/sec/parquet/year=2026";
+
+    CountingStorageProvider primaryDelegate = new CountingStorageProvider(uploadDir);
+    CountingStorageProvider thirteenFDelegate = new CountingStorageProvider(uploadDir);
+    LocalStagingStorageProvider primary =
+        new LocalStagingStorageProvider(primaryDelegate, stagingDir);
+    LocalStagingStorageProvider thirteenF =
+        new LocalStagingStorageProvider(thirteenFDelegate, stagingDir);
+
+    // Different filings (different form types), same table type, same partition, both at batch 0.
+    primary.writeAvroParquet(partition + "/0000840489-26-000085_metadata.parquet", FACTS_SCHEMA,
+        makeRecords(FACTS_SCHEMA, "0000840489", 1), "FilingMetadata");
+    primary.flushAll();
+    thirteenF.writeAvroParquet(partition + "/0001193125-26-317911_metadata.parquet", FACTS_SCHEMA,
+        makeRecords(FACTS_SCHEMA, "0001193125", 1), "FilingMetadata");
+    thirteenF.flushAll();
+
+    String primaryPath = primary.drainUploadedPaths().get(0);
+    String thirteenFPath = thirteenF.drainUploadedPaths().get(0);
+
+    assertNotEquals(primaryPath, thirteenFPath,
+        "second worker overwrote the first worker's metadata batch at " + primaryPath
+            + " — the first worker's rows are lost and will not be re-derived");
+
+    // Still batch-style names in the same partition, so IcebergMaterializer's filename parse
+    // (leading token non-numeric => batch file, stem is the accession key) is unaffected.
+    for (String path : new String[] {primaryPath, thirteenFPath}) {
+      assertTrue(path.startsWith(partition + "/metadata_batch_"),
+          "expected a metadata batch file in " + partition + ", got " + path);
+      assertTrue(path.endsWith("_0000.parquet"),
+          "each worker's first batch should still be index 0000, got " + path);
+    }
+  }
+
+  /**
    * The drained paths are what materialization absorbs instead of listing the partition, so they
    * must name every batch file uploaded and nothing else.
    */
@@ -117,12 +164,19 @@ class LocalStagingStorageProviderTest {
     List<String> drained = staging.drainUploadedPaths();
 
     assertEquals(2, drained.size(), "one batch path per flushed group, got " + drained);
-    assertTrue(drained.contains(r2Base + "/facts_batch_0000.parquet")
-            || drained.contains(r2Base + "/facts_batch_0001.parquet"),
-        "expected the facts batch path, got " + drained);
+    int factsBatches = 0;
+    int metadataBatches = 0;
     for (String path : drained) {
       assertTrue(path.startsWith(r2Base + "/"), "path outside the partition: " + path);
+      assertTrue(path.endsWith(".parquet"), "not a parquet path: " + path);
+      if (path.startsWith(r2Base + "/facts_batch_")) {
+        factsBatches++;
+      } else if (path.startsWith(r2Base + "/metadata_batch_")) {
+        metadataBatches++;
+      }
     }
+    assertEquals(1, factsBatches, "expected one facts batch path, got " + drained);
+    assertEquals(1, metadataBatches, "expected one metadata batch path, got " + drained);
   }
 
   /**

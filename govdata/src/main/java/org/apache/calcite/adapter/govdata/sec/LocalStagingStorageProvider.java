@@ -94,6 +94,28 @@ public class LocalStagingStorageProvider implements StorageProvider {
   private final int flushThreshold;
   private final AtomicInteger batchCounter = new AtomicInteger(0);
 
+  /**
+   * Per-instance token qualifying every merged batch filename.
+   *
+   * <p>{@link #batchCounter} restarts at 0 in each process, and the merged name is otherwise just
+   * {@code {tableType}_batch_{NNNN}}. SEC workers are partitioned by form type, not by table: a
+   * filing of any form contributes a filing-metadata row, so sec_primary, sec_secondary and
+   * sec_13f all emit {@code metadata} — plus {@code facts}, {@code contexts}, {@code mda},
+   * {@code relationships} and {@code chunks} for the first two — into the same
+   * {@code sec/year=YYYY/} partition. Running concurrently, as they are designed to, they land
+   * different content on identical object paths.
+   *
+   * <p>The loser's rows are then gone: its accessions are already marked staging-complete, so
+   * {@code SecFilingCache.filterUnprocessed} never offers them again and nothing re-derives them.
+   * Observed on 2026-07-28, where sec_13f overwrote {@code sec/year=2026/metadata_batch_0001.parquet}
+   * at 07:25:18 — twelve minutes before sec_primary read that path — costing 24 accessions their
+   * filing_metadata rows while their other five tables materialized normally.
+   *
+   * <p>Qualifying the name per instance makes each merged file write-once, so concurrent workers
+   * cannot destroy each other's output.
+   */
+  private final String runToken = UUID.randomUUID().toString().substring(0, 8);
+
   /** Lock for all access to stagedFiles and groupKeyToR2Dir. */
   private final Object lock = new Object();
 
@@ -306,8 +328,8 @@ public class LocalStagingStorageProvider implements StorageProvider {
     String r2ParentDir = groupKeyToR2ParentDir.get(groupKey);
     String tableType = groupKeyToTableType.get(groupKey);
     int batchNum = batchCounter.getAndIncrement();
-    String r2TargetPath = String.format(Locale.ROOT, "%s/%s_batch_%04d.parquet",
-        r2ParentDir, tableType, batchNum);
+    String r2TargetPath = String.format(Locale.ROOT, "%s/%s_batch_%s_%04d.parquet",
+        r2ParentDir, tableType, runToken, batchNum);
 
     LOGGER.info("Flushing batch {}: merging {} staged '{}' files → {}",
         batchNum, files.size(), tableType, r2TargetPath);
