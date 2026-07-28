@@ -12,7 +12,7 @@ package org.apache.calcite.adapter.govdata;
 
 /**
  * Library of null-safe DuckDB date-parse expressions for use in schema YAML
- * {@code dateFormat:} fields and {@code FecDataRepair}.
+ * {@code dateFormat:} fields.
  *
  * <p>Each value's {@link #toExpression(String)} returns a DuckDB SQL fragment
  * that evaluates to a DATE (never throws — uses TRY_STRPTIME).

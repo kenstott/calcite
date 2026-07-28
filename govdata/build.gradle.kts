@@ -148,15 +148,6 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
-tasks.register<JavaExec>("repairFec") {
-    group = "govdata"
-    description = "Fix FEC table column types in-place on R2 Iceberg (year→INT, dates→DATE)"
-    mainClass.set("org.apache.calcite.adapter.govdata.FecDataRepair")
-    classpath = sourceSets["main"].runtimeClasspath
-    val tables = project.findProperty("tables") as String?
-    if (tables != null) args = tables.split(",")
-}
-
 tasks.register("cleanTestLogs") {
     // Always run — no UP-TO-DATE skipping on ExFAT/APFS where ._* sidecar files accumulate
     outputs.upToDateWhen { false }

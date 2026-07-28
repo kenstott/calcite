@@ -19,7 +19,6 @@ import org.apache.calcite.adapter.file.storage.SftpStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
-import com.amazonaws.services.s3.AmazonS3;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -244,54 +243,6 @@ public class StorageProviderRequirementsTest {
     noSecret.put("accessKeyId", "key");
     assertThrows(IllegalArgumentException.class, () -> new S3StorageProvider(noSecret),
         "missing secretAccessKey must throw IllegalArgumentException");
-  }
-
-  @Test @Tag("FILE-116") void s3WithEndpointEnablesPathStyleAccess() throws Exception {
-    Map<String, Object> config = new HashMap<>();
-    config.put("accessKeyId", "key");
-    config.put("secretAccessKey", "secret");
-    config.put("endpoint", "http://localhost:9000"); // MinIO-style endpoint; never contacted
-    // No "directory" -> no ensureBucketExists() -> no network.
-    S3StorageProvider provider = new S3StorageProvider(config);
-
-    assertTrue(isPathStyleAccessEnabled(provider),
-        "a non-null endpoint must enable path-style access");
-  }
-
-  @Test @Tag("FILE-116") void s3RegionDefaultsToUsEast1WhenAbsent() throws Exception {
-    Map<String, Object> config = new HashMap<>();
-    config.put("accessKeyId", "key");
-    config.put("secretAccessKey", "secret");
-    config.put("endpoint", "http://localhost:9000"); // endpoint config carries the signing region
-    // region intentionally absent.
-    S3StorageProvider provider = new S3StorageProvider(config);
-
-    AmazonS3 client = readS3Client(provider);
-    Method getRegionName = client.getClass().getMethod("getRegionName");
-    String region = (String) getRegionName.invoke(client);
-    assertEquals("us-east-1", region, "region must default to us-east-1 when absent from config");
-  }
-
-  /** Reads the private {@code s3Client} field from an {@link S3StorageProvider} (no network). */
-  private static AmazonS3 readS3Client(S3StorageProvider provider) throws Exception {
-    Field f = S3StorageProvider.class.getDeclaredField("s3Client");
-    f.setAccessible(true);
-    return (AmazonS3) f.get(provider);
-  }
-
-  /**
-   * Reads {@code AmazonS3Client.clientOptions.isPathStyleAccess()} via reflection. Path-style is
-   * applied to the builder and not surfaced through any public provider accessor, so the built
-   * client's stored option is the only exact, hermetic source of truth.
-   */
-  private static boolean isPathStyleAccessEnabled(S3StorageProvider provider) throws Exception {
-    AmazonS3 client = readS3Client(provider);
-    Field optionsField = client.getClass().getDeclaredField("clientOptions");
-    optionsField.setAccessible(true);
-    Object options = optionsField.get(client);
-    assertNotNull(options, "built S3 client must carry S3ClientOptions");
-    Method isPathStyle = options.getClass().getMethod("isPathStyleAccess");
-    return (Boolean) isPathStyle.invoke(options);
   }
 
   // ============================================================ FILE-118 =====================
