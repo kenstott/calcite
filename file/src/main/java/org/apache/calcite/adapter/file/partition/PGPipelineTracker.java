@@ -487,6 +487,33 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         errorMessage, false);
   }
 
+  /** PostgreSQL stores any text except this byte; see {@link #sanitizeErrorMessage}. */
+  private static final char PG_FORBIDDEN_CHAR = (char) 0;
+
+  /**
+   * Trims an error string to the column width and strips the bytes PostgreSQL refuses to store.
+   *
+   * <p>PostgreSQL rejects 0x00 anywhere in a text value, and an error built from a remote
+   * response body carries one whenever the body is binary decoded as text. Binding it raw threw,
+   * which took down the whole marker — so a combo that failed with a 404 could never record the
+   * backoff marker that says "do not retry for 7 days", and every subsequent run re-fetched it.
+   * A stray byte in a diagnostic field must not cost the marker: strip what the column cannot
+   * hold and keep the write.
+   *
+   * <p>Only {@code error_message} is sanitized. {@code source_key} is an identity — silently
+   * altering it would write a marker under a key no reader looks up, so a NUL there stays a loud
+   * failure.
+   */
+  private static String sanitizeErrorMessage(String errorMessage) {
+    if (errorMessage == null) {
+      return null;
+    }
+    String cleaned = errorMessage.indexOf(PG_FORBIDDEN_CHAR) >= 0
+        ? errorMessage.replace(PG_FORBIDDEN_CHAR, ' ')
+        : errorMessage;
+    return cleaned.length() > 1000 ? cleaned.substring(0, 1000) : cleaned;
+  }
+
   /**
    * @param sourceFileWritten true when this marker records a source file the caller just wrote.
    *        Only such writes advance {@code source_as_of}; recovering a marker for a file that
@@ -523,8 +550,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
       stmt.setLong(5, rowCount);
       stmt.setString(6, configHash);
       stmt.setString(7, signature);
-      stmt.setString(8, errorMessage != null
-          ? errorMessage.substring(0, Math.min(1000, errorMessage.length())) : null);
+      stmt.setString(8, sanitizeErrorMessage(errorMessage));
       stmt.setLong(9, now);
       stmt.setLong(10, now);
       stmt.executeUpdate();

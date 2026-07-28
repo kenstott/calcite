@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.lang.reflect.Field;
@@ -942,6 +943,51 @@ class PGPipelineTrackerCoverageTest {
     tracker.markComplete("src1", "table1", "download", 100);
     // errorMessage is null -> should set parameter 8 to null
     verify(pstmt).setString(8, null);
+  }
+
+  /**
+   * An error string carrying 0x00 must still produce a marker.
+   *
+   * <p>PostgreSQL refuses 0x00 in a text value, so binding a remote error body that contains one
+   * threw and took the whole marker down with it. The combo could then never record the "404,
+   * back off for 7 days" state, so every later run re-fetched it -- housing spent ~60 minutes a
+   * run re-downloading combos it had already decided were unavailable.
+   */
+  @Test void testUpsertStateStripsNulFromErrorMessage() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+    when(pstmt.executeUpdate()).thenReturn(1);
+
+    char nul = (char) 0;
+    String dirty = "HTTP 404 from huduser.gov" + nul + "binary-tail";
+
+    tracker.markError("src-nul", "hmda_loans", "incremental", dirty);
+
+    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+    verify(pstmt).setString(eq(8), captor.capture());
+    String bound = captor.getValue();
+
+    assertFalse(bound.indexOf(nul) >= 0,
+        "0x00 must not reach PostgreSQL -- it rejects the whole statement");
+    assertTrue(bound.startsWith("HTTP 404 from huduser.gov"),
+        "the diagnostic text itself must survive, got: " + bound);
+  }
+
+  /** The 1000-char column bound still applies after stripping. */
+  @Test void testUpsertStateTruncatesLongErrorMessage() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+    when(pstmt.executeUpdate()).thenReturn(1);
+
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < 3000; i++) {
+      sb.append('x');
+    }
+    tracker.markError("src-long", "t", "incremental", sb.toString());
+
+    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+    verify(pstmt).setString(eq(8), captor.capture());
+    assertEquals(1000, captor.getValue().length());
   }
 
   @Test void testUpsertStateThrowsOnSQLException() throws Exception {
