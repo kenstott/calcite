@@ -70,7 +70,6 @@ dependencies {
     implementation("org.apache.hadoop:hadoop-aws:3.3.6")
 
     // Storage provider dependencies
-    implementation("com.amazonaws:aws-java-sdk-s3:1.12.565")
     implementation("commons-net:commons-net:3.9.0")
     implementation("com.jcraft:jsch:0.1.55")
 
