@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -117,6 +118,20 @@ class HttpSourceDeepCoverageTest3 {
   }
 
   // ======= parseDelimitedResponse: CSV with filter =======
+
+
+  /**
+   * A source whose storageProvider can actually write, for the raw-cache paths.
+   * The plain factories leave storageProvider null -- valid only because they also leave
+   * rawCachePath null -- so reflectively invoking a cache write on one NPEs on the provider.
+   */
+  private HttpSource createLocalCacheSource() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("http://localhost/test")
+        .build();
+    return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
+        null, null);
+  }
 
   @Test void testParseDelimitedResponseWithFilter() throws Exception {
     HttpSourceConfig config = HttpSourceConfig.builder()
@@ -713,7 +728,7 @@ class HttpSourceDeepCoverageTest3 {
     Path cacheFile = tempDir.resolve("cache/resp.json");
     Files.createDirectories(cacheFile.getParent());
     Files.write(cacheFile, "{}".getBytes(StandardCharsets.UTF_8));
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("hasValidRawCache", String.class);
       m.setAccessible(true);
@@ -772,7 +787,7 @@ class HttpSourceDeepCoverageTest3 {
     Path f = tempDir.resolve("raw/resp.json");
     Files.createDirectories(f.getParent());
     Files.write(f, "{\"d\":1}".getBytes(StandardCharsets.UTF_8));
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("readRawCache", String.class);
       m.setAccessible(true);
@@ -803,7 +818,7 @@ class HttpSourceDeepCoverageTest3 {
 
   @Test void testWriteRawCacheLocal() throws Exception {
     HttpSource source =
-        createSourceWithRawCache(null, tempDir.toString() + "/raw", tempDir.toString());
+        createSourceWithRawCache(new LocalFileStorageProvider(), tempDir.toString() + "/raw", tempDir.toString());
     try {
       Method m =
           HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
@@ -852,7 +867,7 @@ class HttpSourceDeepCoverageTest3 {
   // ======= cacheResponseString =======
 
   @Test void testCacheResponseStringLocal() throws Exception {
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     try {
       Method m =
           HttpSource.class.getDeclaredMethod("cacheResponseString", String.class, String.class);
@@ -887,7 +902,7 @@ class HttpSourceDeepCoverageTest3 {
     Path f = tempDir.resolve("rc/data.json");
     Files.createDirectories(f.getParent());
     Files.write(f, "{\"ok\":true}".getBytes(StandardCharsets.UTF_8));
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     try {
       Method m = HttpSource.class.getDeclaredMethod("readFromCache", String.class);
       m.setAccessible(true);
@@ -917,7 +932,7 @@ class HttpSourceDeepCoverageTest3 {
   // ======= cacheResponse =======
 
   @Test void testCacheResponseLocal() throws Exception {
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     try {
       Method m =
           HttpSource.class.getDeclaredMethod("cacheResponse", InputStream.class, String.class);

@@ -168,6 +168,14 @@ public class HttpSource implements DataSource {
     // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
     this.responseTransformer = loadResponseTransformer(hooksConfig);
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
+    // A raw cache path names a location only storageProvider knows how to write. EtlPipeline
+    // sets the two together -- it derives rawCachePath inside the branch that already resolved a
+    // provider -- but nothing here enforced it, so a caller could pair a path with no provider
+    // and get a NullPointerException several layers down in a write instead of at the mistake.
+    if (rawCachePath != null && storageProvider == null) {
+      throw new IllegalArgumentException(
+          "rawCachePath '" + rawCachePath + "' requires a storageProvider to write it");
+    }
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
     this.operatingDirectory = operatingDirectory;

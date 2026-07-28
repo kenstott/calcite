@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -53,6 +54,20 @@ public class HttpSourceCoverageTest {
   // ---------------------------------------------------------------
   // 1. Constructor variants
   // ---------------------------------------------------------------
+
+
+  /**
+   * A source whose storageProvider can actually write, for the raw-cache paths.
+   * The plain factories leave storageProvider null -- valid only because they also leave
+   * rawCachePath null -- so reflectively invoking a cache write on one NPEs on the provider.
+   */
+  private HttpSource createLocalCacheSource() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("http://localhost/test")
+        .build();
+    return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
+        null, null);
+  }
 
   @Test void testConstructorWithResponseTransformer() {
     HttpSourceConfig config = HttpSourceConfig.builder()
@@ -98,7 +113,7 @@ public class HttpSourceCoverageTest {
         .url("https://api.example.com/data")
         .build();
 
-    HttpSource source = new HttpSource(config, (HooksConfig) null, null, null);
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null);
     assertEquals("http", source.getType());
     source.close();
   }
@@ -109,7 +124,7 @@ public class HttpSourceCoverageTest {
         .build();
 
     HttpSource source =
-        new HttpSource(config, (HooksConfig) null, null, "s3://bucket/.raw", "/tmp/test-op-dir");
+        new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), "s3://bucket/.raw", "/tmp/test-op-dir");
     assertEquals("http", source.getType());
     source.close();
   }
@@ -1445,7 +1460,7 @@ public class HttpSourceCoverageTest {
         .url("https://api.example.com/data")
         .build();
     HttpSource source =
-        new HttpSource(config, (HooksConfig) null, null, "s3://my-bucket/raw-data", "/tmp/op-dir");
+        new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), "s3://my-bucket/raw-data", "/tmp/op-dir");
 
     Method method =
         HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
@@ -1462,7 +1477,7 @@ public class HttpSourceCoverageTest {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, null, null, "/tmp/op-dir");
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, "/tmp/op-dir");
 
     Method method =
         HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
@@ -1479,7 +1494,7 @@ public class HttpSourceCoverageTest {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, null, null, "/tmp/op-dir");
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, "/tmp/op-dir");
 
     Method method =
         HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
@@ -1496,7 +1511,7 @@ public class HttpSourceCoverageTest {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, null, null, "/tmp/op-dir");
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, "/tmp/op-dir");
 
     Method method =
         HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
@@ -1538,7 +1553,7 @@ public class HttpSourceCoverageTest {
         .url("https://api.example.com/data")
         .build();
     HttpSource source =
-        new HttpSource(config, (HooksConfig) null, null, "/tmp/cache/.raw", null);
+        new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), "/tmp/cache/.raw", null);
 
     Method method =
         HttpSource.class.getDeclaredMethod("buildRawCachePath", Map.class);
@@ -1562,7 +1577,7 @@ public class HttpSourceCoverageTest {
         .url("https://api.example.com/data")
         .build();
     HttpSource source =
-        new HttpSource(config, (HooksConfig) null, null, "/tmp/cache/.raw/", null);
+        new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), "/tmp/cache/.raw/", null);
 
     Method method =
         HttpSource.class.getDeclaredMethod("buildRawCachePath", Map.class);
@@ -1591,7 +1606,7 @@ public class HttpSourceCoverageTest {
     File cacheFile = new File(tempDir.toFile(), "test-cache.json");
     Files.write(cacheFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
 
-    HttpSource source = createBasicSource();
+    HttpSource source = createLocalCacheSource();
     Method method =
         HttpSource.class.getDeclaredMethod("hasValidRawCache", String.class);
     method.setAccessible(true);
@@ -1624,7 +1639,7 @@ public class HttpSourceCoverageTest {
     String content = "{\"data\":[{\"id\":1}]}";
     Files.write(cacheFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
-    HttpSource source = createBasicSource();
+    HttpSource source = createLocalCacheSource();
     Method method =
         HttpSource.class.getDeclaredMethod("readRawCache", String.class);
     method.setAccessible(true);
@@ -1644,7 +1659,7 @@ public class HttpSourceCoverageTest {
     String cachePath = new File(cacheDir, "response.json").getAbsolutePath();
     String content = "{\"data\":\"test\"}";
 
-    HttpSource source = createBasicSource();
+    HttpSource source = createLocalCacheSource();
     Method method =
         HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
     method.setAccessible(true);
@@ -1681,7 +1696,7 @@ public class HttpSourceCoverageTest {
         .rawCache(HttpSourceConfig.RawCacheConfig.enabled())
         .build();
     HttpSource source =
-        new HttpSource(config, (HooksConfig) null, null, "/tmp/raw-cache", "/tmp/op-dir");
+        new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), "/tmp/raw-cache", "/tmp/op-dir");
 
     Method method = HttpSource.class.getDeclaredMethod("isRawCacheEnabled");
     method.setAccessible(true);
@@ -1700,7 +1715,7 @@ public class HttpSourceCoverageTest {
     File cacheDir = new File(tempDir.toFile(), "cache-str");
     String cachePath = new File(cacheDir, "cached.json").getAbsolutePath();
 
-    HttpSource source = createBasicSource();
+    HttpSource source = createLocalCacheSource();
     Method method =
         HttpSource.class.getDeclaredMethod("cacheResponseString", String.class, String.class);
     method.setAccessible(true);
@@ -1720,7 +1735,7 @@ public class HttpSourceCoverageTest {
     File cacheDir = new File(tempDir.toFile(), "cache-bin");
     String cachePath = new File(cacheDir, "cached.bin").getAbsolutePath();
 
-    HttpSource source = createBasicSource();
+    HttpSource source = createLocalCacheSource();
     Method method =
         HttpSource.class.getDeclaredMethod("cacheResponse", java.io.InputStream.class, String.class);
     method.setAccessible(true);
@@ -1743,7 +1758,7 @@ public class HttpSourceCoverageTest {
     String content = "cached content here";
     Files.write(cacheFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
-    HttpSource source = createBasicSource();
+    HttpSource source = createLocalCacheSource();
     Method method =
         HttpSource.class.getDeclaredMethod("readFromCache", String.class);
     method.setAccessible(true);

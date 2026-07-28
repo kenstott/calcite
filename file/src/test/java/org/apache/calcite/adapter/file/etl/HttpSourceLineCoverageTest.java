@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.Tag;
@@ -69,7 +70,7 @@ class HttpSourceLineCoverageTest {
         .url("http://localhost/test")
         .rawCache(HttpSourceConfig.RawCacheConfig.enabled())
         .build();
-    return new HttpSource(config, (HooksConfig) null, null, rawCachePath, operatingDir);
+    return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), rawCachePath, operatingDir);
   }
 
   private Object invokePrivate(Object target, String methodName, Class<?>[] paramTypes,
@@ -86,6 +87,20 @@ class HttpSourceLineCoverageTest {
   }
 
   // ======= computeLocalRawCachePath tests =======
+
+
+  /**
+   * A source whose storageProvider can actually write, for the raw-cache paths.
+   * The plain factories leave storageProvider null -- valid only because they also leave
+   * rawCachePath null -- so reflectively invoking a cache write on one NPEs on the provider.
+   */
+  private HttpSource createLocalCacheSource() {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("http://localhost/test")
+        .build();
+    return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
+        null, null);
+  }
 
   @Test void testComputeLocalRawCachePathWithNullRawCachePath() throws Exception {
     HttpSource source = createSourceWithRawCache(null, null);
@@ -174,7 +189,7 @@ class HttpSourceLineCoverageTest {
     File cacheFile = tempDir.resolve("cached-response.json").toFile();
     Files.write(cacheFile.toPath(), "{}".getBytes(StandardCharsets.UTF_8));
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     Boolean result =
         (Boolean) invokePrivate(source, "hasValidRawCache", new Class[]{String.class}, cacheFile.getAbsolutePath());
     assertTrue(result, "Should return true when local file exists");
@@ -196,7 +211,7 @@ class HttpSourceLineCoverageTest {
     File cacheFile = tempDir.resolve("raw-cache.json").toFile();
     Files.write(cacheFile.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     String result =
         (String) invokePrivate(source, "readRawCache", new Class[]{String.class}, cacheFile.getAbsolutePath());
     assertEquals(content, result);
@@ -209,7 +224,7 @@ class HttpSourceLineCoverageTest {
     String content = "{\"key\": \"value\"}";
     File cacheFile = tempDir.resolve("subdir/write-cache.json").toFile();
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     invokePrivate(source, "writeRawCache",
         new Class[]{String.class, String.class},
         cacheFile.getAbsolutePath(), content);
@@ -226,7 +241,7 @@ class HttpSourceLineCoverageTest {
     String content = "{\"result\": true}";
     String path = tempDir.resolve("cache-str/resp.json").toString();
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     String result =
         (String) invokePrivate(source, "cacheResponseString", new Class[]{String.class, String.class}, content, path);
     assertEquals(path, result);
@@ -243,7 +258,7 @@ class HttpSourceLineCoverageTest {
     InputStream input = new ByteArrayInputStream(data);
     String path = tempDir.resolve("cache-resp/data.bin").toString();
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     String result =
         (String) invokePrivate(source, "cacheResponse", new Class[]{InputStream.class, String.class}, input, path);
     assertEquals(path, result);
@@ -260,7 +275,7 @@ class HttpSourceLineCoverageTest {
     File file = tempDir.resolve("read-cache.json").toFile();
     Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     String result =
         (String) invokePrivate(source, "readFromCache", new Class[]{String.class}, file.getAbsolutePath());
     assertEquals(content, result);
@@ -961,7 +976,7 @@ class HttpSourceLineCoverageTest {
     ByteArrayInputStream zipInput = new ByteArrayInputStream(baos.toByteArray());
     String cachePath = tempDir.resolve("zip-extract/extracted.csv").toString();
 
-    HttpSource source = createMinimalSource();
+    HttpSource source = createLocalCacheSource();
     String result =
         (String) invokePrivate(source, "extractFromZip", new Class[]{InputStream.class, String.class, String.class},
         zipInput, "*.csv", cachePath);
@@ -1240,7 +1255,7 @@ class HttpSourceLineCoverageTest {
         .url("http://localhost/test")
         .rawCache(HttpSourceConfig.RawCacheConfig.enabled())
         .build();
-    HttpSource source = new HttpSource(config, null, null, "s3://bucket/raw");
+    HttpSource source = new HttpSource(config, null, new LocalFileStorageProvider(), "s3://bucket/raw");
     assertNotNull(source);
     source.close();
   }
