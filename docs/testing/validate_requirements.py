@@ -33,7 +33,7 @@ RTYPE = {"behavioral", "structural", "constraint", "ui", "infrastructure"}
 MODE = {"read", "write"}
 CARD = {"1:1", "1:N"}
 TOPO = {"single", "walking"}
-SEAM = {"bytes", "catalog", "json-set", "table", "execution"}
+SEAM = {"connection", "bytes", "catalog", "json-set", "table", "execution"}
 REQUIRED = ("id", "module", "status", "group", "priority", "type", "description")
 ID_RE = re.compile(r"^[A-Z]+-\d+$")
 

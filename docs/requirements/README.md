@@ -38,7 +38,7 @@ since       YYYY-MM (required when complete)
 mode        read | write
 cardinality 1:1 (simple format) | 1:N (complex format / walking source)
 topology    single | walking
-seam        bytes | catalog | json-set | table | execution   (what the test asserts up to)
+seam        connection | bytes | catalog | json-set | table | execution   (what the test asserts up to)
 applies     { engines: [...], storagetypes: [...] }           (cells the requirement holds for)
 exceptions  [ { engine|storagetype|format: <v>, reason: <why> } ]  (accepted-unsupported cells)
 ```
