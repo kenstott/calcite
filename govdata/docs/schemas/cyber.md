@@ -72,7 +72,7 @@ with configurable download automation.
 
 | Variable | Description |
 |---|---|
-| `CYBER_OTX_DELTA_DAYS` | If set to a positive integer, OTX fetches only pulses modified in the last N days. Unset or 0 = full backfill. |
+| `CYBER_OTX_CACHE_TTL_DAYS` | Opt-in OTX pull-cache TTL in days. Default 0 (off) — reuses the assembled pulse population for N days instead of re-crawling. |
 
 ---
 

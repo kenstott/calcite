@@ -82,7 +82,7 @@ For `cyber_vuln:initial`:
 For `cyber_threat:initial`:
 
 1. **Static standards**: NIST 800-53 Rev 5, NIST CSF 2.0, CIS Controls v8, OWASP Top 10, ATT&CK→NIST mappings
-2. **OTX full backfill** (only if `CYBER_OTX_API_KEY` is set; cursor-paginates all available pulses)
+2. **OTX full backfill** (only if `CYBER_OTX_API_KEY` is set; keyset-crawls all available pulses, ~182 requests / ~6.5 min)
 
 After initial completes, switch to the recurring cadence workers. Do not re-run `initial` routinely —
 it fetches the entire NVD catalog each time.
@@ -142,15 +142,15 @@ Applies to `cyber_threat`. Fetches the most current threat intelligence from liv
 | `ioc_hashes` | MalwareBazaar | Downloads ZIP+CSV of malware hashes |
 | `ioc_ips` | Feodo Tracker | JSON feed of botnet C2 IPs |
 | `ioc_mixed` | ThreatFox | POST API; requires `CYBER_THREATFOX_API_KEY` |
-| `threat_pulses` | AlienVault OTX | Cursor pagination; requires `CYBER_OTX_API_KEY`; uses `CYBER_OTX_DELTA_DAYS=1` for delta |
+| `threat_pulses` | AlienVault OTX | Keyset pagination on `modified`; requires `CYBER_OTX_API_KEY`; delta bound comes from the freshness watermark, not an env var |
 
 **When to run:** Every 1–4 hours depending on your threat intelligence freshness requirement.
 The IOC sources (URLhaus, MalwareBazaar, Feodo) are public and rate-limit-free.
 ThreatFox and OTX require API keys.
 
 ```bash
-# Set delta window for OTX before running
-export CYBER_OTX_DELTA_DAYS=1
+# The OTX delta bound is recovered automatically from the threat_pulses freshness
+# watermark (max pulse `modified`) — there is no delta env var to set.
 ./scripts/parallel/worker-cyber.sh hourly cyber_threat
 ```
 
@@ -212,8 +212,10 @@ Register for a free API key at [nvd.nist.gov/developers](https://nvd.nist.gov/de
 
 ### OTX 429 errors
 
-The OTX transformer automatically sleeps 60 seconds and retries on HTTP 429. If this happens
-frequently, increase `CYBER_OTX_DELTA_DAYS` in the hourly job to reduce the number of pages fetched.
+The OTX transformer honors the server's `Retry-After` on 429 and otherwise backs off
+exponentially, up to the `maxRetries` declared in the source's `rateLimit:` block in
+`cyber-threat-schema.yaml`. If 429s are frequent, lower `requestsPerSecond` in that same block —
+both values are read at runtime, so no code change is needed.
 
 ### Missing tables
 

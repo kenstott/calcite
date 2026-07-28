@@ -558,7 +558,7 @@ All 3 warns are from ioc_hashes (MalwareBazaar returned 0 rows this cycle — tr
 
 - **enabledTables not implemented in GovDataSchemaFactory**: The `enabledTables` operand in model JSON is silently ignored. All 11 tables run regardless of which are listed. Only `PatentsSchemaFactory` implements this filter. `worker-cyber.sh static` was intended to run 5 tables but runs all 11; `worker-cyber.sh hourly` runs all 11 instead of just the 4 IOC tables + threat_pulses.
 - **ioc_mixed ioc_value always NULL**: ThreatFox schema maps the IOC indicator value to `ioc_value` but the field is always null. The actual indicator appears to not be populated by the current transformer. T6 pk check uses `reporter IS NULL` as a proxy.
-- **OTX full-load performance**: Without `CYBER_OTX_DELTA_DAYS` set, `OtxResponseTransformer` paginates all subscribed pulses at 500ms/page. For initial load, set `CYBER_OTX_DELTA_DAYS=N` to limit scope. The hourly worker uses delta mode by design.
+- **OTX full-load performance**: `OtxResponseTransformer` keyset-crawls all subscribed pulses (~8.8k) in 182 requests at flat latency, ~6.4 min measured (8,847 rows). `dqRowLimit: 2000` caps the DQ sample. The hourly worker runs delta mode off the freshness watermark by design.
 
 ---
 
