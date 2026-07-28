@@ -820,12 +820,34 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             LOGGER.debug("Initialized filing cache from operatingDirectory: {}", this.secOperatingDirectory);
           }
 
+          // Accessions the caller demands be reprocessed regardless of tracker state.
+          //
+          // Read here, before the document tracker is built, because there are TWO independent
+          // "already done?" gates and both have to honour it. filterUnprocessed decides which
+          // accessions to enumerate; DocumentETLProcessor then re-asks per document through
+          // ProcessedDocumentTracker.isProcessed. Honouring the set in only the first gate makes
+          // the second silently discard everything the first selected — the run reports
+          // "N processed, 0 failed" with N skipped and writes nothing, which is indistinguishable
+          // from having had no work to do.
+          final Set<String> forceAccessions = new HashSet<String>();
+          Object forceAccObjEarly = operand.get("forceAccessions");
+          if (forceAccObjEarly instanceof List) {
+            for (Object acc : (List<?>) forceAccObjEarly) {
+              if (acc instanceof String) {
+                forceAccessions.add((String) acc);
+              }
+            }
+          }
+
           // Create document tracker using SecFilingCache (tracker-only decisions)
           final SecFilingCache cache = this.filingCache;
           final boolean vectorizationEnabled = isVectorizedChunksEnabled();
           ProcessedDocumentTracker documentTracker = cache != null
               ? new ProcessedDocumentTracker() {
                 @Override public boolean isProcessed(String cik, String accession, String formType) {
+                  if (forceAccessions.contains(accession)) {
+                    return false;
+                  }
                   String form = formType != null ? formType : "UNKNOWN";
                   ProcessingDecision decision = cache.checkFiling(cik, accession, form, "", vectorizationEnabled);
                   return !decision.shouldProcess();
@@ -952,15 +974,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               allEntries = cikFiltered;
             }
             boolean chunksBackfill = Boolean.TRUE.equals(operand.get("chunksBackfill"));
-            Object forceAccObj = operand.get("forceAccessions");
-            Set<String> forceAccessions = new HashSet<String>();
-            if (forceAccObj instanceof List) {
-              for (Object acc : (List<?>) forceAccObj) {
-                if (acc instanceof String) {
-                  forceAccessions.add((String) acc);
-                }
-              }
-            }
+            // Same set the document tracker was given above — parsed once so the two
+            // "already done?" gates cannot disagree about which accessions are forced.
             if (!forceAccessions.isEmpty()) {
               LOGGER.info("Force-reprocessing {} accession(s): {}", forceAccessions.size(),
                   forceAccessions);

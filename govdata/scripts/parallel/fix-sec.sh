@@ -376,6 +376,24 @@ for year in $YEARS; do
       log_info "fix-sec: batch $batches FAILED (year $year) — list kept at $bf"
       continue
     fi
+
+    # A zero exit is not evidence the batch did anything. The ETL reports success when it
+    # enumerated the accessions and then skipped every one of them, which is what a
+    # disagreement between the two "already done?" gates looks like from outside — and it
+    # is indistinguishable from a batch that legitimately had no work. Read the counts.
+    _wlog=$(ls -t "$SCRIPT_DIR/runs/worker-sec-reprocess"/etl_*.log 2>/dev/null | head -1)
+    _done_line=$(grep -h "Document ETL completed" "$_wlog" 2>/dev/null | tail -1)
+    _processed=$(printf '%s' "$_done_line" | sed -nE 's/.*completed: ([0-9]+) processed.*/\1/p')
+    _skipped=$(printf '%s' "$_done_line" | sed -nE 's/.*, ([0-9]+) skipped.*/\1/p')
+    if [ -n "$_processed" ] && [ "$_processed" = "0" ] && [ "${_skipped:-0}" -gt 0 ]; then
+      failed=$((failed + 1))
+      log_info "fix-sec: batch $batches processed 0 of $n accessions (${_skipped} skipped) —" \
+               "the ETL treated them as already done, so nothing was written."
+      log_info "  worker log: $_wlog"
+      log_info "  list kept at $bf"
+      continue
+    fi
+    log_info "fix-sec: batch $batches processed ${_processed:-?} accession(s)"
     rm -f "$bf"
   done
   rm -f "$year_file"
