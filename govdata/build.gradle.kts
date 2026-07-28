@@ -163,6 +163,20 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
+// Maven Central requires a javadoc jar carrying real generated documentation. The publish
+// workflow used to fabricate one from a stub text file, which is why govdata has never
+// published there while every other io.simpleishard artifact has.
+//
+// Javadoc does not currently pass doclint anywhere in this repo -- govdata reports 52 errors
+// and file 84 -- so generation runs with doclint off rather than being gated on a bar no
+// module meets. That is deliberately a packaging decision, not an endorsement: the underlying
+// doc defects (unescaped & in MD&A/R&D, out-of-sequence headings, unresolved @link targets)
+// are real and worth fixing separately.
+tasks.named<Javadoc>("javadoc") {
+    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+    isFailOnError = false
+}
+
 tasks.register("cleanTestLogs") {
     // Always run — no UP-TO-DATE skipping on ExFAT/APFS where ._* sidecar files accumulate
     outputs.upToDateWhen { false }

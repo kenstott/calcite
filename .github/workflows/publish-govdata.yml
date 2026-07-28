@@ -39,6 +39,14 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Central rejects a deployment whose sources/javadoc jars carry no real content, which
+      # is why govdata never published while the bundle fabricated them from a stub file.
+      - name: Build sources and javadoc JARs
+        run: ./gradlew :govdata:sourcesJar :govdata:javadocJar --no-daemon -PreleaseVersion=${{ steps.version.outputs.version }}
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish to GitHub Packages
         run: |
           OUTPUT=$(./gradlew :govdata:publishShadowPublicationToGitHubPackagesRepository \
@@ -82,10 +90,20 @@ jobs:
           cp "$JAR" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar"
           cp "$POM" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.pom"
 
-          # Minimal sources and javadoc JARs (required by Central)
-          echo "Sources: ${ARTIFACT_ID} ${VERSION}" > /tmp/placeholder.txt
-          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar" -C /tmp placeholder.txt
-          jar cf "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar" -C /tmp placeholder.txt
+          # Real sources and javadoc JARs, both required by Central with actual content.
+          # Fail loudly if either is missing rather than shipping a bundle Central will reject
+          # after accepting the upload -- that failure mode is invisible from the 201 response.
+          SOURCES=$(find govdata/build/libs -name "*-sources.jar" | head -1)
+          JAVADOC=$(find govdata/build/libs -name "*-javadoc.jar" | head -1)
+          if [ -z "$SOURCES" ] || [ -z "$JAVADOC" ]; then
+            echo "ERROR: sources/javadoc jar not found in govdata/build/libs" >&2
+            ls -l govdata/build/libs >&2
+            exit 1
+          fi
+          echo "sources: $SOURCES ($(du -h "$SOURCES" | cut -f1))"
+          echo "javadoc: $JAVADOC ($(du -h "$JAVADOC" | cut -f1))"
+          cp "$SOURCES" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar"
+          cp "$JAVADOC" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
 
           # GPG sign all four artifacts
           for f in \
