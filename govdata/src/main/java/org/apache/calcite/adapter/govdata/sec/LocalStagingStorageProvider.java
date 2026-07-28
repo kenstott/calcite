@@ -30,6 +30,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -106,6 +107,17 @@ public class LocalStagingStorageProvider implements StorageProvider {
   /** Maps each group key to the table type string (for merged filename). */
   private final Map<String, String> groupKeyToTableType =
       new LinkedHashMap<String, String>();
+
+  /**
+   * Object paths of batch files uploaded since the last {@link #drainUploadedPaths()}.
+   *
+   * <p>These are exactly the source files a following materialization pass has to absorb, which
+   * lets it skip the storage LIST it would otherwise need to discover them. Appended from
+   * {@link #flushFiles} — which runs outside {@link #lock}, on converter threads — so appends
+   * must be safe concurrently, and the drain must be atomic against them.
+   */
+  private final List<String> uploadedPaths =
+      Collections.synchronizedList(new ArrayList<String>());
 
   public LocalStagingStorageProvider(StorageProvider delegate) {
     this(delegate, resolveStagingDir());
@@ -227,6 +239,25 @@ public class LocalStagingStorageProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Returns the batch files uploaded since the previous call, and clears the record.
+   *
+   * <p>Call this immediately after {@link #flushAll()} and hand the result to the materialization
+   * pass: it is the complete set of new source files that pass has to absorb, so the pass can skip
+   * listing the partition to rediscover them. Draining rather than accumulating keeps the contract
+   * right for the periodic-commit loop, which flushes and materializes once per accession chunk —
+   * each pass then sees only its own chunk's files.
+   *
+   * @return uploaded object paths, oldest first; empty if nothing was uploaded since the last call
+   */
+  public List<String> drainUploadedPaths() {
+    synchronized (uploadedPaths) {
+      List<String> drained = new ArrayList<String>(uploadedPaths);
+      uploadedPaths.clear();
+      return drained;
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Internal staging and flushing
   // -----------------------------------------------------------------------
@@ -295,6 +326,7 @@ public class LocalStagingStorageProvider implements StorageProvider {
       }
       LOGGER.info("Uploaded batch {} to R2: {} ({} source files)",
           batchNum, r2TargetPath, files.size());
+      uploadedPaths.add(r2TargetPath);
 
     } finally {
       // Clean up: delete staged files and merged temp file (if it's different from a staged file)

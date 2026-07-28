@@ -232,6 +232,7 @@ public class IcebergMaterializer {
     private final int rowBatchSize;
     private final int fileChunkSize;  // Max files per DuckDB query; 0 = use glob (no chunking)
     private final String rowFilter;  // Optional WHERE clause filter (e.g., "cik IN ('0001', '0002')")
+    private final List<String> stagedSourceFiles;  // New source files from this run; null = discover by LIST
     private final String icebergTableLocation;  // Iceberg table location for accession-level dedup
     private final String accessionColumn;  // Column name for accession (default: "accession_number")
     // Columns excluded from full-row dedup because they are synthesized per conversion and thus
@@ -266,6 +267,7 @@ public class IcebergMaterializer {
       this.rowBatchSize = builder.rowBatchSize;
       this.fileChunkSize = builder.fileChunkSize > 0 ? builder.fileChunkSize : DEFAULT_FILE_CHUNK_SIZE;
       this.rowFilter = builder.rowFilter;
+      this.stagedSourceFiles = builder.stagedSourceFiles;
       this.icebergTableLocation = builder.icebergTableLocation;
       this.accessionColumn = builder.accessionColumn != null ? builder.accessionColumn : "accession_number";
       this.dedupIgnoreColumns = builder.dedupIgnoreColumns != null
@@ -373,6 +375,23 @@ public class IcebergMaterializer {
     }
 
     /**
+     * Returns the source files written by the ETL pass that is about to be materialized, or
+     * {@code null} when the caller cannot vouch for that set and the partition must be listed.
+     *
+     * <p>Supplying it turns discovery of new source files from a storage LIST into a lookup.
+     * That matters because the LIST is charged per object: an 8k-object partition costs minutes
+     * against object storage backed by spinning disks, and it is repeated every run to find the
+     * handful of files the run itself just wrote.
+     *
+     * <p>Only supply it when the ETL pass completed cleanly in this process. A pass that failed
+     * partway, or a materialization running without one, cannot enumerate what is unabsorbed —
+     * that is what the LIST is for.
+     */
+    public List<String> getStagedSourceFiles() {
+      return stagedSourceFiles;
+    }
+
+    /**
      * Returns the Iceberg table location for accession-level deduplication.
      * When set, the materializer will query this table for existing accessions
      * and skip re-processing them.
@@ -426,6 +445,7 @@ public class IcebergMaterializer {
       private int rowBatchSize;
       private int fileChunkSize;
       private String rowFilter;
+      private List<String> stagedSourceFiles;
       private String icebergTableLocation;
       private String accessionColumn;
       private List<String> dedupIgnoreColumns;
@@ -533,6 +553,17 @@ public class IcebergMaterializer {
        */
       public Builder rowFilter(String rowFilter) {
         this.rowFilter = rowFilter;
+        return this;
+      }
+
+      /**
+       * Declares the source files a just-completed ETL pass wrote, letting materialization skip
+       * the partition LIST it would otherwise need to find them. Leave unset (null) whenever the
+       * caller cannot guarantee the set is complete — see
+       * {@link MaterializationConfig#getStagedSourceFiles()}.
+       */
+      public Builder stagedSourceFiles(List<String> stagedSourceFiles) {
+        this.stagedSourceFiles = stagedSourceFiles;
         return this;
       }
 
@@ -940,7 +971,15 @@ public class IcebergMaterializer {
         // Self-heal: if DuckDB returned 0 new rows, ensure tracker has entries for
         // all source accessions. This handles the case where data exists in Iceberg
         // but the tracker was reset or never populated (e.g., first run with new tracker).
-        if (newAccessions.isEmpty() && yearValue != null) {
+        //
+        // Skipped when the caller supplied its staged files: self-heal reconstructs the source
+        // accessions by listing the partition, which is the very cost the staged list exists to
+        // avoid — and it triggers on exactly the common case, a clean run that found nothing new.
+        // Nothing is lost by skipping it, because a run that supplies a staged list is one whose
+        // ETL pass completed here; the reset/never-populated tracker it repairs arises on the
+        // recovery paths, and those pass no staged list and still self-heal.
+        if (newAccessions.isEmpty() && yearValue != null
+            && config.getStagedSourceFiles() == null) {
           selfHealTracker(config, yearValue, excludeAccessions);
         }
 
@@ -1081,9 +1120,16 @@ public class IcebergMaterializer {
         }
       }
 
-      // Fast skip: compare tracked accessions against source accessions from S3 LIST cache
       String year = batch.get("year");
-      if (year != null && !excludeAccessions.isEmpty()) {
+
+      // When the caller handed us the files its ETL pass just wrote, that IS the set of new
+      // source files — every discovery step below exists only to reconstruct it from storage.
+      // Both of them (the fast-skip accession compare and getNewSourceFilePaths) reach the same
+      // partition LIST, so the staged list has to bypass both or the LIST still happens.
+      List<String> stagedPaths = getStagedFilePathsForBatch(config, year);
+
+      // Fast skip: compare tracked accessions against source accessions from S3 LIST cache
+      if (stagedPaths == null && year != null && !excludeAccessions.isEmpty()) {
         Set<String> sourceAccessions =
             getFilteredSourceAccessions(config.getSourcePattern(), year, config.getRowFilter());
         if (sourceAccessions != null && !sourceAccessions.isEmpty()) {
@@ -1107,8 +1153,14 @@ public class IcebergMaterializer {
 
       // Try file-list chunking: avoids scanning 100k+ files via a single glob query.
       // Falls back to glob-based processing when S3 LIST data is unavailable.
-      List<String> newFilePaths =
-          getNewSourceFilePaths(config.getSourcePattern(), year, config.getRowFilter(), excludeAccessions);
+      List<String> newFilePaths = stagedPaths;
+      if (newFilePaths == null) {
+        newFilePaths =
+            getNewSourceFilePaths(config.getSourcePattern(), year, config.getRowFilter(), excludeAccessions);
+      } else {
+        LOGGER.info("Staged-file list: {} new files for year={} on {} — partition not listed",
+            newFilePaths.size(), year, config.getTargetTableId());
+      }
 
       if (newFilePaths != null) {
         if (newFilePaths.isEmpty()) {
@@ -2040,15 +2092,7 @@ public class IcebergMaterializer {
     }
 
     // Derive cache key to look up paths (same logic as getSourceAccessions)
-    String fileSuffix = "_metadata.parquet";
-    int lastSlashIdx = sourcePattern.lastIndexOf('/');
-    if (lastSlashIdx > 0) {
-      String filePattern = sourcePattern.substring(lastSlashIdx + 1);
-      int starIdx = filePattern.indexOf('*');
-      if (starIdx >= 0 && starIdx < filePattern.length() - 1) {
-        fileSuffix = filePattern.substring(starIdx + 1);
-      }
-    }
+    String fileSuffix = deriveFileSuffix(sourcePattern);
     String cacheKey = year + ":" + fileSuffix;
     Map<String, String> pathsMap = sourcePathsCache.get(cacheKey);
     if (pathsMap == null) {
@@ -2075,6 +2119,88 @@ public class IcebergMaterializer {
       }
     }
     return newPaths;
+  }
+
+  /**
+   * Derives the source filename suffix a table selects, from its source pattern.
+   *
+   * <p>{@code .../year=*}{@code /*_facts.parquet} yields {@code _facts.parquet}. The suffix may
+   * itself contain a wildcard ({@code metadata*.parquet}), which {@link #matchesFileSuffix}
+   * interprets.
+   */
+  private static String deriveFileSuffix(String sourcePattern) {
+    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    if (lastSlashIdx > 0) {
+      String filePattern = sourcePattern.substring(lastSlashIdx + 1);
+      int starIdx = filePattern.indexOf('*');
+      if (starIdx >= 0 && starIdx < filePattern.length() - 1) {
+        return filePattern.substring(starIdx + 1);
+      }
+    }
+    return "_metadata.parquet";
+  }
+
+  /**
+   * Returns whether a filename satisfies a suffix from {@link #deriveFileSuffix}.
+   *
+   * <p>A suffix containing {@code *} matches when its literal parts occur in order — the same
+   * rule {@link #getSourceAccessions} applies to listed files, which hoists the split out of its
+   * per-file loop because it scans whole partitions. This form takes a handful of files at a time.
+   */
+  private static boolean matchesFileSuffix(String fileName, String fileSuffix) {
+    if (!fileSuffix.contains("*")) {
+      return fileName.endsWith(fileSuffix);
+    }
+    int searchFrom = 0;
+    for (String part : fileSuffix.split("\\*", -1)) {
+      if (part.isEmpty()) {
+        continue;
+      }
+      int idx = fileName.indexOf(part, searchFrom);
+      if (idx < 0) {
+        return false;
+      }
+      searchFrom = idx + part.length();
+    }
+    return true;
+  }
+
+  /**
+   * Narrows the caller-supplied staged files to the ones this batch is responsible for.
+   *
+   * <p>One ETL pass writes for every table and every year partition it touched, so the list has
+   * to be split by both before a batch can use it: entries outside {@code year}, nested below the
+   * partition, or belonging to another table's suffix are dropped. Returns {@code null} — meaning
+   * "discover by listing instead" — when no staged list was supplied or the batch is not
+   * year-partitioned, since neither can be answered from the list.
+   */
+  private List<String> getStagedFilePathsForBatch(MaterializationConfig config, String year) {
+    return filterStagedFilesForBatch(config.getStagedSourceFiles(), config.getSourcePattern(), year);
+  }
+
+  /** Pure filtering half of {@link #getStagedFilePathsForBatch}, split out to be testable. */
+  static List<String> filterStagedFilesForBatch(List<String> staged, String sourcePattern,
+      String year) {
+    if (staged == null || year == null) {
+      return null;
+    }
+    String fileSuffix = deriveFileSuffix(sourcePattern);
+    String yearMarker = "year=" + year + "/";
+    List<String> matched = new ArrayList<String>();
+    for (String path : staged) {
+      int markerIdx = path.indexOf(yearMarker);
+      if (markerIdx < 0) {
+        continue;
+      }
+      String remainder = path.substring(markerIdx + yearMarker.length());
+      if (remainder.indexOf('/') >= 0) {
+        continue;
+      }
+      if (matchesFileSuffix(remainder, fileSuffix)) {
+        matched.add(path);
+      }
+    }
+    return matched;
   }
 
   /**

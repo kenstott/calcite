@@ -98,6 +98,60 @@ class LocalStagingStorageProviderTest {
         "flushAll should produce exactly 1 delegate write for same table+partition group");
   }
 
+  /**
+   * The drained paths are what materialization absorbs instead of listing the partition, so they
+   * must name every batch file uploaded and nothing else.
+   */
+  @Test
+  void testDrainReportsUploadedBatchPaths() throws IOException {
+    String r2Base = "/r2/sec/parquet/year=2024";
+    staging.writeAvroParquet(r2Base + "/cik0_facts.parquet", FACTS_SCHEMA,
+        makeRecords(FACTS_SCHEMA, "cik0", 1), "XbrlFact");
+    staging.writeAvroParquet(r2Base + "/cik0_metadata.parquet", FACTS_SCHEMA,
+        makeRecords(FACTS_SCHEMA, "cik0", 1), "FilingMetadata");
+
+    assertTrue(staging.drainUploadedPaths().isEmpty(),
+        "nothing is uploaded until flush, so nothing is claimed as materializable");
+
+    staging.flushAll();
+    List<String> drained = staging.drainUploadedPaths();
+
+    assertEquals(2, drained.size(), "one batch path per flushed group, got " + drained);
+    assertTrue(drained.contains(r2Base + "/facts_batch_0000.parquet")
+            || drained.contains(r2Base + "/facts_batch_0001.parquet"),
+        "expected the facts batch path, got " + drained);
+    for (String path : drained) {
+      assertTrue(path.startsWith(r2Base + "/"), "path outside the partition: " + path);
+    }
+  }
+
+  /**
+   * The periodic-commit loop flushes and materializes once per accession chunk, so each drain must
+   * return only that chunk's uploads. Re-reporting an earlier chunk's files would re-materialize
+   * them; the row-level dedup would absorb the damage, but the work is exactly what this avoids.
+   */
+  @Test
+  void testDrainClearsSoChunksDoNotOverlap() throws IOException {
+    String r2Base = "/r2/sec/parquet/year=2024";
+
+    staging.writeAvroParquet(r2Base + "/cik0_facts.parquet", FACTS_SCHEMA,
+        makeRecords(FACTS_SCHEMA, "cik0", 1), "XbrlFact");
+    staging.flushAll();
+    List<String> firstChunk = staging.drainUploadedPaths();
+
+    staging.writeAvroParquet(r2Base + "/cik1_facts.parquet", FACTS_SCHEMA,
+        makeRecords(FACTS_SCHEMA, "cik1", 1), "XbrlFact");
+    staging.flushAll();
+    List<String> secondChunk = staging.drainUploadedPaths();
+
+    assertEquals(1, firstChunk.size(), "first chunk should report its single batch");
+    assertEquals(1, secondChunk.size(), "second chunk should report only its own batch");
+    assertTrue(!secondChunk.contains(firstChunk.get(0)),
+        "second drain re-reported the first chunk's file " + firstChunk.get(0));
+    assertTrue(staging.drainUploadedPaths().isEmpty(),
+        "a drain with no intervening flush should report nothing");
+  }
+
   @Test
   void testDifferentTableTypesFlushSeparately() throws IOException {
     String r2Base = "/r2/sec/parquet/year=2024";

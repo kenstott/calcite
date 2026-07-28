@@ -790,6 +790,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String secParquetDir = govdataParquetDir;
 
       DocumentETLProcessor.DocumentETLResult result;
+      // Source files the filing ETL pass uploaded, for materialization to absorb without listing
+      // the partitions. Stays null when no such pass ran — the prices-only and no-CIK paths fall
+      // through to materialization without one, and a pass that never ran cannot account for what
+      // is unabsorbed, so those keep listing.
+      List<String> stagedSourceFiles = null;
 
       if (!ciks.isEmpty()) {
         // When filingTypes is empty (e.g., prices-only workers), skip all filing
@@ -1015,7 +1020,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 LOGGER.info("Periodic commit after {}/{} accessions — flushing staged "
                     + "parquet and materializing to Iceberg", chunkEnd, total);
                 stagingProvider.flushAll();
-                materializeStagingFilesToIceberg(operand, secParquetDir);
+                materializeStagingFilesToIceberg(operand, secParquetDir,
+                    stagedFilesFor(chunkResult, stagingProvider));
               }
             }
             result = new DocumentETLProcessor.DocumentETLResult(
@@ -1051,6 +1057,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               result.getDocumentsSkipped(),
               result.getDocumentsFailed(),
               result.getDurationMs());
+
+          // Everything this pass produced is uploaded by now, so the staging provider's record of
+          // it is a complete account of the new source files.
+          stagedSourceFiles = stagedFilesFor(result, stagingProvider);
         } else {
           LOGGER.info("No filing types configured — skipping filing processing");
           result = new DocumentETLProcessor.DocumentETLResult(
@@ -1078,7 +1088,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
       // Always run materialization — even with empty CIKs or no new documents,
       // existing parquet files still need to be materialized to Iceberg tables
-      materializeStagingFilesToIceberg(operand, secParquetDir);
+      materializeStagingFilesToIceberg(operand, secParquetDir, stagedSourceFiles);
 
       return result;
 
@@ -1106,7 +1116,40 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * @param secParquetDir Base directory for SEC parquet files
    */
   @SuppressWarnings("unchecked")
-  private void materializeStagingFilesToIceberg(Map<String, Object> operand, String secParquetDir) {
+  /**
+   * Decides whether materialization can trust the ETL pass's own record of what it wrote, and
+   * always drains that record so it cannot carry into a later pass.
+   *
+   * <p>Returns the uploaded paths only when the pass finished without failures. The list has to
+   * account for every unabsorbed source file, not merely the ones this pass happened to write —
+   * and a pass that failed partway cannot promise that, so the caller gets {@code null} and
+   * materialization goes back to listing the partition, which is what finds files an earlier run
+   * left behind. Callers that never ran a pass at all pass {@code null} without asking.
+   *
+   * <p>An empty list is not the same as {@code null}: it means a pass ran cleanly and wrote
+   * nothing, so there is genuinely nothing to absorb and listing would only confirm it.
+   */
+  private static List<String> stagedFilesFor(
+      DocumentETLProcessor.DocumentETLResult result, LocalStagingStorageProvider stagingProvider) {
+    List<String> uploaded = stagingProvider.drainUploadedPaths();
+    if (result.getDocumentsFailed() > 0) {
+      LOGGER.info("ETL pass reported {} failed documents — materializing via partition listing so "
+          + "any source file left unabsorbed is still picked up", result.getDocumentsFailed());
+      return null;
+    }
+    LOGGER.info("ETL pass uploaded {} source files — materializing those without listing partitions",
+        uploaded.size());
+    return uploaded;
+  }
+
+  /**
+   * @param stagedSourceFiles Source files the just-completed ETL pass uploaded, letting each table
+   *     skip the partition LIST it would otherwise need to rediscover them. Pass {@code null}
+   *     whenever that set cannot be vouched for — no ETL pass ran, or one ran and failed partway —
+   *     so materialization falls back to listing and still picks up anything left unabsorbed.
+   */
+  private void materializeStagingFilesToIceberg(Map<String, Object> operand, String secParquetDir,
+      List<String> stagedSourceFiles) {
     LOGGER.info("Starting Iceberg materialization for SEC tables using IcebergMaterializer");
 
     // Load table definitions from YAML
@@ -1196,7 +1239,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // Build MaterializationConfig from table config
         IcebergMaterializer.MaterializationConfig config =
             buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
-                tableConfig, operand, warehousePath);
+                tableConfig, operand, warehousePath, stagedSourceFiles);
 
         // Clean up old empty parquet files that can cause DuckDB union_by_name issues
         cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
@@ -1239,7 +1282,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   @SuppressWarnings("unchecked")
   private IcebergMaterializer.MaterializationConfig buildMaterializationConfig(
       String tableName, String icebergTableName, String baseDir, String pattern,
-      Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath) {
+      Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath,
+      List<String> stagedSourceFiles) {
 
     // Build source pattern
     String sourcePattern = storageProvider.resolvePath(baseDir, pattern);
@@ -1398,6 +1442,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .rowBatchSize(rowBatchSize)
         .fileChunkSize(fileChunkSize)
         .rowFilter(rowFilter)
+        .stagedSourceFiles(stagedSourceFiles)
         .icebergTableLocation(warehousePath + "/" + icebergTableName)
         .accessionColumn("accession_number")
         .dedupIgnoreColumns(dedupIgnoreColumns)
