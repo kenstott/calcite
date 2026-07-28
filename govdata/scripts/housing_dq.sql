@@ -215,11 +215,6 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/
 -- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
-SELECT schema, tbl, test, status, value, threshold, detail
-FROM dq_results
-ORDER BY schema, tbl, test;
-
-
 -- ============================================================================
 -- T1/T2 — tables previously absent from this file entirely.
 -- A table with no checks emits no dq rows, which reads as healthy rather than as
@@ -241,6 +236,11 @@ WITH counts AS (
 )
 SELECT 'housing', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
-       CAST(n AS VARCHAR), '>0',
+       n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
+
+
+SELECT schema, tbl, test, status, value, threshold, detail
+FROM dq_results
+ORDER BY schema, tbl, test;

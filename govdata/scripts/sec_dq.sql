@@ -113,7 +113,7 @@ WITH counts AS (
 )
 SELECT 'sec', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
-       CAST(n AS VARCHAR), '>0',
+       n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
 
