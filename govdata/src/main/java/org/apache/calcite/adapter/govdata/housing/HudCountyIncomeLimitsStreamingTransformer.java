@@ -56,7 +56,13 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
   private static final String API_MARKER = "/hudapi/public/";
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 60_000;
-  private static final int MAX_RETRIES = 3;
+  private static final int MAX_RETRIES = 5;
+
+  /** First backoff step; doubles per attempt (1s, 2s, 4s, 8s, 16s) up to {@link #MAX_BACKOFF_MS}. */
+  private static final long BASE_BACKOFF_MS = 1_000L;
+
+  /** Ceiling on any single wait, including a server-supplied {@code Retry-After}. */
+  private static final long MAX_BACKOFF_MS = 60_000L;
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
@@ -114,6 +120,7 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
       conn.setRequestProperty("User-Agent", "GovData/1.0");
       conn.setRequestProperty("Authorization", auth);
       int status;
+      long waitMs;
       try {
         status = conn.getResponseCode();
         if (status == HttpURLConnection.HTTP_NOT_FOUND) {
@@ -126,12 +133,44 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
           throw new IOException("HTTP " + status + " from " + url);
         }
         last = new IOException("HTTP " + status + " from " + url);
+        // Read Retry-After before disconnect: when HUD states how long its rate-limit window
+        // has left, obey it. Guessing shorter just burns an attempt and returns another 429.
+        waitMs = retryAfterMs(conn, attempt);
       } finally {
         conn.disconnect();
       }
-      sleepBackoff(attempt);
+      sleepMillis(waitMs);
     }
     throw last != null ? last : new IOException("GET failed: " + url);
+  }
+
+  /**
+   * How long to wait before the next attempt: the server's {@code Retry-After} when present,
+   * otherwise exponential backoff.
+   *
+   * <p>This used to be {@code 500ms * attempt} over 3 attempts — about 3 seconds of total
+   * patience against a rate-limit window measured in minutes. Every attempt returned 429, the
+   * fetch threw, the whole state batch failed, and a failed batch records no completion marker.
+   * So the next run re-expanded all 180 state/year combos and re-fetched every one of them:
+   * income_limits_county burned ~60 minutes per run, permanently, without ever finishing.
+   *
+   * @param attempt 1-based attempt number that just failed
+   */
+  private static long retryAfterMs(HttpURLConnection conn, int attempt) {
+    String header = conn.getHeaderField("Retry-After");
+    if (header != null && !header.trim().isEmpty()) {
+      try {
+        // Delta-seconds form. The HTTP-date form is legal too but HUD sends seconds; an
+        // unparseable value falls through to backoff rather than being treated as zero.
+        long seconds = Long.parseLong(header.trim());
+        if (seconds >= 0) {
+          return Math.min(seconds * 1000L, MAX_BACKOFF_MS);
+        }
+      } catch (NumberFormatException ignored) {
+        // fall through to exponential backoff
+      }
+    }
+    return Math.min(BASE_BACKOFF_MS << (attempt - 1), MAX_BACKOFF_MS);
   }
 
   private static String readBody(InputStream in) throws IOException {
@@ -146,9 +185,12 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
     return sb.toString();
   }
 
-  private static void sleepBackoff(int attempt) throws IOException {
+  private static void sleepMillis(long millis) throws IOException {
+    if (millis <= 0) {
+      return;
+    }
     try {
-      Thread.sleep(500L * attempt);
+      Thread.sleep(millis);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IOException("interrupted during HUD retry backoff", e);
