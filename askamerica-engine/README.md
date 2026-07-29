@@ -1,6 +1,6 @@
 # AskAmerica JDBC Driver
 
-Query 15 US government datasets — SEC filings, census, economic indicators, crime, weather, and more — using standard SQL from any JDBC client.
+Query 25 US government datasets — SEC filings, census, economic indicators, crime, weather, and more — using standard SQL from any JDBC client.
 
 ## Download
 
@@ -63,6 +63,7 @@ jdbc:askamerica:source=fec,crime,weather
 | `transport` | NHTSA recalls/complaints/FARS crashes, BTS airline on-time & T-100, FAA airports, FTA transit ridership |
 | `environment` | EPA air quality, TRI, GHG, drinking water, Superfund/RCRA facilities + USGS water |
 | `research` | NSF NCSES R&D: National Patterns, Federal Funds for R&D, Higher Education R&D (HERD) |
+| `fiscal` | Federal revenue and outlays: IRS SOI income/tax by ZIP and county, USAspending obligations, SBA loans, SSA |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
 
 ## DBeaver setup
