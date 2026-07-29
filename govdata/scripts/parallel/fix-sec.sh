@@ -61,6 +61,8 @@
 #   fix-sec.sh --table metadata                 # report one staging table's gap
 #   fix-sec.sh --batch-size 1000 --confirm      # smaller worker invocations
 #   fix-sec.sh --max-accessions 500 --confirm   # cap the run (rehearsal)
+#   fix-sec.sh --threads 12 --heap 16 --confirm # push harder on an otherwise idle box
+#   fix-sec.sh --threads 2 --heap 3 --confirm   # back off to pool-sized resources
 #
 set -uo pipefail
 
@@ -91,6 +93,15 @@ BATCH_SIZE=2000
 MAX_ACCESSIONS=0
 VERIFY=true
 VERIFY_N=12
+# Reprocessing is a bulk backfill, not the steady-state pipeline, so it is sized for the
+# machine rather than for coexisting with a pool. .env.prod pins ETL_PARALLEL_THREADS=2 —
+# correct when several schema workers share the box, wasteful when this is the only thing
+# running: a measured batch held ~66% of ONE core and 40% disk utilisation at queue depth
+# 0.73, so both CPU and spindle were mostly idle waiting for work to be handed to them.
+# Heap has to rise with the thread count: each worker thread holds a document in flight, and
+# the run above sat at 2.48G RSS against -Xmx3g with only two of them.
+THREADS=8
+HEAP_GB=12
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -101,6 +112,8 @@ while [ $# -gt 0 ]; do
     --max-accessions) shift; MAX_ACCESSIONS="${1:-}" ;;
     --no-verify)      VERIFY=false ;;
     --verify-n)       shift; VERIFY_N="${1:-}" ;;
+    --threads)        shift; THREADS="${1:-}" ;;
+    --heap)           shift; HEAP_GB="${1:-}" ;;
     -h|--help)        sed -n '18,62p' "$0" >&2; exit 0 ;;
     *) echo "fix-sec: unknown argument '$1'" >&2; exit 2 ;;
   esac
@@ -117,6 +130,17 @@ done
 # Accessions are passed to worker-sec-reprocess.sh as positional arguments, so a batch has
 # to fit argv. At ~21 bytes each plus the rest of the command line, cap well under ARG_MAX
 # rather than discovering the limit as "Argument list too long" partway through a repair.
+[[ "$THREADS" =~ ^[0-9]+$ ]] && [ "$THREADS" -gt 0 ] \
+  || { echo "fix-sec: --threads must be a positive integer" >&2; exit 2; }
+[[ "$HEAP_GB" =~ ^[0-9]+$ ]] && [ "$HEAP_GB" -gt 0 ] \
+  || { echo "fix-sec: --heap must be a positive integer (GB)" >&2; exit 2; }
+
+# Applies to every worker-sec-reprocess.sh invocation below. Exported rather than passed:
+# run_etl reads both from the environment, and .env.prod's values would otherwise win.
+export ETL_PARALLEL_THREADS="$THREADS"
+export ETL_HEAP_MIN="$((HEAP_GB / 2))g"
+export ETL_HEAP_MAX="${HEAP_GB}g"
+
 ARG_MAX="$(getconf ARG_MAX 2>/dev/null || echo 2097152)"
 MAX_BATCH=$(( (ARG_MAX / 2) / 21 ))
 if [ "$BATCH_SIZE" -gt "$MAX_BATCH" ]; then
