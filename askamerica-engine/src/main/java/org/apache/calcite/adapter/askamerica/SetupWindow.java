@@ -244,11 +244,18 @@ public class SetupWindow {
         setStatus("Writing configuration…", null);
 
         try {
-            for (Path configPath : claudeConfigPaths()) {
+            List<Path> written = claudeConfigPaths();
+            for (Path configPath : written) {
                 writeClaudeConfig(configPath, apiKey);
             }
             saveTelemetryOptIn(telemetryCheckbox.isSelected());
-            setStatus("Done! Restart Claude Desktop to activate.", true);
+            // Name the count, and the paths on hover: a bare "Done!" was reported after
+            // writing a config file Claude Desktop does not read, which is unfalsifiable
+            // from the wizard and looks identical to success.
+            setStatus("Done! Updated " + written.size()
+                + (written.size() == 1 ? " config file. " : " config files. ")
+                + "Restart Claude Desktop to activate.", true);
+            statusLabel.setToolTipText(written.toString());
             configureBtn.setText("Configure again");
         } catch (Exception ex) {
             setStatus("Error: " + ex.getMessage(), false);
@@ -338,6 +345,9 @@ public class SetupWindow {
     private static List<Path> claudeConfigPaths() throws IOException {
         String os = System.getProperty("os.name", "").toLowerCase();
         List<Path> candidates = new ArrayList<>();
+        // Container-redirected dirs, kept apart from `candidates`: their package root
+        // proves the app is installed, so they are written whether or not the leaf exists.
+        List<Path> containerDirs = new ArrayList<>();
         if (os.contains("mac")) {
             candidates.add(Paths.get(System.getProperty("user.home"),
                 "Library", "Application Support", "Claude"));
@@ -350,7 +360,7 @@ public class SetupWindow {
                         Files.newDirectoryStream(packages, "Claude_*");
                     try {
                         for (Path pkg : pkgs) {
-                            candidates.add(pkg.resolve("LocalCache")
+                            containerDirs.add(pkg.resolve("LocalCache")
                                 .resolve("Roaming").resolve("Claude"));
                         }
                     } finally {
@@ -368,14 +378,24 @@ public class SetupWindow {
         }
 
         List<Path> configs = new ArrayList<>();
+        for (Path dir : containerDirs) {
+            // Claude Desktop creates this leaf lazily, on its first config write. Gating it
+            // on Files.isDirectory dropped it silently whenever it was absent, leaving
+            // %APPDATA%\Claude as the only write target — a file the containerised app never
+            // reads — while the wizard still reported success. Create it instead.
+            Files.createDirectories(dir);
+            configs.add(dir.resolve("claude_desktop_config.json"));
+        }
         for (Path dir : candidates) {
             if (Files.isDirectory(dir)) {
                 configs.add(dir.resolve("claude_desktop_config.json"));
             }
         }
         if (configs.isEmpty()) {
+            List<Path> looked = new ArrayList<>(containerDirs);
+            looked.addAll(candidates);
             throw new IOException("Claude Desktop's config folder was not found (looked in "
-                + candidates + "). Install Claude Desktop and launch it once, "
+                + looked + "). Install Claude Desktop and launch it once, "
                 + "then click Configure again.");
         }
         return configs;
