@@ -75,6 +75,16 @@ load_env() {
     local _saved_pg_url="${GOVDATA_TRACKER_PG_URL:-}"
     local _saved_pg_user="${GOVDATA_TRACKER_PG_USER:-}"
     local _saved_pg_pass="${GOVDATA_TRACKER_PG_PASSWORD:-}"
+    # Worker resourcing: .env.prod sizes these for a shared pool. A caller running one job on an
+    # otherwise idle box (fix-sec.sh) raises them deliberately, and worker scripts call load_env
+    # again for themselves — so without preserving them the child silently reverts to pool sizing
+    # and the override looks like it did nothing.
+    local _pre_threads="${ETL_PARALLEL_THREADS+set}"
+    local _pre_heap_min="${ETL_HEAP_MIN+set}"
+    local _pre_heap_max="${ETL_HEAP_MAX+set}"
+    local _saved_threads="${ETL_PARALLEL_THREADS:-}"
+    local _saved_heap_min="${ETL_HEAP_MIN:-}"
+    local _saved_heap_max="${ETL_HEAP_MAX:-}"
 
     set -a
     # shellcheck disable=SC1090
@@ -97,6 +107,9 @@ load_env() {
     [ "${_pre_pg_url}" = "set" ] && export GOVDATA_TRACKER_PG_URL="$_saved_pg_url"
     [ "${_pre_pg_user}" = "set" ] && export GOVDATA_TRACKER_PG_USER="$_saved_pg_user"
     [ "${_pre_pg_pass}" = "set" ] && export GOVDATA_TRACKER_PG_PASSWORD="$_saved_pg_pass"
+    [ "${_pre_threads}" = "set" ] && export ETL_PARALLEL_THREADS="$_saved_threads"
+    [ "${_pre_heap_min}" = "set" ] && export ETL_HEAP_MIN="$_saved_heap_min"
+    [ "${_pre_heap_max}" = "set" ] && export ETL_HEAP_MAX="$_saved_heap_max"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
