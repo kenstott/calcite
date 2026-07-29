@@ -128,10 +128,17 @@ public final class S3FileIOTables {
    * @return true if the version hint is present, false if it is absent
    */
   public static boolean exists(String tablePath, Map<String, String> s3Config) {
-    S3FileIO io = newIO(s3Config);
     String root = stripTrailingSlash(tablePath);
     String hintPath = root + "/metadata/version-hint.text";
-    try (InputStream is = io.newInputFile(hintPath).newStream();
+    // Unlike load/create/loadWritable, which hand their S3FileIO to a TableOperations that must
+    // outlive the call, this one uses it purely as a probe and discards it. Left unclosed it
+    // strands an S3 client and its connection pool until finalization — one per table per
+    // materialize pass, which a long backfill repeats thousands of times, and which surfaces as
+    // "Unclosed S3FileIO instance created by ..." from the Finalizer thread.
+    //
+    // io is declared first so it closes LAST, after the stream and reader that borrow from it.
+    try (S3FileIO io = newIO(s3Config);
+         InputStream is = io.newInputFile(hintPath).newStream();
          BufferedReader reader =
              new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
       String line = reader.readLine();
