@@ -132,8 +132,15 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      # -PreleaseVersion is what stamps AskAmerica-Engine-Version into the jar manifest.
+      # Without it the published asset carries no engine version, EngineInstaller cannot
+      # tell whether a cached jar is current, and every install is pinned to whatever jar
+      # it downloaded first.
       - name: Build shadow JAR
-        run: ./gradlew :askamerica-engine:shadowJar --no-daemon
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          ./gradlew :askamerica-engine:shadowJar --no-daemon -PreleaseVersion="$VERSION"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

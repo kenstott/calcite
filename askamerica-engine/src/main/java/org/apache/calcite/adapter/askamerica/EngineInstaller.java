@@ -53,6 +53,10 @@ final class EngineInstaller {
     private static final String DEFAULT_URL =
         "https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar";
 
+    /** Newest published release; {@code tag_name} is {@code engine-vX.Y.Z}. */
+    private static final String LATEST_API =
+        "https://api.github.com/repos/kenstott/calcite/releases/latest";
+
     static Path cacheJar() {
         return Paths.get(System.getProperty("user.home"),
             ".askamerica", "engine", "askamerica-engine.jar");
@@ -94,15 +98,130 @@ final class EngineInstaller {
      */
     static Path ensure(File launcherDir, boolean headless)
         throws IOException, InterruptedException {
+        Path dest = cacheJar();
         Path existing = resolveExisting(launcherDir);
-        if (existing != null) {
+        if (existing != null && !existing.equals(dest)) {
+            // ASKAMERICA_ENGINE_JAR, or a jar dropped beside the launcher, is a deliberate
+            // pin by an operator — report the version but never replace it.
+            report("Using pinned engine jar " + existing + " (" + describe(existing) + ").");
             return existing;
         }
-        Path dest = cacheJar();
+        if (existing != null && !isStale(existing)) {
+            return existing;
+        }
         Files.createDirectories(dest.getParent());
         String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", DEFAULT_URL);
         download(url, dest, headless);
         return dest;
+    }
+
+    /**
+     * True when the cached jar is a different release from the newest published one.
+     *
+     * <p>An unreachable GitHub means "cannot tell", which resolves to not-stale: a check
+     * that could not run must never discard a working install. It is reported rather than
+     * swallowed, though — a silent "cannot tell" is indistinguishable from a successful
+     * check, and that is how a jar cached once stayed in service through thirty releases.
+     *
+     * <p>A cached jar with no stamped version is treated as stale, not as unknown. Every
+     * release from the one that introduced {@code AskAmerica-Engine-Version} onward carries
+     * it, so an unstamped jar in the cache is by definition older than that release — and
+     * resolving it to "keep" would leave every install that predates stamping pinned
+     * forever, which is the bug this check exists to end. A jar that must not be replaced
+     * belongs in {@code ASKAMERICA_ENGINE_JAR} or beside the launcher; those are returned
+     * before this method is reached.
+     */
+    private static boolean isStale(Path jar) {
+        String have;
+        String latest;
+        try {
+            have = jarVersion(jar);
+            latest = latestVersion();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            report("Engine update check interrupted — keeping the cached jar.");
+            return false;
+        } catch (IOException e) {
+            report("Engine update check failed (" + e.getMessage()
+                + ") — keeping the cached jar.");
+            return false;
+        }
+        if (latest == null) {
+            report("Engine update check inconclusive (no engine-v tag in the release "
+                + "response) — keeping the cached jar.");
+            return false;
+        }
+        if (have == null) {
+            report("Cached engine carries no version stamp, so it predates " + latest
+                + " — updating.");
+            return true;
+        }
+        if (have.equals(latest)) {
+            return false;
+        }
+        report("Cached engine " + have + " is superseded by " + latest + " — updating.");
+        return true;
+    }
+
+    /**
+     * Engine release version from a jar manifest, or null when the jar carries none —
+     * a local build, or any jar published before the attribute was stamped.
+     *
+     * <p>Not {@code Implementation-Version}: that carries the Apache Calcite version on
+     * every jar this repo builds, which would compare unequal to every engine release tag.
+     */
+    static String jarVersion(Path jar) throws IOException {
+        try (java.util.jar.JarFile jf = new java.util.jar.JarFile(jar.toFile())) {
+            java.util.jar.Manifest mf = jf.getManifest();
+            if (mf == null) {
+                return null;
+            }
+            return mf.getMainAttributes().getValue("AskAmerica-Engine-Version");
+        }
+    }
+
+    /**
+     * Version of the newest published engine release, or null when the response carried
+     * no recognisable {@code engine-v} tag. Parsed with a regex rather than a JSON
+     * library because this class runs before the engine jar is on the classpath.
+     */
+    static String latestVersion() throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+        HttpRequest req = HttpRequest.newBuilder(URI.create(LATEST_API))
+            .header("User-Agent", "askamerica-mcp-launcher")
+            .header("Accept", "application/vnd.github+json")
+            .timeout(Duration.ofSeconds(5))
+            .GET()
+            .build();
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new IOException("release lookup returned HTTP " + resp.statusCode());
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("\"tag_name\"\\s*:\\s*\"engine-v([^\"]+)\"")
+            .matcher(resp.body());
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** Best-effort version label for diagnostics. */
+    private static String describe(Path jar) {
+        try {
+            String v = jarVersion(jar);
+            return v == null ? "no Implementation-Version" : "version " + v;
+        } catch (IOException e) {
+            return "unreadable manifest: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Launcher diagnostics. stderr in both modes: it is what Claude Desktop captures for
+     * an MCP server, and the interactive path has no console of its own to write to.
+     */
+    private static void report(String message) {
+        System.err.println("[askamerica-launcher] " + message);
     }
 
     private static void download(String url, Path dest, boolean headless)

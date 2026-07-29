@@ -245,6 +245,26 @@ val publishVersion: String =
         ?: project.version.toString().replace("-SNAPSHOT", ""))
         .let { if (it.isBlank() || it == "unspecified") "0.0.1" else it }
 
+// Stamp the engine release version into the fat jar. EngineInstaller reads it back out of
+// the cached jar and compares it against the newest GitHub release; without it a jar cached
+// once is used forever.
+//
+// Deliberately not Implementation-Version: the root build already sets that to the Apache
+// Calcite version (1.42.0), which is unrelated to the engine-vX.Y.Z release line. Comparing
+// it against the latest tag would mark every jar stale and re-download ~460MB on every
+// launch. A dedicated attribute, set only when CI passes -PreleaseVersion, also leaves a
+// local build unstamped — the launcher then reports the check inconclusive and keeps the
+// jar it has, rather than fighting the developer's own build.
+val engineReleaseVersion: String? = project.findProperty("releaseVersion") as String?
+
+tasks.shadowJar {
+    if (!engineReleaseVersion.isNullOrBlank()) {
+        manifest {
+            attributes["AskAmerica-Engine-Version"] = engineReleaseVersion
+        }
+    }
+}
+
 publishing {
     publications {
         create<MavenPublication>("askamericaEngine") {
