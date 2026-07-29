@@ -122,6 +122,19 @@ public class GovDataDriver extends Driver {
       govDataInfo.setProperty("caseSensitive", "false");
       LOGGER.debug("Using default caseSensitive=false");
     }
+    // Without this the connection gets fun=standard, which is narrower than the
+    // PostgreSQL-compatible dialect this driver is documented to accept: length() is
+    // rejected with "No match found for function signature", while char_length() on the
+    // same column succeeds, so the failure reads as an arbitrary allowlist rather than a
+    // missing library. postgresql supplies length() and its siblings; spatial is kept
+    // because the geo schemas rely on it (GovDataModelVerificationRunner already sets
+    // standard,spatial). Validation happens in Calcite before pushdown, so a function
+    // absent here fails even when the underlying DuckDB engine implements it — which is
+    // why DuckDB-only names like strlen() and hex() still do not resolve, correctly.
+    if (!govDataInfo.containsKey("fun")) {
+      govDataInfo.setProperty("fun", "standard,postgresql,spatial");
+      LOGGER.debug("Using default fun=standard,postgresql,spatial");
+    }
 
     try {
       // Extract connection parameters from URL
