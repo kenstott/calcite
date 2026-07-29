@@ -80,7 +80,21 @@ tasks.shadowJar {
     archiveBaseName.set("askamerica-engine")
     archiveClassifier.set("")
     isZip64 = true
-    mergeServiceFiles()
+    // hadoop-common brings a dnsjava that registers a JDK InetAddressResolverProvider whose
+    // implementation ships only under META-INF/versions/18. This jar is not marked
+    // Multi-Release, so the JVM cannot load that class while ServiceLoader still reads the
+    // merged provider file -- every InetAddress lookup then dies with
+    // ServiceConfigurationError. In the MCP server that surfaces as list_tables and
+    // describe_table failing outright, because opening a connection resolves a host.
+    // Dropping the registration leaves the JVM's own resolver in charge; dnsjava itself
+    // stays on the classpath for callers that use it directly. Same fix as the govdata
+    // shadow jar, and it must be excluded in both places: mergeServiceFiles() rebuilds
+    // META-INF/services from the inputs, so a task-level exclude alone is overwritten,
+    // while the transformer alone leaves the copy that arrives as an ordinary resource.
+    mergeServiceFiles {
+        exclude("META-INF/services/java.net.spi.InetAddressResolverProvider")
+    }
+    exclude("META-INF/services/java.net.spi.InetAddressResolverProvider")
 
     exclude("META-INF/*.SF")
     exclude("META-INF/*.DSA")

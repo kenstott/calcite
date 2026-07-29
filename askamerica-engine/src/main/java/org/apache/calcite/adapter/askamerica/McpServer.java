@@ -513,6 +513,10 @@ public class McpServer {
                     // ASKAMERICA_SELFTEST_ENABLED=true).
                     c = UsageMetering.wrap(c, UsageMetering.resolveApiKey(null));
                     schemaConns.put(k, c);
+                    // Clear any error from a previous attempt. Readers no longer consume it,
+                    // so success is the only thing that retires it — otherwise a recovered
+                    // schema would keep reporting the failure that is no longer true.
+                    schemaErrors.remove(k);
                     log.println("[askamerica-mcp] Schema ready: " + k);
                 } catch (Throwable e) {
                     schemaErrors.put(k, e);
@@ -540,22 +544,25 @@ public class McpServer {
                 "Schema '" + schemaName + "' is still initializing "
                 + "(first use can take several minutes). Please retry.");
         }
+        // Drop the completed latch before reading the outcome so the next call genuinely
+        // retries init. Leaving it in place made computeIfAbsent skip initialization
+        // forever, so a single transient failure bricked the schema until restart.
         Throwable err = schemaErrors.get(schemaName);
-        if (err != null) {
-            // Drop the completed latch so the next call genuinely retries init. Leaving it
-            // in place made computeIfAbsent skip initialization forever, so a single
-            // transient failure bricked the schema until the process restarted.
+        Connection ready = schemaConns.get(schemaName);
+        if (ready == null) {
             schemaLatches.remove(schemaName);
-            schemaErrors.remove(schemaName);
+        }
+        if (err != null) {
+            // The error is NOT removed here. It used to be, and every caller that had
+            // already passed the latch then found neither a connection nor an error and
+            // reported that instead — so the real cause was consumed by whichever caller
+            // read it first. A dnsjava ServiceConfigurationError hid behind that message
+            // for an entire release. It is cleared when init next succeeds, not on read.
             throw new RuntimeException(
                 "Schema '" + schemaName + "' failed to initialize: "
                 + err.getClass().getName() + ": " + err.getMessage(), err);
         }
-        Connection ready = schemaConns.get(schemaName);
         if (ready == null) {
-            // Init reported neither a connection nor an error. Surface it rather than
-            // returning null and letting the caller NPE on createStatement().
-            schemaLatches.remove(schemaName);
             throw new IllegalStateException(
                 "Schema '" + schemaName + "' initialization completed without producing a "
                 + "connection and without recording an error.");
