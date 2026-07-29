@@ -768,7 +768,12 @@ public class McpServer {
                 }
             }
         } catch (Exception e) {
-            log.println("[askamerica-mcp] list_schemas information_schema failed: " + e.getMessage());
+            // Do not fall through to the allow-list. Swallowing this reported a healthy
+            // 25-schema catalog off a connection that had failed to open, so discovery
+            // looked fine while every query, list_tables and resolve_geo call failed —
+            // the static list is indistinguishable from a live one to the caller.
+            log.println("[askamerica-mcp] list_schemas failed: " + e.getMessage());
+            throw e;
         }
         // Guarantee every allowed schema appears even if information_schema didn't list it.
         for (String s : allowed) {
