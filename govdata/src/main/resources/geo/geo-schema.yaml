@@ -327,10 +327,17 @@ partitionedTables:
       path: "states"
 
     # Single batch for all reference rows; no year partitioning.
+    #
+    # No year dimension, deliberately. This table is static: the constants source
+    # returns the same 51 rows whatever year is asked for. A year dimension fans the
+    # fetch out across tiger_year_range and, since partition: below is empty, every
+    # year writes another full copy to the same unpartitioned location — 17 identical
+    # 51-row files, 867 rows where 51 are expected. Compaction then concatenates them
+    # without deduplicating, so the count survives compaction. Any table sourced from
+    # type: constants wants exactly one fetch unit.
     dimensions:
       type:
         - state_ref
-      year: *tiger_year_range
 
     materialize:
       enabled: true
@@ -381,11 +388,14 @@ partitionedTables:
       type: constants
       file: "/geo/census-regions.yaml"
       path: "regions"
+    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
 
     dimensions:
       type:
         - census_regions
-      year: *tiger_year_range
 
     materialize:
       enabled: true
@@ -436,11 +446,14 @@ partitionedTables:
       type: constants
       file: "/geo/census-regions.yaml"
       path: "divisions"
+    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
 
     dimensions:
       type:
         - census_divisions
-      year: *tiger_year_range
 
     materialize:
       enabled: true
@@ -508,10 +521,12 @@ partitionedTables:
       file: "/geo/zcta-ref.yaml"
       path: "zctas"
 
+    # No year dimension — same reasoning as state_ref above. This table is static and
+    # constants-sourced, and the year fan-out gave it the identical 17x duplication:
+    # 574,447 rows against 33,791 distinct ZCTAs.
     dimensions:
       type:
         - zcta_ref
-      year: *tiger_year_range
 
     materialize:
       enabled: true

@@ -693,11 +693,14 @@ partitionedTables:
       type: constants
       file: "/ref/naics-codes.yaml"
       path: "naics"
+    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
 
     dimensions:
       type:
         - naics
-      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -864,11 +867,14 @@ partitionedTables:
       type: constants
       file: "/ref/sic-codes.yaml"
       path: "sic"
+    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
 
     dimensions:
       type:
         - sic
-      year: *ref_year_range
 
     materialize:
       enabled: true
@@ -923,11 +929,14 @@ partitionedTables:
       type: constants
       file: "/ref/currency-codes.yaml"
       path: "currencies"
+    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
 
     dimensions:
       type:
         - currencies
-      year: *ref_year_range
 
     materialize:
       enabled: true

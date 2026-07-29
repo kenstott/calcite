@@ -301,11 +301,14 @@ partitionedTables:
       file: "/bls/bls-geographies.yaml"
       path: "geographies"
 
-    # Dimension definitions for ETL iteration (single batch for all reference data)
+    # Dimension definitions for ETL iteration (single batch for all reference data)    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
+
     dimensions:
       type:
         - bls_geographies
-      year: *econ_reference_year_range
 
     # Materialization configuration (reference data)
     materialize:
@@ -351,11 +354,14 @@ partitionedTables:
       keyColumn: "supersector_code"
       valueColumn: "supersector_name"
 
-    # Dimension definitions for ETL iteration (single batch for reference data)
+    # Dimension definitions for ETL iteration (single batch for reference data)    # No year dimension: this table is constants-sourced and static, so a year range
+    # fans the fetch out and each year appends another full copy to the same
+    # unpartitioned location. That is what left geo.state_ref with 867 rows for 51
+    # states, and compaction concatenates the copies rather than deduplicating them.
+
     dimensions:
       type:
         - naics_sectors
-      year: *econ_reference_year_range
 
     # Materialization configuration (reference data)
     materialize:
