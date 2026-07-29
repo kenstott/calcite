@@ -21,6 +21,18 @@
 # get_timeout_config (common.sh) from this source YAML; not consumed by the ETL.
 workerTimeoutMinutes: 240
 
+# Every other schema carries this key and cftc did not, so list_schemas returned it as
+# the one schema with no description — invisible to anyone browsing the catalog by
+# description. The header comments above are '#' lines, which the loader does not read.
+comment: >
+  CFTC-jurisdiction swap and derivatives transaction data, publicly disseminated from
+  the DTCC Global Trade Repository under 17 CFR Part 43 (Dodd-Frank). Daily end-of-day
+  cumulative files across five asset classes — rates, credit, forex, equities and
+  commodities — carrying notional amounts, prices, effective and expiration dates,
+  clearing status and counterparty jurisdiction. Coverage starts 2024-01-01, the
+  post-Part-43/45 rewrite schema; earlier years use an incompatible field structure and
+  are not included.
+
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 schema:
