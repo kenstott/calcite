@@ -13,13 +13,19 @@
 </head>
 <body>
 
-<h2>Two steps left</h2>
+<h2>Setup is running now</h2>
+
+<p>
+  The <b>AskAmerica MCP</b> setup window should have opened behind this installer.
+  It downloads the query engine (about 450 MB) to <code>~/.askamerica/engine</code>
+  and shows a progress bar while it does. <b>Let it finish before continuing</b> —
+  it runs once, and the pip package shares the same copy.
+</p>
 
 <ol>
   <li>
-    Open <b>AskAmerica MCP</b> from your Applications folder, paste your API key
-    (free key at <b>askamerica.ai</b>), and click <b>Configure Claude Desktop</b>.
-    The setup window may have opened already — if so, just use it.
+    In the setup window, paste your API key (free key at <b>askamerica.ai</b>) and
+    click <b>Configure Claude Desktop</b>.
   </li>
   <li>
     <b>Quit and reopen Claude Desktop.</b> AskAmerica then shows up as a connected
@@ -29,9 +35,15 @@
 </ol>
 
 <p class="note">
-  The first launch downloads the query engine (about 450 MB) to
-  <code>~/.askamerica/engine</code> and shows a progress window. This happens once;
-  the pip package shares the same copy.
+  <b>No setup window?</b> Open <b>AskAmerica MCP</b> from your Applications folder —
+  it picks up exactly where the installer left off. What happened is recorded in
+  <code>~/.askamerica/last-install.txt</code>.
+</p>
+
+<p class="note">
+  If you skip setup entirely, Claude Desktop downloads the engine the first time it
+  starts the server, which can take a few minutes. A progress window appears for that
+  too, so it is never a silent wait.
 </p>
 
 </body>

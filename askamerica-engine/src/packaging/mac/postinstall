@@ -2,8 +2,9 @@
 #
 # postinstall for the AskAmerica MCP component package.
 #
-# Two jobs: pre-warm the engine jar into the shared cache, and open the setup
-# wizard so the user can enter an API key and configure Claude Desktop.
+# Two jobs: prepare the shared engine cache directory, and open the setup wizard,
+# which downloads the engine with a visible progress window and lets the user
+# enter an API key and configure Claude Desktop.
 #
 # The jar goes to ~/.askamerica/engine, NOT inside the app bundle. Writing into
 # a Developer ID-signed, notarized bundle invalidates its CodeResources seal,
@@ -49,36 +50,29 @@ if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
   exit 1
 fi
 
-# ── Pre-warm the engine jar ──────────────────────────────────────────────────
-# Not fatal on failure: McpServerLauncher downloads the jar on first launch with
-# a progress window. This only saves the user that wait.
+# ── Engine jar: owned by the setup wizard, not by this script ────────────────
+# This used to curl the jar here as root. It worked, but it put a multi-minute
+# download behind a progress bar that reports package extraction, and when it
+# failed it did so non-fatally into installer.log — so the user got a fast,
+# apparently-successful install and paid the cost later as an unexplained stall
+# the first time Claude Desktop started the server.
+#
+# The wizard now owns it, which is what the Windows installer already does: its
+# finish dialog launches the app and the download runs in a real progress window
+# the user is looking at. Opening the app below is therefore not a convenience,
+# it is the install step, so the cache directory is prepared here (as the user,
+# since postinstall is root) to keep the wizard off a permissions error.
 
 CACHE_DIR="$USER_HOME/.askamerica/engine"
 JAR="$CACHE_DIR/askamerica-engine.jar"
-URL="${ASKAMERICA_ENGINE_URL:-https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar}"
 
 if [ -f "$JAR" ]; then
-  log "engine already cached at $JAR — skipping download"
+  log "engine already cached at $JAR — the wizard will skip the download"
 else
   install -d -o "$USER_NAME" -g "$USER_GROUP" -m 755 \
-    "$USER_HOME/.askamerica" "$CACHE_DIR"
-  PART="$CACHE_DIR/askamerica-engine.jar.part"
-  log "downloading engine from $URL"
-  HTTP=$(curl -fsSL --connect-timeout 30 --max-time 900 \
-    -w '%{http_code}' -o "$PART" "$URL")
-  CURL_RC=$?
-  if [ "$CURL_RC" -eq 0 ]; then
-    # Move into place only once complete, so a partial file is never mistaken
-    # for a usable engine.
-    mv -f "$PART" "$JAR"
-    chown "$USER_NAME:$USER_GROUP" "$JAR"
-    chmod 644 "$JAR"
-    log "engine cached at $JAR"
-  else
-    rm -f "$PART"
-    fail "engine download failed: curl exit $CURL_RC, HTTP ${HTTP:-none}, url $URL"
-    fail "Recoverable — the app downloads the engine on first launch instead."
-  fi
+    "$USER_HOME/.askamerica" "$CACHE_DIR" \
+    || fail "could not create $CACHE_DIR — the wizard will try again as $USER_NAME."
+  log "engine not cached; the setup wizard will download it with a progress window"
 fi
 
 # ── Open the setup wizard ────────────────────────────────────────────────────
@@ -86,12 +80,27 @@ fi
 # `sudo -u ... open` from root's namespace fails with LSOpenURLsWithRole -600.
 # Not backgrounded, so the exit status is real and gets logged.
 
+# The final pane cannot read this script's exit status, so record the outcome
+# where a user can find it. Without this a failed launch is visible only in
+# installer.log, which is precisely the silence that made the old pre-warm
+# failure surface later as an unexplained stall.
+STATUS_DIR="$USER_HOME/.askamerica"
+STATUS_FILE="$STATUS_DIR/last-install.txt"
+
 log "opening setup wizard as $USER_NAME"
 if launchctl asuser "$USER_UID" sudo -u "$USER_NAME" open "$APP"; then
   log "setup wizard launched"
+  printf 'setup-wizard: opened\nengine-cached: %s\n' \
+    "$([ -f "$JAR" ] && echo yes || echo 'no (wizard will download)')" \
+    > "$STATUS_FILE" 2>/dev/null || true
 else
-  fail "could not open the setup wizard (launchctl asuser exit $?)."
+  RC=$?
+  fail "could not open the setup wizard (launchctl asuser exit $RC)."
   fail "Recoverable — the installer's final pane tells the user to open the app manually."
+  printf 'setup-wizard: FAILED to open (exit %s)\nengine-cached: %s\naction: open "AskAmerica MCP" from Applications\n' \
+    "$RC" "$([ -f "$JAR" ] && echo yes || echo no)" \
+    > "$STATUS_FILE" 2>/dev/null || true
 fi
+chown "$USER_NAME:$USER_GROUP" "$STATUS_FILE" 2>/dev/null || true
 
 exit 0

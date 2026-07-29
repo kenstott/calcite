@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.askamerica;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -65,8 +66,8 @@ final class EngineInstaller {
     /**
      * First existing jar among: {@code ASKAMERICA_ENGINE_JAR} override, a jar sitting
      * beside the launcher (an operator dropping one into the app bundle), then the
-     * shared cache — which is where the mac postinstall pre-warms it. Returns null if
-     * none is present yet.
+     * shared cache — written by whichever of the setup wizard or the pip client ran
+     * first, and shared between them. Returns null if none is present yet.
      */
     static Path resolveExisting(File launcherDir) {
         String env = System.getenv("ASKAMERICA_ENGINE_JAR");
@@ -93,10 +94,11 @@ final class EngineInstaller {
      * Returns a usable engine jar, downloading it to the shared cache if necessary.
      *
      * @param launcherDir directory containing the launcher jar (may be null)
-     * @param headless    true in {@code --mcp} server mode (console progress);
-     *                    false for interactive launch (Swing progress dialog)
+     * @param serverMode  true in {@code --mcp} server mode; see
+     *                    {@link #progressFor(boolean, long)} for why that does not
+     *                    by itself mean the download has to be invisible
      */
-    static Path ensure(File launcherDir, boolean headless)
+    static Path ensure(File launcherDir, boolean serverMode)
         throws IOException, InterruptedException {
         Path dest = cacheJar();
         Path existing = resolveExisting(launcherDir);
@@ -111,8 +113,38 @@ final class EngineInstaller {
         }
         Files.createDirectories(dest.getParent());
         String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", DEFAULT_URL);
-        download(url, dest, headless);
+        download(url, dest, serverMode);
         return dest;
+    }
+
+    /**
+     * Chooses how to report a download that takes minutes.
+     *
+     * <p>Server mode is not the same thing as having nowhere to draw. Claude Desktop
+     * spawns the MCP server inside the user's GUI session, and the pre-init phase this
+     * download runs in has no MCP session to send notifications through — the jar is
+     * being fetched precisely so the server can start. Reporting only to stderr there
+     * means the user watches Claude Desktop sit still for minutes with no indication
+     * why, which is the "mysterious wait" this exists to prevent. So a window is used
+     * whenever one can be drawn, in server mode too.
+     *
+     * <p>Falls back to stderr when there is genuinely no display — CI, ssh, a Linux
+     * daemon — or if the toolkit refuses to initialise, which must never be fatal to
+     * a download that is otherwise fine.
+     */
+    private static Progress progressFor(boolean serverMode, long total) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return new ConsoleProgress();
+        }
+        if (serverMode) {
+            // Also on stderr: Claude Desktop records it, so a support log still explains
+            // the pause even though the user saw a window.
+            System.err.println("Downloading AskAmerica engine ("
+                + (total > 0 ? (total / (1024 * 1024)) + " MB" : "size unknown")
+                + ", one-time) — progress window opened.");
+        }
+        // DialogProgress falls back to stderr itself if the window cannot be drawn.
+        return new DialogProgress();
     }
 
     /**
@@ -224,7 +256,7 @@ final class EngineInstaller {
         System.err.println("[askamerica-launcher] " + message);
     }
 
-    private static void download(String url, Path dest, boolean headless)
+    private static void download(String url, Path dest, boolean serverMode)
         throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -242,7 +274,7 @@ final class EngineInstaller {
         }
         long total = resp.headers().firstValueAsLong("content-length").orElse(-1L);
 
-        Progress progress = headless ? new ConsoleProgress() : new DialogProgress();
+        Progress progress = progressFor(serverMode, total);
         progress.start(total);
 
         // Download to a sibling temp file, then atomically move into place so a
@@ -313,6 +345,12 @@ final class EngineInstaller {
     private static final class DialogProgress implements Progress {
         private JFrame frame;
         private JProgressBar bar;
+        /**
+         * Used when the window cannot be created. Degrading to silence would reproduce
+         * the failure this class exists to avoid: a multi-minute download with nothing
+         * on screen and nothing in the log.
+         */
+        private ConsoleProgress fallback;
 
         @Override public void start(long total) {
             try {
@@ -335,13 +373,20 @@ final class EngineInstaller {
                     frame.setLocationRelativeTo(null);
                     frame.setVisible(true);
                 });
-            } catch (Exception headlessOrInterrupted) {
-                // No display available — degrade silently; the download still runs.
+            } catch (Exception noDisplay) {
+                // The toolkit refused despite a non-headless environment (no $DISPLAY, a
+                // locked-down session). Report on stderr rather than showing nothing.
                 frame = null;
+                fallback = new ConsoleProgress();
+                fallback.start(total);
             }
         }
 
         @Override public void update(long read, long total) {
+            if (fallback != null) {
+                fallback.update(read, total);
+                return;
+            }
             if (frame == null || total <= 0) {
                 return;
             }
@@ -354,6 +399,10 @@ final class EngineInstaller {
         }
 
         @Override public void done() {
+            if (fallback != null) {
+                fallback.done();
+                return;
+            }
             if (frame == null) {
                 return;
             }
