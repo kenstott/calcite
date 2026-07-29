@@ -1900,14 +1900,55 @@ public class XbrlToParquetConverter implements FileConverter {
           "https://www.sec.gov/Archives/edgar/data/%s/%s",
           cikNumeric, accessionDir);
 
-      // Strategy 1: FilingSummary.xml (reliable when present)
+      // Strategy 0: an instance this filing already has in the cache.
+      //
+      // Strategies 1 and 2 below both ask EDGAR for the companion's NAME before anything can be
+      // checked locally, so a filing whose instance is already cached still spends rate-limit
+      // budget rediscovering what it is called. Resolving the name from the cache directory
+      // instead makes an already-fetched filing cost nothing at all — which is the normal case
+      // for a reprocess sweep, where every accession has been through here before.
+      String cachedInstance = findCachedXbrlInstance(parentDir);
+      if (cachedInstance != null) {
+        // INFO, and phrased to pair with the "Downloading companion XBRL" line below, so the hit
+        // rate is countable from a run's log rather than estimated: the two counts together are
+        // every filing that needed a companion.
+        LOGGER.info("Companion XBRL from cache (no EDGAR request): {}", cachedInstance);
+        return cachedInstance;
+      }
+
+      // Strategy 1: FilingSummary.xml (reliable when present).
+      //
+      // Read the cached copy before asking EDGAR. Every request here is paced by
+      // EdgarRateLimiter — 8 req/s, host-wide across threads AND processes — so these are not
+      // merely slow, they are the pipeline's ceiling: a reprocess sweep spends its time asleep
+      // in the limiter while CPU and disk sit idle. EDGAR archives are immutable once filed, so
+      // a companion fetched on any previous pass is still correct, and re-fetching it buys
+      // nothing but rate-limit budget spent on bytes already held.
+      String summaryPath = storageProvider.resolvePath(parentDir, "FilingSummary.xml");
       String xbrlFileName = null;
-      String summaryXml = downloadFile(baseUrl + "/FilingSummary.xml");
+      String summaryXml = readCachedFile(summaryPath);
+      boolean summaryFromCache = summaryXml != null;
+      if (summaryXml == null) {
+        summaryXml = downloadFile(baseUrl + "/FilingSummary.xml");
+      }
       if (summaryXml != null) {
         xbrlFileName = parseXbrlFilenameFromSummary(summaryXml);
       }
 
-      // Strategy 2: Parse filing index page for XBRL instance doc
+      // Persist a freshly-downloaded summary so the next pass over this filing resolves the
+      // companion's name without spending any budget at all.
+      if (summaryXml != null && !summaryFromCache) {
+        try {
+          storageProvider.writeFile(summaryPath, summaryXml.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+          LOGGER.debug("Could not cache FilingSummary.xml for {}: {}", accessionDir,
+              e.getMessage());
+        }
+      }
+
+      // Strategy 2: Parse filing index page for XBRL instance doc. Not cached — it is only
+      // reached when a filing has no FilingSummary.xml, and once its instance doc is stored the
+      // cache hit below short-circuits before either strategy runs again.
       if (xbrlFileName == null) {
         String indexHtml = downloadFile(baseUrl + "/");
         if (indexHtml != null) {
@@ -1921,6 +1962,14 @@ public class XbrlToParquetConverter implements FileConverter {
         return null;
       }
 
+      String xbrlPath = storageProvider.resolvePath(parentDir, xbrlFileName);
+
+      // The instance doc itself, if a previous pass already stored it.
+      if (fileExists(xbrlPath)) {
+        LOGGER.debug("Companion XBRL served from cache: {}", xbrlPath);
+        return xbrlPath;
+      }
+
       // Download the XBRL instance file from EDGAR
       LOGGER.info("Downloading companion XBRL: {}", xbrlFileName);
       String xbrlContent = downloadFile(baseUrl + "/" + xbrlFileName);
@@ -1930,8 +1979,6 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Store alongside the HTML file via storageProvider
-      String xbrlPath = storageProvider.resolvePath(
-          parentDir, xbrlFileName);
       storageProvider.writeFile(xbrlPath,
           xbrlContent.getBytes(StandardCharsets.UTF_8));
 
@@ -1940,6 +1987,141 @@ public class XbrlToParquetConverter implements FileConverter {
     } catch (Exception e) {
       LOGGER.debug("Failed to find companion XBRL for {}: {}",
           htmlPath, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Matches the root element of an XBRL instance — {@code <xbrl} or a prefixed
+   * {@code <xbrli:xbrl} — and nothing else that shares the directory. A linkbase roots at
+   * {@code <linkbase>}, an ownership form at {@code <ownershipDocument>}, inline XBRL at
+   * {@code <html>}.
+   *
+   * <p>Deliberately matches the ROOT ELEMENT rather than the instance namespace URI. That URI is
+   * declared on the same element, but an instance root carries dozens of namespace declarations
+   * in alphabetical order and {@code http://www.xbrl.org/2003/instance} sorts far down: in a
+   * sampled filing it did not appear until byte 9657, while the root element began at byte 130.
+   * Sniffing for the URI would need a window large enough to be a real read of every candidate.
+   */
+  private static final Pattern XBRL_INSTANCE_ROOT =
+      Pattern.compile("<([A-Za-z0-9_.-]+:)?xbrl[\\s>]", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Bytes read when confirming a candidate really is an XBRL instance. Comfortably past the XML
+   * declaration and any generator comments; the documents themselves run to megabytes and are
+   * never read past this.
+   */
+  private static final int XBRL_SNIFF_BYTES = 8192;
+
+  /**
+   * Files that live beside a filing and are XML but are never its XBRL instance: the linkbases
+   * that accompany one, and ownership forms (3/4/5), which are XML filings in their own right.
+   */
+  private static final Pattern NON_INSTANCE_XML =
+      Pattern.compile(".*(_(cal|def|lab|pre|ref)\\.xml|form\\d+.*\\.xml|doc\\d+\\.xml)$",
+          Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Finds a companion XBRL instance already sitting in this filing's cache directory.
+   *
+   * <p>Selection is by content, not by name. A filename pattern alone is not safe here: the same
+   * directory can hold linkbases ({@code x-20190330_cal.xml}) and ownership forms
+   * ({@code doc4.xml}, {@code wf-form4_*.xml}), and handing a linkbase to the instance parser
+   * would produce a filing that looks converted but carries none of its facts. Candidates are
+   * therefore narrowed by name and then confirmed by reading the first few KB and requiring the
+   * XBRL instance namespace — a local read against an object already on disk.
+   *
+   * @param parentDir cache directory holding the filing's documents
+   * @return path of a confirmed instance, or null to let the caller ask EDGAR
+   */
+  private String findCachedXbrlInstance(String parentDir) {
+    try {
+      List<StorageProvider.FileEntry> entries = storageProvider.listFiles(parentDir, false);
+      if (entries == null || entries.isEmpty()) {
+        return null;
+      }
+      for (StorageProvider.FileEntry entry : entries) {
+        if (entry.isDirectory()) {
+          continue;
+        }
+        String name = entry.getName();
+        if (name == null || !name.toLowerCase(Locale.ROOT).endsWith(".xml")) {
+          continue;
+        }
+        if (NON_INSTANCE_XML.matcher(name).matches()) {
+          continue;
+        }
+        if (isXbrlInstance(entry.getPath())) {
+          return entry.getPath();
+        }
+      }
+      return null;
+    } catch (Exception e) {
+      // A listing failure must look like "not cached" so the caller falls back to EDGAR. Costing
+      // a request is always recoverable; skipping a filing's facts is not.
+      LOGGER.debug("Could not scan {} for a cached XBRL instance: {}", parentDir, e.getMessage());
+      return null;
+    }
+  }
+
+  /**
+   * Returns whether the head of a document declares the XBRL instance namespace.
+   *
+   * <p>Reads at most {@link #XBRL_SNIFF_BYTES}; a linkbase, an ownership form and an instance are
+   * all distinguishable from their root element, so the body is never touched.
+   */
+  private boolean isXbrlInstance(String path) {
+    try (InputStream is = storageProvider.openInputStream(path)) {
+      byte[] head = new byte[XBRL_SNIFF_BYTES];
+      int filled = 0;
+      int n;
+      while (filled < head.length && (n = is.read(head, filled, head.length - filled)) != -1) {
+        filled += n;
+      }
+      String prefix = new String(head, 0, filled, StandardCharsets.UTF_8);
+      return XBRL_INSTANCE_ROOT.matcher(prefix).find();
+    } catch (Exception e) {
+      LOGGER.debug("Could not sniff {} as an XBRL instance: {}", path, e.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Returns whether a path is already present in storage, treating any failure as absent.
+   *
+   * <p>A storage error must not be reported as "cached": that would return a path the caller
+   * then fails to read, turning a transient blip into a filing with no companion XBRL. Falling
+   * through to the download is always safe — it costs rate-limit budget, never correctness.
+   */
+  private boolean fileExists(String path) {
+    try {
+      return storageProvider.exists(path);
+    } catch (Exception e) {
+      LOGGER.debug("exists() failed for {} — treating as absent: {}", path, e.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Reads a cached artifact as UTF-8, or returns null when it is absent or unreadable.
+   *
+   * <p>Same reasoning as {@link #fileExists}: an unreadable cache entry must look like a miss so
+   * the caller re-fetches, rather than propagating a half-read document into the parser.
+   */
+  private String readCachedFile(String path) {
+    if (!fileExists(path)) {
+      return null;
+    }
+    try (InputStream is = storageProvider.openInputStream(path)) {
+      java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+      byte[] buf = new byte[8192];
+      int n;
+      while ((n = is.read(buf)) != -1) {
+        out.write(buf, 0, n);
+      }
+      return new String(out.toByteArray(), StandardCharsets.UTF_8);
+    } catch (Exception e) {
+      LOGGER.debug("Could not read cached {} — refetching: {}", path, e.getMessage());
       return null;
     }
   }
