@@ -3296,16 +3296,17 @@ public class IcebergMaterializer {
       }
     }
 
-    // Load quackformers (community) extension for embedding functions (embed_jina, etc.) LAST,
-    // since the community-registry fetch is the most likely to fail and must not poison the
-    // critical parquet/iceberg/S3 setup above.
-    try (Statement stmt = conn.createStatement()) {
-      stmt.execute("INSTALL quackformers FROM community");
-      stmt.execute("LOAD quackformers");
-      LOGGER.debug("Loaded quackformers extension for embedding functions");
-    } catch (SQLException e) {
-      LOGGER.debug("Quackformers extension not available: {}", e.getMessage());
-    }
+    // No quackformers (community) extension. It existed to supply embed_jina() to computed
+    // columns, and embeddings are now produced outside SQL — SecSchemaFactory strips every
+    // embed()/embed_jina() expression before materialization runs, so nothing here can call it.
+    //
+    // Installing it was not free. INSTALL ... FROM community reaches the community registry on
+    // every call, and this runs once per getDuckDBConnection — once per table per batch. The
+    // extension was never cached locally (~/.duckdb/extensions held httpfs, iceberg, parquet and
+    // the rest, but no quackformers), so the fetch had always failed; it merely failed quickly.
+    // When the registry became slow to answer rather than refusing, the same call started
+    // blocking for 15-30 minutes per table: a catch around it handles an error, not a hang, and
+    // there is no timeout on the fetch. Materializations that take seconds took half an hour.
 
     return conn;
   }
