@@ -117,6 +117,78 @@ SELECT 'sec', tbl, 'existence',
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
 
+-- ============================================================================
+-- T3: REFERENTIAL — every filing's rows must have a filing_metadata row.
+--
+-- Existence, row counts and PK uniqueness all pass while a filing is partly missing.
+-- Materialization is per table, so one table can lose a filing's rows while its siblings
+-- keep theirs — a staged batch file overwritten before it was absorbed takes exactly one
+-- table's slice with it. Nothing downstream notices: the table is present, non-empty and
+-- uniquely keyed. The only trace left in the data is the sibling rows now pointing at a
+-- filing_metadata row that is not there.
+--
+-- Counts DISTINCT (cik, accession_number) tuples, not rows: one missing parent orphans
+-- every child row referencing it, so a row count would report the size of the child table
+-- rather than the size of the loss. Partially-null keys are excluded — a null key is not a
+-- reference. EXCEPT rather than NOT EXISTS: the same anti-join expressed as a correlated
+-- subquery is silently mis-planned on the Calcite read path, and phrasing it as a set
+-- difference keeps this check meaning the same thing wherever it is run.
+--
+-- Status is 'warn', not 'fail'. The historical backlog is real and large (~31.6k orphans in
+-- insider_transactions alone at the time of writing) and is being cleared by fix-sec.sh.
+-- Promote to 'fail' once that backfill is complete, so this gates future regressions rather
+-- than sitting permanently red and training everyone to ignore it.
+-- ============================================================================
+SELECT '=== T3: REFERENTIAL ===' AS section;
+
+INSERT INTO dq_results
+WITH parent AS (
+  SELECT DISTINCT cik, accession_number
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata', allow_moved_paths => true)
+), orphans AS (
+  SELECT 'financial_line_items' AS tbl, COUNT(*) AS n FROM (
+    SELECT DISTINCT cik, accession_number
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/financial_line_items', allow_moved_paths => true)
+     WHERE cik IS NOT NULL AND accession_number IS NOT NULL
+    EXCEPT SELECT cik, accession_number FROM parent)
+  UNION ALL
+  SELECT 'filing_contexts', COUNT(*) FROM (
+    SELECT DISTINCT cik, accession_number
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_contexts', allow_moved_paths => true)
+     WHERE cik IS NOT NULL AND accession_number IS NOT NULL
+    EXCEPT SELECT cik, accession_number FROM parent)
+  UNION ALL
+  SELECT 'mda_sections', COUNT(*) FROM (
+    SELECT DISTINCT cik, accession_number
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/mda_sections', allow_moved_paths => true)
+     WHERE cik IS NOT NULL AND accession_number IS NOT NULL
+    EXCEPT SELECT cik, accession_number FROM parent)
+  UNION ALL
+  SELECT 'xbrl_relationships', COUNT(*) FROM (
+    SELECT DISTINCT cik, accession_number
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships', allow_moved_paths => true)
+     WHERE cik IS NOT NULL AND accession_number IS NOT NULL
+    EXCEPT SELECT cik, accession_number FROM parent)
+  UNION ALL
+  SELECT 'insider_transactions', COUNT(*) FROM (
+    SELECT DISTINCT cik, accession_number
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/insider_transactions', allow_moved_paths => true)
+     WHERE cik IS NOT NULL AND accession_number IS NOT NULL
+    EXCEPT SELECT cik, accession_number FROM parent)
+  UNION ALL
+  SELECT 'earnings_transcripts', COUNT(*) FROM (
+    SELECT DISTINCT cik, accession_number
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts', allow_moved_paths => true)
+     WHERE cik IS NOT NULL AND accession_number IS NOT NULL
+    EXCEPT SELECT cik, accession_number FROM parent)
+)
+SELECT 'sec', tbl, 'orphan_refs',
+       CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+       CAST(n AS VARCHAR), '0',
+       CASE WHEN n = 0 THEN 'every filing has a filing_metadata row'
+            ELSE CAST(n AS VARCHAR) || ' filing(s) present here but missing from filing_metadata' END
+FROM orphans;
+
 -- ============================================================
 -- REPORT
 -- ============================================================
