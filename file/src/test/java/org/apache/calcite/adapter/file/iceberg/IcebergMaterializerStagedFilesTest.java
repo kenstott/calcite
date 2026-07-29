@@ -102,6 +102,60 @@ class IcebergMaterializerStagedFilesTest {
         "only files directly in the partition are source files; deeper paths are table internals");
   }
 
+  /**
+   * Materialization must cover the partitions the ETL wrote, not the caller's year of interest.
+   *
+   * <p>A SEC reprocess is scoped to the accessions' FILING year, while the converter partitions by
+   * fiscal period. A run scoped to filing year 2019 was measured writing into eleven partitions,
+   * 2011 through 2022. Batching only the configured range strands every file outside it, and the
+   * run still reports success — so the rows never appear and the next gap scan re-offers the same
+   * accessions.
+   */
+  @Test void testYearsComeFromTheFilesActuallyWritten() {
+    List<String> staged = Arrays.asList(
+        BASE + "/year=2019/metadata_batch_0000.parquet",
+        BASE + "/year=2018/facts_batch_0001.parquet",
+        BASE + "/year=2011/mda_batch_0002.parquet",
+        BASE + "/year=2019/facts_batch_0003.parquet");
+
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(METADATA_PATTERN)
+            .targetTableId("filing_metadata")
+            .yearRange(2019, 2019)          // caller's filing-year scope
+            .stagedSourceFiles(staged)
+            .build();
+
+    assertEquals(Arrays.asList("2011", "2018", "2019"),
+        IcebergMaterializer.yearsFromStagedFiles(config),
+        "every written partition must be batched, ascending and deduplicated");
+  }
+
+  @Test void testNoStagedListFallsBackToTheConfiguredRange() {
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(METADATA_PATTERN)
+            .targetTableId("filing_metadata")
+            .yearRange(2019, 2019)
+            .build();
+
+    assertNull(IcebergMaterializer.yearsFromStagedFiles(config),
+        "null, not empty — 'the caller said nothing' must stay distinct from 'wrote nothing'");
+  }
+
+  @Test void testCleanPassThatWroteNothingBatchesNothing() {
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(METADATA_PATTERN)
+            .targetTableId("filing_metadata")
+            .yearRange(2019, 2019)
+            .stagedSourceFiles(new ArrayList<String>())
+            .build();
+
+    assertEquals(0, IcebergMaterializer.yearsFromStagedFiles(config).size(),
+        "an empty staged list means there is genuinely nothing to materialize");
+  }
+
   @Test void testYearMatchIsExact() {
     List<String> result =
         IcebergMaterializer.filterStagedFilesForBatch(staged(), METADATA_PATTERN, "202");

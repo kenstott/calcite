@@ -2178,6 +2178,35 @@ public class IcebergMaterializer {
     return filterStagedFilesForBatch(config.getStagedSourceFiles(), config.getSourcePattern(), year);
   }
 
+  /**
+   * Returns the {@code year=} partitions present in the caller's staged-file list, ascending, or
+   * null when no list was supplied.
+   *
+   * <p>This is the set of partitions the ETL pass actually wrote, which is what materialization
+   * has to cover — see the reasoning in {@link #buildBatchCombinations}. Returning null rather
+   * than an empty list keeps "the caller said nothing" distinct from "the caller wrote nothing":
+   * the first falls back to the configured range, the second correctly materializes nothing.
+   */
+  static List<String> yearsFromStagedFiles(MaterializationConfig config) {
+    List<String> staged = config.getStagedSourceFiles();
+    if (staged == null) {
+      return null;
+    }
+    Set<String> years = new TreeSet<String>();
+    for (String path : staged) {
+      int idx = path.indexOf("year=");
+      if (idx < 0) {
+        continue;
+      }
+      int start = idx + "year=".length();
+      int end = path.indexOf('/', start);
+      if (end > start) {
+        years.add(path.substring(start, end));
+      }
+    }
+    return new ArrayList<String>(years);
+  }
+
   /** Pure filtering half of {@link #getStagedFilePathsForBatch}, split out to be testable. */
   static List<String> filterStagedFilesForBatch(List<String> staged, String sourcePattern,
       String year) {
@@ -3111,10 +3140,24 @@ public class IcebergMaterializer {
     for (String col : batchColumns) {
       List<String> values;
       if ("year".equalsIgnoreCase(col)) {
-        // Use configured year range
-        values = new ArrayList<String>();
-        for (int y = config.getStartYear(); y <= config.getEndYear(); y++) {
-          values.add(String.valueOf(y));
+        // Prefer the partitions the ETL pass actually wrote, when it told us.
+        //
+        // The configured range is the range of interest to the CALLER — for a SEC reprocess it is
+        // the filing year of the accessions being repaired. The converter partitions by fiscal
+        // period instead, and the two diverge: a 10-K filed in 2019 covers FY2018, and an amended
+        // filing can cover a period years earlier. A run scoped to filing year 2019 was measured
+        // writing into eleven partitions, 2011 through 2022 — 17,284 files into 2018 alone.
+        //
+        // Batching only the configured range leaves every file outside it unmaterialized, and
+        // nothing downstream notices: the run reports success, the rows never appear, and the
+        // next gap scan re-offers the same accessions because they are still missing. Repairing
+        // them writes the same orphans again.
+        values = yearsFromStagedFiles(config);
+        if (values == null) {
+          values = new ArrayList<String>();
+          for (int y = config.getStartYear(); y <= config.getEndYear(); y++) {
+            values.add(String.valueOf(y));
+          }
         }
       } else {
         // Query distinct values from source
