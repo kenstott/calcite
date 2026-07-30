@@ -6882,6 +6882,50 @@ public class XbrlToParquetConverter implements FileConverter {
    * <p>This method fetches the filing index page and locates the information
    * table document, then downloads and parses it.
    */
+  /**
+   * Resolves a 13F filing's information-table document name from its {@code index.json}.
+   *
+   * <p>Mirrors {@code EdgarDownloader.find13FInfoTableDoc}: prefer the item EDGAR types as
+   * INFORMATION TABLE, then any xml whose name says so, then any data xml that is not the cover
+   * document. One request, and it names the file exactly rather than probing for it.
+   *
+   * @param baseUrl filing directory, e.g. {@code .../Archives/edgar/data/<cik>/<accessionNoDash>}
+   * @return the document name, or null to let the caller fall back to guessing
+   */
+  private String find13FInfoTableFromIndexJson(String baseUrl) {
+    try {
+      String body = downloadFile(baseUrl + "/index.json");
+      if (body == null) {
+        return null;
+      }
+      com.fasterxml.jackson.databind.JsonNode items =
+          new com.fasterxml.jackson.databind.ObjectMapper().readTree(body)
+              .path("directory").path("item");
+      String fallbackXml = null;
+      for (com.fasterxml.jackson.databind.JsonNode item : items) {
+        String name = item.path("name").asText("");
+        String type = item.path("type").asText("");
+        String lower = name.toLowerCase(Locale.ROOT);
+        if ("INFORMATION TABLE".equalsIgnoreCase(type)) {
+          return name;
+        }
+        if (lower.endsWith(".xml")
+            && (lower.contains("infotable") || lower.contains("informationtable")
+                || lower.contains("form13f"))) {
+          return name;
+        }
+        if (lower.endsWith(".xml") && !lower.contains("primary_doc")
+            && !lower.contains("primarydoc")) {
+          fallbackXml = name;
+        }
+      }
+      return fallbackXml;
+    } catch (Exception e) {
+      LOGGER.debug("13F index.json lookup failed for {}: {}", baseUrl, e.getMessage());
+      return null;
+    }
+  }
+
   private Document download13FInfoTable(String cik, String accession) {
     if (cik == null || accession == null) {
       return null;
@@ -6893,15 +6937,30 @@ public class XbrlToParquetConverter implements FileConverter {
       String baseUrl = String.format(
           "https://www.sec.gov/Archives/edgar/data/%s/%s", cikNumeric, accessionNoDash);
 
-      // Try common info table filenames directly (faster than parsing index)
-      String[] infoTableNames = {
-          "InformationTableOutput.xml",
-          "infotable.xml",
-          "InfoTable.xml",
-          "information_table.xml"
-      };
+      // Ask the filing's index.json for the real document name, before guessing at it.
+      //
+      // The guesses below were introduced as "faster than parsing index", and they are not:
+      // every one is a rate-limited round trip against the same 8 req/s host-wide budget, and
+      // a 13F filing whose table is not one of the four costs four requests to discover that.
+      // Measured on a live batch: 318 x HTTP 404 against 67 conversions, and the four names in
+      // the log matched this list exactly. index.json answers in one request and names the
+      // document exactly, so the common case goes from four requests to one.
+      //
+      // EdgarDownloader.find13FInfoTableDoc already resolves 13F tables this way. Preferring
+      // the same route here removes the duplication in behaviour, not just the requests.
+      String indexedName = find13FInfoTableFromIndexJson(baseUrl);
+      List<String> candidates = new ArrayList<String>();
+      if (indexedName != null) {
+        candidates.add(indexedName);
+      }
+      // Retained as a fallback: a filing whose index.json is unavailable or shaped unexpectedly
+      // still resolves, at the old cost, rather than losing its holdings entirely.
+      candidates.add("InformationTableOutput.xml");
+      candidates.add("infotable.xml");
+      candidates.add("InfoTable.xml");
+      candidates.add("information_table.xml");
 
-      for (String name : infoTableNames) {
+      for (String name : candidates) {
         String content = downloadFile(baseUrl + "/" + name);
         if (content != null && content.contains("infoTable")) {
           LOGGER.info("Downloaded 13F info table: {}/{}", accession, name);
