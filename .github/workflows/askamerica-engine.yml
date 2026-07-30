@@ -176,6 +176,29 @@ jobs:
           # (proves the models/*.json exclude did not over-match).
           k=$(echo "$entries" | grep -cE '^config/djia-wiki-model\.json$' || true)
           [ "$k" -eq 1 ] || { echo "FAIL: config/djia-wiki-model.json missing (over-broad exclude)"; fail=1; }
+          # Logging binding: slf4j-reload4j and log4j-slf4j-impl both ship
+          # org/slf4j/impl/StaticLoggerBinder.class, so which backend SLF4J 1.7 binds to is decided
+          # by jar merge order. Bound to reload4j — which nothing in this jar configures — every
+          # govdata and file log statement is discarded, and a cold start that spends minutes
+          # rebuilding Iceberg views presents as a hung MCP server with an empty log. Assert the
+          # binding rather than trusting the ordering.
+          # Assert the merged StaticLoggerBinder is log4j2's copy by the factory it names. Checking
+          # for the absence of reload4j's classes is not enough: they arrive embedded in a
+          # dependency and survive both a module exclude and a shadow dependency exclude, so the
+          # only reliable signal is which factory the surviving binder actually points at.
+          if ! unzip -p "$JAR" org/slf4j/impl/StaticLoggerBinder.class \
+               | grep -qa 'org/apache/logging/slf4j/Log4jLoggerFactory'; then
+            echo "FAIL: SLF4J StaticLoggerBinder does not bind to log4j2 — adapter logs would be"
+            echo "      discarded and a slow cold start would present as a hung server."
+            fail=1
+          fi
+          n=$(echo "$entries" | grep -cE '^org/apache/logging/slf4j/Log4jLoggerFactory\.class$' || true)
+          [ "$n" -eq 1 ] || { echo "FAIL: log4j2 SLF4J binding missing from jar"; fail=1; }
+          # log4j2.xml must not point an appender at stdout — that is the MCP JSON-RPC channel.
+          if unzip -p "$JAR" log4j2.xml | grep -q 'target="SYSTEM_OUT"'; then
+            echo "FAIL: log4j2.xml Console appender targets SYSTEM_OUT (corrupts MCP stdio)"
+            fail=1
+          fi
           # Size ceiling — catches a bloat regression (current ~441 MB after Tier-1/2a/3).
           sz=$(stat -c%s "$JAR"); ceil=$((500*1024*1024))
           echo "JAR size: $((sz/1024/1024)) MB (ceiling $((ceil/1024/1024)) MB)"

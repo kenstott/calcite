@@ -45,10 +45,27 @@ repositories {
     mavenCentral()
 }
 
+// SLF4J 1.7 resolves its binding through org/slf4j/impl/StaticLoggerBinder, and Hadoop drags in
+// slf4j-reload4j, which therefore wins. Nothing configures reload4j, so every adapter log
+// statement was discarded and reload4j printed "log4j:WARN No appenders could be found" in its
+// place — which is why a cold start that spends minutes rebuilding Iceberg views looks like a hung
+// server: the entire diagnostic channel is dead. govdata declares log4j-slf4j2-impl, but that only
+// binds under SLF4J 2.x and can never activate while :bom pins slf4j-api to strictly 1.7.25, so
+// the bundled log4j2.xml has been inert. Keep the reload4j binding off the classpath so the
+// log4j2 provider below is the only one StaticLoggerBinder can resolve to.
+configurations.all {
+    exclude(group = "org.slf4j", module = "slf4j-reload4j")
+}
+
 dependencies {
     implementation(project(":driver-base"))
     implementation(project(":govdata"))
     implementation("com.formdev:flatlaf:3.3")
+
+    // log4j-slf4j-impl (not -slf4j2-impl) is the log4j2 binding for SLF4J 1.7, which is the API
+    // version this jar actually ships. Pairs with govdata's bundled log4j2.xml.
+    runtimeOnly("org.apache.logging.log4j:log4j-slf4j-impl:2.23.1")
+    runtimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
@@ -99,6 +116,16 @@ tasks.shadowJar {
     exclude("META-INF/*.SF")
     exclude("META-INF/*.DSA")
     exclude("META-INF/*.RSA")
+
+    // slf4j-reload4j and log4j-slf4j-impl both ship org/slf4j/impl/StaticLoggerBinder.class, so
+    // which backend SLF4J 1.7 binds to would be settled by whichever jar shadow merges first. Bound
+    // to reload4j, which nothing here configures, every adapter log line is discarded — the silent
+    // cold start this exists to prevent. The configurations-wide exclude above keeps the module off
+    // runtimeClasspath; this drops any copy that still reaches the merge, so exactly one binding
+    // survives and it is the log4j2 one that log4j2.xml configures.
+    dependencies {
+        exclude(dependency("org.slf4j:slf4j-reload4j"))
+    }
 
     // ── ETL-only govdata packages ──────────────────────────────────────────
     // govdata/etl is pure ETL orchestration — safe to exclude
