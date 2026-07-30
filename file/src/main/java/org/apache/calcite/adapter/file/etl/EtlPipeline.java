@@ -719,10 +719,20 @@ public class EtlPipeline {
         }
       }
 
-      writer =
-          MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, tableDirectory, incrementalTracker);
-      writer.initialize(materializeConfig);
-      LOGGER.info("Initialized {} writer for table {}", format, tableName);
+      // materialize.enabled: false means "run the pipeline, write nothing" — a supported
+      // configuration, guarded on in Phase 1.5, verifyDataExists and elsewhere. Building a real
+      // writer here ignored that: the Iceberg and Parquet writers reject a disabled config in
+      // initialize(), so the pipeline died with "Materialization is disabled in config" rather
+      // than running. Substitute the no-op writer so the rest of the pipeline is unchanged.
+      if (materializeConfig != null && !materializeConfig.isEnabled()) {
+        writer = MaterializationWriter.NOOP;
+        LOGGER.info("Materialization disabled for table {} - running without a writer", tableName);
+      } else {
+        writer =
+            MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, tableDirectory, incrementalTracker);
+        writer.initialize(materializeConfig);
+        LOGGER.info("Initialized {} writer for table {}", format, tableName);
+      }
 
       // Wire per-row effective year/month fields from dimension config into Iceberg writer.
       if (writer instanceof IcebergMaterializationWriter) {

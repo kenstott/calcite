@@ -1172,7 +1172,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       LOGGER.info("Created flattened JSON file: {} -> {}", originalFile.getName(), flattenedFile.getName());
 
       // Log the conversion metadata state after flattening
-      LOGGER.info("=== CONVERSION METADATA AFTER FLATTENING ===");
+      LOGGER.debug("=== CONVERSION METADATA AFTER FLATTENING ===");
       LOGGER.info("Recorded flattened conversion for table '{}': originalFile={}, flattenedFile={}",
           tableName, originalFile.getName(), flattenedFile.getName());
 
@@ -1197,6 +1197,30 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   /**
    * Gets the table name for a file from explicit table definitions.
    */
+  /**
+   * Absolute path of the local file an explicit table definition claims, or null when the
+   * definition names something that is not a local file (an HTTP URL, a glob, a SQL view).
+   *
+   * <p>Used to stop the directory scan and the storage-provider walk from re-registering a file
+   * that a {@code tables} entry already registered.
+   */
+  private @Nullable String claimedLocalPath(Map<String, Object> tableDef) {
+    String url = (String) tableDef.get("url");
+    if (url == null || isGlobPattern(url)
+        || url.startsWith("http://") || url.startsWith("https://")) {
+      return null;
+    }
+    try {
+      Source source = resolveSource(url);
+      File file = source.file();
+      return file == null ? null : file.getAbsolutePath();
+    } catch (Exception e) {
+      LOGGER.debug("Could not resolve explicit table url '{}' to a local file: {}",
+          url, e.getMessage());
+      return null;
+    }
+  }
+
   private String getTableNameForFile(File jsonFile) {
     String filePath = jsonFile.getAbsolutePath();
 
@@ -1266,7 +1290,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     Set<String> alreadyProcessedFiles = new HashSet<>();
     if (conversionMetadata != null) {
       Map<String, ConversionMetadata.ConversionRecord> allRecords = conversionMetadata.getAllConversions();
-      LOGGER.info("=== FILES TO EXCLUDE FROM BULK CONVERSION ===");
+      LOGGER.debug("=== FILES TO EXCLUDE FROM BULK CONVERSION ===");
       for (Map.Entry<String, ConversionMetadata.ConversionRecord> entry : allRecords.entrySet()) {
         ConversionMetadata.ConversionRecord record = entry.getValue();
         if (record.sourceFile != null) {
@@ -1341,7 +1365,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // Log conversion metadata after bulk conversion
     if (conversionMetadata != null) {
       Map<String, ConversionMetadata.ConversionRecord> allRecordsAfter = conversionMetadata.getAllConversions();
-      LOGGER.info("=== ALL CONVERSION RECORDS AFTER BULK CONVERSION ({} records) ===", allRecordsAfter.size());
+      LOGGER.debug("=== ALL CONVERSION RECORDS AFTER BULK CONVERSION ({} records) ===", allRecordsAfter.size());
       for (ConversionMetadata.ConversionRecord record : allRecordsAfter.values()) {
         LOGGER.info("  tableName: {}", record.tableName);
         LOGGER.info("  sourceFile: {}", record.sourceFile);
@@ -1351,7 +1375,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.info("  tableType: {}", record.tableType);
         LOGGER.info("  ---");
       }
-      LOGGER.info("=== END CONVERSION RECORDS AFTER BULK CONVERSION ===");
+      LOGGER.debug("=== END CONVERSION RECORDS AFTER BULK CONVERSION ===");
 
       // Also log the full conversions.json content after bulk conversion
       try {
@@ -1750,7 +1774,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // Report ALL conversion.json records after tableDef processing and flattening
     if (conversionMetadata != null) {
       Map<String, ConversionMetadata.ConversionRecord> allRecords = conversionMetadata.getAllConversions();
-      LOGGER.info("=== ALL CONVERSION RECORDS AFTER TABLEDEF PROCESSING ({} records) ===", allRecords.size());
+      LOGGER.debug("=== ALL CONVERSION RECORDS AFTER TABLEDEF PROCESSING ({} records) ===", allRecords.size());
       for (ConversionMetadata.ConversionRecord record : allRecords.values()) {
         LOGGER.info("  tableName: {}", record.tableName);
         LOGGER.info("  sourceFile: {}", record.sourceFile);
@@ -1760,7 +1784,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.info("  tableType: {}", record.tableType);
         LOGGER.info("  ---");
       }
-      LOGGER.info("=== END ALL CONVERSION RECORDS ===");
+      LOGGER.debug("=== END ALL CONVERSION RECORDS ===");
     }
 
     // Look for files in the directory ending in ".csv", ".csv.gz", ".json",
@@ -1785,10 +1809,31 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       File[] files = getFilesForProcessing();
       LOGGER.debug("[FileSchema] Found {} files for processing", files.length);
       // Build a map from table name to table; each file becomes a table.
+      // Files an explicit `tables` entry already registered, by absolute path. The conversion-record
+      // check below only sees files that went through a conversion; a file registered directly from
+      // a tableDef leaves no such record, so the scan walked it again. The name guards further down
+      // cannot catch that either — they compare a name derived from the FILE ("explicit") against
+      // the declared names ("explicit_csv"), which never matches, and addTable then resolves the
+      // rescanned file back to its declared name. The result was two builder entries under one key,
+      // which threw, and getTableMap turned that into an empty schema: a directory containing an
+      // explicitly-declared file served no tables at all.
+      final Set<String> explicitlyClaimedPaths = new HashSet<>();
+      for (Map<String, Object> td : this.tables) {
+        String claimed = claimedLocalPath(td);
+        if (claimed != null) {
+          explicitlyClaimedPaths.add(claimed);
+        }
+      }
+
       for (File file : files) {
         // Skip files that were already processed during tableDef processing
         boolean shouldSkip = false;
-        if (conversionMetadata != null) {
+        if (explicitlyClaimedPaths.contains(file.getAbsolutePath())) {
+          LOGGER.debug("Skipping file {} - already registered by an explicit table definition",
+              file.getName());
+          shouldSkip = true;
+        }
+        if (!shouldSkip && conversionMetadata != null) {
           Map<String, ConversionMetadata.ConversionRecord> allRecords = conversionMetadata.getAllConversions();
           for (ConversionMetadata.ConversionRecord record : allRecords.values()) {
             if (record.sourceFile != null &&
@@ -1830,7 +1875,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           sourceSansJson = sourceSansGz.trimOrNull(".yml");
         }
         if (sourceSansJson != null) {
-          LOGGER.info("=== PROCESSING JSON FILE IN BULK CONVERSION ===");
+          LOGGER.debug("=== PROCESSING JSON FILE IN BULK CONVERSION ===");
           LOGGER.info("  JSON file: {}", source.path());
 
           // For files in the conversions directory, use just the filename as the table name
@@ -1971,7 +2016,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                       options.put("flatten", this.flatten);
                     }
 
-                    LOGGER.info("=== CREATING PARQUET FROM SOURCE FILE ===");
+                    LOGGER.debug("=== CREATING PARQUET FROM SOURCE FILE ===");
                     LOGGER.info("  Source file for Parquet generation: {}", tableSource.path());
                     LOGGER.info("  Table name: {}", tableName);
                     LOGGER.info("  Conversion type: {}", conversionRecord != null ? conversionRecord.conversionType : "null");
@@ -1981,7 +2026,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                     // Log what the JsonScannableTable sees
                     try {
                       if ("JSON_FLATTEN".equals(conversionRecord.conversionType)) {
-                        LOGGER.info("=== JSONTABLE SCHEMA ===");
+                        LOGGER.debug("=== JSONTABLE SCHEMA ===");
                         org.apache.calcite.rel.type.RelDataType rowType = jsonTable.getRowType(null);
                         for (org.apache.calcite.rel.type.RelDataTypeField field : rowType.getFieldList()) {
                           LOGGER.info("  Field: {} (type: {})", field.getName(), field.getType());
@@ -2016,7 +2061,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                           while (keys.hasNext()) {
                             keyList.add(keys.next());
                           }
-                          LOGGER.info("=== FIRST RECORD KEYS FROM SOURCE JSON ===");
+                          LOGGER.debug("=== FIRST RECORD KEYS FROM SOURCE JSON ===");
                           LOGGER.info("  Source file: {}", tableSource.path());
                           LOGGER.info("  Keys: {}", String.join(", ", keyList));
                         }
@@ -2280,20 +2325,20 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // DEBUG: Log what's in the builder before final build
     try {
       Map<String, Table> previewTables = builder.build();
-      LOGGER.info("=== FINAL TABLE BUILDER CONTENTS BEFORE CACHE ===");
+      LOGGER.debug("=== FINAL TABLE BUILDER CONTENTS BEFORE CACHE ===");
       LOGGER.info("Total tables in builder: {}", previewTables.size());
       for (Map.Entry<String, Table> entry : previewTables.entrySet()) {
         LOGGER.info("  Table: '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
       }
-      LOGGER.info("=== END BUILDER CONTENTS ===");
+      LOGGER.debug("=== END BUILDER CONTENTS ===");
 
       // Debug: Log what tables we have before final build
-      LOGGER.info("=== BEFORE FINAL BUILD ===");
+      LOGGER.debug("=== BEFORE FINAL BUILD ===");
       LOGGER.info("Preview tables count: {}", previewTables.size());
       for (Map.Entry<String, Table> entry : previewTables.entrySet()) {
         LOGGER.info("  Table '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
       }
-      LOGGER.info("=== END BEFORE FINAL BUILD ===");
+      LOGGER.debug("=== END BEFORE FINAL BUILD ===");
 
       // Rebuild the builder since build() consumes it
       ImmutableMap.Builder<String, Table> newBuilder = ImmutableMap.builder();
@@ -2307,12 +2352,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
 
       // Debug: Log final table cache contents
-      LOGGER.info("=== FINAL TABLE CACHE ===");
+      LOGGER.debug("=== FINAL TABLE CACHE ===");
       LOGGER.info("Final tableCache count: {}", tableCache.size());
       for (Map.Entry<String, Table> entry : tableCache.entrySet()) {
         LOGGER.info("  Final table '{}' -> {}", entry.getKey(), entry.getValue().getClass().getSimpleName());
       }
-      LOGGER.info("=== END FINAL TABLE CACHE ===");
+      LOGGER.debug("=== END FINAL TABLE CACHE ===");
     } catch (Exception builderException) {
       LOGGER.error("Exception during final table cache build: {}", builderException.getMessage(), builderException);
       throw builderException;
@@ -2355,9 +2400,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     return tableCache;
     } catch (Exception e) {
-      LOGGER.error("[FileSchema.getTableMap] Error computing tables: {}", e.getMessage());
-      e.printStackTrace();
-      return ImmutableMap.of();
+      // Propagate. Returning an empty map here made every construction failure look like an
+      // empty directory: the real cause was logged and discarded, and the caller met it much
+      // later as "Object 'x' not found within 'y'". A duplicate-key collision between an
+      // explicit table definition and the directory scan hid behind this for exactly that
+      // reason — the schema silently served no tables at all. Nothing branches on the map
+      // being empty, so failing here costs no behaviour and surfaces the cause where it happens.
+      throw new RuntimeException(
+          "Failed to compute tables for schema '" + name + "': " + e.getMessage(), e);
     }
   }
 
@@ -4078,7 +4128,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * Process partitioned table configurations.
    */
   private void processPartitionedTables(ImmutableMap.Builder<String, Table> builder) {
-    LOGGER.info("=== PARTITIONED TABLE PROCESSING START ===");
+    LOGGER.debug("=== PARTITIONED TABLE PROCESSING START ===");
     LOGGER.info("partitionedTables: {}, baseDirectory: {}",
                 partitionedTables != null ? partitionedTables.size() + " tables" : "null", baseDirectory);
 
@@ -4342,7 +4392,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
         // Storage provider config explicitly defines table name - use as-is
         try {
-          LOGGER.info("=== ADDING PARTITIONED TABLE TO BUILDER ===");
+          LOGGER.debug("=== ADDING PARTITIONED TABLE TO BUILDER ===");
           LOGGER.info("Table name: '{}'", config.getName());
           LOGGER.info("Table class: {}", table.getClass().getName());
           LOGGER.info("Table toString: {}", table.toString());
@@ -5196,12 +5246,17 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
         }
       }
-      // Also track source files from explicit table definitions directly
+      // Also track source files from explicit table definitions directly.
+      // Resolved the same way addTable resolves them, rather than assuming the url is relative:
+      // new File(sourceDirectory, url) silently mangles an ABSOLUTE url into
+      // <sourceDirectory>/<absolute-url>, a path that matches no entry. The file was then walked
+      // again here, addTable resolved it back to the explicit table name, and the builder got two
+      // entries under that one key — which threw, and getTableMap turned into an empty schema. A
+      // directory holding an explicitly-declared file therefore served no tables at all.
       for (Map<String, Object> td : tables) {
-        String url = (String) td.get("url");
-        if (url != null && sourceDirectory != null) {
-          File f = new File(sourceDirectory, url);
-          addWithPrivateVariants(processedSourceFiles, f.getAbsolutePath());
+        String claimed = claimedLocalPath(td);
+        if (claimed != null) {
+          addWithPrivateVariants(processedSourceFiles, claimed);
         }
       }
       LOGGER.debug("[processStorageProviderFiles] Excluding {} already-processed source files: {}",

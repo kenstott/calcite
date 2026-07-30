@@ -96,7 +96,7 @@ public class BundleArchiver {
    * @param bundleId Bundle identifier (e.g., {@code run-20260310T1423})
    */
   public static void archive(String localCacheDir, StorageProvider storageProvider,
-      String schemaName, String bundleId) {
+      String schemaName, String bundleId) throws IOException {
     archive(localCacheDir, storageProvider, schemaName, bundleId, DEFAULT_SIZE_THRESHOLD);
   }
 
@@ -110,7 +110,7 @@ public class BundleArchiver {
    * @param sizeThreshold Files larger than this (bytes) are stored as individual objects
    */
   public static void archive(String localCacheDir, StorageProvider storageProvider,
-      String schemaName, String bundleId, long sizeThreshold) {
+      String schemaName, String bundleId, long sizeThreshold) throws IOException {
     File cacheRoot = new File(localCacheDir);
     if (!cacheRoot.exists() || !cacheRoot.isDirectory()) {
       LOGGER.debug("No local cache directory to archive: {}", localCacheDir);
@@ -162,8 +162,14 @@ public class BundleArchiver {
       LOGGER.info("Archive complete: {} bundled + {} individual objects, index in {} parts",
           smallFiles.size(), largeFiles.size(), indexParts);
 
-    } catch (Exception e) {
-      LOGGER.warn("Failed to archive raw cache (non-fatal): {}", e.getMessage());
+    } catch (IOException | RuntimeException e) {
+      // Wrap so callers see one checked failure type. Nothing is swallowed: a failed upload
+      // previously left the archive silently incomplete — no index written, no objects stored —
+      // and reported success, so a cache that could not be restored looked identical to one that
+      // had nothing to store. The "never break the ETL run" policy belongs at the call site,
+      // which already applies it (SchemaLifecycleProcessor catches and warns).
+      throw new IOException("Failed to archive raw cache from " + localCacheDir + ": "
+          + e.getMessage(), e);
     }
   }
 
