@@ -95,9 +95,76 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
       return false;
     }
 
+    // The cached count describes ONE table, so the input must reduce to exactly one scan.
+    // Without this the rule fired on an Aggregate over a Join and answered from whichever
+    // scan it found first: COUNT(*) over a self cross join of a 33,791-row table returned
+    // 33,791 instead of ~1.1e9, and a three-way join returned the same. The Filter guard
+    // above did not catch it, because a join predicate like a.x < b.x becomes the join
+    // condition rather than a Filter above it.
+    int scans = countTableScans(aggregate.getInput());
+    if (scans != 1) {
+      LOGGER.debug("[ICEBERG COUNT*] Skipping - input reduces to {} table scans, not 1", scans);
+      return false;
+    }
+
     LOGGER.info("[ICEBERG COUNT*] matches() returning true - found COUNT(*)");
     return true;
   }
+
+  /**
+   * Number of {@link TableScan}s under {@code node}, or {@link #NOT_SIMPLE} when the tree
+   * contains anything that makes the row count differ from a single table's.
+   *
+   * <p>Deliberately a whitelist. A blacklist is the wrong shape for a rewrite that
+   * substitutes a stored number for a real scan: every relational operator not yet thought
+   * of would default to "safe" and silently return a wrong count. Only nodes that cannot
+   * change cardinality are passed through, so an unfamiliar node stops the rule instead.
+   */
+  private int countTableScans(RelNode node) {
+    if (node == null) {
+      return NOT_SIMPLE;
+    }
+    if (node instanceof TableScan) {
+      return 1;
+    }
+    // Volcano wrapper — inspect the chosen (or original) plan, as hasFilter does.
+    if (node.getClass().getName().contains("RelSubset")) {
+      try {
+        java.lang.reflect.Method getBest = node.getClass().getMethod("getBest");
+        RelNode best = (RelNode) getBest.invoke(node);
+        if (best != null && best != node) {
+          return countTableScans(best);
+        }
+        java.lang.reflect.Method getOriginal = node.getClass().getMethod("getOriginal");
+        RelNode original = (RelNode) getOriginal.invoke(node);
+        if (original != null && original != node) {
+          return countTableScans(original);
+        }
+      } catch (Exception e) {
+        // Cannot inspect it, so cannot prove it is a single scan.
+        return NOT_SIMPLE;
+      }
+      return NOT_SIMPLE;
+    }
+    // Row-count-preserving pass-throughs only. Notably absent: Join and Union (multiply or
+    // add rows), Sort (a fetch/offset truncates), and a nested Aggregate (collapses them).
+    if (node instanceof org.apache.calcite.rel.core.Project
+        || node instanceof org.apache.calcite.rel.core.Calc) {
+      int total = 0;
+      for (RelNode input : node.getInputs()) {
+        int n = countTableScans(input);
+        if (n == NOT_SIMPLE) {
+          return NOT_SIMPLE;
+        }
+        total += n;
+      }
+      return total;
+    }
+    return NOT_SIMPLE;
+  }
+
+  /** Sentinel: the input is not a plain single-table scan, so the cached count cannot apply. */
+  private static final int NOT_SIMPLE = -1;
 
   /**
    * Returns true if the RelNode tree rooted at {@code node} contains any Filter node.

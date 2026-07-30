@@ -104,6 +104,20 @@ public class CountStarStatisticsRule extends RelRule<CountStarStatisticsRule.Con
       return;
     }
 
+    // The statistic describes ONE table, so the input must reduce to exactly one scan with
+    // nothing above it that changes the row count. Without this the rule fired on an
+    // Aggregate over a Join and answered from whichever scan findTableScan reached first:
+    // COUNT(*) over a self cross join of a 33,791-row table returned 33,791 instead of
+    // ~1.1e9, a three-way join returned the same, and adding a join predicate changed
+    // nothing. A WHERE clause was wrong the same way, since there was no Filter guard here
+    // either -- the count returned was always the whole table's.
+    int scans = countPlainTableScans(input);
+    if (scans != 1) {
+      LOGGER.debug("[COUNT* STATS]: Skipping - input reduces to {} plain table scans, not 1",
+          scans);
+      return;
+    }
+
     // Find the table scan to get statistics
     TableScan tableScan = findTableScan(input);
     if (tableScan == null) {
@@ -143,6 +157,60 @@ public class CountStarStatisticsRule extends RelRule<CountStarStatisticsRule.Con
     if (valuesNode != null) {
       call.transformTo(valuesNode, com.google.common.collect.ImmutableMap.of());
     }
+  }
+
+  /** Sentinel: the input is not a plain single-table scan, so a stored count cannot apply. */
+  private static final int NOT_SIMPLE = -1;
+
+  /**
+   * Number of {@link TableScan}s under {@code node}, or {@link #NOT_SIMPLE} when the tree
+   * holds anything that makes the row count differ from a single table's.
+   *
+   * <p>A whitelist on purpose. For a rewrite that swaps a stored number in for a real scan,
+   * a blacklist is the wrong shape: every operator nobody thought of defaults to "safe" and
+   * silently returns a wrong count. Only nodes that cannot change cardinality pass through,
+   * so anything unfamiliar stops the rule rather than corrupting the answer. Notably absent
+   * are Join and Union (multiply or add rows), Filter (removes them), Sort (a fetch/offset
+   * truncates) and a nested Aggregate (collapses them).
+   */
+  private int countPlainTableScans(RelNode node) {
+    if (node == null) {
+      return NOT_SIMPLE;
+    }
+    if (node instanceof TableScan) {
+      return 1;
+    }
+    // Volcano wrapper — inspect the chosen (or original) plan, as findTableScan does.
+    if (node.getClass().getName().contains("RelSubset")) {
+      try {
+        java.lang.reflect.Method getBest = node.getClass().getMethod("getBest");
+        RelNode best = (RelNode) getBest.invoke(node);
+        if (best != null && best != node) {
+          return countPlainTableScans(best);
+        }
+        java.lang.reflect.Method getOriginal = node.getClass().getMethod("getOriginal");
+        RelNode original = (RelNode) getOriginal.invoke(node);
+        if (original != null && original != node) {
+          return countPlainTableScans(original);
+        }
+      } catch (Exception e) {
+        return NOT_SIMPLE;
+      }
+      return NOT_SIMPLE;
+    }
+    if (node instanceof org.apache.calcite.rel.core.Project
+        || node instanceof org.apache.calcite.rel.core.Calc) {
+      int total = 0;
+      for (RelNode child : node.getInputs()) {
+        int n = countPlainTableScans(child);
+        if (n == NOT_SIMPLE) {
+          return NOT_SIMPLE;
+        }
+        total += n;
+      }
+      return total;
+    }
+    return NOT_SIMPLE;
   }
 
   /**
