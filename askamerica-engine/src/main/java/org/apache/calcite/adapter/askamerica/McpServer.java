@@ -193,27 +193,87 @@ public class McpServer {
             if (line.isEmpty()) {
                 continue;
             }
+            final String raw = line;
             try {
-                JsonNode req = MAPPER.readTree(line);
-                String method = req.path("method").asText("");
+                final JsonNode req = MAPPER.readTree(raw);
+                final String reqMethod = req.path("method").asText("");
 
-                // Notifications have no id — fire and forget, no response.
+                // Notifications have no id — fire and forget, no response. Handled on this
+                // thread: they are trivial, and ordering against the requests around them
+                // is easier to reason about kept in sequence.
                 if (!req.has("id")) {
-                    handleNotification(method);
+                    handleNotification(reqMethod);
                     continue;
                 }
 
-                ObjectNode resp = dispatch(req, method);
-                out.println(MAPPER.writeValueAsString(resp));
+                // Dispatch off the reader thread. Reading stays serial — there is one stdin
+                // — but a request no longer has to finish before the next is even parsed.
+                // JSON-RPC pairs responses to requests by id, so replying out of order is
+                // allowed by the protocol.
+                WORKERS.execute(() -> respond(out, dispatch(req, reqMethod)));
             } catch (Exception e) {
                 log.println("[askamerica-mcp] Error: " + e.getMessage());
-                ObjectNode err = errorResponse(null, -32700, "Parse error: " + e.getMessage());
-                out.println(MAPPER.writeValueAsString(err));
+                respond(out, errorResponse(null, -32700, "Parse error: " + e.getMessage()));
             }
         }
     }
 
     // ── Dispatcher ────────────────────────────────────────────────────────────
+
+    /**
+     * Handles requests off the reader thread.
+     *
+     * <p>Small on purpose. DB-bound tools serialise on {@link #DB_LOCK} regardless, so extra
+     * threads buy nothing there; the pool exists so the cheap calls — initialize, tools/list,
+     * ping, and the three lock-free tools — stay answerable while a query runs. Daemon
+     * threads, so a client disconnecting cannot keep the JVM alive.
+     */
+    private static final java.util.concurrent.ExecutorService WORKERS =
+        java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "mcp-worker");
+            t.setDaemon(true);
+            return t;
+        });
+
+    /** Guards stdout so two responses can never interleave on the same line. */
+    private static final Object OUT_LOCK = new Object();
+
+    /**
+     * Writes one JSON-RPC response. Serialisation happens inside the lock as well, so a
+     * failure to serialise cannot leave a half-written line on the wire.
+     */
+    private static void respond(PrintStream out, ObjectNode resp) {
+        synchronized (OUT_LOCK) {
+            try {
+                out.println(MAPPER.writeValueAsString(resp));
+                out.flush();
+            } catch (Exception e) {
+                log.println("[askamerica-mcp] Failed to write response: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Serialises database work. Requests are dispatched concurrently, but every DB-bound
+     * tool shares one JDBC connection (see {@link #getCatalogConnection()}), and an Avatica
+     * connection is not safe for concurrent use. Until each worker can hold its own
+     * connection, this lock is what preserves the safety the serial loop used to provide
+     * for free — it is not an optimisation choice.
+     */
+    private static final Object DB_LOCK = new Object();
+
+    /**
+     * Tools that touch no database, so they need not wait behind a long query. This is the
+     * whole point of dispatching concurrently: suggest_external_sources performs no I/O at
+     * all, yet used to sit behind fetch_aligned_series and look like a hang.
+     *
+     * <p>Everything absent from this set is assumed to need the lock. list_schemas is
+     * deliberately not here — it reads information_schema, which is a DB query despite
+     * sounding like a local lookup.
+     */
+    private static final java.util.Set<String> LOCK_FREE_TOOLS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "suggest_external_sources", "set_telemetry", "report_issue"));
 
     private static ObjectNode dispatch(JsonNode req, String method) {
         JsonNode id = req.get("id");
@@ -221,10 +281,21 @@ public class McpServer {
 
         try {
             switch (method) {
+                // initialize, tools/list and ping touch no schema, so they stay answerable
+                // while a query runs. Previously a client could not even enumerate tools
+                // during a long call.
                 case "initialize":       return handleInitialize(id);
                 case "tools/list":       return handleToolsList(id);
-                case "tools/call":       return handleToolsCall(id, params);
                 case "ping":             return result(id, MAPPER.createObjectNode());
+                case "tools/call": {
+                    String tool = params.path("name").asText("");
+                    if (LOCK_FREE_TOOLS.contains(tool)) {
+                        return handleToolsCall(id, params);
+                    }
+                    synchronized (DB_LOCK) {
+                        return handleToolsCall(id, params);
+                    }
+                }
                 default:
                     return errorResponse(id, -32601, "Method not found: " + method);
             }
@@ -1343,16 +1414,23 @@ public class McpServer {
         return name;
     }
 
-    private static String keyExpr(JsonNode spec, String on, String label) {
+    static String keyExpr(JsonNode spec, String on, String label) {
         if (TIME_GRAINS.contains(on)) {
             String timeCol = specText(spec, "time_col");
             if (timeCol != null) {
-                return "date_trunc('" + on + "', " + timeCol + ")";
+                // CAST, not the raw column: most date-bearing columns in this warehouse are
+                // VARCHAR holding ISO-8601 text, and date_trunc on a VARCHAR fails outright — so
+                // every time-grain alignment failed while the geo path, which passes its key
+                // column through untouched, worked. Casting covers both typings without the tool
+                // having to inspect types: DATE -> DATE is a no-op, and ISO text parses.
+                return "date_trunc('" + on + "', CAST(" + timeCol + " AS DATE))";
             }
             String yearCol = specText(spec, "year_col");
             String periodCol = specText(spec, "period_col");
             if (yearCol != null && periodCol != null) {
-                return "date_trunc('" + on + "', make_date(" + yearCol
+                // Same reason make_date's companion argument is already cast: year columns are
+                // just as often VARCHAR as INTEGER.
+                return "date_trunc('" + on + "', make_date(CAST(" + yearCol + " AS INTEGER)"
                     + ", CAST(substr(" + periodCol + ", 2) AS INTEGER), 1))";
             }
             String quarterCol = specText(spec, "quarter_col");
@@ -1363,7 +1441,8 @@ public class McpServer {
             }
             String yearOnly = specText(spec, "year_only_col");
             if (yearOnly != null) {
-                return "date_trunc('" + on + "', make_date(" + yearOnly + ", 1, 1))";
+                return "date_trunc('" + on + "', make_date(CAST(" + yearOnly
+                    + " AS INTEGER), 1, 1))";
             }
             throw new IllegalArgumentException("series " + label + ": for on=" + on
                 + " give time_col | (year_col & period_col) | quarter_col | year_only_col");
