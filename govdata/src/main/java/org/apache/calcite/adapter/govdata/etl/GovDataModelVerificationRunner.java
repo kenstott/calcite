@@ -61,7 +61,12 @@ public final class GovDataModelVerificationRunner {
 
   // dataSource -> bundled schema-definition YAML resource (classpath). Used to classify each
   // defined table as a base table, an intra-schema view, or an inter-schema view.
-  private static final Map<String, String> SCHEMA_YAML = new LinkedHashMap<String, String>();
+  /**
+   * Schema name to its YAML resource. Package-private so {@code SchemaListDriftTest} can assert it
+   * covers every {@code *-schema.yaml} and agrees with {@code model-verify.sh}'s ALL_SCHEMAS — a
+   * name missing here is silently never verified and never seeded.
+   */
+  static final Map<String, String> SCHEMA_YAML = new LinkedHashMap<String, String>();
   // Canonical schema names, used to detect cross-schema references inside view SQL.
   private static final Set<String> KNOWN_SCHEMAS = new LinkedHashSet<String>();
   static {
@@ -89,6 +94,7 @@ public final class GovDataModelVerificationRunner {
     SCHEMA_YAML.put("transport", "/transport/transport-schema.yaml");
     SCHEMA_YAML.put("environment", "/environment/environment-schema.yaml");
     SCHEMA_YAML.put("research", "/research/research-schema.yaml");
+    SCHEMA_YAML.put("fiscal", "/fiscal/fiscal-schema.yaml");
     KNOWN_SCHEMAS.addAll(SCHEMA_YAML.keySet());
   }
 

@@ -17,7 +17,14 @@
   -->
 <Configuration status="WARN">
   <Appenders>
-    <Console name="Console" target="SYSTEM_OUT">
+    <!-- SYSTEM_ERR, not SYSTEM_OUT: this configuration ships inside the MCP server jar, whose
+         stdout is the JSON-RPC channel. A log line written there corrupts the protocol stream and
+         drops the client's connection. The MCP server also reassigns System.out to stderr before
+         touching SLF4J, but a ConsoleAppender resolves its target at configuration time and does
+         not follow that reassignment by default, so relying on the ordering would leave the
+         protocol channel one class-load away from breaking. Diagnostics belong on stderr in every
+         mode; the ETL and CLI paths read it just as well. -->
+    <Console name="Console" target="SYSTEM_ERR">
       <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
     </Console>
   </Appenders>
