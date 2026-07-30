@@ -411,6 +411,7 @@ for year in $YEARS; do
     _done_line=$(grep -h "Document ETL completed" "$_wlog" 2>/dev/null | tail -1)
     _processed=$(printf '%s' "$_done_line" | sed -nE 's/.*completed: ([0-9]+) processed.*/\1/p')
     _skipped=$(printf '%s' "$_done_line" | sed -nE 's/.*, ([0-9]+) skipped.*/\1/p')
+    _etlfailed=$(printf '%s' "$_done_line" | sed -nE 's/.*, ([0-9]+) failed.*/\1/p')
     if [ -n "$_processed" ] && [ "$_processed" = "0" ] && [ "${_skipped:-0}" -gt 0 ]; then
       failed=$((failed + 1))
       log_info "fix-sec: batch $batches processed 0 of $n accessions (${_skipped} skipped) —" \
@@ -419,6 +420,35 @@ for year in $YEARS; do
       log_info "  list kept at $bf"
       continue
     fi
+
+    # Any ETL failure means the batch must NOT be recorded as attempted.
+    #
+    # The attempted-list exists to retire accessions whose gap reprocessing cannot close — an
+    # output that was legitimately empty is indistinguishable from one whose source was
+    # overwritten, so each gets a single pass and then drops out. A filing that failed on a
+    # transient error has had no such pass, and recording it writes it out of the repair for
+    # good.
+    #
+    # This is not hypothetical. When SEC began answering with HTTP 429, one batch reported
+    # "981 processed, 4 skipped, 1015 failed" — and because this check only looked at
+    # processed==0, all 2000 accessions were recorded. The 1015 were silently excluded from
+    # every future enumeration, and the run continued into the next batch doing the same.
+    # Stop the batch instead: the list is kept, nothing is recorded, and a later run retries it.
+    if [ -n "$_etlfailed" ] && [ "$_etlfailed" -gt 0 ]; then
+      failed=$((failed + 1))
+      log_info "fix-sec: batch $batches FAILED — ${_etlfailed} of $n accessions errored" \
+               "(${_processed:-?} processed). NOT recording as attempted; they must be retried."
+      log_info "  worker log: $_wlog"
+      log_info "  list kept at $bf"
+      _429=$(grep -ac "HTTP 429" "$_wlog" 2>/dev/null || echo 0)
+      if [ "${_429:-0}" -gt 0 ]; then
+        log_info "  ${_429} x HTTP 429 — SEC is rate-limiting. Stopping rather than escalating;" \
+                 "re-run later and the attempted-list resumes from here."
+        exit 1
+      fi
+      continue
+    fi
+
     log_info "fix-sec: batch $batches processed ${_processed:-?} accession(s)"
 
     # Record the attempt, not the outcome. Whether rows appeared or the filing's output was
