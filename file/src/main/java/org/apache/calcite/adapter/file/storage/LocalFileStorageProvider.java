@@ -204,7 +204,12 @@ public class LocalFileStorageProvider implements StorageProvider {
     Path filePath = parsePath(path);
 
     // Create parent directories if they don't exist
-    Path parentDir = filePath.getParent();
+    // Resolved against the working directory so a bare filename ("data.txt") still has a parent.
+    // getParent() is null for a single-segment relative path, and the temp-file creation below
+    // passes that parent as the target directory — Files.createTempFile throws NPE on a null
+    // directory, so writing to an unqualified name failed outright. The absolute form also keeps
+    // the temp file on the same filesystem as the destination, which ATOMIC_MOVE requires.
+    Path parentDir = filePath.toAbsolutePath().getParent();
     if (parentDir != null && !Files.exists(parentDir)) {
       Files.createDirectories(parentDir);
     }
@@ -214,7 +219,7 @@ public class LocalFileStorageProvider implements StorageProvider {
     // are read by other processes at any time, so we write to a sibling temp file and rename it
     // into place. The rename is a single filesystem operation, so readers observe either the old
     // content or the fully-written new content, never an intermediate state.
-    Path tempFile = Files.createTempFile(filePath.getParent(),
+    Path tempFile = Files.createTempFile(parentDir,
         "." + filePath.getFileName().toString(), ".tmp");
     try {
       Files.write(tempFile, content,

@@ -138,4 +138,57 @@ public interface MaterializationWriter extends Closeable {
   default String getEtlProperty(String key) {
     return null;
   }
+
+  /**
+   * A writer that accepts and discards everything, for {@code materialize.enabled: false}.
+   *
+   * <p>Disabling materialization is a supported configuration — the pipeline still fetches,
+   * transforms and tracks, it just has no output target — and {@link EtlPipeline} guards on
+   * {@code isEnabled()} in several places to honour that. Its writer phase did not, so it built a
+   * real writer whose {@code initialize} rejects a disabled config, and a pipeline configured that
+   * way failed with "Materialization is disabled in config" instead of running. Substituting this
+   * writer keeps the single write path intact rather than scattering null checks through batch
+   * processing and commit.
+   *
+   * <p>Mirrors {@code IncrementalTracker.NOOP}, which exists for the same reason.
+   */
+  MaterializationWriter NOOP = new MaterializationWriter() {
+    @Override public void initialize(MaterializeConfig config) {
+    }
+
+    @Override public long writeBatch(Iterator<Map<String, Object>> data,
+        Map<String, String> partitionVariables) {
+      // Drain the iterator so upstream producers are not left holding an unread stream, and
+      // report the rows seen: a caller distinguishes "no rows arrived" from "rows arrived and
+      // were not materialized", and returning 0 for the latter would look like an empty source.
+      long rows = 0;
+      while (data != null && data.hasNext()) {
+        data.next();
+        rows++;
+      }
+      return rows;
+    }
+
+    @Override public void commit() {
+    }
+
+    @Override public long getTotalRowsWritten() {
+      return 0;
+    }
+
+    @Override public int getTotalFilesWritten() {
+      return 0;
+    }
+
+    @Override public MaterializeConfig.Format getFormat() {
+      return MaterializeConfig.Format.PARQUET;
+    }
+
+    @Override public String getTableLocation() {
+      return null;
+    }
+
+    @Override public void close() {
+    }
+  };
 }
