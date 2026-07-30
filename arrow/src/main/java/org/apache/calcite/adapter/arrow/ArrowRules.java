@@ -54,7 +54,17 @@ public class ArrowRules {
       ArrowToEnumerableConverterRule.DEFAULT_CONFIG
           .toRule(ArrowToEnumerableConverterRule.class);
 
-  public static final List<RelOptRule> RULES = ImmutableList.of(PROJECT_SCAN, FILTER_SCAN);
+  /**
+   * Filter pushdown is only registered when Gandiva can run: it is Gandiva that evaluates the
+   * pushed condition. Projection pushdown stays either way — it is column selection, which the
+   * scan performs directly off the Arrow vectors. Without the filter rule, Calcite's Enumerable
+   * convention applies the predicate above the scan, covering strictly more expressions than the
+   * pushdown accepts (the translator rejects disjunctions outright).
+   */
+  public static final List<RelOptRule> RULES =
+      GandivaAvailability.isAvailable()
+          ? ImmutableList.of(PROJECT_SCAN, FILTER_SCAN)
+          : ImmutableList.of(PROJECT_SCAN);
 
   static List<String> arrowFieldNames(final RelDataType rowType) {
     return SqlValidatorUtil.uniquify(rowType.getFieldNames(),

@@ -23,7 +23,17 @@ dependencies {
     implementation("com.google.guava:guava:33.1.0-jre")
     implementation("org.apache.arrow:arrow-memory-netty")
     implementation("org.apache.arrow:arrow-vector")
-    implementation("org.apache.arrow.gandiva:arrow-gandiva")
+    // compileOnly, not implementation: Gandiva ships ~118 MB of platform-specific native
+    // libraries — more than everything else here combined — to accelerate projections and
+    // conjunctive comparison filters. The adapter reads the same data without it (see
+    // GandivaAvailability / ArrowScanEnumerator), so it is an opt-in a deployment adds to its own
+    // classpath rather than weight every downstream consumer carries.
+    compileOnly("org.apache.arrow.gandiva:arrow-gandiva")
+    testCompileOnly("org.apache.arrow.gandiva:arrow-gandiva")
+    // On the test runtime so the accelerated path is exercised wherever Gandiva actually works.
+    // Where it does not, ArrowExtension skips rather than fails. Test-scope only: it never
+    // reaches a consumer of this module.
+    testRuntimeOnly("org.apache.arrow.gandiva:arrow-gandiva")
     implementation("org.apache.hadoop:hadoop-common:3.3.6")
     implementation("org.apache.hadoop:hadoop-client:3.3.6")
     implementation("org.apache.parquet:parquet-avro:1.14.2")
