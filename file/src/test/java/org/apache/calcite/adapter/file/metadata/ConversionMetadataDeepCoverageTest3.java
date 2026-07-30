@@ -444,117 +444,19 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertFalse(baseline.isEmpty());
   }
 
-  // ====================================================================
-  // Tests for isHivePartitioned (private static method)
-  // ====================================================================
 
-  @Test void testIsHivePartitionedWithNullList() throws Exception {
-    boolean result = invokeIsHivePartitioned(null);
-    assertFalse(result);
-  }
 
-  @Test void testIsHivePartitionedWithEmptyList() throws Exception {
-    boolean result = invokeIsHivePartitioned(Collections.emptyList());
-    assertFalse(result);
-  }
 
-  @Test void testIsHivePartitionedWithSingleFile() throws Exception {
-    boolean result =
-        invokeIsHivePartitioned(Collections.singletonList("/data/year=2020/file.parquet"));
-    assertFalse(result, "Need at least 2 files");
-  }
 
-  @Test void testIsHivePartitionedWithHiveFiles() throws Exception {
-    List<String> files =
-        Arrays.asList("/data/year=2020/file1.parquet",
-        "/data/year=2021/file2.parquet",
-        "/data/year=2022/file3.parquet");
-    boolean result = invokeIsHivePartitioned(files);
-    assertTrue(result);
-  }
 
-  @Test void testIsHivePartitionedWithNonHiveFiles() throws Exception {
-    List<String> files =
-        Arrays.asList("/data/2020/file1.parquet",
-        "/data/2021/file2.parquet");
-    boolean result = invokeIsHivePartitioned(files);
-    assertFalse(result);
-  }
 
-  @Test void testIsHivePartitionedMixed() throws Exception {
-    // Only 1 of 3 files is Hive-partitioned (< 50%)
-    List<String> files =
-        Arrays.asList("/data/year=2020/file1.parquet",
-        "/data/plain/file2.parquet",
-        "/data/flat/file3.parquet");
-    boolean result = invokeIsHivePartitioned(files);
-    assertFalse(result);
-  }
 
-  // ====================================================================
-  // Tests for extractTableSpecificPattern (private static method)
-  // ====================================================================
 
-  @Test void testExtractTableSpecificPatternWithNull() throws Exception {
-    String result = invokeExtractTableSpecificPattern(null);
-    assertNull(result);
-  }
 
-  @Test void testExtractTableSpecificPatternWithEmpty() throws Exception {
-    String result = invokeExtractTableSpecificPattern(Collections.emptyList());
-    assertNull(result);
-  }
 
-  @Test void testExtractTableSpecificPatternWithHiveFiles() throws Exception {
-    List<String> files =
-        Arrays.asList("s3://bucket/schema/table/year=2020/file1.parquet",
-        "s3://bucket/schema/table/year=2021/file2.parquet");
-    String result = invokeExtractTableSpecificPattern(files);
-    assertNotNull(result);
-    assertTrue(result.contains("/**/*"));
-    assertTrue(result.endsWith(".parquet"));
-  }
 
-  @Test void testExtractTableSpecificPatternWithNonPartitionedFiles() throws Exception {
-    List<String> files =
-        Arrays.asList("/data/table/file1.parquet",
-        "/data/table/file2.parquet");
-    String result = invokeExtractTableSpecificPattern(files);
-    assertNotNull(result);
-    assertTrue(result.contains("/**/*"));
-  }
 
-  // ====================================================================
-  // Tests for findLongestCommonPrefix (private static method)
-  // ====================================================================
 
-  @Test void testFindLongestCommonPrefixEmpty() throws Exception {
-    String result = invokeFindLongestCommonPrefix(Collections.emptyList());
-    assertEquals("", result);
-  }
-
-  @Test void testFindLongestCommonPrefixSingleFile() throws Exception {
-    String result =
-        invokeFindLongestCommonPrefix(Collections.singletonList("/data/file.parquet"));
-    assertEquals("/data/file.parquet", result);
-  }
-
-  @Test void testFindLongestCommonPrefixMultipleFiles() throws Exception {
-    List<String> files =
-        Arrays.asList("/data/schema/table/file1.parquet",
-        "/data/schema/table/file2.parquet",
-        "/data/schema/other/file3.parquet");
-    String result = invokeFindLongestCommonPrefix(files);
-    assertTrue(result.startsWith("/data/schema/"));
-  }
-
-  @Test void testFindLongestCommonPrefixNoCommon() throws Exception {
-    List<String> files =
-        Arrays.asList("/alpha/file1.parquet",
-        "/beta/file2.parquet");
-    String result = invokeFindLongestCommonPrefix(files);
-    assertEquals("/", result);
-  }
 
   // ====================================================================
   // Tests for hints
@@ -979,28 +881,6 @@ public class ConversionMetadataDeepCoverageTest3 {
     assertNull(found);
   }
 
-  // ====================================================================
-  // Reflection helpers
-  // ====================================================================
 
-  @SuppressWarnings("unchecked")
-  private boolean invokeIsHivePartitioned(List<String> filePaths) throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", java.util.List.class);
-    method.setAccessible(true);
-    return (Boolean) method.invoke(null, filePaths);
-  }
 
-  @SuppressWarnings("unchecked")
-  private String invokeExtractTableSpecificPattern(List<String> filePaths) throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", java.util.List.class);
-    method.setAccessible(true);
-    return (String) method.invoke(null, filePaths);
-  }
-
-  @SuppressWarnings("unchecked")
-  private String invokeFindLongestCommonPrefix(List<String> filePaths) throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", java.util.List.class);
-    method.setAccessible(true);
-    return (String) method.invoke(null, filePaths);
-  }
 }

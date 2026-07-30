@@ -1438,90 +1438,10 @@ public class HttpSourceCoverageTest {
     assertFalse(StorageProvider.isLocalPath(null));
   }
 
-  // ---------------------------------------------------------------
-  // 20. computeLocalRawCachePath (via reflection)
-  // ---------------------------------------------------------------
 
-  @Test void testComputeLocalRawCachePathNull() throws Exception {
-    HttpSource source = createBasicSource();
-    Method method =
-        HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
 
-    String result = (String) method.invoke(source, (String) null);
-    assertNull(result);
 
-    source.close();
-  }
 
-  @Test void testComputeLocalRawCachePathS3() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source =
-        new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), "s3://my-bucket/raw-data", "/tmp/op-dir");
-
-    Method method =
-        HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    String result = (String) method.invoke(source, "s3://bucket/path/to/data");
-    assertNotNull(result);
-    assertTrue(result.contains("path/to/data"));
-
-    source.close();
-  }
-
-  @Test void testComputeLocalRawCachePathGS() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, "/tmp/op-dir");
-
-    Method method =
-        HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    String result = (String) method.invoke(source, "gs://bucket/data");
-    assertNotNull(result);
-    assertTrue(result.contains("data"));
-
-    source.close();
-  }
-
-  @Test void testComputeLocalRawCachePathLocal() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, "/tmp/op-dir");
-
-    Method method =
-        HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    String result = (String) method.invoke(source, "/local/path/data");
-    assertNotNull(result);
-    assertTrue(result.contains("/local/path/data"));
-
-    source.close();
-  }
-
-  @Test void testComputeLocalRawCachePathEmptySuffix() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, "/tmp/op-dir");
-
-    Method method =
-        HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    // S3 URL with only bucket, no path after
-    String result = (String) method.invoke(source, "s3://bucket");
-    assertNotNull(result);
-
-    source.close();
-  }
 
   // ---------------------------------------------------------------
   // 21. sanitizePathComponent (via reflection)
@@ -1893,52 +1813,8 @@ public class HttpSourceCoverageTest {
     source.close();
   }
 
-  // ---------------------------------------------------------------
-  // 31. collectFiles (via reflection, static method)
-  // ---------------------------------------------------------------
 
-  @Test void testCollectFiles() throws Exception {
-    // Create temp directory structure
-    File subDir = new File(tempDir.toFile(), "sub");
-    subDir.mkdirs();
-    Files.write(new File(tempDir.toFile(), "file1.txt").toPath(),
-        "a".getBytes(StandardCharsets.UTF_8));
-    Files.write(new File(subDir, "file2.txt").toPath(),
-        "b".getBytes(StandardCharsets.UTF_8));
 
-    Method method =
-        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    method.setAccessible(true);
-
-    List<File> result = new ArrayList<File>();
-    method.invoke(null, tempDir.toFile(), result);
-    assertEquals(2, result.size());
-  }
-
-  @Test void testCollectFilesEmptyDir() throws Exception {
-    File emptyDir = new File(tempDir.toFile(), "empty");
-    emptyDir.mkdirs();
-
-    Method method =
-        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    method.setAccessible(true);
-
-    List<File> result = new ArrayList<File>();
-    method.invoke(null, emptyDir, result);
-    assertTrue(result.isEmpty());
-  }
-
-  @Test void testCollectFilesNonexistentDir() throws Exception {
-    File noDir = new File(tempDir.toFile(), "nonexistent");
-
-    Method method =
-        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    method.setAccessible(true);
-
-    List<File> result = new ArrayList<File>();
-    method.invoke(null, noDir, result);
-    assertTrue(result.isEmpty());
-  }
 
   // ---------------------------------------------------------------
   // 32. createBatches (via reflection, static method)
@@ -2451,20 +2327,6 @@ public class HttpSourceCoverageTest {
     source.close();
   }
 
-  // ---------------------------------------------------------------
-  // 43. evictLocalCacheIfNeeded (via reflection)
-  // ---------------------------------------------------------------
-
-  @Test void testEvictLocalCacheIfNeededNullPath() throws Exception {
-    HttpSource source = createBasicSource();
-    Method method = HttpSource.class.getDeclaredMethod("evictLocalCacheIfNeeded");
-    method.setAccessible(true);
-
-    // Should not throw - localRawCachePath is null
-    method.invoke(source);
-
-    source.close();
-  }
 
   // ---------------------------------------------------------------
   // Helper methods

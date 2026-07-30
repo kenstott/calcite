@@ -44,7 +44,8 @@ class SubSchemaFactoryTest {
   @Test void testShouldAutoDownloadDefaultTrue() {
     SubSchemaFactory factory = new TestSubSchemaFactory();
     Map<String, Object> operand = new HashMap<String, Object>();
-    assertTrue(factory.shouldAutoDownload(operand));
+    // Default is false since 5333997fe: opening a model to query must not trigger ETL.
+    assertFalse(factory.shouldAutoDownload(operand));
   }
 
   @Test void testShouldAutoDownloadWithBooleanTrue() {
@@ -79,8 +80,11 @@ class SubSchemaFactoryTest {
     SubSchemaFactory factory = new TestSubSchemaFactory();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("autoDownload", Integer.valueOf(1));
-    // Non-boolean, non-string defaults to true
-    assertTrue(factory.shouldAutoDownload(operand));
+    // A non-boolean, non-string value is not a request to enable it; the default applies.
+    // Default is false since 5333997fe "default autoDownload to false so reads never trigger
+    // ETL": opening a model to query must not kick off an ingestion. Enabling it is an
+    // explicit opt-in via the operand or GOVDATA_AUTO_DOWNLOAD.
+    assertFalse(factory.shouldAutoDownload(operand));
   }
 
   @Test void testGetDependenciesDefault() {

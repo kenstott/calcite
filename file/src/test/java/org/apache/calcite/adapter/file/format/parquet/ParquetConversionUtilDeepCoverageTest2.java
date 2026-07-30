@@ -173,37 +173,9 @@ public class ParquetConversionUtilDeepCoverageTest2 {
     assertFalse(ParquetConversionUtil.needsConversion(sourceFile, parquetFile));
   }
 
-  // ====== isS3Path tests ======
 
-  @Test void testIsS3Path() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
-    method.setAccessible(true);
-    assertTrue((Boolean) method.invoke(null, "s3://my-bucket/data/file.parquet"));
-    assertFalse((Boolean) method.invoke(null, "/local/path/file.parquet"));
-    assertFalse((Boolean) method.invoke(null, (String) null));
-    assertFalse((Boolean) method.invoke(null, "hdfs://cluster/data"));
-    assertFalse((Boolean) method.invoke(null, "http://example.com/data"));
-  }
 
-  // ====== getHadoopPath tests ======
 
-  @Test void testGetHadoopPathS3() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    method.setAccessible(true);
-    assertEquals("s3a://my-bucket/data", method.invoke(null, "s3://my-bucket/data"));
-  }
-
-  @Test void testGetHadoopPathLocalPath() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    method.setAccessible(true);
-    assertEquals("/local/path", method.invoke(null, "/local/path"));
-  }
-
-  @Test void testGetHadoopPathNull() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    method.setAccessible(true);
-    assertNull(method.invoke(null, (String) null));
-  }
 
   // ====== isNullRepresentation tests ======
 

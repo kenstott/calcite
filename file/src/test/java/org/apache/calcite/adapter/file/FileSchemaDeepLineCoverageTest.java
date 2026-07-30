@@ -635,9 +635,12 @@ class FileSchemaDeepLineCoverageTest {
     FileSchema s = schemaWithDefs(p, "t27", d, defs, LINQ4J);
     p.add("t27", s);
 
-    // getTableMap should not throw; format error is logged, table may or may not appear
-    Map<String, Table> t = s.getTableMap();
-    assertNotNull(t);
+    // An unrecognised format override is rejected outright. It used to be logged and flattened
+    // into an empty map, so this could only assert that *something* came back — a bad format and
+    // a schema that built nothing looked identical.
+    RuntimeException ex = assertThrows(RuntimeException.class, s::getTableMap);
+    assertTrue(ex.getMessage().contains("Unsupported format override"),
+        "expected the unsupported-format refusal, got: " + ex.getMessage());
   }
 
   // ---------------------------------------------------------------

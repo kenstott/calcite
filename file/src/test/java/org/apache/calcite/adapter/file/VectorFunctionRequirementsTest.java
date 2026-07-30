@@ -54,6 +54,9 @@ public class VectorFunctionRequirementsTest {
       "VECTOR_NORM",
       "NORMALIZE_VECTOR",
       "TEXT_SIMILARITY",
+      // Table function added by 19b11f3fe (SEMANTIC_SEARCH over quantized codes). It registers
+      // onto the same schema as the scalar UDFs, so an exact-set assertion has to include it.
+      "SEMANTIC_SEARCH",
   };
 
   private static SchemaPlus registerOntoFreshSchema() {
@@ -85,10 +88,10 @@ public class VectorFunctionRequirementsTest {
         "registered function names must match the documented set exactly");
 
     // Exact count.
-    assertEquals(10, EXPECTED_FUNCTION_NAMES.length,
-        "documented set is expected to contain exactly 10 names");
-    assertEquals(10, actual.size(),
-        "schema must expose exactly 10 distinct registered function names");
+    assertEquals(11, EXPECTED_FUNCTION_NAMES.length,
+        "documented set is expected to contain exactly 11 names");
+    assertEquals(11, actual.size(),
+        "schema must expose exactly 11 distinct registered function names");
   }
 
   // ===== FILE-150: exact count + EMBED return policy =====
@@ -98,8 +101,8 @@ public class VectorFunctionRequirementsTest {
   void registeredSetSizeIsExactAndEmbedReturnsCommaSeparatedVarchar() {
     // Exact registered-set size (pinned independently of FILE-093's name assertions).
     SchemaPlus schema = registerOntoFreshSchema();
-    assertEquals(10, schema.getFunctionNames().size(),
-        "schema must expose exactly 10 distinct registered function names");
+    assertEquals(11, schema.getFunctionNames().size(),
+        "schema must expose exactly 11 distinct registered function names");
 
     // EMBED is registered (maps to embedText). NOTE: EMBED is present in the code, so this
     // FILE-150 method asserts both the exact set size AND the EMBED return policy.

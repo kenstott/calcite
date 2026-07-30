@@ -282,7 +282,10 @@ class HttpSourceConfigTest {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("http://example.com")
         .build();
-    assertEquals(1, config.getParallel());
+    // 0 means "unset": the effective thread count defers to the global calcite.etl.threads
+    // rather than being pinned to 1 here. A per-source default of 1 would silently override
+    // that global setting for every source that does not name a value.
+    assertEquals(0, config.getParallel());
   }
 
   @Test void testParallelCustom() {

@@ -1583,9 +1583,15 @@ class FileSchemaDeepLineCoverageTest2 {
     tables.add(t);
     operand.put("tables", tables);
 
-    // Excel format is converted internally
-    Schema schema = createSchemaViaFactory("excel_fmt_test", operand);
-    assertNotNull(schema);
+    // These formats are deliberately refused in an explicit table definition: one file yields
+    // many tables (sheets, or several tables in a document), so a single named entry cannot
+    // describe it — the schema directory is the supported route. That refusal used to be
+    // swallowed into an empty table map, which let this assert only that construction returned
+    // *something*. Pin the actual contract, message included.
+    RuntimeException e = assertThrows(RuntimeException.class,
+        () -> createSchemaViaFactory("excel_fmt_test", operand));
+    assertTrue(e.getMessage().contains("cannot be used in explicit table definitions"),
+        "expected the Excel explicit-definition refusal, got: " + e.getMessage());
   }
 
   @Test void testMarkdownFormatOverrideHandled() throws Exception {
@@ -1601,9 +1607,15 @@ class FileSchemaDeepLineCoverageTest2 {
     tables.add(t);
     operand.put("tables", tables);
 
-    // Markdown format is converted internally
-    Schema schema = createSchemaViaFactory("md_fmt_test", operand);
-    assertNotNull(schema);
+    // These formats are deliberately refused in an explicit table definition: one file yields
+    // many tables (sheets, or several tables in a document), so a single named entry cannot
+    // describe it — the schema directory is the supported route. That refusal used to be
+    // swallowed into an empty table map, which let this assert only that construction returned
+    // *something*. Pin the actual contract, message included.
+    RuntimeException e = assertThrows(RuntimeException.class,
+        () -> createSchemaViaFactory("md_fmt_test", operand));
+    assertTrue(e.getMessage().contains("cannot be used in explicit table definitions"),
+        "expected the Markdown explicit-definition refusal, got: " + e.getMessage());
   }
 
   @Test void testDocxFormatOverrideHandled() throws Exception {
@@ -1619,9 +1631,15 @@ class FileSchemaDeepLineCoverageTest2 {
     tables.add(t);
     operand.put("tables", tables);
 
-    // DOCX format is handled (converted or error logged)
-    Schema schema = createSchemaViaFactory("docx_fmt_test", operand);
-    assertNotNull(schema);
+    // These formats are deliberately refused in an explicit table definition: one file yields
+    // many tables (sheets, or several tables in a document), so a single named entry cannot
+    // describe it — the schema directory is the supported route. That refusal used to be
+    // swallowed into an empty table map, which let this assert only that construction returned
+    // *something*. Pin the actual contract, message included.
+    RuntimeException e = assertThrows(RuntimeException.class,
+        () -> createSchemaViaFactory("docx_fmt_test", operand));
+    assertTrue(e.getMessage().contains("cannot be used in explicit table definitions"),
+        "expected the DOCX explicit-definition refusal, got: " + e.getMessage());
   }
 
   @Test void testParquetFormatOverrideViaFactory() throws Exception {

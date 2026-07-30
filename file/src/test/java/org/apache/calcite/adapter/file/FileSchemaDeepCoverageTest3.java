@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -938,23 +939,7 @@ public class FileSchemaDeepCoverageTest3 {
     assertTrue(pattern.endsWith("}"));
   }
 
-  // -----------------------------------------------------------------------
-  // trim / trimOrNull - private static methods
-  // -----------------------------------------------------------------------
 
-  @Test void testTrimWithSuffix() throws Exception {
-    Method method = FileSchema.class.getDeclaredMethod("trim", String.class, String.class);
-    method.setAccessible(true);
-    assertEquals("data", method.invoke(null, "data.csv", ".csv"));
-    assertEquals("data.csv", method.invoke(null, "data.csv", ".json"));
-  }
-
-  @Test void testTrimOrNull() throws Exception {
-    Method method = FileSchema.class.getDeclaredMethod("trimOrNull", String.class, String.class);
-    method.setAccessible(true);
-    assertEquals("data", method.invoke(null, "data.csv", ".csv"));
-    assertNull(method.invoke(null, "data.csv", ".json"));
-  }
 
   // -----------------------------------------------------------------------
   // getTableBaseline - public method
@@ -1112,10 +1097,13 @@ public class FileSchemaDeepCoverageTest3 {
     constraints.put("data", tableConstraints);
 
     schema.setConstraintMetadata(constraints);
-    // getTableMap() triggers validateForeignKeyConstraints which should remove invalid FKs
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
-    // The FK should have been removed
+    // FK validation is deferred off getTableMap() (it deadlocks against the synchronized map
+    // build) and runs once via ensureForeignKeysValidated(). Without this call nothing has
+    // been validated yet, so nothing has been removed.
+    schema.ensureForeignKeysValidated();
+    // Local target that genuinely does not exist — still removed.
     assertTrue(foreignKeys.isEmpty());
   }
 
@@ -1145,8 +1133,13 @@ public class FileSchemaDeepCoverageTest3 {
     schema.setConstraintMetadata(constraints);
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
-    // FK should have been removed (other_schema doesn't exist)
-    assertTrue(foreignKeys.isEmpty());
+    // FK validation is deferred off getTableMap() (it deadlocks against the synchronized map
+    // build) and runs once via ensureForeignKeysValidated(). Without this call nothing has
+    // been validated yet, so nothing has been removed.
+    schema.ensureForeignKeysValidated();
+    // Cross-schema target: 'other_schema' is not registered on the parent, and an unresolved
+    // schema is not an absent one — the FK is kept rather than silently dropped.
+    assertFalse(foreignKeys.isEmpty());
   }
 
   @Test @SuppressWarnings("unchecked")
@@ -1174,6 +1167,11 @@ public class FileSchemaDeepCoverageTest3 {
     schema.setConstraintMetadata(constraints);
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
+    // FK validation is deferred off getTableMap() (it deadlocks against the synchronized map
+    // build) and runs once via ensureForeignKeysValidated(). Without this call nothing has
+    // been validated yet, so nothing has been removed.
+    schema.ensureForeignKeysValidated();
+    // Single-element list is an unqualified local table name; 'nonexistent' is absent locally.
     assertTrue(foreignKeys.isEmpty());
   }
 
@@ -1270,7 +1268,12 @@ public class FileSchemaDeepCoverageTest3 {
     FileSchema schema = createSchema(tempDir.toFile());
     Map<String, Table> localTables = new HashMap<>();
 
-    assertFalse(
+    // An unresolved target schema is not an absent one. Schemas mount incrementally, so a
+    // cross-schema FK can be validated before its target schema is registered; answering
+    // "absent" there silently drops a valid reference. checkTableExists therefore keeps the
+    // FK when it cannot confirm absence, and only removes it when the target schema IS
+    // resolved and genuinely lacks the table.
+    assertTrue(
         (Boolean) invokePrivate(schema, "checkTableExists",
         new Class[]{String.class, String.class, Map.class},
         "missing_schema", "any_table", localTables));
@@ -2144,10 +2147,12 @@ public class FileSchemaDeepCoverageTest3 {
     tableDefs.add(tableDef);
 
     FileSchema schema = createSchemaWithTables(tempDir.toFile(), tableDefs);
-    // getTableMap() should catch RuntimeException from xlsx table creation
-    Map<String, Table> tables = schema.getTableMap();
-    assertNotNull(tables);
-    // Excel in explicit table def throws error -> caught -> empty map
+    // Excel in an explicit table definition is refused: one workbook yields a table per sheet,
+    // so a single named entry cannot describe it. That refusal now propagates rather than being
+    // flattened into an empty map, where it was indistinguishable from building nothing.
+    RuntimeException ex = assertThrows(RuntimeException.class, schema::getTableMap);
+    assertTrue(ex.getMessage().contains("Excel files"),
+        "expected the Excel explicit-definition refusal, got: " + ex.getMessage());
   }
 
   // -----------------------------------------------------------------------

@@ -404,33 +404,6 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
     assertNull(result.get("fs.s3a.endpoint"));
   }
 
-  // ====================================================================
-  // Tests for buildHadoopConfiguration
-  // ====================================================================
-
-  @Test void testBuildHadoopConfigurationWithAndWithoutMap() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
-    Method buildHadoopConfig =
-        IcebergMaterializationWriter.class.getDeclaredMethod("buildHadoopConfiguration");
-    buildHadoopConfig.setAccessible(true);
-
-    Field catalogConfigField = IcebergMaterializationWriter.class.getDeclaredField("catalogConfig");
-    catalogConfigField.setAccessible(true);
-
-    Map<String, Object> catalogCfg = new HashMap<String, Object>();
-    Map<String, String> hadoopMap = new HashMap<String, String>();
-    hadoopMap.put("fs.s3a.access.key", "test-key");
-    catalogCfg.put("hadoopConfig", hadoopMap);
-    catalogConfigField.set(writer, catalogCfg);
-
-    org.apache.hadoop.conf.Configuration conf =
-        (org.apache.hadoop.conf.Configuration) buildHadoopConfig.invoke(writer);
-    assertEquals("test-key", conf.get("fs.s3a.access.key"));
-
-    catalogCfg.clear();
-    conf = (org.apache.hadoop.conf.Configuration) buildHadoopConfig.invoke(writer);
-    assertNull(conf.get("fs.s3a.access.key"));
-  }
 
   // ====================================================================
   // Tests for escapeString

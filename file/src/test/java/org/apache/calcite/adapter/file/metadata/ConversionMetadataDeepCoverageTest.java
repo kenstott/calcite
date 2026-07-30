@@ -705,129 +705,16 @@ public class ConversionMetadataDeepCoverageTest {
     assertEquals("unknown", detectedSourceTypeFor("test.xyz"));
   }
 
-  // ===================================================================
-  // extractExtension
-  // ===================================================================
 
-  @Test void testExtractExtensionWithTestPrefix() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-    assertEquals("csv", method.invoke(null, "test.csv"));
-    assertEquals("json.gz", method.invoke(null, "test.json.gz"));
-    assertEquals("parquet", method.invoke(null, "test.parquet"));
-  }
 
-  @Test void testExtractExtensionWithoutTestPrefix() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-    // Files not starting with "test." return null
-    assertNull(method.invoke(null, "data.csv"));
-    assertNull(method.invoke(null, "noprefix.json"));
-  }
 
-  @Test void testExtractExtensionCompressedVariants() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-    assertEquals("csv.gz", method.invoke(null, "test.csv.gz"));
-    assertEquals("tsv.gz", method.invoke(null, "test.tsv.gz"));
-  }
 
-  // ===================================================================
-  // generateFileExtensions -- via reflection
-  // ===================================================================
 
-  @Test @SuppressWarnings("unchecked")
-  void testGenerateFileExtensionsReturnsNonEmptyList() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
-    List<Map.Entry<String, String>> extensions = (List<Map.Entry<String, String>>) method.invoke(null);
-    assertNotNull(extensions);
-    assertFalse(extensions.isEmpty());
-  }
 
-  @Test @SuppressWarnings("unchecked")
-  void testGenerateFileExtensionsContainsCsv() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
-    List<Map.Entry<String, String>> extensions = (List<Map.Entry<String, String>>) method.invoke(null);
-    boolean hasCsv = false;
-    for (Map.Entry<String, String> entry : extensions) {
-      if ("csv".equals(entry.getKey())) {
-        hasCsv = true;
-        assertEquals("csv", entry.getValue());
-        break;
-      }
-    }
-    assertTrue(hasCsv, "Expected csv in generated extensions");
-  }
 
-  @Test @SuppressWarnings("unchecked")
-  void testGenerateFileExtensionsContainsCompressedVariants() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
-    List<Map.Entry<String, String>> extensions = (List<Map.Entry<String, String>>) method.invoke(null);
-    boolean hasCsvGz = false;
-    boolean hasJsonBz2 = false;
-    for (Map.Entry<String, String> entry : extensions) {
-      if ("csv.gz".equals(entry.getKey())) {
-        hasCsvGz = true;
-      }
-      if ("json.bz2".equals(entry.getKey())) {
-        hasJsonBz2 = true;
-      }
-    }
-    assertTrue(hasCsvGz, "Expected csv.gz in generated extensions");
-    assertTrue(hasJsonBz2, "Expected json.bz2 in generated extensions");
-  }
 
-  @Test @SuppressWarnings("unchecked")
-  void testGenerateFileExtensionsContainsConvertibleTypes() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
-    List<Map.Entry<String, String>> extensions = (List<Map.Entry<String, String>>) method.invoke(null);
-    boolean hasXlsx = false;
-    boolean hasHtml = false;
-    for (Map.Entry<String, String> entry : extensions) {
-      if ("xlsx".equals(entry.getKey())) {
-        hasXlsx = true;
-        assertEquals("excel", entry.getValue());
-      }
-      if ("html".equals(entry.getKey())) {
-        hasHtml = true;
-        assertEquals("html", entry.getValue());
-      }
-    }
-    assertTrue(hasXlsx, "Expected xlsx in generated extensions");
-    assertTrue(hasHtml, "Expected html in generated extensions");
-  }
 
-  // ===================================================================
-  // detectTypeFromExtension -- via reflection
-  // ===================================================================
 
-  @Test void testDetectTypeFromExtensionCsv() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-    assertEquals("csv", method.invoke(null, "csv"));
-  }
-
-  @Test void testDetectTypeFromExtensionJson() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-    assertEquals("json", method.invoke(null, "json"));
-  }
-
-  @Test void testDetectTypeFromExtensionXlsx() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-    assertEquals("excel", method.invoke(null, "xlsx"));
-  }
-
-  @Test void testDetectTypeFromExtensionUnknown() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-    assertEquals("unknown", method.invoke(null, "zip"));
-  }
 
   // ===================================================================
   // isRemoteFile -- via reflection on instance method
@@ -1182,15 +1069,6 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(cm.getAllConversions().isEmpty());
   }
 
-  // ===================================================================
-  // isHivePartitioned -- via reflection
-  // ===================================================================
-
-  @Test void testIsHivePartitionedNull() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
-    method.setAccessible(true);
-    assertFalse((Boolean) method.invoke(null, (List<?>) null));
-  }
 
   @Test void testIsHivePartitionedEmpty() {
     assertFalse(hivePartitioned(Collections.emptyList()));
@@ -1218,60 +1096,11 @@ public class ConversionMetadataDeepCoverageTest {
     assertTrue(hivePartitioned(files));
   }
 
-  // ===================================================================
-  // extractTableSpecificPattern -- via reflection
-  // ===================================================================
 
-  @Test void testExtractTableSpecificPatternNull() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
-    assertNull(method.invoke(null, (List<?>) null));
-  }
 
-  @Test void testExtractTableSpecificPatternEmpty() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
-    assertNull(method.invoke(null, Collections.emptyList()));
-  }
 
-  @Test void testExtractTableSpecificPatternWithHiveFiles() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
-    List<String> files = new ArrayList<String>();
-    files.add("s3://bucket/schema/table/year=2020/file1.parquet");
-    files.add("s3://bucket/schema/table/year=2021/file2.parquet");
-    String pattern = (String) method.invoke(null, files);
-    assertNotNull(pattern);
-    assertTrue(pattern.contains("**/*"));
-    assertTrue(pattern.contains(".parquet"));
-  }
 
-  // ===================================================================
-  // findLongestCommonPrefix -- via reflection
-  // ===================================================================
 
-  @Test void testFindLongestCommonPrefixEmpty() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-    assertEquals("", method.invoke(null, Collections.emptyList()));
-  }
-
-  @Test void testFindLongestCommonPrefixSingleFile() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-    List<String> files = Collections.singletonList("s3://bucket/path/file.parquet");
-    assertEquals("s3://bucket/path/file.parquet", method.invoke(null, files));
-  }
-
-  @Test void testFindLongestCommonPrefixMultipleFiles() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-    List<String> files = new ArrayList<String>();
-    files.add("s3://bucket/schema/table/a.parquet");
-    files.add("s3://bucket/schema/table/b.parquet");
-    String prefix = (String) method.invoke(null, files);
-    assertEquals("s3://bucket/schema/table/", prefix);
-  }
 
   // ===================================================================
   // formatRecord -- via reflection

@@ -154,28 +154,7 @@ class ParquetConversionUtilDeepCoverageTest {
     assertFalse(ParquetConversionUtil.needsConversion(sourceFile, parquetFile));
   }
 
-  // ===== isS3Path via Reflection =====
 
-  @Test void testIsS3PathViaReflection() throws Exception {
-    Method isS3Path = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
-    isS3Path.setAccessible(true);
-
-    assertTrue((Boolean) isS3Path.invoke(null, "s3://bucket/key"));
-    assertFalse((Boolean) isS3Path.invoke(null, "/local/path"));
-    assertFalse((Boolean) isS3Path.invoke(null, "http://example.com"));
-    assertFalse((Boolean) isS3Path.invoke(null, (Object) null));
-  }
-
-  // ===== getHadoopPath via Reflection =====
-
-  @Test void testGetHadoopPathViaReflection() throws Exception {
-    Method getHadoopPath = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    getHadoopPath.setAccessible(true);
-
-    assertEquals("s3a://bucket/key", getHadoopPath.invoke(null, "s3://bucket/key"));
-    assertEquals("/local/path", getHadoopPath.invoke(null, "/local/path"));
-    assertEquals(null, getHadoopPath.invoke(null, (Object) null));
-  }
 
   // ===== isNullRepresentation via Reflection =====
 

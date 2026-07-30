@@ -25,6 +25,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import com.sun.net.httpserver.HttpServer;
+import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -46,6 +51,8 @@ import java.util.stream.Stream;
 import static org.apache.calcite.adapter.file.FileAdapterTests.sql;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static java.util.Objects.requireNonNull;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -158,10 +165,68 @@ public class FileAdapterTest {
   }
 
   /** Reads from a URL and checks the result. */
-  @Test void testUrlSelect() {
-    final String sql = "select \"state\", \"statehood\" from wiki.\"states_as_of\"\n"
-        + "where \"state\" = 'California'";
-    sql("wiki", sql).returns("state=California; statehood=1850-09-09").ok();
+  @Test void testUrlSelect() throws Exception {
+    // Serves its own page instead of fetching en.wikipedia.org. The model is generated against a
+    // loopback HTTP server so the test provisions its input: an offline build, a proxy, or an
+    // upstream page edit used to fail this, which reads identically to a real HTML-parsing
+    // regression. The fetch, Jsoup selection and field typing paths are unchanged.
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 16);
+    server.createContext("/states", exchange -> {
+      byte[] body;
+      try (InputStream in =
+               requireNonNull(FileAdapterTest.class.getResourceAsStream("/wiki-states.html"),
+                   "/wiki-states.html")) {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        while ((n = in.read(chunk)) != -1) {
+          buf.write(chunk, 0, n);
+        }
+        body = buf.toByteArray();
+      }
+      exchange.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream out = exchange.getResponseBody()) {
+        out.write(body);
+      }
+    });
+    server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
+    server.start();
+    try {
+      String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/states";
+      File model = File.createTempFile("wiki-local-", ".json");
+      model.deleteOnExit();
+      try (java.io.PrintWriter w = new java.io.PrintWriter(model, "UTF-8")) {
+        w.print("{\"version\":\"1.0\",\"defaultSchema\":\"wiki\",\"schemas\":[{"
+            + "\"name\":\"wiki\",\"type\":\"custom\","
+            + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
+            + "\"operand\":{\"ephemeralCache\":true,\"tables\":[{"
+            + "\"name\":\"states_as_of\",\"url\":\"" + url + "\","
+            + "\"selector\":\"#mw-content-text table.wikitable.sortable\",\"index\":0,"
+            + "\"fields\":["
+            + "{\"th\":\"State\",\"name\":\"state\",\"selector\":\"a\","
+            + "\"selectedElement\":0},"
+            + "{\"th\":\"Statehood[B]\",\"name\":\"statehood\",\"type\":\"Date\"}"
+            + "]}]}}]}");
+      }
+
+      Properties info = new Properties();
+      info.put("model", model.getAbsolutePath());
+      info.put("lex", "ORACLE");
+      info.put("unquotedCasing", "TO_LOWER");
+      try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+           Statement statement = connection.createStatement();
+           ResultSet rs = statement.executeQuery(
+               "select \"state\", \"statehood\" from wiki.\"states_as_of\" "
+               + "where \"state\" = 'California'")) {
+        assertThat(rs.next(), is(true));
+        assertThat(rs.getString("state"), is("California"));
+        assertThat(String.valueOf(rs.getDate("statehood")), is("1850-09-09"));
+        assertThat(rs.next(), is(false));
+      }
+    } finally {
+      server.stop(0);
+    }
   }
 
   /** Reads the EMPS table. */

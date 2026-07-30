@@ -450,10 +450,11 @@ public class FileSchemaDeepCoverageTest {
 
     FileSchema schema =
         new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tableDefs);
-    // getTableMap() catches RuntimeException and returns empty map
-    Map<String, Table> tables = schema.getTableMap();
-    assertNotNull(tables);
-    assertFalse(tables.containsKey("bad_format"));
+    // An unrecognised format override is rejected outright rather than flattened into an empty
+    // table map, which made a bad format indistinguishable from a schema that built nothing.
+    RuntimeException ex = assertThrows(RuntimeException.class, schema::getTableMap);
+    assertTrue(ex.getMessage().contains("Unsupported format override"),
+        "expected the unsupported-format refusal, got: " + ex.getMessage());
   }
 
   @Test void testExplicitTableDefExcelFormat() throws IOException {
@@ -469,10 +470,14 @@ public class FileSchemaDeepCoverageTest {
 
     FileSchema schema =
         new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tableDefs);
-    // getTableMap() catches RuntimeException from excel format and returns empty map
-    Map<String, Table> tables = schema.getTableMap();
-    assertNotNull(tables);
-    assertFalse(tables.containsKey("excel_table"));
+    // The refusal now propagates instead of being flattened into an empty table map. These
+    // formats yield many tables from one file (sheets, or several tables in a document), so a
+    // single named entry cannot describe one — the schema directory is the supported route.
+    // Asserting the absence of a key could not tell that refusal apart from a schema that built
+    // nothing at all, which is what the swallow made every construction failure look like.
+    RuntimeException ex = assertThrows(RuntimeException.class, schema::getTableMap);
+    assertTrue(ex.getMessage().contains("cannot be used in explicit table definitions"),
+        "expected the explicit-definition refusal, got: " + ex.getMessage());
   }
 
   @Test void testExplicitTableDefMarkdownFormat() throws IOException {
@@ -488,10 +493,14 @@ public class FileSchemaDeepCoverageTest {
 
     FileSchema schema =
         new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tableDefs);
-    // getTableMap() catches RuntimeException from markdown format and returns empty map
-    Map<String, Table> tables = schema.getTableMap();
-    assertNotNull(tables);
-    assertFalse(tables.containsKey("md_table"));
+    // The refusal now propagates instead of being flattened into an empty table map. These
+    // formats yield many tables from one file (sheets, or several tables in a document), so a
+    // single named entry cannot describe one — the schema directory is the supported route.
+    // Asserting the absence of a key could not tell that refusal apart from a schema that built
+    // nothing at all, which is what the swallow made every construction failure look like.
+    RuntimeException ex = assertThrows(RuntimeException.class, schema::getTableMap);
+    assertTrue(ex.getMessage().contains("cannot be used in explicit table definitions"),
+        "expected the explicit-definition refusal, got: " + ex.getMessage());
   }
 
   @Test void testExplicitTableDefDocxFormat() throws IOException {
@@ -507,10 +516,14 @@ public class FileSchemaDeepCoverageTest {
 
     FileSchema schema =
         new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tableDefs);
-    // getTableMap() catches RuntimeException from docx format and returns empty map
-    Map<String, Table> tables = schema.getTableMap();
-    assertNotNull(tables);
-    assertFalse(tables.containsKey("docx_table"));
+    // The refusal now propagates instead of being flattened into an empty table map. These
+    // formats yield many tables from one file (sheets, or several tables in a document), so a
+    // single named entry cannot describe one — the schema directory is the supported route.
+    // Asserting the absence of a key could not tell that refusal apart from a schema that built
+    // nothing at all, which is what the swallow made every construction failure look like.
+    RuntimeException ex = assertThrows(RuntimeException.class, schema::getTableMap);
+    assertTrue(ex.getMessage().contains("cannot be used in explicit table definitions"),
+        "expected the explicit-definition refusal, got: " + ex.getMessage());
   }
 
   // --- JSON flattening ---

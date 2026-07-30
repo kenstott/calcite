@@ -115,58 +115,9 @@ public class ConversionMetadataTest {
     assertEquals("unknown", invokeDetectTypeFromTestFile("test.txt"));
   }
 
-  @Test void testDetectTypeFromExtensionDelegates() throws Exception {
-    // detectTypeFromExtension("csv") calls detectTypeFromTestFile("test.csv")
-    assertEquals("csv", invokeDetectTypeFromExtension("csv"));
-    assertEquals("excel", invokeDetectTypeFromExtension("xlsx"));
-    assertEquals("html", invokeDetectTypeFromExtension("html"));
-    assertEquals("parquet", invokeDetectTypeFromExtension("parquet"));
-    assertEquals("unknown", invokeDetectTypeFromExtension("bogus"));
-  }
 
-  @Test void testGenerateFileExtensionsIncludesKnownTypes() throws Exception {
-    @SuppressWarnings("unchecked")
-    List<Map.Entry<String, String>> extensions = invokeGenerateFileExtensions();
 
-    // Collect extension -> type for verification
-    Map<String, String> extMap = new HashMap<String, String>();
-    for (Map.Entry<String, String> entry : extensions) {
-      extMap.put(entry.getKey(), entry.getValue());
-    }
 
-    // Verify known extensions appear
-    assertTrue(extMap.containsKey("csv"), "Should contain csv extension");
-    assertEquals("csv", extMap.get("csv"));
-    assertTrue(extMap.containsKey("parquet"), "Should contain parquet extension");
-    assertEquals("parquet", extMap.get("parquet"));
-    assertTrue(extMap.containsKey("json"), "Should contain json extension");
-    assertEquals("json", extMap.get("json"));
-  }
-
-  @Test void testGenerateFileExtensionsIncludesCompressedVariants() throws Exception {
-    @SuppressWarnings("unchecked")
-    List<Map.Entry<String, String>> extensions = invokeGenerateFileExtensions();
-
-    Map<String, String> extMap = new HashMap<String, String>();
-    for (Map.Entry<String, String> entry : extensions) {
-      extMap.put(entry.getKey(), entry.getValue());
-    }
-
-    // Compressed variants should be generated for directly usable types
-    assertTrue(extMap.containsKey("csv.gz"), "Should contain csv.gz compressed variant");
-    assertEquals("csv", extMap.get("csv.gz"));
-    assertTrue(extMap.containsKey("json.gz"), "Should contain json.gz compressed variant");
-    assertEquals("json", extMap.get("json.gz"));
-    assertTrue(extMap.containsKey("csv.bz2"), "Should contain csv.bz2 compressed variant");
-    assertTrue(extMap.containsKey("csv.xz"), "Should contain csv.xz compressed variant");
-    assertTrue(extMap.containsKey("csv.zip"), "Should contain csv.zip compressed variant");
-  }
-
-  @Test void testExtractExtensionWithTestPrefix() throws Exception {
-    assertEquals("csv", invokeExtractExtension("test.csv"));
-    assertEquals("csv.gz", invokeExtractExtension("test.csv.gz"));
-    assertNull(invokeExtractExtension("nottest.csv"));
-  }
 
   // =========================================================================
   // 2. Metadata Recording and Reading - Basic CRUD
@@ -1344,33 +1295,6 @@ public class ConversionMetadataTest {
   private final java.util.concurrent.atomic.AtomicInteger nextTable =
       new java.util.concurrent.atomic.AtomicInteger();
 
-  /**
-   * Invokes the private static method detectTypeFromExtension via reflection.
-   */
-  private static String invokeDetectTypeFromExtension(String extension) throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-    return (String) method.invoke(null, extension);
-  }
 
-  /**
-   * Invokes the private static method generateFileExtensions via reflection.
-   */
-  @SuppressWarnings("unchecked")
-  private static List<Map.Entry<String, String>> invokeGenerateFileExtensions() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
-    return (List<Map.Entry<String, String>>) method.invoke(null);
-  }
 
-  /**
-   * Invokes the private static method extractExtension via reflection.
-   */
-  private static String invokeExtractExtension(String filename) throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-    return (String) method.invoke(null, filename);
-  }
 }

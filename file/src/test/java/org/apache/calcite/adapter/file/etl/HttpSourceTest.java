@@ -717,7 +717,8 @@ public class HttpSourceTest {
         .url("https://api.example.com/data")
         .build();
 
-    assertEquals(1, config.getParallel());
+    // 0 means "unset" — the effective thread count comes from the global calcite.etl.threads.
+    assertEquals(0, config.getParallel());
   }
 
   @Test void testHttpSourceConfigSourceType() {

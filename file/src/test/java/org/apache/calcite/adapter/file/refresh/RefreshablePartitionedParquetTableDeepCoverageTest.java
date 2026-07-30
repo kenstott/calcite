@@ -539,56 +539,8 @@ class RefreshablePartitionedParquetTableDeepCoverageTest {
     assertTrue(result.files.isEmpty());
   }
 
-  // ====================================================================
-  // Tests for hasFilesChanged (private method)
-  // ====================================================================
 
-  @Test
-  void testHasFilesChangedWithNullBaseline() throws Exception {
-    PartitionedTableConfig config = createSimpleConfig();
-    StorageProvider storageProvider = mock(StorageProvider.class);
-    when(storageProvider.listFiles(anyString(), anyBoolean())).thenReturn(Collections.emptyList());
 
-    RefreshablePartitionedParquetTable table = new RefreshablePartitionedParquetTable(
-        "test", tempDir.toString(), "**/*.parquet", config,
-        null, null, null, null, storageProvider);
-
-    boolean result = invokeHasFilesChanged(table, null);
-    assertTrue(result, "Should return true for null baseline");
-  }
-
-  @Test
-  void testHasFilesChangedWithEmptyBaseline() throws Exception {
-    PartitionedTableConfig config = createSimpleConfig();
-    StorageProvider storageProvider = mock(StorageProvider.class);
-    when(storageProvider.listFiles(anyString(), anyBoolean())).thenReturn(Collections.emptyList());
-
-    RefreshablePartitionedParquetTable table = new RefreshablePartitionedParquetTable(
-        "test", tempDir.toString(), "**/*.parquet", config,
-        null, null, null, null, storageProvider);
-
-    ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
-    boolean result = invokeHasFilesChanged(table, baseline);
-    assertTrue(result, "Should return true for empty baseline");
-  }
-
-  @Test
-  void testHasFilesChangedWithNullStorageProvider() throws Exception {
-    PartitionedTableConfig config = createSimpleConfig();
-    StorageProvider storageProvider = mock(StorageProvider.class);
-    when(storageProvider.listFiles(anyString(), anyBoolean())).thenReturn(Collections.emptyList());
-
-    RefreshablePartitionedParquetTable table = new RefreshablePartitionedParquetTable(
-        "test", tempDir.toString(), "**/*.parquet", config,
-        null, null, null, null, null);
-
-    ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
-    baseline.files = new HashMap<>();
-    baseline.files.put("/file.parquet", new ConversionMetadata.FileBaseline(100L, "etag", 1000L));
-
-    boolean result = invokeHasFilesChanged(table, baseline);
-    assertTrue(result, "Should return true when storageProvider is null");
-  }
 
   // ====================================================================
   // Tests for filesChangedComparedToBaseline (private method)
@@ -1004,13 +956,6 @@ class RefreshablePartitionedParquetTableDeepCoverageTest {
     return (ConversionMetadata.PartitionBaseline) method.invoke(table, filePaths);
   }
 
-  private boolean invokeHasFilesChanged(RefreshablePartitionedParquetTable table,
-      ConversionMetadata.PartitionBaseline baseline) throws Exception {
-    Method method = RefreshablePartitionedParquetTable.class.getDeclaredMethod(
-        "hasFilesChanged", ConversionMetadata.PartitionBaseline.class);
-    method.setAccessible(true);
-    return (Boolean) method.invoke(table, baseline);
-  }
 
   @SuppressWarnings("unchecked")
   private boolean invokeFilesChangedComparedToBaseline(

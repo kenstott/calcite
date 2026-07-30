@@ -199,7 +199,9 @@ public class ArrowFileTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
-        + "        ephemeralCache: true,\n"
+        // No ephemeralCache here: it redirects the parquet cache to a throwaway temp directory and
+        // so overrides the parquetCacheDirectory below, leaving the path this test inspects empty.
+        // Isolation is already provided by parquetCacheDirectory living under this test's @TempDir.
         + "        executionEngine: 'parquet',\n"
         + "        parquetCacheDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "/test_cache_arrow',\n"
         + "        tableNameCasing: 'LOWER',\n"
@@ -227,16 +229,19 @@ public class ArrowFileTest {
       File cacheDir = new File(tempDir, "test_cache_arrow");
       assertTrue(cacheDir.exists());
 
-      // With schema-aware caching, files are in schema_<schemaName> subdirectory
-      File schemaCacheDir = new File(cacheDir, "schema_arrow");
-      File[] parquetFiles = null;
-      if (schemaCacheDir.exists()) {
-        parquetFiles = schemaCacheDir.listFiles((dir, name) -> name.endsWith(".parquet"));
-      } else {
-        // Check root directory as fallback
-        parquetFiles = cacheDir.listFiles((dir, name) -> name.endsWith(".parquet"));
+      // Schema-aware caching puts files under schema_<schemaName>, and the schema name keeps the
+      // case it was declared with ('ARROW'), so a hard-coded "schema_arrow" misses the directory
+      // and the old root-directory fallback then found nothing. Search the cache tree instead of
+      // guessing the layout — the claim being made is simply that a parquet cache was written.
+      java.util.List<java.nio.file.Path> parquetFiles;
+      try (java.util.stream.Stream<java.nio.file.Path> walk =
+               java.nio.file.Files.walk(cacheDir.toPath())) {
+        parquetFiles = walk
+            .filter(java.nio.file.Files::isRegularFile)
+            .filter(f -> f.getFileName().toString().endsWith(".parquet"))
+            .collect(java.util.stream.Collectors.toList());
       }
-      assertThat(parquetFiles, arrayWithSize(1));
+      assertThat(parquetFiles, hasSize(1));
     }
   }
 

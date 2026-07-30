@@ -377,15 +377,19 @@ public class IcebergMaterializerCoverageTest3 {
   }
 
   @Test void testExtractCiksFromRowFilterNoOpenParen() {
-    Set<String> ciks =
-        IcebergMaterializer.extractCiksFromRowFilter("CIK IN '0000320193'");
-    assertTrue(ciks.isEmpty());
+        // A malformed filter is not an empty filter. Returning an empty set here would
+        // silently drop the CIK restriction and widen the overwrite to every CIK in the
+        // table, so the parser rejects it instead.
+        assertThrows(IllegalStateException.class, () ->
+            IcebergMaterializer.extractCiksFromRowFilter("CIK IN '0000320193'"));
   }
 
   @Test void testExtractCiksFromRowFilterNoCloseParen() {
-    Set<String> ciks =
-        IcebergMaterializer.extractCiksFromRowFilter("CIK IN ('0000320193'");
-    assertTrue(ciks.isEmpty());
+        // A malformed filter is not an empty filter. Returning an empty set here would
+        // silently drop the CIK restriction and widen the overwrite to every CIK in the
+        // table, so the parser rejects it instead.
+        assertThrows(IllegalStateException.class, () ->
+            IcebergMaterializer.extractCiksFromRowFilter("CIK IN ('0000320193'"));
   }
 
   @Test void testExtractCiksFromRowFilterNoQuotes() {

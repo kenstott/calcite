@@ -1,0 +1,67 @@
+<html>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<!--
+  Local stand-in for the pinned Wikipedia revision the URL-based tests used to fetch
+  (List_of_states_and_territories_of_the_United_States, oldid=713721917). Served from the
+  in-test HTTP server so those tests provision their own input instead of depending on
+  en.wikipedia.org being reachable. Structure mirrors the real page closely enough to exercise
+  the same path: a #mw-content-text container, a sortable wikitable, the same <th> captions the
+  wiki.json model keys off, and a linked state name in the first cell.
+  Dates are ISO so they take FileRowConverter's java.sql.Date.valueOf fast path.
+-->
+<body>
+<div id="mw-content-text">
+  <table class="wikitable sortable">
+    <thead>
+      <tr>
+        <th>City</th>
+        <th>State</th>
+        <th>Population</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td><a href="/wiki/New_York">New York</a></td>
+          <td>New York</td>
+          <td>8175133</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Los_Angeles">Los Angeles</a></td>
+          <td>California</td>
+          <td>3792621</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Chicago">Chicago</a></td>
+          <td>Illinois</td>
+          <td>2695598</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Houston">Houston</a></td>
+          <td>Texas</td>
+          <td>2100263</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Phoenix">Phoenix</a></td>
+          <td>Arizona</td>
+          <td>1445632</td>
+        </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

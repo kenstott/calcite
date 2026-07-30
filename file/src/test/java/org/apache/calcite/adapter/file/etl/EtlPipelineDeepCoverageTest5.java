@@ -529,7 +529,7 @@ public class EtlPipelineDeepCoverageTest5 {
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .build();
     EtlPipelineConfig config =
-        createHttpConfig("ice_zero", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("ice_zero", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
@@ -1364,7 +1364,7 @@ public class EtlPipelineDeepCoverageTest5 {
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("not_mat")
         .source(HttpSourceConfig.builder().url("http://x").build())
-        .dimensions(singleRangeDimension("y", 2020, 2020))
+        .dimensions(singleRangeDimension("year", 2020, 2020))
         .materialize(mc)
         .build();
     EtlPipeline pipeline =
@@ -1607,7 +1607,7 @@ public class EtlPipelineDeepCoverageTest5 {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
     // Cached completion matches but data gone -> invalidates -> forceReprocessAll
-    Map<String, DimensionConfig> dims = singleRangeDimension("y", 2020, 2021);
+    Map<String, DimensionConfig> dims = singleRangeDimension("year", 2020, 2021);
     String hash = IncrementalTracker.computeConfigHash(dims);
     when(tracker.getCachedCompletion("force_all"))
         .thenReturn(new IncrementalTracker.CachedCompletion(hash, "sig", 100));
@@ -1835,7 +1835,7 @@ public class EtlPipelineDeepCoverageTest5 {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(true);
-    Map<String, DimensionConfig> dims = singleRangeDimension("y", 2020, 2020);
+    Map<String, DimensionConfig> dims = singleRangeDimension("year", 2020, 2020);
     String hash = IncrementalTracker.computeConfigHash(dims);
     // 0 rows, but no options configured
     when(tracker.getCachedCompletion("zero_no_opts"))

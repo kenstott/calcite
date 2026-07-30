@@ -892,13 +892,6 @@ class ConversionMetadataDeepCoverageTest2 {
     assertEquals("unknown", detectedSourceTypeFor("test.unknown"));
   }
 
-  @Test void testExtractExtension() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-
-    assertEquals("csv", method.invoke(null, "test.csv"));
-    assertNull(method.invoke(null, "noprefix.csv"));
-  }
 
   // ======= isRemoteFile and isGlobPattern =======
 
@@ -927,34 +920,6 @@ class ConversionMetadataDeepCoverageTest2 {
     assertFalse((Boolean) method.invoke(metadata, (String) null));
   }
 
-  // ======= isHivePartitioned =======
-
-  @Test void testIsHivePartitioned() throws Exception {
-    Method method = ConversionMetadata.class.getDeclaredMethod("isHivePartitioned", List.class);
-    method.setAccessible(true);
-
-    // Null
-    assertFalse((Boolean) method.invoke(null, (List<?>) null));
-
-    // Empty
-    assertFalse((Boolean) method.invoke(null, Collections.emptyList()));
-
-    // Single file
-    List<String> singleFile = Collections.singletonList("/data/file.parquet");
-    assertFalse((Boolean) method.invoke(null, singleFile));
-
-    // Non-partitioned files
-    List<String> nonPartitioned = new ArrayList<String>();
-    nonPartitioned.add("/data/file1.parquet");
-    nonPartitioned.add("/data/file2.parquet");
-    assertFalse((Boolean) method.invoke(null, nonPartitioned));
-
-    // Hive-partitioned files
-    List<String> partitioned = new ArrayList<String>();
-    partitioned.add("/data/year=2020/file1.parquet");
-    partitioned.add("/data/year=2021/file2.parquet");
-    assertTrue((Boolean) method.invoke(null, partitioned));
-  }
 
   // ======= formatRecord =======
 

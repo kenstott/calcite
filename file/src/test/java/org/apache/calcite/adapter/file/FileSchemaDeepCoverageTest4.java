@@ -301,37 +301,9 @@ public class FileSchemaDeepCoverageTest4 {
     assertNotNull(result);
   }
 
-  // -----------------------------------------------------------------------
-  // trim() and trimOrNull() - static methods
-  // -----------------------------------------------------------------------
 
-  @Test void testTrimWithMatchingSuffix() throws Exception {
-    Method method = FileSchema.class.getDeclaredMethod("trim", String.class, String.class);
-    method.setAccessible(true);
-    String result = (String) method.invoke(null, "hello.csv", ".csv");
-    assertEquals("hello", result);
-  }
 
-  @Test void testTrimWithNonMatchingSuffix() throws Exception {
-    Method method = FileSchema.class.getDeclaredMethod("trim", String.class, String.class);
-    method.setAccessible(true);
-    String result = (String) method.invoke(null, "hello.csv", ".json");
-    assertEquals("hello.csv", result);
-  }
 
-  @Test void testTrimOrNullWithMatch() throws Exception {
-    Method method = FileSchema.class.getDeclaredMethod("trimOrNull", String.class, String.class);
-    method.setAccessible(true);
-    String result = (String) method.invoke(null, "data.json", ".json");
-    assertEquals("data", result);
-  }
-
-  @Test void testTrimOrNullWithNoMatch() throws Exception {
-    Method method = FileSchema.class.getDeclaredMethod("trimOrNull", String.class, String.class);
-    method.setAccessible(true);
-    Object result = method.invoke(null, "data.json", ".csv");
-    assertNull(result);
-  }
 
   // -----------------------------------------------------------------------
   // buildConvertibleFilesGlobPattern
@@ -1158,7 +1130,10 @@ public class FileSchemaDeepCoverageTest4 {
     invokePrivate(schema, "validateForeignKeyConstraints",
         new Class[]{Map.class}, Collections.emptyMap());
 
-    assertTrue(foreignKeys.isEmpty());
+    // Cross-schema target: 'other_schema' is not registered on the parent. An unresolved schema
+    // is not an absent one — schemas mount incrementally, so the FK is kept rather than silently
+    // dropped. Only a resolved schema that genuinely lacks the table loses its FK.
+    assertFalse(foreignKeys.isEmpty());
   }
 
   @Test void testValidateForeignKeyConstraintsWithSingleElementList() throws Exception {
@@ -1227,10 +1202,15 @@ public class FileSchemaDeepCoverageTest4 {
     FileSchema schema = createSchema(tempDir.toFile());
     Map<String, Table> localTables = new HashMap<>();
 
+    // An unresolved target schema is not an absent one. Schemas mount incrementally, so a
+    // cross-schema FK can be validated before its target schema is registered; answering
+    // "absent" there silently drops a valid reference. checkTableExists therefore keeps the
+    // FK when it cannot confirm absence, and only removes it when the target schema IS
+    // resolved and genuinely lacks the table.
     Boolean result =
         (Boolean) invokePrivate(schema, "checkTableExists", new Class[]{String.class, String.class, Map.class},
         "nonexistent_schema", "other_table", localTables);
-    assertFalse(result);
+    assertTrue(result);
   }
 
   // -----------------------------------------------------------------------
@@ -1844,30 +1824,7 @@ public class FileSchemaDeepCoverageTest4 {
     assertFalse(result);
   }
 
-  // -----------------------------------------------------------------------
-  // storeExplicitTableMapping and getExplicitTableName
-  // -----------------------------------------------------------------------
 
-  @Test void testStoreAndGetExplicitTableMapping() throws Exception {
-    FileSchema schema = createSchema(tempDir.toFile());
-    File testFile = new File(tempDir.toFile(), "mapped.csv");
-    Files.write(testFile.toPath(), "a\n1".getBytes(StandardCharsets.UTF_8));
-
-    Source source = Sources.of(testFile);
-    invokePrivate(schema, "storeExplicitTableMapping",
-        new Class[]{String.class, Source.class}, "explicit_name", source);
-
-    String result =
-        (String) invokePrivate(schema, "getExplicitTableName", new Class[]{File.class}, testFile);
-    assertEquals("explicit_name", result);
-  }
-
-  @Test void testGetExplicitTableNameNotFound() throws Exception {
-    FileSchema schema = createSchema(tempDir.toFile());
-    String result =
-        (String) invokePrivate(schema, "getExplicitTableName", new Class[]{File.class}, new File("/nonexistent/file.csv"));
-    assertNull(result);
-  }
 
   // -----------------------------------------------------------------------
   // getTableNameForFile

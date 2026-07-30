@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -351,8 +352,12 @@ public class EtlPipelineCoverageTest {
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
-    // It should have invalidated and re-processed
-    verify(mockTracker).invalidateTableCompletion("ttl_expired_pipeline");
+    // The empty-result TTL this test was written for is gone. A zero-row result is now a
+    // completed result: EtlPipeline re-processes it only when source freshness changes, never on
+    // a timer, so a stale completedAt no longer invalidates anything. What still invalidates a
+    // marker is data going missing, which the data-does-not-exist tests cover. Pin the contract
+    // that replaced it: with data present, the marker survives.
+    verify(mockTracker, never()).invalidateTableCompletion("ttl_expired_pipeline");
   }
 
   // -----------------------------------------------------------------------
@@ -596,10 +601,11 @@ public class EtlPipelineCoverageTest {
     EtlResult result = pipeline.execute();
 
     assertNotNull(result);
-    // Phase 1.5 short-circuits (filterUnprocessed returns empty), so neededCount=0.
-    // The pipeline marks complete and returns skippedEntirePipeline=true.
-    // The filterUnprocessedWithEmptyTtl stub is not reached in this path.
-    assertTrue(result.isSkippedEntirePipeline());
+    // This stubs filterUnprocessed to one unprocessed combination, so neededCount is 1 and the
+    // pipeline processes it rather than skipping — a table marked complete whose Iceberg row
+    // count cannot be read is reprocessed rather than trusted. The comment that previously stood
+    // here claimed the filter returned empty, which contradicted the stub above it.
+    assertFalse(result.isSkippedEntirePipeline());
     assertNotNull(result.getPipelineName());
   }
 

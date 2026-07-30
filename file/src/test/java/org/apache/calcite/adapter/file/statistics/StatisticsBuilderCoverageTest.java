@@ -175,29 +175,6 @@ public class StatisticsBuilderCoverageTest {
     assertEquals("myfile.aperio_stats", result.getName());
   }
 
-  // ====================================================================
-  // StatisticsBuilder.shouldGenerateHLL via reflection
-  // ====================================================================
-
-  @Test void testShouldGenerateHLLDisabled() throws Exception {
-    StatisticsBuilder builder = new StatisticsBuilder(StatisticsConfig.NO_HLL);
-    Method m = StatisticsBuilder.class.getDeclaredMethod(
-        "shouldGenerateHLL",
-        Class.forName(
-            "org.apache.calcite.adapter.file.statistics.StatisticsBuilder$ColumnStatsBuilder"),
-        long.class);
-    m.setAccessible(true);
-
-    // Create a ColumnStatsBuilder via reflection
-    Class<?> csbClass = Class.forName(
-        "org.apache.calcite.adapter.file.statistics.StatisticsBuilder$ColumnStatsBuilder");
-    java.lang.reflect.Constructor<?> csbCtor = csbClass.getDeclaredConstructor(String.class);
-    csbCtor.setAccessible(true);
-    Object csb = csbCtor.newInstance("test_col");
-
-    boolean result = (Boolean) m.invoke(builder, csb, 10000L);
-    assertFalse(result, "HLL should not be generated when disabled");
-  }
 
   // ====================================================================
   // StatisticsBuilder CSV statistics via reflection

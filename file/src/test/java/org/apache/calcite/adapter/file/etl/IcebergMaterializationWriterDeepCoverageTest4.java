@@ -616,7 +616,8 @@ public class IcebergMaterializationWriterDeepCoverageTest4 {
     retryDelayField.set(writer, 1L);
 
     Method method =
-        IcebergMaterializationWriter.class.getDeclaredMethod("processBatchWithRetry", List.class, Map.class);
+        IcebergMaterializationWriter.class.getDeclaredMethod(
+            "processBatchWithRetry", List.class, Map.class, int.class);
     method.setAccessible(true);
 
     // Setting config to null causes NPE in processBatch -> transformRows
@@ -632,8 +633,14 @@ public class IcebergMaterializationWriterDeepCoverageTest4 {
     row.put("data", "test");
     rows.add(row);
 
-    boolean result = (boolean) method.invoke(writer, rows, new HashMap<String, String>());
-    assertFalse(result);
+    // Exhausting the retries no longer returns a false success flag — it throws, carrying the
+    // last attempt's exception as the cause, so a caller cannot mistake a failed batch for an
+    // empty one. Assert the throw rather than a return value that no longer exists.
+    java.lang.reflect.InvocationTargetException thrown =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(writer, rows, new HashMap<String, String>(), 0));
+    assertTrue(thrown.getCause() instanceof IOException,
+        "expected the exhausted retry to surface as IOException, got " + thrown.getCause());
   }
 
   // ====================================================================

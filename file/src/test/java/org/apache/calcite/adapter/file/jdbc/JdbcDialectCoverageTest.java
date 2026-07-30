@@ -137,14 +137,14 @@ public class JdbcDialectCoverageTest {
           dialect.readIcebergSql("s3://warehouse/table",
           Arrays.asList("col1", "col2"));
       assertEquals(
-          "SELECT col1, col2 FROM iceberg_scan('s3://warehouse/table')",
+          "SELECT col1, col2 FROM iceberg_scan('s3://warehouse/table', allow_moved_paths=true)",
           sql);
     }
 
     @Test void testReadIcebergSqlNullColumns() {
       String sql = dialect.readIcebergSql("s3://warehouse/table", null);
       assertEquals(
-          "SELECT * FROM iceberg_scan('s3://warehouse/table')",
+          "SELECT * FROM iceberg_scan('s3://warehouse/table', allow_moved_paths=true)",
           sql);
     }
 
@@ -153,7 +153,7 @@ public class JdbcDialectCoverageTest {
           dialect.readIcebergSql("/local/iceberg/table",
           Collections.<String>emptyList());
       assertEquals(
-          "SELECT * FROM iceberg_scan('/local/iceberg/table')",
+          "SELECT * FROM iceberg_scan('/local/iceberg/table', allow_moved_paths=true)",
           sql);
     }
 
@@ -224,7 +224,7 @@ public class JdbcDialectCoverageTest {
           dialect.createIcebergViewSql("myschema", "myview", "s3://bucket/table");
       assertEquals(
           "CREATE VIEW IF NOT EXISTS \"myschema\".\"myview\""
-              + " AS SELECT * FROM iceberg_scan('s3://bucket/table')",
+              + " AS SELECT * FROM iceberg_scan('s3://bucket/table', allow_moved_paths=true)",
           sql);
     }
 
@@ -233,7 +233,7 @@ public class JdbcDialectCoverageTest {
           dialect.createIcebergViewSql(null, "myview", "s3://bucket/table");
       assertEquals(
           "CREATE VIEW IF NOT EXISTS \"myview\""
-              + " AS SELECT * FROM iceberg_scan('s3://bucket/table')",
+              + " AS SELECT * FROM iceberg_scan('s3://bucket/table', allow_moved_paths=true)",
           sql);
     }
 

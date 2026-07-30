@@ -81,11 +81,6 @@ class HttpSourceLineCoverageTest {
     return m.invoke(target, args);
   }
 
-  private Object getPrivateField(Object target, String fieldName) throws Exception {
-    Field f = target.getClass().getDeclaredField(fieldName);
-    f.setAccessible(true);
-    return f.get(target);
-  }
 
   // ======= computeLocalRawCachePath tests =======
 
@@ -103,55 +98,11 @@ class HttpSourceLineCoverageTest {
         null, null);
   }
 
-  @Test void testComputeLocalRawCachePathWithNullRawCachePath() throws Exception {
-    HttpSource source = createSourceWithRawCache(null, null);
-    Object localPath = getPrivateField(source, "localRawCachePath");
-    assertNull(localPath, "localRawCachePath should be null when rawCachePath is null");
-    source.close();
-  }
 
-  @Test void testComputeLocalRawCachePathWithS3Path() throws Exception {
-    HttpSource source = createSourceWithRawCache("s3://my-bucket/raw/data", null);
-    Object localPath = getPrivateField(source, "localRawCachePath");
-    assertNotNull(localPath, "localRawCachePath should be computed for S3 paths");
-    assertTrue(localPath.toString().contains("raw/data"),
-        "Should contain the S3 suffix: " + localPath);
-    source.close();
-  }
 
-  @Test void testComputeLocalRawCachePathWithGsPath() throws Exception {
-    HttpSource source = createSourceWithRawCache("gs://my-bucket/raw/data", null);
-    Object localPath = getPrivateField(source, "localRawCachePath");
-    assertNotNull(localPath, "localRawCachePath should be computed for GCS paths");
-    assertTrue(localPath.toString().contains("raw/data"),
-        "Should contain the GCS suffix: " + localPath);
-    source.close();
-  }
 
-  @Test void testComputeLocalRawCachePathWithOperatingDirectory() throws Exception {
-    String opDir = tempDir.resolve("opdir").toString();
-    HttpSource source = createSourceWithRawCache("s3://bucket/path", opDir);
-    Object localPath = getPrivateField(source, "localRawCachePath");
-    assertNotNull(localPath);
-    assertTrue(localPath.toString().contains(opDir + "/cache/raw"),
-        "Should use operating directory for cache base: " + localPath);
-    source.close();
-  }
 
-  @Test void testComputeLocalRawCachePathWithEmptySuffix() throws Exception {
-    HttpSource source = createSourceWithRawCache("s3://bucket", null);
-    Object localPath = getPrivateField(source, "localRawCachePath");
-    assertNotNull(localPath);
-    source.close();
-  }
 
-  @Test void testComputeLocalRawCachePathWithLocalPath() throws Exception {
-    String localDir = tempDir.resolve("local-cache").toString();
-    HttpSource source = createSourceWithRawCache(localDir, null);
-    Object localPath = getPrivateField(source, "localRawCachePath");
-    assertNotNull(localPath);
-    source.close();
-  }
 
   // ======= buildRawCachePath tests =======
 
@@ -929,32 +880,7 @@ class HttpSourceLineCoverageTest {
     assertEquals('|', result);
   }
 
-  // ======= collectFiles tests =======
 
-  @Test void testCollectFiles() throws Exception {
-    File root = tempDir.resolve("collect-test").toFile();
-    root.mkdirs();
-    File sub = new File(root, "sub");
-    sub.mkdirs();
-    Files.write(new File(root, "file1.json").toPath(), "{}".getBytes());
-    Files.write(new File(sub, "file2.json").toPath(), "{}".getBytes());
-
-    Method m = HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    m.setAccessible(true);
-
-    List<File> result = new ArrayList<File>();
-    m.invoke(null, root, result);
-    assertEquals(2, result.size());
-  }
-
-  @Test void testCollectFilesOnNonExistent() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    m.setAccessible(true);
-
-    List<File> result = new ArrayList<File>();
-    m.invoke(null, new File("/nonexistent/path"), result);
-    assertTrue(result.isEmpty());
-  }
 
   // ======= extractFromZip tests =======
 

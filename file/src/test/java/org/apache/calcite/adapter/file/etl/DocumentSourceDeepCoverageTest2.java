@@ -344,12 +344,12 @@ class DocumentSourceDeepCoverageTest2 {
     HttpSourceConfig config = createConfigWithRateLimit(1000);
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
 
-    Method m = DocumentSource.class.getDeclaredMethod("enforceRateLimit");
+    Method m = DocumentSource.class.getDeclaredMethod("enforceRateLimit", String.class);
     m.setAccessible(true);
 
     // Call twice - should be fast with high rate limit
-    m.invoke(ds);
-    m.invoke(ds);
+    m.invoke(ds, "https://example.com/a");
+    m.invoke(ds, "https://example.com/b");
   }
 
   // ===== getDocumentConfig null for minimal config =====

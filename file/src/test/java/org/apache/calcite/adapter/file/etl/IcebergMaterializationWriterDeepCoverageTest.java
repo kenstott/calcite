@@ -289,48 +289,7 @@ public class IcebergMaterializationWriterDeepCoverageTest {
     assertTrue(result.containsKey("hadoopConfig"));
   }
 
-  // --- buildHadoopConfiguration via reflection ---
 
-  @Test void testBuildHadoopConfiguration() throws Exception {
-    IcebergMaterializationWriter writer =
-        new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
-
-    // First set catalogConfig
-    Field catalogConfigField = IcebergMaterializationWriter.class.getDeclaredField("catalogConfig");
-    catalogConfigField.setAccessible(true);
-
-    Map<String, Object> catalogConfig = new HashMap<>();
-    Map<String, String> hadoopConfig = new HashMap<>();
-    hadoopConfig.put("fs.s3a.access.key", "AKID");
-    catalogConfig.put("hadoopConfig", hadoopConfig);
-    catalogConfigField.set(writer, catalogConfig);
-
-    Method method = IcebergMaterializationWriter.class
-        .getDeclaredMethod("buildHadoopConfiguration");
-    method.setAccessible(true);
-
-    Object conf = method.invoke(writer);
-    assertNotNull(conf);
-  }
-
-  @Test void testBuildHadoopConfigurationNoHadoopConfig() throws Exception {
-    IcebergMaterializationWriter writer =
-        new IcebergMaterializationWriter(mockStorage, "/warehouse", mockTracker);
-
-    Field catalogConfigField = IcebergMaterializationWriter.class.getDeclaredField("catalogConfig");
-    catalogConfigField.setAccessible(true);
-
-    Map<String, Object> catalogConfig = new HashMap<>();
-    // No hadoopConfig entry
-    catalogConfigField.set(writer, catalogConfig);
-
-    Method method = IcebergMaterializationWriter.class
-        .getDeclaredMethod("buildHadoopConfiguration");
-    method.setAccessible(true);
-
-    Object conf = method.invoke(writer);
-    assertNotNull(conf);
-  }
 
   // --- getEnvInt static method ---
 

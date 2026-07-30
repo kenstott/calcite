@@ -333,7 +333,7 @@ public class SparkJdbcSchemaFactory {
       boolean recursive, String sparkSchema,
       org.apache.calcite.adapter.file.FileSchema fileSchema)
       throws SQLException {
-    LOGGER.info("=== Starting Spark table registration for schema '{}' ===", sparkSchema);
+    LOGGER.debug("=== Starting Spark table registration for schema '{}' ===", sparkSchema);
 
     if (fileSchema == null) {
       LOGGER.error("No FileSchema available - cannot register views");
@@ -412,7 +412,7 @@ public class SparkJdbcSchemaFactory {
       }
     }
 
-    LOGGER.info("=== Spark table registration complete: {} views created ===", viewCount);
+    LOGGER.debug("=== Spark table registration complete: {} views created ===", viewCount);
   }
 
   /**

@@ -809,10 +809,13 @@ public class EtlPipelineLineCoverageTest {
   // --- Cached completion data doesn't exist (invalidate path) ---
 
   @Test void testCachedCompletionDataDoesNotExist() throws IOException {
-    EtlPipelineConfig config = buildConfigWithMaterialize("no_data_pipeline");
+    Map<String, DimensionConfig> dims = yearDims();
+    EtlPipelineConfig config =
+        buildConfigWithMaterializeAndDimensions("no_data_pipeline", dims);
 
     IncrementalTracker.CachedCompletion cached =
-        new IncrementalTracker.CachedCompletion("empty", "sig", 100);
+        new IncrementalTracker.CachedCompletion(
+            IncrementalTracker.computeConfigHash(dims), "sig", 100);
 
     when(mockTracker.getCachedCompletion("no_data_pipeline")).thenReturn(cached);
     // verifyDataExists returns false
@@ -1027,7 +1030,8 @@ public class EtlPipelineLineCoverageTest {
   // --- Config hash mismatch with rows > 0 and data exists ---
 
   @Test void testCachedCompletionConfigHashMismatchWithRowsDataExists() throws IOException {
-    EtlPipelineConfig config = buildConfigWithMaterialize("mismatch_rows_pipeline");
+    EtlPipelineConfig config =
+        buildConfigWithMaterializeAndDimensions("mismatch_rows_pipeline", yearDims());
 
     // Cached with different hash but has rows
     IncrementalTracker.CachedCompletion cached =
@@ -1050,9 +1054,11 @@ public class EtlPipelineLineCoverageTest {
     assertNotNull(result);
     assertTrue(result.isSkippedEntirePipeline());
     assertEquals(50, result.getTotalRows());
-    // Should have updated config hash
+    // Should have updated config hash. The signature argument is the one computed from this
+    // run's expanded dimensions, not the stale "sig" carried on the cached completion — that is
+    // the point of re-marking after a hash mismatch.
     verify(mockTracker).markTableCompleteWithConfig(
-        eq("mismatch_rows_pipeline"), anyString(), eq("sig"), eq(50L));
+        eq("mismatch_rows_pipeline"), anyString(), anyString(), eq(50L));
   }
 
   // --- Parquet format table directory path ---
@@ -1119,6 +1125,38 @@ public class EtlPipelineLineCoverageTest {
         .materialize(MaterializeConfig.builder()
             .enabled(true)
             .format(MaterializeConfig.Format.PARQUET)
+            .output(MaterializeOutputConfig.builder().build())
+            .build())
+        .build();
+  }
+
+  /**
+   * A single-year period dimension. A cached completion is only consulted for a table that has a
+   * period dimension — {@code hasPeriodDimension} requires a period type or a calendar name — so a
+   * config with no dimensions never reaches the completion logic these tests are about.
+   */
+  private Map<String, DimensionConfig> yearDims() {
+    Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
+    dims.put("year", DimensionConfig.builder()
+        .name("year")
+        .type(DimensionType.RANGE)
+        .start(2020)
+        .end(2020)
+        .build());
+    return dims;
+  }
+
+  private EtlPipelineConfig buildConfigWithMaterializeAndDimensions(String name,
+      Map<String, DimensionConfig> dims) {
+    return EtlPipelineConfig.builder()
+        .name(name)
+        .source(HttpSourceConfig.builder()
+            .url("https://api.example.com/data")
+            .build())
+        .dimensions(dims)
+        .materialize(MaterializeConfig.builder()
+            .enabled(true)
+            .format(MaterializeConfig.Format.ICEBERG)
             .output(MaterializeOutputConfig.builder().build())
             .build())
         .build();

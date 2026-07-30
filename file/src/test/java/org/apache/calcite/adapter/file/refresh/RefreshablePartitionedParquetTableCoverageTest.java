@@ -683,32 +683,7 @@ public class RefreshablePartitionedParquetTableCoverageTest {
     assertNotNull(result);
   }
 
-  // ====================================================================
-  // Tests for hasFilesChanged
-  // ====================================================================
 
-  @Test
-  void testHasFilesChangedNullBaseline() throws Exception {
-    RefreshablePartitionedParquetTable table = createSimpleTable();
-
-    Method method = RefreshablePartitionedParquetTable.class.getDeclaredMethod(
-        "hasFilesChanged", ConversionMetadata.PartitionBaseline.class);
-    method.setAccessible(true);
-
-    assertTrue((boolean) method.invoke(table, (Object) null));
-  }
-
-  @Test
-  void testHasFilesChangedEmptyBaseline() throws Exception {
-    RefreshablePartitionedParquetTable table = createSimpleTable();
-
-    Method method = RefreshablePartitionedParquetTable.class.getDeclaredMethod(
-        "hasFilesChanged", ConversionMetadata.PartitionBaseline.class);
-    method.setAccessible(true);
-
-    ConversionMetadata.PartitionBaseline emptyBaseline = new ConversionMetadata.PartitionBaseline();
-    assertTrue((boolean) method.invoke(table, emptyBaseline));
-  }
 
   // ====================================================================
   // Tests for filesChangedComparedToBaseline

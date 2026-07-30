@@ -501,8 +501,9 @@ class DimensionIteratorDeepCoverageTest {
         .type(DimensionType.CUSTOM)
         .build();
 
-    List<String> values = iterator.resolveDimension(config);
-    assertTrue(values.isEmpty());
+    // A resolver returning null is a broken resolver, not an empty dimension. Treating it as
+    // empty would silently produce zero combinations and read as "nothing to process".
+    assertThrows(RuntimeException.class, () -> iterator.resolveDimension(config));
   }
 
   @Test void testResolveCustomWithResolverThrowingException() {
@@ -532,8 +533,10 @@ class DimensionIteratorDeepCoverageTest {
         .source(null)
         .build();
 
-    List<String> values = iterator.resolveDimension(config);
-    assertTrue(values.isEmpty());
+    // A JSON_CATALOG dimension with no source cannot be resolved. Returning an empty list
+    // would silently yield zero combinations, which is indistinguishable from "this table
+    // has nothing to process" — so resolution rejects it instead.
+    assertThrows(IllegalStateException.class, () -> iterator.resolveDimension(config));
   }
 
   @Test void testResolveJsonCatalogWithEmptySource() {
@@ -544,8 +547,10 @@ class DimensionIteratorDeepCoverageTest {
         .source("")
         .build();
 
-    List<String> values = iterator.resolveDimension(config);
-    assertTrue(values.isEmpty());
+    // A JSON_CATALOG dimension with no source cannot be resolved. Returning an empty list
+    // would silently yield zero combinations, which is indistinguishable from "this table
+    // has nothing to process" — so resolution rejects it instead.
+    assertThrows(IllegalStateException.class, () -> iterator.resolveDimension(config));
   }
 
   @Test void testResolveJsonCatalogWithInvalidSource() {
@@ -618,9 +623,11 @@ class DimensionIteratorDeepCoverageTest {
         .build());
 
     List<Map<String, String>> result = iterator.expand(dimensions);
-    // Empty dimension is skipped, returns single empty combination
-    assertEquals(1, result.size());
-    assertTrue(result.get(0).isEmpty());
+    // A dimension that resolves to nothing yields no combinations rather than being dropped to
+    // leave one empty combination behind. Silently ignoring a declared dimension would run the
+    // pipeline once with no dimension values at all, which looks like success; zero combinations
+    // is what the pipeline warns about ("no dimension combinations - check dimensions config").
+    assertTrue(result.isEmpty());
   }
 
   // ====================================================================

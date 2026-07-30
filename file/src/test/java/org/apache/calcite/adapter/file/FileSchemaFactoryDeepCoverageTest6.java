@@ -987,6 +987,12 @@ class FileSchemaFactoryDeepCoverageTest6 {
     table.put("url", tempDir.resolve("test.csv").toString());
     tables.add(table);
 
+    // Create the file the table definition points at. It never existed, so the PARQUET
+    // engine's conversion failed — a failure that used to be swallowed into an empty table
+    // map, letting this assert only that create() returned something. The test is about
+    // local-storage auto-detection, so it has to provide the local file it declares.
+    writeTempCsv("test.csv");
+
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("tables", tables);
     operand.put("ephemeralCache", Boolean.TRUE);
@@ -1176,5 +1182,15 @@ class FileSchemaFactoryDeepCoverageTest6 {
     Schema schema = factory.create(parentSchema, "ephstrtest", operand);
     assertNotNull(schema);
     trackSchema(schema);
+  }
+
+  /** Writes a minimal CSV into {@code tempDir} so a table definition that names it resolves. */
+  private void writeTempCsv(String fileName) {
+    try {
+      java.nio.file.Files.write(tempDir.resolve(fileName),
+          "id:int,name:string\n1,alpha\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    } catch (java.io.IOException e) {
+      throw new RuntimeException("could not provision " + fileName, e);
+    }
   }
 }
