@@ -53,7 +53,11 @@ GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
 RUNNER="org.apache.calcite.adapter.govdata.etl.GovDataModelVerificationRunner"
 
 # Canonical primary dataSource names (GovDataSchemaFactory.getFactoryForDataSource switch).
-ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregister cyber_vuln cyber_threat health energy edu patents lands cftc disasters housing ag transport environment research"
+# Must stay in step with GovDataModelVerificationRunner.SCHEMA_YAML and the *-schema.yaml
+# resources; SchemaListDriftTest fails the build when they diverge. This list silently omitted
+# fiscal from the day that schema was added, so fiscal was never verified and never made it into
+# the JAR-bundled seed — leaving it to rebuild every view on a user's first query.
+ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregister cyber_vuln cyber_threat health energy edu patents lands cftc disasters housing ag transport environment research fiscal"
 
 SOURCE=""
 LIMIT="1"

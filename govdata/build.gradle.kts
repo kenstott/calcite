@@ -219,6 +219,12 @@ tasks.test {
     dependsOn("cleanMacResourceForks", "cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
+    // SchemaListDriftTest reads this script to assert its ALL_SCHEMAS matches the Java schema map.
+    // Gradle cannot infer a file a test opens at runtime, so without declaring it the task stays
+    // UP-TO-DATE after a script-only edit and the drift check never re-runs — exactly the silent
+    // skip the test exists to prevent.
+    inputs.file("scripts/model-verify.sh").withPathSensitivity(PathSensitivity.RELATIVE)
+
     // Run tests serially to avoid DuckDB file lock conflicts
     maxParallelForks = 1
 
@@ -381,6 +387,29 @@ tasks.register("bundleGovdataSeed") {
         }
         if (trackers.isEmpty()) {
             throw GradleException("No .aperio/*/.conversions.json trackers under $base — nothing to seed.")
+        }
+
+        // Every declared schema must be represented. A partial seed installs and works, so a
+        // missing schema is invisible: the 24 it covers start instantly while the 25th rebuilds
+        // every one of its views from Iceberg metadata on the user's first query — the slow cold
+        // start the seed exists to remove, now affecting one schema instead of all of them and
+        // with nothing in the build to say so. The shipped seed was short exactly one schema
+        // (fiscal) for this reason.
+        val declaredSchemas = fileTree("src/main/resources") { include("**/*-schema.yaml") }
+            .map { it.name.removeSuffix("-schema.yaml").replace('-', '_') }
+            .toSortedSet()
+        val seededSchemas = trackers.mapNotNull { it.parentFile?.name }.toSortedSet()
+        val missingSchemas = declaredSchemas - seededSchemas
+        if (missingSchemas.isNotEmpty()) {
+            val message = ("Seed covers ${seededSchemas.size} of ${declaredSchemas.size} declared "
+                + "schemas; missing: ${missingSchemas.joinToString(",")}. Materialize them into "
+                + "$base before bundling. Pass -PseedAllowPartial=true to bundle anyway, "
+                + "accepting that those schemas rebuild all their views on a user's first query.")
+            if (project.hasProperty("seedAllowPartial")) {
+                logger.warn("bundleGovdataSeed: {}", message)
+            } else {
+                throw GradleException(message)
+            }
         }
 
         val seedDir = file("src/main/resources/duckdb/seed")
