@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
 import org.apache.calcite.adapter.govdata.GovDataDriver;
 import org.apache.calcite.adapter.govdata.R2CredentialProvider;
 import org.apache.calcite.jdbc.CalciteConnection;
@@ -146,14 +147,32 @@ public class McpServer {
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting... build=" + BUILD_ID);
+        // Name the active SLF4J binding. Two bindings ship in the shaded jar and whichever one
+        // wins decides whether adapter logs appear at all: bound to reload4j, which nothing
+        // configures, every govdata and file log statement is discarded and the server looks hung
+        // through a multi-minute cold start. That was invisible for want of this line.
+        log.println("[askamerica-mcp] logging binding="
+            + org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName());
 
         // Mount every allowed schema on one connection up front, off the request thread.
         // Every tool runs against this connection, so warming it here means the first
         // query pays no mount cost and can join across schemas from the outset.
         Thread warm = new Thread(() -> {
+            long t0 = System.currentTimeMillis();
             try {
                 getCatalogConnection();
-                log.println("[askamerica-mcp] All schemas mounted.");
+                // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
+                // metadata end in the same mounted state, so without these counts a mount that
+                // spent minutes on object-store round trips is indistinguishable in the log from
+                // one that started instantly. Printed to this stream, not through SLF4J, because
+                // the shaded jar's logging binding drops adapter logs entirely.
+                log.println("[askamerica-mcp] All schemas mounted in "
+                    + (System.currentTimeMillis() - t0) + "ms"
+                    + " — catalog=" + new java.io.File(
+                        System.getProperty("govdata.operating.dir.base", "?"),
+                        ".duckdb/govdata.duckdb")
+                    + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
+                    + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
             } catch (Throwable e) {
                 log.println("[askamerica-mcp] Schema warm-up failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -894,6 +913,38 @@ public class McpServer {
         }
         out.set("columns", cols);
 
+        // Declared primary key. Without it a caller cannot tell a table's grain from its columns,
+        // and several govdata tables are vintage-partitioned: geo.counties keys on
+        // (county_fips, year) and holds one full copy of every county per TIGER vintage, so a join
+        // on county_fips alone silently multiplies row counts by the number of years with no error
+        // to notice. The schemas already declare these keys; reporting them here is what makes the
+        // grain visible at the point a caller decides how to join.
+        ArrayNode pk = MAPPER.createArrayNode();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT k.column_name FROM information_schema.key_column_usage k "
+                 + "JOIN information_schema.table_constraints tc "
+                 + "  ON k.constraint_name = tc.constraint_name "
+                 + " AND k.table_schema = tc.table_schema "
+                 + " AND k.table_name = tc.table_name "
+                 + "WHERE lower(k.table_schema) = '" + s + "' "
+                 + "  AND lower(k.table_name) = '" + t + "' "
+                 // Restated for tc, not redundant: each metadata table prunes from its own
+                 // predicates, and without these the constraints scan walks every table in every
+                 // schema to answer a question about one — the whole-catalog resolution that made
+                 // describe_table both slow and breakable by an unrelated table.
+                 + "  AND lower(tc.table_schema) = '" + s + "' "
+                 + "  AND lower(tc.table_name) = '" + t + "' "
+                 + "  AND tc.constraint_type = 'PRIMARY KEY' "
+                 + "ORDER BY k.ordinal_position")) {
+            while (rs.next()) {
+                pk.add(rs.getString(1));
+            }
+        }
+        if (pk.size() > 0) {
+            out.set("primaryKey", pk);
+        }
+
         // Declared year window, so an empty result outside coverage isn't read as a zero.
         // The observed window is measured out of band and attached once it lands, since
         // the declared range can run ahead of an in-progress backfill.
@@ -1107,6 +1158,34 @@ public class McpServer {
             || m.contains("unknown");
     }
 
+    /** Default seconds a single query may run before it is aborted. */
+    private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 180;
+
+    /**
+     * Per-query time bound, overridable with ASKAMERICA_QUERY_TIMEOUT_SECONDS.
+     *
+     * <p>Deliberately generous. A legitimate cross-schema aggregate over several years of
+     * data can take minutes, and this is a ceiling on runaway work, not a latency target —
+     * cutting it to something like 30s would start failing real analytical queries. Zero or
+     * negative disables the bound, for a caller who genuinely wants to wait.
+     */
+    private static int queryTimeoutSeconds() {
+        String raw = System.getProperty("askamerica.query.timeout.seconds");
+        if (raw == null || raw.isEmpty()) {
+            raw = System.getenv("ASKAMERICA_QUERY_TIMEOUT_SECONDS");
+        }
+        if (raw != null && !raw.isEmpty()) {
+            try {
+                int v = Integer.parseInt(raw.trim());
+                return Math.max(0, v);
+            } catch (NumberFormatException e) {
+                log.println("[askamerica-mcp] bad query timeout '" + raw + "', using "
+                    + DEFAULT_QUERY_TIMEOUT_SECONDS + "s");
+            }
+        }
+        return DEFAULT_QUERY_TIMEOUT_SECONDS;
+    }
+
     /** Execute SQL on the single all-schemas connection, applying the same reserved-word
      *  quoting and default row-limit as query(). Every tool runs here: a narrower source
      *  set would mount a second connection and re-open all of that schema's Iceberg
@@ -1120,6 +1199,12 @@ public class McpServer {
         }
         Connection c = getCatalogConnection();
         Statement stmt = c.createStatement();
+        // Without this a query runs unbounded, and because the stdio loop is strictly
+        // serial that freezes the whole server, not just the one call: a tool doing no I/O
+        // at all appears to hang because it is queued behind the query that is still
+        // running. Verified enforced on this path -- a 5s limit aborted a three-way cross
+        // join at 5996ms -- so it is a real bound rather than an advisory one.
+        stmt.setQueryTimeout(queryTimeoutSeconds());
         try {
             ResultSet rs = stmt.executeQuery(effective);
             ResultSetMetaData meta = rs.getMetaData();
@@ -1616,6 +1701,15 @@ public class McpServer {
         System.setProperty("org.slf4j.simpleLogger.log.org.apache.calcite.adapter.govdata", "info");
         System.setProperty("log4j.rootLogger", "ERROR");
 
+        // The shaded jar binds SLF4J to log4j2, so the levels this method cares about come from
+        // the bundled log4j2.xml (root WARN; govdata and file at INFO) rather than from anything
+        // set here: log4j.rootLogger above is a log4j 1.x property that its own LogManager only
+        // reads from a properties file, and the logback branch below finds no logback at all. The
+        // one thing that must hold regardless of binding is that no appender writes to stdout —
+        // that is the JSON-RPC channel — which is why System.out was already redirected to stderr
+        // before this method runs, and why the bundled configuration targets SYSTEM_ERR.
+        // Kept for the case where a caller supplies logback on the classpath instead.
+        //
         // Logback ignores the above properties — configure it via reflection.
         // Must run before initConnection() to suppress Hadoop/Calcite WARN spam
         // that would otherwise contaminate stdout (the MCP JSON channel).
