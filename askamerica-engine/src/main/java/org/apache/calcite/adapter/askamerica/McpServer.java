@@ -1074,16 +1074,37 @@ public class McpServer {
     }
 
     private static String query(String sql, int limit) throws Exception {
-        if (extractSchema(sql) == null) {
-            throw new RuntimeException(
-                "Cannot determine schema from SQL. "
-                + "Reference tables as schema.table, e.g. SELECT * FROM sec.filing_metadata.");
+        // No pre-emptive schema check. extractSchema() plays no part in choosing the
+        // connection — runSqlOn always uses the all-schemas catalog connection — so
+        // rejecting up front only refused SQL that would have run:
+        //   SELECT 1+1                              no FROM at all
+        //   SELECT ... FROM information_schema.columns   meta schemas are excluded by design
+        //   DESCRIBE geo.state_ref                  no FROM/JOIN for the pattern to match
+        // All three work on that connection; the guard was the only thing stopping them.
+        //
+        // The advice it carried is still worth giving, so it is attached to the failure
+        // instead — where it is a hint about a real error rather than a refusal to try.
+        try {
+            return runSqlOn(sql, limit);
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            if (extractSchema(sql) == null && msg != null && looksLikeUnresolvedObject(msg)) {
+                throw new RuntimeException(msg
+                    + " — tables must be referenced as schema.table, e.g. "
+                    + "SELECT * FROM sec.filing_metadata. Call list_schemas to see the "
+                    + "available schemas.", e);
+            }
+            throw e;
         }
-        // Run against the connection that mounts every allowed schema. Scoping the
-        // connection to a source set derived from the SQL text left any schema past the
-        // first one unmounted, so a census-to-housing join failed with "Object 'census'
-        // not found" even though both schemas were available.
-        return runSqlOn(sql, limit);
+    }
+
+    /** True when a SQL error reads like an unqualified or unknown table/column reference. */
+    private static boolean looksLikeUnresolvedObject(String msg) {
+        String m = msg.toLowerCase();
+        return m.contains("not found")
+            || m.contains("object '")
+            || m.contains("table '")
+            || m.contains("unknown");
     }
 
     /** Execute SQL on the single all-schemas connection, applying the same reserved-word
@@ -1167,13 +1188,27 @@ public class McpServer {
             case "state":
                 // geo.state_ref is the canonical state reference (state_fips, state_abbr,
                 // state_name) — the FK target for state joins across all govdata schemas.
-                return "SELECT state_fips, state_abbr, state_name FROM geo.state_ref "
+                //
+                // DISTINCT, matching the county branch. state_ref declares state_abbr as
+                // its primary key and state_fips/state_name as unique, so in a healthy
+                // table this changes nothing. It matters when the table is not healthy:
+                // a duplicated load once made term="NC" return the same row seventeen
+                // times, and the county branch's DISTINCT is why the same fault never
+                // showed there.
+                return "SELECT DISTINCT state_fips, state_abbr, state_name FROM geo.state_ref "
                     + "WHERE lower(state_abbr) = lower(" + lit + ") "
                     + "OR state_fips = " + lit + " "
                     + "OR lower(state_name) LIKE " + like + " "
                     + "ORDER BY state_fips FETCH FIRST " + cap + " ROWS ONLY";
             case "county": {
-                String where = "lower(county_name) LIKE " + like + " OR county_fips = " + lit;
+                // geo.counties carries the bare name in county_name ("Mecklenburg") and the
+                // fuller form in county_code ("Mecklenburg County"), so matching only
+                // county_name meant the name a caller is most likely to type — the one that
+                // appears on a map or in a citation — found nothing while the bare word
+                // worked. Both are matched now.
+                String where = "lower(county_name) LIKE " + like
+                    + " OR lower(county_code) LIKE " + like
+                    + " OR county_fips = " + lit;
                 if (withinState != null && !withinState.isEmpty()) {
                     where = "(" + where + ") AND state_fips = " + sqlStr(withinState);
                 }
