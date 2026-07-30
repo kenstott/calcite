@@ -22,48 +22,19 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # Ensure engine-v<version> tag exists even if release-please created only v<version>
-      - name: Create engine-v alias tag
-        if: ${{ steps.release.outputs.release_created }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.release.outputs.tag_name }}"
-          BARE="${VERSION#v}"
-          ENGINE_TAG="engine-v${BARE}"
-          SHA="${{ steps.release.outputs.sha }}"
-          if ! gh api "repos/${{ github.repository }}/git/refs/tags/${ENGINE_TAG}" &>/dev/null; then
-            gh api repos/${{ github.repository }}/git/refs \
-              --method POST \
-              --field ref="refs/tags/${ENGINE_TAG}" \
-              --field sha="${SHA}"
-            echo "Created ${ENGINE_TAG} → ${SHA}"
-          else
-            echo "${ENGINE_TAG} already exists"
-          fi
-
-      # release-please creates a redundant v<version> release + tag. The canonical, consistent
-      # release is engine-v<version> (alias above, assets attached by AskAmerica Engine). Remove the
-      # v<version> duplicate so only the engine-v<version> tag/release remains.
-      - name: Remove redundant v<version> release/tag
-        if: ${{ steps.release.outputs.release_created }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.release.outputs.tag_name }}"
-          gh release delete "${VERSION}" --repo "${{ github.repository }}" --cleanup-tag --yes \
-            || echo "No ${VERSION} release/tag to remove"
-
-      # Tags created via the API by GITHUB_TOKEN do not trigger push events in other
-      # workflows. Dispatch the release CI explicitly so the jar is always built.
+      # A tag pushed by GITHUB_TOKEN does not trigger push events in other workflows, so the
+      # release CI is dispatched explicitly rather than relying on the tag trigger.
       - name: Dispatch release workflows
         if: ${{ steps.release.outputs.release_created }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.release.outputs.tag_name }}"
-          BARE="${VERSION#v}"
-          ENGINE_TAG="engine-v${BARE}"
+          # release-please now emits the canonical tag itself (engine-v<version>), so take it as
+          # given and derive the bare version from it. This previously stripped a leading "v" off
+          # a v<version> tag and re-prefixed it; doing that to an already-prefixed tag would build
+          # engine-vengine-v<version>.
+          ENGINE_TAG="${{ steps.release.outputs.tag_name }}"
+          BARE="${ENGINE_TAG#engine-v}"
           gh workflow run "AskAmerica Engine" \
             --repo "${{ github.repository }}" \
             --ref "refs/tags/${ENGINE_TAG}" \

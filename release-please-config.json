@@ -3,7 +3,10 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "tag-name": "engine-v${version}",
+      "component": "engine",
+      "include-component-in-tag": true,
+      "include-v-in-tag": true,
+      "tag-separator": "-",
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false
