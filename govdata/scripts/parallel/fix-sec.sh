@@ -70,29 +70,56 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-# Staging marker name -> Iceberg table, taken from sec-schema.yaml's per-table `pattern`
-# (year=*/*<token>*.parquet). Reprocessing works per accession, not per table, so these
-# only decide which accessions are pulled in — the repair regenerates every output.
-TABLE_MAP=(
-  "metadata:filing_metadata"
-  "facts:financial_line_items"
-  "contexts:filing_contexts"
-  "mda:mda_sections"
-  "relationships:xbrl_relationships"
-  "insider:insider_transactions"
-  "earnings:earnings_transcripts"
-  "chunks:vectorized_chunks"
-  "13f:institutional_holdings"
-  "13dg:beneficial_ownership"
+# Which Iceberg tables each SEC form type is defined to produce.
+#
+# Transcribed from FormType's enum constructor (govdata/.../sec/FormType.java), whose argument
+# order is metadata, facts, contexts, relationships, mda, insider, earnings, chunks,
+# institutional_holdings, beneficial_ownership. FormType.getExpectedOutputs() is what the ETL
+# itself uses to decide whether a filing's outputs are complete, so this is the pipeline's own
+# contract rather than an inference about it.
+#
+# This replaces asking the tracker "is there a staging marker with no Iceberg row?". A staging
+# marker records that an output FILE was written, not that it held any rows, and several writers
+# emit an empty file deliberately — XbrlToParquetConverter says so outright ("Always write the
+# file, even if empty, to satisfy cache validation") for facts, relationships, insider and chunks.
+# Every such filing therefore looked permanently lost: measured against 2,000 accessions that had
+# just been reprocessed successfully, relationships still showed 788 of 793 "missing" and chunks
+# 1,014 of 1,986. Nothing loses 99% of its rows; that was the empty-file artifact, and the repair
+# chased it every run without ever clearing it.
+#
+# Asking instead "this form is DEFINED to produce table T, and T has no rows for this filing"
+# needs no marker and makes no assumption about emptiness. Validated against production: no
+# accession outside the 10-K/10-Q family has relationships rows, so the enum describes what the
+# data actually looks like.
+FORM_TABLES=(
+  "10-K:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
+  "10-K/A:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
+  "10-Q:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
+  "10-Q/A:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
+  "8-K:filing_metadata,earnings_transcripts,vectorized_chunks"
+  "8-K/A:filing_metadata,earnings_transcripts,vectorized_chunks"
+  "DEF 14A:filing_metadata,financial_line_items,filing_contexts"
+  "3:filing_metadata,insider_transactions"
+  "4:filing_metadata,insider_transactions"
+  "5:filing_metadata,insider_transactions"
+  "13F-HR:filing_metadata,institutional_holdings"
+  "13F-HR/A:filing_metadata,institutional_holdings"
+  "SC 13D:filing_metadata,beneficial_ownership"
+  "SC 13D/A:filing_metadata,beneficial_ownership"
+  "SC 13G:filing_metadata,beneficial_ownership"
+  "SC 13G/A:filing_metadata,beneficial_ownership"
 )
+
+# vectorized_chunks is gated on vectorizationEnabled in FormType.getExpectedOutputs(). Drop it
+# from every form's expected set when the embedding pipeline is not in play, otherwise every
+# 10-K and 8-K is reported as missing a table it was never asked to produce.
+VECTORIZATION_ENABLED="${GOVDATA_VECTORIZATION_ENABLED:-true}"
 
 CONFIRM=false
 ONLY_TABLE=""
 ONLY_YEAR=""
 BATCH_SIZE=2000
 MAX_ACCESSIONS=0
-VERIFY=true
-VERIFY_N=12
 # Reprocessing is a bulk backfill, not the steady-state pipeline, so it is sized for the
 # machine rather than for coexisting with a pool. .env.prod pins ETL_PARALLEL_THREADS=2 —
 # correct when several schema workers share the box, wasteful when this is the only thing
@@ -110,8 +137,6 @@ while [ $# -gt 0 ]; do
     --year)           shift; ONLY_YEAR="${1:-}" ;;
     --batch-size)     shift; BATCH_SIZE="${1:-}" ;;
     --max-accessions) shift; MAX_ACCESSIONS="${1:-}" ;;
-    --no-verify)      VERIFY=false ;;
-    --verify-n)       shift; VERIFY_N="${1:-}" ;;
     --threads)        shift; THREADS="${1:-}" ;;
     --heap)           shift; HEAP_GB="${1:-}" ;;
     -h|--help)        sed -n '18,62p' "$0" >&2; exit 0 ;;
@@ -196,61 +221,100 @@ STAMP="$(date +%Y%m%d_%H%M%S)"
 ACC_FILE="$WORK_DIR/missing-$STAMP.txt"
 REPORT_FILE="$WORK_DIR/report-$STAMP.txt"
 
-_pairs_sql=""
-_names_sql=""
-for entry in "${TABLE_MAP[@]}"; do
-  stage="${entry%%:*}"; ice="${entry##*:}"
-  [ -z "$ONLY_TABLE" ] || [ "$ONLY_TABLE" = "$stage" ] || continue
-  _pairs_sql="${_pairs_sql}${_pairs_sql:+,}('${stage}','${ice}')"
-  _names_sql="${_names_sql}${_names_sql:+,}'${stage}','${ice}'"
+# Expand FORM_TABLES into (form, table) rows, dropping vectorized_chunks when vectorization is
+# off so a table nobody asked for is never reported missing.
+_matrix_sql=""
+for entry in "${FORM_TABLES[@]}"; do
+  form="${entry%%:*}"; tbls="${entry##*:}"
+  IFS=',' read -ra _t <<< "$tbls"
+  for tbl in "${_t[@]}"; do
+    [ "$tbl" = "vectorized_chunks" ] && [ "$VECTORIZATION_ENABLED" != "true" ] && continue
+    [ -z "$ONLY_TABLE" ] || [ "$ONLY_TABLE" = "$tbl" ] || continue
+    _matrix_sql="${_matrix_sql}${_matrix_sql:+,}('${form//\'/\'\'}','${tbl}')"
+  done
 done
-[ -n "$_pairs_sql" ] || { echo "fix-sec: --table '$ONLY_TABLE' is not a SEC staging table" >&2; exit 2; }
+[ -n "$_matrix_sql" ] || { echo "fix-sec: --table '$ONLY_TABLE' is not a SEC Iceberg table" >&2; exit 2; }
+
+# Distinct Iceberg tables the matrix references — one scan each, no more.
+_scanned=$(printf '%s\n' "${FORM_TABLES[@]}" | cut -d: -f2- | tr ',' '\n' | sort -u)
+[ "$VECTORIZATION_ENABLED" = "true" ] || _scanned=$(printf '%s\n' "$_scanned" | grep -v '^vectorized_chunks$')
+[ -z "$ONLY_TABLE" ] || _scanned="$ONLY_TABLE"
 
 _year_filter=""
-[ -z "$ONLY_YEAR" ] || _year_filter="AND substring(acc from 12 for 2) = '${ONLY_YEAR:2:2}'"
+[ -z "$ONLY_YEAR" ] || _year_filter="AND acc LIKE '%-${ONLY_YEAR:2:2}-%'"
 
-log_info "fix-sec: scanning tracker for staged-but-unmaterialized accessions"
+_duck_ep="${AWS_ENDPOINT_OVERRIDE#http://}"; _duck_ep="${_duck_ep#https://}"
+command -v duckdb >/dev/null 2>&1 \
+  || { echo "fix-sec: duckdb is required to read the Iceberg tables" >&2; exit 2; }
 
-psql_q <<SQL > "$REPORT_FILE"
-CREATE TEMP TABLE t AS
-  SELECT table_name, split_part(split_part(source_key,'=',2),'__',1) AS acc
-    FROM ${PG_SCHEMA}.pipeline_tracker
-   WHERE table_name IN (${_names_sql});
-CREATE INDEX ON t (table_name, acc);
-ANALYZE t;
+log_info "fix-sec: scanning Iceberg for filings missing a table their form should produce"
 
-CREATE TEMP TABLE pairs(stage text, ice text);
-INSERT INTO pairs VALUES ${_pairs_sql};
+{
+  echo "INSTALL httpfs; LOAD httpfs; INSTALL iceberg; LOAD iceberg;"
+  echo "CREATE SECRET (TYPE S3, PROVIDER credential_chain, ENDPOINT '${_duck_ep}',"
+  echo "               USE_SSL false, URL_STYLE 'path', REGION 'auto');"
+  # filing_metadata carries filing_type, which is what maps a filing onto its expected tables.
+  echo "CREATE TEMP TABLE meta AS SELECT accession_number AS acc, filing_type AS form"
+  echo "  FROM iceberg_scan('${GOVDATA_PARQUET_DIR}/sec/filing_metadata', allow_moved_paths => true)"
+  echo " WHERE accession_number IS NOT NULL ${_year_filter};"
+  echo "CREATE TEMP TABLE present(tbl VARCHAR, acc VARCHAR);"
+  printf '%s\n' "$_scanned" | while read -r tbl; do
+    [ -n "$tbl" ] || continue
+    echo "INSERT INTO present SELECT '${tbl}', acc FROM ("
+    echo "  SELECT DISTINCT accession_number AS acc"
+    echo "    FROM iceberg_scan('${GOVDATA_PARQUET_DIR}/sec/${tbl}', allow_moved_paths => true)"
+    echo "   WHERE accession_number IS NOT NULL) x;"
+  done
+  echo "CREATE TEMP TABLE matrix(form VARCHAR, tbl VARCHAR);"
+  echo "INSERT INTO matrix VALUES ${_matrix_sql};"
+  # A gap is a filing whose form is DEFINED to produce table T, with no row in T. No staging
+  # marker is consulted, so an output that was legitimately empty is never mistaken for loss.
+  echo "CREATE TEMP TABLE gaps AS"
+  echo "  SELECT m.acc, x.tbl FROM meta m JOIN matrix x ON x.form = m.form"
+  echo "   WHERE NOT EXISTS (SELECT 1 FROM present p WHERE p.tbl = x.tbl AND p.acc = m.acc);"
+  echo "COPY (SELECT DISTINCT acc FROM gaps ORDER BY acc) TO '${ACC_FILE}' (HEADER false);"
+  echo "SELECT 'BY_TABLE|'||tbl||'|'||count(DISTINCT acc) FROM gaps GROUP BY tbl ORDER BY 1;"
+  echo "SELECT 'BY_YEAR|20'||yy||'|'||cnt FROM (SELECT substring(acc,12,2) AS yy,"
+  echo "  count(DISTINCT acc) AS cnt FROM gaps GROUP BY 1) y ORDER BY yy;"
+  echo "SELECT 'TOTAL|'||count(DISTINCT acc) FROM gaps;"
+} > "$WORK_DIR/enumerate-$STAMP.sql"
 
--- An accession is missing for a pair when it carries the staging marker but never
--- reached the Iceberg table. Year comes from the accession itself (NNNNNNNNNN-YY-NNNNNN).
-CREATE TEMP TABLE gaps AS
-  SELECT p.stage, s.acc
-    FROM pairs p
-    JOIN t s ON s.table_name = p.stage
-   WHERE NOT EXISTS (SELECT 1 FROM t m WHERE m.table_name = p.ice AND m.acc = s.acc)
-     AND s.acc ~ '^[0-9]{10}-[0-9]{2}-[0-9]{6}\$'
-     ${_year_filter};
-
-\\copy (SELECT DISTINCT acc FROM gaps ORDER BY acc) TO '${ACC_FILE}'
-
-SELECT 'BY_TABLE|'||stage||'|'||count(DISTINCT acc) FROM gaps GROUP BY stage ORDER BY 1;
-SELECT 'BY_YEAR|20'||yy||'|'||cnt FROM (
-  SELECT substring(acc from 12 for 2) AS yy, count(DISTINCT acc) AS cnt
-    FROM gaps GROUP BY 1) y ORDER BY yy;
-SELECT 'TOTAL|'||count(DISTINCT acc) FROM gaps;
-SQL
-
-if [ $? -ne 0 ]; then
-  echo "fix-sec: tracker query failed — see $REPORT_FILE" >&2
+if ! duckdb -noheader -list < "$WORK_DIR/enumerate-$STAMP.sql" > "$REPORT_FILE" 2>&1; then
+  echo "fix-sec: Iceberg enumeration failed — see $REPORT_FILE" >&2
   exit 1
 fi
 
-TOTAL=$(awk -F'|' '$1=="TOTAL"{print $2}' "$REPORT_FILE")
+# -------------------------------------------------------------------------------------
+# Subtract accessions already attempted.
+#
+# Some gaps cannot be closed by reprocessing, and there is no way to tell which from the data:
+# a filing whose batch file was overwritten and one whose output was legitimately empty look
+# identical once the source is gone. Without a record of what has been tried, the enumeration
+# re-offers both every run — which is why a repair that processed ~22,000 accessions moved the
+# gap by 442 and then kept re-processing the same work.
+#
+# Recording the attempt rather than the outcome sidesteps the undecidable part: try each
+# accession once, and converge whether or not rows appeared.
+# -------------------------------------------------------------------------------------
+
+psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
+             accession   VARCHAR PRIMARY KEY,
+             attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
+
+ATTEMPTED=$(psql_q -c "SELECT count(*) FROM ${PG_SCHEMA}.fix_sec_attempted")
+if [ "${ATTEMPTED:-0}" -gt 0 ]; then
+  psql_q -c "\\copy (SELECT accession FROM ${PG_SCHEMA}.fix_sec_attempted ORDER BY accession) TO '$ACC_FILE.attempted'" >/dev/null
+  sort -u "$ACC_FILE" > "$ACC_FILE.all"
+  comm -23 "$ACC_FILE.all" "$ACC_FILE.attempted" > "$ACC_FILE"
+  log_info "fix-sec: $(wc -l < "$ACC_FILE.all") in gap, $ATTEMPTED already attempted, $(wc -l < "$ACC_FILE") remaining"
+  rm -f "$ACC_FILE.all" "$ACC_FILE.attempted"
+fi
+
+TOTAL=$(wc -l < "$ACC_FILE" | tr -d ' ')
 TOTAL="${TOTAL:-0}"
 
 echo
-echo "Accessions staged but never materialized, by table:"
+echo "Filings missing a table their form is defined to produce:"
 awk -F'|' '$1=="BY_TABLE"{printf "  %-16s %8d\n", $2, $3}' "$REPORT_FILE"
 echo
 echo "By filing year:"
@@ -265,72 +329,10 @@ if [ "$TOTAL" -eq 0 ]; then
   exit 0
 fi
 
-# -------------------------------------------------------------------------------------
-# Spot-check the candidates against Iceberg.
-#
-# The counts above come from the tracker, which is a CACHE of Iceberg state, not the
-# authority — getExcludedAccessions repopulates it from Iceberg per (table, year) as
-# materialization runs, so a partition not visited recently can under-report and make
-# healthy accessions look lost. Reprocessing is idempotent, but a false positive rate
-# here is the difference between repairing thousands and needlessly rebuilding millions,
-# so sample a few candidates per table and read the real answer out of Iceberg.
-# -------------------------------------------------------------------------------------
-
-verify_sample() {
-  local stage="$1" ice="$2" n="$3"
-  local accs
-  accs=$(psql_q -c "
-    SELECT split_part(split_part(s.source_key,'=',2),'__',1) AS acc
-      FROM ${PG_SCHEMA}.pipeline_tracker s
-     WHERE s.table_name = '${stage}' AND s.phase = 'staging'
-       AND split_part(split_part(s.source_key,'=',2),'__',1) ~ '^[0-9]{10}-[0-9]{2}-[0-9]{6}\$'
-       AND NOT EXISTS (
-         SELECT 1 FROM ${PG_SCHEMA}.pipeline_tracker m
-          WHERE m.table_name = '${ice}'
-            AND split_part(split_part(m.source_key,'=',2),'__',1)
-                = split_part(split_part(s.source_key,'=',2),'__',1))
-     LIMIT ${n}" 2>/dev/null)
-  [ -n "$accs" ] || { printf "  %-16s %s\n" "$stage" "no candidates"; return; }
-
-  local in_list count found
-  in_list=$(printf '%s\n' "$accs" | awk '{printf "%s'\''%s'\''", (NR>1?",":""), $0}')
-  count=$(printf '%s\n' "$accs" | wc -l)
-  found=$(duckdb -noheader -list -c "
-    INSTALL httpfs; LOAD httpfs; INSTALL iceberg; LOAD iceberg;
-    CREATE SECRET (TYPE S3, PROVIDER credential_chain, ENDPOINT '${_duck_endpoint}',
-                   USE_SSL false, URL_STYLE 'path', REGION 'auto');
-    SELECT count(DISTINCT accession_number)
-      FROM iceberg_scan('${GOVDATA_PARQUET_DIR}/sec/${ice}', allow_moved_paths=true)
-     WHERE accession_number IN (${in_list});" 2>/dev/null | tail -1)
-  found="${found:-?}"
-  if [ "$found" = "0" ]; then
-    printf "  %-16s %s\n" "$stage" "$count/$count confirmed missing"
-  else
-    printf "  %-16s %s\n" "$stage" \
-      "$found of $count candidates ARE in Iceberg — tracker is stale, treat counts as an upper bound"
-  fi
-}
-
-if $VERIFY; then
-  # DuckDB wants a bare host:port; the ETL passes the same endpoint without its scheme.
-  _duck_endpoint="${AWS_ENDPOINT_OVERRIDE:-}"
-  _duck_endpoint="${_duck_endpoint#http://}"
-  _duck_endpoint="${_duck_endpoint#https://}"
-  if [ -z "$_duck_endpoint" ] || ! command -v duckdb >/dev/null 2>&1; then
-    echo "Skipping Iceberg spot-check (need duckdb and AWS_ENDPOINT_OVERRIDE); counts are"
-    echo "tracker-derived and may over-report. Pass --no-verify to silence this."
-    echo
-  else
-    echo "Iceberg spot-check ($VERIFY_N candidates per table):"
-    for entry in "${TABLE_MAP[@]}"; do
-      stage="${entry%%:*}"; ice="${entry##*:}"
-      [ -z "$ONLY_TABLE" ] || [ "$ONLY_TABLE" = "$stage" ] || continue
-      awk -F'|' -v s="$stage" '$1=="BY_TABLE" && $2==s{f=1} END{exit !f}' "$REPORT_FILE" || continue
-      verify_sample "$stage" "$ice" "$VERIFY_N"
-    done
-    echo
-  fi
-fi
+# The enumeration above reads Iceberg directly, so there is no second source left to check it
+# against — the earlier spot-check existed only because candidates came from the tracker, which
+# is a cache of Iceberg state rather than the authority. Reading the tables themselves removes
+# both the indirection and the need to sample.
 
 if ! $CONFIRM; then
   echo "DRY RUN — nothing reprocessed. Re-run with --confirm to repair."
@@ -418,6 +420,17 @@ for year in $YEARS; do
       continue
     fi
     log_info "fix-sec: batch $batches processed ${_processed:-?} accession(s)"
+
+    # Record the attempt, not the outcome. Whether rows appeared or the filing's output was
+    # legitimately empty, this accession has now had its one pass and must drop out of the next
+    # enumeration — otherwise the undecidable cases recirculate forever. ON CONFLICT keeps a
+    # re-run of the same batch idempotent.
+    psql_q -c "\\copy ${PG_SCHEMA}.fix_sec_attempted (accession) FROM '$bf'" >/dev/null 2>&1 \
+      || psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession)
+                    SELECT unnest(string_to_array(pg_read_file('$bf'), E'\\n'))
+                    ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1 \
+      || log_info "fix-sec: WARNING could not record batch $batches as attempted — it will recur"
+
     rm -f "$bf"
   done
   rm -f "$year_file"
