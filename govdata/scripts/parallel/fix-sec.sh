@@ -382,6 +382,20 @@ fi
 awk '{ print "20" substr($0,12,2) "\t" $0 }' "$ACC_FILE" | sort > "$ACC_FILE.byyear"
 
 YEARS=$(cut -f1 "$ACC_FILE.byyear" | uniq)
+# Record an accession list as attempted. Whether rows appeared or the filing's output was
+# legitimately empty, each listed accession has now had its one pass and must drop out of the next
+# enumeration — otherwise the undecidable cases recirculate forever. ON CONFLICT keeps a re-run of
+# the same list idempotent.
+record_attempted() {
+  _rf="$1"
+  psql_q -c "\\copy ${PG_SCHEMA}.fix_sec_attempted (accession) FROM '$_rf'" >/dev/null 2>&1 \
+    || psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession)
+                  SELECT unnest(string_to_array(pg_read_file('$_rf'), E'\\n'))
+                  ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1 \
+    || return 1
+  return 0
+}
+
 batches=0
 failed=0
 for year in $YEARS; do
@@ -421,25 +435,51 @@ for year in $YEARS; do
       continue
     fi
 
-    # Any ETL failure means the batch must NOT be recorded as attempted.
+    # An accession that errored must NOT be recorded as attempted; one that succeeded alongside it
+    # must be.
     #
     # The attempted-list exists to retire accessions whose gap reprocessing cannot close — an
     # output that was legitimately empty is indistinguishable from one whose source was
-    # overwritten, so each gets a single pass and then drops out. A filing that failed on a
-    # transient error has had no such pass, and recording it writes it out of the repair for
-    # good.
+    # overwritten, so each gets a single pass and then drops out. A filing that failed has had no
+    # such pass, and recording it writes it out of the repair for good.
     #
-    # This is not hypothetical. When SEC began answering with HTTP 429, one batch reported
-    # "981 processed, 4 skipped, 1015 failed" — and because this check only looked at
-    # processed==0, all 2000 accessions were recorded. The 1015 were silently excluded from
-    # every future enumeration, and the run continued into the next batch doing the same.
-    # Stop the batch instead: the list is kept, nothing is recorded, and a later run retries it.
+    # This is not hypothetical in either direction. When SEC began answering with HTTP 429, one
+    # batch reported "981 processed, 4 skipped, 1015 failed" and recorded all 2000 — the 1015 were
+    # excluded from every future enumeration. Retiring the whole batch on any failure fixed that
+    # and broke the converse: six 13F filings that fail every time discarded the credit for 1994
+    # successes, so the batch was re-offered, re-run for 94 minutes, and discarded again. Neither
+    # year can reach zero that way. Split the batch on the outcome the ETL already reports.
     if [ -n "$_etlfailed" ] && [ "$_etlfailed" -gt 0 ]; then
       failed=$((failed + 1))
-      log_info "fix-sec: batch $batches FAILED — ${_etlfailed} of $n accessions errored" \
-               "(${_processed:-?} processed). NOT recording as attempted; they must be retried."
+      log_info "fix-sec: batch $batches — ${_etlfailed} of $n accessions errored" \
+               "(${_processed:-?} processed)."
       log_info "  worker log: $_wlog"
-      log_info "  list kept at $bf"
+
+      # Name the failures so the rest can be credited. The ETL logs each as
+      # "Failed to process accession <cik>/<accession>".
+      grep -aoE "Failed to process accession [0-9]+/[0-9][0-9-]+" "$_wlog" \
+        | sed -E 's#.*/##' | sort -u > "$bf.failed"
+      _nfail=$(wc -l < "$bf.failed")
+
+      # Only split when every reported failure was named. A short list would credit an accession
+      # that actually failed, which is the exact silent exclusion this guard exists to prevent.
+      if [ "$_nfail" -ne "${_etlfailed}" ]; then
+        log_info "  could not name every failure (${_nfail} named, ${_etlfailed} reported) —" \
+                 "recording nothing; list kept at $bf"
+        rm -f "$bf.failed"
+        continue
+      fi
+
+      grep -vxF -f "$bf.failed" "$bf" > "$bf.ok"
+      _nok=$(wc -l < "$bf.ok")
+      if [ "$_nok" -gt 0 ]; then
+        record_attempted "$bf.ok" \
+          && log_info "  recorded ${_nok} succeeded; ${_nfail} left to retry" \
+          || log_info "  WARNING could not record the ${_nok} succeeded — they will recur"
+      fi
+      log_info "  failures kept at $bf.failed"
+      rm -f "$bf.ok"
+
       _429=$(grep -ac "HTTP 429" "$_wlog" 2>/dev/null || echo 0)
       if [ "${_429:-0}" -gt 0 ]; then
         log_info "  ${_429} x HTTP 429 — SEC is rate-limiting. Stopping rather than escalating;" \
@@ -451,14 +491,7 @@ for year in $YEARS; do
 
     log_info "fix-sec: batch $batches processed ${_processed:-?} accession(s)"
 
-    # Record the attempt, not the outcome. Whether rows appeared or the filing's output was
-    # legitimately empty, this accession has now had its one pass and must drop out of the next
-    # enumeration — otherwise the undecidable cases recirculate forever. ON CONFLICT keeps a
-    # re-run of the same batch idempotent.
-    psql_q -c "\\copy ${PG_SCHEMA}.fix_sec_attempted (accession) FROM '$bf'" >/dev/null 2>&1 \
-      || psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession)
-                    SELECT unnest(string_to_array(pg_read_file('$bf'), E'\\n'))
-                    ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1 \
+    record_attempted "$bf" \
       || log_info "fix-sec: WARNING could not record batch $batches as attempted — it will recur"
 
     rm -f "$bf"
