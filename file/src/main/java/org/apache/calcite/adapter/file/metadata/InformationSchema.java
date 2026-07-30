@@ -17,8 +17,13 @@ import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
+import org.apache.calcite.schema.FilterableTable;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -39,9 +44,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * SQL standard INFORMATION_SCHEMA implementation for the file adapter.
@@ -49,6 +56,145 @@ import java.util.Map;
  */
 public class InformationSchema extends AbstractSchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(InformationSchema.class);
+
+  /** Field index of TABLE_SCHEMA in both the TABLES and COLUMNS row types. */
+  private static final int IDX_TABLE_SCHEMA = 1;
+
+  /** Field index of TABLE_NAME in both the TABLES and COLUMNS row types. */
+  private static final int IDX_TABLE_NAME = 2;
+
+  /**
+   * Field index of TABLE_SCHEMA in the constraint row types (TABLE_CONSTRAINTS,
+   * KEY_COLUMN_USAGE), which lead with three CONSTRAINT_* columns and so sit three later than
+   * the TABLES/COLUMNS positions above.
+   */
+  private static final int IDX_CONSTRAINT_TABLE_SCHEMA = 4;
+
+  /** Field index of TABLE_NAME in the constraint row types. */
+  private static final int IDX_CONSTRAINT_TABLE_NAME = 5;
+
+  /**
+   * Lower-cased literal values that {@code filters} restricts field {@code fieldIndex} to, or null
+   * when the field is unconstrained.
+   *
+   * <p>Used to prune which schemas and tables the TABLES and COLUMNS scans have to touch. Building
+   * a row for a table means calling {@code getTable()} and {@code getRowType()} on it, which for an
+   * object-store-backed table resolves its view; scanning the whole catalog to answer a question
+   * about one table is both slow and fragile, because a single unresolvable table anywhere makes
+   * the scan throw and takes down metadata lookups for every table that is perfectly fine.
+   *
+   * <p>Recognises {@code col = 'v'} and {@code lower(col) = 'v'} in either operand order, looking
+   * through CAST. Deliberately a hint, not a contract: the filters are
+   * left in the list for Calcite to re-apply, so an expression this does not recognise returns null
+   * and costs a full scan, and one it reads too broadly still yields correct rows. It can prune
+   * work; it cannot change the answer.
+   */
+  private static Set<String> restrictedValues(List<RexNode> filters, int fieldIndex) {
+    Set<String> values = null;
+    for (RexNode filter : filters) {
+      Set<String> fromThis = equalityValues(filter, fieldIndex);
+      if (fromThis == null) {
+        continue;
+      }
+      if (values == null) {
+        values = fromThis;
+      } else {
+        // Conjunction of two restrictions on the same field: only the overlap can match.
+        values.retainAll(fromThis);
+      }
+    }
+    return values;
+  }
+
+  /** Values a single conjunct pins field {@code fieldIndex} to, or null if it does not. */
+  private static Set<String> equalityValues(RexNode filter, int fieldIndex) {
+    if (!(filter instanceof RexCall)) {
+      return null;
+    }
+    RexCall call = (RexCall) filter;
+    switch (call.getKind()) {
+    case EQUALS: {
+      RexNode left = call.getOperands().get(0);
+      RexNode right = call.getOperands().get(1);
+      if (referencesField(left, fieldIndex) && right instanceof RexLiteral) {
+        return literalSet(right);
+      }
+      if (referencesField(right, fieldIndex) && left instanceof RexLiteral) {
+        return literalSet(left);
+      }
+      return null;
+    }
+    case IN:
+    case SEARCH:
+      // SEARCH/Sarg internals vary by Calcite version; treat as unconstrained rather than risk
+      // misreading a range as an equality. A full scan is slow, never wrong.
+      return null;
+    case AND: {
+      Set<String> values = null;
+      for (RexNode operand : call.getOperands()) {
+        Set<String> nested = equalityValues(operand, fieldIndex);
+        if (nested == null) {
+          continue;
+        }
+        if (values == null) {
+          values = nested;
+        } else {
+          values.retainAll(nested);
+        }
+      }
+      return values;
+    }
+    default:
+      return null;
+    }
+  }
+
+  /**
+   * True when {@code node} is a reference to field {@code fieldIndex}, seen through the wrappers
+   * the validator adds: {@code LOWER}/{@code UPPER} (the MCP metadata queries compare
+   * case-insensitively) and {@code CAST}.
+   */
+  private static boolean referencesField(RexNode node, int fieldIndex) {
+    if (node instanceof RexInputRef) {
+      return ((RexInputRef) node).getIndex() == fieldIndex;
+    }
+    if (node instanceof RexCall) {
+      RexCall call = (RexCall) node;
+      switch (call.getKind()) {
+      case CAST:
+      case OTHER_FUNCTION:
+        String name = call.getOperator().getName();
+        if (!"LOWER".equalsIgnoreCase(name) && !"UPPER".equalsIgnoreCase(name)
+            && call.getKind() != org.apache.calcite.sql.SqlKind.CAST) {
+          return false;
+        }
+        return call.getOperands().size() == 1
+            && referencesField(call.getOperands().get(0), fieldIndex);
+      default:
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /** Single-element, lower-cased, mutable set holding a string literal's value. */
+  private static Set<String> literalSet(RexNode literal) {
+    Comparable<?> value = RexLiteral.value((RexLiteral) literal);
+    if (value == null) {
+      return null;
+    }
+    String text = value instanceof org.apache.calcite.util.NlsString
+        ? ((org.apache.calcite.util.NlsString) value).getValue()
+        : value.toString();
+    Set<String> out = new LinkedHashSet<>();
+    out.add(text.toLowerCase(Locale.ROOT));
+    return out;
+  }
+
+  /** True when {@code name} survives a restriction set (null meaning "no restriction"). */
+  private static boolean retained(Set<String> restriction, String name) {
+    return restriction == null || restriction.contains(name.toLowerCase(Locale.ROOT));
+  }
 
   private final SchemaPlus rootSchema;
   private final String catalogName;
@@ -125,14 +271,14 @@ public class InformationSchema extends AbstractSchema {
     @Override public Enumerable<Object[]> scan(DataContext root) {
       List<Object[]> rows = new ArrayList<>();
 
-      LOGGER.info("========== SchemataTable.scan START ==========");
-      LOGGER.info("rootSchema class: {}", rootSchema.getClass().getName());
-      LOGGER.info("Available schemas: {}", rootSchema.subSchemas().getNames(LikePattern.any()));
+      LOGGER.debug("========== SchemataTable.scan START ==========");
+      LOGGER.debug("rootSchema class: {}", rootSchema.getClass().getName());
+      LOGGER.debug("Available schemas: {}", rootSchema.subSchemas().getNames(LikePattern.any()));
 
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
-        LOGGER.info("--- Processing schema: '{}' ---", schemaName);
+        LOGGER.debug("--- Processing schema: '{}' ---", schemaName);
         SchemaPlus schemaPlus = rootSchema.subSchemas().get(schemaName);
-        LOGGER.info("  schemaPlus null? {}, class: {}",
+        LOGGER.debug("  schemaPlus null? {}, class: {}",
             schemaPlus == null, schemaPlus != null ? schemaPlus.getClass().getName() : "N/A");
 
         // Unwrap to get the actual Schema implementation (needed for CommentableSchema support)
@@ -143,17 +289,17 @@ public class InformationSchema extends AbstractSchema {
               org.apache.calcite.jdbc.CalciteSchema.from(schemaPlus);
           schema = calciteSchema.schema;  // Access public field with actual schema implementation
         }
-        LOGGER.info("  unwrapped Schema null? {}, class: {}, implements CommentableSchema: {}",
+        LOGGER.debug("  unwrapped Schema null? {}, class: {}, implements CommentableSchema: {}",
             schema == null, schema != null ? schema.getClass().getName() : "N/A",
             schema instanceof CommentableSchema);
 
         String comment = null;
         if (schema instanceof CommentableSchema) {
           comment = ((CommentableSchema) schema).getComment();
-          LOGGER.info("  ✓ CommentableSchema.getComment() returned: {}",
+          LOGGER.debug("  ✓ CommentableSchema.getComment() returned: {}",
               comment != null && comment.length() > 80 ? comment.substring(0, 77) + "..." : comment);
         } else {
-          LOGGER.info("  ✗ Schema '{}' does NOT implement CommentableSchema", schemaName);
+          LOGGER.debug("  ✗ Schema '{}' does NOT implement CommentableSchema", schemaName);
         }
         rows.add(new Object[]{
             catalogName,
@@ -167,7 +313,7 @@ public class InformationSchema extends AbstractSchema {
         });
       }
 
-      LOGGER.info("========== SchemataTable.scan END (processed {} schemas) ==========", rows.size());
+      LOGGER.debug("========== SchemataTable.scan END (processed {} schemas) ==========", rows.size());
 
       // Also add metadata schemas
       rows.add(new Object[]{catalogName, "information_schema", "CALCITE", null, null, "UTF8", null, null});
@@ -184,7 +330,7 @@ public class InformationSchema extends AbstractSchema {
   /**
    * TABLES - all tables in the catalog
    */
-  private class TablesTable extends AbstractTable implements ScannableTable {
+  private class TablesTable extends AbstractTable implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
@@ -204,12 +350,24 @@ public class InformationSchema extends AbstractSchema {
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
+      return scan(root, new ArrayList<RexNode>());
+    }
+
+    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
       List<Object[]> rows = new ArrayList<>();
+      Set<String> onlySchemas = restrictedValues(filters, IDX_TABLE_SCHEMA);
+      Set<String> onlyTables = restrictedValues(filters, IDX_TABLE_NAME);
 
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        if (!retained(onlySchemas, schemaName)) {
+          continue;
+        }
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            if (!retained(onlyTables, tableName)) {
+              continue;
+            }
             // IMPORTANT: Use getTable() instead of tables().get() to ensure schema's
             // getTable() override is called (needed for wrapped tables with comment support)
             Schema unwrappedSchema = schema.unwrap(Schema.class);
@@ -252,7 +410,7 @@ public class InformationSchema extends AbstractSchema {
   /**
    * COLUMNS - all columns of all tables
    */
-  private class ColumnsTable extends AbstractTable implements ScannableTable {
+  private class ColumnsTable extends AbstractTable implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
@@ -304,19 +462,27 @@ public class InformationSchema extends AbstractSchema {
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
-      List<Object[]> rows = new ArrayList<>();
+      return scan(root, new ArrayList<RexNode>());
+    }
 
-      LOGGER.info("ColumnsTable.scan: Available sub-schemas: {}",
-                  rootSchema.subSchemas().getNames(LikePattern.any()));
+    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
+      List<Object[]> rows = new ArrayList<>();
+      Set<String> onlySchemas = restrictedValues(filters, IDX_TABLE_SCHEMA);
+      Set<String> onlyTables = restrictedValues(filters, IDX_TABLE_NAME);
+
+      LOGGER.debug("ColumnsTable.scan: sub-schemas={} restrictedTo schemas={} tables={}",
+                  rootSchema.subSchemas().getNames(LikePattern.any()), onlySchemas, onlyTables);
 
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        if (!retained(onlySchemas, schemaName)) {
+          continue;
+        }
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
-        LOGGER.info("ColumnsTable.scan: Processing schema '{}', schema != null: {}",
-                    schemaName, schema != null);
         if (schema != null) {
-          LOGGER.info("ColumnsTable.scan: Schema '{}' contains tables: {}",
-                      schemaName, schema.tables().getNames(LikePattern.any()));
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            if (!retained(onlyTables, tableName)) {
+              continue;
+            }
             // IMPORTANT: Use getTable() instead of tables().get() to ensure schema's
             // getTable() override is called (needed for wrapped tables with comment support)
             Schema unwrappedSchema = null;
@@ -327,7 +493,7 @@ public class InformationSchema extends AbstractSchema {
             }
             @SuppressWarnings("deprecation")
             Table table = unwrappedSchema != null ? unwrappedSchema.getTable(tableName) : schema.tables().get(tableName);
-            LOGGER.info("ColumnsTable.scan: Processing table '{}' in schema '{}'",
+            LOGGER.debug("ColumnsTable.scan: Processing table '{}' in schema '{}'",
                         tableName, schemaName);
             if (table != null) {
               RelDataType rowType = table.getRowType(root.getTypeFactory());
@@ -404,7 +570,8 @@ public class InformationSchema extends AbstractSchema {
   }
 
   // Table for constraint metadata
-  private class TableConstraintsTable extends AbstractTable implements ScannableTable {
+  private class TableConstraintsTable extends AbstractTable
+      implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -420,10 +587,19 @@ public class InformationSchema extends AbstractSchema {
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
+      return scan(root, new ArrayList<RexNode>());
+    }
+
+    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
       List<Object[]> rows = new ArrayList<>();
+      Set<String> onlySchemas = restrictedValues(filters, IDX_CONSTRAINT_TABLE_SCHEMA);
+      Set<String> onlyTables = restrictedValues(filters, IDX_CONSTRAINT_TABLE_NAME);
 
       // Iterate through all schemas
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        if (!retained(onlySchemas, schemaName)) {
+          continue;
+        }
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
           // Get the unwrapped schema to check its actual type
@@ -431,6 +607,9 @@ public class InformationSchema extends AbstractSchema {
 
           // Iterate through all tables in the schema
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            if (!retained(onlyTables, tableName)) {
+              continue;
+            }
             Table table;
 
             // Check if this is a ConstraintAwareJdbcSchema - if so, use its getTable method
@@ -447,11 +626,11 @@ public class InformationSchema extends AbstractSchema {
             }
 
             if (table != null) {
-              LOGGER.info("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
+              LOGGER.debug("InformationSchema: Checking constraints for table '{}' in schema '{}', type: {}",
                           tableName, schemaName, table.getClass().getSimpleName());
               // Get table statistics which contain constraint information
               Statistic statistic = table.getStatistic();
-              LOGGER.info("  - statistic: {}, keys: {}, referentialConstraints: {}",
+              LOGGER.debug("  - statistic: {}, keys: {}, referentialConstraints: {}",
                           statistic != null ? statistic.getClass().getSimpleName() : "null",
                           statistic != null && statistic.getKeys() != null ? statistic.getKeys().size() : "null",
                           statistic != null && statistic.getReferentialConstraints() != null ?
@@ -516,7 +695,8 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private class KeyColumnUsageTable extends AbstractTable implements ScannableTable {
+  private class KeyColumnUsageTable extends AbstractTable
+      implements ScannableTable, FilterableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -532,12 +712,21 @@ public class InformationSchema extends AbstractSchema {
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root) {
-      List<Object[]> rows = new ArrayList<>();
+      return scan(root, new ArrayList<RexNode>());
+    }
 
-      LOGGER.info("========== KeyColumnUsageTable.scan START ==========");
+    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
+      List<Object[]> rows = new ArrayList<>();
+      Set<String> onlySchemas = restrictedValues(filters, IDX_CONSTRAINT_TABLE_SCHEMA);
+      Set<String> onlyTables = restrictedValues(filters, IDX_CONSTRAINT_TABLE_NAME);
+
+      LOGGER.debug("KeyColumnUsageTable.scan: schemas={} tables={}", onlySchemas, onlyTables);
 
       // Iterate through all schemas
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
+        if (!retained(onlySchemas, schemaName)) {
+          continue;
+        }
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
           // Get the unwrapped schema to check its actual type
@@ -545,6 +734,9 @@ public class InformationSchema extends AbstractSchema {
 
           // Iterate through all tables in the schema
           for (String tableName : schema.tables().getNames(LikePattern.any())) {
+            if (!retained(onlyTables, tableName)) {
+              continue;
+            }
             Table table;
 
             // Check if this is a ConstraintAwareJdbcSchema - if so, use its getTable method
@@ -605,7 +797,7 @@ public class InformationSchema extends AbstractSchema {
                 // Extract foreign keys
                 List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
                 if (foreignKeys != null) {
-                  LOGGER.info("InformationSchema: KeyColumnUsageTable found {} foreign keys for table {}.{}",
+                  LOGGER.debug("InformationSchema: KeyColumnUsageTable found {} foreign keys for table {}.{}",
                               foreignKeys.size(), schemaName, tableName);
                   int fkIndex = 0;
                   for (RelReferentialConstraint fk : foreignKeys) {
@@ -641,7 +833,7 @@ public class InformationSchema extends AbstractSchema {
         }
       }
 
-      LOGGER.info("InformationSchema: KEY_COLUMN_USAGE scan() returning {} total rows", rows.size());
+      LOGGER.debug("InformationSchema: KEY_COLUMN_USAGE scan() returning {} total rows", rows.size());
       return Linq4j.asEnumerable(rows);
     }
 
@@ -680,7 +872,7 @@ public class InformationSchema extends AbstractSchema {
             // Not a ConstraintAwareJdbcSchema, that's fine
           }
 
-          LOGGER.info("InformationSchema: Schema '{}' ConstraintAwareJdbcSchema detection: {}",
+          LOGGER.debug("InformationSchema: Schema '{}' ConstraintAwareJdbcSchema detection: {}",
                       schemaName, constraintAwareSchema != null ? "FOUND" : "not found");
 
           // Iterate through all tables in the schema
@@ -762,7 +954,7 @@ public class InformationSchema extends AbstractSchema {
         }
       }
 
-      LOGGER.info("InformationSchema: REFERENTIAL_CONSTRAINTS scan() returning {} total FK rows", rows.size());
+      LOGGER.debug("InformationSchema: REFERENTIAL_CONSTRAINTS scan() returning {} total FK rows", rows.size());
       return Linq4j.asEnumerable(rows);
     }
 
