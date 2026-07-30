@@ -24,7 +24,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -1380,29 +1383,108 @@ public class McpServer {
         }
     }
 
+    /** Base for the AskAmerica API — system property, then env, then production. */
+    private static String apiBase() {
+        String p = System.getProperty("askamerica.api.url");
+        if (p != null && !p.isEmpty()) {
+            return p;
+        }
+        String e = System.getenv("ASKAMERICA_API_URL");
+        return (e != null && !e.isEmpty()) ? e : "https://api.askamerica.ai";
+    }
+
+    /**
+     * Shared stamp the issues endpoint expects. A filter, not a secret — the endpoint is
+     * public so a customer whose key is the broken thing can still report it.
+     */
+    private static final String ISSUE_STAMP = "askamerica-mcp";
+
+    /**
+     * Files a customer issue via POST /v1/issues, which records it in D1.
+     *
+     * <p>This used to write a parquet file straight into s3://govdata-parquet-v1/issues/
+     * with the caller's own credentials. Those are read-only on the data bucket, so it
+     * always returned 403 — and making it succeed would have meant giving every MCP client
+     * write access to the production data bucket in order to file a bug report.
+     *
+     * <p>Unlike metering, the result is awaited and surfaced. The user has just written up
+     * a report; telling them it was filed when it was not is worse than telling them to
+     * retry.
+     */
     private static String reportIssue(String subject, String body) {
+        HttpURLConnection c = null;
         try {
-            String ts = java.time.Instant.now().toString();
-            // Sanitize for single-quoted SQL literals
-            String safeSubject = subject.replace("'", "''").replace("\n", " ");
-            String safeBody    = body.replace("'", "''");
-            String safeBuild   = BUILD_ID.replace("'", "''");
+            String payload = "{"
+                + "\"stamp\":" + jsonStr(ISSUE_STAMP) + ","
+                + "\"build\":" + jsonStr(BUILD_ID) + ","
+                + "\"session_id\":" + jsonStr(SESSION_ID) + ","
+                + "\"reported_at\":" + jsonStr(java.time.Instant.now().toString()) + ","
+                + "\"subject\":" + jsonStr(subject) + ","
+                + "\"body\":" + jsonStr(body)
+                + "}";
 
-            // Unique key per issue — no collisions across concurrent sessions
-            String key = "issues/" + ts.replace(":", "-") + ".parquet";
+            URL url = java.net.URI.create(apiBase() + "/v1/issues").toURL();
+            c = (HttpURLConnection) url.openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(10000);
+            c.setReadTimeout(15000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            // Optional: lets the server attribute the report. A missing or rejected key
+            // must never block filing, so this is only ever added when present.
+            String apiKey = UsageMetering.resolveApiKey(null);
+            if (apiKey != null && !apiKey.isEmpty()) {
+                c.setRequestProperty("X-API-Key", apiKey);
+            }
+            OutputStream os = c.getOutputStream();
+            try {
+                os.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } finally {
+                os.close();
+            }
 
-            copyToR2("SELECT"
-                + " '" + ts + "' AS reported_at,"
-                + " '" + safeBuild + "' AS build,"
-                + " '" + safeSubject + "' AS subject,"
-                + " '" + safeBody + "' AS body", key);
-
-            log.println("[askamerica-mcp] report_issue recorded to R2: " + key);
-            return "Issue recorded. Subject: " + subject;
+            int code = c.getResponseCode();
+            if (code >= 200 && code < 300) {
+                log.println("[askamerica-mcp] report_issue filed (HTTP " + code + ")");
+                return "Issue recorded. Subject: " + subject;
+            }
+            log.println("[askamerica-mcp] report_issue rejected: HTTP " + code);
+            return "Could not record the issue (HTTP " + code
+                + "). Nothing was filed — please retry, or report it at askamerica.ai.";
         } catch (Exception e) {
             log.println("[askamerica-mcp] report_issue error: " + e.getMessage());
-            return "Error recording issue: " + e.getMessage();
+            return "Could not record the issue: " + e.getMessage()
+                + ". Nothing was filed — please retry, or report it at askamerica.ai.";
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
         }
+    }
+
+    /** Minimal JSON string encoder — the launcher classpath has no JSON library. */
+    private static String jsonStr(String s) {
+        if (s == null) {
+            return "null";
+        }
+        StringBuilder sb = new StringBuilder(s.length() + 16).append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            switch (ch) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (ch < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        sb.append(ch);
+                    }
+            }
+        }
+        return sb.append('"').toString();
     }
 
     private static String setTelemetry(boolean enabled) {
