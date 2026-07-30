@@ -108,7 +108,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
         DuckDBJdbcSchemaFactory.class.getDeclaredMethod("determineCatalogPath", String.class, String.class);
     method.setAccessible(true);
 
-    String dirPath = tempDir.toAbsolutePath().toString();
+    String dirPath = persistentDir("test_schema").toAbsolutePath().toString();
     String result = (String) method.invoke(null, "test_schema", dirPath);
 
     assertNotNull(result);
@@ -275,5 +275,27 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest4 {
     } catch (RuntimeException e) {
       // Expected
     }
+  }
+
+  /**
+   * A directory {@code determineCatalogPath} will treat as persistent.
+   *
+   * <p>{@code @TempDir} hands out a path under {@code /tmp}, which the production code
+   * deliberately classifies as temporary — a temp directory gets an in-memory catalog and no file
+   * on disk, which is why the sibling temp-directory tests assert null. A test about the
+   * persistent branch therefore has to provision a non-temp directory itself rather than borrow
+   * one that the code is right to reject. Created under the module's build output, which is
+   * writable and outside any temp path.
+   */
+  private static java.nio.file.Path persistentDir(String name) throws Exception {
+    java.nio.file.Path classes =
+        java.nio.file.Paths.get(DuckDBJdbcSchemaFactoryDeepCoverageTest4.class.getProtectionDomain()
+            .getCodeSource().getLocation().toURI());
+    java.nio.file.Path buildDir = classes.getParent().getParent().getParent();
+    java.nio.file.Path dir = buildDir.resolve("persistent-catalog-tests")
+        .resolve(name + "-" + java.util.UUID.randomUUID());
+    java.nio.file.Files.createDirectories(dir);
+    dir.toFile().deleteOnExit();
+    return dir;
   }
 }

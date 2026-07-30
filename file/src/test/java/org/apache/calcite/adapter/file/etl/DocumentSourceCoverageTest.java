@@ -390,10 +390,10 @@ class DocumentSourceCoverageTest {
   @Test void testEnforceRateLimitDoesNotThrow() throws Exception {
     HttpSourceConfig config = createConfigWithRateLimit(1000);
     DocumentSource ds = new DocumentSource(config, storageProvider, tempDir.toString());
-    Method m = DocumentSource.class.getDeclaredMethod("enforceRateLimit");
+    Method m = DocumentSource.class.getDeclaredMethod("enforceRateLimit", String.class);
     m.setAccessible(true);
-    m.invoke(ds);
-    m.invoke(ds);
+    m.invoke(ds, "https://example.com/a");
+    m.invoke(ds, "https://example.com/b");
   }
 
   @Test void testFetchUrlContentUnreachableThrowsIOException() {

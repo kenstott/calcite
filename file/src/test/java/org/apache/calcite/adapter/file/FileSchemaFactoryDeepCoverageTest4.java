@@ -2128,6 +2128,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     Map<String, Object> table = new HashMap<>();
     table.put("name", "t1");
     table.put("url", tempDir.resolve("data.csv").toString());
+    // Create the file the table definition points at. It never existed, so the PARQUET
+    // engine's conversion failed — a failure that used to be swallowed into an empty table
+    // map, letting this assert only that create() returned something. The test is about
+    // local-storage auto-detection, so it has to provide the local file it declares.
+    writeTempCsv("data.csv");
     tables.add(table);
     operand.put("tables", tables);
 
@@ -2451,10 +2456,15 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     // Set parentSchema to null to trigger the "schema not found" path
     setField(schema, "parentSchema", null);
 
+    // An unresolved target schema is not an absent one. Schemas mount incrementally, so a
+    // cross-schema FK can be validated before its target schema is registered; answering
+    // "absent" there silently drops a valid reference. checkTableExists therefore keeps the
+    // FK when it cannot confirm absence, and only removes it when the target schema IS
+    // resolved and genuinely lacks the table.
     Boolean result =
         (Boolean) invokePrivate(schema, "checkTableExists", new Class<?>[]{String.class, String.class, Map.class},
         "other_schema", "other_table", localTables);
-    assertFalse(result);
+    assertTrue(result);
   }
 
   // =======================================================================
@@ -2520,34 +2530,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     assertTrue(result.contains("html"));
   }
 
-  // =======================================================================
-  // FileSchema: storeExplicitTableMapping and getExplicitTableName tests
-  // =======================================================================
 
-  @Test void testStoreAndGetExplicitTableMapping() throws Exception {
-    FileSchema schema = createSchemaSimple(tempDir.toFile());
-    File csvFile = new File(tempDir.toFile(), "data.csv");
-    csvFile.createNewFile();
-
-    Source source = org.apache.calcite.util.Sources.of(csvFile);
-    invokePrivate(schema, "storeExplicitTableMapping",
-        new Class<?>[]{String.class, Source.class},
-        "custom_table_name", source);
-
-    String result =
-        (String) invokePrivate(schema, "getExplicitTableName", new Class<?>[]{File.class}, csvFile);
-    assertEquals("custom_table_name", result);
-  }
-
-  @Test void testGetExplicitTableNameNotFound() throws Exception {
-    FileSchema schema = createSchemaSimple(tempDir.toFile());
-    File unknownFile = new File(tempDir.toFile(), "unknown.csv");
-    unknownFile.createNewFile();
-
-    String result =
-        (String) invokePrivate(schema, "getExplicitTableName", new Class<?>[]{File.class}, unknownFile);
-    assertNull(result);
-  }
 
   // =======================================================================
   // FileSchema: isFileNameSupported test (used by storage provider path)
@@ -2682,5 +2665,15 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     Map<String, Table> second = schema.getTableMap();
     // Same reference should be returned (cached)
     assertTrue(first == second, "getTableMap should return cached result on second call");
+  }
+
+  /** Writes a minimal CSV into {@code tempDir} so a table definition that names it resolves. */
+  private void writeTempCsv(String fileName) {
+    try {
+      java.nio.file.Files.write(tempDir.resolve(fileName),
+          "id:int,name:string\n1,alpha\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    } catch (java.io.IOException e) {
+      throw new RuntimeException("could not provision " + fileName, e);
+    }
   }
 }

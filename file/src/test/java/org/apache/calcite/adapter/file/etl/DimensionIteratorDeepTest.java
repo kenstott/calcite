@@ -488,10 +488,13 @@ class DimensionIteratorDeepTest {
 
     List<String> values = iterator.resolveDimension(config);
 
-    // start to currentYear-1 = 2 values
-    assertEquals(2, values.size());
-    assertEquals(String.valueOf(currentYear - 2), values.get(0));
+    // dataLag no longer truncates the publish-year range: publish years run through the current
+    // year and dataLag is carried as the companion effective_year (publish - lag). Values come
+    // back newest-first so the most recent cycle processes first.
+    assertEquals(3, values.size());
+    assertEquals(String.valueOf(currentYear), values.get(0));
     assertEquals(String.valueOf(currentYear - 1), values.get(1));
+    assertEquals(String.valueOf(currentYear - 2), values.get(2));
   }
 
   @Test void testYearRangeWithExcludeYears() {
@@ -507,10 +510,11 @@ class DimensionIteratorDeepTest {
 
     List<String> values = iterator.resolveDimension(config);
 
+    // Descending: most recent year first.
     assertEquals(3, values.size());
-    assertEquals("2018", values.get(0));
+    assertEquals("2022", values.get(0));
     assertEquals("2020", values.get(1));
-    assertEquals("2022", values.get(2));
+    assertEquals("2018", values.get(2));
   }
 
   @Test void testYearRangeMissingStart() {
@@ -536,8 +540,10 @@ class DimensionIteratorDeepTest {
         .type(DimensionType.JSON_CATALOG)
         .build();
 
-    List<String> values = iterator.resolveDimension(config);
-    assertTrue(values.isEmpty());
+    // A JSON_CATALOG dimension with no source cannot be resolved. Returning an empty list
+    // would silently yield zero combinations, which is indistinguishable from "this table
+    // has nothing to process" — so resolution rejects it instead.
+    assertThrows(IllegalStateException.class, () -> iterator.resolveDimension(config));
   }
 
   // --- Factory methods ---

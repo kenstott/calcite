@@ -932,13 +932,13 @@ public class EtlPipelineDeepCoverageTest4 {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(true);
     String configHash =
-        IncrementalTracker.computeConfigHash(singleRangeDimension("y", 2020, 2020));
+        IncrementalTracker.computeConfigHash(singleRangeDimension("year", 2020, 2020));
     when(tracker.getCachedCompletion("test_cached"))
         .thenReturn(new IncrementalTracker.CachedCompletion(configHash, "sig", 500));
     // Stub Phase 2 filter to return empty — all combos already processed
     when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
-        createHttpConfig("test_cached", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("test_cached", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
@@ -956,7 +956,7 @@ public class EtlPipelineDeepCoverageTest4 {
     // Stub Phase 2 filter to return empty — all combos already processed
     when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
-        createHttpConfig("test_mismatch", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("test_mismatch", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, null, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
@@ -996,7 +996,7 @@ public class EtlPipelineDeepCoverageTest4 {
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .build();
     String configHash =
-        IncrementalTracker.computeConfigHash(singleRangeDimension("y", 2020, 2020));
+        IncrementalTracker.computeConfigHash(singleRangeDimension("year", 2020, 2020));
     // completedAt = now, so TTL not expired
     when(tracker.getCachedCompletion("tbl_empty"))
         .thenReturn(
@@ -1004,7 +1004,7 @@ public class EtlPipelineDeepCoverageTest4 {
             configHash, "sig", 0, System.currentTimeMillis()));
     when(tracker.filterUnprocessed(anyString(), anyString(), any(List.class))).thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
-        createHttpConfig("tbl_empty", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("tbl_empty", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.ICEBERG, opts, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
@@ -1020,7 +1020,7 @@ public class EtlPipelineDeepCoverageTest4 {
     MaterializeOptionsConfig opts = MaterializeOptionsConfig.builder()
         .build();
     String configHash =
-        IncrementalTracker.computeConfigHash(singleRangeDimension("y", 2020, 2020));
+        IncrementalTracker.computeConfigHash(singleRangeDimension("year", 2020, 2020));
     // completedAt = 10 days ago, TTL is 1 day -> expired
     long completedAt = System.currentTimeMillis() - (10L * 24 * 60 * 60 * 1000);
     when(tracker.getCachedCompletion("tbl_expired"))
@@ -1031,13 +1031,18 @@ public class EtlPipelineDeepCoverageTest4 {
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
     EtlPipelineConfig config =
-        createHttpConfig("tbl_expired", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("tbl_expired", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.PARQUET, opts, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
-    verify(tracker).invalidateTableCompletion("tbl_expired");
-    assertFalse(result.isSkippedEntirePipeline());
+    // The empty-result TTL this test was written for is gone. A zero-row result is now a
+    // completed result: EtlPipeline re-processes it only when source freshness changes, never on
+    // a timer, so a stale completedAt no longer invalidates anything. What still invalidates a
+    // marker is data going missing, which the data-does-not-exist tests cover. Pin the contract
+    // that replaced it: with data present, the marker survives.
+    verify(tracker, never()).invalidateTableCompletion("tbl_expired");
+    assertNotNull(result);
   }
 
   @Test void testExecute_cachedMatchDataGoneInvalidatesAndReprocesses() throws Exception {
@@ -1045,14 +1050,14 @@ public class EtlPipelineDeepCoverageTest4 {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(false);
     String configHash =
-        IncrementalTracker.computeConfigHash(singleRangeDimension("y", 2020, 2020));
+        IncrementalTracker.computeConfigHash(singleRangeDimension("year", 2020, 2020));
     when(tracker.getCachedCompletion("tbl_gone"))
         .thenReturn(new IncrementalTracker.CachedCompletion(configHash, "sig", 100));
     DataProvider prov = mock(DataProvider.class);
     when(prov.fetch(any(EtlPipelineConfig.class), any(Map.class)))
         .thenReturn(Collections.singletonList(row("id", "1")).iterator());
     EtlPipelineConfig config =
-        createHttpConfig("tbl_gone", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("tbl_gone", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
@@ -1145,7 +1150,7 @@ public class EtlPipelineDeepCoverageTest4 {
         .build();
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("tbl_nomat").source(source)
-        .dimensions(singleRangeDimension("y", 2020, 2020))
+        .dimensions(singleRangeDimension("year", 2020, 2020))
         .materialize(mc)
         .build();
     EtlPipeline pipeline =
@@ -1166,7 +1171,7 @@ public class EtlPipelineDeepCoverageTest4 {
         tracker.filterUnprocessed(anyString(), anyString(), any(List.class)))
         .thenReturn(Collections.<Integer>emptySet());
     EtlPipelineConfig config =
-        createHttpConfig("tbl_done", singleRangeDimension("y", 2020, 2020),
+        createHttpConfig("tbl_done", singleRangeDimension("year", 2020, 2020),
         MaterializeConfig.Format.PARQUET, null, null);
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
@@ -1976,7 +1981,7 @@ public class EtlPipelineDeepCoverageTest4 {
     EtlPipelineConfig config = EtlPipelineConfig.builder()
         .name("tbl_0notl")
         .source(HttpSourceConfig.builder().url("http://x").build())
-        .dimensions(singleRangeDimension("y", 2020, 2020))
+        .dimensions(singleRangeDimension("year", 2020, 2020))
         .materialize(mc)
         .build();
     EtlPipeline pipeline =

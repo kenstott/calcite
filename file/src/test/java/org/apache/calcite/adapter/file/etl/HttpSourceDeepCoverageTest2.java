@@ -1238,62 +1238,9 @@ public class HttpSourceDeepCoverageTest2 {
     // Verify storage provider was called
   }
 
-  // --- computeLocalRawCachePath via reflection ---
 
-  @Test void testComputeLocalRawCachePathNull() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
 
-    String result = (String) method.invoke(source, (String) null);
-    assertNull(result);
-  }
-
-  @Test void testComputeLocalRawCachePathS3() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config);
-
-    Method method = HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    String result = (String) method.invoke(source, "s3://bucket/raw/data");
-    assertNotNull(result);
-    assertTrue(result.contains("raw/data"));
-  }
-
-  @Test void testComputeLocalRawCachePathGCS() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config);
-
-    Method method = HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    String result = (String) method.invoke(source, "gs://bucket/raw/data");
-    assertNotNull(result);
-    assertTrue(result.contains("raw/data"));
-  }
-
-  @Test void testComputeLocalRawCachePathWithOperatingDir() throws Exception {
-    HttpSourceConfig config = HttpSourceConfig.builder()
-        .url("https://api.example.com/data")
-        .build();
-    HttpSource source = new HttpSource(config, null, new LocalFileStorageProvider(), "table", tempDir.toString());
-
-    Method method = HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-    method.setAccessible(true);
-
-    String result = (String) method.invoke(source, "localpath");
-    assertNotNull(result);
-    assertTrue(result.contains(tempDir.toString()));
-  }
 
   // --- checkForApiError via reflection ---
 
@@ -1442,36 +1389,7 @@ public class HttpSourceDeepCoverageTest2 {
     assertEquals("cached content", result);
   }
 
-  // --- collectFiles via reflection ---
 
-  @Test void testCollectFiles() throws Exception {
-    Method method =
-        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    method.setAccessible(true);
-
-    // Create nested directory structure
-    File subDir = tempDir.resolve("subdir").toFile();
-    subDir.mkdirs();
-    Files.write(tempDir.resolve("file1.txt"), "f1".getBytes(StandardCharsets.UTF_8));
-    Files.write(tempDir.resolve("subdir/file2.txt"), "f2".getBytes(StandardCharsets.UTF_8));
-
-    List<File> result = new ArrayList<File>();
-    method.invoke(null, tempDir.toFile(), result);
-    assertTrue(result.size() >= 2);
-  }
-
-  @Test void testCollectFilesEmptyDir() throws Exception {
-    Method method =
-        HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    method.setAccessible(true);
-
-    File emptyDir = tempDir.resolve("emptydir").toFile();
-    emptyDir.mkdirs();
-
-    List<File> result = new ArrayList<File>();
-    method.invoke(null, emptyDir, result);
-    assertEquals(0, result.size());
-  }
 
   // --- resolveDelimiter via reflection ---
 

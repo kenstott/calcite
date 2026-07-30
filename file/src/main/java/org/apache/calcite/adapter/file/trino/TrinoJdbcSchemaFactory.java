@@ -289,7 +289,7 @@ public class TrinoJdbcSchemaFactory {
       org.apache.calcite.adapter.file.FileSchema fileSchema,
       TrinoConfig config)
       throws SQLException {
-    LOGGER.info("=== Starting Trino table registration for schema '{}' ===", trinoSchema);
+    LOGGER.debug("=== Starting Trino table registration for schema '{}' ===", trinoSchema);
 
     if (fileSchema == null) {
       LOGGER.error("No FileSchema available - cannot register tables");
@@ -364,7 +364,7 @@ public class TrinoJdbcSchemaFactory {
       }
     }
 
-    LOGGER.info("=== Trino table registration complete: {} tables created ===", tableCount);
+    LOGGER.debug("=== Trino table registration complete: {} tables created ===", tableCount);
   }
 
   /**

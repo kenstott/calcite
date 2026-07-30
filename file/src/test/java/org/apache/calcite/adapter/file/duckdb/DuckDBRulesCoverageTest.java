@@ -67,12 +67,18 @@ public class DuckDBRulesCoverageTest {
   // ====================================================================
 
   @Test void testIcebergMatchesSimpleCountStar() {
-    RelOptRuleCall call =
-        mockCallWithAggregate(
-            createMockAggregate(
+    Aggregate agg =
+        createMockAggregate(
             ImmutableBitSet.of(),
-            Collections.singletonList(createCountStarAggCall())));
+            Collections.singletonList(createCountStarAggCall()));
+    // The rule now requires the input to reduce to exactly one TableScan: a cached per-table
+    // count cannot answer COUNT(*) over a join, which previously returned one side's row count
+    // (a self cross join of 33,791 rows answered 33,791 instead of ~1.1e9). An unstubbed
+    // getInput() is null, which the whitelist treats as "not simple", so the input has to be
+    // provided for this to reach the match it is testing.
+    when(agg.getInput()).thenReturn(mock(TableScan.class));
 
+    RelOptRuleCall call = mockCallWithAggregate(agg);
     assertTrue(DuckDBIcebergCountStarRule.INSTANCE.matches(call));
   }
 

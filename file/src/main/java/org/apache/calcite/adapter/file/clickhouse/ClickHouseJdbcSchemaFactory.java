@@ -377,7 +377,7 @@ public class ClickHouseJdbcSchemaFactory {
       boolean recursive, String clickhouseSchema,
       org.apache.calcite.adapter.file.FileSchema fileSchema)
       throws SQLException {
-    LOGGER.info("=== Starting ClickHouse table registration for schema '{}' ===", clickhouseSchema);
+    LOGGER.debug("=== Starting ClickHouse table registration for schema '{}' ===", clickhouseSchema);
 
     if (fileSchema == null) {
       LOGGER.error("No FileSchema available - cannot register views");
@@ -448,7 +448,7 @@ public class ClickHouseJdbcSchemaFactory {
       }
     }
 
-    LOGGER.info("=== ClickHouse table registration complete: {} views created ===", viewCount);
+    LOGGER.debug("=== ClickHouse table registration complete: {} views created ===", viewCount);
   }
 
   /**

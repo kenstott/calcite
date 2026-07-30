@@ -1,0 +1,661 @@
+<html>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to you under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<!--
+  Local stand-in for the pinned Wikipedia revision the URL-based tests used to fetch
+  (List_of_states_and_territories_of_the_United_States, oldid=713721917). Served from the
+  in-test HTTP server so those tests provision their own input instead of depending on
+  en.wikipedia.org being reachable. Structure mirrors the real page closely enough to exercise
+  the same path: a #mw-content-text container, a sortable wikitable, the same <th> captions the
+  wiki.json model keys off, and a linked state name in the first cell.
+  Dates are ISO so they take FileRowConverter's java.sql.Date.valueOf fast path.
+-->
+<body>
+<div id="mw-content-text">
+  <table class="wikitable sortable">
+    <thead>
+      <tr>
+        <th>State</th>
+        <th>Capital</th>
+        <th>Abbr.</th>
+        <th>Largest city[A][10]</th>
+        <th>Statehood[B]</th>
+        <th>Population (2013 est)[11]</th>
+        <th>Total area in mi2 (km2)[C][12]</th>
+        <th>Land area in mi2 (km2)[C][12]</th>
+        <th>Water area in mi2 (km2)[C][12]</th>
+        <th>House seat(s)</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td><a href="/wiki/Alabama">Alabama</a></td>
+          <td>Montgomery</td>
+          <td>AL</td>
+          <td>Birmingham</td>
+          <td>1819-12-14</td>
+          <td>1000000</td>
+          <td>50000</td>
+          <td>49100</td>
+          <td>900</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Alaska">Alaska</a></td>
+          <td>Juneau</td>
+          <td>AK</td>
+          <td>Anchorage</td>
+          <td>1959-01-03</td>
+          <td>1007919</td>
+          <td>50311</td>
+          <td>49411</td>
+          <td>900</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Arizona">Arizona</a></td>
+          <td>Phoenix</td>
+          <td>AZ</td>
+          <td>Phoenix</td>
+          <td>1912-02-14</td>
+          <td>1015838</td>
+          <td>50622</td>
+          <td>49722</td>
+          <td>900</td>
+          <td>3</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Arkansas">Arkansas</a></td>
+          <td>Little Rock</td>
+          <td>AR</td>
+          <td>Little Rock</td>
+          <td>1836-06-15</td>
+          <td>1023757</td>
+          <td>50933</td>
+          <td>50033</td>
+          <td>900</td>
+          <td>4</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/California">California</a></td>
+          <td>Sacramento</td>
+          <td>CA</td>
+          <td>Los Angeles</td>
+          <td>1850-09-09</td>
+          <td>1031676</td>
+          <td>51244</td>
+          <td>50344</td>
+          <td>900</td>
+          <td>5</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Colorado">Colorado</a></td>
+          <td>Denver</td>
+          <td>CO</td>
+          <td>Denver</td>
+          <td>1876-08-01</td>
+          <td>1039595</td>
+          <td>51555</td>
+          <td>50655</td>
+          <td>900</td>
+          <td>6</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Connecticut">Connecticut</a></td>
+          <td>Hartford</td>
+          <td>CT</td>
+          <td>Bridgeport</td>
+          <td>1788-01-09</td>
+          <td>1047514</td>
+          <td>51866</td>
+          <td>50966</td>
+          <td>900</td>
+          <td>7</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Delaware">Delaware</a></td>
+          <td>Dover</td>
+          <td>DE</td>
+          <td>Wilmington</td>
+          <td>1787-12-07</td>
+          <td>1055433</td>
+          <td>52177</td>
+          <td>51277</td>
+          <td>900</td>
+          <td>8</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Florida">Florida</a></td>
+          <td>Tallahassee</td>
+          <td>FL</td>
+          <td>Jacksonville</td>
+          <td>1845-03-03</td>
+          <td>1063352</td>
+          <td>52488</td>
+          <td>51588</td>
+          <td>900</td>
+          <td>9</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Georgia">Georgia</a></td>
+          <td>Atlanta</td>
+          <td>GA</td>
+          <td>Atlanta</td>
+          <td>1788-01-02</td>
+          <td>1071271</td>
+          <td>52799</td>
+          <td>51899</td>
+          <td>900</td>
+          <td>10</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Hawaii">Hawaii</a></td>
+          <td>Honolulu</td>
+          <td>HI</td>
+          <td>Honolulu</td>
+          <td>1959-08-21</td>
+          <td>1079190</td>
+          <td>53110</td>
+          <td>52210</td>
+          <td>900</td>
+          <td>11</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Idaho">Idaho</a></td>
+          <td>Boise</td>
+          <td>ID</td>
+          <td>Boise</td>
+          <td>1890-07-03</td>
+          <td>1087109</td>
+          <td>53421</td>
+          <td>52521</td>
+          <td>900</td>
+          <td>12</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Illinois">Illinois</a></td>
+          <td>Springfield</td>
+          <td>IL</td>
+          <td>Chicago</td>
+          <td>1818-12-03</td>
+          <td>1095028</td>
+          <td>53732</td>
+          <td>52832</td>
+          <td>900</td>
+          <td>13</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Indiana">Indiana</a></td>
+          <td>Indianapolis</td>
+          <td>IN</td>
+          <td>Indianapolis</td>
+          <td>1816-12-11</td>
+          <td>1102947</td>
+          <td>54043</td>
+          <td>53143</td>
+          <td>900</td>
+          <td>14</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Iowa">Iowa</a></td>
+          <td>Des Moines</td>
+          <td>IA</td>
+          <td>Des Moines</td>
+          <td>1846-12-28</td>
+          <td>1110866</td>
+          <td>54354</td>
+          <td>53454</td>
+          <td>900</td>
+          <td>15</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Kansas">Kansas</a></td>
+          <td>Topeka</td>
+          <td>KS</td>
+          <td>Wichita</td>
+          <td>1861-01-29</td>
+          <td>1118785</td>
+          <td>54665</td>
+          <td>53765</td>
+          <td>900</td>
+          <td>16</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Kentucky">Kentucky</a></td>
+          <td>Frankfort</td>
+          <td>KY</td>
+          <td>Louisville</td>
+          <td>1792-06-01</td>
+          <td>1126704</td>
+          <td>54976</td>
+          <td>54076</td>
+          <td>900</td>
+          <td>17</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Louisiana">Louisiana</a></td>
+          <td>Baton Rouge</td>
+          <td>LA</td>
+          <td>New Orleans</td>
+          <td>1812-04-30</td>
+          <td>1134623</td>
+          <td>55287</td>
+          <td>54387</td>
+          <td>900</td>
+          <td>18</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Maine">Maine</a></td>
+          <td>Augusta</td>
+          <td>ME</td>
+          <td>Portland</td>
+          <td>1820-03-15</td>
+          <td>1142542</td>
+          <td>55598</td>
+          <td>54698</td>
+          <td>900</td>
+          <td>19</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Maryland">Maryland</a></td>
+          <td>Annapolis</td>
+          <td>MD</td>
+          <td>Baltimore</td>
+          <td>1788-04-28</td>
+          <td>1150461</td>
+          <td>55909</td>
+          <td>55009</td>
+          <td>900</td>
+          <td>20</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Massachusetts">Massachusetts</a></td>
+          <td>Boston</td>
+          <td>MA</td>
+          <td>Boston</td>
+          <td>1788-02-06</td>
+          <td>1158380</td>
+          <td>56220</td>
+          <td>55320</td>
+          <td>900</td>
+          <td>21</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Michigan">Michigan</a></td>
+          <td>Lansing</td>
+          <td>MI</td>
+          <td>Detroit</td>
+          <td>1837-01-26</td>
+          <td>1166299</td>
+          <td>56531</td>
+          <td>55631</td>
+          <td>900</td>
+          <td>22</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Minnesota">Minnesota</a></td>
+          <td>Saint Paul</td>
+          <td>MN</td>
+          <td>Minneapolis</td>
+          <td>1858-05-11</td>
+          <td>1174218</td>
+          <td>56842</td>
+          <td>55942</td>
+          <td>900</td>
+          <td>23</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Mississippi">Mississippi</a></td>
+          <td>Jackson</td>
+          <td>MS</td>
+          <td>Jackson</td>
+          <td>1817-12-10</td>
+          <td>1182137</td>
+          <td>57153</td>
+          <td>56253</td>
+          <td>900</td>
+          <td>24</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Missouri">Missouri</a></td>
+          <td>Jefferson City</td>
+          <td>MO</td>
+          <td>Kansas City</td>
+          <td>1821-08-10</td>
+          <td>1190056</td>
+          <td>57464</td>
+          <td>56564</td>
+          <td>900</td>
+          <td>25</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Montana">Montana</a></td>
+          <td>Helena</td>
+          <td>MT</td>
+          <td>Billings</td>
+          <td>1889-11-08</td>
+          <td>1197975</td>
+          <td>57775</td>
+          <td>56875</td>
+          <td>900</td>
+          <td>26</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Nebraska">Nebraska</a></td>
+          <td>Lincoln</td>
+          <td>NE</td>
+          <td>Omaha</td>
+          <td>1867-03-01</td>
+          <td>1205894</td>
+          <td>58086</td>
+          <td>57186</td>
+          <td>900</td>
+          <td>27</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Nevada">Nevada</a></td>
+          <td>Carson City</td>
+          <td>NV</td>
+          <td>Las Vegas</td>
+          <td>1864-10-31</td>
+          <td>1213813</td>
+          <td>58397</td>
+          <td>57497</td>
+          <td>900</td>
+          <td>28</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/New_Hampshire">New Hampshire</a></td>
+          <td>Concord</td>
+          <td>NH</td>
+          <td>Manchester</td>
+          <td>1788-06-21</td>
+          <td>1221732</td>
+          <td>58708</td>
+          <td>57808</td>
+          <td>900</td>
+          <td>29</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/New_Jersey">New Jersey</a></td>
+          <td>Trenton</td>
+          <td>NJ</td>
+          <td>Newark</td>
+          <td>1787-12-18</td>
+          <td>1229651</td>
+          <td>59019</td>
+          <td>58119</td>
+          <td>900</td>
+          <td>30</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/New_Mexico">New Mexico</a></td>
+          <td>Santa Fe</td>
+          <td>NM</td>
+          <td>Albuquerque</td>
+          <td>1912-01-06</td>
+          <td>1237570</td>
+          <td>59330</td>
+          <td>58430</td>
+          <td>900</td>
+          <td>31</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/New_York">New York</a></td>
+          <td>Albany</td>
+          <td>NY</td>
+          <td>New York City</td>
+          <td>1788-07-26</td>
+          <td>1245489</td>
+          <td>59641</td>
+          <td>58741</td>
+          <td>900</td>
+          <td>32</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/North_Carolina">North Carolina</a></td>
+          <td>Raleigh</td>
+          <td>NC</td>
+          <td>Charlotte</td>
+          <td>1789-11-21</td>
+          <td>1253408</td>
+          <td>59952</td>
+          <td>59052</td>
+          <td>900</td>
+          <td>33</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/North_Dakota">North Dakota</a></td>
+          <td>Bismarck</td>
+          <td>ND</td>
+          <td>Fargo</td>
+          <td>1889-11-02</td>
+          <td>1261327</td>
+          <td>60263</td>
+          <td>59363</td>
+          <td>900</td>
+          <td>34</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Ohio">Ohio</a></td>
+          <td>Columbus</td>
+          <td>OH</td>
+          <td>Columbus</td>
+          <td>1803-03-01</td>
+          <td>1269246</td>
+          <td>60574</td>
+          <td>59674</td>
+          <td>900</td>
+          <td>35</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Oklahoma">Oklahoma</a></td>
+          <td>Oklahoma City</td>
+          <td>OK</td>
+          <td>Oklahoma City</td>
+          <td>1907-11-16</td>
+          <td>1277165</td>
+          <td>60885</td>
+          <td>59985</td>
+          <td>900</td>
+          <td>36</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Oregon">Oregon</a></td>
+          <td>Salem</td>
+          <td>OR</td>
+          <td>Portland</td>
+          <td>1859-02-14</td>
+          <td>1285084</td>
+          <td>61196</td>
+          <td>60296</td>
+          <td>900</td>
+          <td>37</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Pennsylvania">Pennsylvania</a></td>
+          <td>Harrisburg</td>
+          <td>PA</td>
+          <td>Philadelphia</td>
+          <td>1787-12-12</td>
+          <td>1293003</td>
+          <td>61507</td>
+          <td>60607</td>
+          <td>900</td>
+          <td>38</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Rhode_Island">Rhode Island</a></td>
+          <td>Providence</td>
+          <td>RI</td>
+          <td>Providence</td>
+          <td>1790-05-29</td>
+          <td>1300922</td>
+          <td>61818</td>
+          <td>60918</td>
+          <td>900</td>
+          <td>39</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/South_Carolina">South Carolina</a></td>
+          <td>Columbia</td>
+          <td>SC</td>
+          <td>Charleston</td>
+          <td>1788-05-23</td>
+          <td>1308841</td>
+          <td>62129</td>
+          <td>61229</td>
+          <td>900</td>
+          <td>40</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/South_Dakota">South Dakota</a></td>
+          <td>Pierre</td>
+          <td>SD</td>
+          <td>Sioux Falls</td>
+          <td>1889-11-02</td>
+          <td>1316760</td>
+          <td>62440</td>
+          <td>61540</td>
+          <td>900</td>
+          <td>41</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Tennessee">Tennessee</a></td>
+          <td>Nashville</td>
+          <td>TN</td>
+          <td>Memphis</td>
+          <td>1796-06-01</td>
+          <td>1324679</td>
+          <td>62751</td>
+          <td>61851</td>
+          <td>900</td>
+          <td>42</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Texas">Texas</a></td>
+          <td>Austin</td>
+          <td>TX</td>
+          <td>Houston</td>
+          <td>1845-12-29</td>
+          <td>1332598</td>
+          <td>63062</td>
+          <td>62162</td>
+          <td>900</td>
+          <td>43</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Utah">Utah</a></td>
+          <td>Salt Lake City</td>
+          <td>UT</td>
+          <td>Salt Lake City</td>
+          <td>1896-01-04</td>
+          <td>1340517</td>
+          <td>63373</td>
+          <td>62473</td>
+          <td>900</td>
+          <td>44</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Vermont">Vermont</a></td>
+          <td>Montpelier</td>
+          <td>VT</td>
+          <td>Burlington</td>
+          <td>1791-03-04</td>
+          <td>1348436</td>
+          <td>63684</td>
+          <td>62784</td>
+          <td>900</td>
+          <td>45</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Virginia">Virginia</a></td>
+          <td>Richmond</td>
+          <td>VA</td>
+          <td>Virginia Beach</td>
+          <td>1788-06-25</td>
+          <td>1356355</td>
+          <td>63995</td>
+          <td>63095</td>
+          <td>900</td>
+          <td>46</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Washington">Washington</a></td>
+          <td>Olympia</td>
+          <td>WA</td>
+          <td>Seattle</td>
+          <td>1889-11-11</td>
+          <td>1364274</td>
+          <td>64306</td>
+          <td>63406</td>
+          <td>900</td>
+          <td>47</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/West_Virginia">West Virginia</a></td>
+          <td>Charleston</td>
+          <td>WV</td>
+          <td>Charleston</td>
+          <td>1863-06-20</td>
+          <td>1372193</td>
+          <td>64617</td>
+          <td>63717</td>
+          <td>900</td>
+          <td>48</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Wisconsin">Wisconsin</a></td>
+          <td>Madison</td>
+          <td>WI</td>
+          <td>Milwaukee</td>
+          <td>1848-05-29</td>
+          <td>1380112</td>
+          <td>64928</td>
+          <td>64028</td>
+          <td>900</td>
+          <td>49</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/Wyoming">Wyoming</a></td>
+          <td>Cheyenne</td>
+          <td>WY</td>
+          <td>Cheyenne</td>
+          <td>1890-07-10</td>
+          <td>1388031</td>
+          <td>65239</td>
+          <td>64339</td>
+          <td>900</td>
+          <td>50</td>
+        </tr>
+        <tr>
+          <td><a href="/wiki/District_of_Columbia">District of Columbia</a></td>
+          <td>Washington</td>
+          <td>DC</td>
+          <td>Washington</td>
+          <td>1790-07-16</td>
+          <td>1395950</td>
+          <td>65550</td>
+          <td>64650</td>
+          <td>900</td>
+          <td>51</td>
+        </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

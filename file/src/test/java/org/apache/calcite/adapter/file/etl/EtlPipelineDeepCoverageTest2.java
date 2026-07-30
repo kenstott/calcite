@@ -134,7 +134,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -153,7 +153,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -171,7 +171,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -189,7 +189,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -207,7 +207,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -225,7 +225,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -243,7 +243,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -261,7 +261,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("determineErrorAction", IOException.class, EtlPipelineConfig.ErrorHandlingConfig.class);
+        EtlPipeline.class.getDeclaredMethod("determineErrorAction", Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class);
     method.setAccessible(true);
 
     EtlPipelineConfig.ErrorHandlingConfig errorConfig =
@@ -362,8 +362,11 @@ public class EtlPipelineDeepCoverageTest2 {
         EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
-    // Iceberg metadata directory exists
-    when(storageProvider.isDirectory(tempDir.toString() + "/test_table/metadata")).thenReturn(true);
+    // The data directory, not metadata: an Iceberg table whose metadata dir exists but whose
+    // data dir does not is an empty table (current-snapshot-id: -1) that was created and never
+    // written to. Treating that as "data exists" is what let an empty table be skipped as
+    // complete, so verifyDataExists deliberately looks at data/.
+    when(storageProvider.isDirectory(tempDir.toString() + "/test_table/data")).thenReturn(true);
     boolean result = (boolean) method.invoke(pipeline, "test_table", config);
     assertTrue(result);
   }
@@ -714,13 +717,13 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
-        MaterializationWriter.class, int.class, int.class, String.class);
+        MaterializationWriter.class, int.class, String.class);
     method.setAccessible(true);
 
     Map<String, String> variables = new HashMap<String, String>();
     variables.put("key", "value");
 
-    long rows = (long) method.invoke(pipeline, config, variables, null, null, 1, 1, "doc_pipeline");
+    long rows = (long) method.invoke(pipeline, config, variables, null, null, 1, "doc_pipeline");
     assertEquals(5L, rows);
     verify(dataWriter).write(eq(config), any(), eq(variables));
   }
@@ -745,11 +748,11 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
-        MaterializationWriter.class, int.class, int.class, String.class);
+        MaterializationWriter.class, int.class, String.class);
     method.setAccessible(true);
 
     Map<String, String> variables = new HashMap<String, String>();
-    long rows = (long) method.invoke(pipeline, config, variables, null, null, 1, 1, "doc_pipeline2");
+    long rows = (long) method.invoke(pipeline, config, variables, null, null, 1, "doc_pipeline2");
     assertEquals(0L, rows);
   }
 
@@ -778,13 +781,13 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
-        MaterializationWriter.class, int.class, int.class, String.class);
+        MaterializationWriter.class, int.class, String.class);
     method.setAccessible(true);
 
     DataSource dataSource = mock(DataSource.class);
     Map<String, String> variables = new HashMap<String, String>();
 
-    long rows = (long) method.invoke(pipeline, config, variables, dataSource, writer, 1, 1, "test");
+    long rows = (long) method.invoke(pipeline, config, variables, dataSource, writer, 1, "test");
     assertEquals(1L, rows);
   }
 
@@ -813,13 +816,13 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
-        MaterializationWriter.class, int.class, int.class, String.class);
+        MaterializationWriter.class, int.class, String.class);
     method.setAccessible(true);
 
     DataSource dataSource = mock(DataSource.class);
     Map<String, String> variables = new HashMap<String, String>();
 
-    long rows = (long) method.invoke(pipeline, config, variables, dataSource, writer, 1, 1, "test");
+    long rows = (long) method.invoke(pipeline, config, variables, dataSource, writer, 1, "test");
     assertEquals(2L, rows);
   }
 
@@ -843,12 +846,12 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("processSingleBatch", EtlPipelineConfig.class, Map.class, DataSource.class,
-        MaterializationWriter.class, int.class, int.class, String.class);
+        MaterializationWriter.class, int.class, String.class);
     method.setAccessible(true);
 
     Map<String, String> variables = new HashMap<String, String>();
 
-    long rows = (long) method.invoke(pipeline, config, variables, dataSource, writer, 1, 1, "test");
+    long rows = (long) method.invoke(pipeline, config, variables, dataSource, writer, 1, "test");
     assertEquals(1L, rows);
   }
 
@@ -1032,7 +1035,7 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
-        MaterializationWriter.class, DataWriter.class,
+        MaterializationWriter.class,
         IncrementalTracker.class, String.class);
     method.setAccessible(true);
 
@@ -1051,7 +1054,7 @@ public class EtlPipelineDeepCoverageTest2 {
     MaterializationWriter writer = mock(MaterializationWriter.class);
 
     long rows =
-        (long) method.invoke(pipeline, emptyIter, urlVars, rpConfig, writer, null, incrementalTracker, "test_pipeline");
+        (long) method.invoke(pipeline, emptyIter, urlVars, rpConfig, writer, incrementalTracker, "test_pipeline");
     assertEquals(0L, rows);
   }
 
@@ -1062,7 +1065,7 @@ public class EtlPipelineDeepCoverageTest2 {
 
     Method method =
         EtlPipeline.class.getDeclaredMethod("writeWithResponsePartitioning", Iterator.class, Map.class, HttpSourceConfig.ResponsePartitioningConfig.class,
-        MaterializationWriter.class, DataWriter.class,
+        MaterializationWriter.class,
         IncrementalTracker.class, String.class);
     method.setAccessible(true);
 
@@ -1088,7 +1091,7 @@ public class EtlPipelineDeepCoverageTest2 {
     when(writer.writeBatch(any(Iterator.class), any(Map.class))).thenReturn(2L);
 
     long rows =
-        (long) method.invoke(pipeline, dataList.iterator(), urlVars, rpConfig, writer, null, incrementalTracker, "test_pipeline");
+        (long) method.invoke(pipeline, dataList.iterator(), urlVars, rpConfig, writer, incrementalTracker, "test_pipeline");
     assertEquals(2L, rows);
   }
 
@@ -1218,10 +1221,11 @@ public class EtlPipelineDeepCoverageTest2 {
         EtlPipeline.class.getDeclaredMethod("verifyDataExists", String.class, EtlPipelineConfig.class);
     method.setAccessible(true);
 
-    // First check (warehouse path) returns false, fallback (baseDir) returns true
-    when(storageProvider.isDirectory(tempDir.toString() + "/warehouse/test_table/metadata"))
+    // Warehouse path is checked first and misses; the baseDirectory fallback hits. Both probe
+    // data/, not metadata/.
+    when(storageProvider.isDirectory(tempDir.toString() + "/warehouse/test_table/data"))
         .thenReturn(false);
-    when(storageProvider.isDirectory(tempDir.toString() + "/test_table/metadata"))
+    when(storageProvider.isDirectory(tempDir.toString() + "/test_table/data"))
         .thenReturn(true);
 
     boolean result = (boolean) method.invoke(pipeline, "test_table", config);

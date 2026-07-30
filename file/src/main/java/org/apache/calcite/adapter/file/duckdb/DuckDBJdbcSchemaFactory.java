@@ -67,6 +67,65 @@ public class DuckDBJdbcSchemaFactory {
   private static final int MAX_CATALOG_LOCK_FALLBACKS = 16;
 
   /**
+   * Iceberg views satisfied by a catalog that already defined them — no object-store call.
+   *
+   * @see #icebergViewsReused()
+   */
+  private static final java.util.concurrent.atomic.AtomicInteger ICEBERG_VIEWS_REUSED =
+      new java.util.concurrent.atomic.AtomicInteger();
+
+  /**
+   * Iceberg views this process had to define, each costing an {@code iceberg_scan} metadata
+   * read over the object store.
+   *
+   * @see #icebergViewsCreated()
+   */
+  private static final java.util.concurrent.atomic.AtomicInteger ICEBERG_VIEWS_CREATED =
+      new java.util.concurrent.atomic.AtomicInteger();
+
+  /**
+   * Count of Iceberg views that a pre-existing catalog already defined, so this process skipped
+   * the {@code iceberg_scan} metadata read.
+   *
+   * <p>Exposed because the difference between a loaded catalog and a rebuilt one is otherwise
+   * invisible: both end with the same set of views, and the rebuild only shows up as a slow
+   * first query. A caller that ships a prebuilt catalog needs to be able to assert it was used.
+   */
+  public static int icebergViewsReused() {
+    return ICEBERG_VIEWS_REUSED.get();
+  }
+
+  /** Count of Iceberg views this process defined itself, each an object-store round trip. */
+  public static int icebergViewsCreated() {
+    return ICEBERG_VIEWS_CREATED.get();
+  }
+
+  /**
+   * Flushes every open DuckDB catalog's write-ahead log into its base {@code .duckdb} file.
+   *
+   * <p>Schema setup checkpoints the views it creates, but views registered later — the SQL views
+   * deferred to first {@code getTable()} — live only in the {@code .wal} until the process exits
+   * cleanly. A catalog captured for distribution, or one whose process may be killed, needs them
+   * folded into the base file: DuckDB discards an orphaned WAL, and every view in it would be
+   * rebuilt from the object store on the next start.
+   *
+   * @return number of catalogs checkpointed
+   */
+  public static int checkpointCatalogs() {
+    int done = 0;
+    for (Map.Entry<String, SharedDatabaseInfo> entry : DATABASE_POOL.entrySet()) {
+      try (Connection conn = entry.getValue().dataSource.getConnection();
+           Statement stmt = conn.createStatement()) {
+        stmt.execute("CHECKPOINT");
+        done++;
+      } catch (SQLException e) {
+        LOGGER.warn("CHECKPOINT of DuckDB catalog {} failed: {}", entry.getKey(), e.getMessage());
+      }
+    }
+    return done;
+  }
+
+  /**
    * A registered DuckDB view whose scan re-resolves a glob against the object store on every
    * query instead of reading a resolved file list from Iceberg metadata.
    *
@@ -1346,7 +1405,7 @@ public class DuckDBJdbcSchemaFactory {
                                           org.apache.calcite.adapter.file.FileSchema fileSchema,
                                           java.util.Set<String> recreatedIcebergTables)
       throws SQLException {
-    LOGGER.info("=== Starting DuckDB table registration from FileSchema registry for schema '{}' ===", calciteSchemaName);
+    LOGGER.debug("=== Starting DuckDB table registration from FileSchema registry for schema '{}' ===", calciteSchemaName);
 
     // Use FileSchema's metadata directly - NO FALLBACKS!
     if (fileSchema == null) {
@@ -1359,7 +1418,7 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("Found {} entries in FileSchema's conversion registry", records.size());
 
     // Log detailed information about each conversion record for DuckDB
-    LOGGER.info("=== DUCKDB REGISTRATION: CONVERSION RECORDS ===");
+    LOGGER.debug("=== DUCKDB REGISTRATION: CONVERSION RECORDS ===");
     for (java.util.Map.Entry<String, ConversionMetadata.ConversionRecord> entry : records.entrySet()) {
       ConversionMetadata.ConversionRecord record = entry.getValue();
       // Truncate parquetCacheFile for readability (can be huge file list)
@@ -1524,6 +1583,7 @@ public class DuckDBJdbcSchemaFactory {
             // For Iceberg tables, check if view exists first for fast start (no S3 calls)
             // Schema updates are handled during ETL when TTL expires - not on startup
             if (viewExists(conn, duckdbSchema, tableName)) {
+              ICEBERG_VIEWS_REUSED.incrementAndGet();
               LOGGER.debug("⚡ Iceberg view exists, skipping (fast start): {}.{}", duckdbSchema, tableName);
               continue;
             }
@@ -1547,6 +1607,7 @@ public class DuckDBJdbcSchemaFactory {
                 try {
                   conn.createStatement().execute(sql);
                   viewCount++;
+                  ICEBERG_VIEWS_CREATED.incrementAndGet();
                   LOGGER.info("✅ Created Iceberg view: {}.{}", duckdbSchema, tableName);
                   lastError = null;
                   break;
@@ -1666,7 +1727,7 @@ public class DuckDBJdbcSchemaFactory {
             } else {
               // View doesn't exist - create it
               try {
-                LOGGER.info("=== EXECUTING DuckDB DDL ===");
+                LOGGER.debug("=== EXECUTING DuckDB DDL ===");
                 LOGGER.info("🎯 Table: {}.{}", duckdbSchema, tableName);
                 // Truncate parquetPath for readability (can be huge file list)
                 String truncatedPath = parquetPath;
@@ -1769,7 +1830,7 @@ public class DuckDBJdbcSchemaFactory {
       }
     }
 
-    LOGGER.info("=== Created {} DuckDB views from registry ===", viewCount);
+    LOGGER.debug("=== Created {} DuckDB views from registry ===", viewCount);
 
     if (viewCount == 0) {
       LOGGER.warn("No DuckDB views created from registry - this may indicate missing Parquet cache files");

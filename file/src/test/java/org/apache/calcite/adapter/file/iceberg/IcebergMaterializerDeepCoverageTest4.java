@@ -262,14 +262,21 @@ public class IcebergMaterializerDeepCoverageTest4 {
   }
 
   @Test void testExtractCiksFromRowFilterNoParen() {
+
     // "cik IN" but no opening paren
-    Set<String> ciks = IcebergMaterializer.extractCiksFromRowFilter("cik IN '001'");
-    assertTrue(ciks.isEmpty());
+        // A malformed filter is not an empty filter. Returning an empty set here would
+        // silently drop the CIK restriction and widen the overwrite to every CIK in the
+        // table, so the parser rejects it instead.
+        assertThrows(IllegalStateException.class, () ->
+            IcebergMaterializer.extractCiksFromRowFilter("cik IN '001'"));
   }
 
   @Test void testExtractCiksFromRowFilterNoCloseParen() {
-    Set<String> ciks = IcebergMaterializer.extractCiksFromRowFilter("cik IN ('001', '002'");
-    assertTrue(ciks.isEmpty());
+        // A malformed filter is not an empty filter. Returning an empty set here would
+        // silently drop the CIK restriction and widen the overwrite to every CIK in the
+        // table, so the parser rejects it instead.
+        assertThrows(IllegalStateException.class, () ->
+            IcebergMaterializer.extractCiksFromRowFilter("cik IN ('001', '002'"));
   }
 
   // ====================================================================

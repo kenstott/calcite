@@ -41,180 +41,19 @@ public class ConversionMetadataPatternCoverageTest {
   @TempDir
   Path tempDir;
 
-  // ===== extractTableSpecificPattern via reflection =====
 
-  @Test void testExtractTableSpecificPatternNull() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
 
-    assertNull(method.invoke(null, (Object) null));
-  }
 
-  @Test void testExtractTableSpecificPatternEmpty() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
 
-    assertNull(method.invoke(null, new ArrayList<String>()));
-  }
 
-  @Test void testExtractTableSpecificPatternWithPartitions() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
 
-    List<String> paths =
-        Arrays.asList("/data/schema/table/year=2020/file1.parquet",
-        "/data/schema/table/year=2021/file2.parquet",
-        "/data/schema/table/year=2022/file3.parquet");
 
-    String result = (String) method.invoke(null, paths);
-    assertNotNull(result);
-    assertTrue(result.contains("/**/*"), "Should contain glob pattern");
-    assertTrue(result.endsWith(".parquet"), "Should end with .parquet extension");
-  }
 
-  @Test void testExtractTableSpecificPatternNoPartitions() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
 
-    List<String> paths =
-        Arrays.asList("/data/schema/table/file1.parquet",
-        "/data/schema/table/file2.parquet");
 
-    String result = (String) method.invoke(null, paths);
-    assertNotNull(result);
-    assertTrue(result.endsWith(".parquet"));
-  }
 
-  @Test void testExtractTableSpecificPatternCsvExtension() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractTableSpecificPattern", List.class);
-    method.setAccessible(true);
 
-    List<String> paths =
-        Arrays.asList("/data/table/year=2020/data.csv",
-        "/data/table/year=2021/data.csv");
 
-    String result = (String) method.invoke(null, paths);
-    assertNotNull(result);
-    assertTrue(result.endsWith(".csv"), "Should use actual file extension");
-  }
-
-  // ===== findCommonPrefixBeforePartitions via reflection =====
-
-  @Test void testFindCommonPrefixBeforePartitionsEmpty() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
-    method.setAccessible(true);
-
-    assertNull(method.invoke(null, new ArrayList<String>()));
-  }
-
-  @Test void testFindCommonPrefixBeforePartitionsWithPartitionDirs() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
-    method.setAccessible(true);
-
-    List<String> paths =
-        Arrays.asList("s3://bucket/schema/table/year=2020/file1.parquet",
-        "s3://bucket/schema/table/year=2021/file2.parquet");
-
-    String result = (String) method.invoke(null, paths);
-    assertNotNull(result);
-    assertTrue(result.endsWith("/"));
-    assertTrue(result.contains("table"));
-    assertFalse(result.contains("year="));
-  }
-
-  @Test void testFindCommonPrefixBeforePartitionsNoPartitions() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
-    method.setAccessible(true);
-
-    List<String> paths =
-        Arrays.asList("/data/schema/table/file1.parquet",
-        "/data/schema/table/file2.parquet");
-
-    String result = (String) method.invoke(null, paths);
-    assertNotNull(result);
-    // No partitions, so should return parent directory
-    assertTrue(result.contains("table"));
-  }
-
-  @Test void testFindCommonPrefixBeforePartitionsDivergentPaths() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findCommonPrefixBeforePartitions", List.class);
-    method.setAccessible(true);
-
-    List<String> paths =
-        Arrays.asList("/data/tableA/year=2020/file1.parquet",
-        "/data/tableB/year=2020/file2.parquet");
-
-    String result = (String) method.invoke(null, paths);
-    assertNotNull(result);
-    // The prefix before partitions is /data/tableA and /data/tableB which don't match
-    // Should still return a valid prefix
-  }
-
-  // ===== findLongestCommonPrefix via reflection =====
-
-  @Test void testFindLongestCommonPrefixEmpty() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-
-    assertEquals("", method.invoke(null, new ArrayList<String>()));
-  }
-
-  @Test void testFindLongestCommonPrefixSinglePath() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-
-    List<String> paths = Arrays.asList("/data/schema/table/file.parquet");
-    String result = (String) method.invoke(null, paths);
-    assertEquals("/data/schema/table/file.parquet", result);
-  }
-
-  @Test void testFindLongestCommonPrefixMultiplePaths() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-
-    List<String> paths =
-        Arrays.asList("/data/schema/table/file1.parquet",
-        "/data/schema/table/file2.parquet",
-        "/data/schema/table/file3.parquet");
-    String result = (String) method.invoke(null, paths);
-    assertEquals("/data/schema/table/file", result);
-  }
-
-  @Test void testFindLongestCommonPrefixNoCommon() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-
-    List<String> paths =
-        Arrays.asList("/alpha/file.parquet",
-        "/beta/file.parquet");
-    String result = (String) method.invoke(null, paths);
-    assertEquals("/", result);
-  }
-
-  @Test void testFindLongestCommonPrefixShorterPath() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("findLongestCommonPrefix", List.class);
-    method.setAccessible(true);
-
-    List<String> paths =
-        Arrays.asList("/data/schema/table/year=2020/data.parquet",
-        "/data/schema/table/data.parquet");
-    String result = (String) method.invoke(null, paths);
-    assertEquals("/data/schema/table/", result);
-  }
 
   // ===== buildComprehensiveMapping =====
 

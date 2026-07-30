@@ -122,9 +122,14 @@ public class FileConversionEndToEndTest {
     boolean converted = FileConversionManager.convertIfNeeded(excelFile, schemaDir, "TO_LOWER");
     assertTrue(converted, "Excel file should be converted");
 
-    // Verify JSON file was created (Excel creates files with sheet names)
-    File jsonFile = new File(schemaDir, "test_data__Sheet1.json");
-    assertTrue(jsonFile.exists(), "JSON file should exist");
+    // Verify JSON file was created (Excel creates one file per sheet). The sheet name goes
+    // through SmartCasing with the default tableNameCasing (SMART_CASING, lower snake_case) —
+    // this 3-arg overload passes TO_LOWER as the COLUMN casing, not the table casing — so the
+    // file is test_data__sheet1.json, matching the lowercase table name queried below.
+    File jsonFile = new File(schemaDir, "test_data__sheet1.json");
+    assertTrue(jsonFile.exists(),
+        "JSON file should exist; schemaDir contains: "
+            + java.util.Arrays.toString(schemaDir.list()));
 
     // Check metadata is properly recorded
     ConversionMetadata metadata = new ConversionMetadata(schemaDir);

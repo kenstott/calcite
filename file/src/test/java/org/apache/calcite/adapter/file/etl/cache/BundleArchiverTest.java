@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,7 +46,7 @@ public class BundleArchiverTest {
     assertEquals(1L * 1024 * 1024, BundleArchiver.DEFAULT_SIZE_THRESHOLD);
   }
 
-  @Test void testArchiveNonExistentDirectory() {
+  @Test void testArchiveNonExistentDirectory() throws IOException {
     RecordingStorageProvider provider = new RecordingStorageProvider();
 
     BundleArchiver.archive("/nonexistent/dir", provider, "schema", "run-001");
@@ -211,8 +212,14 @@ public class BundleArchiverTest {
       }
     };
 
-    // Should not throw - failures are logged but not propagated
-    BundleArchiver.archive(cacheDir.toString(), failingProvider, "schema", "run-001");
+    // A failed upload is reported, not absorbed. Swallowing it left the archive silently
+    // incomplete — no index, no objects — while reporting success, so an unrestorable cache was
+    // indistinguishable from an empty one. Callers that want the run to continue regardless
+    // apply that policy themselves; SchemaLifecycleProcessor does exactly that.
+    IOException e = assertThrows(IOException.class,
+        () -> BundleArchiver.archive(cacheDir.toString(), failingProvider, "schema", "run-001"));
+    assertTrue(e.getMessage().contains("Failed to archive raw cache"),
+        "expected the archive failure to name itself, got: " + e.getMessage());
   }
 
   /**
@@ -223,6 +230,22 @@ public class BundleArchiverTest {
 
     @Override public void writeFile(String path, byte[] content) throws IOException {
       writtenFiles.put(path, content);
+    }
+
+    /**
+     * Large files are uploaded through the stream overload, not the byte[] one. Without this the
+     * default interface method throws UnsupportedOperationException, BundleArchiver.archive()
+     * swallows it as "non-fatal", and the archive silently completes with nothing recorded — so
+     * the assertions here failed for want of a recorder, not because the archiver was wrong.
+     */
+    @Override public void writeFile(String path, InputStream content) throws IOException {
+      java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+      byte[] chunk = new byte[8192];
+      int n;
+      while ((n = content.read(chunk)) != -1) {
+        buf.write(chunk, 0, n);
+      }
+      writtenFiles.put(path, buf.toByteArray());
     }
 
     @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {

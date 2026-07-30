@@ -168,9 +168,13 @@ public class HDFSStorageProviderTest {
   @Test public void testListFilesPathDoesNotExist() throws IOException {
     when(mockFileSystem.exists(any(Path.class))).thenReturn(false);
 
-    List<StorageProvider.FileEntry> entries = storageProvider.listFiles("/nonexistent", false);
-
-    assertTrue(entries.isEmpty());
+    // A missing directory is an error, matching the Local and S3 providers. Returning an empty
+    // list would make a mistyped path indistinguishable from a directory that genuinely holds no
+    // files, which is exactly the config mistake this is meant to surface.
+    IOException e = assertThrows(IOException.class,
+        () -> storageProvider.listFiles("/nonexistent", false));
+    assertTrue(e.getMessage().contains("/nonexistent"),
+        "the failure should name the path that was missing, got: " + e.getMessage());
   }
 
   @Test public void testOpenInputStream() throws IOException {

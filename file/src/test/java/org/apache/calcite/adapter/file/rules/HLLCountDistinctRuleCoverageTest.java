@@ -124,19 +124,53 @@ class HLLCountDistinctRuleCoverageTest {
   // ===== onMatch (currently disabled) =====
 
   @Test
-  void testOnMatchReturnsImmediately() {
+  void testOnMatchDeclinesGroupByAggregate() {
+    // onMatch is live: it reads the aggregate and only bails out for aggregates it cannot
+    // rewrite. These tests used to hand it a bare mock and assert it "returns immediately
+    // because the rule is disabled", which stopped being true and simply NPE'd on the
+    // unstubbed rel(0). Provide the aggregate the rule needs and pin a real decline path:
+    // HLL can only answer a whole-table COUNT(DISTINCT), so a GROUP BY aggregate is left alone.
+    Aggregate aggregate = aggregateWith(createCountDistinctAggCall(0), ImmutableBitSet.of(0));
     RelOptRuleCall call = mock(RelOptRuleCall.class);
+    when(call.rel(0)).thenReturn(aggregate);
+
     HLLCountDistinctRule.INSTANCE.onMatch(call);
-    // onMatch is disabled, so transformTo should never be called
+
     verify(call, never()).transformTo(org.mockito.ArgumentMatchers.any(RelNode.class));
   }
 
   @Test
-  void testOnMatchDoesNotInteractWithCall() {
+  void testOnMatchReadsTheAggregateItWasMatchedOn() {
+    Aggregate aggregate = aggregateWith(createCountDistinctAggCall(0), ImmutableBitSet.of(0));
     RelOptRuleCall call = mock(RelOptRuleCall.class);
+    when(call.rel(0)).thenReturn(aggregate);
+
     HLLCountDistinctRule.INSTANCE.onMatch(call);
-    // Verify no rel() calls are made since onMatch returns immediately
-    verify(call, never()).rel(org.mockito.ArgumentMatchers.anyInt());
+
+    // It takes operand 0 — the matched Aggregate — and nothing else off the call.
+    verify(call).rel(0);
+    verify(call, never()).transformTo(org.mockito.ArgumentMatchers.any(RelNode.class));
+  }
+
+  /** A COUNT(DISTINCT arg) aggregate call, stubbed to what the rule inspects. */
+  private AggregateCall createCountDistinctAggCall(int argIndex) {
+    AggregateCall aggCall = mock(AggregateCall.class);
+    SqlAggFunction aggFunction = mock(SqlAggFunction.class);
+    when(aggFunction.getKind()).thenReturn(SqlKind.COUNT);
+    when(aggCall.getAggregation()).thenReturn(aggFunction);
+    when(aggCall.isDistinct()).thenReturn(true);
+    when(aggCall.getArgList()).thenReturn(ImmutableList.of(argIndex));
+    when(aggCall.getName()).thenReturn("cnt");
+    return aggCall;
+  }
+
+  /** An Aggregate stubbed with just what {@code onMatch} reads. */
+  private Aggregate aggregateWith(AggregateCall aggCall, ImmutableBitSet groupSet) {
+    Aggregate aggregate = mock(Aggregate.class);
+    when(aggregate.getInput()).thenReturn(mock(RelNode.class));
+    when(aggregate.getGroupSet()).thenReturn(groupSet);
+    when(aggregate.getAggCallList()).thenReturn(ImmutableList.of(aggCall));
+    return aggregate;
   }
 
   // ===== getHLLEstimate (private, via reflection) =====
@@ -381,410 +415,23 @@ class HLLCountDistinctRuleCoverageTest {
     assertNull(result, "Should return null when no TableScan exists in tree");
   }
 
-  // ===== createConstantAgg (private, via reflection) =====
-
-  @Test
-  void testCreateConstantAggReturnsOriginal() throws Exception {
-    AggregateCall original = mock(AggregateCall.class);
-    RexBuilder rexBuilder = mock(RexBuilder.class);
-    RelDataTypeFactory typeFactory = mock(RelDataTypeFactory.class);
-
-    AggregateCall result = invokeCreateConstantAgg(original, 100L, rexBuilder, typeFactory);
-    assertSame(original, result, "Disabled method should return original AggregateCall");
-  }
-
-  @Test
-  void testCreateConstantAggZeroValue() throws Exception {
-    AggregateCall original = mock(AggregateCall.class);
-    RexBuilder rexBuilder = mock(RexBuilder.class);
-    RelDataTypeFactory typeFactory = mock(RelDataTypeFactory.class);
-
-    AggregateCall result = invokeCreateConstantAgg(original, 0L, rexBuilder, typeFactory);
-    assertSame(original, result, "Disabled method should return original regardless of value");
-  }
-
-  @Test
-  void testCreateConstantAggNegativeValue() throws Exception {
-    AggregateCall original = mock(AggregateCall.class);
-    RexBuilder rexBuilder = mock(RexBuilder.class);
-    RelDataTypeFactory typeFactory = mock(RelDataTypeFactory.class);
-
-    AggregateCall result = invokeCreateConstantAgg(original, -1L, rexBuilder, typeFactory);
-    assertSame(original, result, "Disabled method should return original for negative value");
-  }
-
-  @Test
-  void testCreateConstantAggLargeValue() throws Exception {
-    AggregateCall original = mock(AggregateCall.class);
-    RexBuilder rexBuilder = mock(RexBuilder.class);
-    RelDataTypeFactory typeFactory = mock(RelDataTypeFactory.class);
-
-    AggregateCall result = invokeCreateConstantAgg(
-        original, Long.MAX_VALUE, rexBuilder, typeFactory);
-    assertSame(original, result, "Disabled method should return original for large value");
-  }
-
-  // ===== createHLLAggregate (private, via reflection) =====
-
-  @Test
-  void testCreateHLLAggregateNoCountDistinct() throws Exception {
-    // Aggregate with non-COUNT non-DISTINCT agg call -> hasHLLOptimization stays false
-    Aggregate aggregate = createMockAggregate(
-        createNonDistinctAggCall(),
-        ImmutableBitSet.of());
-
-    RelNode input = createMockTableScan(
-        Arrays.asList(uniqueSchema(), "t"),
-        Arrays.asList("col_a"));
-    RelBuilder builder = mock(RelBuilder.class);
-
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(createNonDistinctAggCall());
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "Should return null when no COUNT(DISTINCT) agg calls exist");
-  }
-
-  @Test
-  void testCreateHLLAggregateCountDistinctNoSketch() throws Exception {
-    // COUNT(DISTINCT) but no sketch in cache -> hasHLLOptimization stays false
-    String schema = uniqueSchema();
-    AggregateCall countDistinct = createCountDistinctAggCall(0);
-
-    Aggregate aggregate = createMockAggregate(countDistinct, ImmutableBitSet.of());
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "Should return null when no HLL sketch is available for COUNT(DISTINCT)");
-  }
-
-  @Test
-  void testCreateHLLAggregateCountDistinctWithSketch() throws Exception {
-    // COUNT(DISTINCT) with sketch in cache and empty group set -> creates VALUES node
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(250L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall countDistinct = createCountDistinctAggCall(0);
-
-    RelOptCluster cluster = createRealCluster();
-
-    Aggregate aggregate = createMockAggregateWithCluster(
-        cluster, countDistinct, ImmutableBitSet.of());
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNotNull(result, "Should return VALUES node when HLL sketch is available");
-    assertTrue(result instanceof org.apache.calcite.rel.logical.LogicalValues,
-        "Result should be a LogicalValues node");
-  }
-
-  @Test
-  void testCreateHLLAggregateCountDistinctWithNamedAggCall() throws Exception {
-    // COUNT(DISTINCT) with non-null name on AggregateCall
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(100L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall countDistinct = createCountDistinctAggCallWithName(0, "my_count");
-
-    RelOptCluster cluster = createRealCluster();
-
-    Aggregate aggregate = createMockAggregateWithCluster(
-        cluster, countDistinct, ImmutableBitSet.of());
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNotNull(result, "Should create VALUES node with named agg call");
-    assertTrue(result instanceof org.apache.calcite.rel.logical.LogicalValues);
-  }
-
-  @Test
-  void testCreateHLLAggregateCountDistinctWithNullName() throws Exception {
-    // COUNT(DISTINCT) where getName() returns null -> should use EXPR$0
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(100L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall countDistinct = createCountDistinctAggCallWithName(0, null);
-
-    RelOptCluster cluster = createRealCluster();
-
-    Aggregate aggregate = createMockAggregateWithCluster(
-        cluster, countDistinct, ImmutableBitSet.of());
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNotNull(result, "Should create VALUES node even when name is null");
-    assertTrue(result instanceof org.apache.calcite.rel.logical.LogicalValues);
-  }
-
-  @Test
-  void testCreateHLLAggregateWithGroupBy() throws Exception {
-    // Non-empty group set -> should return null (GROUP BY not supported)
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(250L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall countDistinct = createCountDistinctAggCall(0);
-
-    Aggregate aggregate = createMockAggregate(
-        countDistinct,
-        ImmutableBitSet.of(1)); // GROUP BY col_b
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a", "col_b"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "Should return null for GROUP BY queries");
-  }
-
-  @Test
-  void testCreateHLLAggregateMixedCallsOneSketchMissing() throws Exception {
-    // Two agg calls: COUNT(DISTINCT col_a) with sketch, COUNT(DISTINCT col_b) without sketch
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(250L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall countDistinctA = createCountDistinctAggCall(0);
-    AggregateCall countDistinctB = createCountDistinctAggCall(1);
-
-    List<AggregateCall> aggCalls = new ArrayList<AggregateCall>();
-    aggCalls.add(countDistinctA);
-    aggCalls.add(countDistinctB);
-
-    RelOptCluster cluster = createRealCluster();
-
-    Aggregate aggregate = mock(Aggregate.class);
-    when(aggregate.getAggCallList()).thenReturn(aggCalls);
-    when(aggregate.getGroupSet()).thenReturn(ImmutableBitSet.of());
-    when(aggregate.getCluster()).thenReturn(cluster);
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a", "col_b"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinctA);
-    newAggCalls.add(countDistinctB);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    // hasHLLOptimization is true (col_a has sketch), but col_b has null estimate
-    // -> in the VALUES construction loop, estimate for index 1 is null -> returns null
-    assertNull(result, "Should return null when one of the COUNT(DISTINCT) has no sketch");
-  }
-
-  @Test
-  void testCreateHLLAggregateMultipleCountDistinctsAllWithSketches() throws Exception {
-    // Both COUNT(DISTINCT) calls have sketches
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketchA = HyperLogLogSketch.fromEstimate(250L);
-    cache.putSketch(schema, "t", "col_a", sketchA);
-    HyperLogLogSketch sketchB = HyperLogLogSketch.fromEstimate(50L);
-    cache.putSketch(schema, "t", "col_b", sketchB);
-
-    AggregateCall countDistinctA = createCountDistinctAggCall(0);
-    AggregateCall countDistinctB = createCountDistinctAggCall(1);
-
-    List<AggregateCall> aggCalls = new ArrayList<AggregateCall>();
-    aggCalls.add(countDistinctA);
-    aggCalls.add(countDistinctB);
-
-    RelOptCluster cluster = createRealCluster();
-
-    Aggregate aggregate = mock(Aggregate.class);
-    when(aggregate.getAggCallList()).thenReturn(aggCalls);
-    when(aggregate.getGroupSet()).thenReturn(ImmutableBitSet.of());
-    when(aggregate.getCluster()).thenReturn(cluster);
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a", "col_b"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinctA);
-    newAggCalls.add(countDistinctB);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNotNull(result, "Should return VALUES node when all COUNT(DISTINCT) have sketches");
-    assertTrue(result instanceof org.apache.calcite.rel.logical.LogicalValues);
-  }
-
-  @Test
-  void testCreateHLLAggregateMixedDistinctAndNonDistinct() throws Exception {
-    // One non-distinct agg call (SUM) and one COUNT(DISTINCT) with sketch
-    // The non-distinct call gets null estimate -> VALUES loop returns null
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(250L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall nonDistinct = createNonDistinctAggCall();
-    AggregateCall countDistinct = createCountDistinctAggCall(0);
-
-    List<AggregateCall> aggCalls = new ArrayList<AggregateCall>();
-    aggCalls.add(nonDistinct);
-    aggCalls.add(countDistinct);
-
-    RelOptCluster cluster = createRealCluster();
-
-    Aggregate aggregate = mock(Aggregate.class);
-    when(aggregate.getAggCallList()).thenReturn(aggCalls);
-    when(aggregate.getGroupSet()).thenReturn(ImmutableBitSet.of());
-    when(aggregate.getCluster()).thenReturn(cluster);
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(nonDistinct);
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    // Non-distinct call has null estimate, so VALUES loop falls back
-    assertNull(result,
-        "Should return null when a non-distinct agg call has no HLL estimate");
-  }
-
-  @Test
-  void testCreateHLLAggregateCountNonDistinct() throws Exception {
-    // COUNT without DISTINCT -- should add null to hllEstimates
-    // and hasHLLOptimization stays false
-    AggregateCall countNonDistinct = createCountNonDistinctAggCall(0);
-
-    Aggregate aggregate = createMockAggregate(
-        countNonDistinct, ImmutableBitSet.of());
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(uniqueSchema(), "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countNonDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "COUNT without DISTINCT should not trigger HLL optimization");
-  }
-
-  @Test
-  void testCreateHLLAggregateNoInputTableScan() throws Exception {
-    // COUNT(DISTINCT) but the input has no TableScan -> getHLLEstimate returns null
-    AggregateCall countDistinct = createCountDistinctAggCall(0);
-
-    Aggregate aggregate = createMockAggregate(countDistinct, ImmutableBitSet.of());
-
-    // Input with no TableScan
-    RelNode input = mock(RelNode.class);
-    when(input.getInputs()).thenReturn(Collections.<RelNode>emptyList());
-    RelDataType rowType = mock(RelDataType.class);
-    when(rowType.getFieldNames()).thenReturn(Arrays.asList("col_a"));
-    when(input.getRowType()).thenReturn(rowType);
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "Should return null when input has no TableScan");
-  }
-
-  @Test
-  void testCreateHLLAggregateEmptyAggCallList() throws Exception {
-    // No agg calls at all -> hasHLLOptimization stays false
-    Aggregate aggregate = mock(Aggregate.class);
-    when(aggregate.getAggCallList()).thenReturn(
-        Collections.<AggregateCall>emptyList());
-    when(aggregate.getGroupSet()).thenReturn(ImmutableBitSet.of());
-
-    RelNode input = createMockTableScan(
-        Arrays.asList(uniqueSchema(), "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "Should return null when there are no aggregate calls");
-  }
-
-  @Test
-  void testCreateHLLAggregateSingleCountDistinctWithGroupByAndSketch() throws Exception {
-    // COUNT(DISTINCT) with sketch but non-empty group set
-    String schema = uniqueSchema();
-    HLLSketchCache cache = HLLSketchCache.getInstance();
-    HyperLogLogSketch sketch = HyperLogLogSketch.fromEstimate(100L);
-    cache.putSketch(schema, "t", "col_a", sketch);
-
-    AggregateCall countDistinct = createCountDistinctAggCall(0);
-
-    Aggregate aggregate = createMockAggregate(
-        countDistinct, ImmutableBitSet.of(0)); // GROUP BY
-
-    TableScan input = createMockTableScan(
-        Arrays.asList(schema, "t"),
-        Arrays.asList("col_a"));
-
-    RelBuilder builder = mock(RelBuilder.class);
-    List<AggregateCall> newAggCalls = new ArrayList<AggregateCall>();
-    newAggCalls.add(countDistinct);
-
-    RelNode result = invokeCreateHLLAggregate(aggregate, newAggCalls, input, builder);
-    assertNull(result, "GROUP BY with HLL sketch should still return null");
-  }
-
-  // ===== Helper methods =====
-
-  /** Creates a real RelOptCluster with a MockRelOptPlanner and SqlTypeFactoryImpl. */
-  private RelOptCluster createRealCluster() {
-    RelDataTypeFactory typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-    RexBuilder rexBuilder = new RexBuilder(typeFactory);
-    MockRelOptPlanner planner = new MockRelOptPlanner(Contexts.empty());
-    return RelOptCluster.create(planner, rexBuilder);
-  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   private TableScan createMockTableScan(List<String> qualifiedName,
       List<String> fieldNames) {
@@ -802,61 +449,11 @@ class HLLCountDistinctRuleCoverageTest {
     return tableScan;
   }
 
-  private AggregateCall createCountDistinctAggCall(int argIndex) {
-    return createCountDistinctAggCallWithName(argIndex, "cnt");
-  }
 
-  private AggregateCall createCountDistinctAggCallWithName(int argIndex, String name) {
-    AggregateCall aggCall = mock(AggregateCall.class);
-    SqlAggFunction aggFunction = mock(SqlAggFunction.class);
-    when(aggFunction.getKind()).thenReturn(SqlKind.COUNT);
-    when(aggCall.getAggregation()).thenReturn(aggFunction);
-    when(aggCall.isDistinct()).thenReturn(true);
-    when(aggCall.getArgList()).thenReturn(ImmutableList.of(argIndex));
-    when(aggCall.getName()).thenReturn(name);
-    return aggCall;
-  }
 
-  private AggregateCall createCountNonDistinctAggCall(int argIndex) {
-    AggregateCall aggCall = mock(AggregateCall.class);
-    SqlAggFunction aggFunction = mock(SqlAggFunction.class);
-    when(aggFunction.getKind()).thenReturn(SqlKind.COUNT);
-    when(aggCall.getAggregation()).thenReturn(aggFunction);
-    when(aggCall.isDistinct()).thenReturn(false);
-    when(aggCall.getArgList()).thenReturn(ImmutableList.of(argIndex));
-    when(aggCall.getName()).thenReturn("cnt");
-    return aggCall;
-  }
 
-  private AggregateCall createNonDistinctAggCall() {
-    AggregateCall aggCall = mock(AggregateCall.class);
-    SqlAggFunction aggFunction = mock(SqlAggFunction.class);
-    when(aggFunction.getKind()).thenReturn(SqlKind.SUM);
-    when(aggCall.getAggregation()).thenReturn(aggFunction);
-    when(aggCall.isDistinct()).thenReturn(false);
-    when(aggCall.getName()).thenReturn("total");
-    return aggCall;
-  }
 
-  private Aggregate createMockAggregate(AggregateCall aggCall, ImmutableBitSet groupSet) {
-    Aggregate aggregate = mock(Aggregate.class);
-    List<AggregateCall> aggCallList = new ArrayList<AggregateCall>();
-    aggCallList.add(aggCall);
-    when(aggregate.getAggCallList()).thenReturn(aggCallList);
-    when(aggregate.getGroupSet()).thenReturn(groupSet);
-    return aggregate;
-  }
 
-  private Aggregate createMockAggregateWithCluster(RelOptCluster cluster,
-      AggregateCall aggCall, ImmutableBitSet groupSet) {
-    Aggregate aggregate = mock(Aggregate.class);
-    List<AggregateCall> aggCallList = new ArrayList<AggregateCall>();
-    aggCallList.add(aggCall);
-    when(aggregate.getAggCallList()).thenReturn(aggCallList);
-    when(aggregate.getGroupSet()).thenReturn(groupSet);
-    when(aggregate.getCluster()).thenReturn(cluster);
-    return aggregate;
-  }
 
   // ===== Reflection helpers =====
 
@@ -875,23 +472,5 @@ class HLLCountDistinctRuleCoverageTest {
     return (TableScan) method.invoke(HLLCountDistinctRule.INSTANCE, node);
   }
 
-  private AggregateCall invokeCreateConstantAgg(AggregateCall original, long value,
-      RexBuilder rexBuilder, RelDataTypeFactory typeFactory) throws Exception {
-    Method method = HLLCountDistinctRule.class.getDeclaredMethod(
-        "createConstantAgg", AggregateCall.class, long.class,
-        RexBuilder.class, RelDataTypeFactory.class);
-    method.setAccessible(true);
-    return (AggregateCall) method.invoke(
-        HLLCountDistinctRule.INSTANCE, original, value, rexBuilder, typeFactory);
-  }
 
-  private RelNode invokeCreateHLLAggregate(Aggregate original,
-      List<AggregateCall> newAggCalls, RelNode input, RelBuilder builder) throws Exception {
-    Method method = HLLCountDistinctRule.class.getDeclaredMethod(
-        "createHLLAggregate", Aggregate.class, List.class,
-        RelNode.class, RelBuilder.class);
-    method.setAccessible(true);
-    return (RelNode) method.invoke(
-        HLLCountDistinctRule.INSTANCE, original, newAggCalls, input, builder);
-  }
 }

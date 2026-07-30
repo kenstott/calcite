@@ -890,10 +890,14 @@ public class FileSchemaFeatureCoverageTest {
       tableDefs.add(td);
       operand.put("tables", tableDefs);
 
-      Schema schema =
-          createSchema(parentSchema, "explicit_xlsx_test", operand);
-      Map<String, Table> tables = ((FileSchema) schema).getTableMap();
-      assertNotNull(tables);
+      // Excel in an explicit table definition is refused: one workbook yields a table per sheet,
+      // so a single named entry cannot describe it. The refusal surfaces from createSchema
+      // itself — the factory builds the table map during construction — rather than being
+      // deferred to a later getTableMap() call or flattened into an empty map.
+      RuntimeException ex = assertThrows(RuntimeException.class,
+          () -> createSchema(parentSchema, "explicit_xlsx_test", operand));
+      assertTrue(ex.getMessage().contains("Excel files"),
+          "expected the Excel explicit-definition refusal, got: " + ex.getMessage());
     }
   }
 

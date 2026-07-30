@@ -141,7 +141,7 @@ public class ModelLifecycleProcessor {
    */
   public ModelResult process() {
     long startTime = System.currentTimeMillis();
-    LOGGER.info("=== Starting model processing: {} ===", model.getName());
+    LOGGER.debug("=== Starting model processing: {} ===", model.getName());
     LOGGER.info("Schemas to process: {}", model.getSchemas().size());
 
     // Call beforeModel hook
@@ -158,7 +158,7 @@ public class ModelLifecycleProcessor {
 
     for (ModelConfig.SchemaRef schemaRef : orderedSchemas) {
       try {
-        LOGGER.info("--- Processing schema: {} ---", schemaRef.getName());
+        LOGGER.debug("--- Processing schema: {} ---", schemaRef.getName());
 
         SchemaResult result = processSchema(schemaRef);
         schemaResults.add(result);
@@ -169,7 +169,7 @@ public class ModelLifecycleProcessor {
           failedSchemas++;
         }
 
-        LOGGER.info("--- Schema {} complete: {} tables, {} rows ---",
+        LOGGER.debug("--- Schema {} complete: {} tables, {} rows ---",
             schemaRef.getName(), result.getTotalTables(), result.getTotalRows());
 
       } catch (Exception e) {
@@ -191,7 +191,7 @@ public class ModelLifecycleProcessor {
       afterModelHook.accept(model, result);
     }
 
-    LOGGER.info("=== Model processing complete: {} schemas ({} successful, {} failed) in {}ms ===",
+    LOGGER.debug("=== Model processing complete: {} schemas ({} successful, {} failed) in {}ms ===",
         model.getSchemas().size(), successfulSchemas, failedSchemas, elapsed);
 
     return result;

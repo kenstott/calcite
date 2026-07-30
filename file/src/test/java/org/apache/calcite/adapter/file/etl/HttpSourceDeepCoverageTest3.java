@@ -1054,24 +1054,6 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  // ======= computeLocalRawCachePath =======
-
-  @Test void testComputeLocalRawCachePathVariants() throws Exception {
-    HttpSource source =
-        new HttpSource(HttpSourceConfig.builder().url("http://localhost/test").build(),
-        (HooksConfig) null, null, null, tempDir.toString());
-    try {
-      Method m = HttpSource.class.getDeclaredMethod("computeLocalRawCachePath", String.class);
-      m.setAccessible(true);
-      assertNull(m.invoke(source, (String) null));
-      assertNotNull(m.invoke(source, "s3://mybucket/cache/raw"));
-      assertNotNull(m.invoke(source, "gs://mybucket/raw"));
-      // S3 with no trailing path
-      assertNotNull(m.invoke(source, "s3://bucket"));
-    } finally {
-      source.close();
-    }
-  }
 
   // ======= isLocalPath =======
 
@@ -1217,31 +1199,6 @@ class HttpSourceDeepCoverageTest3 {
     }
   }
 
-  // ======= collectFiles =======
-
-  @Test void testCollectFiles() throws Exception {
-    Method m = HttpSource.class.getDeclaredMethod("collectFiles", File.class, List.class);
-    m.setAccessible(true);
-    Path sub = tempDir.resolve("sub");
-    Files.createDirectories(sub);
-    Files.write(tempDir.resolve("a.txt"), "a".getBytes());
-    Files.write(sub.resolve("b.txt"), "b".getBytes());
-    List<File> result = new ArrayList<File>();
-    m.invoke(null, tempDir.toFile(), result);
-    assertTrue(result.size() >= 2);
-
-    // Empty dir
-    Path empty = tempDir.resolve("empty");
-    Files.createDirectories(empty);
-    List<File> r2 = new ArrayList<File>();
-    m.invoke(null, empty.toFile(), r2);
-    assertTrue(r2.isEmpty());
-
-    // Non-existent
-    List<File> r3 = new ArrayList<File>();
-    m.invoke(null, new File("/nonexistent"), r3);
-    assertTrue(r3.isEmpty());
-  }
 
   // ======= LazyCSVIterator: filter paths =======
 

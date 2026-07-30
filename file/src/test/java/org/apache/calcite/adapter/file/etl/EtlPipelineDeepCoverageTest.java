@@ -132,11 +132,13 @@ public class EtlPipelineDeepCoverageTest {
   // --- Execute with cached completion (fast-path skip) ---
 
   @Test void testExecuteCachedCompletionWithMatchingConfigHash() throws IOException {
-    EtlPipelineConfig config = buildConfigWithMaterialize("cached_pipeline");
+    Map<String, DimensionConfig> dims = yearDims();
+    EtlPipelineConfig config = buildConfigWithDimensions("cached_pipeline", dims);
 
-    // Config has no dimensions, so computeConfigHash returns "empty"
+    // The hash must match the config's dimensions for the cached completion to be honoured.
     IncrementalTracker.CachedCompletion cached =
-        new IncrementalTracker.CachedCompletion("empty", "sig", 100);
+        new IncrementalTracker.CachedCompletion(
+            IncrementalTracker.computeConfigHash(dims), "sig", 100);
     when(mockTracker.getCachedCompletion("cached_pipeline")).thenReturn(cached);
     // verifyDataExists checks isDirectory for Iceberg metadata path
     when(mockStorage.isDirectory(anyString())).thenReturn(true);
@@ -159,12 +161,14 @@ public class EtlPipelineDeepCoverageTest {
     MaterializeOptionsConfig options = MaterializeOptionsConfig.builder()
         .build();
 
-    EtlPipelineConfig config = buildConfigWithOptions("zero_rows_pipeline", options);
+    Map<String, DimensionConfig> dims = yearDims();
+    EtlPipelineConfig config =
+        buildConfigWithOptionsAndDimensions("zero_rows_pipeline", options, dims);
 
     // Use the 4-arg constructor to set completedAt to just now (TTL not expired)
-    // Config has no dimensions, so computeConfigHash returns "empty"
     IncrementalTracker.CachedCompletion cached =
-        new IncrementalTracker.CachedCompletion("empty", "sig", 0,
+        new IncrementalTracker.CachedCompletion(
+            IncrementalTracker.computeConfigHash(dims), "sig", 0,
             System.currentTimeMillis());
 
     when(mockTracker.getCachedCompletion("zero_rows_pipeline")).thenReturn(cached);
@@ -361,6 +365,40 @@ public class EtlPipelineDeepCoverageTest {
         .source(HttpSourceConfig.builder()
             .url("https://api.example.com/data")
             .build())
+        .materialize(MaterializeConfig.builder()
+            .enabled(true)
+            .format(MaterializeConfig.Format.ICEBERG)
+            .output(MaterializeOutputConfig.builder().build())
+            .options(options)
+            .build())
+        .build();
+  }
+
+  /**
+   * A single-year period dimension. Completion is a period concept — {@code hasPeriodDimension}
+   * requires a period type or a calendar name — so a config with no dimensions, or one named
+   * something other than year/quarter/month/week/day, never consults the cached completion at
+   * all. Tests about cached completion have to declare a real period dimension to reach it.
+   */
+  private Map<String, DimensionConfig> yearDims() {
+    Map<String, DimensionConfig> dims = new LinkedHashMap<>();
+    dims.put("year", DimensionConfig.builder()
+        .name("year")
+        .type(DimensionType.RANGE)
+        .start(2020)
+        .end(2020)
+        .build());
+    return dims;
+  }
+
+  private EtlPipelineConfig buildConfigWithOptionsAndDimensions(String name,
+      MaterializeOptionsConfig options, Map<String, DimensionConfig> dims) {
+    return EtlPipelineConfig.builder()
+        .name(name)
+        .source(HttpSourceConfig.builder()
+            .url("https://api.example.com/data")
+            .build())
+        .dimensions(dims)
         .materialize(MaterializeConfig.builder()
             .enabled(true)
             .format(MaterializeConfig.Format.ICEBERG)

@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -845,13 +846,19 @@ public class IcebergMaterializerDeepCoverageTest {
   }
 
   @Test void testExtractCiksFromRowFilterNoOpenParen() {
-    Set<String> ciks = IcebergMaterializer.extractCiksFromRowFilter("cik IN");
-    assertTrue(ciks.isEmpty());
+        // A malformed filter is not an empty filter. Returning an empty set here would
+        // silently drop the CIK restriction and widen the overwrite to every CIK in the
+        // table, so the parser rejects it instead.
+        assertThrows(IllegalStateException.class, () ->
+            IcebergMaterializer.extractCiksFromRowFilter("cik IN"));
   }
 
   @Test void testExtractCiksFromRowFilterNoCloseParen() {
-    Set<String> ciks = IcebergMaterializer.extractCiksFromRowFilter("cik IN ('0001'");
-    assertTrue(ciks.isEmpty());
+        // A malformed filter is not an empty filter. Returning an empty set here would
+        // silently drop the CIK restriction and widen the overwrite to every CIK in the
+        // table, so the parser rejects it instead.
+        assertThrows(IllegalStateException.class, () ->
+            IcebergMaterializer.extractCiksFromRowFilter("cik IN ('0001'"));
   }
 
   @Test void testExtractCiksFromRowFilterUnquotedValues() {

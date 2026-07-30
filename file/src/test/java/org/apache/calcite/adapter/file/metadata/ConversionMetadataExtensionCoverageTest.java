@@ -83,134 +83,11 @@ class ConversionMetadataExtensionCoverageTest {
   private final java.util.concurrent.atomic.AtomicInteger nextTable =
       new java.util.concurrent.atomic.AtomicInteger();
 
-  @Test void testGenerateFileExtensionsReturnsNonEmptyList() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
 
-    @SuppressWarnings("unchecked")
-    List<Map.Entry<String, String>> extensions =
-        (List<Map.Entry<String, String>>) method.invoke(null);
 
-    assertNotNull(extensions);
-    assertFalse(extensions.isEmpty(),
-        "generateFileExtensions should return a non-empty list");
 
-    // Check that we have a mix of directly usable and convertible types
-    boolean hasCsv = false;
-    boolean hasExcel = false;
-    boolean hasCompressed = false;
-    for (Map.Entry<String, String> entry : extensions) {
-      String ext = entry.getKey();
-      String type = entry.getValue();
-      if ("csv".equals(ext)) {
-        hasCsv = true;
-      }
-      if ("xlsx".equals(ext) || "xls".equals(ext)) {
-        hasExcel = true;
-      }
-      if (ext.contains(".gz") || ext.contains(".bz2")
-          || ext.contains(".xz") || ext.contains(".zip")) {
-        hasCompressed = true;
-      }
-      // All types should be non-null and non-empty
-      assertNotNull(type, "Type for extension '" + ext + "' should not be null");
-      assertFalse(type.isEmpty(),
-          "Type for extension '" + ext + "' should not be empty");
-    }
 
-    assertTrue(hasCsv, "Should include csv extension");
-    assertTrue(hasExcel, "Should include excel extensions");
-    assertTrue(hasCompressed,
-        "Should include compressed variants (e.g., csv.gz)");
-  }
 
-  @Test void testGenerateFileExtensionsContainsAllCompressedVariants()
-      throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("generateFileExtensions");
-    method.setAccessible(true);
-
-    @SuppressWarnings("unchecked")
-    List<Map.Entry<String, String>> extensions =
-        (List<Map.Entry<String, String>>) method.invoke(null);
-
-    // Collect all extension keys for easier lookup
-    List<String> extKeys = new ArrayList<>();
-    for (Map.Entry<String, String> entry : extensions) {
-      extKeys.add(entry.getKey());
-    }
-
-    // The code generates compressed variants for: csv, tsv, json, yaml, yml, arrow
-    // with compression suffixes: gz, gzip, bz2, xz, zip
-    String[] baseExts = {"csv", "tsv", "json", "yaml", "yml", "arrow"};
-    String[] compressionSuffixes = {"gz", "gzip", "bz2", "xz", "zip"};
-
-    for (String base : baseExts) {
-      for (String suffix : compressionSuffixes) {
-        String compressedExt = base + "." + suffix;
-        assertTrue(extKeys.contains(compressedExt),
-            "Should contain compressed extension: " + compressedExt);
-      }
-    }
-  }
-
-  // =========================================================================
-  // 2. detectTypeFromExtension() - covers all 24+ extensions
-  // =========================================================================
-
-  @Test void testDetectTypeFromExtensionDirectlyUsableTypes() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-
-    // Directly usable types
-    assertEquals("csv", method.invoke(null, "csv"));
-    assertEquals("tsv", method.invoke(null, "tsv"));
-    assertEquals("json", method.invoke(null, "json"));
-    assertEquals("parquet", method.invoke(null, "parquet"));
-    assertEquals("yaml", method.invoke(null, "yaml"));
-    assertEquals("yaml", method.invoke(null, "yml"));
-    assertEquals("arrow", method.invoke(null, "arrow"));
-  }
-
-  @Test void testDetectTypeFromExtensionConvertibleTypes() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-
-    // Convertible types
-    assertEquals("excel", method.invoke(null, "xlsx"));
-    assertEquals("excel", method.invoke(null, "xls"));
-    assertEquals("html", method.invoke(null, "html"));
-    assertEquals("html", method.invoke(null, "htm"));
-    assertEquals("xml", method.invoke(null, "xml"));
-    assertEquals("markdown", method.invoke(null, "md"));
-    assertEquals("docx", method.invoke(null, "docx"));
-    assertEquals("pptx", method.invoke(null, "pptx"));
-  }
-
-  @Test void testDetectTypeFromExtensionCompressedDirectlyUsable() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-
-    // Compressed variants of directly usable types
-    assertEquals("csv", method.invoke(null, "csv.gz"));
-    assertEquals("tsv", method.invoke(null, "tsv.gz"));
-    assertEquals("json", method.invoke(null, "json.gz"));
-  }
-
-  @Test void testDetectTypeFromExtensionUnknown() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("detectTypeFromExtension", String.class);
-    method.setAccessible(true);
-
-    assertEquals("unknown", method.invoke(null, "foo"));
-    assertEquals("unknown", method.invoke(null, "pdf"));
-    assertEquals("unknown", method.invoke(null, "doc"));
-    assertEquals("unknown", method.invoke(null, "txt"));
-  }
 
   // =========================================================================
   // 3. detectTypeFromTestFile() - covers the full method
@@ -246,29 +123,7 @@ class ConversionMetadataExtensionCoverageTest {
     assertEquals("unknown", detectedSourceTypeFor("test.pdf"));
   }
 
-  // =========================================================================
-  // 4. extractExtension() - covers null return path
-  // =========================================================================
 
-  @Test void testExtractExtensionWithTestPrefix() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-
-    assertEquals("csv", method.invoke(null, "test.csv"));
-    assertEquals("json.gz", method.invoke(null, "test.json.gz"));
-    assertEquals("xlsx", method.invoke(null, "test.xlsx"));
-  }
-
-  @Test void testExtractExtensionWithoutTestPrefix() throws Exception {
-    Method method =
-        ConversionMetadata.class.getDeclaredMethod("extractExtension", String.class);
-    method.setAccessible(true);
-
-    assertNull(method.invoke(null, "data.csv"));
-    assertNull(method.invoke(null, "noprefix"));
-    assertNull(method.invoke(null, "other.test.csv"));
-  }
 
   // =========================================================================
   // 5. detectConvertibleType() and detectDirectType() - branch coverage

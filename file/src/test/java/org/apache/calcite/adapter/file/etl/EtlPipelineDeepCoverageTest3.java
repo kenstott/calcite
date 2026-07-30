@@ -830,7 +830,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testExecute_cachedCompletionMatch() throws Exception {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
-    Map<String, DimensionConfig> dims = singleRangeDimension("y", 2020, 2020);
+    Map<String, DimensionConfig> dims = singleRangeDimension("year", 2020, 2020);
     String hash = IncrementalTracker.computeConfigHash(dims);
     when(tracker.getCachedCompletion("c")).thenReturn(
         new IncrementalTracker.CachedCompletion(hash, "sig", 100));
@@ -849,7 +849,7 @@ public class EtlPipelineDeepCoverageTest3 {
         new IncrementalTracker.CachedCompletion("old", "sig", 50));
     when(sp.isDirectory(anyString())).thenReturn(true);
     EtlPipelineConfig config =
-        createHttpConfig("m", singleRangeDimension("y", 2020, 2020), MaterializeConfig.Format.ICEBERG, null, null);
+        createHttpConfig("m", singleRangeDimension("year", 2020, 2020), MaterializeConfig.Format.ICEBERG, null, null);
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult r = pipeline.execute();
     assertTrue(r.isSkippedEntirePipeline());
@@ -859,7 +859,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testExecute_cachedMatchZeroTtlNotExpired() throws Exception {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
-    Map<String, DimensionConfig> dims = singleRangeDimension("y", 2020, 2020);
+    Map<String, DimensionConfig> dims = singleRangeDimension("year", 2020, 2020);
     String hash = IncrementalTracker.computeConfigHash(dims);
     when(tracker.getCachedCompletion("z")).thenReturn(
         new IncrementalTracker.CachedCompletion(hash, "sig", 0, System.currentTimeMillis()));
@@ -897,7 +897,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testExecute_cachedMatchDataNotExists() throws Exception {
     IncrementalTracker tracker = mockTracker();
     StorageProvider sp = mockStorage();
-    Map<String, DimensionConfig> dims = singleRangeDimension("y", 2020, 2020);
+    Map<String, DimensionConfig> dims = singleRangeDimension("year", 2020, 2020);
     String hash = IncrementalTracker.computeConfigHash(dims);
     when(tracker.getCachedCompletion("s")).thenReturn(
         new IncrementalTracker.CachedCompletion(hash, "sig", 100));
@@ -957,7 +957,7 @@ public class EtlPipelineDeepCoverageTest3 {
     HooksConfig hooks = HooksConfig.builder().enabled(true).build();
     EtlPipelineConfig config = EtlPipelineConfig.builder().name("n")
         .source(HttpSourceConfig.builder().url("http://x").build())
-        .hooks(hooks).dimensions(singleRangeDimension("y", 2020, 2020)).build();
+        .hooks(hooks).dimensions(singleRangeDimension("year", 2020, 2020)).build();
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString(), null, tracker);
     EtlResult r = pipeline.execute();
     assertTrue(r.isSkippedEntirePipeline());

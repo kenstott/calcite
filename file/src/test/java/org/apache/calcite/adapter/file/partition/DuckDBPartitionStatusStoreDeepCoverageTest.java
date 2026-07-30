@@ -258,10 +258,14 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
 
     // Mark with 0 rows (empty result)
     store.markProcessedWithRowCount("alt1", "src1", keys, "target", 0);
+    // TTL is an explicit opt-in now: plain isProcessed()/filterUnprocessed() answer "has this
+    // been processed" with no expiry, and the TTL-aware overloads take the window. These
+    // assertions previously called the no-TTL method twice and expected two different
+    // answers, which cannot hold.
     // Should be within large TTL
-    assertTrue(store.isProcessed("alt1", "src1", keys));
+    assertTrue(store.isProcessedWithTtl("alt1", "src1", keys, 60_000L));
     // Should be expired with 0 TTL
-    assertFalse(store.isProcessed("alt1", "src1", keys));
+    assertFalse(store.isProcessedWithTtl("alt1", "src1", keys, 0L));
   }
 
   @Test void testIsProcessedWithEmptyTtlNonEmpty() {
@@ -400,12 +404,18 @@ class DuckDBPartitionStatusStoreDeepCoverageTest {
 
     List<Map<String, String>> all = Arrays.asList(keys1);
 
+    // TTL is an explicit opt-in now: plain isProcessed()/filterUnprocessed() answer "has this
+    // been processed" with no expiry, and the TTL-aware overloads take the window. These
+    // assertions previously called the no-TTL method twice and expected two different
+    // answers, which cannot hold.
     // With large TTL, should be considered processed
-    Set<Integer> resultLargeTtl = store.filterUnprocessed("alt6", "src", all);
+    Set<Integer> resultLargeTtl =
+        store.filterUnprocessedWithSuccessTtl("alt6", "src", all, 60_000L);
     assertTrue(resultLargeTtl.isEmpty());
 
     // With 0 TTL, should need processing
-    Set<Integer> resultZeroTtl = store.filterUnprocessed("alt6", "src", all);
+    Set<Integer> resultZeroTtl =
+        store.filterUnprocessedWithSuccessTtl("alt6", "src", all, 0L);
     assertTrue(resultZeroTtl.contains(0));
   }
 

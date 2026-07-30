@@ -88,7 +88,7 @@ public class JdbcDialectTest {
     JdbcDialect dialect = DuckDBDialect.INSTANCE;
 
     String sql = dialect.readIcebergSql("s3://bucket/warehouse/table", Collections.emptyList());
-    assertEquals("SELECT * FROM iceberg_scan('s3://bucket/warehouse/table')", sql);
+    assertEquals("SELECT * FROM iceberg_scan('s3://bucket/warehouse/table', allow_moved_paths=true)", sql);
   }
 
   @Test public void testDuckDBReadIcebergSqlWithColumns() {
@@ -96,7 +96,7 @@ public class JdbcDialectTest {
 
     List<String> columns = Arrays.asList("id", "timestamp");
     String sql = dialect.readIcebergSql("s3://bucket/warehouse/table", columns);
-    assertEquals("SELECT id, timestamp FROM iceberg_scan('s3://bucket/warehouse/table')", sql);
+    assertEquals("SELECT id, timestamp FROM iceberg_scan('s3://bucket/warehouse/table', allow_moved_paths=true)", sql);
   }
 
   @Test public void testDuckDBSupportsDirectGlob() {
@@ -480,7 +480,7 @@ public class JdbcDialectTest {
     String sql =
         dialect.createIcebergViewSql("myschema", "mytable", "s3://bucket/warehouse/table");
     assertEquals(
-        "CREATE VIEW IF NOT EXISTS \"myschema\".\"mytable\" AS SELECT * FROM iceberg_scan('s3://bucket/warehouse/table')",
+        "CREATE VIEW IF NOT EXISTS \"myschema\".\"mytable\" AS SELECT * FROM iceberg_scan('s3://bucket/warehouse/table', allow_moved_paths=true)",
         sql);
   }
 

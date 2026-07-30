@@ -524,7 +524,7 @@ public class ConversionMetadata {
   public void recordTable(String tableName, org.apache.calcite.schema.Table table,
       org.apache.calcite.util.Source source, java.util.Map<String, Object> tableDef) {
     try {
-      LOGGER.info("=== CONVERSION RECORD UPDATE TRACE === recordTable({})", tableName);
+      LOGGER.debug("=== CONVERSION RECORD UPDATE TRACE === recordTable({})", tableName);
       LOGGER.info("Before update: conversions map size = {}", conversions.size());
 
       // Extract metadata from table and source
@@ -666,7 +666,7 @@ public class ConversionMetadata {
 
       LOGGER.info("After update: conversions map size = {}", conversions.size());
       LOGGER.info("Final record under tableName '{}': {}", tableName, formatRecord(conversions.get(tableName)));
-      LOGGER.info("=== END CONVERSION RECORD UPDATE TRACE ===\\n");
+      LOGGER.debug("=== END CONVERSION RECORD UPDATE TRACE ===\\n");
 
     } catch (Exception e) {
       LOGGER.warn("Failed to record table metadata for {}: {}", tableName, e.getMessage());
@@ -1010,7 +1010,7 @@ public class ConversionMetadata {
                 String explicitTableName = htmlEntry.getValue();
                 if (jsonBaseName.equals(explicitTableName)) {
                   // This JSON file uses the explicit table name directly
-                  LOGGER.info("=== DIRECT TABLE NAME MATCH === JSON file '{}' matches explicit table name '{}'",
+                  LOGGER.debug("=== DIRECT TABLE NAME MATCH === JSON file '{}' matches explicit table name '{}'",
                              jsonFileName, explicitTableName);
 
                   // Map the JSON file to explicit table name
@@ -1048,15 +1048,15 @@ public class ConversionMetadata {
                 String htmlFileName = baseName.substring(0, underscoreIndex);
 
                 // Check if this HTML file has an explicit table name
-                LOGGER.info("=== HTML MAPPING CHECK === Checking if htmlFileToTableName contains '{}' (size={})",
+                LOGGER.debug("=== HTML MAPPING CHECK === Checking if htmlFileToTableName contains '{}' (size={})",
                            htmlFileName, htmlFileToTableName.size());
                 for (Map.Entry<String, String> entry : htmlFileToTableName.entrySet()) {
-                  LOGGER.info("=== HTML MAPPING ENTRY === '{}' -> '{}'", entry.getKey(), entry.getValue());
+                  LOGGER.debug("=== HTML MAPPING ENTRY === '{}' -> '{}'", entry.getKey(), entry.getValue());
                 }
 
                 if (htmlFileToTableName.containsKey(htmlFileName)) {
                   String explicitTableName = htmlFileToTableName.get(htmlFileName);
-                  LOGGER.info("=== FOUND EXPLICIT MAPPING === '{}' -> '{}'", htmlFileName, explicitTableName);
+                  LOGGER.debug("=== FOUND EXPLICIT MAPPING === '{}' -> '{}'", htmlFileName, explicitTableName);
 
                   // Map the JSON file to explicit table name
                   fileToTableName.put(record.convertedFile, explicitTableName);
@@ -1216,7 +1216,7 @@ public class ConversionMetadata {
    */
   public void updateExistingRecord(File sourceFile, File convertedFile, String conversionType, File baseDirectory, String generatedTableName) {
     try {
-      LOGGER.info("=== CONVERSION RECORD UPDATE TRACE === updateExistingRecord(sourceFile={}, generatedTableName={})", sourceFile.getName(), generatedTableName);
+      LOGGER.debug("=== CONVERSION RECORD UPDATE TRACE === updateExistingRecord(sourceFile={}, generatedTableName={})", sourceFile.getName(), generatedTableName);
       LOGGER.info("Before update: conversions map size = {}", conversions.size());
 
       ConversionRecord existingRecord = findRecordBySourceFile(sourceFile);
@@ -1256,7 +1256,7 @@ public class ConversionMetadata {
       }
 
       LOGGER.info("After update: conversions map size = {}", conversions.size());
-      LOGGER.info("=== END CONVERSION RECORD UPDATE TRACE ===\\n");
+      LOGGER.debug("=== END CONVERSION RECORD UPDATE TRACE ===\\n");
 
     } catch (IOException e) {
       LOGGER.error("Failed to update existing conversion record", e);
@@ -1274,7 +1274,7 @@ public class ConversionMetadata {
    */
   public void recordConversionWithTableName(String tableName, File sourceFile, File convertedFile, String conversionType) {
     try {
-      LOGGER.info("=== CONVERSION RECORD UPDATE TRACE === recordConversionWithTableName({})", tableName);
+      LOGGER.debug("=== CONVERSION RECORD UPDATE TRACE === recordConversionWithTableName({})", tableName);
       LOGGER.info("Before update: conversions map size = {}", conversions.size());
 
       String convertedPath = convertedFile.getCanonicalPath();
@@ -1340,7 +1340,7 @@ public class ConversionMetadata {
       LOGGER.info("After update: conversions map size = {}", conversions.size());
       LOGGER.info("Final record under tableName '{}': {}", tableName, formatRecord(conversions.get(tableName)));
       LOGGER.info("Final record under convertedFile '{}': {}", convertedPath, formatRecord(conversions.get(convertedPath)));
-      LOGGER.info("=== END CONVERSION RECORD UPDATE TRACE ===\\n");
+      LOGGER.debug("=== END CONVERSION RECORD UPDATE TRACE ===\\n");
 
     } catch (IOException e) {
       LOGGER.error("Failed to record conversion with table name", e);

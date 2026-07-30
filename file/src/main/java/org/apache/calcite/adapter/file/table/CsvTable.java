@@ -111,13 +111,13 @@ public abstract class CsvTable extends AbstractTable {
 
             if (!inferredTypes.isEmpty()) {
               // Log all inferred types for debugging
-              LOGGER.info("=== TYPE INFERENCE RESULTS ===");
+              LOGGER.debug("=== TYPE INFERENCE RESULTS ===");
               for (int i = 0; i < inferredTypes.size(); i++) {
                 CsvTypeInferrer.ColumnTypeInfo typeInfo = inferredTypes.get(i);
                 LOGGER.info("Column {}: {} -> {} (nullable={}, confidence={})",
                     i, typeInfo.columnName, typeInfo.inferredType, typeInfo.nullable, typeInfo.confidence);
               }
-              LOGGER.info("=== END TYPE INFERENCE RESULTS ===");
+              LOGGER.debug("=== END TYPE INFERENCE RESULTS ===");
 
               // Build a new row type with inferred types
               RelDataTypeFactory.Builder builder = typeFactory.builder();

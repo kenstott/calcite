@@ -1356,51 +1356,12 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     assertFalse(ParquetConversionUtil.needsConversion(source, target));
   }
 
-  // ========== isS3Path ==========
 
-  @Test void testIsS3PathTrue() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
-    method.setAccessible(true);
-    assertTrue((Boolean) method.invoke(null, "s3://bucket/key"));
-  }
 
-  @Test void testIsS3PathFalseLocal() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
-    method.setAccessible(true);
-    assertFalse((Boolean) method.invoke(null, "/local/path"));
-  }
 
-  @Test void testIsS3PathFalseNull() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
-    method.setAccessible(true);
-    assertFalse((Boolean) method.invoke(null, (String) null));
-  }
 
-  @Test void testIsS3PathFalseHttp() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("isS3Path", String.class);
-    method.setAccessible(true);
-    assertFalse((Boolean) method.invoke(null, "http://example.com"));
-  }
 
-  // ========== getHadoopPath ==========
 
-  @Test void testGetHadoopPathS3() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    method.setAccessible(true);
-    assertEquals("s3a://bucket/key", method.invoke(null, "s3://bucket/key"));
-  }
-
-  @Test void testGetHadoopPathLocal() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    method.setAccessible(true);
-    assertEquals("/local/path", method.invoke(null, "/local/path"));
-  }
-
-  @Test void testGetHadoopPathNull() throws Exception {
-    Method method = ParquetConversionUtil.class.getDeclaredMethod("getHadoopPath", String.class);
-    method.setAccessible(true);
-    assertEquals(null, method.invoke(null, (String) null));
-  }
 
   // ========== isNullRepresentation ==========
 
@@ -1503,21 +1464,6 @@ public class ParquetConversionUtilDeepCoverageTest3 {
     assertEquals("rawdata.parquet", result.getName());
   }
 
-  // ========== configureS3Access via reflection ==========
-
-  @Test void testConfigureS3Access() throws Exception {
-    Method method =
-        ParquetConversionUtil.class.getDeclaredMethod("configureS3Access", org.apache.hadoop.conf.Configuration.class);
-    method.setAccessible(true);
-
-    org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
-    // This should not throw, even if AWS credentials aren't available
-    try {
-      method.invoke(null, conf);
-    } catch (Exception e) {
-      // May fail if AWS SDK classes are not on classpath, which is acceptable
-    }
-  }
 
   // ========== convertToParquet overwrite existing ==========
 

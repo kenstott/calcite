@@ -476,6 +476,17 @@ public class FileConversionManagerTest {
     record.tableName = "custom_table_name";
     metadata.recordConversion(htmlFile, record);
 
+    // Make the source genuinely stale relative to the record. convertIfNeeded short-circuits on
+    // an unchanged file (that is its purpose), so with the record just written it returned false
+    // before ever reaching the branch under test. Rewriting the file changes both size and mtime,
+    // so hasChanged() is true and the existing-record path actually runs.
+    try (FileWriter writer = new FileWriter(htmlFile)) {
+      writer.write("<html><body><table><tr><th>id</th><th>name</th></tr>"
+          + "<tr><td>1</td><td>Alice</td></tr></table></body></html>");
+    }
+    assertTrue(htmlFile.setLastModified(System.currentTimeMillis() + 5000),
+        "could not age the source file; the staleness check below would be vacuous");
+
     // Now convertIfNeeded should find the existing record and preserve table name
     boolean result =
         FileConversionManager.convertIfNeeded(htmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",

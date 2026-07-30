@@ -148,14 +148,18 @@ public class DuckDBPartitionStatusStoreCoverageTest {
     store.markProcessedWithRowCount("alt_empty", "source_empty",
         keyValues, "/output.parquet", 0);
 
-    // Within TTL should return true
+    // TTL is an explicit opt-in now: plain isProcessed()/filterUnprocessed() answer "has this
+    // been processed" with no expiry, and the TTL-aware overloads take the window. These
+    // assertions previously called the no-TTL method twice and expected two different
+    // answers, which cannot hold.
+    // Within a generous TTL it is processed.
     assertTrue(
-        store.isProcessed("alt_empty", "source_empty", keyValues));
+        store.isProcessedWithTtl("alt_empty", "source_empty", keyValues, 60_000L));
 
-    // With very short TTL
+    // Past the TTL it needs reprocessing.
     Thread.sleep(50);
     assertFalse(
-        store.isProcessed("alt_empty", "source_empty", keyValues));
+        store.isProcessedWithTtl("alt_empty", "source_empty", keyValues, 1L));
   }
 
   @Test void testIsProcessedWithEmptyTtlNonEmptyResult() throws Exception {
