@@ -18,17 +18,11 @@ package org.apache.calcite.adapter.arrow;
 
 import org.apache.calcite.config.CalciteSystemProperty;
 
-import org.apache.arrow.gandiva.evaluator.Projector;
-import org.apache.arrow.gandiva.exceptions.GandivaException;
-import org.apache.arrow.gandiva.expression.ExpressionTree;
-import org.apache.arrow.vector.types.pojo.Schema;
 
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * JUnit5 extension to handle Arrow tests.
@@ -50,22 +44,21 @@ class ArrowExtension implements ExecutionCondition {
   @Override public ConditionEvaluationResult evaluateExecutionCondition(
       final ExtensionContext context) {
 
-    boolean enabled = CalciteSystemProperty.TEST_ARROW.value();
-    try {
-      Schema emptySchema = new Schema(new ArrayList<>(), null);
-      List<ExpressionTree> expressions = new ArrayList<>();
-      Projector.make(emptySchema, expressions);
-    } catch (GandivaException e) {
-      // this exception comes from using an empty expression,
-      // but the JNI library was loaded properly
-    } catch (UnsatisfiedLinkError e) {
-      enabled = false;
-    }
+    // Delegate to the same probe the adapter uses at runtime, rather than re-deriving it here.
+    // The previous check built a projector over an EMPTY schema and treated any GandivaException
+    // as "the JNI library loaded properly" — but a platform whose LLVM cannot start reports
+    // exactly that ("Could not create LLJIT instance: Symbols not found:
+    // [llvm_orc_registerEHFrameSectionWrapper]"), so these tests were enabled and then failed
+    // instead of skipping. GandivaAvailability builds a real projector and treats anything
+    // thrown as unavailable, which is the question being asked.
+    boolean enabled =
+        CalciteSystemProperty.TEST_ARROW.value() && GandivaAvailability.isAvailable();
 
     if (enabled) {
       return ConditionEvaluationResult.enabled("Arrow tests enabled");
     } else {
-      return ConditionEvaluationResult.disabled("Arrow tests disabled");
+      return ConditionEvaluationResult.disabled(
+          "Arrow tests disabled: Gandiva is not available on this platform");
     }
   }
 }

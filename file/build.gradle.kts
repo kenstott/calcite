@@ -53,7 +53,10 @@ dependencies {
     implementation("org.apache.arrow:arrow-memory-netty:15.0.2")
     implementation("org.apache.arrow:arrow-format:15.0.2")
     // Removed arrow-c-data - was only for DuckDB Arrow integration which has 400+ms overhead
-    implementation("org.apache.arrow.gandiva:arrow-gandiva")
+    // Gandiva is an optional Arrow accelerator, not something the file adapter calls; it has no
+    // references to it. Declaring it here pulled ~118 MB of native libraries into every consumer
+    // (govdata, then the engine jar, which then had to exclude them again). See
+    // GandivaAvailability in the arrow module for how the accelerated path is opted into.
 
     // Parquet dependencies for Parquet execution engine
     implementation("org.apache.parquet:parquet-arrow:1.15.2")

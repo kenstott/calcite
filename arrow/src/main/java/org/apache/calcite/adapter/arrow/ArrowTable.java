@@ -36,18 +36,10 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.util.ImmutableIntList;
 import org.apache.calcite.util.Util;
 
-import org.apache.arrow.gandiva.evaluator.Filter;
-import org.apache.arrow.gandiva.evaluator.Projector;
-import org.apache.arrow.gandiva.exceptions.GandivaException;
-import org.apache.arrow.gandiva.expression.Condition;
-import org.apache.arrow.gandiva.expression.ExpressionTree;
-import org.apache.arrow.gandiva.expression.TreeBuilder;
-import org.apache.arrow.gandiva.expression.TreeNode;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.ipc.ArrowFileReader;
 import org.apache.arrow.vector.ipc.SeekableReadChannel;
-import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 
@@ -58,10 +50,6 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 
-import static java.lang.Double.parseDouble;
-import static java.lang.Float.parseFloat;
-import static java.lang.Integer.parseInt;
-import static java.lang.Long.parseLong;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -109,74 +97,47 @@ public class ArrowTable extends AbstractTable
   public Enumerable<Object> query(DataContext root, ImmutableIntList fields,
       List<String> conditions) {
     requireNonNull(fields, "fields");
-    final Projector projector;
-    final Filter filter;
 
+    // Gandiva is optional (see GandivaAvailability). Without it, serve the scan straight off the
+    // Arrow vectors and let Calcite's Enumerable convention apply filters and projections. Every
+    // reference to the Gandiva API lives in GandivaEvaluators so that this class still loads when
+    // those classes are absent — it is reached via Class.forName, which initialises it.
+    if (!GandivaAvailability.isAvailable()) {
+      if (!conditions.isEmpty()) {
+        throw new IllegalStateException(
+            "Arrow filter pushdown requires Gandiva, which is not available; "
+                + "ArrowRules should not have pushed " + conditions);
+      }
+      return new ArrowEnumerable(openReader(), fields, null, null);
+    }
+
+    final Object projector;
+    final Object filter;
     if (conditions.isEmpty()) {
       filter = null;
-
-      final List<ExpressionTree> expressionTrees = new ArrayList<>();
-      for (int fieldOrdinal : fields) {
-        Field field = schema.getFields().get(fieldOrdinal);
-        TreeNode node = TreeBuilder.makeField(field);
-        expressionTrees.add(TreeBuilder.makeExpression(node, field));
-      }
-      try {
-        projector = Projector.make(schema, expressionTrees);
-      } catch (GandivaException e) {
-        throw Util.toUnchecked(e);
-      }
+      projector = GandivaEvaluators.makeProjector(schema, fields);
     } else {
       projector = null;
-
-      final List<TreeNode> conditionNodes = new ArrayList<>(conditions.size());
-      for (String condition : conditions) {
-        String[] data = condition.split(" ");
-        List<TreeNode> treeNodes = new ArrayList<>(2);
-        treeNodes.add(
-            TreeBuilder.makeField(schema.getFields()
-                .get(schema.getFields().indexOf(schema.findField(data[0])))));
-
-        // if the split condition has more than two parts it's a binary operator
-        // with an additional literal node
-        if (data.length > 2) {
-          treeNodes.add(makeLiteralNode(data[2], data[3]));
-        }
-
-        String operator = data[1];
-        conditionNodes.add(
-            TreeBuilder.makeFunction(operator, treeNodes, new ArrowType.Bool()));
-      }
-      final Condition filterCondition;
-      if (conditionNodes.size() == 1) {
-        filterCondition = TreeBuilder.makeCondition(conditionNodes.get(0));
-      } else {
-        TreeNode treeNode = TreeBuilder.makeAnd(conditionNodes);
-        filterCondition = TreeBuilder.makeCondition(treeNode);
-      }
-
-      try {
-        filter = Filter.make(schema, filterCondition);
-      } catch (GandivaException e) {
-        throw Util.toUnchecked(e);
-      }
+      filter = GandivaEvaluators.makeFilter(schema, conditions);
     }
 
-    // Create a new ArrowFileReader for each query to ensure we start from the beginning
-    ArrowFileReader readerForQuery = arrowFileReader;
-    if (sourceFile != null) {
-      try {
-        java.io.FileInputStream fileInputStream = new java.io.FileInputStream(sourceFile);
-        SeekableReadChannel seekableReadChannel =
-            new SeekableReadChannel(fileInputStream.getChannel());
-        BufferAllocator allocator = new RootAllocator();
-        readerForQuery = new ArrowFileReader(seekableReadChannel, allocator);
-      } catch (IOException e) {
-        throw Util.toUnchecked(e);
-      }
-    }
+    return new ArrowEnumerable(openReader(), fields, projector, filter);
+  }
 
-    return new ArrowEnumerable(readerForQuery, fields, projector, filter);
+  /** A reader positioned at the start of the file, so each query reads from the beginning. */
+  private ArrowFileReader openReader() {
+    if (sourceFile == null) {
+      return arrowFileReader;
+    }
+    try {
+      java.io.FileInputStream fileInputStream = new java.io.FileInputStream(sourceFile);
+      SeekableReadChannel seekableReadChannel =
+          new SeekableReadChannel(fileInputStream.getChannel());
+      BufferAllocator allocator = new RootAllocator();
+      return new ArrowFileReader(seekableReadChannel, allocator);
+    } catch (IOException e) {
+      throw Util.toUnchecked(e);
+    }
   }
 
   @Override public <T> Queryable<T> asQueryable(QueryProvider queryProvider,
@@ -208,26 +169,4 @@ public class ArrowTable extends AbstractTable
     return builder.build();
   }
 
-  private static TreeNode makeLiteralNode(String literal, String type) {
-    if (type.startsWith("decimal")) {
-      String[] typeParts =
-          type.substring(type.indexOf('(') + 1, type.indexOf(')')).split(",");
-      int precision = parseInt(typeParts[0]);
-      int scale = parseInt(typeParts[1]);
-      return TreeBuilder.makeDecimalLiteral(literal, precision, scale);
-    } else if (type.equals("integer")) {
-      return TreeBuilder.makeLiteral(parseInt(literal));
-    } else if (type.equals("long")) {
-      return TreeBuilder.makeLiteral(parseLong(literal));
-    } else if (type.equals("float")) {
-      return TreeBuilder.makeLiteral(parseFloat(literal));
-    } else if (type.equals("double")) {
-      return TreeBuilder.makeLiteral(parseDouble(literal));
-    } else if (type.equals("string")) {
-      return TreeBuilder.makeStringLiteral(literal.substring(1, literal.length() - 1));
-    } else {
-      throw new IllegalArgumentException("Invalid literal " + literal
-          + ", type " + type);
-    }
-  }
 }

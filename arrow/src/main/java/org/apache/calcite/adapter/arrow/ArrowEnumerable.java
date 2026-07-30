@@ -47,6 +47,12 @@ class ArrowEnumerable extends AbstractEnumerable<Object> {
       } else if (filter != null) {
         return new ArrowFilterEnumerator(sourceReader, fields, filter);
       }
+      // Neither means Gandiva is unavailable and this is a plain scan: the requested vectors are
+      // read directly and Calcite applies any filter above the scan.
+      if (sourceReader instanceof org.apache.arrow.vector.ipc.ArrowFileReader) {
+        return new ArrowScanEnumerator(
+            (org.apache.arrow.vector.ipc.ArrowFileReader) sourceReader, fields);
+      }
       throw new IllegalArgumentException(
           "The enumerator must have either a filter or a projection");
     } catch (Exception e) {
