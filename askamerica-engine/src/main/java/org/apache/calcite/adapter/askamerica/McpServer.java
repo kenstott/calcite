@@ -1353,35 +1353,6 @@ public class McpServer {
         return runSqlOn(sql, stat != null ? 5 : limit);
     }
 
-    /**
-     * COPY a single-row SELECT to R2 as Parquet, through the DuckDB JDBC driver that ships
-     * inside this jar (org.duckdb + its native lib are already on the classpath for query
-     * execution). Both callers previously ran ProcessBuilder("duckdb", "-c", sql), which
-     * requires a duckdb CLI on PATH — no installer puts one there, so on a stock machine
-     * every telemetry write and every bug report failed with ENOENT.
-     */
-    private static void copyToR2(String selectSql, String key) throws Exception {
-        java.util.Map<String, String> creds = R2CredentialProvider.resolve();
-        String accessKey = creds.get("accessKeyId");
-        String secretKey = creds.get("secretAccessKey");
-        String endpoint  = creds.get("endpoint");
-        if (accessKey == null || secretKey == null || endpoint == null) {
-            throw new IllegalStateException("R2 credentials unavailable");
-        }
-        Class.forName("org.duckdb.DuckDBDriver");
-        // Empty URL = fresh in-memory database, independent of the engine's own catalog.
-        try (Connection c = java.sql.DriverManager.getConnection("jdbc:duckdb:");
-             Statement s = c.createStatement()) {
-            s.execute("INSTALL httpfs");
-            s.execute("LOAD httpfs");
-            s.execute("SET s3_access_key_id='" + accessKey + "'");
-            s.execute("SET s3_secret_access_key='" + secretKey + "'");
-            s.execute("SET s3_endpoint='" + endpoint.replaceFirst("https?://", "") + "'");
-            s.execute("SET s3_url_style='path'");
-            s.execute("COPY (" + selectSql + ") TO 's3://govdata-parquet-v1/" + key
-                + "' (FORMAT PARQUET)");
-        }
-    }
 
     /** Base for the AskAmerica API — system property, then env, then production. */
     private static String apiBase() {
@@ -1519,25 +1490,86 @@ public class McpServer {
         }
     }
 
+    /**
+     * Runaway guard. Telemetry is already opt-in, and a normal session sends tens of
+     * events, so this is not a volume control — it is a ceiling so a client stuck in a
+     * loop cannot turn one session into unbounded requests. Failures are exempt: an
+     * error is the event worth having, and a session that has gone wrong is exactly when
+     * the cap would otherwise start discarding the useful records.
+     */
+    private static final int TELEMETRY_SESSION_CAP = 2000;
+    private static final java.util.concurrent.atomic.AtomicInteger TELEMETRY_SENT =
+        new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * Records one tool call, both to the local log and to POST /v1/telemetry.
+     *
+     * <p>This used to write a parquet file into s3://govdata-parquet-v1/telemetry/ with
+     * the caller's read-only credentials, so every write 403'd — silently, because the
+     * only report was a stderr line nobody reads. The local line is now written first and
+     * unconditionally, so the record survives even when the network leg fails.
+     *
+     * <p>Server-side this lands in Analytics Engine, not D1: it is high-cardinality
+     * time-series written per tool call, which is what AE is for.
+     */
     private static void recordTelemetry(String tool, long durationMs, int rowCount,
                                          boolean success, String querySql, String errorMsg) {
+        // Local first, and never conditional on the upload: this is the copy that is
+        // guaranteed to exist.
+        log.println("[askamerica-mcp] telemetry tool=" + tool
+            + " success=" + success
+            + " duration_ms=" + durationMs
+            + " rows=" + rowCount
+            + " session=" + SESSION_ID
+            + (errorMsg != null && !errorMsg.isEmpty()
+                ? " error=" + errorMsg.replace('\n', ' ') : ""));
+
+        if (success && TELEMETRY_SENT.get() >= TELEMETRY_SESSION_CAP) {
+            return;
+        }
+        TELEMETRY_SENT.incrementAndGet();
+
+        HttpURLConnection c = null;
         try {
-            String ts = java.time.Instant.now().toString();
-            String key = "telemetry/" + ts.replace(":", "-") + "-" + SESSION_ID + ".parquet";
-            String safeSql  = querySql  != null ? querySql.replace("'", "''")  : "";
-            String safeErr  = errorMsg  != null ? errorMsg.replace("'", "''").replace("\n", " ") : "";
-            copyToR2("SELECT"
-                + " '" + ts + "' AS recorded_at,"
-                + " '" + SESSION_ID + "' AS session_id,"
-                + " '" + BUILD_ID.replace("'", "''") + "' AS build,"
-                + " '" + tool.replace("'", "''") + "' AS tool,"
-                + " " + durationMs + " AS duration_ms,"
-                + " " + rowCount + " AS row_count,"
-                + " " + success + " AS success,"
-                + " '" + safeSql + "' AS query_sql,"
-                + " '" + safeErr + "' AS error_msg", key);
+            String payload = "{"
+                + "\"stamp\":" + jsonStr(ISSUE_STAMP) + ","
+                + "\"recorded_at\":" + jsonStr(java.time.Instant.now().toString()) + ","
+                + "\"session_id\":" + jsonStr(SESSION_ID) + ","
+                + "\"build\":" + jsonStr(BUILD_ID) + ","
+                + "\"tool\":" + jsonStr(tool) + ","
+                + "\"duration_ms\":" + durationMs + ","
+                + "\"row_count\":" + rowCount + ","
+                + "\"success\":" + success + ","
+                + "\"query_sql\":" + jsonStr(querySql) + ","
+                + "\"error_msg\":" + jsonStr(errorMsg)
+                + "}";
+
+            URL url = java.net.URI.create(apiBase() + "/v1/telemetry").toURL();
+            c = (HttpURLConnection) url.openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(5000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            String apiKey = UsageMetering.resolveApiKey(null);
+            if (apiKey != null && !apiKey.isEmpty()) {
+                c.setRequestProperty("X-API-Key", apiKey);
+            }
+            OutputStream os = c.getOutputStream();
+            try {
+                os.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } finally {
+                os.close();
+            }
+            c.getResponseCode(); // drives the request; the client does not act on it
         } catch (Exception e) {
-            log.println("[askamerica-mcp] telemetry error: " + e.getMessage());
+            // Best-effort upload. The local line above already holds the record, so this
+            // is logged once and never surfaced to the tool caller.
+            log.println("[askamerica-mcp] telemetry upload failed: " + e.getMessage());
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
         }
     }
 
