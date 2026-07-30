@@ -53,10 +53,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
 /**
  * Converter for XBRL files to Parquet format.
@@ -325,9 +327,7 @@ public class XbrlToParquetConverter implements FileConverter {
             LOGGER.info("Found companion XBRL instance: {}",
                 xbrlPath.substring(xbrlPath.lastIndexOf('/') + 1));
             try {
-              DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-              factory.setNamespaceAware(true);
-              DocumentBuilder builder = factory.newDocumentBuilder();
+              DocumentBuilder builder = newSafeDocumentBuilder(true);
               try (InputStream is = sanitizeXmlStream(
                   storageProvider.openInputStream(xbrlPath))) {
                 doc = builder.parse(is);
@@ -344,9 +344,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // If not HTML, try traditional XBRL/XML parsing
       if (doc == null && !fileName.endsWith(".htm") && !fileName.endsWith(".html")) {
         try {
-          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-          factory.setNamespaceAware(true);
-          DocumentBuilder builder = factory.newDocumentBuilder();
+          DocumentBuilder builder = newSafeDocumentBuilder(true);
           try (InputStream is = sanitizeXmlStream(
               storageProvider.openInputStream(sourceFilePath))) {
             doc = builder.parse(is);
@@ -2198,13 +2196,40 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Creates an XML parser that resolves nothing over the network.
+   *
+   * <p>EDGAR answers an overloaded request with an HTML error page rather than the XML that was
+   * asked for. That page carries a DOCTYPE pointing at {@code w3.org/TR/html4/loose.dtd}, and a
+   * default parser dutifully goes and fetches it — so every failed download turns into a second
+   * request, to a host that has deliberately refused automated DTD traffic for years. One batch
+   * made 426 of them and every single one came back HTTP 429, which is also what the parse error
+   * ends up reporting. Nothing is lost by not fetching it: the JSoup fallback reads the page
+   * without the DTD, and the DTD itself only defines entities for a document being discarded.
+   *
+   * <p>DOCTYPE declarations are still parsed, just never dereferenced, so a legitimate EDGAR
+   * document carrying one is unaffected. Switching entity resolution off also closes the XXE hole
+   * these features exist for, matching {@code XmlTableScanner} and
+   * {@code FedRegisterBulkXmlDataProvider}.
+   */
+  private static DocumentBuilder newSafeDocumentBuilder(boolean namespaceAware)
+      throws ParserConfigurationException {
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    factory.setNamespaceAware(namespaceAware);
+    factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+    factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+    factory.setXIncludeAware(false);
+    factory.setExpandEntityReferences(false);
+    return factory.newDocumentBuilder();
+  }
+
+  /**
    * Parse XBRL instance document filename from FilingSummary.xml content.
    * Mirrors the logic in SecSchemaFactory.parseXbrlFilenameFromSummary.
    */
   private String parseXbrlFilenameFromSummary(String summaryXml) {
     try {
-      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      DocumentBuilder builder = factory.newDocumentBuilder();
+      DocumentBuilder builder = newSafeDocumentBuilder(false);
       Document doc = builder.parse(
           new ByteArrayInputStream(
               summaryXml.getBytes(StandardCharsets.UTF_8)));
@@ -2300,9 +2325,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Create a new XML document from inline XBRL elements
-      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      factory.setNamespaceAware(true);
-      DocumentBuilder builder = factory.newDocumentBuilder();
+      DocumentBuilder builder = newSafeDocumentBuilder(true);
       Document doc = builder.newDocument();
 
       // Create root element
@@ -3452,9 +3475,7 @@ public class XbrlToParquetConverter implements FileConverter {
     if (filename.endsWith(".htm") || filename.endsWith(".html")) {
       try {
         LOGGER.debug("Parsing original HTML file to extract inline XBRL relationships: " + filename);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
+        DocumentBuilder builder = newSafeDocumentBuilder(true);
         try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourcePath))) {
           originalHtmlDoc = builder.parse(is);
         }
@@ -3715,9 +3736,7 @@ public class XbrlToParquetConverter implements FileConverter {
     LOGGER.debug("Parsing HTML file for schema references: " + htmlPath);
     Document doc;
     try {
-      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      factory.setNamespaceAware(true);
-      DocumentBuilder builder = factory.newDocumentBuilder();
+      DocumentBuilder builder = newSafeDocumentBuilder(true);
       try (InputStream is = storageProvider.openInputStream(htmlPath)) {
         doc = builder.parse(is);
       }
@@ -3790,9 +3809,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
 
     // Parse XSD to find linkbaseRef elements
-    DocumentBuilderFactory xsdFactory = DocumentBuilderFactory.newInstance();
-    xsdFactory.setNamespaceAware(true);
-    DocumentBuilder xsdBuilder = xsdFactory.newDocumentBuilder();
+    DocumentBuilder xsdBuilder = newSafeDocumentBuilder(true);
     Document xsdDoc = xsdBuilder.parse(new ByteArrayInputStream(xsdContent.getBytes(StandardCharsets.UTF_8)));
 
     // Find linkbaseRef elements
@@ -3857,9 +3874,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Parse linkbase and extract relationships
       try {
-        DocumentBuilderFactory linkbaseFactory = DocumentBuilderFactory.newInstance();
-        linkbaseFactory.setNamespaceAware(true);
-        DocumentBuilder linkbaseBuilder = linkbaseFactory.newDocumentBuilder();
+        DocumentBuilder linkbaseBuilder = newSafeDocumentBuilder(true);
         Document linkbaseDoc = linkbaseBuilder.parse(new ByteArrayInputStream(linkbaseContent.getBytes(StandardCharsets.UTF_8)));
         extractLinkbaseRelationships(linkbaseDoc, columns, dataList, cik, accession, filingDate, linkbaseType);
       } catch (Exception e) {
@@ -4283,10 +4298,44 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Reads a {@code Retry-After} delay, in milliseconds, or -1 when the response carries none.
+   *
+   * <p>Only the delta-seconds form is honoured. The HTTP-date form is legal but EDGAR does not
+   * send it, and a parser for a format that never arrives is a parser that is never exercised.
+   * Capped at a minute so a header asking for an hour cannot wedge a worker thread — the caller
+   * gives up and the accession is re-offered by the next run, which is the cheaper wait.
+   */
+  private static long retryAfterMs(HttpURLConnection conn) {
+    String header = conn.getHeaderField("Retry-After");
+    if (header == null) {
+      return -1;
+    }
+    try {
+      long seconds = Long.parseLong(header.trim());
+      if (seconds < 0) {
+        return -1;
+      }
+      return Math.min(seconds, 60L) * 1000L;
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
+
+  /**
    * Download file from URL with retry and exponential backoff for transient errors.
    */
   private String downloadFile(String urlString) {
-    int maxRetries = 3;
+    // Three attempts one and two seconds apart give a download three seconds to outlast a bad
+    // patch. EDGAR's bad patches run for hours: one batch spent its afternoon against a 503ing
+    // host and exhausted the budget 25 times, which cost six filings. Five attempts backing off to
+    // sixteen seconds ride out a burst instead of a storm — the storm is the caller's problem, and
+    // an exhausted download raises IncompleteFetchException so the accession is left unrecorded
+    // and re-offered by the next run.
+    //
+    // The delay is jittered because the failures arrive together. Eight worker threads that hit
+    // the same bad patch otherwise back off in lockstep and retry in one synchronized burst,
+    // which is the shape of traffic that provoked the throttling to begin with.
+    int maxRetries = 5;
     long initialDelayMs = 1000;
 
     for (int attempt = 0; attempt < maxRetries; attempt++) {
@@ -4320,7 +4369,12 @@ public class XbrlToParquetConverter implements FileConverter {
         if (responseCode == 429 || responseCode == 500 || responseCode == 502
             || responseCode == 503 || responseCode == 504) {
           if (attempt < maxRetries - 1) {
-            long delay = initialDelayMs * (1L << attempt);
+            // A server that says when to come back knows better than the backoff curve does.
+            long delay = retryAfterMs(conn);
+            if (delay < 0) {
+              delay = initialDelayMs * (1L << attempt);
+              delay += ThreadLocalRandom.current().nextLong(delay / 2 + 1) - delay / 4;
+            }
             LOGGER.warn("HTTP {} from {} - retrying in {}ms (attempt {}/{})",
                 responseCode, urlString, delay, attempt + 1, maxRetries);
             sleepQuietly(delay);
@@ -4463,9 +4517,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     Document doc;
     try {
-      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      factory.setNamespaceAware(true);
-      DocumentBuilder builder = factory.newDocumentBuilder();
+      DocumentBuilder builder = newSafeDocumentBuilder(true);
       try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
         doc = builder.parse(is);
       }
@@ -6759,9 +6811,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       if (fileName.endsWith(".xml")) {
         try {
-          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-          factory.setNamespaceAware(true);
-          DocumentBuilder builder = factory.newDocumentBuilder();
+          DocumentBuilder builder = newSafeDocumentBuilder(true);
           try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
             primaryDoc = builder.parse(is);
           }
@@ -6964,9 +7014,7 @@ public class XbrlToParquetConverter implements FileConverter {
         String content = downloadFile(baseUrl + "/" + name);
         if (content != null && content.contains("infoTable")) {
           LOGGER.info("Downloaded 13F info table: {}/{}", accession, name);
-          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-          factory.setNamespaceAware(true);
-          DocumentBuilder builder = factory.newDocumentBuilder();
+          DocumentBuilder builder = newSafeDocumentBuilder(true);
           try (InputStream is = sanitizeXmlStream(
               new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
             return builder.parse(is);
@@ -6988,9 +7036,7 @@ public class XbrlToParquetConverter implements FileConverter {
           String content = downloadFile(baseUrl + "/" + infoTableFile);
           if (content != null) {
             LOGGER.info("Downloaded 13F info table from index: {}/{}", accession, infoTableFile);
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
+            DocumentBuilder builder = newSafeDocumentBuilder(true);
             try (InputStream is = sanitizeXmlStream(
                 new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)))) {
               return builder.parse(is);
@@ -7227,9 +7273,7 @@ public class XbrlToParquetConverter implements FileConverter {
       String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1).toLowerCase();
       if (fileName.endsWith(".xml")) {
         try {
-          DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-          factory.setNamespaceAware(true);
-          DocumentBuilder builder = factory.newDocumentBuilder();
+          DocumentBuilder builder = newSafeDocumentBuilder(true);
           try (InputStream is = sanitizeXmlStream(
               new ByteArrayInputStream(fileContent.getBytes(StandardCharsets.UTF_8)))) {
             xmlDoc = builder.parse(is);
