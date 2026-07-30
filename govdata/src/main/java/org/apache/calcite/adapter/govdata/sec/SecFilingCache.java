@@ -201,14 +201,16 @@ public class SecFilingCache implements AutoCloseable {
       if (!completed.isEmpty()) {
         FormType form = FormType.fromString(ie.formType);
         FileInventory inv = inventoryFromCompletedTables(completed);
-        if (inv.isComplete(form, vectorizationEnabled)) {
+        String items = earningsItemsIfNeeded(form, inv, ie.cik, ie.accession);
+        if (inv.isComplete(form, vectorizationEnabled, items)) {
           cntTrackerComplete++;
           continue;
         }
         // Base staging parquet exists; only chunks are missing.
         // In normal mode: skip — re-downloading just for chunks is unnecessary.
         // In chunksBackfill mode: reprocess so chunks get written.
-        if (inv.isComplete(form, false) && (!chunksBackfill || inv.isComplete(form, true))) {
+        if (inv.isComplete(form, false, items)
+            && (!chunksBackfill || inv.isComplete(form, true, items))) {
           cntTrackerBaseComplete++;
           continue;
         }
@@ -228,6 +230,27 @@ public class SecFilingCache implements AutoCloseable {
         cntTrackerIncomplete, toProcess.size());
 
     return toProcess;
+  }
+
+  /**
+   * Looks up a filing's EDGAR items, but only when they can change the verdict.
+   *
+   * <p>Items decide one question: whether an 8-K owes an earnings transcript. Asking costs a
+   * submissions fetch the first time a CIK is seen, so it is worth asking only for a filing whose
+   * form expects earnings and whose earnings output is actually absent — the case that would
+   * otherwise be reprocessed. A filing already holding its transcript, or one of a form that never
+   * produces one, is settled without the lookup.
+   *
+   * <p>Skipping the lookup returns null, which {@link FormType#getExpectedOutputs} reads as
+   * "unknown" and resolves conservatively. That is the correct reading here: the verdict was
+   * reached without needing the items, not in spite of missing them.
+   */
+  private static String earningsItemsIfNeeded(FormType form, FileInventory inv, String cik,
+      String accession) {
+    if (!form.expectsEarnings() || inv.has(FormType.OutputType.EARNINGS)) {
+      return null;
+    }
+    return SecDataFetcher.getFilingItems(cik, accession);
   }
 
   /**
@@ -274,12 +297,13 @@ public class SecFilingCache implements AutoCloseable {
 
     // Have some tracker entries - check if complete
     FileInventory trackerInventory = inventoryFromCompletedTables(completedTables);
-    if (trackerInventory.isComplete(form, vectorizationEnabled)) {
+    String items = earningsItemsIfNeeded(form, trackerInventory, cik, accession);
+    if (trackerInventory.isComplete(form, vectorizationEnabled, items)) {
       return ProcessingDecision.skip("Already complete");
     }
 
     // Check if vectorization upgrade needed (all base files present, just chunks missing)
-    if (vectorizationEnabled && trackerInventory.isComplete(form, false)
+    if (vectorizationEnabled && trackerInventory.isComplete(form, false, items)
         && !completedTables.contains("chunks")) {
       return ProcessingDecision.processChunksOnly("Vectorization upgrade needed");
     }

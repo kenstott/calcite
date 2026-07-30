@@ -3048,6 +3048,24 @@ public class SecDataFetcher {
   }
 
   private static final Map<String, Map<String, String>> COMPANY_INFO_CACHE = new ConcurrentHashMap<>();
+
+  /**
+   * Accession number to its EDGAR item numbers, e.g. {@code 0000320193-26-000018 -> "2.02,9.01"}.
+   *
+   * <p>Populated as a side effect of {@link #getCompanyInfoForCik}, which already downloads the
+   * submissions payload these live in. Reading them costs nothing extra; the alternative is a
+   * per-filing request for something we have already been handed.
+   *
+   * <p>Only 8-K items are of interest today: an 8-K reports whatever event its items name, and
+   * only Item 2.02 (Results of Operations and Financial Condition) is an earnings release. Without
+   * this, every 8-K is expected to yield an earnings transcript and roughly four in five are
+   * recorded as gaps that no amount of reprocessing can close.
+   */
+  private static final Map<String, String> FILING_ITEMS_CACHE = new ConcurrentHashMap<>();
+
+  /** CIKs whose overflow submission files have been read, so the work happens at most once. */
+  private static final Set<String> OVERFLOW_LOADED =
+      java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
   private static final String SUBMISSIONS_URL_TMPL =
       "https://data.sec.gov/submissions/CIK%s.json";
 
@@ -3091,12 +3109,106 @@ public class SecDataFetcher {
             info.put("mailing_address", street1);
           }
         }
+        indexFilingItems(node.path("filings").path("recent"));
       }
     } catch (Exception e) {
       LOGGER.warn("Failed to fetch submissions.json for CIK {}: {}", normalized, e.getMessage());
     }
     COMPANY_INFO_CACHE.put(normalized, info);
     return info;
+  }
+
+  /**
+   * Indexes one submissions block's parallel arrays into {@link #FILING_ITEMS_CACHE}.
+   *
+   * <p>EDGAR stores a filing's fields as column arrays sharing an index, so entry <i>i</i> of
+   * {@code accessionNumber} describes the same filing as entry <i>i</i> of {@code items}. A
+   * filing with no items — everything that is not an 8-K — is indexed as the empty string, which
+   * is the answer "this filing reports no items" and is distinct from never having looked.
+   */
+  private static void indexFilingItems(JsonNode block) {
+    JsonNode accessions = block.path("accessionNumber");
+    JsonNode items = block.path("items");
+    if (!accessions.isArray()) {
+      return;
+    }
+    for (int i = 0; i < accessions.size(); i++) {
+      String accession = accessions.get(i).asText("");
+      if (!accession.isEmpty()) {
+        FILING_ITEMS_CACHE.put(accession, items.path(i).asText(""));
+      }
+    }
+  }
+
+  /**
+   * Returns the EDGAR item numbers for a filing, or null if EDGAR does not report on it.
+   *
+   * <p>A null is not "no items" — it means the submissions payload never covered this filing, and
+   * a caller deciding what a filing should have produced cannot treat the two alike. An 8-K with
+   * no items is one we know reports no earnings; an 8-K with unknown items is one we know nothing
+   * about, and calling it complete would retire a genuine gap.
+   *
+   * <p>{@code filings.recent} holds only the latest thousand or so filings, so a prolific filer's
+   * older submissions live in the overflow files named by {@code filings.files}. Those are read
+   * only when a lookup misses and only once per CIK, which keeps the common path — a recent
+   * filing, already indexed by the company-info fetch — free of extra requests.
+   */
+  public static String getFilingItems(String cik, String accession) {
+    if (accession == null) {
+      return null;
+    }
+    String normalized = cik.replaceAll("[^0-9]", "");
+    while (normalized.length() < 10) {
+      normalized = "0" + normalized;
+    }
+    // Warms FILING_ITEMS_CACHE from filings.recent on first call for this CIK.
+    getCompanyInfoForCik(normalized);
+    String found = FILING_ITEMS_CACHE.get(accession);
+    if (found != null || !OVERFLOW_LOADED.add(normalized)) {
+      return found;
+    }
+    loadOverflowSubmissions(normalized);
+    return FILING_ITEMS_CACHE.get(accession);
+  }
+
+  /** Reads the overflow submission files listed by a CIK's payload into the items cache. */
+  private static void loadOverflowSubmissions(String cik) {
+    try {
+      String url = String.format(SUBMISSIONS_URL_TMPL, cik);
+      JsonNode root = readSubmissionsJson(url);
+      if (root == null) {
+        return;
+      }
+      for (JsonNode file : root.path("filings").path("files")) {
+        String name = file.path("name").asText("");
+        if (name.isEmpty()) {
+          continue;
+        }
+        JsonNode block = readSubmissionsJson("https://data.sec.gov/submissions/" + name);
+        if (block != null) {
+          indexFilingItems(block);
+        }
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read overflow submissions for CIK {}: {}", cik, e.getMessage());
+    }
+  }
+
+  /** Fetches and parses a submissions JSON document, or null when EDGAR does not return one. */
+  private static JsonNode readSubmissionsJson(String url) {
+    try {
+      HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
+      conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+      conn.setConnectTimeout(8000);
+      conn.setReadTimeout(10000);
+      if (conn.getResponseCode() != 200) {
+        return null;
+      }
+      return MAPPER.readTree(conn.getInputStream());
+    } catch (Exception e) {
+      LOGGER.warn("Failed to read {}: {}", url, e.getMessage());
+      return null;
+    }
   }
 
   /**

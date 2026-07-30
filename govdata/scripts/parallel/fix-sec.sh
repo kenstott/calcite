@@ -96,8 +96,16 @@ FORM_TABLES=(
   "10-K/A:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
   "10-Q:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
   "10-Q/A:filing_metadata,financial_line_items,filing_contexts,xbrl_relationships,mda_sections,vectorized_chunks"
-  "8-K:filing_metadata,earnings_transcripts,vectorized_chunks"
-  "8-K/A:filing_metadata,earnings_transcripts,vectorized_chunks"
+  # earnings_transcripts is deliberately absent. An 8-K reports whatever event its items name and
+  # only Item 2.02 is an earnings release, so the expectation holds for roughly one filing in five
+  # — measured at 18-22% every year from 2019 to 2022. This report reads Iceberg over SQL and
+  # cannot consult a filing's items, so requiring it here flags the other four in five as gaps that
+  # no reprocessing can close: 49,387 of 2021's 49,396 candidates, and 20,585 of 2020's remaining
+  # 28,969. The condition is evaluated per filing by FormType.getExpectedOutputs(boolean, String),
+  # which the ETL consults on restart, so a 2.02 filing genuinely missing its transcript is still
+  # found and reprocessed — just not from here.
+  "8-K:filing_metadata,vectorized_chunks"
+  "8-K/A:filing_metadata,vectorized_chunks"
   "DEF 14A:filing_metadata,financial_line_items,filing_contexts"
   "3:filing_metadata,insider_transactions"
   "4:filing_metadata,insider_transactions"

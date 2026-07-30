@@ -149,6 +149,48 @@ public enum FormType {
   }
 
   /**
+   * Get expected output types for this form, narrowed by the filing's EDGAR item numbers.
+   *
+   * <p>An 8-K reports whatever event its items name — a director's departure, a material
+   * agreement, an acquisition — and only Item 2.02, Results of Operations and Financial Condition,
+   * is an earnings release. Expecting a transcript from every 8-K makes roughly four in five
+   * permanently incomplete: measured across 2019-2022, between 18% and 22% of 8-Ks produced one,
+   * every year. Those filings are re-tested and reprocessed on each restart, and can never pass.
+   *
+   * <p>Unknown items are treated as expecting earnings, which is the behaviour without this
+   * narrowing at all. EDGAR's submissions payload covers every filing, so a null here means the
+   * lookup failed rather than that the filing reports nothing — and a failed lookup must not be
+   * allowed to retire a filing that genuinely owes a transcript. Reprocessing costs time; wrongly
+   * declaring a filing complete loses the data quietly, which is the more expensive mistake.
+   *
+   * @param items comma-separated EDGAR item numbers, empty when the filing reports none, or null
+   *              when EDGAR's payload did not cover the filing
+   */
+  public Set<OutputType> getExpectedOutputs(boolean vectorizationEnabled, String items) {
+    Set<OutputType> outputs = getExpectedOutputs(vectorizationEnabled);
+    if (outputs.contains(OutputType.EARNINGS) && items != null && !reportsEarningsItem(items)) {
+      outputs.remove(OutputType.EARNINGS);
+    }
+    return outputs;
+  }
+
+  /**
+   * Whether an item list names Item 2.02, the earnings release item.
+   *
+   * <p>Matched on the whole item rather than as a substring: the list is comma separated and
+   * {@code 2.02} must not be found inside a hypothetical {@code 12.02}, nor {@code 2.0} inside
+   * {@code 2.02}.
+   */
+  private static boolean reportsEarningsItem(String items) {
+    for (String item : items.split(",")) {
+      if ("2.02".equals(item.trim())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Parse form type from string.
    */
   public static FormType fromString(String form) {

@@ -92,7 +92,16 @@ public class FileInventory {
    * Check if inventory is complete for the given form type.
    */
   public boolean isComplete(FormType formType, boolean vectorizationEnabled) {
-    Set<FormType.OutputType> expected = formType.getExpectedOutputs(vectorizationEnabled);
+    return isComplete(formType, vectorizationEnabled, null);
+  }
+
+  /**
+   * Check if inventory is complete, judged against what this filing's items say it owes.
+   *
+   * @param items the filing's EDGAR item numbers, or null when they are not known
+   */
+  public boolean isComplete(FormType formType, boolean vectorizationEnabled, String items) {
+    Set<FormType.OutputType> expected = formType.getExpectedOutputs(vectorizationEnabled, items);
     for (FormType.OutputType output : expected) {
       if (!has(output)) {
         return false;
