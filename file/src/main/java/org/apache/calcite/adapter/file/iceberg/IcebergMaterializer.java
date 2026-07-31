@@ -16,9 +16,13 @@ import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -2562,7 +2566,7 @@ public class IcebergMaterializer {
   /**
    * Result of ensuring a table exists, including whether it was recreated.
    */
-  private static class TableSetupResult {
+  static class TableSetupResult {
     final Table table;
     final boolean wasRecreated;
 
@@ -2584,7 +2588,7 @@ public class IcebergMaterializer {
    *
    * @return TableSetupResult containing the table and whether it was recreated
    */
-  private TableSetupResult ensureTableExists(MaterializationConfig config) {
+  TableSetupResult ensureTableExists(MaterializationConfig config) {
     // Use tableColumns if provided, otherwise fall back to partition columns
     List<IcebergCatalogManager.ColumnDef> columns;
     if (!config.getTableColumns().isEmpty()) {
@@ -2613,8 +2617,31 @@ public class IcebergMaterializer {
       int expectedColumnCount = columns.size();
 
       if (expectedColumnCount > 0 && existingColumnCount < expectedColumnCount) {
-        LOGGER.warn("Existing Iceberg table '{}' has {} columns but expected {}. "
-            + "Dropping and recreating with correct schema.",
+        // A YAML schema gaining columns is routine — the events of this session alone added four
+        // to xbrl_relationships and one to sec-schema.yaml's filing_metadata draft. Dropping the
+        // table every time that happens erases its history to add a column: xbrl_relationships
+        // held 195M rows: presentation and calculation linkbase relationships that were entirely
+        // correct, discarded along with the polluted rows this session found, because the
+        // materializer could not add four columns without deleting the table first.
+        //
+        // Adding a column is safe exactly when every existing column survives unchanged in the
+        // new schema — same name, same type. That is a pure superset, and Iceberg's schema
+        // evolution can express it directly: the old data files still satisfy the new schema,
+        // reading the missing columns as null, which is correct because those rows genuinely
+        // predate whatever populates them. A renamed, retyped, or removed column cannot be told
+        // apart from data loss from the schema alone, so anything short of a pure superset keeps
+        // the original drop-and-recreate behavior rather than guessing.
+        String addedColumns = pureColumnAdditions(existingTable.schema(), columns);
+        if (addedColumns != null) {
+          Table evolved = addMissingColumns(existingTable, columns);
+          LOGGER.info("Evolved Iceberg table '{}': added column(s) [{}], {} existing rows "
+              + "preserved (no drop, no rewrite)",
+              config.getTargetTableId(), addedColumns, existingColumnCount);
+          return new TableSetupResult(evolved, false);
+        }
+        LOGGER.warn("Existing Iceberg table '{}' has {} columns but expected {}, and the "
+            + "difference is not a pure column addition (a column was renamed, retyped, or "
+            + "removed). Dropping and recreating with correct schema.",
             config.getTargetTableId(), existingColumnCount, expectedColumnCount);
         IcebergCatalogManager.dropTable(catalogConfig, config.getTargetTableId(), true);
         // Fall through to create new table with wasRecreated = true
@@ -2644,6 +2671,83 @@ public class IcebergMaterializer {
         columns,
         config.getPartitionColumnNames());
     return new TableSetupResult(recreatedTable, true);
+  }
+
+  /**
+   * Checks whether {@code expectedColumns} is a pure superset of {@code existingSchema}: every
+   * column already in the table survives, by name and type, unchanged.
+   *
+   * <p>Matching is by name and mapped Iceberg type only — not by field ID or position. A YAML
+   * column list is re-declared from scratch on every run, so it has no notion of the field IDs
+   * Iceberg assigned when the table was created, and reordering columns in the YAML must not be
+   * read as removing and re-adding all of them.
+   *
+   * @return a comma-separated list of the column names that would be added, for logging, or null
+   *         if this is not a pure addition (some existing column is missing, renamed, or retyped)
+   */
+  static String pureColumnAdditions(Schema existingSchema,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    Map<String, IcebergCatalogManager.ColumnDef> expectedByName =
+        new LinkedHashMap<String, IcebergCatalogManager.ColumnDef>();
+    for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+      expectedByName.put(col.getName(), col);
+    }
+
+    for (Types.NestedField existingField : existingSchema.columns()) {
+      IcebergCatalogManager.ColumnDef expected = expectedByName.get(existingField.name());
+      if (expected == null) {
+        return null;
+      }
+      Type expectedType = IcebergCatalogManager.mapToIcebergType(expected.getType());
+      if (!expectedType.equals(existingField.type())) {
+        return null;
+      }
+    }
+
+    StringBuilder added = new StringBuilder();
+    for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+      if (existingSchema.findField(col.getName()) == null) {
+        if (added.length() > 0) {
+          added.append(", ");
+        }
+        added.append(col.getName());
+      }
+    }
+    // expectedColumnCount > existingColumnCount was already established by the caller, so at
+    // least one column is genuinely new; this is defensive rather than reachable.
+    return added.length() > 0 ? added.toString() : null;
+  }
+
+  /**
+   * Commits an {@link UpdateSchema#addColumn} for every column in {@code expectedColumns} not
+   * already present in {@code table}'s schema, then refreshes the table so its schema reflects
+   * the commit immediately.
+   *
+   * <p>Adds columns as nullable — Iceberg has no other option for an added column, since every
+   * existing data file necessarily has no value for it. That is also the semantically correct
+   * reading here: a row written before the column existed truly has no value for it, not an
+   * unknown one standing in for a value that should be there.
+   */
+  Table addMissingColumns(Table table, List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    UpdateSchema update = table.updateSchema();
+    boolean any = false;
+    for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+      if (table.schema().findField(col.getName()) != null) {
+        continue;
+      }
+      Type type = IcebergCatalogManager.mapToIcebergType(col.getType());
+      if (col.getDoc() != null && !col.getDoc().isEmpty()) {
+        update.addColumn(col.getName(), type, col.getDoc());
+      } else {
+        update.addColumn(col.getName(), type);
+      }
+      any = true;
+    }
+    if (any) {
+      update.commit();
+      table.refresh();
+    }
+    return table;
   }
 
   /**

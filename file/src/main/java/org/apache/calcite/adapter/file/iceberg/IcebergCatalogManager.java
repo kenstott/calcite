@@ -405,7 +405,7 @@ public class IcebergCatalogManager {
    * @param typeName The type name (e.g., "VARCHAR", "INTEGER", "array&lt;double&gt;")
    * @return The corresponding Iceberg type
    */
-  private static org.apache.iceberg.types.Type mapToIcebergType(String typeName) {
+  static org.apache.iceberg.types.Type mapToIcebergType(String typeName) {
     if (typeName == null) {
       return Types.StringType.get();
     }
