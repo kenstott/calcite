@@ -31,6 +31,7 @@ import org.apache.calcite.schema.ImplementableFunction;
 import org.apache.calcite.schema.ScalarFunction;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.impl.AbstractSchema;
+import org.apache.calcite.schema.impl.AggregateFunctionImpl;
 import org.apache.calcite.schema.impl.ScalarFunctionImpl;
 import org.apache.calcite.schema.impl.ViewTable;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -54,6 +55,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Tests for user-defined functions;
@@ -647,6 +650,61 @@ class UdfTest {
     with.query("select \"deptno\", my_sum2(\"deptno\") as p from EMPLOYEES\n"
         + "group by \"deptno\"")
         .returnsUnordered("deptno=20; P=20", "deptno=10; P=30");
+  }
+
+  /** A user-defined aggregate whose {@code add} declares boxed {@code Double} parameters,
+   * used to prove such a call still compiles when fed a column of a different numeric type
+   * (e.g. {@code int}), which needs both a widening and a boxing conversion that plain Java
+   * method invocation cannot perform implicitly in a single step. */
+  public static class MyDoubleSumFunction {
+    public Double init() {
+      return 0.0;
+    }
+
+    public Double add(Double accumulator, Double ignored, Double v) {
+      return accumulator + v;
+    }
+
+    public Double result(Double accumulator) {
+      return accumulator;
+    }
+  }
+
+  /** Tests that a user-defined aggregate function declared with boxed {@code Double}
+   * parameters compiles and runs when one argument's column is a different numeric type
+   * (here {@code int}), both alone and alongside a second aggregate call in the same
+   * {@code GROUP BY}. Regression test: previously, sharing the aggregate with a second call
+   * (e.g. {@code COUNT(*)}) triggered a Janino "No applicable constructor/method" compile
+   * failure instead of running, because {@code add}'s arguments were passed to the reflective
+   * call as-is instead of being converted to the method's declared parameter types the way
+   * {@code ReflectiveCallNotNullImplementor} already does for scalar UDFs. */
+  @Test void testUserDefinedAggregateFunctionWithMismatchedArgumentType() throws Exception {
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:")) {
+      CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
+      SchemaPlus rootSchema = calciteConnection.getRootSchema();
+      rootSchema.add("hr", new ReflectiveSchema(new HrSchema()));
+
+      SchemaPlus post = rootSchema.add("POST", new AbstractSchema());
+      post.add("MY_DSUM",
+          requireNonNull(AggregateFunctionImpl.create(MyDoubleSumFunction.class)));
+
+      try (Statement stmt = connection.createStatement()) {
+        // "empid" is int; MyDoubleSumFunction#add declares (Double, Double, Double).
+        try (ResultSet rs = stmt.executeQuery(
+            "select POST.MY_DSUM(\"salary\", \"empid\") as r\n"
+            + "from \"hr\".\"emps\"")) {
+          assertThat(rs.next(), is(true));
+          assertThat(rs.getDouble("R"), is(560.0));
+        }
+        try (ResultSet rs = stmt.executeQuery(
+            "select POST.MY_DSUM(\"salary\", \"empid\") as r, count(*) as n\n"
+            + "from \"hr\".\"emps\"")) {
+          assertThat(rs.next(), is(true));
+          assertThat(rs.getDouble("R"), is(560.0));
+          assertThat(rs.getLong("N"), is(4L));
+        }
+      }
+    }
   }
 
   /** Tests user-defined aggregate function. */

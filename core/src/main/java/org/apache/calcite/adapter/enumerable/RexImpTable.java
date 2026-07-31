@@ -2285,7 +2285,20 @@ public class RexImpTable {
     @Override protected void implementNotNullAdd(AggContext info,
         AggAddContext add) {
       List<Expression> acc = add.accumulator();
-      List<Expression> aggArgs = add.arguments();
+      // addMethod's own first parameter is the accumulator; only the remaining
+      // parameters correspond to add.arguments() and need converting to their declared
+      // Java types. ReflectiveCallNotNullImplementor (the scalar-UDF equivalent of this
+      // class) already does this for every UDF call; this aggregate counterpart did
+      // not, so an argument whose runtime type didn't already match the declared
+      // parameter (e.g. an int-valued column reaching a Double-declared parameter,
+      // which needs both a widening and a boxing conversion that plain Java method
+      // invocation cannot combine in one implicit step) failed to compile instead of
+      // being converted.
+      final Class<?>[] valueParamTypes =
+          Arrays.copyOfRange(afi.addMethod.getParameterTypes(), 1,
+              afi.addMethod.getParameterTypes().length);
+      List<Expression> aggArgs = EnumUtils.fromInternal(valueParamTypes, add.arguments());
+      aggArgs = EnumUtils.convertAssignableTypes(valueParamTypes, aggArgs);
       List<Expression> args = new ArrayList<>(aggArgs.size() + 1);
       args.add(acc.get(0));
       args.addAll(aggArgs);
