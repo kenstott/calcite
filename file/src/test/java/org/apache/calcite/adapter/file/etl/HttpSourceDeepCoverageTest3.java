@@ -170,10 +170,18 @@ class HttpSourceDeepCoverageTest3 {
       Method m =
           HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
       m.setAccessible(true);
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> result = (List<Map<String, Object>>)
-          m.invoke(source, "name,state\nAlice,NY\n", ',');
-      assertEquals(1, result.size());
+      // A filter column absent from the headers must fail, not be dropped: silently admitting
+      // every row turns a deliberately-filtered table into a full copy of the source.
+      java.lang.reflect.InvocationTargetException thrown =
+          org.junit.jupiter.api.Assertions.assertThrows(
+              java.lang.reflect.InvocationTargetException.class,
+              () -> m.invoke(source, "name,state\nAlice,NY\n", ','));
+      org.junit.jupiter.api.Assertions.assertTrue(
+          thrown.getCause() instanceof IllegalStateException,
+          "Expected IllegalStateException, got: " + thrown.getCause());
+      org.junit.jupiter.api.Assertions.assertTrue(
+          thrown.getCause().getMessage().contains("nonexistent"),
+          "Message must name the missing column: " + thrown.getCause().getMessage());
     } finally {
       source.close();
     }

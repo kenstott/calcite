@@ -124,6 +124,62 @@ public class ColumnConfig {
   }
 
   /**
+   * Resolves a field named elsewhere in the table config (e.g. {@code incremental.dateField},
+   * {@code rowFilter.column}) to the key that field actually carries in a <b>fetched</b> row.
+   *
+   * <p>Fetched rows are keyed by the raw source field name — the rename declared by
+   * {@code source:} is applied later, during materialization. So a config that names the
+   * logical column ({@code last_update}) does not match a row keyed by the source field
+   * ({@code Registration.LastUpdateDate}). This accepts either spelling and returns the key
+   * to look up at fetch time, so the YAML means the same thing whichever the author wrote.
+   *
+   * @param columns Declared columns, or null/empty when the table declares none
+   * @param fieldName Field name from the table config; may be null
+   * @return the fetch-time key, {@code fieldName} unchanged when there are no declared
+   *         columns to resolve against, or null when the name matches no declared column
+   *         and no declared source (a configuration error the caller should report)
+   */
+  public static String resolveSourceKey(List<ColumnConfig> columns, String fieldName) {
+    if (fieldName == null || columns == null || columns.isEmpty()) {
+      return fieldName;
+    }
+    for (ColumnConfig column : columns) {
+      if (fieldName.equals(column.getName())) {
+        // A purely computed column exists only after materialization — it has no fetch-time key.
+        return column.isComputed() && column.source == null ? null : column.getEffectiveSource();
+      }
+    }
+    for (ColumnConfig column : columns) {
+      if (fieldName.equals(column.getEffectiveSource())) {
+        return fieldName;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns the names a field may be referred to by, for error messages: every declared
+   * column name plus every distinct source field name.
+   *
+   * @param columns Declared columns; may be null
+   * @return sorted, de-duplicated candidate names
+   */
+  public static List<String> resolvableNames(List<ColumnConfig> columns) {
+    java.util.SortedSet<String> names = new java.util.TreeSet<String>();
+    if (columns != null) {
+      for (ColumnConfig column : columns) {
+        if (column.getName() != null) {
+          names.add(column.getName());
+        }
+        if (column.source != null && !column.source.isEmpty()) {
+          names.add(column.source);
+        }
+      }
+    }
+    return new ArrayList<String>(names);
+  }
+
+  /**
    * Builds the SELECT clause fragment for this column.
    * For computed columns, returns the expression with alias.
    * For direct columns, returns the source field (possibly renamed).

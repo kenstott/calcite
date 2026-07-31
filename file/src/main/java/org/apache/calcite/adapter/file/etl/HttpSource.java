@@ -2419,7 +2419,14 @@ public class HttpSource implements DataSource {
           }
         }
         if (foundIndex < 0) {
-          LOGGER.warn("Filter column '{}' not found in CSV headers", filterColumn);
+          // Dropping the filter here would admit every row — for a table that exists to hold a
+          // filtered subset (e.g. only SEC-registered LEIs) that silently ingests the entire
+          // source and looks like a successful load. The real headers are in hand, so this is a
+          // definite configuration error, not a guess.
+          throw new IllegalStateException(
+              "rowFilter column '" + filterColumn + "' is not among the CSV headers. It is"
+                  + " matched against the raw source header, not a renamed column. Headers: "
+                  + java.util.Arrays.toString(headers));
         }
       }
       this.filterColumnIndex = foundIndex;
@@ -2674,7 +2681,11 @@ public class HttpSource implements DataSource {
           }
         }
         if (filterColumnIndex < 0) {
-          LOGGER.warn("Filter column '{}' not found in CSV headers", filterColumn);
+          // See the streaming path above: an unmatched filter column admits every row.
+          throw new IllegalStateException(
+              "rowFilter column '" + filterColumn + "' is not among the CSV headers. It is"
+                  + " matched against the raw source header, not a renamed column. Headers: "
+                  + java.util.Arrays.toString(headers));
         }
       }
 

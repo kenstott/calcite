@@ -672,4 +672,159 @@ class DeferredItemsTest {
         tracker.getFreshnessToken("iso_hwm_test::computed_delta_hwm"),
         "HWM must advance to 2024-06-01");
   }
+
+  // --- Field-name resolution: config names the logical column, rows carry the source key ---
+
+  /** Columns declaring {@code name} != {@code source}, as a renaming table config does. */
+  private static List<ColumnConfig> renamingColumns() {
+    List<ColumnConfig> columns = new ArrayList<ColumnConfig>();
+    columns.add(ColumnConfig.builder().name("id").type("VARCHAR").source("Entity.Id").build());
+    columns.add(ColumnConfig.builder().name("last_update").type("VARCHAR")
+        .source("Registration.LastUpdateDate").build());
+    return columns;
+  }
+
+  private static EtlPipelineConfig deltaConfig(String name, String dateField,
+      List<ColumnConfig> columns, Path tempDir) {
+    Map<String, Object> incrementalMap = new HashMap<String, Object>();
+    incrementalMap.put("dateField", dateField);
+    HttpSourceConfig source = HttpSourceConfig.builder()
+        .url("https://example.invalid/api")
+        .incremental(HttpSourceConfig.IncrementalConfig.fromMap(incrementalMap))
+        .build();
+    Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
+    dims.put("year", DimensionConfig.builder()
+        .name("year").type(DimensionType.YEAR_RANGE).start(2024).end(2024).build());
+    return EtlPipelineConfig.builder()
+        .name(name)
+        .source(source)
+        .dimensions(dims)
+        .columns(columns)
+        .datasetType("computed_delta")
+        .materialize(MaterializeConfig.builder()
+            .format(MaterializeConfig.Format.PARQUET)
+            .output(MaterializeOutputConfig.builder().location(tempDir.toString()).build())
+            .build())
+        .build();
+  }
+
+  /** One row keyed the way a fetch delivers it — by SOURCE field name, before any rename. */
+  private static Map<String, Object> sourceKeyedRow(String id, String lastUpdate) {
+    Map<String, Object> row = new LinkedHashMap<String, Object>();
+    row.put("Entity.Id", id);
+    row.put("Registration.LastUpdateDate", lastUpdate);
+    return row;
+  }
+
+  @Test void resolveSourceKey_acceptsEitherSpelling() {
+    List<ColumnConfig> columns = renamingColumns();
+    assertEquals("Registration.LastUpdateDate",
+        ColumnConfig.resolveSourceKey(columns, "last_update"),
+        "Logical column name must resolve to its source field");
+    assertEquals("Registration.LastUpdateDate",
+        ColumnConfig.resolveSourceKey(columns, "Registration.LastUpdateDate"),
+        "A source field name must resolve to itself");
+    assertNull(ColumnConfig.resolveSourceKey(columns, "no_such_field"),
+        "An unknown name must not resolve");
+    assertEquals("anything", ColumnConfig.resolveSourceKey(null, "anything"),
+        "With no declared columns the name passes through unchanged");
+  }
+
+  @Test void resolveSourceKey_computedColumnHasNoFetchTimeKey() {
+    List<ColumnConfig> columns = new ArrayList<ColumnConfig>();
+    columns.add(ColumnConfig.builder().name("fiscal_year").type("VARCHAR")
+        .expression("SUBSTR(period, 1, 4)").build());
+    assertNull(ColumnConfig.resolveSourceKey(columns, "fiscal_year"),
+        "A purely computed column exists only after materialization — it has no fetch-time key");
+  }
+
+  @Test void computedDelta_dateFieldNamesLogicalColumn_filtersOnTheSourceKey()
+      throws IOException {
+    // The gleif_entities shape: dateField names the logical column while fetched rows are still
+    // keyed by source field. Before resolution every row looked unmodified-but-present and was
+    // emitted, so the HWM never advanced and the whole source re-appended on every run.
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryTracker tracker = new MemoryTracker();
+    RecordingDataWriter writer = new RecordingDataWriter();
+    EtlPipelineConfig config =
+        deltaConfig("logical_name_test", "last_update", renamingColumns(), tempDir);
+
+    List<Map<String, Object>> run1Rows = new ArrayList<Map<String, Object>>();
+    run1Rows.add(sourceKeyedRow("A", "2024-01-15"));
+    run1Rows.add(sourceKeyedRow("B", "2024-03-01"));
+    new EtlPipeline(config, sp, tempDir.toString(), null, tracker,
+        new FixedDataProvider(Collections.singletonList(run1Rows)), writer).execute();
+
+    assertEquals("2024-03-01",
+        tracker.getFreshnessToken("logical_name_test::computed_delta_hwm"),
+        "HWM must advance even though dateField names the logical column, not the source field");
+
+    writer.writtenRows.clear();
+    writer.writeCount.set(0);
+
+    List<Map<String, Object>> run2Rows = new ArrayList<Map<String, Object>>();
+    run2Rows.add(sourceKeyedRow("C", "2024-01-15")); // old → filtered
+    run2Rows.add(sourceKeyedRow("D", "2024-06-01")); // new → passes
+    new EtlPipeline(config, sp, tempDir.toString(), null, tracker,
+        new FixedDataProvider(Collections.singletonList(run2Rows)), writer).execute();
+
+    assertEquals(1, writer.writtenRows.size(),
+        "Only the advanced row may be emitted — an unresolved field re-appends everything");
+    assertEquals("D", writer.writtenRows.get(0).get("Entity.Id"));
+  }
+
+  @Test void computedDelta_dateFieldNamesUnmaterialisedSourceField_stillFilters()
+      throws IOException {
+    // A field that is used for filtering but never materialised as a column resolves to nothing
+    // and must pass through unchanged — rejecting it up front would break configs like
+    // gleif_cik_mapping, which filters on a source field it deliberately never emits.
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryTracker tracker = new MemoryTracker();
+    RecordingDataWriter writer = new RecordingDataWriter();
+    EtlPipelineConfig config =
+        deltaConfig("undeclared_test", "Registration.LastUpdateDate", renamingColumns(), tempDir);
+
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    rows.add(sourceKeyedRow("A", "2024-03-01"));
+    new EtlPipeline(config, sp, tempDir.toString(), null, tracker,
+        new FixedDataProvider(Collections.singletonList(rows)), writer).execute();
+
+    assertEquals("2024-03-01",
+        tracker.getFreshnessToken("undeclared_test::computed_delta_hwm"),
+        "A source field named directly must still drive the high-water mark");
+  }
+
+  @Test void computedDelta_fieldAbsentFromPayload_failsInsteadOfAppendingEverything()
+      throws IOException {
+    // Resolvable in config but missing from the actual rows (source changed shape). Without the
+    // guard every row takes the "no modified value" branch and the full source re-appends.
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryTracker tracker = new MemoryTracker();
+    RecordingDataWriter writer = new RecordingDataWriter();
+    EtlPipelineConfig config =
+        deltaConfig("drift_test", "last_update", renamingColumns(), tempDir);
+
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row = new LinkedHashMap<String, Object>();
+    row.put("Entity.Id", "A");
+    row.put("Registration.Renamed", "2024-01-15"); // source dropped the expected field
+    rows.add(row);
+
+    // The guard fires inside the streaming filter, so the batch goes down the pipeline's normal
+    // error path (default action SKIP — a source mid-publish is retried after TTL) rather than
+    // propagating. What matters is that it does NOT succeed: nothing written, no HWM advanced,
+    // and the error names the key. A genuine misspelling never gets this far — it is rejected by
+    // validateFieldReferences before the fetch, which does propagate out of execute().
+    EtlResult result = new EtlPipeline(config, sp, tempDir.toString(), null, tracker,
+        new FixedDataProvider(Collections.singletonList(rows)), writer).execute();
+
+    assertEquals(0, result.getSuccessfulBatches(),
+        "The batch must not succeed by emitting every row as unmodified-but-present");
+    assertEquals(0, result.getTotalRows(), "No rows may be counted from the failed batch");
+    assertTrue(result.getErrors().toString().contains("Registration.LastUpdateDate"),
+        "Error must name the resolved key it looked for; was: " + result.getErrors());
+    assertEquals(0, writer.writtenRows.size(), "Nothing may be written before the failure");
+    assertNull(tracker.getFreshnessToken("drift_test::computed_delta_hwm"),
+        "No high-water mark may be persisted when the modified field was never found");
+  }
 }

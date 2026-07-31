@@ -2068,11 +2068,18 @@ public class HttpSourceCoverageTest {
     method.setAccessible(true);
 
     String csv = "name,value\nAlice,100";
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> result =
-        (List<Map<String, Object>>) method.invoke(source, csv, ',');
-    // All rows pass since filter column not found
-    assertEquals(1, result.size());
+    // A filter column absent from the headers must fail, not be dropped: silently admitting
+    // every row turns a deliberately-filtered table into a full copy of the source.
+    java.lang.reflect.InvocationTargetException thrown =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(source, csv, ','));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        thrown.getCause() instanceof IllegalStateException,
+        "Expected IllegalStateException, got: " + thrown.getCause());
+    org.junit.jupiter.api.Assertions.assertTrue(
+        thrown.getCause().getMessage().contains("nonexistent"),
+        "Message must name the missing column: " + thrown.getCause().getMessage());
 
     source.close();
   }

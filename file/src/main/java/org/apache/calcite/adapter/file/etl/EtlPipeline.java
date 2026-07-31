@@ -2013,12 +2013,24 @@ public class EtlPipeline {
       if (modifiedField != null && !modifiedField.isEmpty()) {
         computedDeltaStreaming = true;
         computedDeltaHwm[0] = prevHwm;
+        // Fetched rows are keyed by SOURCE field name; `columns:` renames happen later, during
+        // materialization. Resolve the configured name to the fetch-time key so the YAML may
+        // spell it either way. Falls back to the configured name when nothing is declared.
+        final String resolvedField =
+            ColumnConfig.resolveSourceKey(config.getColumns(), modifiedField) != null
+                ? ColumnConfig.resolveSourceKey(config.getColumns(), modifiedField)
+                : modifiedField;
+        if (!resolvedField.equals(modifiedField)) {
+          LOGGER.info("computed_delta: modifiedField '{}' resolves to source field '{}'",
+              modifiedField, resolvedField);
+        }
         final Iterator<Map<String, Object>> upstream = data;
         // Look-ahead filter: advances past unchanged rows (updating the HWM for every row it sees)
         // until it finds one to emit, so the write pulls only changed rows without buffering.
         data = new Iterator<Map<String, Object>>() {
           private Map<String, Object> nextRow;
           private boolean staged;
+          private boolean checkedFirstRow;
 
           @Override public boolean hasNext() {
             if (staged) {
@@ -2026,8 +2038,22 @@ public class EtlPipeline {
             }
             while (upstream.hasNext()) {
               Map<String, Object> row = upstream.next();
+              // The first row settles whether the field exists in this payload at all. Absent
+              // means the name is wrong (or the source changed shape) — every subsequent row
+              // would take the "no modified value" branch below and be emitted, appending the
+              // whole source with the HWM never advancing. Fail here, before anything is
+              // written, rather than silently degrading to a full append on every run.
+              if (!checkedFirstRow) {
+                checkedFirstRow = true;
+                if (!row.containsKey(resolvedField)) {
+                  throw new IllegalStateException(
+                      "computed_delta pipeline '" + pipelineName + "': modified field '"
+                          + resolvedField + "' is absent from the fetched rows. Fetched rows are"
+                          + " keyed by source field name. Row keys: " + row.keySet());
+                }
+              }
               computedDeltaCounts[0]++;
-              Object modVal = row.get(modifiedField);
+              Object modVal = row.get(resolvedField);
               String modStr = modVal == null ? null : String.valueOf(modVal);
               // Track max(modifiedField) over EVERY row (type-aware), even ones we drop.
               if (modStr != null && (computedDeltaHwm[0] == null
