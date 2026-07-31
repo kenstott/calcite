@@ -149,16 +149,31 @@ case "$SCHEMA" in
   # ── SEC primary (10-K / 10-Q) — one year per invocation ──────────────────
 
   sec_primary)
+    # Two vocabularies share this arm, same as sec_secondary/sec_13f below:
+    #   • daily|historical (DQ harness)         → DQ_SAMPLE scope (or caller GOVDATA_CIKS)
+    #   • <year>|current   (run-pool prod)      → _ALL_EDGAR_FILERS full universe
+    SEC1_FORMS='"10-K","10-K/A","10-Q","10-Q/A"'
     case "$MODE" in
-      current)              YEAR=$(date +%Y) ;;
-      [0-9][0-9][0-9][0-9]) YEAR="$MODE" ;;
-      *) echo "sec_primary: mode must be a 4-digit year or 'current'" >&2; exit 1 ;;
+      historical) SEC1_START="${GOVDATA_START_YEAR:-2010}"; SEC1_END=$((INCREMENTAL_YEAR - 1)); SEC1_DQ=1 ;;
+      daily)      SEC1_START="$INCREMENTAL_YEAR";           SEC1_END="$INCREMENTAL_YEAR";       SEC1_DQ=1 ;;
+      current)              SEC1_START=$(date +%Y); SEC1_END="$SEC1_START"; SEC1_DQ=0 ;;
+      [0-9][0-9][0-9][0-9]) SEC1_START="$MODE";     SEC1_END="$MODE";       SEC1_DQ=0 ;;
+      *) echo "sec_primary: mode must be daily|historical (DQ) or a 4-digit year|current (prod)" >&2; exit 1 ;;
     esac
-    export GOVDATA_START_YEAR="$YEAR"
-    export GOVDATA_END_YEAR="$YEAR"
-    run_etl_inline "$(build_inline_model sec \
-      '"ciks":"_ALL_EDGAR_FILERS","filingTypes":["10-K","10-K/A","10-Q","10-Q/A"],"fetchStockPrices":false')" \
-      "$WORKER_ID"
+    if [ "$SEC1_DQ" = "1" ]; then
+      SEC1_OPS="\"fetchStockPrices\":false,\"ciks\":\"${GOVDATA_CIKS:-DQ_SAMPLE}\",\"filingTypes\":[${SEC1_FORMS}]"
+      for (( SEC1_YEAR=SEC1_END; SEC1_YEAR>=SEC1_START; SEC1_YEAR-- )); do
+        export GOVDATA_START_YEAR="$SEC1_YEAR"
+        export GOVDATA_END_YEAR="$SEC1_YEAR"
+        run_etl_inline "$(build_inline_model sec "$SEC1_OPS")" "worker-sec_primary-${MODE}-${SEC1_YEAR}"
+      done
+    else
+      export GOVDATA_START_YEAR="$SEC1_START"
+      export GOVDATA_END_YEAR="$SEC1_END"
+      run_etl_inline "$(build_inline_model sec \
+        "\"ciks\":\"_ALL_EDGAR_FILERS\",\"filingTypes\":[${SEC1_FORMS}],\"fetchStockPrices\":false")" \
+        "$WORKER_ID"
+    fi
     ;;
 
   # ── SEC secondary (8-K, proxy, insider, 13D/G) — one year ─────────────────
