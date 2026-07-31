@@ -565,9 +565,9 @@ public class XbrlToParquetConverter implements FileConverter {
 
   private String extractFilingType(Document doc, String sourcePath) {
     // For ownership documents (Form 3/4/5), extract documentType
-    NodeList docTypes = doc.getElementsByTagName("documentType");
-    if (docTypes.getLength() > 0) {
-      String docType = docTypes.item(0).getTextContent().trim();
+    String documentType = firstTextByLocalName(doc, "documentType");
+    if (documentType != null) {
+      String docType = documentType;
       // Return just the number for forms 3, 4, 5
       if (docType.equals("3") || docType.equals("4") || docType.equals("5")) {
         return docType;
@@ -585,11 +585,10 @@ public class XbrlToParquetConverter implements FileConverter {
       return docType.replace("-", "");
     }
 
-    // Also check for dei:DocumentType (common in inline XBRL)
-    NodeList deiDocTypes = doc.getElementsByTagName("dei:DocumentType");
-    if (deiDocTypes.getLength() > 0) {
-      String docType = deiDocTypes.item(0).getTextContent().trim();
-      return docType.replace("-", "");
+    // DocumentType, whether the filer prefixed it or not.
+    String deiDocType = firstTextByLocalName(doc, "DocumentType");
+    if (deiDocType != null) {
+      return deiDocType.replace("-", "");
     }
 
     // Also check with ix: prefix for inline XBRL (note the capital N in nonNumeric)
@@ -757,14 +756,13 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    // Try to extract from dei:DocumentPeriodEndDate (inline XBRL)
-    NodeList deiPeriodEnds = doc.getElementsByTagNameNS("*", "dei:DocumentPeriodEndDate");
-    if (deiPeriodEnds.getLength() == 0) {
-      // Try without namespace prefix
-      deiPeriodEnds = doc.getElementsByTagName("dei:DocumentPeriodEndDate");
-    }
-    if (deiPeriodEnds.getLength() > 0) {
-      String date = deiPeriodEnds.item(0).getTextContent().trim();
+    // DocumentPeriodEndDate, however the filer spelled the tag. The previous attempt passed the
+    // qualified name "dei:DocumentPeriodEndDate" as a local name to getElementsByTagNameNS, which
+    // no element can match, so only the prefixed form was ever found and an unprefixed one was
+    // missed.
+    String deiPeriodEnd = firstTextByLocalName(doc, "DocumentPeriodEndDate");
+    if (deiPeriodEnd != null) {
+      String date = deiPeriodEnd;
       if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
         return date;
       }
@@ -790,26 +788,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // Cap at current year to avoid picking up forward-looking dates from XBRL contexts
     // (e.g., lease/debt maturities extending years into the future).
     int maxYear = java.time.Year.now().getValue();
-    NodeList contexts = doc.getElementsByTagName("xbrli:context");
-    if (contexts.getLength() == 0) {
-      contexts = doc.getElementsByTagNameNS("*", "context");
-    }
-    if (contexts.getLength() == 0) {
-      contexts = doc.getElementsByTagName("context");
-    }
+    List<Element> contexts = elementsByLocalName(doc, "context");
 
     // Look for the latest valid period end date in contexts, capped at current year
     String latestDate = null;
-    for (int i = 0; i < contexts.getLength(); i++) {
-      Node context = contexts.item(i);
-
-      // Check for xbrli:endDate elements (common in inline XBRL like DEF 14A)
-      NodeList endDates = ((Element) context).getElementsByTagName("xbrli:endDate");
-      if (endDates.getLength() == 0) {
-        endDates = ((Element) context).getElementsByTagNameNS("*", "endDate");
-      }
-      if (endDates.getLength() > 0) {
-        String date = endDates.item(0).getTextContent().trim();
+    for (Element context : contexts) {
+      String endDate = firstTextByLocalName(context, "endDate");
+      if (endDate != null) {
+        String date = endDate;
         if (date.matches("\\d{4}-\\d{2}-\\d{2}")
             && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
           if (latestDate == null || date.compareTo(latestDate) > 0) {
@@ -819,12 +805,9 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       // Also check for instant dates
-      NodeList instants = ((Element) context).getElementsByTagName("xbrli:instant");
-      if (instants.getLength() == 0) {
-        instants = ((Element) context).getElementsByTagNameNS("*", "instant");
-      }
-      if (instants.getLength() > 0) {
-        String date = instants.item(0).getTextContent().trim();
+      String instant = firstTextByLocalName(context, "instant");
+      if (instant != null) {
+        String date = instant;
         if (date.matches("\\d{4}-\\d{2}-\\d{2}")
             && Integer.parseInt(date.substring(0, 4)) <= maxYear) {
           if (latestDate == null || date.compareTo(latestDate) > 0) {
@@ -931,26 +914,14 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Build context period map for joining period dates onto facts
     Map<String, Map<String, Object>> contextPeriodMap = new HashMap<>();
-    NodeList ctxNodes = doc.getElementsByTagName("context");
-    if (ctxNodes.getLength() == 0) {
-      ctxNodes = doc.getElementsByTagNameNS("*", "context");
-    }
-    for (int c = 0; c < ctxNodes.getLength(); c++) {
-      Node ctxNode = ctxNodes.item(c);
-      if (!(ctxNode instanceof Element)) continue;
-      Element ctxElement = (Element) ctxNode;
+    List<Element> ctxNodes = elementsByLocalName(doc, "context");
+    for (Element ctxElement : ctxNodes) {
       String id = ctxElement.getAttribute("id");
       if (id == null || id.isEmpty()) continue;
-      NodeList starts = ctxElement.getElementsByTagNameNS("*", "startDate");
-      if (starts.getLength() == 0) starts = ctxElement.getElementsByTagName("startDate");
-      NodeList ends = ctxElement.getElementsByTagNameNS("*", "endDate");
-      if (ends.getLength() == 0) ends = ctxElement.getElementsByTagName("endDate");
-      NodeList instants = ctxElement.getElementsByTagNameNS("*", "instant");
-      if (instants.getLength() == 0) instants = ctxElement.getElementsByTagName("instant");
       Map<String, Object> cp = new HashMap<>();
-      cp.put("period_start", starts.getLength() > 0 ? starts.item(0).getTextContent().trim() : null);
-      cp.put("period_end", ends.getLength() > 0 ? ends.item(0).getTextContent().trim() : null);
-      cp.put("is_instant", instants.getLength() > 0);
+      cp.put("period_start", firstTextByLocalName(ctxElement, "startDate"));
+      cp.put("period_end", firstTextByLocalName(ctxElement, "endDate"));
+      cp.put("is_instant", !elementsByLocalName(ctxElement, "instant").isEmpty());
       contextPeriodMap.put(id, cp);
     }
 
@@ -1500,22 +1471,10 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // Try without namespace
-      nodes = doc.getElementsByTagName(tag);
-      if (nodes.getLength() > 0) {
-        String text = nodes.item(0).getTextContent();
-        if (text != null && !text.trim().isEmpty()) {
-          return text.trim();
-        }
-      }
-
-      // Try with dei: prefix
-      nodes = doc.getElementsByTagName("dei:" + tag);
-      if (nodes.getLength() > 0) {
-        String text = nodes.item(0).getTextContent();
-        if (text != null && !text.trim().isEmpty()) {
-          return text.trim();
-        }
+      // Whatever prefix the filer used, or none.
+      String text = firstTextByLocalName(doc, tag);
+      if (text != null && !text.isEmpty()) {
+        return text;
       }
     }
     return null;
@@ -1563,16 +1522,17 @@ public class XbrlToParquetConverter implements FileConverter {
     java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns =
         AbstractSecDataDownloader.loadTableColumns("filing_contexts");
 
-    // Extract context elements
-    // Use getElementsByTagName (not getElementsByTagNameNS) because inline XBRL parsing
-    // creates context elements without a namespace, and some DOM implementations don't
-    // return null-namespace elements when using getElementsByTagNameNS("*", ...)
+    // A traditional XBRL instance writes <xbrli:context>; only once inline XBRL has been
+    // flattened does it become <context>. Matching the bare name alone — which this did — skips
+    // every prefixed filing and writes no contexts for it, while still recording the filing as
+    // processed. The elements *inside* each context were already read by local name here, so a
+    // filing either yielded all of its contexts or none of them, and which one depended on how
+    // the filer wrote the tag.
     List<Map<String, Object>> dataList = new ArrayList<>();
     Set<String> seenContextIds = new java.util.HashSet<>();
-    NodeList contexts = doc.getElementsByTagName("context");
+    List<Element> contexts = elementsByLocalName(doc, "context");
 
-    for (int i = 0; i < contexts.getLength(); i++) {
-      Element context = (Element) contexts.item(i);
+    for (Element context : contexts) {
       String contextId = context.getAttribute("id");
       if (!seenContextIds.add(contextId)) {
         continue;
@@ -1597,13 +1557,9 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("year", year);
       data.put("context_id", contextId);
 
-      // Extract entity information — try bare name first, then NS-wildcard
-      NodeList identifiers = context.getElementsByTagName("identifier");
-      if (identifiers.getLength() == 0) {
-        identifiers = context.getElementsByTagNameNS("*", "identifier");
-      }
-      if (identifiers.getLength() > 0) {
-        Element identifier = (Element) identifiers.item(0);
+      List<Element> identifiers = elementsByLocalName(context, "identifier");
+      if (!identifiers.isEmpty()) {
+        Element identifier = identifiers.get(0);
         data.put("entity_identifier", identifier.getTextContent());
         data.put("entity_scheme", identifier.getAttribute("scheme"));
       } else {
@@ -1612,26 +1568,13 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("entity_scheme", "http://www.sec.gov/CIK");
       }
 
-      // Extract period information — NS-wildcard first, bare-name fallback
-      NodeList startDates = context.getElementsByTagNameNS("*", "startDate");
-      if (startDates.getLength() == 0) startDates = context.getElementsByTagName("startDate");
-      NodeList endDates = context.getElementsByTagNameNS("*", "endDate");
-      if (endDates.getLength() == 0) endDates = context.getElementsByTagName("endDate");
-      NodeList instants = context.getElementsByTagNameNS("*", "instant");
-      if (instants.getLength() == 0) instants = context.getElementsByTagName("instant");
+      data.put("period_start", firstTextByLocalName(context, "startDate"));
+      data.put("period_end", firstTextByLocalName(context, "endDate"));
+      data.put("period_instant", firstTextByLocalName(context, "instant"));
 
-      data.put("period_start", startDates.getLength() > 0 ? startDates.item(0).getTextContent().trim() : null);
-      data.put("period_end", endDates.getLength() > 0 ? endDates.item(0).getTextContent().trim() : null);
-      data.put("period_instant", instants.getLength() > 0 ? instants.item(0).getTextContent().trim() : null);
-
-      // Extract segment and scenario (dimension members for segmented contexts)
-      NodeList segments = context.getElementsByTagNameNS("*", "segment");
-      if (segments.getLength() == 0) segments = context.getElementsByTagName("segment");
-      NodeList scenarios = context.getElementsByTagNameNS("*", "scenario");
-      if (scenarios.getLength() == 0) scenarios = context.getElementsByTagName("scenario");
-
-      data.put("segment", segments.getLength() > 0 ? segments.item(0).getTextContent().trim() : null);
-      data.put("scenario", scenarios.getLength() > 0 ? scenarios.item(0).getTextContent().trim() : null);
+      // Dimension members for segmented contexts.
+      data.put("segment", firstTextByLocalName(context, "segment"));
+      data.put("scenario", firstTextByLocalName(context, "scenario"));
 
       dataList.add(data);
     }
@@ -3244,27 +3187,12 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Write XBRL relationships to Parquet.
-   * Captures presentation, calculation, and definition linkbases.
+   * Writes a filing's presentation, calculation and definition relationships to Parquet.
    *
-   * NOTE: Modern SEC filings use inline XBRL (iXBRL) where relationships are not embedded
-   * in the main document but are provided in separate linkbase files (*.xml) referenced
-   * from the XSD schema. Since we currently only download the main HTML filing document,
-   * we cannot extract relationships from inline XBRL filings. This would require:
-   * 1. Downloading the XSD schema file referenced in the document
-   * 2. Parsing the XSD to find linkbase file references
-   * 3. Downloading and parsing each linkbase file (calculation, presentation, definition)
-   *
-   * For now, this method will create empty relationship files for inline XBRL to satisfy
-   * cache validation requirements.
-   *
-   * TODO: Implement full linkbase download functionality:
-   * - Extract XSD href from: <link:schemaRef xlink:type="simple" xlink:href="aapl-20230930.xsd">
-   * - Download XSD from: https://www.sec.gov/Archives/edgar/data/{CIK}/{ACCESSION}/{XSD_FILE}
-   * - Parse XSD for linkbaseRef elements pointing to linkbase files
-   * - Download each linkbase file (e.g., aapl-20230930_cal.xml, aapl-20230930_pre.xml)
-   * - Parse linkbase XML for arc elements defining relationships
-   * - Convert relationships to Parquet records with proper linkbase_type classification
+   * <p>Relationships are published in linkbase files sitting beside the filing, so they are
+   * fetched and read rather than sought inside the filing document — see
+   * {@link #extractLinkbaseRelationships}. The {@code doc} argument is retained for the caller's
+   * signature and is not read.
    */
   private void writeRelationshipsToParquet(Document doc, String outputPath,
       String cik, String accession, String filingType, String filingDate, String sourcePath) throws IOException {
@@ -3510,6 +3438,44 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
     return extracted;
+  }
+
+  /**
+   * Elements with the given local name, whatever prefix or namespace the filing used.
+   *
+   * <p>An XBRL element is written {@code <xbrli:context>} in a traditional instance and
+   * {@code <context>} once inline XBRL has been flattened, and the two are different tags to
+   * {@link Document#getElementsByTagName}, which matches the qualified name. Asking for the bare
+   * name silently skips every prefixed filing; asking for the prefixed name skips every flattened
+   * one. Matching on the local name is indifferent to which the filer used.
+   *
+   * <p>{@code getElementsByTagNameNS("*", name)} looks like the answer but is not: it is unreliable
+   * for elements carrying no namespace at all, which is what the fallback parser produces, and it
+   * gives nothing when the document was parsed without namespace awareness. Reading the local name
+   * off each element works in all three cases.
+   */
+  static List<Element> elementsByLocalName(Node scope, String localName) {
+    NodeList all = scope instanceof Document
+        ? ((Document) scope).getElementsByTagName("*")
+        : ((Element) scope).getElementsByTagName("*");
+    List<Element> found = new ArrayList<Element>();
+    for (int i = 0; i < all.getLength(); i++) {
+      Element element = (Element) all.item(i);
+      if (localName.equals(localName(element))) {
+        found.add(element);
+      }
+    }
+    return found;
+  }
+
+  /** Text of the first element with this local name, or null when the filing has none. */
+  private static String firstTextByLocalName(Node scope, String localName) {
+    List<Element> found = elementsByLocalName(scope, localName);
+    if (found.isEmpty()) {
+      return null;
+    }
+    String text = found.get(0).getTextContent();
+    return text == null ? null : text.trim();
   }
 
   /** Local name of an element, whether or not the parser resolved its namespace. */
