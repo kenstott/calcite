@@ -2366,7 +2366,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         String filingDate = filingDates.get(i).asText();
         String reportDate = (reportDates != null && i < reportDates.size()) ? reportDates.get(i).asText() : null;
         String form = forms.get(i).asText();
-        String primaryDoc = primaryDocuments.get(i).asText();
+        String primaryDoc = normalizePrimaryDocument(primaryDocuments.get(i).asText());
 
         // Skip 424B forms first - they're prospectuses and we never want to process them
         // even if they have XBRL data
@@ -2714,6 +2714,44 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   // - indexManifestEntries() - replaced by SecFilingCache.checkFiling()
   // - checkFilingStatusInMemory() - replaced by SecFilingCache.checkFiling()
   // - hasAllParquetFiles() - replaced by tracker state (SecFilingCache.checkFiling)
+
+  /**
+   * Strips an XSLT-viewer rendering path off a {@code primaryDocument} filename.
+   *
+   * <p>EDGAR's submissions.json names, as the "primary document," whichever file a browser
+   * should render — and for any filing that is not itself inline XBRL (13F-HR, Forms 3/4/5,
+   * Schedule 13D/G, N-PX, Form 144, and others), that is not the underlying data file but an
+   * auto-generated HTML view of it, nested under a folder such as {@code xslForm13F_X01/} or
+   * {@code xslF345X05/}. Confirmed live: {@code xslForm13F_X01/primary_doc.xml} for a 13F-HR is
+   * a complete HTML document — {@code <!DOCTYPE html ...><meta http-equiv=...>} — while the bare
+   * {@code primary_doc.xml} sitting beside it at the top of the same accession is the real XML
+   * this pipeline is written to parse.
+   *
+   * <p>Using the nested path verbatim means downloading and caching that HTML view under a name
+   * ending in {@code .xml}. The strict parser fails on it — genuine HTML always does, typically
+   * on an unclosed {@code <meta>} — and JSoup's lenient fallback then parses the HTML shell
+   * "successfully," logs no error, and hands the converter a document with none of the structured
+   * fields it is looking for. The accession is recorded as processed regardless. One two-hour 13F
+   * repair batch hit this exact failure 879 times.
+   *
+   * <p>Forms 3/4/5 were never exposed to this: the code downstream ignores {@code primaryDoc} for
+   * them entirely and always looks for a file it names {@code ownership.xml} itself. That was
+   * incidental, not a fix, and every other affected form type had no such protection.
+   *
+   * <p>The rendered copy and the real file share a basename in every case checked — 13F-HR and
+   * Form 4 — which is what EDGAR's own XSLT-viewer convention guarantees: the viewer folder is
+   * named for the stylesheet, and the file inside it is named for the document it renders. Taking
+   * the basename is therefore not a guess at which file might be right; it is reproducing the one
+   * naming relationship the convention establishes. A value with no path separator — every inline
+   * XBRL filing type observed — passes through unchanged.
+   */
+  static String normalizePrimaryDocument(String primaryDoc) {
+    if (primaryDoc == null) {
+      return null;
+    }
+    int lastSlash = primaryDoc.lastIndexOf('/');
+    return lastSlash < 0 ? primaryDoc : primaryDoc.substring(lastSlash + 1);
+  }
 
   private void downloadFilingDocumentWithRateLimit(SecHttpStorageProvider provider, FilingToDownload filing) {
     int maxAttempts = 3;
