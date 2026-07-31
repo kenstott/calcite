@@ -41,13 +41,18 @@ import java.util.zip.ZipInputStream;
  *       paths only.</li>
  * </ul>
  *
- * <p>On the first connection per JVM, {@link #ensureSeeded(String)} compares the bundled seed
- * version ({@code /duckdb/seed/govdata-seed.version}) against the on-disk marker
- * ({@code &lt;base&gt;/.duckdb/govdata.duckdb.version}). When they match, nothing is extracted
- * (fast path). When the marker is absent (fresh machine) or differs (JAR upgrade), the zip is
- * extracted into the operating base and the marker is rewritten. Re-seeding on a version change is
- * safe: the runtime creates any missing view from {@code s3://} on demand and heals column-count
- * drift, so a replaced catalog reconciles itself against live data.
+ * <p>On the first connection per JVM, {@link #ensureSeeded(String)} compares a SHA-256 fingerprint
+ * of the bundled {@code govdata-seed.zip} against the on-disk marker
+ * ({@code &lt;base&gt;/.duckdb/govdata.duckdb.version}) AND confirms the catalog file itself
+ * ({@code &lt;base&gt;/.duckdb/govdata.duckdb}) still exists. Both must hold for extraction to be
+ * skipped (fast path); either the fingerprint changing (a JAR upgrade with new/changed data) or the
+ * catalog file being absent despite a matching marker (deleted, corrupted, or replaced out from
+ * under the marker) forces re-extraction. A content fingerprint is used rather than the project
+ * version because the project version stays constant across many SNAPSHOT rebuilds while the
+ * bundled catalog's actual content changes — a version-only gate would then treat a rebuilt seed as
+ * already installed and never extract it. Re-seeding is always safe: the runtime creates any
+ * missing view from {@code s3://} on demand and heals column-count drift, so a replaced catalog
+ * reconciles itself against live data.
  *
  * <p>Seeding is a pure accelerator: it must run <em>before</em> the DuckDB catalog is opened (so
  * the file is not overwritten while DuckDB holds its single-writer lock), and a missing or
@@ -61,12 +66,18 @@ public final class GovDataSeedInstaller {
   private static final String SEED_ZIP_RESOURCE = "/duckdb/seed/govdata-seed.zip";
   private static final String SEED_VERSION_RESOURCE = "/duckdb/seed/govdata-seed.version";
   private static final String MARKER_RELATIVE = ".duckdb/govdata.duckdb.version";
+  private static final String CATALOG_RELATIVE = ".duckdb/govdata.duckdb";
   private static final String SCHEMA_CACHE_RESOURCE = "/duckdb/seed/iceberg-schema-cache.json";
 
   /** Seed check is a once-per-JVM operation; connect() is called for every connection. */
   private static volatile boolean checkedThisJvm;
 
   private GovDataSeedInstaller() {
+  }
+
+  /** Test-only: clears the once-per-JVM gate so {@link #ensureSeeded(String)} runs again. */
+  static void resetForTesting() {
+    checkedThisJvm = false;
   }
 
   /**
@@ -90,33 +101,36 @@ public final class GovDataSeedInstaller {
     installBundledSchemaCache();
 
     // A JAR built without running bundleGovdataSeed has no seed resource: nothing to do.
-    String bundledVersion = readResourceText(SEED_VERSION_RESOURCE);
-    if (bundledVersion == null) {
-      LOGGER.debug("No bundled govdata seed version ({}); skipping seed (cold start)",
-          SEED_VERSION_RESOURCE);
+    byte[] zipBytes = readResourceBytes(SEED_ZIP_RESOURCE);
+    if (zipBytes == null) {
+      LOGGER.debug("No bundled govdata seed ({}); skipping seed (cold start)", SEED_ZIP_RESOURCE);
       return;
     }
+    String bundledFingerprint = sha256Hex(zipBytes);
+    // Logged only, for a human comparing a bundled seed to its build — the fingerprint above,
+    // not this string, is what gates extraction.
+    String bundledVersion = readResourceText(SEED_VERSION_RESOURCE);
 
     File base = new File(operatingBase);
     File marker = new File(base, MARKER_RELATIVE);
-    String onDiskVersion = marker.isFile() ? readFileText(marker) : null;
-    if (bundledVersion.equals(onDiskVersion)) {
-      LOGGER.debug("govdata seed up to date (version {}); skipping extraction", bundledVersion);
+    File catalogFile = new File(base, CATALOG_RELATIVE);
+    String onDiskFingerprint = marker.isFile() ? readFileText(marker) : null;
+    if (bundledFingerprint.equals(onDiskFingerprint) && catalogFile.isFile()) {
+      LOGGER.debug("govdata seed up to date (fingerprint {}, version {}); skipping extraction",
+          bundledFingerprint, bundledVersion);
       return;
     }
+    if (bundledFingerprint.equals(onDiskFingerprint)) {
+      LOGGER.info("govdata seed marker matches but catalog file {} is missing; re-extracting seed",
+          catalogFile.getAbsolutePath());
+    }
 
-    try (InputStream zipIn = GovDataSeedInstaller.class.getResourceAsStream(SEED_ZIP_RESOURCE)) {
-      if (zipIn == null) {
-        // Version resource present but zip missing: a malformed build. Do not fail the
-        // connection — the cold path still builds a correct catalog.
-        LOGGER.warn("govdata seed version present but zip resource {} is missing; skipping seed",
-            SEED_ZIP_RESOURCE);
-        return;
-      }
-      int entries = extractInto(zipIn, base);
-      writeFileText(marker, bundledVersion);
-      LOGGER.info("Seeded govdata catalog: extracted {} entr{} into {} (version {})",
-          entries, entries == 1 ? "y" : "ies", base.getAbsolutePath(), bundledVersion);
+    try {
+      int entries = extractInto(new java.io.ByteArrayInputStream(zipBytes), base);
+      writeFileText(marker, bundledFingerprint);
+      LOGGER.info("Seeded govdata catalog: extracted {} entr{} into {} (fingerprint {}, version {})",
+          entries, entries == 1 ? "y" : "ies", base.getAbsolutePath(), bundledFingerprint,
+          bundledVersion);
     } catch (IOException e) {
       // A failed seed is recoverable: the runtime rebuilds views/trackers from s3:// on demand.
       LOGGER.warn("Failed to seed govdata catalog into {}: {}", base.getAbsolutePath(),
@@ -186,15 +200,37 @@ public final class GovDataSeedInstaller {
 
   /** Reads a classpath resource as a trimmed UTF-8 string, or null if the resource is absent. */
   private static String readResourceText(String resource) {
+    byte[] bytes = readResourceBytes(resource);
+    return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8).trim();
+  }
+
+  /** Reads a classpath resource fully into memory, or null if the resource is absent. */
+  private static byte[] readResourceBytes(String resource) {
     try (InputStream is = GovDataSeedInstaller.class.getResourceAsStream(resource)) {
       if (is == null) {
         return null;
       }
-      byte[] bytes = readAll(is);
-      return new String(bytes, StandardCharsets.UTF_8).trim();
+      return readAll(is);
     } catch (IOException e) {
       LOGGER.warn("Could not read seed resource {}: {}", resource, e.getMessage());
       return null;
+    }
+  }
+
+  /** SHA-256 of {@code bytes}, as lowercase hex — the content fingerprint gating extraction. */
+  private static String sha256Hex(byte[] bytes) {
+    try {
+      java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+      byte[] hash = digest.digest(bytes);
+      StringBuilder sb = new StringBuilder(hash.length * 2);
+      for (byte b : hash) {
+        sb.append(Character.forDigit((b >> 4) & 0xF, 16));
+        sb.append(Character.forDigit(b & 0xF, 16));
+      }
+      return sb.toString();
+    } catch (java.security.NoSuchAlgorithmException e) {
+      // SHA-256 is a JLS-mandated algorithm, guaranteed present on every JVM.
+      throw new IllegalStateException("SHA-256 unavailable", e);
     }
   }
 

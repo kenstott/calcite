@@ -25,51 +25,49 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Verifies that {@link AskAmericaDriver#connect} sets the three system properties required by
- * the engine when {@code ASKAMERICA_DATA_DIR} is supplied.
+ * Verifies that {@link AskAmericaDriver#connect} sets the system properties required by the
+ * engine when {@code ASKAMERICA_DATA_DIR} is supplied, and only when the URL is actually one this
+ * driver accepts.
  *
- * <p>Regression coverage for Bug 1 in GitHub issue #19: the driver previously used
- * a stale catalog path (nested under {@code .aperio}) rather than
- * {@code <dataDir>/.duckdb/catalog.duckdb}.
+ * <p>{@code duckdb.catalog.path} is deliberately not covered here any more: the generated govdata
+ * model always sets {@code database_filename} in its operand, which wins over that property in
+ * {@code DuckDBJdbcSchemaFactory} regardless, so this driver stopped setting it as dead
+ * configuration (it also used to fire as a DriverManager side effect on every unrelated
+ * jdbc:duckdb: connection, not just jdbc:askamerica: ones — see {@code connect_ignoresNonAskAmericaUrls} below).
  *
  * <p>Properties under test:
  * <ul>
  *   <li>{@code govdata.operating.dir.base} — pinned to {@code ASKAMERICA_DATA_DIR}</li>
- *   <li>{@code duckdb.catalog.path} — set to {@code <dataDir>/.duckdb/catalog.duckdb}</li>
  *   <li>{@code duckdb.cache_httpfs.directory} — set to {@code <dataDir>/.duckdb_httpfs_cache}</li>
  * </ul>
  *
- * <p>Pre-existing values for the last two must not be overwritten (idempotent on repeat calls).
+ * <p>Pre-existing values for the cache dir must not be overwritten (idempotent on repeat calls).
  */
 @Tag("unit")
 @Execution(ExecutionMode.SAME_THREAD)
 public class AskAmericaDriverSystemPropertiesTest {
 
   private static final String PROP_OPERATING_DIR = "govdata.operating.dir.base";
-  private static final String PROP_CATALOG_PATH = "duckdb.catalog.path";
   private static final String PROP_CACHE_DIR = "duckdb.cache_httpfs.directory";
   private static final String PROP_DATA_DIR = "ASKAMERICA_DATA_DIR";
 
   private String savedOperatingDir;
-  private String savedCatalogPath;
   private String savedCacheDir;
   private String savedDataDir;
 
   @BeforeEach
   void saveAndClearProperties() {
     savedOperatingDir = System.getProperty(PROP_OPERATING_DIR);
-    savedCatalogPath = System.getProperty(PROP_CATALOG_PATH);
     savedCacheDir = System.getProperty(PROP_CACHE_DIR);
     savedDataDir = System.getProperty(PROP_DATA_DIR);
     System.clearProperty(PROP_OPERATING_DIR);
-    System.clearProperty(PROP_CATALOG_PATH);
     System.clearProperty(PROP_CACHE_DIR);
     System.clearProperty(PROP_DATA_DIR);
   }
@@ -77,7 +75,6 @@ public class AskAmericaDriverSystemPropertiesTest {
   @AfterEach
   void restoreProperties() {
     restore(PROP_OPERATING_DIR, savedOperatingDir);
-    restore(PROP_CATALOG_PATH, savedCatalogPath);
     restore(PROP_CACHE_DIR, savedCacheDir);
     restore(PROP_DATA_DIR, savedDataDir);
   }
@@ -106,26 +103,9 @@ public class AskAmericaDriverSystemPropertiesTest {
     assertEquals(tmpDir.toString(), System.getProperty(PROP_OPERATING_DIR));
   }
 
-  @Test void connect_setsCatalogPathUnderDotDuckdb(@TempDir Path tmpDir) {
-    invokeConnect(tmpDir.toString());
-    String catalogPath = System.getProperty(PROP_CATALOG_PATH);
-    assertNotNull(catalogPath);
-    String expected = tmpDir.toAbsolutePath() + "/.duckdb/catalog.duckdb";
-    assertEquals(expected, catalogPath,
-        "catalog.duckdb must be at <dataDir>/.duckdb/catalog.duckdb, not nested under .aperio");
-    assertFalse(catalogPath.contains(".aperio"), "catalog path must not use .aperio");
-  }
-
   @Test void connect_setsCacheHttpfsDirUnderDataDir(@TempDir Path tmpDir) {
     invokeConnect(tmpDir.toString());
     assertEquals(tmpDir + "/.duckdb_httpfs_cache", System.getProperty(PROP_CACHE_DIR));
-  }
-
-  @Test void connect_doesNotOverwritePreexistingCatalogPath(@TempDir Path tmpDir) {
-    System.setProperty(PROP_CATALOG_PATH, "/custom/path/catalog.duckdb");
-    invokeConnect(tmpDir.toString());
-    assertEquals("/custom/path/catalog.duckdb", System.getProperty(PROP_CATALOG_PATH),
-        "Pre-existing duckdb.catalog.path must not be overwritten");
   }
 
   @Test void connect_doesNotOverwritePreexistingCacheDir(@TempDir Path tmpDir) {
@@ -133,5 +113,23 @@ public class AskAmericaDriverSystemPropertiesTest {
     invokeConnect(tmpDir.toString());
     assertEquals("/custom/cache", System.getProperty(PROP_CACHE_DIR),
         "Pre-existing duckdb.cache_httpfs.directory must not be overwritten");
+  }
+
+  /**
+   * Regression coverage: {@code connect()} used to run its data-dir pinning unconditionally,
+   * before checking whether the URL was even one this driver handles. Since AskAmericaDriver is
+   * registered with DriverManager, that meant every plain {@code jdbc:duckdb:} connection opened
+   * anywhere in the process — e.g. deep inside a completely unrelated jdbc:govdata: connection's
+   * schema creation — silently reset govdata.operating.dir.base as a side effect. A govdata
+   * connection that had already baked the old value into its generated model's
+   * database_filename kept using the stale catalog path while the property itself moved on.
+   */
+  @Test void connect_ignoresNonAskAmericaUrls(@TempDir Path tmpDir) throws Exception {
+    System.setProperty(PROP_DATA_DIR, tmpDir.toString());
+    AskAmericaDriver driver = new AskAmericaDriver();
+    Connection result = driver.connect("jdbc:duckdb:", new Properties());
+    assertNull(result, "a non-matching URL must return null, per the Driver contract");
+    assertNull(System.getProperty(PROP_OPERATING_DIR),
+        "a URL this driver does not handle must not pin govdata.operating.dir.base");
   }
 }

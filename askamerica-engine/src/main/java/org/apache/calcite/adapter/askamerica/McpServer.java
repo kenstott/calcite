@@ -111,34 +111,28 @@ public class McpServer {
         System.setProperty("java.awt.headless", "true");
 
         // Resolve the data dir: MCP_DATA_DIR (server-specific override) → default ~/.mcp_askamerica.
-        // Pin it as the ASKAMERICA_DATA_DIR system property so AskAmericaDriver.connect() picks it
-        // up via the same path used for direct JDBC connections. govdata.operating.dir.base is set
-        // in exactly one place — AskAmericaDriver — regardless of entry point.
-        if (System.getenv("ASKAMERICA_DATA_DIR") == null
-                && System.getProperty("ASKAMERICA_DATA_DIR") == null) {
-            String dataDir = System.getenv("MCP_DATA_DIR");
-            if (dataDir == null || dataDir.isEmpty()) {
-                String home = System.getProperty("user.home");
-                if (home != null && !home.isEmpty()) {
-                    dataDir = home + "/.mcp_askamerica";
-                }
-            }
-            if (dataDir != null && !dataDir.isEmpty()) {
-                System.setProperty("ASKAMERICA_DATA_DIR", dataDir);
-            }
-        }
-        // Set the shared DuckDB catalog path under whichever data dir was resolved.
+        // Exported as ASKAMERICA_DATA_DIR so any code that reads that name (e.g. a spawned
+        // subprocess) sees it too, then pinned directly via AskAmericaDriver.pinOperatingDir().
+        // This server connects govdata straight through GovDataDriver (see getSchemaConnection()
+        // below), never through jdbc:askamerica:, so AskAmericaDriver.connect() is never invoked
+        // here and cannot be relied on to do this pinning as a side effect of some unrelated
+        // DriverManager call.
         String resolvedDataDir = System.getenv("ASKAMERICA_DATA_DIR");
         if (resolvedDataDir == null || resolvedDataDir.isEmpty()) {
             resolvedDataDir = System.getProperty("ASKAMERICA_DATA_DIR");
         }
-        if (resolvedDataDir != null && !resolvedDataDir.isEmpty()
-                && System.getProperty("duckdb.catalog.path") == null
-                && System.getenv("DUCKDB_CATALOG_PATH") == null) {
-            java.io.File duckdbDir = new java.io.File(resolvedDataDir, ".duckdb");
-            duckdbDir.mkdirs();
-            System.setProperty("duckdb.catalog.path",
-                new java.io.File(duckdbDir, "catalog.duckdb").getAbsolutePath());
+        if (resolvedDataDir == null || resolvedDataDir.isEmpty()) {
+            resolvedDataDir = System.getenv("MCP_DATA_DIR");
+        }
+        if (resolvedDataDir == null || resolvedDataDir.isEmpty()) {
+            String home = System.getProperty("user.home");
+            if (home != null && !home.isEmpty()) {
+                resolvedDataDir = home + "/.mcp_askamerica";
+            }
+        }
+        if (resolvedDataDir != null && !resolvedDataDir.isEmpty()) {
+            System.setProperty("ASKAMERICA_DATA_DIR", resolvedDataDir);
+            AskAmericaDriver.pinOperatingDir(resolvedDataDir);
         }
 
         // Capture the real stdout before any framework can write to it, then
@@ -310,7 +304,7 @@ public class McpServer {
                 log.println("[askamerica-mcp]   caused by: " + cause.getMessage());
                 cause = cause.getCause();
             }
-            return errorResponse(id, -32603, e.getMessage());
+            return errorResponse(id, -32603, compactErrorMessage(e));
         }
     }
 
@@ -431,7 +425,8 @@ public class McpServer {
             + "(3) Quote reserved words used as column names with double quotes: "
             + "\"year\", \"date\", \"time\", \"type\", \"value\", \"name\", "
             + "\"status\", \"level\", \"key\", \"rank\", \"count\", \"order\", "
-            + "\"open\", \"close\", \"domain\", \"sequence\". "
+            + "\"open\", \"close\", \"domain\", \"sequence\", \"period\", \"measure\", "
+            + "\"hour\", \"month\", \"size\", \"source\". "
             + "Example: SELECT \"year\", \"type\", SUM(amount) AS total "
             + "FROM fec.individual_contributions "
             + "WHERE \"year\" = '2024' AND memo_cd <> 'X' "
@@ -838,18 +833,32 @@ public class McpServer {
             }
         } catch (Exception e) {
             long ms = System.currentTimeMillis() - t0;
-            log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms
-                + " msg=" + e.getMessage());
+            String compact = compactErrorMessage(e);
+            log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms + " msg=" + compact);
             if (telemetryOptIn && !"set_telemetry".equals(name)) {
                 final String tName = name;
                 final long tMs = ms;
                 final String tSql = telemetrySql;
-                final String tErr = e.getMessage();
+                final String tErr = compact;
                 Thread t = new Thread(() -> recordTelemetry(tName, tMs, -1, false, tSql, tErr));
                 t.setDaemon(true);
                 t.start();
             }
-            throw e;
+            // A tool failure (bad SQL, missing table, engine error) is reported as a normal MCP
+            // result with isError=true, not a JSON-RPC protocol error — that is what tells the
+            // client this was the tool's business logic failing, not a transport/protocol fault,
+            // and it is what lets compactErrorMessage()'s short message reach the client instead
+            // of the raw exception (previously surfaced to the user as a bare "Tool execution
+            // failed" with no detail at all).
+            ArrayNode errContent = MAPPER.createArrayNode();
+            ObjectNode errBlock = MAPPER.createObjectNode();
+            errBlock.put("type", "text");
+            errBlock.put("text", compact);
+            errContent.add(errBlock);
+            ObjectNode errBody = MAPPER.createObjectNode();
+            errBody.set("content", errContent);
+            errBody.put("isError", true);
+            return result(id, errBody);
         }
 
         long ms = System.currentTimeMillis() - t0;
@@ -889,6 +898,76 @@ public class McpServer {
         body.set("content", content);
         body.put("isError", false);
         return result(id, body);
+    }
+
+    /**
+     * Reduces an exception to a short, actionable message. Three patterns in this stack are
+     * otherwise unusable directly:
+     *
+     * <ul>
+     *   <li>a Calcite parse failure carries a "Was expecting one of:" token dump that can run
+     *       to 100+ lines of grammar productions — keep only the preceding
+     *       "Encountered X at line Y, column Z" sentence, which is self-contained;</li>
+     *   <li>the JDBC sub-schema wrapper ("While executing SQL [...] on JDBC sub-schema", and
+     *       Avatica's own "Error while executing SQL \"...\":" atop it) carries no information
+     *       of its own — the engine's real error (e.g. DuckDB's) is on the deepest cause;</li>
+     *   <li>a stats aggregate (corr, regr_*, median, skewness, kurtosis, mad, quantile_cont,
+     *       quantile_disc — see {@code DuckDBStatsFunctions}) that fails to push down to
+     *       DuckDB is meant to fail with a clean {@code UnsupportedOperationException} from
+     *       its {@code result()} stub, but when a second aggregate (e.g. {@code COUNT(*)})
+     *       shares the same {@code EnumerableAggregate}, Calcite's generated code instead
+     *       fails to *compile*, before that stub ever runs — surfacing a raw Janino
+     *       "No applicable constructor/method" error naming the stub class/method instead.
+     *       Both are the same underlying limitation (the aggregate's inputs span more than
+     *       one govdata schema, so the join can't be pushed to a single DuckDB catalog);
+     *       recognize the compile-failure shape too so it gets the same actionable message.</li>
+     * </ul>
+     */
+    static String compactErrorMessage(Throwable e) {
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && msg.contains("No applicable constructor/method found")
+                && msg.contains("DuckDBStatsFunctions$")) {
+                return "A statistical aggregate (corr, regr_*, median, skewness, kurtosis, "
+                    + "mad, quantile_cont, or quantile_disc) failed to push down to the "
+                    + "DuckDB engine, which is the only place these run — likely because its "
+                    + "inputs come from a join across two different schemas (each schema is "
+                    + "its own DuckDB catalog, so the join can't be pushed down as one query). "
+                    + "Use fetch_aligned_series to align the series first and compute the "
+                    + "statistic there, or keep the corr()/regr_*() call within a single "
+                    + "schema.";
+            }
+        }
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null) {
+                int expecting = msg.indexOf("Was expecting one of:");
+                if (expecting >= 0) {
+                    return truncateMessage(msg.substring(0, expecting).trim());
+                }
+            }
+        }
+        Throwable deepest = e;
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            if (t.getMessage() != null && !t.getMessage().isEmpty()) {
+                deepest = t;
+            }
+        }
+        String msg = deepest.getMessage();
+        if (msg == null || msg.isEmpty()) {
+            msg = e.getClass().getSimpleName();
+        }
+        return truncateMessage(msg);
+    }
+
+    /** {@code getCause()} on some exceptions returns itself; guards the cause-chain walk. */
+    private static Throwable safeCause(Throwable t) {
+        Throwable cause = t.getCause();
+        return cause == t ? null : cause;
+    }
+
+    private static String truncateMessage(String msg) {
+        return msg.length() > 600 ? msg.substring(0, 600) + "..." : msg;
     }
 
     private static int countRows(String json) {
@@ -1168,7 +1247,7 @@ public class McpServer {
             "ref", "year", "date", "time", "timestamp", "type", "value", "name", "status",
             "level", "key", "rank", "count", "order", "open", "close", "domain", "sequence",
             "start", "end", "position", "language", "size", "path", "source", "system",
-            "user", "day", "month", "hour", "minute", "second", "range", "period"));
+            "user", "day", "month", "hour", "minute", "second", "range", "period", "measure"));
 
     /**
      * Quote reserved words used as identifiers, leaving reserved words used as keywords alone.
