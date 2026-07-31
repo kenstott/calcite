@@ -29,7 +29,7 @@ Each schema is served by one or more worker scripts invoked by `run-pool.sh` wit
 | econ_reference | `econ_reference:daily` | Same as daily (single-mode; no historical/initial split) | Year + quarter dimensions (GOVDATA_CURRENT_YEAR/QUARTER) bust rawCache on schedule; tables only re-process when dimension value advances | All 7 tables (static reference; `overwritePartitions: true`) | None (reference data only) | Release gated by `dataLag` + `releaseMonth` per table |
 | geo | `geo:daily` | Same as daily (single-mode; no historical/daily split) | Year dimension (GOVDATA_CURRENT_YEAR) busts rawCache annually. TIGER boundary tables are year-partitioned (type+year); HUD crosswalk tables are year-partitioned (type+year); USDA/Gazetteer/Watershed tables have year dimension from TIGER range | USDA classification (`rural_urban_continuum`, `ruca_codes`) and USGS Watershed tables (static national GDB re-partitioned by year); all HUD crosswalk tables (`overwritePartitions: true`) | TIGER boundary tables, Gazetteer tables (year-append) | None |
 | fedregister | `fedregister:historical` / `fedregister:daily` | Years `START_YEAR`–`INCREMENTAL_YEAR-1`; `fr_documents` partitioned by year × month (96 batches per 8-year range) | Current year only; month dimension (GOVDATA_CURRENT_MONTH) busts rawCache monthly so current-year batches re-fetch | None | `fr_documents` (year+month-partitioned; `batchPartitionColumns: [year, month]`) | None |
-| ref | `ref:daily` | Same as daily (single-mode; no historical/initial split) | Year dimension (GOVDATA_CURRENT_YEAR) busts rawCache annually for GLEIF/FIGI; month dimension (GOVDATA_CURRENT_MONTH) busts sec_company_tickers monthly. `figi_instruments` only runs when `OPENFIGI_API_KEY` is set; uses `FigiDataProvider` to batch 100 tickers/request (~104 requests, 6 min vs 7 hr per-ticker approach) | All 4 tables (static reference; `overwritePartitions: true`) | None (reference data only) | None — GLEIF publishes daily but data changes are minor; annual refresh sufficient |
+| ref | `ref:daily` | Same as daily (single-mode; no historical/initial split) | `gleif_entities` / `gleif_relationships` are `computed_delta` on the source's own `LastUpdateDate`, gated by a `last_modified` freshness probe, so an unchanged golden copy skips the pull entirely and a changed one appends only the advanced rows. Month dimension (GOVDATA_CURRENT_MONTH) busts sec_company_tickers monthly. `figi_instruments` only runs when `OPENFIGI_API_KEY` is set; uses `FigiDataProvider` to batch 100 tickers/request (~104 requests, 6 min vs 7 hr per-ticker approach) | `gleif_cik_mapping`, `sec_company_tickers`, `figi_instruments` and the static tables (`overwritePartitions: true`) | `gleif_entities`, `gleif_relationships` (append-only changelogs; `overwritePartitions: false`) | None — GLEIF publishes 3x/day and the delta gate keeps the append small |
 | ag | `ag:historical` (single once slot) / `ag:daily` | All years `START_YEAR`–`INCREMENTAL_YEAR-1`; NASS crop/livestock, RMA, FSA year-partitioned tables backfill full range; ERS full CSV ingested once | Current year only for NASS/RMA/FSA (`START_YEAR=INCREMENTAL_YEAR`); ERS re-fetched (single cumulative file, no year dim) | `ers_farm_income` (single fetch; partitions by row year) | `nass_crop_production`, `nass_livestock_inventory`, `rma_crop_insurance`, `fsa_commodity_payments` (append-by-year, `dataLag=1`) | `dataLag=1` (prior complete year); per-table `releaseWindow`/`incrementalTtlDays` tuning PENDING until first ETL |
 
 ### How daily efficiency works per schema
@@ -350,6 +350,7 @@ load. The 4 source-characteristic warns are unchanged from prior runs.
 | Table | Rows | Notes |
 |-------|------|-------|
 | gleif_entities | 3,313,968 | Full GLEIF golden copy (~3.2M global LEI records) |
+| gleif_relationships | — | Added 2026-07-31, after this DQ run — 482,824 rows on first ingest |
 | gleif_cik_mapping | 121,474 | LEI→CIK bridge; filtered to SEC registrants (RA000602) |
 | sec_company_tickers | 10,354 | Active US exchange-listed SEC filers from EDGAR company_tickers.json |
 | figi_instruments | 184,221 | OpenFIGI instruments for 9,290 of 10,354 SEC tickers (1,064 tickers had no FIGI match) |
@@ -361,9 +362,20 @@ load. The 4 source-characteristic warns are unchanged from prior runs.
 - `FigiDataProvider`: replaces per-ticker HttpSource calls (10,354 requests, ~7 hours) with batched DataProvider (100 tickers/request, 104 requests, ~6 minutes). Tickers sourced from `sec_company_tickers` Iceberg table via DuckDB.
 - `sec_company_tickers`: new table sourcing ~10,354 active US exchange-listed companies from SEC EDGAR `company_tickers.json`. Feeds `figi_instruments` via `FigiDataProvider`.
 
-**Freshness / release gates (as of 2026-05-22):**
-- `gleif_entities`, `gleif_cik_mapping`, `figi_instruments`: year dimension (GOVDATA_CURRENT_YEAR) → annual cache bust; `overwritePartitions: true`
+**Freshness / release gates (as of 2026-07-31):**
+- `gleif_entities`, `gleif_relationships`: `dataset_type: computed_delta` keyed on the source's own
+  `Registration.LastUpdateDate`, with a `last_modified` freshness probe as a pre-download gate;
+  `overwritePartitions: false` (append-only changelog, history axis = `last_update`)
+- `gleif_cik_mapping`, `figi_instruments`: `overwritePartitions: true`
 - `sec_company_tickers`: month dimension (GOVDATA_CURRENT_MONTH) → monthly cache bust; `overwritePartitions: true`
+
+**Fixed 2026-07-31 —** `incremental.dateField` was matched against fetched rows, which are keyed by
+raw source field name, so `gleif_entities`' `dateField: last_update` (the renamed column) matched
+nothing. Every row took the "no modified value" branch and was appended, and the high-water mark
+never persisted: the table reached **70,148,421 rows for 3,340,401 distinct LEIs**, ~21 stacked
+copies of the registry. `ColumnConfig.resolveSourceKey` now accepts either spelling, and a modified
+field absent from the first fetched row fails the batch instead of silently re-appending. After a
+purge and re-ingest the table is back to 3,340,401 rows / 3,340,401 LEIs with the HWM persisted.
 
 ---
 
