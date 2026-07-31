@@ -1585,8 +1585,11 @@ public class XbrlToParquetConverter implements FileConverter {
     if (!dataList.isEmpty()) {
       storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlContext", "XbrlContext");
       LOGGER.info("Successfully wrote " + dataList.size() + " context records to " + outputPath);
+    } else if (contexts.isEmpty()) {
+      LOGGER.debug("Skipping empty contexts file (0 <context> elements in document): {}", outputPath);
     } else {
-      LOGGER.debug("Skipping empty contexts file: " + outputPath);
+      LOGGER.debug("Skipping empty contexts file ({} <context> elements found, all duplicate ids): {}",
+          contexts.size(), outputPath);
     }
   }
 
@@ -2529,12 +2532,16 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // 1. Extract MD&A from HTML using semantic chunking
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    if (filename.endsWith(".htm") || filename.endsWith(".html")) {
+    boolean htmlChunkerAttempted = filename.endsWith(".htm") || filename.endsWith(".html");
+    if (htmlChunkerAttempted) {
       extractMDAWithChunker(sourcePath, dataList, cik, accessionNumber, filingDate, filingType, chunker);
     }
+    int afterHtmlChunker = dataList.size();
 
     // 2. Also extract from XBRL TextBlocks (if present)
     NodeList allElements = doc.getElementsByTagName("*");
+    int mdaConceptCandidates = 0;
+    int mdaConceptCandidatesWithText = 0;
     for (int i = 0; i < allElements.getLength(); i++) {
       Element element = (Element) allElements.item(i);
 
@@ -2542,8 +2549,10 @@ public class XbrlToParquetConverter implements FileConverter {
         String concept = extractConceptName(element);
 
         if (isMDAConcept(concept)) {
+          mdaConceptCandidates++;
           String text = element.getTextContent().trim();
           if (!text.isEmpty()) {
+            mdaConceptCandidatesWithText++;
             List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(text);
             for (SemanticTextChunker.Chunk chunk : chunks) {
               Map<String, Object> data = new HashMap<>();
@@ -2572,7 +2581,15 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    LOGGER.info("Extracted {} MD&A paragraphs from {}", dataList.size(), sourcePath);
+    if (dataList.isEmpty()) {
+      LOGGER.debug(
+          "Extracted 0 MD&A paragraphs from {} (htmlChunkerAttempted={}, htmlChunkerParagraphs={}, "
+          + "xbrlMdaConceptElements={}, xbrlMdaConceptElementsWithText={})",
+          sourcePath, htmlChunkerAttempted, afterHtmlChunker, mdaConceptCandidates,
+          mdaConceptCandidatesWithText);
+    } else {
+      LOGGER.info("Extracted {} MD&A paragraphs from {}", dataList.size(), sourcePath);
+    }
     return dataList;
   }
 
@@ -2587,7 +2604,7 @@ public class XbrlToParquetConverter implements FileConverter {
       storageProvider.writeAvroParquet(outputPath, columns, mdaData, "MDASection", "MDASection");
       LOGGER.info("Wrote {} MD&A chunks to {}", mdaData.size(), outputPath);
     } else {
-      LOGGER.debug("Skipping empty MD&A file: {}", outputPath);
+      LOGGER.debug("Skipping empty MD&A file (reason logged by extractMDAData above): {}", outputPath);
     }
   }
 
@@ -4240,6 +4257,12 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    if (dataList.isEmpty()) {
+      LOGGER.warn("Extracted 0 insider transactions/holdings for cik={} accession={}: "
+          + "no securities data matched under either the reportingOwner or document-global structure",
+          cik, accession);
+    }
+
     return dataList;
   }
 
@@ -4799,6 +4822,17 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
+    if (chunks.isEmpty()) {
+      if (itemPositions.isEmpty()) {
+        LOGGER.warn("Extracted 0 8-K item chunks for cik={} accession={}: no \"Item N.NN\" "
+            + "headers found in document body", cik, accession);
+      } else {
+        LOGGER.warn("Extracted 0 8-K item chunks for cik={} accession={}: {} item header(s) "
+            + "found but every section was <50 chars or matched a boilerplate filter",
+            cik, accession, itemPositions.size());
+      }
+    }
+
     return chunks;
   }
 
@@ -4947,7 +4981,9 @@ public class XbrlToParquetConverter implements FileConverter {
     if (!dataList.isEmpty()) {
       LOGGER.info("Wrote " + dataList.size() + " vectorized insider chunks to " + outputPath);
     } else {
-      LOGGER.info("Created empty chunks file (no content > 20 chars) for " + outputPath);
+      LOGGER.info("Created empty chunks file for cik={} accession={}: {} <remarks> and {} "
+          + "<footnote> elements found, none with >20 chars of text",
+          cik, accession, remarks.getLength(), footnotes.getLength());
     }
   }
 
@@ -5138,6 +5174,10 @@ public class XbrlToParquetConverter implements FileConverter {
       outputFiles.add(earningsPath);
       if (!earningsRecords.isEmpty()) {
         LOGGER.info("Extracted " + earningsRecords.size() + " earnings paragraphs from 8-K");
+      } else {
+        LOGGER.debug("0 earnings paragraphs for cik={} accession={}: no EX-99.x exhibit content "
+            + "and no earnings-related phrases matched (most 8-Ks carry no earnings release)",
+            cik, accession);
       }
 
       // 4. Extract ALL item sections + merge with earnings chunks
@@ -5201,6 +5241,10 @@ public class XbrlToParquetConverter implements FileConverter {
           storageProvider.writeAvroParquet(chunksPath, chunkColumns, allChunks, "VectorizedChunk", "vectorized_chunks");
           outputFiles.add(chunksPath);
           LOGGER.info("Wrote " + allChunks.size() + " combined chunks (earnings + items) to " + chunksPath);
+        } else {
+          LOGGER.debug("0 combined chunks for cik={} accession={}: 0 earnings chunks and 0 item "
+              + "chunks (see extract8KItems log above for why item extraction was empty)",
+              cik, accession);
         }
       }
 
@@ -6750,6 +6794,10 @@ public class XbrlToParquetConverter implements FileConverter {
       dataList.add(data);
     }
 
+    if (dataList.isEmpty()) {
+      LOGGER.warn("Extracted 0 holdings for cik={} accession={}: 0 <infoTable> elements "
+          + "in the downloaded information table document", cik, accession);
+    }
     return dataList;
   }
 
@@ -6866,6 +6914,9 @@ public class XbrlToParquetConverter implements FileConverter {
               "VectorizedChunk", "vectorized_chunks");
           outputFiles.add(chunksPath);
           LOGGER.info("Wrote {} vectorized chunks from 13D/G items", chunks.size());
+        } else {
+          LOGGER.debug("0 vectorized chunks for cik={} accession={} "
+              + "(see extract13DGItems log above for why)", cik, accession);
         }
       }
 
@@ -7099,6 +7150,17 @@ public class XbrlToParquetConverter implements FileConverter {
 
         chunks.add(chunk);
         paraSeq++;
+      }
+    }
+
+    if (chunks.isEmpty()) {
+      if (itemPositions.isEmpty()) {
+        LOGGER.warn("Extracted 0 13D/G item chunks for cik={} accession={}: no \"Item N\" "
+            + "headers (1-10) found in document body", cik, accession);
+      } else {
+        LOGGER.warn("Extracted 0 13D/G item chunks for cik={} accession={}: {} item header(s) "
+            + "found but every section was <50 chars or matched a boilerplate filter",
+            cik, accession, itemPositions.size());
       }
     }
 
