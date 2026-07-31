@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Reference Data Quality Checks
 -- Schema: ref
--- Tables: gleif_entities, gleif_cik_mapping, sec_company_tickers, figi_instruments
+-- Tables: gleif_entities, gleif_relationships, gleif_cik_mapping, sec_company_tickers, figi_instruments
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'type' for all tables.
 
@@ -117,6 +117,112 @@ SELECT 'ref', 'gleif_entities', 'T7_active_entity_ratio',
 FROM (
   SELECT CAST(SUM(CASE WHEN entity_status = 'ACTIVE' THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*) AS ratio
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_entities', allow_moved_paths := true)
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: gleif_relationships
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true));
+
+-- T2: row_count (RR golden copy ~483k relationship records)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T2_row_count',
+  CASE WHEN n >= 400000 THEN 'pass' ELSE 'fail' END,
+  n, 400000, 'Expected at least 400000 GLEIF relationship records (RR golden copy ~483k)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (start_node_id, end_node_id, relationship_type are nullable: false in the schema)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL start_node_id, end_node_id or relationship_type rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
+      WHERE start_node_id IS NULL OR end_node_id IS NULL OR relationship_type IS NULL);
+
+-- T7: start_node_id / end_node_id lei format (20-character alphanumeric)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T7_node_id_lei_format',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'start_node_id or end_node_id not matching 20-character alphanumeric LEI format'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
+      WHERE (start_node_id IS NOT NULL AND NOT REGEXP_MATCHES(start_node_id, '^[A-Z0-9]{20}$'))
+         OR (end_node_id IS NOT NULL AND NOT REGEXP_MATCHES(end_node_id, '^[A-Z0-9]{20}$')));
+
+-- T7: relationship_type values (known RR-CDF relationship types)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T7_relationship_type_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'relationship_type outside known RR-CDF relationship types'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
+      WHERE relationship_type IS NOT NULL
+        AND relationship_type NOT IN ('IS_DIRECTLY_CONSOLIDATED_BY', 'IS_ULTIMATELY_CONSOLIDATED_BY',
+                                       'IS_FUND-MANAGED_BY', 'IS_SUBFUND_OF', 'IS_FEEDER_TO',
+                                       'IS_INTERNATIONAL_BRANCH_OF'));
+
+-- T7: relationship_status values
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T7_relationship_status_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0, 'relationship_status outside known values (ACTIVE, INACTIVE)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
+      WHERE relationship_status IS NOT NULL
+        AND relationship_status NOT IN ('ACTIVE', 'INACTIVE'));
+
+-- T7: node LEIs resolve to gleif_entities (both endpoints are always LEIs per the schema comment)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T7_node_id_resolves_to_entities',
+  CASE WHEN ratio >= 0.95 THEN 'pass' ELSE 'warn' END,
+  ratio, 0.95, 'Fraction of start_node_id/end_node_id values present in gleif_entities.lei (expect >= 0.95)'
+FROM (
+  SELECT CAST(SUM(CASE WHEN e.lei IS NOT NULL THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*) AS ratio
+  FROM (
+    SELECT start_node_id AS node_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
+    UNION ALL
+    SELECT end_node_id AS node_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
+  ) r
+  LEFT JOIN (SELECT DISTINCT lei FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_entities', allow_moved_paths := true)) e
+    ON r.node_id = e.lei
 );
 
 -- ─────────────────────────────────────────────────────────────
