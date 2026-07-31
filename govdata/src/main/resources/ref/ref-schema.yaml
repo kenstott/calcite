@@ -4,6 +4,7 @@
 # Cross-referencing tables that link financial identifiers across systems:
 #   - GLEIF entities (LEI -> legal entity mapping)
 #   - GLEIF CIK mapping (LEI <-> SEC CIK bridge)
+#   - GLEIF relationships (LEI -> LEI parent/child consolidation and fund edges)
 #   - OpenFIGI instruments (ticker -> FIGI mapping)
 #
 # This is a standalone reference schema with no dependencies.
@@ -47,6 +48,17 @@ bulkDownloads:
     comment: >
       GLEIF LEI-CDF 3.1 golden copy CSV download (~450MB compressed, 3.2M records).
       Contains all LEI records worldwide. Shared by gleif_entities and gleif_cik_mapping.
+
+  # GLEIF Relationship Records (RR) golden copy — Level 2 "who owns whom" (~23MB ZIP, ~483k rows)
+  # Separate publish from lei2: LEI-CDF carries no parent/child fields at all, the parent edges
+  # live only here. Same stable permalink form (302 → the current dated file), same 3x/day cadence.
+  gleif_rr_golden_copy:
+    cachePattern: "type=gleif_bulk/gleif-rr-golden-copy.csv.zip"
+    url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/rr/latest.csv"
+    dimensions: {}
+    comment: >
+      GLEIF RR-CDF 2.1 golden copy CSV download (~23MB compressed, ~483k relationship
+      records). One row per directed LEI-to-LEI relationship. Used by gleif_relationships.
 
 column_templates:
 
@@ -321,6 +333,332 @@ partitionedTables:
         catalogType: hadoop
         batchPartitionColumns: [type]
         overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ==========================================================================
+  # GLEIF RELATIONSHIPS — LEI-to-LEI parent/child edges (RR golden copy)
+  # ==========================================================================
+  - name: gleif_relationships
+    # Same history model as gleif_entities: a full point-in-time golden copy that already carries
+    # a per-record updated_at, so computed_delta appends only the edges whose LastUpdateDate
+    # advanced past the stored high-water mark and registration_last_update becomes the history
+    # axis. Ownership changes are exactly what you want a changelog of — "when did X become a
+    # subsidiary of Y" is answerable from the appended rows, not from any single snapshot.
+    # Columns are 1:1 with the RR CSV, renamed but not reshaped: all five Period / Qualifier /
+    # Quantifier slots are carried as published, so a slot GLEIF starts populating lands in the
+    # table instead of being silently dropped by a selection rule frozen at ingest time. The
+    # collapsing happens in the current_gleif_parents view.
+    dataset_type: computed_delta
+    freshness:
+      type: last_modified   # pre-download gate: skip the pull entirely when the RR file is unchanged
+    pattern: "type=gleif_relationships.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      GLEIF Level 2 relationship records — the LEI-to-LEI edges that LEI-CDF (gleif_entities)
+      does not carry. One row per directed relationship. Both endpoints are always LEIs, so the
+      table self-joins to gleif_entities on either side and, through gleif_cik_mapping, resolves
+      to SEC CIKs. relationship_type values (2026-07-31 publish, 482,849 rows):
+      IS_DIRECTLY_CONSOLIDATED_BY (126,021) and IS_ULTIMATELY_CONSOLIDATED_BY (132,196) are the
+      two levels of the ownership hierarchy; IS_FUND-MANAGED_BY (148,576), IS_SUBFUND_OF (72,731),
+      IS_FEEDER_TO (1,386) are fund structures; IS_INTERNATIONAL_BRANCH_OF (1,939) is branch
+      registration. In every type start_node_id is the subordinate entity and end_node_id is the
+      superior one — but only consolidation means ownership. A fund commonly carries a manager AND
+      an umbrella (59,419 entities; the two are different entities in 60,266 of 60,370 cases): two
+      distinct relations, not two parents.
+      GLEIF flattens the ownership chain to two attested levels and never publishes the
+      intermediate one, so IS_ULTIMATELY_CONSOLIDATED_BY is largely derivable — walking the direct
+      chain reaches the declared ultimate for 113,860 of the 118,627 entities that report both. It
+      is kept because it is REPORTED, not computed: 13,569 entities declare an ultimate with no
+      direct edge to walk from, and 4,765 chains break at an intermediate holding company that has
+      no LEI. Dropping it loses those ~18k attestations.
+      Only entities that report a relationship to GLEIF appear here — an absent edge means "not
+      reported", which the REPEX (reporting exception) publish explains and this table does not
+      carry. Source: GLEIF Golden Copy RR (goldencopy.gleif.org).
+
+    columns:
+      - name: start_node_id
+        type: string
+        nullable: false
+        source: Relationship.StartNode.NodeID
+        comment: LEI of the subordinate entity in the relationship (start_node_id_type is LEI on all 482,849 rows)
+      - name: start_node_id_type
+        type: string
+        nullable: true
+        source: Relationship.StartNode.NodeIDType
+        comment: Node identifier scheme; LEI throughout the current publish
+      - name: end_node_id
+        type: string
+        nullable: false
+        source: Relationship.EndNode.NodeID
+        comment: LEI of the superior entity in the relationship
+      - name: end_node_id_type
+        type: string
+        nullable: true
+        source: Relationship.EndNode.NodeIDType
+        comment: Node identifier scheme; LEI throughout the current publish
+      - name: relationship_type
+        type: string
+        nullable: false
+        source: Relationship.RelationshipType
+        comment: IS_DIRECTLY_CONSOLIDATED_BY, IS_ULTIMATELY_CONSOLIDATED_BY, IS_FUND-MANAGED_BY, IS_SUBFUND_OF, IS_FEEDER_TO, IS_INTERNATIONAL_BRANCH_OF
+      - name: relationship_status
+        type: string
+        nullable: true
+        source: Relationship.RelationshipStatus
+        comment: ACTIVE or INACTIVE
+      # Period slots are NOT positional: a RELATIONSHIP_PERIOD lands in slot 1, 2 or 3 depending on how
+      # many accounting/filing periods the record also carries. Select on period_N_type, never on N.
+      # Slots 4-5 are empty in the current publish; the RR-CDF allows them, so they are carried.
+      - name: period_1_start_date
+        type: string
+        nullable: true
+        source: Relationship.Period.1.startDate
+      - name: period_1_end_date
+        type: string
+        nullable: true
+        source: Relationship.Period.1.endDate
+      - name: period_1_type
+        type: string
+        nullable: true
+        source: Relationship.Period.1.periodType
+      - name: period_2_start_date
+        type: string
+        nullable: true
+        source: Relationship.Period.2.startDate
+      - name: period_2_end_date
+        type: string
+        nullable: true
+        source: Relationship.Period.2.endDate
+      - name: period_2_type
+        type: string
+        nullable: true
+        source: Relationship.Period.2.periodType
+      - name: period_3_start_date
+        type: string
+        nullable: true
+        source: Relationship.Period.3.startDate
+      - name: period_3_end_date
+        type: string
+        nullable: true
+        source: Relationship.Period.3.endDate
+      - name: period_3_type
+        type: string
+        nullable: true
+        source: Relationship.Period.3.periodType
+      - name: period_4_start_date
+        type: string
+        nullable: true
+        source: Relationship.Period.4.startDate
+      - name: period_4_end_date
+        type: string
+        nullable: true
+        source: Relationship.Period.4.endDate
+      - name: period_4_type
+        type: string
+        nullable: true
+        source: Relationship.Period.4.periodType
+      - name: period_5_start_date
+        type: string
+        nullable: true
+        source: Relationship.Period.5.startDate
+      - name: period_5_end_date
+        type: string
+        nullable: true
+        source: Relationship.Period.5.endDate
+      - name: period_5_type
+        type: string
+        nullable: true
+        source: Relationship.Period.5.periodType
+      # ACCOUNTING_STANDARD is the only dimension GLEIF currently publishes; slots 2-5 are near-empty.
+      - name: qualifier_1_dimension
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.1.QualifierDimension
+      - name: qualifier_1_category
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.1.QualifierCategory
+      - name: qualifier_2_dimension
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.2.QualifierDimension
+      - name: qualifier_2_category
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.2.QualifierCategory
+      - name: qualifier_3_dimension
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.3.QualifierDimension
+      - name: qualifier_3_category
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.3.QualifierCategory
+      - name: qualifier_4_dimension
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.4.QualifierDimension
+      - name: qualifier_4_category
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.4.QualifierCategory
+      - name: qualifier_5_dimension
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.5.QualifierDimension
+      - name: qualifier_5_category
+        type: string
+        nullable: true
+        source: Relationship.Qualifiers.5.QualifierCategory
+      # Only slot 1 is populated today, always ACCOUNTING_CONSOLIDATION. Amounts stay strings: 19,232 of
+      # 51,652 are published with no units and some exceed 100 — cast and filter in the query, not here.
+      - name: quantifier_1_method
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.1.MeasurementMethod
+      - name: quantifier_1_amount
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.1.QuantifierAmount
+      - name: quantifier_1_units
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.1.QuantifierUnits
+      - name: quantifier_2_method
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.2.MeasurementMethod
+      - name: quantifier_2_amount
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.2.QuantifierAmount
+      - name: quantifier_2_units
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.2.QuantifierUnits
+      - name: quantifier_3_method
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.3.MeasurementMethod
+      - name: quantifier_3_amount
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.3.QuantifierAmount
+      - name: quantifier_3_units
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.3.QuantifierUnits
+      - name: quantifier_4_method
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.4.MeasurementMethod
+      - name: quantifier_4_amount
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.4.QuantifierAmount
+      - name: quantifier_4_units
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.4.QuantifierUnits
+      - name: quantifier_5_method
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.5.MeasurementMethod
+      - name: quantifier_5_amount
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.5.QuantifierAmount
+      - name: quantifier_5_units
+        type: string
+        nullable: true
+        source: Relationship.Quantifiers.5.QuantifierUnits
+      # --- Registration block: the lifecycle of the relationship RECORD, not of either entity ---
+      - name: registration_initial_date
+        type: string
+        nullable: true
+        source: Registration.InitialRegistrationDate
+      - name: registration_last_update
+        type: string
+        nullable: true
+        source: Registration.LastUpdateDate
+        comment: Last update of the relationship record (ISO 8601) — the computed_delta change key
+      - name: registration_status
+        type: string
+        nullable: true
+        source: Registration.RegistrationStatus
+        comment: PUBLISHED, LAPSED, PENDING_ARCHIVAL or PENDING_TRANSFER — lifecycle of the relationship record itself
+      - name: registration_next_renewal
+        type: string
+        nullable: true
+        source: Registration.NextRenewalDate
+      - name: registration_managing_lou
+        type: string
+        nullable: true
+        source: Registration.ManagingLOU
+        comment: LEI of the Local Operating Unit maintaining the record
+      - name: registration_validation_sources
+        type: string
+        nullable: true
+        source: Registration.ValidationSources
+        comment: FULLY_CORROBORATED, PARTIALLY_CORROBORATED or ENTITY_SUPPLIED_ONLY
+      - name: registration_validation_documents
+        type: string
+        nullable: true
+        source: Registration.ValidationDocuments
+      - name: registration_validation_reference
+        type: string
+        nullable: true
+        source: Registration.ValidationReference
+
+    download:
+      bulkDownload: gleif_rr_golden_copy
+
+    source:
+      type: http
+      url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/rr/latest.csv"
+      method: GET
+      extractPattern: "*.csv"
+      incremental:
+        # computed_delta change key: only rows whose registration_last_update exceeds the stored
+        # high-water mark are kept and appended.
+        dateField: registration_last_update
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - gleif_relationships
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        batchPartitionColumns: [type]
+        overwritePartitions: false   # APPEND the computed_delta rows; ownership history is the point
         runMaintenance: true
         snapshotRetentionDays: 1
         runCompaction: true
@@ -1492,6 +1830,26 @@ constraints:
         targetTable: filings
         targetColumns: [cik]
 
+  gleif_relationships:
+    # registration_last_update is part of the key because the table is an append-only changelog: a
+    # given (start node, type) edge appears once per publish in which it was restated. Within a
+    # single publish (start_node_id, relationship_type) is unique — verified on the 2026-07-31
+    # golden copy: 482,849 rows, zero duplicate (start_node_id, relationship_type) pairs.
+    primaryKey: [type, start_node_id, relationship_type, registration_last_update]
+    foreignKeys:
+      - columns: [start_node_id]
+        targetTable: gleif_entities
+        targetColumns: [lei]
+        comment: The subordinate end of the edge — subsidiary, sub-fund, branch or feeder
+      - columns: [end_node_id]
+        targetTable: gleif_entities
+        targetColumns: [lei]
+        comment: The superior end of the edge — consolidating parent, fund manager or umbrella
+      - columns: [registration_managing_lou]
+        targetTable: gleif_entities
+        targetColumns: [lei]
+        comment: LOUs are themselves LEI-registered; links the record's maintainer to its entity
+
   sec_company_tickers:
     primaryKey: [type, as_of, cik]   # per-day snapshots: cik is unique within an as_of, not across
 
@@ -1548,3 +1906,83 @@ views:
         FROM gleif_entities
         GROUP BY lei
       ) latest ON e.lei = latest.lei AND e.last_update = latest.max_last_update
+
+  - name: current_gleif_relationships
+    comment: >
+      Current-state GLEIF relationships: the latest row per (start_node_id, relationship_type)
+      from the append-only gleif_relationships changelog, raw source columns unchanged. Use for
+      "as-now" walks; query gleif_relationships directly (group by registration_last_update) to
+      see when an edge changed.
+    sql: >
+      SELECT r.*
+      FROM gleif_relationships r
+      JOIN (
+        SELECT start_node_id, relationship_type,
+               MAX(registration_last_update) AS max_last_update
+        FROM gleif_relationships
+        GROUP BY start_node_id, relationship_type
+      ) latest ON r.start_node_id = latest.start_node_id
+              AND r.relationship_type = latest.relationship_type
+              AND r.registration_last_update = latest.max_last_update
+
+  - name: current_gleif_parents
+    comment: >
+      The convenience shape over the raw relationship rows — this is where the repeating Period /
+      Qualifier / Quantifier slots are collapsed, deliberately in SQL rather than baked into the
+      stored table, so the selection rules can change without a re-ingest. Restricted to the two
+      ownership types (fund, branch and feeder edges excluded), to ACTIVE relationships whose
+      record is still PUBLISHED, with legal name and jurisdiction resolved on both ends. One row
+      per (child, IS_DIRECTLY_CONSOLIDATED_BY | IS_ULTIMATELY_CONSOLIDATED_BY) — an entity can
+      appear twice, once for its immediate parent and once for the top of its group. Join
+      child_lei or parent_lei to gleif_cik_mapping to reach SEC filers.
+    sql: >
+      SELECT r.start_node_id AS child_lei, ce.legal_name AS child_legal_name,
+             ce.jurisdiction AS child_jurisdiction, r.relationship_type,
+             r.end_node_id AS parent_lei, pe.legal_name AS parent_legal_name,
+             pe.jurisdiction AS parent_jurisdiction,
+             CASE WHEN r.period_1_type = 'RELATIONSHIP_PERIOD' THEN r.period_1_start_date
+                  WHEN r.period_2_type = 'RELATIONSHIP_PERIOD' THEN r.period_2_start_date
+                  WHEN r.period_3_type = 'RELATIONSHIP_PERIOD' THEN r.period_3_start_date
+                  WHEN r.period_4_type = 'RELATIONSHIP_PERIOD' THEN r.period_4_start_date
+                  WHEN r.period_5_type = 'RELATIONSHIP_PERIOD' THEN r.period_5_start_date
+             END AS relationship_start_date,
+             CASE WHEN r.period_1_type = 'ACCOUNTING_PERIOD' THEN r.period_1_end_date
+                  WHEN r.period_2_type = 'ACCOUNTING_PERIOD' THEN r.period_2_end_date
+                  WHEN r.period_3_type = 'ACCOUNTING_PERIOD' THEN r.period_3_end_date
+                  WHEN r.period_4_type = 'ACCOUNTING_PERIOD' THEN r.period_4_end_date
+                  WHEN r.period_5_type = 'ACCOUNTING_PERIOD' THEN r.period_5_end_date
+             END AS accounting_period_end_date,
+             CASE WHEN r.qualifier_1_dimension = 'ACCOUNTING_STANDARD' THEN r.qualifier_1_category
+                  WHEN r.qualifier_2_dimension = 'ACCOUNTING_STANDARD' THEN r.qualifier_2_category
+                  WHEN r.qualifier_3_dimension = 'ACCOUNTING_STANDARD' THEN r.qualifier_3_category
+                  WHEN r.qualifier_4_dimension = 'ACCOUNTING_STANDARD' THEN r.qualifier_4_category
+                  WHEN r.qualifier_5_dimension = 'ACCOUNTING_STANDARD' THEN r.qualifier_5_category
+             END AS accounting_standard,
+             CASE WHEN r.quantifier_1_units = 'PERCENTAGE'
+                  THEN CAST(r.quantifier_1_amount AS DOUBLE) END AS ownership_percentage
+      FROM gleif_relationships r
+      JOIN (
+        SELECT start_node_id, relationship_type,
+               MAX(registration_last_update) AS max_last_update
+        FROM gleif_relationships
+        GROUP BY start_node_id, relationship_type
+      ) lr ON r.start_node_id = lr.start_node_id
+          AND r.relationship_type = lr.relationship_type
+          AND r.registration_last_update = lr.max_last_update
+      LEFT JOIN (
+        SELECT e.lei, e.legal_name, e.jurisdiction
+        FROM gleif_entities e
+        JOIN (
+          SELECT lei, MAX(last_update) AS max_last_update FROM gleif_entities GROUP BY lei
+        ) le ON e.lei = le.lei AND e.last_update = le.max_last_update
+      ) ce ON r.start_node_id = ce.lei
+      LEFT JOIN (
+        SELECT e.lei, e.legal_name, e.jurisdiction
+        FROM gleif_entities e
+        JOIN (
+          SELECT lei, MAX(last_update) AS max_last_update FROM gleif_entities GROUP BY lei
+        ) le ON e.lei = le.lei AND e.last_update = le.max_last_update
+      ) pe ON r.end_node_id = pe.lei
+      WHERE r.relationship_type IN ('IS_DIRECTLY_CONSOLIDATED_BY', 'IS_ULTIMATELY_CONSOLIDATED_BY')
+        AND r.relationship_status = 'ACTIVE'
+        AND r.registration_status = 'PUBLISHED'

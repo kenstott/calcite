@@ -19,6 +19,7 @@ across `sec`, `econ`, `health` (drug manufacturers), and `patents` (assignees) r
 |---|---|---|---|
 | `gleif_entities` | Global LEI Foundation entity records: LEI, legal name, jurisdiction, entity legal form, registration authority, headquarters and registration country/city, registration/update/renewal dates | GLEIF full CSV bulk download | Annual |
 | `gleif_cik_mapping` | Bridge table linking SEC CIK numbers to LEI codes (entities registered with RA000602 = SEC) | GLEIF full CSV bulk download | Annual |
+| `gleif_relationships` | GLEIF Level 2 relationship records: directed LEI-to-LEI edges with relationship type, status, relationship and accounting periods, accounting standard, and consolidation quantifier. The corporate parent/child data — `gleif_entities` (Level 1) carries none | GLEIF RR golden copy CSV bulk download | Per publish (3x/day; `computed_delta` on `Registration.LastUpdateDate`) |
 | `figi_instruments` | OpenFIGI financial instrument identifiers: FIGI, name, exchange code, market sector, security type, composite FIGI, share class FIGI | OpenFIGI API v3 `/mapping` | Annual |
 | `countries` | Country identity crosswalk: Census 4-digit trade code, ISO 3166-1 alpha-2/alpha-3/numeric, FIPS 10-4, name-based BEA area key, M49 region/subregion/continent, ISO 4217 currency | Census Schedule C (live, freshness-gated) + bundled ISO spine (DataHub `country-codes`, public domain) | Daily (freshness-gated) |
 
@@ -52,6 +53,8 @@ groups) intentionally do not resolve. `countries.is_aggregate` flags Census grou
 | View | Description | Depends on |
 |---|---|---|
 | `ticker_instrument_map` | Maps trading tickers to FIGI instruments with exchange and security type; links to GLEIF entities registered with SEC | `figi_instruments`, `gleif_entities`, `gleif_cik_mapping` |
+| `current_gleif_relationships` | Latest row per `(child_lei, relationship_type)` from the append-only relationship changelog | `gleif_relationships` |
+| `current_gleif_parents` | Current ACTIVE + PUBLISHED consolidation edges only (fund/branch/feeder types excluded), with legal name and jurisdiction resolved on both ends | `gleif_relationships`, `gleif_entities` |
 
 ---
 
@@ -77,6 +80,28 @@ JOIN ref.gleif_cik_mapping m ON CAST(f.cik AS VARCHAR) = CAST(m.cik AS VARCHAR)
 JOIN ref.gleif_entities e ON m.lei = e.lei
 WHERE f.form_type = '10-K';
 ```
+
+### Corporate hierarchy of an SEC filer
+```sql
+-- Immediate and ultimate parents of a public company, by CIK
+SELECT p.relationship_type, p.parent_legal_name, p.parent_jurisdiction,
+       p.ownership_amount, p.ownership_units, p.accounting_standard
+FROM ref.gleif_cik_mapping m
+JOIN ref.current_gleif_parents p ON m.lei = p.child_lei
+WHERE m.cik = '0000320193';
+
+-- Subsidiaries: walk the edge the other way, and keep only SEC-registered children
+SELECT p.child_legal_name, c.cik
+FROM ref.current_gleif_parents p
+JOIN ref.gleif_cik_mapping pm ON p.parent_lei = pm.lei
+LEFT JOIN ref.gleif_cik_mapping c ON p.child_lei = c.lei
+WHERE pm.cik = '0000320193'
+  AND p.relationship_type = 'IS_DIRECTLY_CONSOLIDATED_BY';
+```
+
+An entity that reports no parent is simply absent from `gleif_relationships` — GLEIF publishes
+the reason (NO_LEI, NON_CONSOLIDATING, LEGAL_OBSTACLES, …) in a separate REPEX golden copy that
+this schema does not ingest. Absence therefore means "not reported", never "has no parent".
 
 ### Drug manufacturer identity
 ```sql
