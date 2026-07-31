@@ -157,7 +157,15 @@ public interface IncrementalTracker {
     }
     Set<Map<String, String>> filtered = new HashSet<>();
     for (Map<String, String> kv : all) {
-      if (year.equals(kv.get("year"))) {
+      // A key of one component is stored as its bare value, so it comes back as
+      // {source_key=2021} rather than {year=2021} — a year-partitioned table whose only key is the
+      // year would match nothing here and every period would look unprocessed. Reading the sole
+      // value when there is no explicit year is what the caller means by "scoped to a year".
+      String keyYear = kv.get("year");
+      if (keyYear == null && kv.size() == 1) {
+        keyYear = kv.values().iterator().next();
+      }
+      if (year.equals(keyYear)) {
         filtered.add(kv);
       }
     }

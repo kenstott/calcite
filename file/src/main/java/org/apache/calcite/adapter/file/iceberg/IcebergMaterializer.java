@@ -2739,6 +2739,28 @@ public class IcebergMaterializer {
     // The tracker is a fallback for when Iceberg is unavailable — never an authority.
     if (table != null) {
       try {
+        // The scan below reads every accession in the partition to learn what is already
+        // committed. It costs 5 to 68 seconds per table and year against object storage, and a
+        // run does it for each of them — which is where the minutes between batches go. Measured
+        // on a 2022 repair: filing_metadata/year=2022 took 68s to return 342,226 accessions and
+        // marked none of them, because nothing had changed since the previous run.
+        //
+        // An Iceberg snapshot id changes on every commit, so a table whose snapshot still matches
+        // the one recorded when this partition was last synced cannot have gained an accession.
+        // The tracker was brought into step with Iceberg at that point, so it can answer instead —
+        // a second rather than a minute — and it stays exact: any commit, by this process or
+        // another, moves the snapshot and forces the scan again.
+        String snapshotId = table.currentSnapshot() == null
+            ? null : String.valueOf(table.currentSnapshot().snapshotId());
+        String syncKey = config.getTargetTableId() + "#iceberg-accession-sync#year="
+            + (yearValue == null ? "all" : yearValue);
+        if (snapshotId != null && incrementalTracker.isTableComplete(syncKey, snapshotId)) {
+          Set<String> tracked = getTrackedAccessions(config.getTargetTableId(), yearValue);
+          LOGGER.info("Iceberg unchanged for {}/year={} (snapshot {}) — {} accessions from tracker",
+              config.getTargetTableId(), yearValue, snapshotId, tracked.size());
+          return tracked;
+        }
+
         Set<String> icebergAccessions =
             getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
         // Sync tracker from Iceberg so retries use the cheap path without a second S3 scan.
@@ -2760,6 +2782,13 @@ public class IcebergMaterializer {
           incrementalTracker.markProcessed(config.getTargetTableId(),
               config.getSourceTableName(), accessionKey, config.getTargetTableId());
           newlyMarked++;
+        }
+        // Recorded only after the tracker has been brought into step with this snapshot, so the
+        // skip above can never claim agreement that was not actually reached. A failure before
+        // this point leaves the old snapshot recorded and the next run rescans, which is the safe
+        // direction to fail in.
+        if (snapshotId != null) {
+          incrementalTracker.markTableComplete(syncKey, snapshotId);
         }
         LOGGER.info("Iceberg scan: {} committed accessions for {}/year={} ({} newly tracked)",
             icebergAccessions.size(), config.getTargetTableId(), yearValue, newlyMarked);
