@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.66.1](https://github.com/kenstott/calcite/compare/engine-v0.66.0...engine-v0.66.1) (2026-07-30)
+
+
+### Bug Fixes
+
+* **govdata:** stop expecting an earnings transcript from every 8-K ([68f20d9](https://github.com/kenstott/calcite/commit/68f20d9624f4f6c090cd02c6f3937b1f84d04a5f))
+
 ## [0.66.0](https://github.com/kenstott/calcite/compare/engine-v0.65.0...engine-v0.66.0) (2026-07-30)
 
 ### Features
