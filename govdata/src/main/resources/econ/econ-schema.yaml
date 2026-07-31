@@ -2341,7 +2341,7 @@ partitionedTables:
 
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
-    pattern: "type=regional_employment/year=*/state_fips=*/regional_employment.parquet"
+    pattern: "type=regional_employment/year=*/regional_employment.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -2360,7 +2360,14 @@ partitionedTables:
         - regional_employment
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        # 2010, not the 2020 default used elsewhere in this file: BLS LAUS actually returns
+        # full series history regardless of this dimension, and the live warehouse carries
+        # regional_employment data back to 2010 (confirmed via the Iceberg table's own
+        # manifests) — so a runtime with no GOVDATA_START_YEAR set (e.g. a shipped MCP
+        # server, which never runs ETL and has no reason to have this ETL-time variable
+        # exported) previously declared a coverage window ten years narrower than what was
+        # actually loaded, until the async observed-window probe caught up.
+        start: "{env:GOVDATA_START_YEAR:2010}"
         end: current
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -2449,13 +2456,36 @@ partitionedTables:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
 
     # Materialization configuration
+    #
+    # partition.columns deliberately does NOT include state_fips, even though it is a real
+    # column and BLS API responses are fetched per-state. state_fips is computed via the
+    # `expression` on that column above (SUBSTRING of series), not present in the raw fetched
+    # row — the writer buffers and flushes batches (see iceberg.batchPartitionColumns) before
+    # that expression is ever evaluated, and a single BLS batch request covers 50 series
+    # spanning multiple states, so no single write batch is state_fips-homogeneous. Declaring
+    # it as an Iceberg partition column here produced a table where every file's Iceberg
+    # partition-value metadata was bogus (state_fips is not actually used to split files —
+    # every year's rows for all 51 states land in one file, confirmed via
+    # `iceberg_scan(...) WHERE year = 2022` returning the full 2448-row year while `WHERE
+    # state_fips = '37'` returned 0 against the same live table), which made DuckDB's Iceberg
+    # partition pruning silently discard every row for ANY state_fips predicate — a correct
+    # column value that can never be found by filtering on it. Contrast econ_schema's
+    # national_accounts/gdp_statistics, which partition on an expression-derived `frequency`
+    # column safely, because frequency IS a fetch dimension (one value per request) so every
+    # write batch is frequency-homogeneous even though the column itself is computed.
+    #
+    # This YAML change only prevents a FUTURE re-materialization from recreating the bug. The
+    # existing s3://govdata-parquet-v1/econ/regional_employment Iceberg table already carries
+    # the bad partition metadata on disk and needs an explicit reset/re-materialization (e.g.
+    # via the data-fix tooling) to actually pick up a 2-column [type, year] partition spec and
+    # start answering state_fips predicates correctly.
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=regional_employment/year=*/state_fips=*/"
+        pattern: "type=regional_employment/year=*/"
       partition:
-        columns: [type, year, state_fips]
+        columns: [type, year]
       options:
         compression: snappy
         batchSize: 50000
