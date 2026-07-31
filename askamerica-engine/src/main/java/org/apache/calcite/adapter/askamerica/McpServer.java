@@ -106,6 +106,10 @@ public class McpServer {
             return;
         }
 
+        // A stdio server with no display — render_chart draws through XChart/Java2D, which
+        // otherwise probes for a real X11/Windows display and fails on a headless host.
+        System.setProperty("java.awt.headless", "true");
+
         // Resolve the data dir: MCP_DATA_DIR (server-specific override) → default ~/.mcp_askamerica.
         // Pin it as the ASKAMERICA_DATA_DIR system property so AskAmericaDriver.connect() picks it
         // up via the same path used for direct JDBC connections. govdata.operating.dir.base is set
@@ -485,6 +489,42 @@ public class McpServer {
             + "regression; for a single-table statistic, just call query with corr()/regr_*().",
             schema(alignProps, new String[]{"series"})));
 
+        ObjectNode chartProps = MAPPER.createObjectNode();
+        chartProps.set(
+            "chart_type", prop("string",
+            "'line', 'bar', 'scatter', or 'pie'. Default 'line'."));
+        chartProps.set("title", prop("string", "Chart title."));
+        chartProps.set(
+            "x_label", prop("string", "X-axis label. Ignored for 'pie'."));
+        chartProps.set(
+            "y_label", prop("string", "Y-axis label. Ignored for 'pie'."));
+        ObjectNode categoriesProp = MAPPER.createObjectNode();
+        categoriesProp.put("type", "array");
+        categoriesProp.put(
+            "description",
+            "X-axis categories shared by every series, e.g. years, dates, or names. "
+            + "For 'pie', these are the slice labels.");
+        chartProps.set("categories", categoriesProp);
+        ObjectNode chartSeriesProp = MAPPER.createObjectNode();
+        chartSeriesProp.put("type", "array");
+        chartSeriesProp.put(
+            "description",
+            "List of series to plot. Each object: name (string) and values (array of numbers, "
+            + "same length and order as categories). 'pie' takes exactly one series, whose "
+            + "values become the slice sizes.");
+        chartProps.set("series", chartSeriesProp);
+        chartProps.set(
+            "width", prop("integer", "Image width in pixels (default 800, max 2000)."));
+        chartProps.set(
+            "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
+        tools.add(
+            tool("render_chart",
+            "Render categories and one or more numeric series as a chart image (line, bar, "
+            + "scatter, or pie), returned inline as a PNG. Build the categories/series arrays "
+            + "from a prior query or fetch_aligned_series result — this tool only draws, it "
+            + "does not fetch data.",
+            schema(chartProps, new String[]{"categories", "series"})));
+
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
@@ -670,6 +710,7 @@ public class McpServer {
         long t0 = System.currentTimeMillis();
         String text;
         String telemetrySql = null;
+        byte[] chartPng = null;
         try {
             switch (name) {
                 case "list_schemas":
@@ -755,6 +796,43 @@ public class McpServer {
                     text = fetchAlignedSeries(seriesNode, on, stat, alignLimit);
                     break;
                 }
+                case "render_chart": {
+                    String chartType = args.has("chart_type") && !args.get("chart_type").isNull()
+                        ? args.get("chart_type").asText() : "line";
+                    String title = args.has("title") && !args.get("title").isNull()
+                        ? args.get("title").asText() : null;
+                    String xLabel = args.has("x_label") && !args.get("x_label").isNull()
+                        ? args.get("x_label").asText() : null;
+                    String yLabel = args.has("y_label") && !args.get("y_label").isNull()
+                        ? args.get("y_label").asText() : null;
+                    int width = args.has("width")
+                        ? Math.min(Math.max(100, args.get("width").asInt()), 2000) : 800;
+                    int height = args.has("height")
+                        ? Math.min(Math.max(100, args.get("height").asInt()), 2000) : 500;
+
+                    java.util.List<String> categories = new java.util.ArrayList<>();
+                    for (JsonNode c : args.path("categories")) {
+                        categories.add(c.asText());
+                    }
+                    java.util.List<ChartRenderer.SeriesSpec> series = new java.util.ArrayList<>();
+                    for (JsonNode s : args.path("series")) {
+                        java.util.List<Double> values = new java.util.ArrayList<>();
+                        for (JsonNode v : s.path("values")) {
+                            values.add(v.asDouble());
+                        }
+                        series.add(new ChartRenderer.SeriesSpec(s.path("name").asText(), values));
+                    }
+
+                    log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
+                        + " categories=" + categories.size() + " series=" + series.size());
+                    chartPng = ChartRenderer.renderPng(
+                        chartType, title, xLabel, yLabel, categories, series, width, height);
+                    text = "Rendered " + chartType + " chart"
+                        + (title == null ? "" : " '" + title + "'")
+                        + " (" + categories.size() + " categories, " + series.size()
+                        + " series).";
+                    break;
+                }
                 default:
                     return errorResponse(id, -32602, "Unknown tool: " + name);
             }
@@ -795,6 +873,13 @@ public class McpServer {
         }
 
         ArrayNode content = MAPPER.createArrayNode();
+        if (chartPng != null) {
+            ObjectNode imageBlock = MAPPER.createObjectNode();
+            imageBlock.put("type", "image");
+            imageBlock.put("data", java.util.Base64.getEncoder().encodeToString(chartPng));
+            imageBlock.put("mimeType", "image/png");
+            content.add(imageBlock);
+        }
         ObjectNode textBlock = MAPPER.createObjectNode();
         textBlock.put("type", "text");
         textBlock.put("text", text);

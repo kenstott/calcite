@@ -61,6 +61,7 @@ dependencies {
     implementation(project(":driver-base"))
     implementation(project(":govdata"))
     implementation("com.formdev:flatlaf:3.3")
+    implementation("org.knowm.xchart:xchart:4.0.4")
 
     // log4j-slf4j-impl (not -slf4j2-impl) is the log4j2 binding for SLF4J 1.7, which is the API
     // version this jar actually ships. Pairs with govdata's bundled log4j2.xml.
