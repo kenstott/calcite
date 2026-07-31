@@ -790,6 +790,31 @@ partitionedTables:
         type: string
         nullable: true
         comment: Preferred label role for presentation
+      - name: arc_use
+        type: string
+        nullable: true
+        comment: >-
+          Arc use, "optional" or "prohibited". A prohibited arc states that the relationship
+          does NOT hold — it removes one inherited from a base taxonomy — so a consumer
+          reconstructing the graph must exclude it rather than treat it as an assertion.
+      - name: arc_priority
+        type: int
+        nullable: true
+        comment: >-
+          Arc priority, resolving which arc wins when several share the same from/to and role.
+          Meaningless without arc_use, since its purpose is ordering prohibition against assertion.
+      - name: context_element
+        type: string
+        nullable: true
+        comment: >-
+          xbrldt:contextElement on a hypercube arc, "segment" or "scenario" — which part of the
+          XBRL context the dimension applies to. Definition linkbases only.
+      - name: closed
+        type: boolean
+        nullable: true
+        comment: >-
+          xbrldt:closed on a hypercube arc. When true the hypercube admits only the members it
+          names, so a fact dimensioned outside it is invalid. Definition linkbases only.
 
 
     source:

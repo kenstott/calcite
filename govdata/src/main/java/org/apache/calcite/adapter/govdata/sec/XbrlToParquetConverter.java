@@ -47,6 +47,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -3281,113 +3282,20 @@ public class XbrlToParquetConverter implements FileConverter {
 
     List<Map<String, Object>> dataList = new ArrayList<>();
 
-    // Only extract traditional arc relationships if document was successfully parsed
-    if (doc != null) {
-      // Look for linkbase arcs in the document
-      // These define relationships between concepts
-      NodeList arcs = doc.getElementsByTagNameNS("*", "arc");
-      LOGGER.debug(String.format("DEBUG: Found %d arc elements with namespace wildcard", arcs.getLength()));
-
-      // Also try without namespace
-      if (arcs.getLength() == 0) {
-        arcs = doc.getElementsByTagName("arc");
-        LOGGER.debug(String.format("DEBUG: Found %d arc elements without namespace", arcs.getLength()));
-      }
-
-      // Also try with common linkbase prefixes
-      if (arcs.getLength() == 0) {
-        arcs = doc.getElementsByTagName("link:arc");
-        LOGGER.debug(String.format("DEBUG: Found %d link:arc elements", arcs.getLength()));
-      }
-
-      // Log what elements we DO have at root level
-      if (arcs.getLength() == 0 && doc.getDocumentElement() != null) {
-        NodeList allElems = doc.getDocumentElement().getChildNodes();
-        LOGGER.debug(String.format("DEBUG: Document has %d root child elements:", allElems.getLength()));
-        for (int i = 0; i < Math.min(10, allElems.getLength()); i++) {
-          Node node = allElems.item(i);
-          if (node.getNodeType() == Node.ELEMENT_NODE) {
-            LOGGER.debug(String.format("DEBUG: Child element %d: %s", i, node.getNodeName()));
-          }
-        }
-      }
-    for (int i = 0; i < arcs.getLength(); i++) {
-      Element arc = (Element) arcs.item(i);
-
-      Map<String, Object> data = new HashMap<>();
-      data.put("cik", cik);
-      data.put("accession_number", accession);
-      data.put("filing_date", filingDate);
-      // Extract year for Iceberg partitioning
-      int year = 0;
-      if (filingDate != null && filingDate.length() >= 4) {
-        try {
-          year = Integer.parseInt(filingDate.substring(0, 4));
-        } catch (NumberFormatException e) {
-          // ignore
-        }
-      }
-      data.put("year", year);
-
-      // Determine linkbase type from namespace or arc role
-      String arcRole = arc.getAttribute("arcrole");
-      String linkbaseType = determineLinkbaseType(arcRole);
-      data.put("linkbase_type", linkbaseType);
-      data.put("arc_role", arcRole);
-      Node arcParent1 = arc.getParentNode();
-      String linkRole1 = null;
-      if (arcParent1 instanceof Element) {
-        Element parentLink1 = (Element) arcParent1;
-        linkRole1 = parentLink1.getAttribute("xlink:role");
-        if (linkRole1 == null || linkRole1.isEmpty()) {
-          linkRole1 = parentLink1.getAttribute("role");
-        }
-      }
-      data.put("link_role", linkRole1);
-
-      // Get from and to concepts
-      String from = arc.getAttribute("from");
-      String to = arc.getAttribute("to");
-      data.put("from_concept", cleanConceptName(from));
-      data.put("to_concept", cleanConceptName(to));
-
-      // Get weight for calculation linkbase
-      String weight = arc.getAttribute("weight");
-      if (weight != null && !weight.isEmpty()) {
-        try {
-          data.put("weight", Double.parseDouble(weight));
-        } catch (NumberFormatException e) {
-          data.put("weight", null);
-        }
-      }
-
-      // Get order for presentation linkbase
-      String order = arc.getAttribute("order");
-      if (order != null && !order.isEmpty()) {
-        try {
-          data.put("order", (int) Double.parseDouble(order));
-        } catch (NumberFormatException e) {
-          data.put("order", null);
-        }
-      }
-
-      // Get preferred label
-      data.put("preferred_label", arc.getAttribute("preferredLabel"));
-
-      dataList.add(data);
-      LOGGER.debug(String.format("DEBUG: Added arc relationship from %s to %s", from, to));
-    }
-    LOGGER.debug(String.format("DEBUG: Total arc-based relationships extracted: %d", dataList.size()));
-    } else {
-      LOGGER.debug(" Document is null, skipping arc extraction");
-    }
-
-    // Also extract relationships from inline XBRL if present
-    int beforeInlineCount = dataList.size();
-    LOGGER.debug(String.format("DEBUG: Before inline extraction, have %d relationships", beforeInlineCount));
-    extractInlineXBRLRelationships(doc, columns, dataList, cik, accession, filingDate, sourcePath);
-    int inlineRelationships = dataList.size() - beforeInlineCount;
-    LOGGER.debug(String.format("DEBUG: After inline extraction, extracted %d inline relationships, total now %d", inlineRelationships, dataList.size()));
+    // Relationships are published in the filing's linkbases, and only there. Reading them from
+    // the filing document instead — which is what this method used to do — names concepts by
+    // whatever identifier the document happened to carry: locator labels, inline element ids, or a
+    // prefix concatenated onto the local name with the separator lost. That is why 61% of the
+    // concepts already stored are not resolvable names, and why a column holding both spellings
+    // could not be joined to financial_line_items at all.
+    //
+    // A filing with no linkbases has no relationships to record. It is not an occasion to fall
+    // back to a weaker source: doing so would put two naming conventions in one column with
+    // nothing to distinguish them, and would silently turn a failed linkbase download into rows
+    // that look like data. A download that fails throws instead, failing the accession so it is
+    // retried rather than recorded complete and empty.
+    int linkbaseRelationships = extractLinkbaseRelationships(cik, accession, filingDate, dataList);
+    LOGGER.debug("Extracted {} linkbase relationships for {}", linkbaseRelationships, accession);
 
     // Only write file if there's data - empty parquet files cause DuckDB union_by_name issues
     try {
@@ -3395,13 +3303,13 @@ public class XbrlToParquetConverter implements FileConverter {
 
       if (!dataList.isEmpty()) {
         storageProvider.writeAvroParquet(outputPath, columns, dataList, "XbrlRelationship", "xbrl_relationships");
-        LOGGER.info(
-            String.format("Wrote %d relationships (%d arc-based, %d inline) to %s",
-            dataList.size(), beforeInlineCount, inlineRelationships, outputPath));
+        LOGGER.info(String.format("Wrote %d linkbase relationships to %s",
+            linkbaseRelationships, outputPath));
       } else {
-        // Skip empty files - inline XBRL filings typically have no relationships since
-        // they're in separate linkbase files that we don't currently download
-        LOGGER.debug(String.format("Skipping empty relationships file for CIK %s filing type %s (expected for inline XBRL)", cik, filingType));
+        // Empty now means the filing published no linkbases at all, so there is nothing to
+        // record. A filing that has them but could not be read throws instead of arriving here.
+        LOGGER.debug(String.format("No linkbases for CIK %s filing type %s; no relationships",
+            cik, filingType));
       }
 
     } catch (Exception e) {
@@ -3410,592 +3318,237 @@ public class XbrlToParquetConverter implements FileConverter {
     }
   }
 
-  /**
-   * Determine linkbase type from arc role.
-   */
-  private String determineLinkbaseType(String arcRole) {
-    if (arcRole == null) return "unknown";
 
-    if (arcRole.contains("parent-child") || arcRole.contains("presentation")) {
-      return "presentation";
-    } else if (arcRole.contains("summation") || arcRole.contains("calculation")) {
-      return "calculation";
-    } else if (arcRole.contains("dimension") || arcRole.contains("definition")) {
-      return "definition";
-    }
 
-    return "other";
+  private static final String XLINK_NS = "http://www.w3.org/1999/xlink";
+  private static final String XBRLDT_NS = "http://xbrl.org/2005/xbrldt";
+
+  /** Linkbase file suffix to the linkbase_type it produces. */
+  private static final Map<String, String> LINKBASE_SUFFIXES = new LinkedHashMap<String, String>();
+
+  static {
+    LINKBASE_SUFFIXES.put("_pre.xml", "presentation");
+    LINKBASE_SUFFIXES.put("_cal.xml", "calculation");
+    LINKBASE_SUFFIXES.put("_def.xml", "definition");
   }
 
   /**
-   * Clean concept name by removing namespace prefix.
+   * Extracts relationships from the filing's presentation, calculation and definition linkbases.
+   *
+   * <p>Relationships live in linkbase files sitting beside the filing, not inside the document
+   * itself, so a converter reading only the downloaded document finds none and writes nothing. The
+   * effect is invisible: the filing is recorded as processed and the table simply has no rows for
+   * it. Measured on 2021, 4,846 of 22,567 annual and quarterly filings were in that state, and
+   * reprocessing closed 5% of them because no amount of re-reading the same document can produce
+   * what was never in it.
+   *
+   * <p>Concepts are named {@code prefix:LocalName} to match the {@code concept} column of
+   * financial_line_items, so the two tables join. The locator href gives {@code prefix_LocalName},
+   * because an XML id cannot contain a colon.
+   *
+   * @return the number of relationships appended to {@code dataList}
    */
-  private String cleanConceptName(String concept) {
-    if (concept == null) return null;
-    if (concept.contains(":")) {
-      return concept.substring(concept.indexOf(":") + 1);
-    }
-    return concept;
-  }
+  int extractLinkbaseRelationships(String cik, String accession, String filingDate,
+      List<Map<String, Object>> dataList) {
+    String cikNumeric = cik.replaceFirst("^0+", "");
+    String baseUrl = String.format(Locale.ROOT,
+        "https://www.sec.gov/Archives/edgar/data/%s/%s", cikNumeric, accession.replace("-", ""));
 
-  /**
-   * Extract relationships from inline XBRL structure.
-   */
-  private void extractInlineXBRLRelationships(Document doc,
-      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
-      List<Map<String, Object>> dataList, String cik, String accession, String filingDate, String sourcePath) {
-
-    String fileName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    LOGGER.debug(" extractInlineXBRLRelationships START");
-    LOGGER.debug(String.format("DEBUG: Document is null? %s", doc == null));
-    LOGGER.debug(String.format("DEBUG: Source file is: %s", fileName));
-
-    // First, try to download and parse external linkbase files
-    // These contain the actual relationship definitions for inline XBRL
-    try {
-      downloadAndParseLinkbases(sourcePath, columns, dataList, cik, accession, filingDate);
-    } catch (Exception e) {
-      LOGGER.debug("Failed to download/parse linkbase files: " + e.getMessage());
+    List<String> linkbaseFiles = listLinkbaseFiles(baseUrl);
+    if (linkbaseFiles.isEmpty()) {
+      return 0;
     }
 
-    // In inline XBRL, relationships are often implicit in the document structure
-    // We extract multiple types of relationships:
-    // 1. Parent-child from nesting
-    // 2. Calculation relationships from summation contexts
-    // 3. Dimensional relationships
-
-    // Track unique relationships to avoid duplicates
-    Set<String> processedRelationships = new HashSet<>();
-
-    // CRITICAL FIX: The doc passed here is a transformed document that doesn't contain
-    // ix:relationship or ix:footnote elements. We need to parse the original HTML file
-    // to find these inline XBRL relationship elements.
-    Document originalHtmlDoc = null;
-    String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
-    if (filename.endsWith(".htm") || filename.endsWith(".html")) {
+    int year = 0;
+    if (filingDate != null && filingDate.length() >= 4) {
       try {
-        LOGGER.debug("Parsing original HTML file to extract inline XBRL relationships: " + filename);
-        DocumentBuilder builder = newSafeDocumentBuilder(true);
-        try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourcePath))) {
-          originalHtmlDoc = builder.parse(is);
-        }
-        LOGGER.debug("Successfully parsed original HTML file for relationship extraction");
-      } catch (org.xml.sax.SAXParseException e) {
-        LOGGER.info("Strict XML parse failed for {} relationships: {} — falling back to JSoup",
-            filename, e.getMessage());
-        originalHtmlDoc = parseWithJsoupFallback(sourcePath);
-      } catch (Exception e) {
-        LOGGER.warn("Failed to parse original HTML file for relationships: " + e.getMessage());
+        year = Integer.parseInt(filingDate.substring(0, 4));
+      } catch (NumberFormatException e) {
+        LOGGER.debug("Unparseable filing date {} for {}", filingDate, accession);
       }
     }
 
-    // Use the original HTML document if available, otherwise fall back to the transformed doc
-    Document searchDoc = (originalHtmlDoc != null) ? originalHtmlDoc : doc;
-
-    // Look for ix:relationship elements (Inline XBRL 1.1 standard)
-    NodeList ixRelationships = searchDoc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "relationship");
-    LOGGER.debug(String.format("Found %d ix:relationship elements", ixRelationships.getLength()));
-
-    for (int i = 0; i < ixRelationships.getLength(); i++) {
-      Element ixRel = (Element) ixRelationships.item(i);
-      String arcrole = ixRel.getAttribute("arcrole");
-      String fromRefs = ixRel.getAttribute("fromRefs");  // FIXED: Use correct plural attribute
-      String toRefs = ixRel.getAttribute("toRefs");      // FIXED: Use correct plural attribute
-      String order = ixRel.getAttribute("order");
-      String weight = ixRel.getAttribute("weight");
-
-      LOGGER.debug(
-          String.format("Processing ix:relationship %d: arcrole=%s, fromRefs=%s, toRefs=%s",
-          i, arcrole, fromRefs, toRefs));
-
-      if (arcrole != null && !arcrole.isEmpty() && fromRefs != null && !fromRefs.isEmpty() &&
-          toRefs != null && !toRefs.isEmpty()) {
-
-        // Split space-separated fromRefs and toRefs (inline XBRL can have multiple refs)
-        String[] fromRefArray = fromRefs.trim().split("\\s+");
-        String[] toRefArray = toRefs.trim().split("\\s+");
-
-        // Create relationships for each fromRef to each toRef combination
-        for (String fromRef : fromRefArray) {
-          for (String toRef : toRefArray) {
-            String relationshipKey = fromRef + "->" + toRef + ":" + arcrole;
-
-            if (!processedRelationships.contains(relationshipKey)) {
-              Map<String, Object> data = new HashMap<>();
-              data.put("cik", cik);
-              data.put("accession_number", accession);
-              data.put("filing_date", filingDate);
-              data.put("year", extractYearFromDate(filingDate));
-              data.put("linkbase_type", determineLinkbaseType(arcrole));
-              data.put("arc_role", arcrole);
-              Node ixRelParent = ixRel.getParentNode();
-              String ixRelLinkRole = null;
-              if (ixRelParent instanceof Element) {
-                Element ixRelParentLink = (Element) ixRelParent;
-                ixRelLinkRole = ixRelParentLink.getAttribute("xlink:role");
-                if (ixRelLinkRole == null || ixRelLinkRole.isEmpty()) {
-                  ixRelLinkRole = ixRelParentLink.getAttribute("role");
-                }
-              }
-              data.put("link_role", ixRelLinkRole);
-              data.put("from_concept", cleanConceptName(fromRef));
-              data.put("to_concept", cleanConceptName(toRef));
-              data.put("weight", weight != null && !weight.isEmpty() ? Double.parseDouble(weight) : null);
-              data.put("order", order != null && !order.isEmpty() ? (int) Double.parseDouble(order) : i);
-              data.put("preferred_label", ixRel.getAttribute("preferredLabel"));
-              dataList.add(data);
-              processedRelationships.add(relationshipKey);
-              LOGGER.debug("Added ix:relationship: " + relationshipKey);
-            }
-          }
-        }
-      } else {
-        LOGGER.debug(
-            String.format("Skipping ix:relationship %d: missing required attributes (arcrole=%s, fromRefs=%s, toRefs=%s)",
-            i, arcrole, fromRefs, toRefs));
-      }
-    }
-
-    // Look for ix:footnote elements tied to facts
-    NodeList ixFootnotes = searchDoc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "footnote");
-    LOGGER.debug(String.format("Found %d ix:footnote elements", ixFootnotes.getLength()));
-
-    for (int i = 0; i < ixFootnotes.getLength(); i++) {
-      Element footnote = (Element) ixFootnotes.item(i);
-      String footnoteRole = footnote.getAttribute("footnoteRole");
-      String id = footnote.getAttribute("id");
-
-      if (id != null && !id.isEmpty()) {
-        // Look for elements that reference this footnote
-        NodeList allElems = searchDoc.getElementsByTagName("*");
-        for (int j = 0; j < allElems.getLength(); j++) {
-          Element elem = (Element) allElems.item(j);
-          String footnoteRefs = elem.getAttribute("footnoteRefs");
-
-          if (footnoteRefs != null && footnoteRefs.contains(id)) {
-            String concept = extractConceptName(elem);
-            if (concept != null) {
-              String relationshipKey = concept + "-footnote->" + id;
-
-              if (!processedRelationships.contains(relationshipKey)) {
-                Map<String, Object> data = new HashMap<>();
-                data.put("cik", cik);
-                data.put("accession_number", accession);
-                data.put("filing_date", filingDate);
-                data.put("year", extractYearFromDate(filingDate));
-                data.put("linkbase_type", "reference");
-                data.put("arc_role", "http://www.xbrl.org/2009/arcrole/fact-explanatoryFact");
-                Node footnoteParent = footnote.getParentNode();
-                String footnoteLinkRole = null;
-                if (footnoteParent instanceof Element) {
-                  Element footnoteParentLink = (Element) footnoteParent;
-                  footnoteLinkRole = footnoteParentLink.getAttribute("xlink:role");
-                  if (footnoteLinkRole == null || footnoteLinkRole.isEmpty()) {
-                    footnoteLinkRole = footnoteParentLink.getAttribute("role");
-                  }
-                }
-                data.put("link_role", footnoteLinkRole);
-                data.put("from_concept", cleanConceptName(concept));
-                data.put("to_concept", "footnote_" + id);
-                data.put("weight", null);
-                data.put("order", i * 1000 + j);
-                data.put("preferred_label", footnoteRole);
-                dataList.add(data);
-                processedRelationships.add(relationshipKey);
-                LOGGER.debug("Added fact-footnote relationship: " + relationshipKey);
-              }
-            }
-          }
+    int extracted = 0;
+    for (String name : linkbaseFiles) {
+      String linkbaseType = null;
+      for (Map.Entry<String, String> entry : LINKBASE_SUFFIXES.entrySet()) {
+        if (name.toLowerCase(Locale.ROOT).endsWith(entry.getKey())) {
+          linkbaseType = entry.getValue();
         }
       }
-    }
-
-    // Look for ix:nonNumeric and ix:nonFraction elements that define structure
-    NodeList ixElements = doc.getElementsByTagNameNS("http://www.xbrl.org/2013/inlineXBRL", "*");
-    LOGGER.debug(String.format("Found %d inline XBRL elements", ixElements.getLength()));
-
-    // Extract relationships from table structures (common in inline XBRL)
-    NodeList tables = doc.getElementsByTagName("table");
-    for (int t = 0; t < tables.getLength(); t++) {
-      Element table = (Element) tables.item(t);
-
-      // Look for XBRL concepts within table rows
-      NodeList rows = table.getElementsByTagName("tr");
-      String lastParentConcept = null;
-
-      for (int r = 0; r < rows.getLength(); r++) {
-        NodeList cells = ((Element) rows.item(r)).getElementsByTagName("*");
-
-        for (int c = 0; c < cells.getLength(); c++) {
-          Element cell = (Element) cells.item(c);
-
-          if (cell.hasAttribute("contextRef") || cell.hasAttribute("name")) {
-            String concept = extractConceptName(cell);
-            if (concept != null) {
-              // Check if this appears to be a child of the previous concept
-              if (lastParentConcept != null && !concept.equals(lastParentConcept)) {
-                String relationshipKey = lastParentConcept + "->" + concept;
-
-                if (!processedRelationships.contains(relationshipKey)) {
-                  Map<String, Object> data = new HashMap<>();
-                  data.put("cik", cik);
-                  data.put("accession_number", accession);
-                  data.put("filing_date", filingDate);
-                  data.put("year", extractYearFromDate(filingDate));
-                  data.put("linkbase_type", "presentation");
-                  data.put("arc_role", "table-structure");
-                  Node cellParent = cell.getParentNode();
-                  String cellLinkRole = null;
-                  if (cellParent instanceof Element) {
-                    Element cellParentLink = (Element) cellParent;
-                    cellLinkRole = cellParentLink.getAttribute("xlink:role");
-                    if (cellLinkRole == null || cellLinkRole.isEmpty()) {
-                      cellLinkRole = cellParentLink.getAttribute("role");
-                    }
-                  }
-                  data.put("link_role", cellLinkRole);
-                  data.put("from_concept", cleanConceptName(lastParentConcept));
-                  data.put("to_concept", cleanConceptName(concept));
-                  data.put("weight", null);
-                  data.put("order", r * 100 + c);  // Row-column based ordering
-                  data.put("preferred_label", cell.getAttribute("preferredLabel"));
-                  dataList.add(data);
-                  processedRelationships.add(relationshipKey);
-                }
-              }
-
-              // Update parent if this looks like a section header
-              if (cell.getTagName().matches("th|h\\d") ||
-                  cell.getAttribute("class").contains("header")) {
-                lastParentConcept = concept;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Extract calculation relationships from elements with calculation attributes
-    NodeList allElements = doc.getElementsByTagName("*");
-    for (int i = 0; i < allElements.getLength(); i++) {
-      Element element = (Element) allElements.item(i);
-
-      // Look for calculation weight indicators
-      if (element.hasAttribute("calculationWeight") ||
-          element.hasAttribute("data-calculation-parent")) {
-        String concept = extractConceptName(element);
-        String parentConcept = element.getAttribute("data-calculation-parent");
-        String weight = element.getAttribute("calculationWeight");
-
-        if (concept != null && parentConcept != null && !parentConcept.isEmpty()) {
-          String relationshipKey = parentConcept + "-calc->" + concept;
-
-          if (!processedRelationships.contains(relationshipKey)) {
-            Map<String, Object> data = new HashMap<>();
-            data.put("cik", cik);
-            data.put("accession_number", accession);
-            data.put("filing_date", filingDate);
-            data.put("year", extractYearFromDate(filingDate));
-            data.put("linkbase_type", "calculation");
-            data.put("arc_role", "summation-item");
-            Node elementParent = element.getParentNode();
-            String elementLinkRole = null;
-            if (elementParent instanceof Element) {
-              Element elementParentLink = (Element) elementParent;
-              elementLinkRole = elementParentLink.getAttribute("xlink:role");
-              if (elementLinkRole == null || elementLinkRole.isEmpty()) {
-                elementLinkRole = elementParentLink.getAttribute("role");
-              }
-            }
-            data.put("link_role", elementLinkRole);
-            data.put("from_concept", cleanConceptName(parentConcept));
-            data.put("to_concept", cleanConceptName(concept));
-            data.put("weight", weight.isEmpty() ? 1.0 : Double.parseDouble(weight));
-            data.put("order", i);
-            data.put("preferred_label", element.getAttribute("preferredLabel"));
-            dataList.add(data);
-            processedRelationships.add(relationshipKey);
-          }
-        }
-      }
-    }
-
-    LOGGER.debug(String.format("Extracted %d unique inline XBRL relationships", processedRelationships.size()));
-  }
-
-  /**
-   * Download and parse linkbase files referenced from inline XBRL schema.
-   */
-  private void downloadAndParseLinkbases(String htmlPath,
-      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
-      List<Map<String, Object>> dataList, String cik, String accession, String filingDate) throws Exception {
-
-    LOGGER.debug("Looking for linkbase references in inline XBRL document");
-
-    // Parse the HTML file to look for schema references
-    LOGGER.debug("Parsing HTML file for schema references: " + htmlPath);
-    Document doc;
-    try {
-      DocumentBuilder builder = newSafeDocumentBuilder(true);
-      try (InputStream is = storageProvider.openInputStream(htmlPath)) {
-        doc = builder.parse(is);
-      }
-      LOGGER.debug("Successfully parsed HTML file, proceeding with schema reference search");
-    } catch (Exception e) {
-      LOGGER.debug("Failed to parse HTML file: " + e.getMessage());
-      return;
-    }
-
-    // Find schemaRef element that points to XSD file
-    // First try with the correct linkbase namespace
-    NodeList schemaRefs = doc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", "schemaRef");
-    LOGGER.debug("Found " + schemaRefs.getLength() + " schemaRef elements in linkbase namespace");
-
-    if (schemaRefs.getLength() == 0) {
-      // Try with prefixed tag name (more common in inline XBRL)
-      schemaRefs = doc.getElementsByTagName("link:schemaRef");
-      LOGGER.debug("Found " + schemaRefs.getLength() + " link:schemaRef elements");
-    }
-    if (schemaRefs.getLength() == 0) {
-      // Try looking inside ix:references elements
-      NodeList references = doc.getElementsByTagName("ix:references");
-      LOGGER.debug("Found " + references.getLength() + " ix:references elements");
-      for (int i = 0; i < references.getLength(); i++) {
-        Element referencesEl = (Element) references.item(i);
-        NodeList childSchemaRefs = referencesEl.getElementsByTagName("link:schemaRef");
-        LOGGER.debug("Found " + childSchemaRefs.getLength() + " link:schemaRef children in ix:references[" + i + "]");
-        if (childSchemaRefs.getLength() > 0) {
-          schemaRefs = childSchemaRefs;
-          break;
-        }
-      }
-    }
-
-    if (schemaRefs.getLength() == 0) {
-      LOGGER.debug("No schemaRef found in inline XBRL - no linkbases to download");
-      return;
-    }
-
-    Element schemaRef = (Element) schemaRefs.item(0);
-    String xsdHref = schemaRef.getAttribute("xlink:href");
-    if (xsdHref == null || xsdHref.isEmpty()) {
-      xsdHref = schemaRef.getAttribute("href");
-    }
-
-    if (xsdHref == null || xsdHref.isEmpty()) {
-      LOGGER.debug("No XSD href found in schemaRef");
-      return;
-    }
-
-    LOGGER.debug("Found XSD reference: " + xsdHref);
-
-    // Extract base URL from source file path or document URL
-    String baseUrl = extractBaseUrl(htmlPath, xsdHref);
-    if (baseUrl == null) {
-      LOGGER.warn("Could not determine base URL for linkbase downloads");
-      return;
-    }
-
-    // Download and parse XSD to find linkbase references
-    String xsdUrl = resolveUrl(baseUrl, xsdHref);
-    LOGGER.debug("Downloading XSD from: " + xsdUrl);
-
-    String xsdContent = downloadFile(xsdUrl);
-    if (xsdContent == null) {
-      LOGGER.debug("Failed to download XSD file from: " + xsdUrl + " - continuing with inline XBRL relationship processing");
-      // For inline XBRL documents, XSD files often don't exist on the server
-      // We can still extract relationships from the inline document structure
-      return;
-    }
-
-    // Parse XSD to find linkbaseRef elements
-    DocumentBuilder xsdBuilder = newSafeDocumentBuilder(true);
-    Document xsdDoc = xsdBuilder.parse(new ByteArrayInputStream(xsdContent.getBytes(StandardCharsets.UTF_8)));
-
-    // Find linkbaseRef elements
-    NodeList linkbaseRefs = xsdDoc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", "linkbaseRef");
-    if (linkbaseRefs.getLength() == 0) {
-      linkbaseRefs = xsdDoc.getElementsByTagName("link:linkbaseRef");
-    }
-
-    LOGGER.debug("Found " + linkbaseRefs.getLength() + " linkbase references in XSD");
-
-    // Fallback: linkbases embedded directly in the XSD (no linkbaseRef elements)
-    if (linkbaseRefs.getLength() == 0) {
-      boolean foundEmbedded = false;
-      String[] embeddedTypes = {"calculationLink", "presentationLink", "definitionLink"};
-      for (String linkType : embeddedTypes) {
-        NodeList embedded = xsdDoc.getElementsByTagNameNS("http://www.xbrl.org/2003/linkbase", linkType);
-        if (embedded.getLength() == 0) {
-          embedded = xsdDoc.getElementsByTagName("link:" + linkType);
-        }
-        if (embedded.getLength() > 0) {
-          foundEmbedded = true;
-          break;
-        }
-      }
-      if (foundEmbedded) {
-        LOGGER.debug("Detected linkbase arcs embedded directly in XSD — parsing XSD as linkbase document");
-        extractLinkbaseRelationships(xsdDoc, columns, dataList, cik, accession, filingDate, "mixed");
-        return;
-      }
-    }
-
-    // Process each linkbase file
-    for (int i = 0; i < linkbaseRefs.getLength(); i++) {
-      Element linkbaseRef = (Element) linkbaseRefs.item(i);
-      String linkbaseHref = linkbaseRef.getAttribute("xlink:href");
-      if (linkbaseHref == null || linkbaseHref.isEmpty()) {
-        linkbaseHref = linkbaseRef.getAttribute("href");
-      }
-
-      if (linkbaseHref == null || linkbaseHref.isEmpty()) {
+      if (linkbaseType == null) {
         continue;
       }
-
-      String role = linkbaseRef.getAttribute("xlink:role");
-      if (role == null || role.isEmpty()) {
-        role = linkbaseRef.getAttribute("role");
+      // index.json listed this file, so it exists. Anything else — a 404, an unreadable body, a
+      // linkbase that will not parse — is a genuine anomaly, and skipping it would write a
+      // partial relationship set that is indistinguishable from a complete one. Let it throw:
+      // the accession fails, is not recorded, and is offered again by the next run.
+      String body = downloadFile(baseUrl + "/" + name);
+      if (body == null) {
+        throw new IllegalStateException("Linkbase " + name + " is listed in index.json but could "
+            + "not be downloaded for accession " + accession);
       }
+      Document linkbase;
+      try {
+        linkbase = newSafeDocumentBuilder(true).parse(
+            new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+      } catch (Exception e) {
+        throw new IllegalStateException("Could not parse linkbase " + name + " for accession "
+            + accession, e);
+      }
+      extracted += readExtendedLinks(linkbase, linkbaseType, cik, accession, filingDate, year,
+          dataList);
+    }
+    return extracted;
+  }
 
-      // Determine linkbase type from role
-      String linkbaseType = determineLinkbaseTypeFromRole(role);
+  /** Names the presentation, calculation and definition linkbases sitting beside a filing. */
+  private List<String> listLinkbaseFiles(String baseUrl) {
+    // An empty list must mean "this filing publishes no linkbases", never "the listing could not
+    // be read". Conflating the two writes an empty relationship set for a filing that has one,
+    // and records the filing as complete — the failure then looks exactly like a filing that
+    // legitimately had nothing, which is undiagnosable after the fact.
+    String body = downloadFile(baseUrl + "/index.json");
+    if (body == null) {
+      throw new IllegalStateException("Could not list filing directory " + baseUrl
+          + " to find its linkbases");
+    }
+    List<String> found = new ArrayList<String>();
+    try {
+      com.fasterxml.jackson.databind.JsonNode items =
+          new com.fasterxml.jackson.databind.ObjectMapper().readTree(body)
+              .path("directory").path("item");
+      for (com.fasterxml.jackson.databind.JsonNode item : items) {
+        String name = item.path("name").asText("");
+        String lower = name.toLowerCase(Locale.ROOT);
+        for (String suffix : LINKBASE_SUFFIXES.keySet()) {
+          if (lower.endsWith(suffix)) {
+            found.add(name);
+          }
+        }
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("Could not read the directory listing for " + baseUrl, e);
+    }
+    return found;
+  }
 
-      LOGGER.debug("Processing " + linkbaseType + " linkbase: " + linkbaseHref);
-
-      // Download linkbase file
-      String linkbaseUrl = resolveUrl(baseUrl, linkbaseHref);
-      String linkbaseContent = downloadFile(linkbaseUrl);
-
-      if (linkbaseContent == null) {
-        LOGGER.warn("Failed to download linkbase from: " + linkbaseUrl);
+  /**
+   * Reads every extended link in one linkbase, appending its arcs as relationship rows.
+   *
+   * <p>An arc names its endpoints by locator label, not by concept, and those labels are scoped to
+   * the extended link that declares them — the same label means different concepts in two links of
+   * the same file. The locator map is therefore rebuilt per link rather than per file.
+   */
+  int readExtendedLinks(Document linkbase, String linkbaseType, String cik,
+      String accession, String filingDate, int year, List<Map<String, Object>> dataList) {
+    int extracted = 0;
+    NodeList links = linkbase.getDocumentElement().getChildNodes();
+    for (int i = 0; i < links.getLength(); i++) {
+      if (links.item(i).getNodeType() != Node.ELEMENT_NODE) {
         continue;
       }
+      Element link = (Element) links.item(i);
+      if (!localName(link).endsWith("Link")) {
+        continue;
+      }
+      String linkRole = link.getAttributeNS(XLINK_NS, "role");
 
-      // Parse linkbase and extract relationships
-      try {
-        DocumentBuilder linkbaseBuilder = newSafeDocumentBuilder(true);
-        Document linkbaseDoc = linkbaseBuilder.parse(new ByteArrayInputStream(linkbaseContent.getBytes(StandardCharsets.UTF_8)));
-        extractLinkbaseRelationships(linkbaseDoc, columns, dataList, cik, accession, filingDate, linkbaseType);
-      } catch (Exception e) {
-        LOGGER.warn("Failed to parse linkbase " + linkbaseHref + ": " + e.getMessage());
+      Map<String, String> locators = new HashMap<String, String>();
+      NodeList children = link.getChildNodes();
+      for (int j = 0; j < children.getLength(); j++) {
+        if (children.item(j).getNodeType() != Node.ELEMENT_NODE) {
+          continue;
+        }
+        Element child = (Element) children.item(j);
+        if ("loc".equals(localName(child))) {
+          locators.put(child.getAttributeNS(XLINK_NS, "label"),
+              conceptFromHref(child.getAttributeNS(XLINK_NS, "href")));
+        }
+      }
+
+      for (int j = 0; j < children.getLength(); j++) {
+        if (children.item(j).getNodeType() != Node.ELEMENT_NODE) {
+          continue;
+        }
+        Element arc = (Element) children.item(j);
+        if (!localName(arc).endsWith("Arc")) {
+          continue;
+        }
+        String from = locators.get(arc.getAttributeNS(XLINK_NS, "from"));
+        String to = locators.get(arc.getAttributeNS(XLINK_NS, "to"));
+        if (from == null || to == null) {
+          // An arc whose endpoints are resources rather than locators — a label or reference arc.
+          // Its target is documentation, not a concept, so it is not a relationship between two
+          // concepts and from_concept/to_concept could not be honestly filled.
+          continue;
+        }
+
+        Map<String, Object> data = new HashMap<String, Object>();
+        data.put("cik", cik);
+        data.put("accession_number", accession);
+        data.put("filing_date", filingDate);
+        data.put("year", year);
+        data.put("linkbase_type", linkbaseType);
+        data.put("arc_role", arc.getAttributeNS(XLINK_NS, "arcrole"));
+        data.put("link_role", emptyToNull(linkRole));
+        data.put("from_concept", from);
+        data.put("to_concept", to);
+        data.put("weight", parseDoubleOrNull(arc.getAttribute("weight")));
+        data.put("order", parseDoubleOrNull(arc.getAttribute("order")));
+        data.put("preferred_label", emptyToNull(arc.getAttribute("preferredLabel")));
+        data.put("arc_use", emptyToNull(arc.getAttribute("use")));
+        Double priority = parseDoubleOrNull(arc.getAttribute("priority"));
+        data.put("arc_priority", priority == null ? null : Integer.valueOf(priority.intValue()));
+        data.put("context_element",
+            emptyToNull(arc.getAttributeNS(XBRLDT_NS, "contextElement")));
+        String closed = arc.getAttributeNS(XBRLDT_NS, "closed");
+        data.put("closed", closed == null || closed.isEmpty() ? null : Boolean.valueOf(closed));
+
+        dataList.add(data);
+        extracted++;
       }
     }
+    return extracted;
+  }
+
+  /** Local name of an element, whether or not the parser resolved its namespace. */
+  private static String localName(Element element) {
+    String local = element.getLocalName();
+    if (local != null) {
+      return local;
+    }
+    String name = element.getNodeName();
+    int colon = name.indexOf(':');
+    return colon < 0 ? name : name.substring(colon + 1);
   }
 
   /**
-   * Extract relationships from a linkbase document.
+   * Turns a locator href into a concept name.
+   *
+   * <p>{@code us-gaap-2021.xsd#us-gaap_Assets} names the concept {@code us-gaap:Assets}. The
+   * fragment separates prefix from local name with an underscore because an XML id cannot contain
+   * a colon; the first underscore is the separator, and any later one belongs to the local name.
    */
-  private void extractLinkbaseRelationships(Document linkbaseDoc,
-      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.TableColumn> columns,
-      List<Map<String, Object>> dataList, String cik, String accession, String filingDate, String linkbaseType) {
-
-    // Find arc elements in the linkbase
-    NodeList arcs = linkbaseDoc.getElementsByTagName("*");
-    int relationshipCount = 0;
-
-    for (int i = 0; i < arcs.getLength(); i++) {
-      Element element = (Element) arcs.item(i);
-      String tagName = element.getTagName();
-
-      // Look for arc elements (calculationArc, presentationArc, definitionArc, etc.)
-      if (tagName.endsWith("Arc") || tagName.contains(":arc")) {
-        String from = element.getAttribute("xlink:from");
-        String to = element.getAttribute("xlink:to");
-
-        if (from == null || from.isEmpty()) {
-          from = element.getAttribute("from");
-        }
-        if (to == null || to.isEmpty()) {
-          to = element.getAttribute("to");
-        }
-
-        if (from != null && !from.isEmpty() && to != null && !to.isEmpty()) {
-          Map<String, Object> data = new HashMap<>();
-          data.put("cik", cik);
-          data.put("accession_number", accession);
-          data.put("filing_date", filingDate);
-          data.put("year", extractYearFromDate(filingDate));
-          data.put("linkbase_type", linkbaseType);
-
-          // Get arc role
-          String arcRole = element.getAttribute("xlink:arcrole");
-          if (arcRole == null || arcRole.isEmpty()) {
-            arcRole = element.getAttribute("arcrole");
-          }
-          data.put("arc_role", arcRole);
-          Node linkbaseArcParent = element.getParentNode();
-          String linkbaseArcLinkRole = null;
-          if (linkbaseArcParent instanceof Element) {
-            Element linkbaseArcParentLink = (Element) linkbaseArcParent;
-            linkbaseArcLinkRole = linkbaseArcParentLink.getAttribute("xlink:role");
-            if (linkbaseArcLinkRole == null || linkbaseArcLinkRole.isEmpty()) {
-              linkbaseArcLinkRole = linkbaseArcParentLink.getAttribute("role");
-            }
-          }
-          data.put("link_role", linkbaseArcLinkRole);
-
-          // Clean concept names
-          data.put("from_concept", cleanConceptName(from));
-          data.put("to_concept", cleanConceptName(to));
-
-          // Get weight for calculation linkbase
-          String weight = element.getAttribute("weight");
-          if (weight != null && !weight.isEmpty()) {
-            try {
-              data.put("weight", Double.parseDouble(weight));
-            } catch (NumberFormatException e) {
-              data.put("weight", null);
-            }
-          } else {
-            data.put("weight", null);
-          }
-
-          // Get order for presentation linkbase
-          String order = element.getAttribute("order");
-          if (order != null && !order.isEmpty()) {
-            try {
-              data.put("order", (int) Double.parseDouble(order));
-            } catch (NumberFormatException e) {
-              data.put("order", null);
-            }
-          } else {
-            data.put("order", null);
-          }
-
-          // Get preferred label
-          String preferredLabel = element.getAttribute("preferredLabel");
-          data.put("preferred_label", preferredLabel);
-
-          dataList.add(data);
-          relationshipCount++;
-        }
-      }
+  static String conceptFromHref(String href) {
+    if (href == null || href.isEmpty()) {
+      return null;
     }
-
-    LOGGER.debug("Extracted " + relationshipCount + " relationships from " + linkbaseType + " linkbase");
+    String fragment = href.substring(href.indexOf('#') + 1);
+    int separator = fragment.indexOf('_');
+    if (separator <= 0) {
+      return fragment;
+    }
+    return fragment.substring(0, separator) + ":" + fragment.substring(separator + 1);
   }
 
-  /**
-   * Determine linkbase type from role URI.
-   */
-  private String determineLinkbaseTypeFromRole(String role) {
-    if (role == null) return "unknown";
-
-    if (role.contains("calculation")) {
-      return "calculation";
-    } else if (role.contains("presentation")) {
-      return "presentation";
-    } else if (role.contains("definition")) {
-      return "definition";
-    } else if (role.contains("label")) {
-      return "label";
-    } else if (role.contains("reference")) {
-      return "reference";
-    }
-
-    return "other";
+  private static String emptyToNull(String value) {
+    return value == null || value.isEmpty() ? null : value;
   }
+
+
+
+
 
   /**
    * Extract base URL from file path or filing information.
