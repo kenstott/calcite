@@ -309,6 +309,27 @@ psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
              accession   VARCHAR PRIMARY KEY,
              attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
 
+# retired_by names the code that decided an accession's one pass was done — the jar's own content
+# hash, not a version string, so it survives an unbumped rebuild. Without it a retirement outlives
+# the bug that caused it: 194 13F-HR filings were marked attempted by a converter that guessed at
+# four fixed information-table filenames and 404'd on every non-standard one, the guess was
+# replaced by reading index.json (f1a5dc431) thirteen hours later, and the 165 markers written
+# before that fix stayed retired regardless — because nothing recorded which converter had looked.
+# They surfaced only by cross-referencing attempted_at against `git log`, which does not scale past
+# one investigation. A retired_by cksum turns "which of these predate the fix" into a WHERE clause.
+psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted
+             ADD COLUMN IF NOT EXISTS retired_by VARCHAR" >/dev/null
+
+JAR_CKSUM=""
+for _jar in "$SCRIPT_DIR"/../../build/libs/sih-govdata.jar \
+            "${GOVDATA_JAR:-}"; do
+  [ -n "$_jar" ] && [ -f "$_jar" ] || continue
+  JAR_CKSUM=$(cksum "$_jar" 2>/dev/null | awk '{print $1}')
+  break
+done
+[ -n "$JAR_CKSUM" ] || log_info "fix-sec: WARNING could not identify the worker jar —" \
+  "retired_by will be recorded empty for this run"
+
 ATTEMPTED=$(psql_q -c "SELECT count(*) FROM ${PG_SCHEMA}.fix_sec_attempted")
 if [ "${ATTEMPTED:-0}" -gt 0 ]; then
   psql_q -c "\\copy (SELECT accession FROM ${PG_SCHEMA}.fix_sec_attempted ORDER BY accession) TO '$ACC_FILE.attempted'" >/dev/null
@@ -395,13 +416,25 @@ YEARS=$(cut -f1 "$ACC_FILE.byyear" | uniq)
 # enumeration — otherwise the undecidable cases recirculate forever. ON CONFLICT keeps a re-run of
 # the same list idempotent.
 record_attempted() {
+  # psql_q opens a fresh connection per call — a TEMP TABLE would not survive between the
+  # statements below, so this stages through a real (unlogged, so no WAL cost) table instead,
+  # scoped per invocation of this script so two concurrent fix-sec runs cannot collide on it.
   _rf="$1"
-  psql_q -c "\\copy ${PG_SCHEMA}.fix_sec_attempted (accession) FROM '$_rf'" >/dev/null 2>&1 \
-    || psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession)
-                  SELECT unnest(string_to_array(pg_read_file('$_rf'), E'\\n'))
-                  ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1 \
-    || return 1
-  return 0
+  _stage="_fix_sec_batch_$$"
+  psql_q -c "CREATE UNLOGGED TABLE ${_stage} (accession VARCHAR)" >/dev/null 2>&1 || return 1
+  ( psql_q -c "\\copy ${_stage} (accession) FROM '$_rf'" >/dev/null 2>&1 \
+      || psql_q -c "INSERT INTO ${_stage} (accession)
+                    SELECT unnest(string_to_array(pg_read_file('$_rf'), E'\\n'))" >/dev/null 2>&1 )
+  _copy_rc=$?
+  if [ "$_copy_rc" -eq 0 ]; then
+    psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession, retired_by)
+               SELECT accession, NULLIF('$JAR_CKSUM', '') FROM ${_stage}
+               WHERE accession <> ''
+               ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1
+    _copy_rc=$?
+  fi
+  psql_q -c "DROP TABLE IF EXISTS ${_stage}" >/dev/null 2>&1
+  return $_copy_rc
 }
 
 batches=0
