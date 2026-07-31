@@ -86,10 +86,29 @@ public class DocumentETLProcessor {
   private final Set<String> existsCache = new HashSet<String>();
   private final Set<String> notExistsCache = new HashSet<String>();
 
-  // Per-CIK cache of accession → primaryDocument from data.sec.gov/submissions API.
+  // Per-CIK cache of accession → primaryDocument from data.sec.gov/submissions API, plus the
+  // overflow pagination files (filings.files) not yet merged in. filings.recent covers roughly a
+  // filer's newest 1000 submissions; older ones are named there but live in separate pages. Kept
+  // alongside the map, not just the map alone, so a miss can merge the overflow in without
+  // re-fetching and re-parsing the base submissions.json.
   // Avoids duplicate submissions.json fetches when a CIK has multiple accessions in the same run.
-  private final ConcurrentHashMap<String, Map<String, String>> cikSubmissionsCache =
-      new ConcurrentHashMap<String, Map<String, String>>();
+  private final ConcurrentHashMap<String, CikSubmissions> cikSubmissionsCache =
+      new ConcurrentHashMap<String, CikSubmissions>();
+
+  /** Per-CIK submissions state: the recent-filing map, and unmerged overflow pages if any. */
+  private static final class CikSubmissions {
+    final Map<String, String> byAccession;
+    final List<PaginationFileRef> overflowFiles;
+    /** True once the overflow pages have been fetched and folded into byAccession. Guarded by
+     *  synchronizing on this instance — merging is per-CIK and rare (only on a genuine miss),
+     *  so contention is not a concern. */
+    boolean overflowMerged;
+
+    CikSubmissions(Map<String, String> byAccession, List<PaginationFileRef> overflowFiles) {
+      this.byAccession = byAccession;
+      this.overflowFiles = overflowFiles;
+    }
+  }
 
   // Limits diagnostic WARNs for submissions parse/miss — prevents log flooding.
   private final AtomicInteger submissionsParseDiagCount = new AtomicInteger(0);
@@ -624,43 +643,101 @@ public class DocumentETLProcessor {
    * Results are cached per CIK so that multiple accessions from the same company only require
    * one API call.
    *
-   * @return primary document filename, or null if not found
+   * <p>{@code filings.recent} in that response covers only a filer's newest ~1000 submissions; a
+   * more prolific filer has its older accessions named in {@code filings.files} instead, each
+   * pointing at a separate page. Looking only at {@code recent} makes an old accession
+   * indistinguishable from one that was never filed — this returns null for both, and a caller
+   * cannot tell "does not exist" from "exists, further back than we looked". Fetching the
+   * overflow pages up front for every CIK would multiply request volume for the overwhelming
+   * majority of filers who never fill 1000 recent submissions, so they are fetched only on a
+   * miss, and then only once per CIK regardless of how many of its accessions miss.
+   *
+   * @return primary document filename, or null if genuinely not found after checking overflow
    */
   private String fetchPrimaryDocumentFromSubmissions(
       DocumentSource documentSource, String cik, String accession) throws IOException {
-    Map<String, String> byAccession = cikSubmissionsCache.get(cik);
-    if (byAccession == null) {
+    CikSubmissions submissions = cikSubmissionsCache.get(cik);
+    if (submissions == null) {
       String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
       String submissionsJson = documentSource.fetchUrlContent(submissionsUrl);
-      List<String> accessionNumbers = extractJsonArray(submissionsJson, "accessionNumber");
-      List<String> primaryDocuments = extractJsonArray(submissionsJson, "primaryDocument");
-      Map<String, String> map = new HashMap<String, String>();
-      int count = Math.min(accessionNumbers.size(), primaryDocuments.size());
-      for (int i = 0; i < count; i++) {
-        map.put(accessionNumbers.get(i), primaryDocuments.get(i));
-      }
-      if (accessionNumbers.isEmpty() && submissionsParseDiagCount.get() < 5) {
+      Map<String, String> map = parseAccessionToPrimaryDocument(submissionsJson);
+      if (map.isEmpty() && submissionsParseDiagCount.get() < 5) {
         int diagIdx = submissionsParseDiagCount.getAndIncrement();
         LOGGER.warn("submissions.json parse [diag {}]: url={} responseLen={} "
             + "accessionNumbers=0 — first 200 chars of response: [{}]",
             diagIdx, submissionsUrl, submissionsJson.length(),
             submissionsJson.length() > 200 ? submissionsJson.substring(0, 200) : submissionsJson);
       }
-      cikSubmissionsCache.putIfAbsent(cik, map);
-      byAccession = cikSubmissionsCache.get(cik);
+      List<PaginationFileRef> overflow = extractPaginationFiles(submissionsJson);
+      cikSubmissionsCache.putIfAbsent(cik, new CikSubmissions(map, overflow));
+      submissions = cikSubmissionsCache.get(cik);
     }
-    String result = byAccession.get(accession);
+
+    String result = submissions.byAccession.get(accession);
+    if (result == null && !submissions.overflowFiles.isEmpty()) {
+      synchronized (submissions) {
+        if (!submissions.overflowMerged) {
+          mergeOverflowSubmissions(documentSource, cik, submissions);
+          submissions.overflowMerged = true;
+        }
+      }
+      result = submissions.byAccession.get(accession);
+    }
+
     if (result == null && submissionsMissDiagCount.get() < 5) {
-      int mapSize = byAccession.size();
+      int mapSize = submissions.byAccession.size();
       if (mapSize > 0) {
         int diagIdx = submissionsMissDiagCount.getAndIncrement();
-        String sampleKey = byAccession.keySet().iterator().hasNext()
-            ? byAccession.keySet().iterator().next() : "(none)";
-        LOGGER.warn("submissions.json miss [diag {}]: cik={} accession={} mapSize={} sampleKey={}",
-            diagIdx, cik, accession, mapSize, sampleKey);
+        String sampleKey = submissions.byAccession.keySet().iterator().hasNext()
+            ? submissions.byAccession.keySet().iterator().next() : "(none)";
+        LOGGER.warn("submissions.json miss [diag {}]: cik={} accession={} mapSize={} sampleKey={} "
+            + "overflowPagesChecked={}",
+            diagIdx, cik, accession, mapSize, sampleKey, submissions.overflowFiles.size());
       }
     }
     return result;
+  }
+
+  /**
+   * Extracts the accessionNumber/primaryDocument pair arrays from a submissions JSON payload.
+   *
+   * <p>A {@code ConcurrentHashMap}, not a plain one: {@link CikSubmissions#byAccession} is read
+   * by any thread at any time and is written once, later, by whichever thread merges the overflow
+   * pages. A plain {@code HashMap} does not tolerate a read concurrent with a write — it can loop
+   * forever mid-resize — and that write is unsynchronized with respect to readers by design, so
+   * the map itself has to be the thing that makes it safe.
+   */
+  private static Map<String, String> parseAccessionToPrimaryDocument(String json) {
+    List<String> accessionNumbers = extractJsonArray(json, "accessionNumber");
+    List<String> primaryDocuments = extractJsonArray(json, "primaryDocument");
+    Map<String, String> map = new ConcurrentHashMap<String, String>();
+    int count = Math.min(accessionNumbers.size(), primaryDocuments.size());
+    for (int i = 0; i < count; i++) {
+      map.put(accessionNumbers.get(i), primaryDocuments.get(i));
+    }
+    return map;
+  }
+
+  /**
+   * Fetches this CIK's overflow submission pages and folds their accessions into the cache entry.
+   *
+   * <p>An overflow page is a flat array document — not wrapped in {@code filings.recent} — so the
+   * same array extraction applies directly. A page that fails to fetch is skipped rather than
+   * aborting the merge: the accession being looked up may be on a different page, and one bad page
+   * must not hide every other one from a filer with many.
+   */
+  private void mergeOverflowSubmissions(DocumentSource documentSource, String cik,
+      CikSubmissions submissions) {
+    for (PaginationFileRef ref : submissions.overflowFiles) {
+      try {
+        String pageJson =
+            documentSource.fetchUrlContent("https://data.sec.gov/submissions/" + ref.name);
+        submissions.byAccession.putAll(parseAccessionToPrimaryDocument(pageJson));
+      } catch (IOException e) {
+        LOGGER.warn("Could not fetch overflow submissions page {} for CIK {}: {}",
+            ref.name, cik, e.getMessage());
+      }
+    }
   }
 
   private Set<String> extractYearsFromAccessions(List<AccessionRef> accessions) {
