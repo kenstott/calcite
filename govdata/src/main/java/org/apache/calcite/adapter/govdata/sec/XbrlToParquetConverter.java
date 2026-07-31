@@ -385,16 +385,22 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.debug(" Extracted metadata for " + fileName + " - CIK: " + cik + ", Filing Type: " + filingType
           + ", Period End: " + periodEndDate + ", Filing Date: " + actualFilingDate);
 
-      // Skip conversion if we couldn't extract required metadata
+      // Required identity/temporal metadata missing or unusable: throw rather than return an
+      // empty result, matching process8KHtml/process13FForm/process13DGForm's unidentifiedFiling
+      // contract for the same conditions. A silent empty result here previously left one of these
+      // fixable-by-retry failures indistinguishable from "genuinely no XBRL", so a code fix could
+      // never reach the affected accessions again — fix-sec.sh only reprocesses failures.
+      String hintCikForError = metadata != null ? metadata.getHint("cik") : null;
+      String hintAccessionForError = metadata != null ? metadata.getHint("accession") : null;
       if (cik == null || cik.equals("0000000000")) {
-        LOGGER.warn("DEBUG: Skipping conversion due to invalid or missing CIK: " + fileName + " (extracted CIK: " + cik + ")");
-        return outputFiles; // Return empty list
+        throw unidentifiedFiling("XBRL", "cannot resolve CIK", sourceFilePath,
+            hintCikForError, filingType, hintFilingDate, hintAccessionForError, cik, accession);
       }
 
       // Validate period end date - must be present (needed for fiscal year logic)
       if (periodEndDate == null) {
-        LOGGER.warn("DEBUG: Skipping conversion - could not extract period end date from: " + fileName);
-        return outputFiles; // Skip conversion
+        throw unidentifiedFiling("XBRL", "could not extract period end date", sourceFilePath,
+            hintCikForError, filingType, hintFilingDate, hintAccessionForError, cik, accession);
       }
 
       // Validate period end date format and year
@@ -402,16 +408,19 @@ public class XbrlToParquetConverter implements FileConverter {
         try {
           int year = Integer.parseInt(periodEndDate.substring(0, 4));
           if (year < 1934 || year > java.time.Year.now().getValue()) {
-            LOGGER.warn("Invalid year " + year + " in period end date " + periodEndDate + " for " + fileName);
-            return outputFiles; // Skip conversion
+            throw unidentifiedFiling("XBRL",
+                "invalid year " + year + " in period end date " + periodEndDate, sourceFilePath,
+                hintCikForError, filingType, hintFilingDate, hintAccessionForError, cik, accession);
           }
         } catch (NumberFormatException e) {
-          LOGGER.warn("Invalid period end date format: " + periodEndDate + " for " + fileName);
-          return outputFiles; // Skip conversion
+          throw unidentifiedFiling("XBRL",
+              "invalid period end date format: " + periodEndDate, sourceFilePath,
+              hintCikForError, filingType, hintFilingDate, hintAccessionForError, cik, accession);
         }
       } else {
-        LOGGER.warn("Period end date too short: " + periodEndDate + " for " + fileName);
-        return outputFiles; // Skip conversion
+        throw unidentifiedFiling("XBRL", "period end date too short: " + periodEndDate,
+            sourceFilePath, hintCikForError, filingType, hintFilingDate, hintAccessionForError,
+            cik, accession);
       }
 
       // Check if this is a Form 3, 4, or 5 (insider trading forms)
@@ -6635,8 +6644,13 @@ public class XbrlToParquetConverter implements FileConverter {
     } catch (IncompleteFetchException e) {
       throw e;
     } catch (Exception e) {
-      LOGGER.warn("Failed to download 13F info table for {}: {}", accession, e.getMessage());
-      return null;
+      // Same contract as extractLinkbaseRelationships: a failure while fetching or parsing an
+      // info table that index.json/candidates/the filing index all pointed to is not the same
+      // fact as "this filing has no info table" (the LOGGER.warn + return null above). Swallowing
+      // it here previously wrote a permanent empty holdings file for a filing that does have
+      // data, indistinguishable from the genuine-absence case and never retried.
+      throw new RuntimeException(
+          "Failed to download 13F info table for cik=" + cik + " accession=" + accession, e);
     }
   }
 
