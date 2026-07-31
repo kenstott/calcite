@@ -442,6 +442,24 @@ public class DocumentETLProcessor {
   }
 
   /**
+   * submissions.json names, as the primary document, whichever file a browser should render.
+   * For a filing that is not itself inline XBRL, that is an auto-generated HTML view nested
+   * under a folder named for the XSL stylesheet — e.g. {@code xslF345X03/wf-form4_xxx.xml} for
+   * Forms 3/4/5, or {@code xslForm13F_X02/primary_doc.xml} for a 13F-HR — not the underlying
+   * data file this pipeline parses. Every observed variant across form types shares the same
+   * shape: a stylesheet folder, then the real file's own name, so this strips everything before
+   * the last {@code '/'} unconditionally. Used to only fire for 3/4/5, which left every other
+   * form type (13F-HR included) fetching the rendered HTML view instead of the real document.
+   */
+  static String stripViewerFolderPrefix(String primaryDocument) {
+    if (primaryDocument == null) {
+      return null;
+    }
+    int slashIdx = primaryDocument.lastIndexOf('/');
+    return slashIdx < 0 ? primaryDocument : primaryDocument.substring(slashIdx + 1);
+  }
+
+  /**
    * Processes a single accession whose metadata is already known from the full-index cache.
    *
    * <p>Unlike {@link #processEntity}, this method fetches the filing {@code index.json} to
@@ -486,18 +504,7 @@ public class DocumentETLProcessor {
           System.currentTimeMillis() - startTime);
     }
 
-    // For Form 3/4/5 (insider trading), EDGAR returns XSL-transformed path like
-    // "xslF345X03/wf-form4_xxx.xml" — strip the prefix to get the raw XML filename.
-    if (primaryDocument != null && (formType.equals("3") || formType.equals("4")
-        || formType.equals("5") || formType.startsWith("3/")
-        || formType.startsWith("4/") || formType.startsWith("5/"))) {
-      if (primaryDocument.startsWith("xslF345X")) {
-        int slashIdx = primaryDocument.indexOf('/');
-        if (slashIdx > 0) {
-          primaryDocument = primaryDocument.substring(slashIdx + 1);
-        }
-      }
-    }
+    primaryDocument = stripViewerFolderPrefix(primaryDocument);
 
     if (primaryDocument == null || primaryDocument.isEmpty()) {
       LOGGER.debug("No primary document found for {}/{} form {}", cik, accession, formType);
