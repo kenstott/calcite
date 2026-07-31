@@ -105,17 +105,27 @@ INSERT INTO dq_results SELECT 'sec','stock_prices','row_count', CASE WHEN n>=100
 -- row_count only — deliberately minimal, to be deepened per table.
 -- ============================================================================
 
+-- institutional_holdings (13F-HR) is a periodic quarterly filing for any active manager in
+-- the sample, so zero rows is always a real gap: fail.
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'beneficial_ownership'   AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'institutional_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths := true) LIMIT 1))
-)
-SELECT 'sec', tbl, 'existence',
+SELECT 'sec', 'institutional_holdings', 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths := true) LIMIT 1)) t;
+
+-- beneficial_ownership (SC 13D/G) is event-driven, not periodic — a filer that crosses no
+-- new 5%-ownership threshold in the sample window files nothing. Zero rows over a narrow
+-- CIK/year sample is a plausible true state (confirmed live for CIK 0001067983 in 2026: 0
+-- SC 13D/G filings via EDGAR submissions.json), so this warns rather than fails.
+INSERT INTO dq_results
+SELECT 'sec', 'beneficial_ownership', 'existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
+       n, 1,
+       CASE WHEN n > 0 THEN 'readable'
+            ELSE '0 rows — plausible for an event-driven filing over a narrow sample; '
+                 || 'verify against EDGAR submissions.json before treating as a gap' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership', allow_moved_paths := true) LIMIT 1)) t;
 
 -- ============================================================================
 -- T3: REFERENTIAL — every filing's rows must have a filing_metadata row.
@@ -188,6 +198,90 @@ SELECT 'sec', tbl, 'orphan_refs',
        CASE WHEN n = 0 THEN 'every filing has a filing_metadata row'
             ELSE CAST(n AS VARCHAR) || ' filing(s) present here but missing from filing_metadata' END
 FROM orphans;
+
+-- ============================================================================
+-- T4: EXTRACTION QUALITY — regression gates for defects found and fixed in this
+-- investigation. Each check pins a specific bug so it fails loudly if it ever
+-- recurs, instead of surfacing only as a downstream "why is this null" question.
+--
+-- company_name concatenated with address (grey zone, fixed in cb8608c99):
+-- Node.getTextContent() on a <filingManager> container returns the name AND its
+-- nested <address> run together with no separator. The garbled form is long
+-- (a name plus street/city/state/zip) and carries multiple consecutive spaces
+-- where the address fields were joined — a clean company name has neither.
+--
+-- wrong document fetched (item 4, fixed in aabff1033): a 13F-HR whose primary
+-- document was EDGAR's HTML viewer rendering instead of the real XML parsed to
+-- entirely empty fields. Checked as an elevated NULL rate on company_name
+-- specifically for 13F-HR filings (the form this bug affected).
+--
+-- unresolvable relationship concept names: reading concepts from the filing
+-- document instead of the linkbase produced locator labels and prefix-stripped
+-- local names instead of "prefix:LocalName" — 61% of stored concepts were not
+-- resolvable. A qualified XBRL concept name always contains ':'.
+-- ============================================================================
+SELECT '=== T4: EXTRACTION QUALITY ===' AS section;
+
+INSERT INTO dq_results
+SELECT 'sec', 'filing_metadata', 'company_name_not_garbled',
+       CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '0',
+       CASE WHEN n = 0 THEN 'no company_name values look like a concatenated address'
+            ELSE CAST(n AS VARCHAR) || ' company_name value(s) are unusually long with '
+                 || 'repeated internal spacing — looks like name+address run together' END
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata', allow_moved_paths=true)
+  WHERE company_name IS NOT NULL
+    AND length(company_name) > 100
+    AND regexp_matches(company_name, '\s{3,}')
+) t;
+
+INSERT INTO dq_results
+SELECT 'sec', 'filing_metadata', 'thirteenf_company_name_present',
+       CASE WHEN total = 0 THEN 'warn'
+            WHEN null_rate <= 0.05 THEN 'pass' ELSE 'fail' END,
+       CAST(null_rate AS VARCHAR), '0.05',
+       CASE WHEN total = 0 THEN 'no 13F-HR filings in this sample'
+            ELSE CAST(nulls AS VARCHAR) || ' of ' || CAST(total AS VARCHAR)
+                 || ' 13F-HR filing_metadata rows have a null company_name' END
+FROM (
+  SELECT COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE company_name IS NULL) AS nulls,
+         COALESCE(COUNT(*) FILTER (WHERE company_name IS NULL) * 1.0 / NULLIF(COUNT(*), 0), 0) AS null_rate
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata', allow_moved_paths=true)
+  WHERE filing_type = '13F-HR'
+) t;
+
+INSERT INTO dq_results
+SELECT 'sec', 'institutional_holdings', 'manager_name_not_garbled',
+       CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+       CAST(n AS VARCHAR), '0',
+       CASE WHEN n = 0 THEN 'no manager_name values look like a concatenated address'
+            ELSE CAST(n AS VARCHAR) || ' manager_name value(s) are unusually long with '
+                 || 'repeated internal spacing — looks like name+address run together' END
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true)
+  WHERE manager_name IS NOT NULL
+    AND length(manager_name) > 100
+    AND regexp_matches(manager_name, '\s{3,}')
+) t;
+
+INSERT INTO dq_results
+SELECT 'sec', 'xbrl_relationships', 'concept_names_qualified',
+       CASE WHEN total = 0 THEN 'warn'
+            WHEN unqualified_rate <= 0.05 THEN 'pass' ELSE 'fail' END,
+       CAST(unqualified_rate AS VARCHAR), '0.05',
+       CASE WHEN total = 0 THEN 'no xbrl_relationships rows in this sample'
+            ELSE CAST(unqualified AS VARCHAR) || ' of ' || CAST(total AS VARCHAR)
+                 || ' from_concept/to_concept values have no "prefix:LocalName" colon — '
+                 || 'looks like a locator label or bare local name, not a resolvable concept' END
+FROM (
+  SELECT COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE from_concept NOT LIKE '%:%' OR to_concept NOT LIKE '%:%') AS unqualified,
+         COALESCE(COUNT(*) FILTER (WHERE from_concept NOT LIKE '%:%' OR to_concept NOT LIKE '%:%') * 1.0
+                  / NULLIF(COUNT(*), 0), 0) AS unqualified_rate
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/xbrl_relationships', allow_moved_paths=true)
+) t;
 
 -- ============================================================
 -- REPORT
