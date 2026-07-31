@@ -1235,8 +1235,10 @@ public class XbrlToParquetConverter implements FileConverter {
       companyName = getElementText(doc, "issuerName");
     }
     if (companyName == null) {
-      // 13F: <filingManager><name> or <companyName>
-      companyName = getElementText(doc, "filingManager");
+      // 13F: <filingManager><name> or <companyName>. The name, not the whole element — a
+      // filingManager also wraps <address>, and getTextContent on the container would run the
+      // company name and its street address together into one string.
+      companyName = getElementText(doc, "filingManager", "name");
       if (companyName == null) {
         companyName = getElementText(doc, "companyName");
       }
@@ -4573,10 +4575,29 @@ public class XbrlToParquetConverter implements FileConverter {
   /**
    * Helper to get element text.
    */
-  private String getElementText(Document doc, String tagName) {
+  String getElementText(Document doc, String tagName) {
     NodeList elements = doc.getElementsByTagName(tagName);
     if (elements.getLength() > 0) {
       return elements.item(0).getTextContent().trim();
+    }
+    return null;
+  }
+
+  /**
+   * Gets the text of a specific child within the first {@code tagName} element in a document.
+   *
+   * <p>{@code getElementText(doc, "filingManager")} does not do this — {@code Node.getTextContent}
+   * concatenates every descendant text node, so a container element returns its own text run
+   * together with all of its children's. A 13F filer's {@code <filingManager>} wraps both
+   * {@code <name>} and {@code <address>}, so that call returns the company name and its street
+   * address concatenated with no separator, as company_name. This narrows to just the child that
+   * holds the value wanted, the same way {@link #getElementText(Element, String, String)} narrows
+   * within an already-resolved element.
+   */
+  String getElementText(Document doc, String tagName, String nestedTag) {
+    NodeList elements = doc.getElementsByTagName(tagName);
+    if (elements.getLength() > 0) {
+      return getElementText((Element) elements.item(0), nestedTag);
     }
     return null;
   }
@@ -6388,7 +6409,7 @@ public class XbrlToParquetConverter implements FileConverter {
         holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year, coverReportPeriod);
         // Extract manager name from primary doc if not in info table
         if (!holdings.isEmpty()) {
-          String managerName = getElementText(primaryDoc, "filingManager");
+          String managerName = getElementText(primaryDoc, "filingManager", "name");
           if (managerName == null) {
             managerName = getElementText(primaryDoc, "name");
           }
@@ -6667,7 +6688,7 @@ public class XbrlToParquetConverter implements FileConverter {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
     // Extract manager info from the primary doc (headerData or coverPage)
-    String managerName = getElementText(doc, "filingManager");
+    String managerName = getElementText(doc, "filingManager", "name");
     if (managerName == null) {
       managerName = getElementText(doc, "name");
     }
