@@ -21,8 +21,11 @@ import org.apache.calcite.adapter.govdata.GovDataCatalog;
 import java.time.Year;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * In-memory metadata catalog loaded once from the bundled {@code /catalog.json}.
@@ -184,6 +187,7 @@ final class Catalog {
         Integer minYear = intOrNull(cov.get("minYear"));
         Integer maxYear = intOrNull(cov.get("maxYear"));
         Integer dataLag = intOrNull(cov.get("dataLag"));
+        int lag = (dataLag != null && dataLag > 0) ? dataLag.intValue() : 0;
 
         Integer start = resolveYear(cov.path("start").asText(null), currentYear);
 
@@ -198,16 +202,33 @@ final class Catalog {
             end = resolveYear(cov.path("end").asText(null), currentYear);
         }
 
-        // Same clamping the ETL dimension iterator applies: the source's own floor and
-        // ceiling win over the configured range, and publication lag caps the ceiling.
+        // minYear/maxYear and the declared start/end are all expressed in iterated
+        // (publish-year) terms, matching DimensionIterator#resolveYearRange's own
+        // clamping of `start`/`effectiveEnd` against them before it ever computes a
+        // data year — so apply those clamps first, in that same unit.
         if (start != null && minYear != null) {
             start = Math.max(start, minYear);
         }
         if (end != null && maxYear != null) {
             end = Math.min(end, maxYear);
         }
-        if (end != null && dataLag != null && dataLag > 0) {
-            end = Math.min(end, currentYear - dataLag);
+        if (end != null) {
+            end = Math.min(end, currentYear);
+        }
+
+        // DimensionIterator#injectEffectiveYear stamps effective_year = year - dataLag
+        // into every combination of a YEAR_RANGE dimension with dataLag>0, and that
+        // effective_year — not the publish year iterated above — is what most schemas
+        // template into the URL and write as the table's own year/partition column.
+        // Reported bounds must shift by the same amount or first_year/last_year name a
+        // year earlier than any row the table actually holds.
+        if (lag > 0) {
+            if (start != null) {
+                start = Integer.valueOf(start.intValue() - lag);
+            }
+            if (end != null) {
+                end = Integer.valueOf(end.intValue() - lag);
+            }
         }
 
         ObjectNode out = MAPPER.createObjectNode();
@@ -219,7 +240,12 @@ final class Catalog {
             out.put("last_year", end);
         }
         if (minYear != null) {
-            out.put("source_earliest_year", minYear);
+            // Declared in the same publish-year terms as start/end (see the yearRange
+            // comments in econ-schema.yaml, e.g. "minYear hard-floors the publish year
+            // at 2014 (=> data floor 2013)") — shift it the same way so it stays
+            // comparable to first_year rather than naming a year later than the data
+            // actually starts.
+            out.put("source_earliest_year", Integer.valueOf(minYear.intValue() - lag));
         }
         if (dataLag != null && dataLag > 0) {
             out.put("publication_lag_years", dataLag);
@@ -314,14 +340,31 @@ final class Catalog {
         return (n != null && n.isNumber()) ? Integer.valueOf(n.intValue()) : null;
     }
 
+    /**
+     * Common short English words excluded from search scoring, shared with
+     * {@link ExternalSources}. Without this, a stopword like "by" is a substring of
+     * dozens of unrelated {@code *_by_state}-style table names/comments across this
+     * catalog, and its incidental hits outrank a genuinely on-topic table whose own
+     * name/comment never happens to contain the query's stopwords at all.
+     */
+    static final Set<String> STOPWORDS = new HashSet<>(Arrays.asList(
+        "a", "an", "the", "and", "or", "but", "for", "nor", "so", "yet", "of", "to", "in", "on",
+        "at", "by", "with", "from", "into", "onto", "is", "are", "was", "were", "be", "been",
+        "being", "this", "that", "these", "those", "it", "its", "as", "if", "than", "then"));
+
     /** Keyword search across schema/table/column names + descriptions; ranked, capped. */
     static ArrayNode search(String query, int limit) {
-        String[] toks = query.toLowerCase(Locale.ROOT).split("\\s+");
+        List<String> toks = new ArrayList<>();
+        for (String tk : query.toLowerCase(Locale.ROOT).split("\\s+")) {
+            if (!tk.isEmpty() && !STOPWORDS.contains(tk)) {
+                toks.add(tk);
+            }
+        }
         List<ObjectNode> hits = new ArrayList<>();
         for (JsonNode sc : root()) {
             String schema = txt(sc.get("schema"));
             String sComment = txt(sc.get("comment"));
-            int ss = score(toks, schema, sComment);
+            int ss = score(toks, schema, sComment, NAME_WEIGHT);
             if (ss > 0) {
                 hits.add(match("schema", schema, null, null, null, sComment, ss));
             }
@@ -329,7 +372,7 @@ final class Catalog {
                 String table = txt(tb.get("name"));
                 String tType = tb.path("type").asText("table");
                 String tComment = txt(tb.get("comment"));
-                int ts = score(toks, schema + " " + table, tComment);
+                int ts = score(toks, schema + " " + table, tComment, NAME_WEIGHT);
                 if (ts > 0) {
                     hits.add(match("table", schema, table, tType, null, tComment, ts));
                 }
@@ -337,8 +380,13 @@ final class Catalog {
                     String col = txt(c.get("name"));
                     String cComment = txt(c.get("comment"));
                     // Score column on its own name + comment only, so a query token that
-                    // matches the table name doesn't drag in all of its columns.
-                    int cs = score(toks, col, cComment);
+                    // matches the table name doesn't drag in all of its columns. Weighted
+                    // lower than a schema/table match (see COLUMN_NAME_WEIGHT): a column
+                    // literally named "state" exists on dozens of unrelated tables across
+                    // this catalog, so its bare name matching one query token is much
+                    // weaker evidence of topical relevance than the table's own name or
+                    // comment actually describing the query's subject.
+                    int cs = score(toks, col, cComment, COLUMN_NAME_WEIGHT);
                     if (cs > 0) {
                         hits.add(match("column", schema, table, txt(c.get("type")), col, cComment, cs));
                     }
@@ -357,7 +405,21 @@ final class Catalog {
         return arr;
     }
 
-    private static int score(String[] toks, String name, String comment) {
+    /** Full weight for a schema/table name match. */
+    private static final int NAME_WEIGHT = 10;
+
+    /**
+     * Weight for a column name match — well below {@link #NAME_WEIGHT}. A bare column
+     * name is reused verbatim across dozens of unrelated tables in this catalog (e.g.
+     * "state", "year", "value"), so its exact match is far weaker evidence that a table
+     * is genuinely about the query's topic than the table's own name or comment saying
+     * so; scoring it the same let single-token column hits outrank a table whose
+     * name/comment actually described the query (search_catalog("campaign contributions
+     * by state") never surfacing any fec.* table).
+     */
+    private static final int COLUMN_NAME_WEIGHT = 3;
+
+    private static int score(List<String> toks, String name, String comment, int nameWeight) {
         String n = name.toLowerCase(Locale.ROOT);
         String c = comment.toLowerCase(Locale.ROOT);
         int s = 0;
@@ -366,9 +428,9 @@ final class Catalog {
                 continue;
             }
             if (n.equals(tk)) {
-                s += 10;
+                s += nameWeight;
             } else if (n.contains(tk)) {
-                s += 5;
+                s += nameWeight / 2;
             }
             if (c.contains(tk)) {
                 s += 1;
