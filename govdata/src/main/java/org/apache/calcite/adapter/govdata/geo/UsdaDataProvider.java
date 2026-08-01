@@ -245,12 +245,13 @@ public class UsdaDataProvider implements StorageAwareDataProvider {
   }
 
   /**
-   * Parses USDA RUCA codes CSV.
-   *
-   * <p>RUCA file format varies but typically has tract-level data with
-   * primary and secondary RUCA codes.
+   * Parses USDA RUCA codes CSV (2020-vintage census-tract file). Header names and
+   * output field names below were verified directly against the live file at
+   * https://www.ers.usda.gov/media/5443/2020-rural-urban-commuting-area-codes-census-tracts.csv
+   * — column indices/output keys must match the {@code ruca_codes} table's declared
+   * {@code source:}/{@code name:} columns in geo-schema.yaml exactly, or every field
+   * silently comes back null (the failure mode this replaced).
    */
-  @SuppressWarnings("UnusedVariable")
   private List<Map<String, Object>> parseRucaCsv(String csvContent, String year)
       throws IOException {
     List<Map<String, Object>> result = new ArrayList<>();
@@ -263,13 +264,13 @@ public class UsdaDataProvider implements StorageAwareDataProvider {
 
       // Parse header
       String[] headers = parseCSVLine(headerLine);
-      int tractIdx = findColumnIndex(headers, "TRACTFIPS", "tract", "GEOID", "STATE_COUNTY_TRACT_FIPS_CODE");
-      int stateIdx = findColumnIndex(headers, "State", "STATE_CODE", "state_fips");
-      int countyIdx = findColumnIndex(headers, "County", "COUNTY_FIPS_CODE", "county_fips");
-      int primaryIdx = findColumnIndex(headers, "Primary_RUCA_Code_2010", "RUCA1", "PRIMARY_RUCA_CODE_2010");
-      int secondaryIdx = findColumnIndex(headers, "Secondary_RUCA_Code_2010", "RUCA2", "SECONDARY_RUCA_CODE_2010");
-      int popIdx = findColumnIndex(headers, "Tract_Population_2010", "Population", "TRACT_POPULATION");
-      int landAreaIdx = findColumnIndex(headers, "Land_Area", "LAND_AREA_SQUARE_MILES");
+      int tractIdx = findColumnIndex(headers, "TractFIPS20");
+      int stateIdx = findColumnIndex(headers, "StateFIPS20");
+      int countyIdx = findColumnIndex(headers, "CountyFIPS20");
+      int primaryIdx = findColumnIndex(headers, "PrimaryRUCA");
+      int primaryDescIdx = findColumnIndex(headers, "PrimaryRUCADescription");
+      int secondaryIdx = findColumnIndex(headers, "SecondaryRUCA");
+      int popIdx = findColumnIndex(headers, "Population");
 
       String line;
       while ((line = reader.readLine()) != null) {
@@ -288,26 +289,37 @@ public class UsdaDataProvider implements StorageAwareDataProvider {
         if (tractFips != null && !tractFips.isEmpty()) {
           // Pad tract FIPS to 11 digits
           tractFips = String.format("%011d", Long.parseLong(tractFips.replace(" ", "").replace("-", "")));
-          record.put("tract_fips", tractFips);
-          if (tractFips.length() >= 5) {
-            record.put("state_fips", tractFips.substring(0, 2));
-            record.put("county_fips", tractFips.substring(0, 5));
-          }
+          record.put("tract_fips_20", tractFips);
+        }
+
+        String stateFips = getValueSafe(values, stateIdx);
+        if (stateFips != null && !stateFips.isEmpty()) {
+          record.put("state_fips_20", String.format("%02d", Integer.parseInt(stateFips)));
+        }
+
+        String countyFips = getValueSafe(values, countyIdx);
+        if (countyFips != null && !countyFips.isEmpty()) {
+          record.put("county_fips_20", String.format("%05d", Integer.parseInt(countyFips)));
         }
 
         String primaryCode = getValueSafe(values, primaryIdx);
         if (primaryCode != null && !primaryCode.isEmpty()) {
           try {
-            record.put("primary_ruca_code", Double.valueOf(primaryCode).intValue());
+            record.put("primary_ruca", Double.valueOf(primaryCode).intValue());
           } catch (NumberFormatException e) {
             LOGGER.debug("Invalid primary RUCA code: {}", primaryCode);
           }
         }
 
+        String primaryDesc = getValueSafe(values, primaryDescIdx);
+        if (primaryDesc != null && !primaryDesc.isEmpty()) {
+          record.put("primary_ruca_description", primaryDesc);
+        }
+
         String secondaryCode = getValueSafe(values, secondaryIdx);
         if (secondaryCode != null && !secondaryCode.isEmpty()) {
           try {
-            record.put("secondary_ruca_code", Double.valueOf(secondaryCode));
+            record.put("secondary_ruca", Double.valueOf(secondaryCode));
           } catch (NumberFormatException e) {
             LOGGER.debug("Invalid secondary RUCA code: {}", secondaryCode);
           }
@@ -316,18 +328,9 @@ public class UsdaDataProvider implements StorageAwareDataProvider {
         String popStr = getValueSafe(values, popIdx);
         if (popStr != null && !popStr.isEmpty()) {
           try {
-            record.put("tract_population", Integer.parseInt(popStr.replace(",", "")));
+            record.put("population", Integer.parseInt(popStr.replace(",", "")));
           } catch (NumberFormatException e) {
             LOGGER.debug("Invalid population: {}", popStr);
-          }
-        }
-
-        String landArea = getValueSafe(values, landAreaIdx);
-        if (landArea != null && !landArea.isEmpty()) {
-          try {
-            record.put("land_area_sqmi", Double.parseDouble(landArea));
-          } catch (NumberFormatException e) {
-            LOGGER.debug("Invalid land area: {}", landArea);
           }
         }
 

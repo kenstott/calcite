@@ -227,9 +227,11 @@ partitionedTables:
   - name: states
     pattern: "type=boundary/year=*/states.parquet"
     comment: >
-      U.S. state boundaries and attributes from TIGER/Line shapefiles. Includes state
-      FIPS codes, names, areas, and geographic boundaries. Updated annually with official
-      Census Bureau boundaries.
+      U.S. state boundaries and attributes (FIPS code, name, 2-letter postal abbreviation,
+      land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row per state
+      per TIGER vintage year (2010-present). state_fips/state_abbr repeat across vintages
+      so this table is not a valid FK target — join geo.state_ref for a stable,
+      non-vintaged state-identity key.
 
     columns:
       - <<: *state_fips_column
@@ -553,9 +555,11 @@ partitionedTables:
   - name: counties
     pattern: "type=boundary/year=*/counties.parquet"
     comment: >
-      U.S. county boundaries and attributes including FIPS codes, names, metropolitan
-      statistical areas, and geographic boundaries. Contains all 3,000+ counties and
-      county equivalents.
+      U.S. county boundaries and attributes (FIPS code, name, GEOID, land/water area,
+      WKT geometry) from Census TIGER/Line shapefiles, one row per county per TIGER
+      vintage year (2010-present), covering all 3,000+ counties and county equivalents.
+      Does not carry CBSA/metro-area membership — see geo.cbsa for metropolitan and
+      micropolitan statistical area boundaries.
 
     columns:
       - <<: *county_fips_column
@@ -616,9 +620,11 @@ partitionedTables:
   - name: places
     pattern: "type=boundary/year=*/places.parquet"
     comment: >
-      Census designated places including cities, towns, and villages. Contains place
-      boundaries, population classifications, and geographic identifiers for incorporated
-      and census-designated places.
+      Census designated places (incorporated cities/towns and census-designated
+      places/CDPs) with place FIPS code, name, place type, and WKT geometry, one row
+      per place per TIGER vintage year (2010-present), fanned out by state. Carries no
+      land/water area or population — see geo.gazetteer_places for area, population,
+      and housing-unit counts.
 
     columns:
       - name: place_fips
@@ -681,8 +687,12 @@ partitionedTables:
   - name: zctas
     pattern: "type=boundary/year=*/zctas.parquet"
     comment: >
-      ZIP Code Tabulation Areas (ZCTAs) approximating USPS ZIP Code delivery areas.
-      Includes ZCTA boundaries and relationships to other geographic entities.
+      ZIP Code Tabulation Area boundaries (ZCTA code, land/water area, WKT geometry)
+      from Census TIGER/Line shapefiles, one row per ZCTA per TIGER vintage year
+      (2010-present, no 2011 vintage published). Vintage-specific — codes and
+      boundaries shift between vintages, so this is not a stable FK target; see
+      geo.zcta_ref for the static, non-vintaged ZCTA dimension, and
+      geo.gazetteer_zctas for population, housing units, and centroid coordinates.
 
     columns:
       - name: zcta
@@ -758,8 +768,11 @@ partitionedTables:
   - name: census_tracts
     pattern: "type=boundary/year=*/census_tracts.parquet"
     comment: >
-      Census tract boundaries - small statistical subdivisions of counties averaging
-      4,000 inhabitants. Key geography for demographic analysis and census data reporting.
+      Census tract boundary geometry (tract FIPS code, parent state/county FIPS, tract
+      number, land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row
+      per tract per TIGER vintage year (2010-present), fanned out by state. Boundaries
+      only — no demographic or population data; join to census schema ACS tables on
+      tract FIPS for those statistics.
 
     columns:
       - name: tract_fips
@@ -822,8 +835,10 @@ partitionedTables:
   - name: block_groups
     pattern: "type=boundary/year=*/block_groups.parquet"
     comment: >
-      Census block groups - statistical divisions of census tracts, generally containing
-      600-3,000 people. Smallest geography for which census sample data is published.
+      Census block group boundary geometry (block group FIPS code, parent
+      state/county/tract FIPS, land/water area, WKT geometry) from Census TIGER/Line
+      shapefiles, one row per block group per TIGER vintage year (2010-present), fanned
+      out by state. Boundaries only — no population or demographic data.
 
     columns:
       - name: block_group_fips
@@ -886,8 +901,11 @@ partitionedTables:
   - name: cbsa
     pattern: "type=boundary/year=*/cbsa.parquet"
     comment: >
-      Core Based Statistical Areas including Metropolitan and Micropolitan Statistical
-      Areas. Defines urban cores and surrounding counties with social and economic ties.
+      Core Based Statistical Area boundaries (CBSA code, name, Metropolitan/Micropolitan
+      designation via metro_micro, land/water area, WKT geometry) from Census TIGER/Line
+      shapefiles, one row per CBSA per TIGER vintage year (2010-present), national file
+      (not fanned out by state). Carries no member-county list — see
+      geo.zip_cbsa_crosswalk to relate ZIP codes to CBSAs.
 
     columns:
       - name: cbsa_fips
@@ -951,8 +969,11 @@ partitionedTables:
   - name: congressional_districts
     pattern: "type=boundary/year=*/congressional_districts.parquet"
     comment: >
-      U.S. Congressional district boundaries for the House of Representatives.
-      Updated after each decennial census reapportionment and subsequent redistricting.
+      U.S. Congressional district boundaries for the House of Representatives (district
+      code, parent state FIPS, district name, land/water area, WKT geometry), one row
+      per district, national file per vintage. Covers only the 2023-vintage TIGER
+      shapefile forward — unlike other TIGER boundary tables in this schema (which go
+      back to 2010), congressional_districts starts at 2023.
 
     columns:
       - name: cd_fips
@@ -1025,8 +1046,10 @@ partitionedTables:
   - name: school_districts
     pattern: "type=boundary/year=*/school_districts.parquet"
     comment: >
-      Elementary, secondary, and unified school district boundaries. Includes district
-      codes, names, and relationships to other geographic entities.
+      Elementary, secondary, and unified school district boundaries (LEA code, parent
+      state FIPS, district name, district type — elementary/secondary/unified,
+      land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row per
+      district per TIGER vintage year (2010-present), fanned out by state.
 
     columns:
       - name: sd_lea
@@ -1092,8 +1115,12 @@ partitionedTables:
   - name: state_legislative_lower
     pattern: "type=boundary/year=*/state_legislative_lower.parquet"
     comment: >
-      State legislative district boundaries for lower chambers (State House/Assembly).
-      Used for political analysis and representation mapping.
+      State legislative district boundaries for lower chambers (State House/Assembly) —
+      SLDL code, parent state FIPS, district name, land/water area, WKT geometry — one
+      row per district per TIGER vintage year (2010-present). Excludes DC and Nebraska,
+      which have no lower chamber (Nebraska's legislature is unicameral); see
+      geo.state_legislative_upper for upper-chamber (State Senate) districts, which
+      covers every state.
 
     columns:
       - name: sldl_fips
@@ -1157,8 +1184,11 @@ partitionedTables:
   - name: state_legislative_upper
     pattern: "type=boundary/year=*/state_legislative_upper.parquet"
     comment: >
-      State legislative district boundaries for upper chambers (State Senate).
-      Used for political analysis and representation mapping.
+      State legislative district boundaries for upper chambers (State Senate) — SLDU
+      code, parent state FIPS, district name, land/water area, WKT geometry — one row
+      per district per TIGER vintage year (2010-present), covering every state. See
+      geo.state_legislative_lower for lower-chamber (State House/Assembly) districts,
+      which excludes DC and Nebraska.
 
     columns:
       - name: sldu_fips
@@ -1287,8 +1317,11 @@ partitionedTables:
   - name: tribal_areas
     pattern: "type=boundary/year=*/tribal_areas.parquet"
     comment: >
-      American Indian reservations, Alaska Native villages, and Native Hawaiian home lands.
-      Includes federal and state recognized tribal boundaries and trust lands.
+      American Indian reservations, Alaska Native village statistical areas, and Native
+      Hawaiian home lands (area code, name, area type — federal reservation, state
+      reservation, TDSA, etc., land/water area, WKT geometry) from Census TIGER/Line
+      AIANNH shapefiles, one row per area per TIGER vintage year (2010-present),
+      national file (not fanned out by state).
 
     columns:
       - name: aiannhce
@@ -1630,8 +1663,11 @@ partitionedTables:
   - name: zip_county_crosswalk
     pattern: "type=crosswalk/year=*/zip_county_crosswalk.parquet"
     comment: >
-      ZIP Code to County crosswalk file mapping ZIP codes to counties with residential
-      and business address ratios. Source: HUD USPS ZIP Code Crosswalk.
+      ZIP Code to County crosswalk mapping ZIP codes to counties, with
+      residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
+      oth_ratio, tot_ratio), one row per ZIP-county pair per year. Source: HUD USPS ZIP
+      Code Crosswalk, Q4 snapshot only (not all four quarters). Reverse mapping: see
+      geo.county_zip_crosswalk.
 
     columns:
       - name: zip
@@ -1703,7 +1739,10 @@ partitionedTables:
     pattern: "type=crosswalk/year=*/zip_cbsa_crosswalk.parquet"
     comment: >
       ZIP Code to Core Based Statistical Area crosswalk mapping ZIP codes to
-      metropolitan and micropolitan areas.
+      metropolitan/micropolitan statistical areas, with residential/business/other/total
+      address-ratio splits (res_ratio, bus_ratio, oth_ratio, tot_ratio), one row per
+      ZIP-CBSA pair per year. Source: HUD USPS ZIP Code Crosswalk, Q4 snapshot only
+      (not all four quarters).
 
     columns:
       - name: zip
@@ -1777,8 +1816,11 @@ partitionedTables:
   - name: tract_zip_crosswalk
     pattern: "type=crosswalk/year=*/tract_zip_crosswalk.parquet"
     comment: >
-      Census tract to ZIP Code crosswalk for relating census geography to postal
-      geography. Includes residential and business address ratios.
+      Census tract to ZIP Code crosswalk mapping tract FIPS to ZIP codes, with
+      residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
+      oth_ratio, tot_ratio), one row per tract-ZIP pair per year. Source: HUD USPS ZIP
+      Code Crosswalk, Q4 snapshot only (not all four quarters). Reverse mapping: see
+      geo.zip_tract_crosswalk.
 
     columns:
       - name: tract_fips
@@ -1852,8 +1894,11 @@ partitionedTables:
   - name: zip_tract_crosswalk
     pattern: "type=crosswalk/year=*/zip_tract_crosswalk.parquet"
     comment: >
-      ZIP Code to Census Tract crosswalk mapping ZIP codes to census tracts
-      with residential and business address ratios. Source: HUD USPS ZIP Code Crosswalk.
+      ZIP Code to Census Tract crosswalk mapping ZIP codes to census tracts, with
+      residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
+      oth_ratio, tot_ratio), one row per ZIP-tract pair per year. Source: HUD USPS ZIP
+      Code Crosswalk, Q4 snapshot only (not all four quarters). Reverse mapping: see
+      geo.tract_zip_crosswalk.
 
     columns:
       - name: zip
@@ -1929,7 +1974,10 @@ partitionedTables:
     pattern: "type=crosswalk/year=*/zip_cd_crosswalk.parquet"
     comment: >
       ZIP Code to Congressional District crosswalk mapping ZIP codes to congressional
-      districts with address ratios. Source: HUD USPS ZIP Code Crosswalk.
+      districts, with residential/business/other/total address-ratio splits (res_ratio,
+      bus_ratio, oth_ratio, tot_ratio), one row per ZIP-CD pair per year. Source: HUD
+      USPS ZIP Code Crosswalk, Q4 snapshot only (not all four quarters). Reverse
+      mapping: see geo.cd_zip_crosswalk.
 
     columns:
       - name: zip
@@ -2003,8 +2051,11 @@ partitionedTables:
   - name: county_zip_crosswalk
     pattern: "type=crosswalk/year=*/county_zip_crosswalk.parquet"
     comment: >
-      County to ZIP Code crosswalk for allocating county-level data to ZIP codes.
-      Reverse mapping of zip_county_crosswalk. Source: HUD USPS ZIP Code Crosswalk.
+      County to ZIP Code crosswalk for allocating county-level data to ZIP codes, with
+      residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
+      oth_ratio, tot_ratio), one row per county-ZIP pair per year. Source: HUD USPS ZIP
+      Code Crosswalk, Q4 snapshot only (not all four quarters). Reverse mapping of
+      geo.zip_county_crosswalk.
 
     columns:
       - <<: *county_fips_column
@@ -2075,8 +2126,11 @@ partitionedTables:
   - name: cd_zip_crosswalk
     pattern: "type=crosswalk/year=*/cd_zip_crosswalk.parquet"
     comment: >
-      Congressional District to ZIP Code crosswalk for allocating district-level
-      data to ZIP codes. Reverse mapping of zip_cd_crosswalk. Source: HUD USPS Crosswalk.
+      Congressional District to ZIP Code crosswalk for allocating district-level data
+      to ZIP codes, with residential/business/other/total address-ratio splits
+      (res_ratio, bus_ratio, oth_ratio, tot_ratio), one row per CD-ZIP pair per year.
+      Source: HUD USPS ZIP Code Crosswalk, Q4 snapshot only (not all four quarters).
+      Reverse mapping of geo.zip_cd_crosswalk.
 
     columns:
       - name: cd_fips
@@ -2155,9 +2209,12 @@ partitionedTables:
   - name: rural_urban_continuum
     pattern: "type=classification/year=*/rural_urban_continuum.parquet"
     comment: >
-      USDA Economic Research Service Rural-Urban Continuum Codes classifying counties
-      by degree of urbanization and adjacency to metro areas. 9-category classification
-      updated decennially.
+      USDA Economic Research Service Rural-Urban Continuum Codes (RUCC) classifying
+      counties by degree of urbanization and adjacency to metro areas, with a
+      9-category code (rucc_code), description, county population, and a metro/nonmetro
+      flag (metro_nonmetro), one row per county for the 2023 vintage (RUCC is updated
+      decennially; next release ~2033). See geo.ruca_codes for the finer-grained,
+      tract-level rural-urban classification.
 
     columns:
       - <<: *county_fips_column
@@ -2192,7 +2249,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "2023"
-        lagYears: 0
+        end: "2023"
 
     source:
       type: http
@@ -2229,9 +2286,11 @@ partitionedTables:
   - name: ruca_codes
     pattern: "type=classification/year=*/ruca_codes.parquet"
     comment: >
-      USDA Rural-Urban Commuting Area codes at census tract level. More granular
-      than county-level RUCC, based on population density and commuting patterns.
-      Primary codes (1-10) with secondary subdivision codes.
+      USDA Rural-Urban Commuting Area (RUCA) codes at census tract level (2020-vintage
+      FIPS), more granular than the county-level geo.rural_urban_continuum (RUCC)
+      table. Carries a primary RUCA code (primary_ruca, 1-10), a secondary subdivision
+      code (secondary_ruca), a description, and tract population, one row per tract for
+      the 2020 vintage (RUCA is updated roughly decennially; next release ~2030).
 
     # Columns match USDA RUCA CSV file column names (snake_case with source mapping)
     columns:
@@ -2279,8 +2338,8 @@ partitionedTables:
         - classification
       year:
         type: yearRange
-        start: "2023"
-        lagYears: 0
+        start: "2020"
+        end: "2020"
 
     source:
       type: http
@@ -2320,9 +2379,10 @@ partitionedTables:
   - name: gazetteer_counties
     pattern: "type=gazetteer/year=*/gazetteer_counties.parquet"
     comment: >
-      Census Bureau Gazetteer file for counties with authoritative names, codes,
-      area measurements, and representative coordinates. Official reference for
-      county identifiers and centroids.
+      Census Bureau Gazetteer file for counties: county FIPS code, name, land/water
+      area in square miles, and centroid latitude/longitude, one row per county per
+      TIGER vintage year (2010-present). Centroid and area only, no boundary polygon —
+      see geo.counties for full WKT boundary geometry.
 
     columns:
       - <<: *county_fips_column
@@ -2392,8 +2452,11 @@ partitionedTables:
   - name: gazetteer_places
     pattern: "type=gazetteer/year=*/gazetteer_places.parquet"
     comment: >
-      Census Bureau Gazetteer file for incorporated places and CDPs with authoritative
-      names, codes, area measurements, and representative coordinates.
+      Census Bureau Gazetteer file for incorporated places and CDPs: place FIPS code,
+      name, place type, land/water area in square miles, centroid latitude/longitude,
+      population estimate, and housing unit count, one row per place per TIGER vintage
+      year (2010-present). Unlike geo.places (boundary polygons only, no population),
+      this table carries population and housing_units but no WKT geometry.
 
     columns:
       - name: place_fips
@@ -2478,8 +2541,12 @@ partitionedTables:
   - name: gazetteer_zctas
     pattern: "type=gazetteer/year=*/gazetteer_zctas.parquet"
     comment: >
-      Census Bureau Gazetteer file for ZIP Code Tabulation Areas with area
-      measurements and representative coordinates.
+      Census Bureau Gazetteer file for ZIP Code Tabulation Areas: ZCTA code, land/water
+      area in square miles, centroid latitude/longitude, population estimate, and
+      housing unit count, one row per ZCTA per TIGER vintage year (2010-present).
+      Unlike geo.zctas (boundary polygons only, no population) or geo.zcta_ref (static,
+      non-vintaged reference), this table carries vintage-specific population and
+      housing_units.
 
     columns:
       - name: zcta
