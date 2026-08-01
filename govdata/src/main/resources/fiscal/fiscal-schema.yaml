@@ -853,8 +853,12 @@ partitionedTables:
     pattern: "type=usaspending_by_state/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Federal spending summarized by place-of-performance state x fiscal year, the
-      spatial counterpart to the SOI revenue tables. From USAspending
+      Federal spending summarized by place-of-performance state x fiscal year — the
+      spatial counterpart to the SOI revenue tables and one level up from the
+      county-grain usaspending_by_county. Carries obligated_amount plus a
+      population figure and a derived per_capita spending amount; that population
+      is USAspending's own reference (2020 decennial, per usaspending_by_county),
+      so prefer census.acs_population for a current denominator. From USAspending
       spending_by_geography (geo_layer=state, all award types, FY expressed as
       Oct-Sep). Joins to geo.state_ref via state_abbr. Source:
       api.usaspending.gov/api/v2/search/spending_by_geography/.
@@ -1452,8 +1456,10 @@ views:
 
   - name: soi_income_by_county_year
     comment: >
-      County-level revenue rollup: returns, AGI, and total income tax by county
-      and tax year, summed across AGI brackets (excludes the state-total 000 rows).
+      County-level revenue rollup: return counts, individual/exemption counts,
+      adjusted gross income, and total income tax by county and tax year, summed
+      across the six SOI AGI brackets (excludes the county_fips '...000'
+      state-total rows carried in the source soi_income_by_county table).
     sql: >
       SELECT
         c.year,
@@ -1470,9 +1476,10 @@ views:
 
   - name: federal_money_by_state_year
     comment: >
-      Both sides of the ledger per state and fiscal/tax year: SOI total income tax
-      collected (from county rollup) beside USAspending obligations. A direct
-      revenue-vs-outlay comparison keyed on geo.state_ref.
+      Places each usaspending_by_state row (state, fiscal year, obligated_amount)
+      beside its same-state, same-year SOI total-income-tax figure summed from
+      the soi_income_by_county state-total ('...000') rows — a direct
+      revenue-vs-outlay comparison per state per year.
     sql: >
       SELECT
         s.year,
@@ -1484,19 +1491,20 @@ views:
       LEFT JOIN (
         SELECT
           c.year,
-          c.state_fips,
+          c.state_abbr,
           SUM(c.total_income_tax) AS total_income_tax_thousands
         FROM soi_income_by_county c
         WHERE c.county_fips LIKE '%000'
-        GROUP BY c.year, c.state_fips
+        GROUP BY c.year, c.state_abbr
       ) r
-        ON r.year = s.year
+        ON r.year = s.year AND r.state_abbr = s.state_abbr
 
   - name: nonprofit_financials
     comment: >
-      Form 990 filings enriched with the exempt-org roster: financials from
-      exempt_org_990 joined to name/state/NTEE/subsection from exempt_org_master
-      on EIN — the nonprofit sector view.
+      One row per Form 990 filing: exempt_org_990's total_revenue, total_expenses,
+      total_assets, return_type (990/990-EZ/990-PF), and tax_year, left-joined to
+      exempt_org_master's org_name (fallback to the filing's own name), state_abbr,
+      ntee_code, and subsection_code on EIN — the nonprofit sector view.
     sql: >
       SELECT
         f.year,
