@@ -58,10 +58,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * expands it into DuckDB's native {@code date_trunc} call at SQL-generation time.
  *
  * <p>These tests run the generated expression through a real Calcite connection over a genuine
- * DuckDB-engine {@code FileSchema} table (not a bare in-memory VALUES row) with a real aggregate
- * in the {@code GROUP BY} — the same shape {@code buildAlignedSql} always generates — so a
- * function Calcite can't resolve, an identifier its parser rejects, or an expression that fails to
- * push down all fail the test the same way they fail a real MCP call.
+ * DuckDB-engine {@code FileSchema} table (not a bare in-memory VALUES row), projecting the
+ * expression once in an inner subquery and aggregating {@code GROUP BY} the resulting column —
+ * the same shape {@code buildAlignedSql} generates. That shape matters on its own: repeating the
+ * key expression's literal text in both {@code SELECT} and {@code GROUP BY} instead (the original
+ * form of this query) makes Calcite's {@code GROUP BY} expander fail to resolve identifiers inside
+ * the second copy for some expression shapes — {@code CASE} inside {@code SUBSTRING}
+ * (quarter_col), and a join-derived {@code COALESCE} (the state grain) — even though the identical
+ * {@code SELECT}-list copy resolves fine. So a function Calcite can't resolve, an identifier its
+ * parser rejects, an expression that fails to push down, or a {@code GROUP BY} shape it can't
+ * resolve all fail the test the same way they fail a real MCP call.
  */
 @Tag("unit")
 class McpServerAlignedSeriesKeyTest {
@@ -123,10 +129,14 @@ class McpServerAlignedSeriesKeyTest {
 
   /**
    * Writes a one-row JSON table {@code t(<columnNames>)} (each value a raw JSON literal — quote
-   * string values yourself) into the schema directory, then runs {@code SELECT <expr> AS k,
-   * COUNT(*) AS n FROM t GROUP BY <expr>} through a real Calcite+DuckDB-engine connection and
-   * returns the value. The real aggregate matches the shape {@code buildAlignedSql} always
-   * generates, and the real table scan is what forces the whole query to push down to DuckDB.
+   * string values yourself) into the schema directory, then projects {@code expr} once in an
+   * inner subquery and runs {@code SELECT k, COUNT(*) AS n FROM (SELECT <expr> AS k FROM t) p
+   * GROUP BY k} through a real Calcite+DuckDB-engine connection, returning the value. This is the
+   * exact shape {@code buildAlignedSql} generates — project the key once, group by the resulting
+   * column — never the key expression's own text repeated in both SELECT and GROUP BY, which
+   * Calcite's GROUP BY expander fails to resolve for some expression shapes (see
+   * {@link #quarterColMapsToFirstMonthOfQuarter} and {@link #stateGeoColNormalizesFipsAndAbbreviation}).
+   * The real table scan is what forces the whole query to push down to DuckDB.
    */
   private String evaluate(String[] columnNames, String[] jsonValues, String expr)
       throws Exception {
@@ -146,8 +156,8 @@ class McpServerAlignedSeriesKeyTest {
         + ";lex=ORACLE;unquotedCasing=TO_LOWER;fun=standard,postgresql,spatial";
     try (Connection c = DriverManager.getConnection(url);
          Statement st = c.createStatement();
-         ResultSet rs = st.executeQuery("SELECT " + expr + " AS k, COUNT(*) AS n FROM "
-             + "\"TEST\".\"t\" GROUP BY " + expr)) {
+         ResultSet rs = st.executeQuery("SELECT k, COUNT(*) AS n FROM (SELECT " + expr
+             + " AS k FROM \"TEST\".\"t\") p GROUP BY k")) {
       assertTrue(rs.next(), "expected one row");
       return rs.getString(1);
     }
@@ -178,8 +188,9 @@ class McpServerAlignedSeriesKeyTest {
         + ";lex=ORACLE;unquotedCasing=TO_LOWER;fun=standard,postgresql,spatial";
     try (Connection c = DriverManager.getConnection(url);
          Statement st = c.createStatement();
-         ResultSet rs = st.executeQuery("SELECT " + expr + " AS k, COUNT(*) AS n FROM "
-             + "(SELECT CAST(\"d\" AS DATE) AS d FROM \"TEST\".\"t\") AS dt GROUP BY " + expr)) {
+         ResultSet rs = st.executeQuery("SELECT k, COUNT(*) AS n FROM (SELECT " + expr
+             + " AS k FROM (SELECT CAST(\"d\" AS DATE) AS d FROM \"TEST\".\"t\") AS dt) p"
+             + " GROUP BY k")) {
       assertTrue(rs.next());
       assertEquals("2024-03-01", rs.getString(1));
     }
@@ -196,13 +207,12 @@ class McpServerAlignedSeriesKeyTest {
 
   @Test @DisplayName("quarter grain truncates a VARCHAR date")
   void quarterGrainOnVarchar() throws Exception {
-    // KNOWN ISSUE: this assertion is currently flaky. FLOOR(...TO QUARTER) genuinely computes
-    // the correct value (2024-07-01) when traced in isolation — confirmed via calcite.debug=true
-    // showing the pushed-down DuckDB result directly — but a second connection opened against
-    // the same model within the same JVM run has been observed to return a stale/wrong value
-    // (2024-01-01) for the identical query and data. Root cause not yet isolated: suspected
-    // cross-connection caching (DuckDB catalog/conversion cache, or a Calcite plan/codegen
-    // cache) rather than an error in the generated expression itself. Needs follow-up.
+    // Previously observed returning a stale value (2024-01-01 instead of 2024-07-01) under the
+    // old query shape, which repeated this CASE/SUBSTRING expression's literal text in both
+    // SELECT and GROUP BY. Projecting the key once in a subquery and grouping by the resulting
+    // column (see #evaluate) resolved it — same root cause as the "Column not found" failure in
+    // #quarterColMapsToFirstMonthOfQuarter and #stateGeoColNormalizesFipsAndAbbreviation: Calcite's
+    // GROUP BY validation of a duplicated complex expression, not an error in the expression itself.
     String expr = McpServer.keyExpr(spec("time_col", "d"), "quarter", "s0");
     assertEquals("2024-07-01", evaluate("d", "\"2024-08-02\"", expr));
   }
@@ -280,8 +290,8 @@ class McpServerAlignedSeriesKeyTest {
         + ";lex=ORACLE;unquotedCasing=TO_LOWER;fun=standard,postgresql,spatial";
     try (Connection c = DriverManager.getConnection(url);
          Statement st = c.createStatement();
-         ResultSet rs = st.executeQuery("SELECT " + expr + " AS k, COUNT(*) AS n FROM "
-             + "\"TEST\".\"t\"" + join + " GROUP BY " + expr)) {
+         ResultSet rs = st.executeQuery("SELECT k, COUNT(*) AS n FROM (SELECT " + expr
+             + " AS k FROM \"TEST\".\"t\"" + join + ") p GROUP BY k")) {
       assertTrue(rs.next(), "expected one row");
       return rs.getString(1);
     }

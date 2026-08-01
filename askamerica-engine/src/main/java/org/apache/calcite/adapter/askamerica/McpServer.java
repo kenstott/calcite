@@ -1446,7 +1446,7 @@ public class McpServer {
             int cols = meta.getColumnCount();
             String[] names = new String[cols];
             for (int i = 0; i < cols; i++) {
-                names[i] = meta.getColumnName(i + 1);
+                names[i] = meta.getColumnLabel(i + 1);
             }
             int[] sqlTypes = new int[cols];
             for (int i = 0; i < cols; i++) {
@@ -1724,10 +1724,16 @@ public class McpServer {
             String tableFrom = table + (geoJoin != null ? geoJoin : "");
             String where = specText(spec, "where");
             String whereClause = (where != null && !where.isEmpty()) ? (" WHERE " + where) : "";
-            // Repeat the key expression in GROUP BY — this Calcite dialect rejects
-            // ordinal GROUP BY (GROUP BY 1).
-            ctes.add("s" + i + " AS (SELECT " + key + " AS k, " + agg + "(" + value + ") AS " + name
-                + " FROM " + tableFrom + whereClause + " GROUP BY " + key + ")");
+            // Project the key expression once in an inner subquery and GROUP BY the resulting
+            // plain column, rather than repeating the (sometimes CASE/SUBSTRING-laden) key
+            // expression as its own literal text in both SELECT and GROUP BY: Calcite's GROUP BY
+            // expander fails to resolve identifiers inside that second, textually-duplicated copy
+            // for some expression shapes (quarter_col's CASE, and the state grain's join-derived
+            // COALESCE) — "Column ... not found" — even though the identical SELECT-list copy
+            // resolves fine. A GROUP BY on a real projected column never hits that path.
+            ctes.add("s" + i + " AS (SELECT k, " + agg + "(v) AS " + name + " FROM (SELECT "
+                + key + " AS k, " + value + " AS v FROM " + tableFrom + whereClause + ") p" + i
+                + " GROUP BY k)");
             cols.add(name);
         }
         StringBuilder from = new StringBuilder("s0");
