@@ -484,7 +484,12 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
       // Microsoft Graph returns ISO 8601 format
       return Instant.parse(dateTime).toEpochMilli();
     } catch (Exception e) {
-      return System.currentTimeMillis();
+      // This feeds FileMetadata.lastModified, which cache/staleness comparisons key on.
+      // Fabricating "now" would make a genuinely old file look freshly modified -- either
+      // masking real staleness or breaking "only re-fetch if changed since X" logic, depending
+      // on the comparison direction. A malformed timestamp from the API is a real parsing bug.
+      throw new RuntimeException("Failed to parse Microsoft Graph lastModifiedDateTime '"
+          + dateTime + "': " + e.getMessage(), e);
     }
   }
 

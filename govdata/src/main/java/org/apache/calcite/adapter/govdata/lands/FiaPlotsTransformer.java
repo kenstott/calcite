@@ -51,6 +51,7 @@ public class FiaPlotsTransformer implements StreamingResponseTransformer {
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     long rowsRead = 0;
+    long rowsMalformed = 0;
     try (FiaStateArchive.EntryHandle entry = FiaStateArchive.openEntry(state, PLOT_ENTRY);
          BufferedReader reader = new BufferedReader(
              new InputStreamReader(entry.stream, StandardCharsets.UTF_8))) {
@@ -83,26 +84,40 @@ public class FiaPlotsTransformer implements StreamingResponseTransformer {
         if (cn.isEmpty()) {
           continue;
         }
-        int statusCd = intAt(cols, idxStatus);
-        Map<String, Object> row = new LinkedHashMap<String, Object>();
-        row.put("plot_cn", cn);
-        row.put("prev_plot_cn", nullIfEmpty(strAt(cols, idxPrevCn)));
-        row.put("inventory_year", intOrNull(cols, idxInvyr));
-        row.put("state_fips", stateFips);
-        String countyFips = countyFips(stateFips, intAt(cols, idxCountycd));
-        row.put("county_fips", countyFips);
-        row.put("plot_number", intOrNull(cols, idxPlot));
-        row.put("plot_status_cd", statusCd > 0 ? statusCd : null);
-        row.put("plot_status_name", resolvePlotStatus(statusCd));
-        row.put("lat", doubleOrNull(cols, idxLat));
-        row.put("lon", doubleOrNull(cols, idxLon));
-        row.put("elev_ft", intOrNull(cols, idxElev));
-        row.put("measure_year", intOrNull(cols, idxMeasyear));
-        rows.add(row);
+        try {
+          int statusCd = intAt(cols, idxStatus);
+          Map<String, Object> row = new LinkedHashMap<String, Object>();
+          row.put("plot_cn", cn);
+          row.put("prev_plot_cn", nullIfEmpty(strAt(cols, idxPrevCn)));
+          row.put("inventory_year", intOrNull(cols, idxInvyr));
+          row.put("state_fips", stateFips);
+          String countyFips = countyFips(stateFips, intAt(cols, idxCountycd));
+          row.put("county_fips", countyFips);
+          row.put("plot_number", intOrNull(cols, idxPlot));
+          row.put("plot_status_cd", statusCd > 0 ? statusCd : null);
+          row.put("plot_status_name", resolvePlotStatus(statusCd));
+          row.put("lat", doubleOrNull(cols, idxLat));
+          row.put("lon", doubleOrNull(cols, idxLon));
+          row.put("elev_ft", intOrNull(cols, idxElev));
+          row.put("measure_year", intOrNull(cols, idxMeasyear));
+          rows.add(row);
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // masquerade as a real status/county code -- skip and count just this row rather than
+          // fabricate a value, and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("fia_plots[{}]: skipping malformed row {} ({})",
+              state, rowsRead, e.getMessage());
+        }
       }
     }
 
-    LOGGER.info("fia_plots[{}]: rows read={} kept={}", state, rowsRead, rows.size());
+    if (rowsMalformed > 0) {
+      LOGGER.warn("fia_plots[{}]: {} row(s) skipped due to malformed numeric fields",
+          state, rowsMalformed);
+    }
+    LOGGER.info("fia_plots[{}]: rows read={} kept={} malformed={}",
+        state, rowsRead, rows.size(), rowsMalformed);
     return rows.iterator();
   }
 
@@ -153,16 +168,16 @@ public class FiaPlotsTransformer implements StreamingResponseTransformer {
     return (s == null || s.isEmpty()) ? null : s;
   }
 
+  // fallback-guard: allow empty/out-of-range means "column not present" -- a real, benign case
+  // distinct from a malformed value, so 0 there is a legitimate default. A genuinely malformed
+  // (non-empty, non-numeric) value is NOT caught here -- it propagates as NumberFormatException so
+  // the per-row loop can skip+log instead of fabricating (see intOrNull's javadoc-equivalent note).
   private static int intAt(String[] cols, int idx) {
     String v = strAt(cols, idx);
     if (v.isEmpty()) {
       return 0;
     }
-    try {
-      return (int) Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return (int) Double.parseDouble(v);
   }
 
   private static Integer intOrNull(String[] cols, int idx) {
