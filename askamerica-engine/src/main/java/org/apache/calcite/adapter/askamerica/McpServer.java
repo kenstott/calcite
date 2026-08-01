@@ -385,7 +385,11 @@ public class McpServer {
             + "table's declared coverage window, and an empty result outside that window "
             + "means the period is not published yet, not zero. Say so rather than "
             + "substituting an outside figure; suggest_external_sources lists keyless "
-            + "public endpoints for genuine gaps.");
+            + "public endpoints for genuine gaps. "
+            + "render_chart draws a line/bar/scatter/pie image from categories/series data "
+            + "you've already fetched — use it instead of hand-building a chart when a "
+            + "visualization is requested; pass null for a missing data point to render a "
+            + "gap rather than a false zero.");
         return result(id, body);
     }
 
@@ -847,7 +851,9 @@ public class McpServer {
                     for (JsonNode s : args.path("series")) {
                         java.util.List<Double> values = new java.util.ArrayList<>();
                         for (JsonNode v : s.path("values")) {
-                            values.add(v.asDouble());
+                            // A JSON null marks a missing data point and must render as a gap,
+                            // not a silent 0 — v.asDouble() would coerce null to 0.0.
+                            values.add(v.isNull() ? null : v.asDouble());
                         }
                         series.add(new ChartRenderer.SeriesSpec(s.path("name").asText(), values));
                     }
