@@ -30,12 +30,23 @@ public class EiaRefineryOperationsTransformer extends EiaV2Transformer
     try {
       JsonNode data = extractDataArray(response);
       ArrayNode result = MAPPER.createArrayNode();
+      int rowsSkipped = 0;
 
       for (JsonNode row : data) {
         String period = getString(row, "period");
+        int reportYear;
+        try {
+          reportYear = parseYear(period);
+        } catch (NumberFormatException e) {
+          // A malformed period must not fabricate year 0 for this row, nor abort every
+          // other row in the batch -- skip and count just this one.
+          rowsSkipped++;
+          LOGGER.warn("EIA Refinery Operations: skipping row with unparseable period '{}'", period);
+          continue;
+        }
         ObjectNode out = MAPPER.createObjectNode();
 
-        out.put("report_year", parseYear(period));
+        out.put("report_year", reportYear);
 
         Integer month = parseMonth(period);
         if (month != null) {
@@ -96,6 +107,9 @@ public class EiaRefineryOperationsTransformer extends EiaV2Transformer
         result.add(out);
       }
 
+      if (rowsSkipped > 0) {
+        LOGGER.warn("EIA Refinery Operations: skipped {} row(s) with unparseable period", rowsSkipped);
+      }
       LOGGER.debug("EIA Refinery Operations: transformed {} records", result.size());
       return result.toString();
 

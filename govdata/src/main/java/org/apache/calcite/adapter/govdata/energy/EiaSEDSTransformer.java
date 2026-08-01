@@ -29,12 +29,23 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
     try {
       JsonNode data = extractDataArray(response);
       ArrayNode result = MAPPER.createArrayNode();
+      int rowsSkipped = 0;
 
       for (JsonNode row : data) {
         String period = getString(row, "period");
+        int consumptionYear;
+        try {
+          consumptionYear = parseYear(period);
+        } catch (NumberFormatException e) {
+          // A malformed period must not fabricate year 0 for this row, nor abort every
+          // other row in the batch -- skip and count just this one.
+          rowsSkipped++;
+          LOGGER.warn("EIA SEDS: skipping row with unparseable period '{}'", period);
+          continue;
+        }
         ObjectNode out = MAPPER.createObjectNode();
 
-        out.put("consumption_year", parseYear(period));
+        out.put("consumption_year", consumptionYear);
 
         String stateAbbr = getString(row, "stateId", "location");
         if (stateAbbr != null) {
@@ -110,6 +121,9 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
         result.add(out);
       }
 
+      if (rowsSkipped > 0) {
+        LOGGER.warn("EIA SEDS: skipped {} row(s) with unparseable period", rowsSkipped);
+      }
       LOGGER.debug("EIA SEDS: transformed {} records", result.size());
       return result.toString();
 

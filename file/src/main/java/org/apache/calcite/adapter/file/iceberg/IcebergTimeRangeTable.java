@@ -196,6 +196,7 @@ public class IcebergTimeRangeTable extends AbstractTable implements ScannableTab
         currentFileEnumerator = fileEnumerable.enumerator();
 
         return true;
+      // fallback-guard: allow a single corrupt/unreadable Parquet file must not abort the whole time-range scan; logged at ERROR with the file path, then skips to the next file (per-item skip pattern)
       } catch (Exception e) {
         LOGGER.error("Failed to process Parquet file: {}", currentFile.getFilePath(), e);
         // Try next file
@@ -212,14 +213,12 @@ public class IcebergTimeRangeTable extends AbstractTable implements ScannableTab
     // Use the execution engine to create the appropriate table
     switch (engineConfig.getEngineType()) {
       case PARQUET:
-        try {
-          // ParquetTranslatableTable is TranslatableTable, not ScannableTable,
-          // so we create an enumerable directly
-          return createBasicParquetEnumerable(parquetFile);
-        } catch (Exception e) {
-          LOGGER.error("Failed to create Parquet table for: {}", parquetFile, e);
-          return Linq4j.asEnumerable(java.util.Collections.<Object[]>emptyList());
-        }
+        // ParquetTranslatableTable is TranslatableTable, not ScannableTable,
+        // so we create an enumerable directly. Any failure propagates to the caller
+        // (Enumerator.moveToNextFile), which already logs and skips to the next file —
+        // silently substituting an empty enumerable here would double that handling and
+        // additionally hide the failure from moveToNextFile's ERROR log.
+        return createBasicParquetEnumerable(parquetFile);
       default:
         // For other engines, create a basic enumerable
         return createBasicParquetEnumerable(parquetFile);

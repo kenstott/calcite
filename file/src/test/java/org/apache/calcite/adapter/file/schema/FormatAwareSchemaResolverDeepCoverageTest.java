@@ -34,6 +34,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -304,10 +305,10 @@ class FormatAwareSchemaResolverDeepCoverageTest {
   void testResolveSchemaJsonInvalidSyntax() throws Exception {
     File jsonFile = createJsonFile("invalid.json", "not json at all");
     List<File> files = Collections.singletonList(jsonFile);
-    // Should not throw, returns empty schema on error
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    assertNotNull(schema);
-    assertEquals(0, schema.getFieldCount());
+    // This file is the sole schema authority — a parse failure must surface as an error,
+    // not silently present the table as having zero columns.
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT));
   }
 
   // ====================================================================
@@ -394,15 +395,15 @@ class FormatAwareSchemaResolverDeepCoverageTest {
     // Parquet has higher priority than CSV
     File csvFile = createCsvFile("data.csv", "a,b,c\n1,2,3\n");
     // Create a "parquet" file by extension (won't be valid for schema read)
-    // The resolver will try parquet first due to priority, fail, and return empty
-    // But the detection logic routes it to parquet format resolution
+    // The detection logic routes it to parquet format resolution, which then fails to
+    // read the fabricated footer — that failure must surface as an error, not silently
+    // resolve to a 0-column schema.
     File fakeParquet = tempDir.resolve("data.parquet").toFile();
     Files.write(fakeParquet.toPath(), "not real parquet".getBytes());
 
     List<File> files = Arrays.asList(csvFile, fakeParquet);
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    assertNotNull(schema);
-    // Parquet resolution will fail, so returns empty schema
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT));
   }
 
   @Test
@@ -467,9 +468,13 @@ class FormatAwareSchemaResolverDeepCoverageTest {
   @Test
   void testInferCsvSchemaNonExistentFile() throws Exception {
     File csvFile = tempDir.resolve("no_such.csv").toFile();
-    RelDataType schema = invokeInferCsvSchema(csvFile);
-    assertNotNull(schema);
-    assertEquals(0, schema.getFieldCount());
+    // This file is the sole schema authority — a read failure must surface as an error
+    // (wrapped in InvocationTargetException by reflection), not silently present the
+    // table as having zero columns.
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> invokeInferCsvSchema(csvFile));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   // ====================================================================
@@ -654,8 +659,10 @@ class FormatAwareSchemaResolverDeepCoverageTest {
         SchemaStrategy.CsvStrategy.RICHEST_FILE,
         SchemaStrategy.JsonStrategy.LATEST_FILE);
 
-    RelDataType schema = resolver.resolveSchema(files, intersectStrategy);
-    assertNotNull(schema);
+    // INTERSECTION_ONLY falls back to LATEST_FILE, which fails to read the fabricated
+    // footer — that failure must surface as an error, not silently resolve to a
+    // 0-column schema.
+    assertThrows(RuntimeException.class, () -> resolver.resolveSchema(files, intersectStrategy));
   }
 
   @Test
@@ -669,8 +676,7 @@ class FormatAwareSchemaResolverDeepCoverageTest {
         SchemaStrategy.CsvStrategy.RICHEST_FILE,
         SchemaStrategy.JsonStrategy.LATEST_FILE);
 
-    RelDataType schema = resolver.resolveSchema(files, firstFileStrategy);
-    assertNotNull(schema);
+    assertThrows(RuntimeException.class, () -> resolver.resolveSchema(files, firstFileStrategy));
   }
 
   @Test
@@ -679,8 +685,8 @@ class FormatAwareSchemaResolverDeepCoverageTest {
     Files.write(fakeParquet.toPath(), "not real".getBytes());
     List<File> files = Collections.singletonList(fakeParquet);
 
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.CONSERVATIVE);
-    assertNotNull(schema);
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.CONSERVATIVE));
   }
 
   // ====================================================================

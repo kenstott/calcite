@@ -338,17 +338,19 @@ class MicrosoftGraphStorageProviderCoverageTest {
   }
 
   @Test void testParseDateTimeInvalidFormat() throws Exception {
-    long before = System.currentTimeMillis();
-    long result = invokeParseDateTime(createProvider(), "not-a-date");
-    long after = System.currentTimeMillis();
-    assertTrue(result >= before && result <= after);
+    // A malformed lastModifiedDateTime must not fabricate "now" -- that would make a genuinely
+    // old file look freshly modified to cache/staleness comparisons keyed on this value.
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> invokeParseDateTime(createProvider(), "not-a-date"));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   @Test void testParseDateTimeEmpty() throws Exception {
-    long before = System.currentTimeMillis();
-    long result = invokeParseDateTime(createProvider(), "");
-    long after = System.currentTimeMillis();
-    assertTrue(result >= before && result <= after);
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> invokeParseDateTime(createProvider(), ""));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   // ---------------------------------------------------------------

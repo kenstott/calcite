@@ -4085,8 +4085,12 @@ public class XbrlToParquetConverter implements FileConverter {
       LOGGER.info("XML parse failed for insider form {}: {} — falling back to JSoup", fileName, e.getMessage());
       doc = parseWithJsoupFallback(sourceFilePath);
     } catch (Exception e) {
-      LOGGER.warn("Failed to parse insider form {}: {}", fileName, e.getMessage());
-      return new ArrayList<String>();
+      // Returning an empty output list here would make the caller (SecSchemaFactory's
+      // per-filing conversion) treat this filing as successfully converted with zero output
+      // files and mark it COMPLETE in the manifest -- silently losing this filing's data and
+      // never retrying it. Throw so the existing outer per-filing catch marks it FAILED
+      // instead, which is both visible and retryable.
+      throw new RuntimeException("Failed to parse insider form " + fileName, e);
     }
     if (doc == null) {
       LOGGER.warn("No parseable document found for insider form: {}", fileName);

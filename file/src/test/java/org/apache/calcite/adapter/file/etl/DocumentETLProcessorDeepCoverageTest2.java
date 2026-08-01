@@ -199,7 +199,7 @@ class DocumentETLProcessorDeepCoverageTest2 {
     verify(sp, never()).exists(anyString());
   }
 
-  @Test void testIsAlreadyProcessedNoTrackerExceptionReturnsTrue() throws Exception {
+  @Test void testIsAlreadyProcessedNoTrackerExceptionThrows() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
     when(sp.exists(anyString())).thenThrow(new IOException("S3 error"));
 
@@ -215,8 +215,13 @@ class DocumentETLProcessorDeepCoverageTest2 {
     docVars.put("cik", "0001234567");
     docVars.put("accession", "0001234567-24-000001");
 
-    // Exception => returns false (not already processed)
-    assertFalse((Boolean) m.invoke(processor, docVars));
+    // A storage failure must surface as an error (wrapped in InvocationTargetException by
+    // reflection), not be silently treated as "not processed" — which would cause endless
+    // silent reprocessing if storage is persistently unreachable.
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> m.invoke(processor, docVars));
+    assertTrue(ex.getCause() instanceof IOException);
   }
 
   // ========== extractYearFromAccession edge cases ==========

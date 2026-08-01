@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -418,7 +419,7 @@ class DocumentETLProcessorCoverageTest {
 
   // ===== isAlreadyProcessed =====
 
-  @Test void testIsAlreadyProcessedNullCik() {
+  @Test void testIsAlreadyProcessedNullCik() throws IOException {
     DocumentETLProcessor processor =
         new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
@@ -429,7 +430,7 @@ class DocumentETLProcessorCoverageTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedNullAccession() {
+  @Test void testIsAlreadyProcessedNullAccession() throws IOException {
     DocumentETLProcessor processor =
         new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
@@ -440,7 +441,7 @@ class DocumentETLProcessorCoverageTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedWithTracker() {
+  @Test void testIsAlreadyProcessedWithTracker() throws IOException {
     ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
     when(tracker.isProcessed("0000070502", "0001-23-000001", "10-K")).thenReturn(true);
 
@@ -484,7 +485,7 @@ class DocumentETLProcessorCoverageTest {
     assertTrue(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedShortAccession() {
+  @Test void testIsAlreadyProcessedShortAccession() throws IOException {
     DocumentETLProcessor processor =
         new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
@@ -496,7 +497,7 @@ class DocumentETLProcessorCoverageTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedNoDashInAccession() {
+  @Test void testIsAlreadyProcessedNoDashInAccession() throws IOException {
     DocumentETLProcessor processor =
         new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
@@ -508,7 +509,7 @@ class DocumentETLProcessorCoverageTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedNonNumericYear() {
+  @Test void testIsAlreadyProcessedNonNumericYear() throws IOException {
     DocumentETLProcessor processor =
         new DocumentETLProcessor(mockConfig, mockStorageProvider,
         tempDir.getAbsolutePath(), tempDir.getAbsolutePath(),
@@ -559,7 +560,9 @@ class DocumentETLProcessorCoverageTest {
     Map<String, String> docVars = new HashMap<String, String>();
     docVars.put("cik", "0000070502");
     docVars.put("accession", "0001234567-23-000001");
-    assertFalse(processor.isAlreadyProcessed(docVars));
+    // A storage failure must surface as an error, not be silently treated as "not processed"
+    // (which would cause endless silent reprocessing if storage is persistently unreachable).
+    assertThrows(IOException.class, () -> processor.isAlreadyProcessed(docVars));
   }
 
   // ===== isTransientError (tested indirectly via processDocumentWithRetry) =====

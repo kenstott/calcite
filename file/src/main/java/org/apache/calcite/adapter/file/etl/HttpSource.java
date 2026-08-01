@@ -1724,7 +1724,7 @@ public class HttpSource implements DataSource {
    * @return Error message if API error found, null if response is valid (or empty data)
    */
   private String checkForApiError(String responseBody,
-      HttpSourceConfig.ResponseConfig respConfig) {
+      HttpSourceConfig.ResponseConfig respConfig) throws IOException {
     try {
       JsonNode root = OBJECT_MAPPER.readTree(responseBody);
 
@@ -1753,8 +1753,13 @@ public class HttpSource implements DataSource {
 
       return null; // No error found (or no errorPath configured)
     } catch (Exception e) {
-      LOGGER.debug("Could not check for API error (treating as valid): {}", e.getMessage());
-      return null; // If we can't parse, assume it's valid
+      // This response was declared JSON format and already passed HTTP-success checks, so a
+      // parse/navigation failure here means the body is not the well-formed JSON we expected
+      // (truncated, HTML error page, etc). Silently treating that as "no error" would let a
+      // broken response get cached as valid — and the raw cache is immutable, so a bad entry
+      // would cause repeated downstream failures with no signal of the real cause.
+      throw new IOException("Failed to check for API error in response (format=JSON, "
+          + "errorPath=" + respConfig.getErrorPath() + "): " + e.getMessage(), e);
     }
   }
 

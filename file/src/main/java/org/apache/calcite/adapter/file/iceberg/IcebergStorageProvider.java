@@ -18,6 +18,8 @@ import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -33,6 +35,8 @@ import java.util.Map;
  * This provider treats Iceberg tables as "files" in the storage abstraction.
  */
 public class IcebergStorageProvider implements StorageProvider {
+  private static final Logger LOGGER = LoggerFactory.getLogger(IcebergStorageProvider.class);
+
   private final Map<String, Object> config;
   private @Nullable Catalog catalog;
 
@@ -131,12 +135,14 @@ public class IcebergStorageProvider implements StorageProvider {
       return catalog.tableExists(tableId);
     } else if (parts.length == 1) {
       // Check if namespace exists
+      Namespace namespace = Namespace.of(parts[0]);
       try {
-        Namespace namespace = Namespace.of(parts[0]);
         // Try to list tables in namespace - if it works, namespace exists
         catalog.listTables(namespace);
         return true;
-      } catch (Exception e) {
+      // fallback-guard: allow narrowly catches only NoSuchNamespaceException, genuinely distinguishable from a catalog/auth/network failure (see IcebergCatalogManager for the same pattern)
+      } catch (org.apache.iceberg.exceptions.NoSuchNamespaceException e) {
+        LOGGER.debug("Namespace {} does not exist: {}", namespace, e.getMessage());
         return false;
       }
     }

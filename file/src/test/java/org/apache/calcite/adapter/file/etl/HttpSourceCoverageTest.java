@@ -1855,10 +1855,14 @@ public class HttpSourceCoverageTest {
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "json", "errorPath", "error"));
 
-    // Invalid JSON - should return null (treat as valid)
-    String result =
-        (String) method.invoke(source, "not json at all", respConfig);
-    assertNull(result);
+    // A response declared JSON that fails to parse is not "no error" — it means the body
+    // isn't the well-formed JSON expected, so silently caching it as valid would risk caching
+    // a broken response permanently (the raw cache is immutable). Must surface as an error
+    // (wrapped in InvocationTargetException by reflection).
+    InvocationTargetException ex =
+        assertThrows(InvocationTargetException.class,
+            () -> method.invoke(source, "not json at all", respConfig));
+    assertTrue(ex.getCause() instanceof IOException);
 
     source.close();
   }

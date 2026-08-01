@@ -31,9 +31,20 @@ public class EiaStorageTransformer extends EiaV2Transformer implements ResponseT
     try {
       JsonNode data = extractDataArray(response);
       ArrayNode result = MAPPER.createArrayNode();
+      int rowsSkipped = 0;
 
       for (JsonNode row : data) {
         String period = getString(row, "period");
+        int storageYear;
+        try {
+          storageYear = parseYear(period);
+        } catch (NumberFormatException e) {
+          // A malformed period must not fabricate year 0 for this row, nor abort every
+          // other row in the batch -- skip and count just this one.
+          rowsSkipped++;
+          LOGGER.warn("EIA Storage: skipping row with unparseable period '{}'", period);
+          continue;
+        }
         ObjectNode out = MAPPER.createObjectNode();
 
         if (period != null) {
@@ -42,7 +53,7 @@ public class EiaStorageTransformer extends EiaV2Transformer implements ResponseT
           out.putNull("report_date");
         }
 
-        out.put("storage_year", parseYear(period));
+        out.put("storage_year", storageYear);
 
         Integer week = computeIsoWeek(period);
         if (week != null) {
@@ -103,6 +114,9 @@ public class EiaStorageTransformer extends EiaV2Transformer implements ResponseT
         result.add(out);
       }
 
+      if (rowsSkipped > 0) {
+        LOGGER.warn("EIA Storage: skipped {} row(s) with unparseable period", rowsSkipped);
+      }
       LOGGER.debug("EIA Storage: transformed {} records", result.size());
       return result.toString();
 

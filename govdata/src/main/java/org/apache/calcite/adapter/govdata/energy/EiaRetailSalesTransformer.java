@@ -29,12 +29,23 @@ public class EiaRetailSalesTransformer extends EiaV2Transformer implements Respo
     try {
       JsonNode data = extractDataArray(response);
       ArrayNode result = MAPPER.createArrayNode();
+      int rowsSkipped = 0;
 
       for (JsonNode row : data) {
         String period = getString(row, "period");
+        int priceYear;
+        try {
+          priceYear = parseYear(period);
+        } catch (NumberFormatException e) {
+          // A malformed period must not fabricate year 0 for this row, nor abort every
+          // other row in the batch -- skip and count just this one.
+          rowsSkipped++;
+          LOGGER.warn("EIA Retail Sales: skipping row with unparseable period '{}'", period);
+          continue;
+        }
         ObjectNode out = MAPPER.createObjectNode();
 
-        out.put("price_year", parseYear(period));
+        out.put("price_year", priceYear);
 
         Integer month = parseMonth(period);
         if (month != null) {
@@ -102,6 +113,9 @@ public class EiaRetailSalesTransformer extends EiaV2Transformer implements Respo
         result.add(out);
       }
 
+      if (rowsSkipped > 0) {
+        LOGGER.warn("EIA Retail Sales: skipped {} row(s) with unparseable period", rowsSkipped);
+      }
       LOGGER.debug("EIA Retail Sales: transformed {} records", result.size());
       return result.toString();
 

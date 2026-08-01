@@ -77,11 +77,25 @@ public class CensusDataTransformer {
 
     // Collect all data from JSON files
     List<Map<String, Object>> allData = new ArrayList<>();
+    int filesFailed = 0;
     for (String jsonFilePath : jsonFilePaths) {
-      List<Map<String, Object>> fileData = parseJsonFile(jsonFilePath, storageProvider);
+      List<Map<String, Object>> fileData;
+      try {
+        fileData = parseJsonFile(jsonFilePath, storageProvider);
+      } catch (RuntimeException e) {
+        // A malformed cache file must not abort the whole table over one bad file --
+        // skip and count just this file, rather than lose every other file's data.
+        filesFailed++;
+        LOGGER.warn("Skipping unparseable Census JSON file: {} ({})", jsonFilePath, e.getMessage());
+        continue;
+      }
       if (fileData != null && !fileData.isEmpty()) {
         allData.addAll(fileData);
       }
+    }
+    if (filesFailed > 0) {
+      LOGGER.warn("{} of {} Census JSON file(s) failed to parse for table {} year {}",
+          filesFailed, jsonFilePaths.length, tableName, year);
     }
 
     if (allData.isEmpty()) {
@@ -171,8 +185,7 @@ public class CensusDataTransformer {
     } catch (Exception e) {
       // Extract filename from path for logging
       String fileName = jsonFilePath.substring(jsonFilePath.lastIndexOf('/') + 1);
-      LOGGER.error("Error parsing JSON file {}: {}", fileName, e.getMessage());
-      return new ArrayList<>();
+      throw new RuntimeException("Error parsing JSON file " + fileName, e);
     }
   }
 
@@ -267,6 +280,11 @@ public class CensusDataTransformer {
             default:
               return stringValue;
           }
+        // The Census API legitimately emits non-numeric annotation values (e.g. suppression
+        // markers) for nominally numeric variables. convertToGenericRecords' per-record
+        // try/catch already skips+logs any row where this mistyped value doesn't fit the
+        // Avro schema, so the failure stays visible rather than being masked.
+        // fallback-guard: allow preserving the raw string instead of fabricating a number
         } catch (NumberFormatException e) {
           LOGGER.warn("Failed to convert {} to {}: {}", columnName, dataType, stringValue);
           return stringValue;

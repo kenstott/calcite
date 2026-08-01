@@ -581,10 +581,15 @@ public class ParquetReorganizer {
       long elapsed = System.currentTimeMillis() - startTime;
       LOGGER.info("    Completed batch {} in {}ms", batch, elapsed);
       return true;
+    // fallback-guard: allow true-return here is confined to the documented "no matching files" case (same pattern as IcebergMaterializer.processBatch); every other SQLException falls through and returns false
     } catch (java.sql.SQLException e) {
-      // Log but continue - some combinations may not have data
-      LOGGER.debug("  Skipped batch {} (no data): {}", batch, e.getMessage());
-      return true;  // No data is not an error
+      String message = e.getMessage();
+      if (message != null && message.contains("No files found")) {
+        LOGGER.debug("  Skipped batch {} (no data): {}", batch, message);
+        return true;  // No data is not an error
+      }
+      LOGGER.error("  Batch {} failed: {}", batch, message, e);
+      return false;
     }
   }
 

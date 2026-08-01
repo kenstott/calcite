@@ -685,9 +685,13 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       return matchingFiles;
 
     } catch (Exception e) {
-      LOGGER.error("Failed to discover files for table '{}' in directory '{}': {}",
-          tableName, directoryPath, e.getMessage(), e);
-      return new java.util.ArrayList<>();
+      // A listFiles() failure (storage outage, permission error, etc.) is not "zero files".
+      // Every caller of discoverFiles() already wraps its call in its own try/catch(Exception)
+      // that logs and skips this refresh cycle — propagating here lets that existing handling
+      // do its job, instead of returning an empty list that callers would read as "table has
+      // no data" and use to recreate (i.e. blank out) a view that previously had real files.
+      throw new RuntimeException("Failed to discover files for table '" + tableName
+          + "' in directory '" + directoryPath + "'", e);
     }
   }
 

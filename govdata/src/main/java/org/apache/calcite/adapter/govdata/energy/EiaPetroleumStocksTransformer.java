@@ -31,9 +31,20 @@ public class EiaPetroleumStocksTransformer extends EiaV2Transformer implements R
     try {
       JsonNode data = extractDataArray(response);
       ArrayNode result = MAPPER.createArrayNode();
+      int rowsSkipped = 0;
 
       for (JsonNode row : data) {
         String period = getString(row, "period");
+        int stockYear;
+        try {
+          stockYear = parseYear(period);
+        } catch (NumberFormatException e) {
+          // A malformed period must not fabricate year 0 for this row, nor abort every
+          // other row in the batch -- skip and count just this one.
+          rowsSkipped++;
+          LOGGER.warn("EIA Petroleum Stocks: skipping row with unparseable period '{}'", period);
+          continue;
+        }
         ObjectNode out = MAPPER.createObjectNode();
 
         if (period != null) {
@@ -42,7 +53,7 @@ public class EiaPetroleumStocksTransformer extends EiaV2Transformer implements R
           out.putNull("report_date");
         }
 
-        out.put("stock_year", parseYear(period));
+        out.put("stock_year", stockYear);
 
         Integer week = computeIsoWeek(period);
         if (week != null) {
@@ -117,6 +128,9 @@ public class EiaPetroleumStocksTransformer extends EiaV2Transformer implements R
         result.add(out);
       }
 
+      if (rowsSkipped > 0) {
+        LOGGER.warn("EIA Petroleum Stocks: skipped {} row(s) with unparseable period", rowsSkipped);
+      }
       LOGGER.debug("EIA Petroleum Stocks: transformed {} records", result.size());
       return result.toString();
 

@@ -143,9 +143,15 @@ public final class S3FileIOTables {
              new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
       String line = reader.readLine();
       return line != null && !line.trim().isEmpty();
-    } catch (Exception e) {
-      // Absent hint file (no table yet).
+    // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal (S3
+    // key not found) as "no table yet"; other failures are surfaced instead of being silently
+    // treated as absence, which would make createTable() (see IcebergCatalogManager) think it's
+    // creating a brand new table and overwrite an existing one's metadata history.
+    } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
       return false;
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException(
+          "Failed to check for Iceberg table existence at " + hintPath, e);
     }
   }
 

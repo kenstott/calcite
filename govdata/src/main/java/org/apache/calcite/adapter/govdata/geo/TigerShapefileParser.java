@@ -77,6 +77,7 @@ public class TigerShapefileParser {
       }
 
       // Convert using attribute mapper, adding geometry if available
+      int featuresSkipped = 0;
       for (int i = 0; i < dbfRecords.size(); i++) {
         Map<String, Object> record = dbfRecords.get(i);
 
@@ -84,12 +85,23 @@ public class TigerShapefileParser {
         Geometry geometry = (i < geometries.size()) ? geometries.get(i) : null;
         record.put("_GEOMETRY_", geometry);
 
-        Object[] mappedRecord = attributeMapper.mapAttributes(new ShapefileFeature(record));
-        if (mappedRecord != null) {
-          records.add(mappedRecord);
+        try {
+          Object[] mappedRecord = attributeMapper.mapAttributes(new ShapefileFeature(record));
+          if (mappedRecord != null) {
+            records.add(mappedRecord);
+          }
+        } catch (RuntimeException e) {
+          // A malformed attribute in one feature (e.g. an unparseable numeric field) must not
+          // abort the whole shapefile -- skip and count just this feature.
+          featuresSkipped++;
+          LOGGER.warn("Skipping feature {} in {}: {}", i, dbfFile.getName(), e.getMessage());
         }
       }
 
+      if (featuresSkipped > 0) {
+        LOGGER.warn("{}: {} feature(s) skipped due to unparseable attribute values",
+            dbfFile.getName(), featuresSkipped);
+      }
       LOGGER.info("Parsed {} features from {} (with {} geometries)",
           records.size(), dbfFile.getName(), geometries.size());
 
@@ -188,6 +200,7 @@ public class TigerShapefileParser {
 
       // Read data records
       byte[] recordData = new byte[recordLength];
+      int fieldsMalformed = 0;
 
       for (int i = 0; i < recordCount; i++) {
         int bytesRead = fis.read(recordData);
@@ -210,8 +223,20 @@ public class TigerShapefileParser {
 
             String fieldValue = new String(fieldData, StandardCharsets.US_ASCII).trim();
 
-            // Convert to appropriate type
-            Object value = convertDbfValue(fieldValue, field.type);
+            // Convert to appropriate type. A genuinely malformed (non-empty, non-numeric)
+            // numeric field must not fabricate 0.0 -- that would masquerade as a real
+            // measurement. Record and geometry lists are index-aligned in parseShapefile, so
+            // the record itself must NOT be dropped here; only this one field's value is
+            // recorded as null (unknown) instead.
+            Object value;
+            try {
+              value = convertDbfValue(fieldValue, field.type);
+            } catch (NumberFormatException e) {
+              fieldsMalformed++;
+              LOGGER.warn("DBF record {}: malformed value '{}' for field {} ({})",
+                  i, fieldValue, field.name, e.getMessage());
+              value = null;
+            }
             record.put(field.name, value);
 
             fieldOffset += field.length;
@@ -219,6 +244,11 @@ public class TigerShapefileParser {
         }
 
         records.add(record);
+      }
+
+      if (fieldsMalformed > 0) {
+        LOGGER.warn("{}: {} field value(s) could not be parsed and were recorded as null",
+            dbfFile.getName(), fieldsMalformed);
       }
     }
 
@@ -236,14 +266,10 @@ public class TigerShapefileParser {
     switch (type) {
       case 'N': // Numeric
       case 'F': // Float
-        try {
-          if (value.contains(".")) {
-            return Double.parseDouble(value);
-          } else {
-            return Long.parseLong(value);
-          }
-        } catch (NumberFormatException e) {
-          return 0.0;
+        if (value.contains(".")) {
+          return Double.parseDouble(value);
+        } else {
+          return Long.parseLong(value);
         }
       case 'L': // Logical
         return "T".equalsIgnoreCase(value) || "Y".equalsIgnoreCase(value);
@@ -586,12 +612,12 @@ public class TigerShapefileParser {
       return ((Number) value).doubleValue();
     }
 
-    try {
-      return Double.parseDouble(value.toString());
-    } catch (NumberFormatException e) {
-      LOGGER.warn("Could not parse {} as double: {}", attributeName, value);
-      return 0.0;
-    }
+    // A genuinely malformed (non-empty, non-numeric) value must not fabricate 0.0 -- for
+    // fields like INTPTLAT/INTPTLON that would silently place the feature at a real
+    // coordinate (0,0) instead of surfacing the bad data. Let it propagate; the per-feature
+    // try/catch in parseShapefile skips+counts+logs just this one feature instead of losing
+    // the whole shapefile.
+    return Double.parseDouble(value.toString());
   }
 
   /**

@@ -217,11 +217,11 @@ public class CpsVotingTable extends AbstractTable implements ScannableTable {
     if (value == null || value.isEmpty()) {
       return 0.0;
     }
-    try {
-      return Double.parseDouble(value);
-    } catch (NumberFormatException e) {
-      return 0.0;
-    }
+    // A genuinely malformed (non-empty, non-numeric) survey weight must not silently become
+    // 0.0 -- that would zero out this record's contribution to every weighted statistic
+    // without any signal. Let it propagate; the per-row try/catch around this call (see the
+    // "Skipping malformed record" catch above) already skips+logs just this one row instead.
+    return Double.parseDouble(value);
   }
 
   private String decodeVoted(int code) {

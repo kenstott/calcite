@@ -523,7 +523,9 @@ class DocumentETLProcessorCoverageTest2 {
     docVars.put("cik", "0000070502");
     docVars.put("accession", "0001234567-23-000001");
 
-    assertFalse(processor.isAlreadyProcessed(docVars));
+    // A storage failure must surface as an error, not be silently treated as "not processed"
+    // (which would cause endless silent reprocessing if storage is persistently unreachable).
+    assertThrows(IOException.class, () -> processor.isAlreadyProcessed(docVars));
   }
 
   // ====================================================================

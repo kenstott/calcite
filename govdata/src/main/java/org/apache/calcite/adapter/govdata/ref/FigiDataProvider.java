@@ -143,9 +143,13 @@ public class FigiDataProvider implements DataProvider {
       return tickers;
 
     } catch (Exception e) {
-      LOGGER.warn("FigiDataProvider: failed to load tickers from {}: {}. "
-          + "Ensure sec_company_tickers has been materialized first.", tickersPath, e.getMessage());
-      return Collections.emptyList();
+      // A query/connection failure here is not "sec_company_tickers legitimately has zero
+      // tickers" -- that table always has many rows once materialized. Returning empty would
+      // let fetch() silently produce a 0-row figi_instruments table (see the isEmpty() check
+      // right after loadTickers() is called) instead of surfacing the real dependency-ordering
+      // or connectivity problem.
+      throw new RuntimeException("FigiDataProvider: failed to load tickers from " + tickersPath
+          + ". Ensure sec_company_tickers has been materialized first.", e);
     }
   }
 

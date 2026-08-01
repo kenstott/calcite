@@ -875,9 +875,13 @@ class RefreshablePartitionedParquetTableDeepCoverageTest {
         "test", tempDir.toString(), "**/*.parquet", config,
         null, null, null, null, storageProvider);
 
-    List<String> result = invokeDiscoverFiles(table);
-    assertNotNull(result);
-    assertTrue(result.isEmpty());
+    // A listFiles() failure is not "zero files" — it must surface as an error (wrapped in
+    // InvocationTargetException by reflection) so callers don't mistake a storage outage for
+    // an empty table and recreate (blank out) a view that may have had real files.
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> invokeDiscoverFiles(table));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   // ====================================================================

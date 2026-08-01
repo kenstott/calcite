@@ -505,7 +505,7 @@ class DocumentETLProcessorTest {
   // isAlreadyProcessed — with no tracker, exercises in-memory cache path
   // -----------------------------------------------------------------------
 
-  @Test void testIsAlreadyProcessedMissingCik() {
+  @Test void testIsAlreadyProcessedMissingCik() throws IOException {
     DocumentETLProcessor processor = createMinimalProcessor();
 
     Map<String, String> docVars = new HashMap<String, String>();
@@ -515,7 +515,7 @@ class DocumentETLProcessorTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedMissingAccession() {
+  @Test void testIsAlreadyProcessedMissingAccession() throws IOException {
     DocumentETLProcessor processor = createMinimalProcessor();
 
     Map<String, String> docVars = new HashMap<String, String>();

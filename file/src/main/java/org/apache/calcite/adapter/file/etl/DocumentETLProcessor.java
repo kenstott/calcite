@@ -1208,7 +1208,7 @@ public class DocumentETLProcessor {
    * @param docVariables Document variables
    * @return true if already processed
    */
-  protected boolean isAlreadyProcessed(Map<String, String> docVariables) {
+  protected boolean isAlreadyProcessed(Map<String, String> docVariables) throws IOException {
     String cik = docVariables.get("cik");
     String accession = docVariables.get("accession");
 
@@ -1254,7 +1254,11 @@ public class DocumentETLProcessor {
       }
       return false;
     } catch (Exception e) {
-      return false;
+      // An exists() failure here is not "not processed" — treating it as such would silently
+      // reprocess the document forever if storage is persistently unreachable. Let it surface
+      // as a per-document failure like other IOExceptions in the caller's loop (line ~288).
+      throw new IOException("Failed to check whether document " + cik + "/" + accession
+          + " was already processed", e);
     }
   }
 

@@ -44,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -676,8 +677,12 @@ class HttpSourceDeepCoverageTest3 {
       // unknown error returns null
       assertNull(m.invoke(source, "{\"error\":\"unknown error occurred\"}", withError));
 
-      // Invalid JSON returns null
-      assertNull(m.invoke(source, "not-json", withError));
+      // Invalid JSON must surface as an error (wrapped in InvocationTargetException by
+      // reflection), not be silently cached as a valid response.
+      InvocationTargetException invalidJsonEx =
+          assertThrows(InvocationTargetException.class,
+              () -> m.invoke(source, "not-json", withError));
+      assertTrue(invalidJsonEx.getCause() instanceof IOException);
 
       // No errorPath configured returns null
       assertNull(m.invoke(source, "{\"error\":\"test\"}", noError));

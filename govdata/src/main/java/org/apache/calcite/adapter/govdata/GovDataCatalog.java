@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.HashSet;
@@ -38,6 +41,7 @@ import java.util.Set;
  */
 public final class GovDataCatalog {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(GovDataCatalog.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private GovDataCatalog() {
@@ -69,7 +73,16 @@ public final class GovDataCatalog {
   public static ArrayNode build(Collection<String> schemas) {
     ArrayNode out = MAPPER.createArrayNode();
     for (String schema : schemas) {
-      JsonNode root = read(resourcePath(schema));
+      JsonNode root;
+      try {
+        root = read(resourcePath(schema));
+      } catch (RuntimeException e) {
+        // A malformed bundled resource is a real bug in this schema's YAML, but it must
+        // not take down catalog discovery for every other schema in the same request.
+        LOGGER.warn("Skipping schema '{}' in catalog: failed to parse {}", schema,
+            resourcePath(schema), e);
+        continue;
+      }
       if (root == null) {
         continue;
       }
@@ -93,11 +106,14 @@ public final class GovDataCatalog {
   private static JsonNode read(String path) {
     try (InputStream is = GovDataCatalog.class.getResourceAsStream(path)) {
       if (is == null) {
+        // Resource genuinely absent from the jar - this schema legitimately has no
+        // catalog entry (see class javadoc: "schemas whose YAML resource is missing
+        // are skipped").
         return null;
       }
       return YamlUtils.parseYamlOrJson(is, path);
     } catch (Exception e) {
-      return null;
+      throw new RuntimeException("Failed to parse catalog resource: " + path, e);
     }
   }
 

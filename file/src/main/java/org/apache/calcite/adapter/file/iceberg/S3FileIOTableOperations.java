@@ -129,9 +129,15 @@ public class S3FileIOTableOperations implements TableOperations {
         return null;
       }
       return line.trim();
-    } catch (Exception e) {
-      // Absent hint file (no table yet) — treat as "no current metadata".
+    // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal (S3
+    // key not found) as "no table yet"; other failures below are surfaced instead of being
+    // silently treated as absence, which would make commit() think it's creating a brand
+    // new table (version 0) and overwrite an existing one's metadata history.
+    } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
       return null;
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException(
+          "Failed to read version hint at " + hintPath, e);
     }
   }
 

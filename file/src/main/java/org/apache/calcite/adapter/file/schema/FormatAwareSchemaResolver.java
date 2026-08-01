@@ -232,8 +232,11 @@ public class FormatAwareSchemaResolver {
 
       return builder.build();
     } catch (Exception e) {
-      LOGGER.error("Failed to read schema from latest Parquet file: {}", latestFile.getName(), e);
-      return typeFactory.builder().build();
+      // This file is the sole schema authority for the whole table (LATEST_FILE strategy) —
+      // there is no other file to fall back to. Silently returning a 0-column schema would make
+      // the table appear to have no columns at all instead of surfacing the real read failure.
+      throw new RuntimeException("Failed to read schema from latest Parquet file: "
+          + latestFile.getName(), e);
     }
   }
 
@@ -253,8 +256,11 @@ public class FormatAwareSchemaResolver {
 
       return builder.build();
     } catch (Exception e) {
-      LOGGER.error("Failed to read schema from first Parquet file: {}", firstFile.getName(), e);
-      return typeFactory.builder().build();
+      // This file is the sole schema authority for the whole table (FIRST_FILE strategy) —
+      // there is no other file to fall back to. Silently returning a 0-column schema would make
+      // the table appear to have no columns at all instead of surfacing the real read failure.
+      throw new RuntimeException("Failed to read schema from first Parquet file: "
+          + firstFile.getName(), e);
     }
   }
 
@@ -437,8 +443,10 @@ public class FormatAwareSchemaResolver {
       }
       return typeFactory.builder().build();
     } catch (Exception e) {
-      LOGGER.error("Failed to infer CSV schema from file: {}", file.getName(), e);
-      return typeFactory.builder().build();
+      // This file is the sole schema authority (richest-file strategy) for the whole table —
+      // there is no other file to fall back to. Silently returning a 0-column schema would make
+      // the table appear to have no columns at all instead of surfacing the real read failure.
+      throw new RuntimeException("Failed to infer CSV schema from file: " + file.getName(), e);
     }
   }
 
@@ -447,8 +455,10 @@ public class FormatAwareSchemaResolver {
       JsonNode rootNode = jsonMapper.readTree(file);
       return inferJsonSchemaFromNode(rootNode, typeFactory);
     } catch (Exception e) {
-      LOGGER.error("Failed to infer JSON schema from file: {}", file.getName(), e);
-      return typeFactory.builder().build();
+      // This file is the sole schema authority (latest-file strategy) for the whole table —
+      // there is no other file to fall back to. Silently returning a 0-column schema would make
+      // the table appear to have no columns at all instead of surfacing the real read failure.
+      throw new RuntimeException("Failed to infer JSON schema from file: " + file.getName(), e);
     }
   }
 

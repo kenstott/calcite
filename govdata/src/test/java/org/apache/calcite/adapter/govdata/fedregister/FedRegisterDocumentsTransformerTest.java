@@ -30,6 +30,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -265,9 +266,9 @@ class FedRegisterDocumentsTransformerTest {
     assertEquals("2023-00002", array.get(1).get("document_number").asText());
   }
 
-  @Test void testMalformedJsonReturnsEmpty() {
-    String result = transformer.transform("not valid json {{{", context);
-    assertEquals("[]", result);
+  @Test void testMalformedJsonThrows() {
+    assertThrows(RuntimeException.class,
+        () -> transformer.transform("not valid json {{{", context));
   }
 
   @Test void testDocTypeFromContextNotResponse() throws Exception {

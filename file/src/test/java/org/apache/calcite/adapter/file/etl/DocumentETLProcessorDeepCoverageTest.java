@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -313,7 +314,7 @@ class DocumentETLProcessorDeepCoverageTest {
 
   // ===== isAlreadyProcessed tests =====
 
-  @Test void testIsAlreadyProcessedNullCik() {
+  @Test void testIsAlreadyProcessedNullCik() throws IOException {
     org.apache.calcite.adapter.file.storage.StorageProvider mockStorage =
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     org.apache.calcite.adapter.file.converters.FileConverter mockConverter =
@@ -329,7 +330,7 @@ class DocumentETLProcessorDeepCoverageTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedNullAccession() {
+  @Test void testIsAlreadyProcessedNullAccession() throws IOException {
     org.apache.calcite.adapter.file.storage.StorageProvider mockStorage =
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     org.apache.calcite.adapter.file.converters.FileConverter mockConverter =
@@ -345,7 +346,7 @@ class DocumentETLProcessorDeepCoverageTest {
     assertFalse(processor.isAlreadyProcessed(docVars));
   }
 
-  @Test void testIsAlreadyProcessedWithTracker() {
+  @Test void testIsAlreadyProcessedWithTracker() throws IOException {
     org.apache.calcite.adapter.file.storage.StorageProvider mockStorage =
         org.mockito.Mockito.mock(org.apache.calcite.adapter.file.storage.StorageProvider.class);
     org.apache.calcite.adapter.file.converters.FileConverter mockConverter =

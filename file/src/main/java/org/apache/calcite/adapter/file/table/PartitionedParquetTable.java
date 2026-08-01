@@ -225,14 +225,12 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
             return cachedRowType;
           }
 
-          // Compute the row type
-          try {
-            cachedRowType = computeRowType(factory);
-            return cachedRowType;
-          } catch (Exception e) {
-            LOGGER.error("Error computing row type: {}", e.getMessage(), e);
-            return factory.builder().build();
-          }
+          // Compute the row type. A failure here must surface to the query validator —
+          // silently caching/returning a 0-column type would make the table appear to have
+          // no columns at all, turning a clear "schema read failed" error into a confusing
+          // "column not found" error on every query against this table.
+          cachedRowType = computeRowType(factory);
+          return cachedRowType;
         }
       };
 
@@ -308,8 +306,11 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
 
       return builder.build();
     } catch (Exception e) {
-      LOGGER.error("Error computing row type: {}", e.getMessage(), e);
-      return typeFactory.builder().build();
+      // The first Parquet file is the sole schema authority for this table. Silently
+      // returning a 0-column schema would make the table appear to have no columns at all
+      // instead of surfacing the real read failure to the query validator/caller.
+      throw new RuntimeException("Failed to compute row type from Parquet file "
+          + filePaths.get(0) + " for table '" + tableName + "'", e);
     }
   }
 
@@ -622,8 +623,11 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       return builder.build();
 
     } catch (Exception e) {
-      LOGGER.error("Failed to get schema from Parquet files", e);
-      return typeFactory.builder().build();
+      // The first Parquet file is the sole schema authority for this table. Silently
+      // returning a 0-column schema would make the table appear to have no columns at all
+      // instead of surfacing the real read failure to the query validator/caller.
+      throw new RuntimeException("Failed to get schema from Parquet file "
+          + filePaths.get(0) + " for table '" + tableName + "'", e);
     }
   }
 

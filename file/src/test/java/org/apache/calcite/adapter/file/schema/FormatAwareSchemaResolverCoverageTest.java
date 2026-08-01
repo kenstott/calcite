@@ -46,6 +46,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -78,8 +79,12 @@ class FormatAwareSchemaResolverCoverageTest {
       fos.write(new byte[]{'P', 'A', 'R', '1', 0, 0, 0, 0});
     }
     List<File> files = Collections.singletonList(file);
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    assertNotNull(schema);
+    // This is not a real Parquet file (no valid footer) — it exists only to prove
+    // detectFormat() routed by extension to the Parquet path, which then fails to
+    // read the (fabricated) footer and must surface that as an error, not silently
+    // resolve to a 0-column schema.
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT));
   }
 
   @Test void testDetectFormatCsvExtension() throws IOException {
@@ -100,10 +105,13 @@ class FormatAwareSchemaResolverCoverageTest {
 
   @Test void testDetectFormatParquetUpperCase() throws IOException {
     File file = createCsvFile("data.PARQUET", "a,b");
-    // Parquet extension detection is case-insensitive (toLowerCase)
+    // Parquet extension detection is case-insensitive (toLowerCase). The file's actual
+    // content is CSV text, not a real Parquet footer — it exists only to prove routing;
+    // the doomed-to-fail Parquet footer read must surface as an error, not silently
+    // resolve to a 0-column schema.
     List<File> files = Collections.singletonList(file);
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    assertNotNull(schema);
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT));
   }
 
   @Test void testDetectFormatCsvUpperCase() throws IOException {
@@ -383,9 +391,12 @@ class FormatAwareSchemaResolverCoverageTest {
     try (FileWriter writer = new FileWriter(file)) {
       writer.write("not valid json at all {{{}}}");
     }
-    RelDataType schema = invokeInferJsonSchema(file);
-    // Error should return empty schema
-    assertEquals(0, schema.getFieldCount());
+    // This file is the sole schema authority — a parse failure must surface as an error
+    // (wrapped in InvocationTargetException by reflection), not silently present the
+    // table as having zero columns.
+    InvocationTargetException ex =
+        assertThrows(InvocationTargetException.class, () -> invokeInferJsonSchema(file));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   @Test void testInferJsonSchemaNestedObject() throws Exception {
@@ -606,9 +617,10 @@ class FormatAwareSchemaResolverCoverageTest {
       writer.write("this is not valid json!!!");
     }
     List<File> files = Collections.singletonList(badJson);
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
-    assertNotNull(schema);
-    assertEquals(0, schema.getFieldCount());
+    // This file is the sole schema authority — a parse failure must surface as an error,
+    // not silently present the table as having zero columns.
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT));
   }
 
   // ========== Mixed format resolution ==========

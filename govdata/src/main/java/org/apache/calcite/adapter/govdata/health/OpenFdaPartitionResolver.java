@@ -92,9 +92,13 @@ public class OpenFdaPartitionResolver implements DimensionResolver {
           + "({} skipped before startYear)", endpoint, startYear, files.size(), skipped);
       return files;
     } catch (Exception e) {
-      LOGGER.error("OpenFdaPartitionResolver: failed to resolve partitions for '{}': {}",
-          endpoint, e.getMessage());
-      return Collections.emptyList();
+      // A download.json fetch/parse failure is not "this endpoint has no partitions" -- it
+      // means we couldn't even check. Returning empty here would silently produce a 0-row
+      // table with no error surfaced (DimensionIterator treats an empty resolve() result as
+      // "skip this dimension", not a failure). Let the caller's resolveCustomWithContext
+      // wrap and surface this loudly instead.
+      throw new RuntimeException(
+          "OpenFdaPartitionResolver: failed to resolve partitions for '" + endpoint + "'", e);
     }
   }
 

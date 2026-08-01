@@ -84,6 +84,7 @@ public class DroughtMonitorTransformer implements ResponseTransformer {
       ArrayNode result = MAPPER.createArrayNode();
       String[] lines = response.split("\n");
       boolean firstLine = true;
+      int linesSkipped = 0;
 
       for (String line : lines) {
         line = line.trim();
@@ -108,58 +109,70 @@ public class DroughtMonitorTransformer implements ResponseTransformer {
           continue;
         }
 
-        String stateAbbr = cols[COL_STATE].trim();
-        if (stateAbbr.isEmpty()) {
-          stateAbbr = stateAbbrDim;
-        }
-        String stateFips = stateAbbr != null ? STATE_FIPS.get(stateAbbr) : null;
-
-        String mapDateStr = cols[COL_MAP_DATE].trim();
-        String weekDate = mapDateStr.length() == 8 ? mapDateToString(mapDateStr) : mapDateStr;
-        int year = weekDate.length() >= 4
-            ? Integer.parseInt(weekDate.substring(0, 4)) : 0;
-
-        double noneVal = parseDouble(cols[COL_NONE]);
-        double d0 = parseDouble(cols[COL_D0]);
-        double d1 = parseDouble(cols[COL_D1]);
-        double d2 = parseDouble(cols[COL_D2]);
-        double d3 = parseDouble(cols[COL_D3]);
-        double d4 = parseDouble(cols[COL_D4]);
-
-        double d0Pct = Math.max(0.0, d0 - d1);
-        double d1Pct = Math.max(0.0, d1 - d2);
-        double d2Pct = Math.max(0.0, d2 - d3);
-        double d3Pct = Math.max(0.0, d3 - d4);
-        double dsci = d0 + d1 + d2 + d3 + d4;
-
-        ObjectNode row = MAPPER.createObjectNode();
         try {
-          row.put("county_fips", String.format("%05d", Integer.parseInt(rawFips)));
-        } catch (NumberFormatException e) {
-          row.put("county_fips", rawFips);
-        }
-        row.put("state_abbr", stateAbbr);
-        if (stateFips != null) {
-          row.put("state_fips", stateFips);
-        } else {
-          row.putNull("state_fips");
-        }
-        row.put("county_name", cols[COL_COUNTY].trim());
-        row.put("week_date", weekDate);
-        row.put("year", year);
-        row.put("valid_start", cols[COL_VALID_START].trim());
-        row.put("valid_end", cols[COL_VALID_END].trim());
-        row.put("none_pct", noneVal);
-        row.put("d0_pct", d0Pct);
-        row.put("d1_pct", d1Pct);
-        row.put("d2_pct", d2Pct);
-        row.put("d3_pct", d3Pct);
-        row.put("d4_pct", Math.max(0.0, d4));
-        row.put("dsci", dsci);
+          String stateAbbr = cols[COL_STATE].trim();
+          if (stateAbbr.isEmpty()) {
+            stateAbbr = stateAbbrDim;
+          }
+          String stateFips = stateAbbr != null ? STATE_FIPS.get(stateAbbr) : null;
 
-        result.add(row);
+          String mapDateStr = cols[COL_MAP_DATE].trim();
+          String weekDate = mapDateStr.length() == 8 ? mapDateToString(mapDateStr) : mapDateStr;
+          int year = weekDate.length() >= 4
+              ? Integer.parseInt(weekDate.substring(0, 4)) : 0;
+
+          double noneVal = parseDouble(cols[COL_NONE]);
+          double d0 = parseDouble(cols[COL_D0]);
+          double d1 = parseDouble(cols[COL_D1]);
+          double d2 = parseDouble(cols[COL_D2]);
+          double d3 = parseDouble(cols[COL_D3]);
+          double d4 = parseDouble(cols[COL_D4]);
+
+          double d0Pct = Math.max(0.0, d0 - d1);
+          double d1Pct = Math.max(0.0, d1 - d2);
+          double d2Pct = Math.max(0.0, d2 - d3);
+          double d3Pct = Math.max(0.0, d3 - d4);
+          double dsci = d0 + d1 + d2 + d3 + d4;
+
+          ObjectNode row = MAPPER.createObjectNode();
+          try {
+            row.put("county_fips", String.format("%05d", Integer.parseInt(rawFips)));
+          } catch (NumberFormatException e) {
+            row.put("county_fips", rawFips);
+          }
+          row.put("state_abbr", stateAbbr);
+          if (stateFips != null) {
+            row.put("state_fips", stateFips);
+          } else {
+            row.putNull("state_fips");
+          }
+          row.put("county_name", cols[COL_COUNTY].trim());
+          row.put("week_date", weekDate);
+          row.put("year", year);
+          row.put("valid_start", cols[COL_VALID_START].trim());
+          row.put("valid_end", cols[COL_VALID_END].trim());
+          row.put("none_pct", noneVal);
+          row.put("d0_pct", d0Pct);
+          row.put("d1_pct", d1Pct);
+          row.put("d2_pct", d2Pct);
+          row.put("d3_pct", d3Pct);
+          row.put("d4_pct", Math.max(0.0, d4));
+          row.put("dsci", dsci);
+
+          result.add(row);
+        } catch (NumberFormatException e) {
+          // A malformed drought-percentage or map-date field must not fabricate 0.0 and
+          // silently corrupt the DSCI severity calculation, nor abort every other county's
+          // row in the batch -- skip and count just this one.
+          linesSkipped++;
+          LOGGER.warn("Drought Monitor: skipping row with unparseable numeric field: {}", line);
+        }
       }
 
+      if (linesSkipped > 0) {
+        LOGGER.warn("Drought Monitor: skipped {} row(s) with unparseable numeric fields",
+            linesSkipped);
+      }
       LOGGER.debug("Drought Monitor: Transformed {} records for state_abbr={}",
           result.size(), stateAbbrDim);
       return result.toString();
@@ -175,14 +188,15 @@ public class DroughtMonitorTransformer implements ResponseTransformer {
     return mapDate.substring(0, 4) + "-" + mapDate.substring(4, 6) + "-" + mapDate.substring(6, 8);
   }
 
+  /**
+   * @throws NumberFormatException if {@code s} is non-empty but not a valid double. Callers
+   *     must catch this per-row (see {@link #transform}) and skip just the offending row --
+   *     fabricating 0.0 would silently corrupt the DSCI drought-severity calculation.
+   */
   private static double parseDouble(String s) {
     if (s == null || s.trim().isEmpty()) {
       return 0.0;
     }
-    try {
-      return Double.parseDouble(s.trim());
-    } catch (NumberFormatException e) {
-      return 0.0;
-    }
+    return Double.parseDouble(s.trim());
   }
 }

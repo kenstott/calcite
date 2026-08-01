@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -1346,10 +1347,14 @@ public class HttpSourceDeepCoverageTest2 {
         HttpSource.class.getDeclaredMethod("checkForApiError", String.class, HttpSourceConfig.ResponseConfig.class);
     method.setAccessible(true);
 
-    // Invalid JSON should be treated as valid (null)
-    String result =
-        (String) method.invoke(source, "not valid json!!!", config.getResponse());
-    assertNull(result);
+    // A response declared JSON that fails to parse is not "no error" — it means the body
+    // isn't the well-formed JSON expected, so silently caching it as valid would risk caching
+    // a broken response permanently (the raw cache is immutable). Must surface as an error
+    // (wrapped in InvocationTargetException by reflection).
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(source, "not valid json!!!", config.getResponse()));
+    assertTrue(ex.getCause() instanceof IOException);
   }
 
   // --- cacheResponseString via reflection ---

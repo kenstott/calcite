@@ -19,6 +19,7 @@ import java.lang.reflect.Method;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -198,15 +199,16 @@ public class SharePointRestStorageProviderDeepCoverageTest {
 
   @Test
   void testParseDateTimeInvalidFormat() throws Exception {
+    // A malformed TimeLastModified must not fabricate "now" -- that would make a genuinely old
+    // file look freshly modified to cache/staleness comparisons keyed on this value.
     Method parseDateTimeMethod =
         SharePointRestStorageProvider.class.getDeclaredMethod("parseDateTime", String.class);
     parseDateTimeMethod.setAccessible(true);
 
-    // Test invalid format - should return current time
-    long before = System.currentTimeMillis();
-    long result = (Long) parseDateTimeMethod.invoke(provider, "not-a-date");
-    long after = System.currentTimeMillis();
-    assertTrue(result >= before && result <= after);
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> parseDateTimeMethod.invoke(provider, "not-a-date"));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   // --- isDocumentLibraryRoot via reflection ---

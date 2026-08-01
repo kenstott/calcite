@@ -455,10 +455,11 @@ public class FormatAwareSchemaResolverDeepTest {
     File file = createJsonFile("bad.json", "not valid json{{{");
 
     List<File> files = Collections.singletonList(file);
-    RelDataType schema = resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT);
 
-    // Should fall back to empty schema
-    assertEquals(0, schema.getFieldCount());
+    // This file is the sole schema authority — a parse failure must surface as an error,
+    // not silently present the table as having zero columns.
+    assertThrows(RuntimeException.class,
+        () -> resolver.resolveSchema(files, SchemaStrategy.PARQUET_DEFAULT));
   }
 
   // --- Helper methods ---

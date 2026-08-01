@@ -42,6 +42,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -466,9 +467,12 @@ public class IcebergMaterializerDeepCoverageTest2 {
     Set<String> result =
         (Set<String>) method.invoke(materializer, config, mock(org.apache.iceberg.Table.class), batch);
 
-    // Iceberg scan catches its own exception and returns empty; tracker is not used as primary
-    // source — only as fallback when Iceberg throws at the outer call site.
-    assertTrue(result.isEmpty());
+    // The mock Table has no real Iceberg data behind it, so the inner scan genuinely fails; the
+    // outer catch falls back to the tracker (a real secondary source of truth) rather than
+    // silently returning empty, which is what this test's own name asserts: tracker data is used.
+    assertEquals(2, result.size());
+    assertTrue(result.contains("tracked-acc-1"));
+    assertTrue(result.contains("tracked-acc-2"));
   }
 
   @Test void testGetExcludedAccessionsWithNullYear() throws Exception {
@@ -501,30 +505,31 @@ public class IcebergMaterializerDeepCoverageTest2 {
 
   // ===== getAccessionsFromIceberg tests =====
 
-  @Test void testGetAccessionsFromIcebergFailsGracefully() throws Exception {
+  @Test void testGetAccessionsFromIcebergThrowsOnGenuineFailure() throws Exception {
+    // The only production caller (getExcludedAccessions) already confirmed the Iceberg table
+    // exists before calling in, so a query failure here is a genuine error, not benign absence —
+    // it must not be swallowed to an empty set (that previously let a transient failure look
+    // permanently like an empty table via markTableComplete). Direct-reflection invocation with a
+    // path that was never validated by a real caller correctly surfaces that as a thrown exception.
     Method method =
         IcebergMaterializer.class.getDeclaredMethod("getAccessionsFromIceberg", String.class, String.class, String.class);
     method.setAccessible(true);
 
-    @SuppressWarnings("unchecked")
-    Set<String> result =
-        (Set<String>) method.invoke(materializer, "/nonexistent/path/to/iceberg", "accession_number", "2023");
-
-    assertNotNull(result);
-    assertTrue(result.isEmpty());
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(materializer, "/nonexistent/path/to/iceberg", "accession_number", "2023"));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
-  @Test void testGetAccessionsFromIcebergNullYear() throws Exception {
+  @Test void testGetAccessionsFromIcebergNullYearThrowsOnGenuineFailure() throws Exception {
     Method method =
         IcebergMaterializer.class.getDeclaredMethod("getAccessionsFromIceberg", String.class, String.class, String.class);
     method.setAccessible(true);
 
-    @SuppressWarnings("unchecked")
-    Set<String> result =
-        (Set<String>) method.invoke(materializer, "/nonexistent/iceberg", "accession_number", null);
-
-    assertNotNull(result);
-    assertTrue(result.isEmpty());
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(materializer, "/nonexistent/iceberg", "accession_number", null));
+    assertTrue(ex.getCause() instanceof RuntimeException);
   }
 
   // ===== getSourceFileWatermark for local paths =====

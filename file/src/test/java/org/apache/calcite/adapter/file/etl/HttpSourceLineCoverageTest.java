@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -682,10 +683,14 @@ class HttpSourceLineCoverageTest {
         HttpSourceConfig.ResponseConfig.fromMap(
             createMap("format", "JSON", "errorPath", "error"));
 
-    String result =
-        (String) invokePrivate(source, "checkForApiError", new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
-        "not json at all", respConfig);
-    assertNull(result, "Should return null for unparseable content");
+    // Unparseable content declared JSON must surface as an error (wrapped in
+    // InvocationTargetException by reflection), not be silently cached as valid.
+    java.lang.reflect.InvocationTargetException ex =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> invokePrivate(source, "checkForApiError",
+                new Class[]{String.class, HttpSourceConfig.ResponseConfig.class},
+                "not json at all", respConfig));
+    assertTrue(ex.getCause() instanceof IOException);
     source.close();
   }
 

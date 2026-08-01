@@ -44,16 +44,21 @@ public abstract class EiaV2Transformer {
     return MAPPER.createArrayNode();
   }
 
+  /**
+   * Parses the leading year component out of an EIA {@code period} string
+   * (e.g. {@code "2020"}, {@code "2020-01"}, {@code "2020-01-15"}).
+   *
+   * @throws NumberFormatException if {@code period} is non-empty but its leading component
+   *     is not a valid integer. Callers processing a batch of rows must catch this per-row
+   *     (see e.g. {@link EiaSEDSTransformer#transform}) and skip just the offending row --
+   *     fabricating year 0 would silently corrupt a core time-series dimension.
+   */
   protected int parseYear(String period) {
     if (period == null || period.isEmpty()) {
       return 0;
     }
     String[] parts = period.split("-");
-    try {
-      return Integer.parseInt(parts[0]);
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return Integer.parseInt(parts[0]);
   }
 
   protected Integer parseMonth(String period) {
