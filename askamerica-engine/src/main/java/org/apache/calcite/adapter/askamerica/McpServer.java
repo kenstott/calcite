@@ -88,6 +88,24 @@ public class McpServer {
     // recorded too, or the latch releases with no connection and no recorded cause.
     private static final ConcurrentHashMap<String, Throwable> schemaErrors =
         new ConcurrentHashMap<>();
+    // Epoch millis each cached connection was opened. isValid(5) only catches a DEAD
+    // connection — a live one is handed out forever even though the Iceberg tables it
+    // was built against are read once at connection-open and never re-resolved (a
+    // schema/table build is a one-time construction, not a per-query lookup). Observed:
+    // a 'sec' connection opened hours before a same-day R2 backfill kept serving the
+    // pre-backfill row counts indefinitely after the backfill completed, with no error
+    // and no way to tell from the response that the answer was stale. This TTL forces a
+    // periodic reconnect (which rebuilds the schema from current Iceberg state) so
+    // staleness is bounded instead of open-ended.
+    private static final ConcurrentHashMap<String, Long> schemaConnOpenedAtMillis =
+        new ConcurrentHashMap<>();
+    private static final long SCHEMA_CONN_TTL_MILLIS =
+        TimeUnit.MINUTES.toMillis(resolveSchemaConnTtlMinutes());
+
+    private static long resolveSchemaConnTtlMinutes() {
+        String raw = System.getenv("ASKAMERICA_SCHEMA_CONN_TTL_MINUTES");
+        return (raw == null || raw.isEmpty()) ? 30L : Long.parseLong(raw);
+    }
 
     private static PrintStream log;
 
@@ -614,14 +632,23 @@ public class McpServer {
     static Connection getSchemaConnection(final String schemaName) throws Exception {
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {
+            Long openedAt = schemaConnOpenedAtMillis.get(schemaName);
+            long ageMillis = (openedAt == null) ? Long.MAX_VALUE
+                : System.currentTimeMillis() - openedAt;
             // A cached-but-dead connection would otherwise be handed out forever, so a
             // connection that has died since init drops out of the cache and re-inits below.
-            if (existing.isValid(5)) {
+            // A cached-but-STALE connection is the same failure mode with no exception to
+            // catch it by: isValid(5) only pings the connection, it does not know the
+            // Iceberg tables built at open time have since changed on R2. TTL expiry forces
+            // the same re-init path so staleness is bounded rather than open-ended.
+            if (ageMillis < SCHEMA_CONN_TTL_MILLIS && existing.isValid(5)) {
                 return existing;
             }
             log.println("[askamerica-mcp] Cached connection for '" + schemaName
-                + "' is dead — discarding and re-initializing.");
+                + "' is " + (ageMillis >= SCHEMA_CONN_TTL_MILLIS ? "past its TTL" : "dead")
+                + " — discarding and re-initializing.");
             schemaConns.remove(schemaName, existing);
+            schemaConnOpenedAtMillis.remove(schemaName);
             schemaLatches.remove(schemaName);
             schemaErrors.remove(schemaName);
         }
@@ -647,6 +674,7 @@ public class McpServer {
                     // ASKAMERICA_SELFTEST_ENABLED=true).
                     c = UsageMetering.wrap(c, UsageMetering.resolveApiKey(null));
                     schemaConns.put(k, c);
+                    schemaConnOpenedAtMillis.put(k, System.currentTimeMillis());
                     // Clear any error from a previous attempt. Readers no longer consume it,
                     // so success is the only thing that retires it — otherwise a recovered
                     // schema would keep reporting the failure that is no longer true.
