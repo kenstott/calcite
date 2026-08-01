@@ -746,8 +746,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // non-fatal SEC download handler so the run fails and the year is retried (not a "0m" success).
       throw e;
     } catch (Exception e) {
+      // Same "fail loud" contract as EdgarIndexUnavailableException above, extended to every other
+      // exception: logging and returning normally from a void method is indistinguishable from a
+      // real, complete success to every caller of triggerDownload()/downloadSecData() — the exact
+      // "0m false success" this method already fixes for one specific exception type. Propagate.
       LOGGER.error("Error in downloadSecData", e);
-      LOGGER.warn("Failed to download SEC data: " + e.getMessage());
+      throw new RuntimeException("Failed to download SEC data: " + e.getMessage(), e);
     } finally {
       // Save manifest in finally block to ensure it's saved even if errors occur
       if (cacheManifest != null) {
@@ -1115,11 +1119,13 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       // deliberately non-fatal catch.
       throw e;
     } catch (Exception e) {
-      LOGGER.error("Document ETL failed: {}", e.getMessage(), e);
-      List<String> errors = new ArrayList<String>();
-      errors.add(e.getMessage());
-      return new DocumentETLProcessor.DocumentETLResult(
-          0, 0, 1, new ArrayList<String>(), errors, 0);
+      // Fail loud, for the exact reason the EdgarIndexUnavailableException handler above does:
+      // downgrading an UNANTICIPATED exception to a "soft" DocumentETLResult is the same "0m false
+      // success" trap, just for every failure mode we didn't already carve out a name for. This
+      // caller (downloadSecData()) checks isSuccess() and logs a warning, but only when the
+      // failure is actually visible as one — an unrecognized exception has no more business being
+      // silently absorbed here than a rate-limited EDGAR index does.
+      throw new RuntimeException("Document ETL failed: " + e.getMessage(), e);
     }
   }
 
@@ -2024,8 +2030,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             .newInstance(converterStorageProvider);
       }
     } catch (Exception e) {
-      LOGGER.error("Failed to instantiate XbrlToParquetConverter: {}", e.getMessage());
-      return null;
+      // A null converter here doesn't fail loudly at the call site — it either NPEs somewhere
+      // downstream with no clue why, or (worse) lets XBRL conversion silently no-op. Throw so the
+      // real cause (a reflection/classpath problem) is what actually surfaces.
+      throw new RuntimeException("Failed to instantiate XbrlToParquetConverter: " + e.getMessage(), e);
     }
   }
 

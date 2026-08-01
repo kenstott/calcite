@@ -484,227 +484,197 @@ public class CikRegistry {
     switch (marker) {
       case "_ALL_EDGAR_FILERS":
         LOGGER.info("Loading all EDGAR filers dynamically...");
-        try {
-          List<String> allCiks = SecDataFetcher.fetchAllEdgarFilers();
-          if (!allCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + allCiks.size() + " CIKs from SEC EDGAR");
-            return allCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch all EDGAR filers: " + e.getMessage());
-        }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> allCiks = SecDataFetcher.fetchAllEdgarFilers();
+        LOGGER.info("Successfully loaded " + allCiks.size() + " CIKs from SEC EDGAR");
+        return allCiks;
 
       case "_SP500_CONSTITUENTS":
         LOGGER.info("Loading S&P 500 constituents dynamically...");
-        try {
-          List<String> sp500Ciks = SecDataFetcher.fetchSP500Constituents();
-          if (!sp500Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + sp500Ciks.size() + " S&P 500 CIKs");
-            return sp500Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch S&P 500 constituents: " + e.getMessage());
-        }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> sp500Ciks = SecDataFetcher.fetchSP500Constituents();
+        LOGGER.info("Successfully loaded " + sp500Ciks.size() + " S&P 500 CIKs");
+        return sp500Ciks;
 
       case "_RUSSELL2000_CONSTITUENTS":
         LOGGER.info("Loading Russell 2000 constituents dynamically...");
-        try {
-          List<String> russell2000Ciks = SecDataFetcher.fetchRussell2000Constituents();
-          if (!russell2000Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + russell2000Ciks.size() + " Russell 2000 CIKs");
-            return russell2000Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch Russell 2000 constituents: " + e.getMessage());
-        }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> russell2000Ciks = SecDataFetcher.fetchRussell2000Constituents();
+        LOGGER.info("Successfully loaded " + russell2000Ciks.size() + " Russell 2000 CIKs");
+        return russell2000Ciks;
 
       case "_RUSSELL1000_CONSTITUENTS":
         LOGGER.info("Loading Russell 1000 constituents dynamically...");
-        try {
-          List<String> russell1000Ciks = SecDataFetcher.fetchRussell1000Constituents();
-          if (!russell1000Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + russell1000Ciks.size() + " Russell 1000 CIKs");
-            return russell1000Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch Russell 1000 constituents: " + e.getMessage());
-        }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> russell1000Ciks = SecDataFetcher.fetchRussell1000Constituents();
+        LOGGER.info("Successfully loaded " + russell1000Ciks.size() + " Russell 1000 CIKs");
+        return russell1000Ciks;
 
       case "_RUSSELL3000_CONSTITUENTS":
         LOGGER.info("Loading Russell 3000 constituents dynamically...");
-        try {
-          List<String> russell3000Ciks = SecDataFetcher.fetchRussell3000Constituents();
-          if (!russell3000Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + russell3000Ciks.size() + " Russell 3000 CIKs");
-            return russell3000Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch Russell 3000 constituents: " + e.getMessage());
-        }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> russell3000Ciks = SecDataFetcher.fetchRussell3000Constituents();
+        LOGGER.info("Successfully loaded " + russell3000Ciks.size() + " Russell 3000 CIKs");
+        return russell3000Ciks;
 
       case "_DJIA_CONSTITUENTS":
         LOGGER.info("Loading DJIAA constituents dynamically...");
-        try {
-          List<String> djiaCiks = SecDataFetcher.fetchDJIAAConstituents();
-          if (!djiaCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + djiaCiks.size() + " DJIAA CIKs");
-            return djiaCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch DJIAA constituents: " + e.getMessage());
-        }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> djiaCiks = SecDataFetcher.fetchDJIAAConstituents();
+        LOGGER.info("Successfully loaded " + djiaCiks.size() + " DJIAA CIKs");
+        return djiaCiks;
 
       case "_NASDAQ100_CONSTITUENTS":
         LOGGER.info("Loading NASDAQ-100 constituents dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> nasdaq100Ciks;
         try {
-          List<String> nasdaq100Ciks = SecDataFetcher.fetchNasdaq100Constituents();
-          if (!nasdaq100Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + nasdaq100Ciks.size() + " NASDAQ-100 CIKs");
-            return nasdaq100Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch NASDAQ-100 constituents: " + e.getMessage());
+          nasdaq100Ciks = SecDataFetcher.fetchNasdaq100Constituents();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchNasdaq100Constituents failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + nasdaq100Ciks.size() + " NASDAQ-100 CIKs");
+        return nasdaq100Ciks;
 
       case "_NYSE_LISTED":
         LOGGER.info("Loading NYSE-listed companies dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> nyseCiks;
         try {
-          List<String> nyseCiks = SecDataFetcher.fetchNYSEListedCompanies();
-          if (!nyseCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + nyseCiks.size() + " NYSE-listed CIKs");
-            return nyseCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch NYSE-listed companies: " + e.getMessage());
+          nyseCiks = SecDataFetcher.fetchNYSEListedCompanies();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchNYSEListedCompanies failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + nyseCiks.size() + " NYSE-listed CIKs");
+        return nyseCiks;
 
       case "_NASDAQ_LISTED":
         LOGGER.info("Loading NASDAQ-listed companies dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> nasdaqCiks;
         try {
-          List<String> nasdaqCiks = SecDataFetcher.fetchNASDAQListedCompanies();
-          if (!nasdaqCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + nasdaqCiks.size() + " NASDAQ-listed CIKs");
-            return nasdaqCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch NASDAQ-listed companies: " + e.getMessage());
+          nasdaqCiks = SecDataFetcher.fetchNASDAQListedCompanies();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchNASDAQListedCompanies failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + nasdaqCiks.size() + " NASDAQ-listed CIKs");
+        return nasdaqCiks;
 
       case "_WILSHIRE5000_CONSTITUENTS":
         LOGGER.info("Loading Wilshire 5000 constituents dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> wilshire5000Ciks;
         try {
-          List<String> wilshire5000Ciks = SecDataFetcher.fetchWilshire5000Constituents();
-          if (!wilshire5000Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + wilshire5000Ciks.size() + " Wilshire 5000 CIKs");
-            return wilshire5000Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch Wilshire 5000 constituents: " + e.getMessage());
+          wilshire5000Ciks = SecDataFetcher.fetchWilshire5000Constituents();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchWilshire5000Constituents failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + wilshire5000Ciks.size() + " Wilshire 5000 CIKs");
+        return wilshire5000Ciks;
 
       case "_FTSE100_US_LISTED":
         LOGGER.info("Loading FTSE 100 companies with US listings dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> ftse100Ciks;
         try {
-          List<String> ftse100Ciks = SecDataFetcher.fetchFTSE100USListed();
-          if (!ftse100Ciks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + ftse100Ciks.size() + " FTSE 100 US-listed CIKs");
-            return ftse100Ciks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch FTSE 100 US-listed companies: " + e.getMessage());
+          ftse100Ciks = SecDataFetcher.fetchFTSE100USListed();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchFTSE100USListed failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + ftse100Ciks.size() + " FTSE 100 US-listed CIKs");
+        return ftse100Ciks;
 
       case "_GLOBAL_MEGA_CAP":
         LOGGER.info("Loading global mega-cap companies (market cap > $200B) dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> megaCapCiks;
         try {
-          List<String> megaCapCiks = SecDataFetcher.fetchGlobalMegaCap();
-          if (!megaCapCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + megaCapCiks.size() + " global mega-cap CIKs");
-            return megaCapCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch global mega-cap companies: " + e.getMessage());
+          megaCapCiks = SecDataFetcher.fetchGlobalMegaCap();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchGlobalMegaCap failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + megaCapCiks.size() + " global mega-cap CIKs");
+        return megaCapCiks;
 
       case "_US_LARGE_CAP":
         LOGGER.info("Loading US large-cap companies (market cap > $10B) dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> largeCapCiks;
         try {
-          List<String> largeCapCiks = SecDataFetcher.fetchUSLargeCap();
-          if (!largeCapCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + largeCapCiks.size() + " US large-cap CIKs");
-            return largeCapCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch US large-cap companies: " + e.getMessage());
+          largeCapCiks = SecDataFetcher.fetchUSLargeCap();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchUSLargeCap failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + largeCapCiks.size() + " US large-cap CIKs");
+        return largeCapCiks;
 
       case "_US_MID_CAP":
         LOGGER.info("Loading US mid-cap companies (market cap $2B-$10B) dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> midCapCiks;
         try {
-          List<String> midCapCiks = SecDataFetcher.fetchUSMidCap();
-          if (!midCapCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + midCapCiks.size() + " US mid-cap CIKs");
-            return midCapCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch US mid-cap companies: " + e.getMessage());
+          midCapCiks = SecDataFetcher.fetchUSMidCap();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchUSMidCap failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + midCapCiks.size() + " US mid-cap CIKs");
+        return midCapCiks;
 
       case "_US_SMALL_CAP":
         LOGGER.info("Loading US small-cap companies (market cap $300M-$2B) dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> smallCapCiks;
         try {
-          List<String> smallCapCiks = SecDataFetcher.fetchUSSmallCap();
-          if (!smallCapCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + smallCapCiks.size() + " US small-cap CIKs");
-            return smallCapCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch US small-cap companies: " + e.getMessage());
+          smallCapCiks = SecDataFetcher.fetchUSSmallCap();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchUSSmallCap failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + smallCapCiks.size() + " US small-cap CIKs");
+        return smallCapCiks;
 
       case "_US_MICRO_CAP":
         LOGGER.info("Loading US micro-cap companies (market cap < $300M) dynamically...");
+        // Let a fetch failure propagate — SecDataFetcher already throws on a real failure
+        // (falling back only to a real, logged stale cache); catching it here and returning
+        // Collections.emptyList() would just reintroduce the same false "0 CIKs" success.
+        List<String> microCapCiks;
         try {
-          List<String> microCapCiks = SecDataFetcher.fetchUSMicroCap();
-          if (!microCapCiks.isEmpty()) {
-            LOGGER.info("Successfully loaded " + microCapCiks.size() + " US micro-cap CIKs");
-            return microCapCiks;
-          }
-        } catch (Exception e) {
-          LOGGER.error("Failed to fetch US micro-cap companies: " + e.getMessage());
+          microCapCiks = SecDataFetcher.fetchUSMicroCap();
+        } catch (java.io.IOException e) {
+          throw new RuntimeException("fetchUSMicroCap failed: " + e.getMessage(), e);
         }
-        LOGGER.warn("Returning empty list for " + marker);
-        return Collections.emptyList();
+        LOGGER.info("Successfully loaded " + microCapCiks.size() + " US micro-cap CIKs");
+        return microCapCiks;
 
       default:
         LOGGER.warn("Unknown special marker: " + marker);

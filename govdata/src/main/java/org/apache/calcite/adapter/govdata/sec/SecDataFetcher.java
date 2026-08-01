@@ -406,7 +406,8 @@ public class SecDataFetcher {
         return new ArrayList<>(cached.ciks);
       }
 
-      return new ArrayList<>();
+      throw new DataFetchException(
+          "Failed to fetch all EDGAR filer CIKs from SEC and no cache is available", e);
     }
   }
 
@@ -1040,9 +1041,9 @@ public class SecDataFetcher {
       return ciks;
 
     } catch (Exception e) {
-      LOGGER.warn("Failed to fetch DJIA from Wikipedia: " + e.getMessage());
-      e.printStackTrace();
-      return ciks;
+      throw new DataFetchException(
+          "Failed to fetch DJIA constituents from Wikipedia - only " + ciks.size()
+              + " of 30 components were parsed before the failure", e);
     }
   }
 
@@ -1239,8 +1240,8 @@ public class SecDataFetcher {
       List<String> ciks = fetchRussell2000FromSources();
 
       if (ciks.isEmpty()) {
-        // Use hardcoded sample as fallback
-        ciks = getHardcodedRussell2000CIKs();
+        throw new DataFetchException(
+            "Failed to fetch Russell 2000 constituents from any source - no data returned");
       }
 
       // Cache the results
@@ -1260,8 +1261,8 @@ public class SecDataFetcher {
         return new ArrayList<>(cached.ciks);
       }
 
-      // Last resort: return hardcoded sample
-      return getHardcodedRussell2000CIKs();
+      throw new DataFetchException(
+          "Failed to fetch Russell 2000 constituents and no cache is available", e);
     }
   }
 
@@ -1541,8 +1542,8 @@ public class SecDataFetcher {
       List<String> ciks = fetchRussell1000FromSources();
 
       if (ciks.isEmpty()) {
-        // Use a combination of S&P 500 and mid-cap companies as approximation
-        ciks = getApproximateRussell1000();
+        throw new DataFetchException(
+            "Failed to fetch Russell 1000 constituents from any source - no data returned");
       }
 
       // Cache the results
@@ -1562,8 +1563,8 @@ public class SecDataFetcher {
         return new ArrayList<>(cached.ciks);
       }
 
-      // Last resort: return approximation
-      return getApproximateRussell1000();
+      throw new DataFetchException(
+          "Failed to fetch Russell 1000 constituents and no cache is available", e);
     }
   }
 
@@ -1649,7 +1650,8 @@ public class SecDataFetcher {
         return new ArrayList<>(cached.ciks);
       }
 
-      return new ArrayList<>();
+      throw new DataFetchException(
+          "Failed to fetch Russell 3000 constituents and no cache is available", e);
     }
   }
 
@@ -2677,9 +2679,7 @@ public class SecDataFetcher {
 
       LOGGER.debug("Fetched " + allCiks.size() + " FTSE 100 US-listed CIKs from LLM");
     } catch (Exception e) {
-      LOGGER.warn("Failed to fetch FTSE 100 from LLM: " + e.getMessage());
-      // Use fallback
-      return getFallbackFTSE100USListed();
+      throw new DataFetchException("Failed to fetch FTSE 100 US-listed companies from LLM", e);
     }
 
     return allCiks;
@@ -2899,8 +2899,7 @@ public class SecDataFetcher {
 
       LOGGER.debug("Fetched " + allCiks.size() + " " + description + " CIKs from LLM");
     } catch (Exception e) {
-      LOGGER.warn("Failed to fetch " + description + " from LLM: " + e.getMessage());
-      return getFallbackMarketCapCompanies(minMarketCap, maxMarketCap);
+      throw new DataFetchException("Failed to fetch " + description + " companies from LLM", e);
     }
 
     return allCiks;
@@ -2991,8 +2990,7 @@ public class SecDataFetcher {
       // This already fetches all tickers from SEC
       return fetchTickerToCikMap();
     } catch (IOException e) {
-      LOGGER.error("Failed to fetch all EDGAR tickers: " + e.getMessage());
-      return new HashMap<>();
+      throw new DataFetchException("Failed to fetch all EDGAR tickers from SEC", e);
     }
   }
 
@@ -3035,11 +3033,12 @@ public class SecDataFetcher {
         LOGGER.info("Built CIK-to-tickers reverse mapping with {} CIKs", newCache.size());
 
       } catch (IOException e) {
-        LOGGER.warn("Failed to fetch SEC ticker data: " + e.getMessage());
         if (cikToTickersCache == null) {
-          return new ArrayList<>();
+          throw new DataFetchException(
+              "Failed to fetch SEC ticker-to-CIK data and no cache is available", e);
         }
-        // Use stale cache
+        LOGGER.warn("Failed to fetch SEC ticker data, using stale CIK-to-tickers cache: "
+            + e.getMessage());
       }
     }
 
