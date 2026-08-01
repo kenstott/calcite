@@ -4892,10 +4892,11 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     data.put("year", year);
 
-    // Extract company name from HTML <title> tag if available
-    org.jsoup.nodes.Document doc = Jsoup.parse(fileContent);
-    org.jsoup.nodes.Element titleEl = doc.selectFirst("title");
-    data.put("company_name", titleEl != null ? titleEl.text().trim() : null);
+    // Company name comes from EDGAR submissions.json (the registrant's official name), NOT the
+    // primary document's HTML <title> tag: filer/filing-agent tooling frequently sets <title> to
+    // the document's own filename stem (e.g. "aapl-20260129.htm" -> title "aapl-20260129"), which
+    // silently wrote the filename into company_name instead of an actual company name.
+    data.put("company_name", submissionsInfo.get("company_name"));
 
     String filename = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     data.put("primary_document", filename);

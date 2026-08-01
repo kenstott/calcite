@@ -3069,8 +3069,8 @@ public class SecDataFetcher {
       "https://data.sec.gov/submissions/CIK%s.json";
 
   /**
-   * Returns ticker, sic_code, and fiscal_year_end (MMDD) for a CIK from EDGAR submissions.json.
-   * Results are cached in-process for the lifetime of the JVM.
+   * Returns company_name, ticker, sic_code, and fiscal_year_end (MMDD) for a CIK from EDGAR
+   * submissions.json. Results are cached in-process for the lifetime of the JVM.
    */
   public static Map<String, String> getCompanyInfoForCik(String cik) {
     String normalized = cik.replaceAll("[^0-9]", "");
@@ -3089,6 +3089,10 @@ public class SecDataFetcher {
       conn.setReadTimeout(10000);
       if (conn.getResponseCode() == 200) {
         JsonNode node = MAPPER.readTree(conn.getInputStream());
+        String name = node.path("name").asText(null);
+        if (name != null && !name.isEmpty()) {
+          info.put("company_name", name);
+        }
         JsonNode tickers = node.path("tickers");
         if (tickers.isArray() && tickers.size() > 0) {
           info.put("ticker", tickers.get(0).asText());
