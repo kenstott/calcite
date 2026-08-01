@@ -144,6 +144,9 @@ public class DuckDBSqlDialect extends PostgresqlSqlDialect {
     case YEAR:
       format = "year";
       break;
+    case QUARTER:
+      format = "quarter";
+      break;
     case MONTH:
       format = "month";
       break;
