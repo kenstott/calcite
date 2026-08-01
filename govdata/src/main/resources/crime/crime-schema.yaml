@@ -350,11 +350,17 @@ partitionedTables:
       - name: offense_rate
         type: double
         nullable: true
-        comment: Offenses per 100k population (state)
+        comment: >
+          Offenses per 100k population (state), for this row's month only — not an
+          annualized rate. AVG(offense_rate) across a year's 12 rows understates the
+          true annual rate by roughly 12x; SUM(offense_rate) across the year's months
+          gives the annual per-100k rate.
       - name: clearance_rate
         type: double
         nullable: true
-        comment: Clearances per 100k population (state)
+        comment: >
+          Clearances per 100k population (state), for this row's month only — same
+          per-month grain as offense_rate; sum across months for an annual rate.
       - name: national_offense_rate
         type: double
         nullable: true

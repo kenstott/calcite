@@ -1690,6 +1690,12 @@ views:
       us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax map to canonical_name=revenue).
       value_dollars applies the scale factor so callers never need to handle
       value_numeric * POWER(10, scale) themselves.
+      WARNING: a filing reports one consolidated value per concept plus, separately, its
+      segment/geography/product-line breakdown members under the same canonical_name and
+      period — each context_ref is a distinct fact, so SUM(value_dollars) across all
+      context_refs for a (cik, canonical_name, period) multiplies the consolidated total
+      by however many dimensional breakdowns the filer disclosed. Filter
+      is_consolidated_total = TRUE to get the single company-wide figure per concept/period.
     sql: >
       SELECT
         li.cik,
@@ -1707,8 +1713,13 @@ views:
         li.decimals,
         li.scale,
         li.value_numeric,
-        li.value_numeric * POWER(10, COALESCE(li.scale, 0)) AS value_dollars
+        li.value_numeric * POWER(10, COALESCE(li.scale, 0)) AS value_dollars,
+        fc.segment IS NULL AS is_consolidated_total
       FROM financial_line_items li
+      LEFT JOIN filing_contexts fc
+        ON li.cik = fc.cik
+        AND li.accession_number = fc.accession_number
+        AND li.context_ref = fc.context_id
       JOIN (VALUES
         ('us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'revenue', 'income_statement'),
         ('us-gaap:Revenues', 'revenue', 'income_statement'),
