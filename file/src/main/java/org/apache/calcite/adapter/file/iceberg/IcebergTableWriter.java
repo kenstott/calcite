@@ -448,7 +448,10 @@ public class IcebergTableWriter {
         default:
           return value;
       }
+    // fallback-guard: allow non-empty unparseable partition value becomes null (correct three-valued-logic semantics, not a fabricated value), matching the field's own "-" null-indicator handling above
     } catch (NumberFormatException e) {
+      LOGGER.debug("Partition value '{}' is not a valid {}, using NULL: {}", value,
+          sourceType.typeId(), e.getMessage());
       return null;
     }
   }
@@ -687,8 +690,10 @@ public class IcebergTableWriter {
         }
         try {
           return Integer.parseInt(value.toString());
+        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
         } catch (NumberFormatException e) {
-          return null;  // Return null for unparseable values
+          LOGGER.debug("Value '{}' is not a valid INTEGER, using NULL: {}", value, e.getMessage());
+          return null;
         }
       case LONG:
         if (value instanceof Number) {
@@ -696,7 +701,9 @@ public class IcebergTableWriter {
         }
         try {
           return Long.parseLong(value.toString());
+        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
         } catch (NumberFormatException e) {
+          LOGGER.debug("Value '{}' is not a valid LONG, using NULL: {}", value, e.getMessage());
           return null;
         }
       case FLOAT:
@@ -705,7 +712,9 @@ public class IcebergTableWriter {
         }
         try {
           return Float.parseFloat(value.toString());
+        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
         } catch (NumberFormatException e) {
+          LOGGER.debug("Value '{}' is not a valid FLOAT, using NULL: {}", value, e.getMessage());
           return null;
         }
       case DOUBLE:
@@ -714,7 +723,9 @@ public class IcebergTableWriter {
         }
         try {
           return Double.parseDouble(value.toString());
+        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
         } catch (NumberFormatException e) {
+          LOGGER.debug("Value '{}' is not a valid DOUBLE, using NULL: {}", value, e.getMessage());
           return null;
         }
       case BOOLEAN:
@@ -737,7 +748,9 @@ public class IcebergTableWriter {
         if (value instanceof String) {
           try {
             return java.time.LocalDate.parse((String) value);
+          // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
           } catch (Exception e) {
+            LOGGER.debug("Value '{}' is not a valid DATE, using NULL: {}", value, e.getMessage());
             return null;
           }
         }

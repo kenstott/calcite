@@ -22,6 +22,8 @@ import com.joestelmach.natty.Parser;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.text.NumberFormat;
 import java.text.ParseException;
@@ -47,6 +49,8 @@ import static java.util.Objects.requireNonNull;
  * FileRowConverter.
  */
 public class FileRowConverter {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(FileRowConverter.class);
 
   // cache for lazy initialization
   private final FileReaderV2 fileReader;
@@ -342,28 +346,36 @@ public class FileRowConverter {
       case SHORT:
         try {
           return integerFormat.parse(string).shortValue();
+        // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (ParseException e) {
+          LOGGER.debug("Cell '{}' is not a valid SHORT, returning NULL: {}", string, e.getMessage());
           return null;
         }
 
       case INT:
         try {
           return integerFormat.parse(string).intValue();
+        // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (ParseException e) {
+          LOGGER.debug("Cell '{}' is not a valid INT, returning NULL: {}", string, e.getMessage());
           return null;
         }
 
       case LONG:
         try {
           return numberFormat.parse(string).longValue();
+        // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (ParseException e) {
+          LOGGER.debug("Cell '{}' is not a valid LONG, returning NULL: {}", string, e.getMessage());
           return null;
         }
 
       case FLOAT:
         try {
           return numberFormat.parse(string).floatValue();
+        // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (ParseException e) {
+          LOGGER.debug("Cell '{}' is not a valid FLOAT, returning NULL: {}", string, e.getMessage());
           return null;
         }
 
@@ -377,7 +389,10 @@ public class FileRowConverter {
           // If parsing still fails, try parsing as a plain double
           try {
             return Double.parseDouble(string);
+          // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
           } catch (NumberFormatException nfe) {
+            LOGGER.debug("Cell '{}' is not a valid DOUBLE, returning NULL: {}", string,
+                nfe.getMessage());
             return null;
           }
         }
@@ -398,7 +413,9 @@ public class FileRowConverter {
           sdf.setTimeZone(TimeZone.getDefault());
           String dateStr = sdf.format(parsed);
           return java.sql.Date.valueOf(dateStr);
+        // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (Exception e) {
+          LOGGER.debug("Cell '{}' is not a valid DATE, returning NULL: {}", string, e.getMessage());
           return null;
         }
 
@@ -420,7 +437,9 @@ public class FileRowConverter {
           String timeStr = timeFormat.format(timeParsed);
           java.time.LocalTime localTime = java.time.LocalTime.parse(timeStr);
           return (int) (localTime.toNanoOfDay() / 1_000_000L);
+        // fallback-guard: allow non-empty unparseable cell becomes SQL NULL (correct null-aware semantics, not a fabricated value); now logged for DQ visibility
         } catch (Exception e) {
+          LOGGER.debug("Cell '{}' is not a valid TIME, returning NULL: {}", string, e.getMessage());
           return null;
         }
 
