@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -72,8 +73,8 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
     LOGGER.info("URLhaus: fetching ZIP from {}", url);
 
     byte[] zipBytes = fetchBytes(url);
-    if (zipBytes == null || zipBytes.length == 0) {
-      LOGGER.warn("URLhaus: empty or failed ZIP fetch");
+    if (zipBytes.length == 0) {
+      LOGGER.warn("URLhaus: empty ZIP response body");
       return "[]";
     }
 
@@ -181,9 +182,8 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
 
       int status = conn.getResponseCode();
       if (status != 200) {
-        LOGGER.warn("URLhaus: HTTP {} fetching ZIP", status);
         conn.disconnect();
-        return null;
+        throw new RuntimeException("URLhaus: HTTP " + status + " fetching ZIP");
       }
 
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -196,9 +196,11 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
       }
       conn.disconnect();
       return baos.toByteArray();
-    } catch (Exception e) {
-      LOGGER.warn("URLhaus: error fetching ZIP: {}", e.getMessage());
-      return null;
+    } catch (IOException e) {
+      // A network/HTTP failure here previously became a masked "[]" success one call up
+      // (transform() checked for a null/empty zipBytes and silently returned an empty feed) —
+      // indistinguishable from "URLhaus genuinely published zero entries today."
+      throw new RuntimeException("URLhaus: error fetching ZIP: " + e.getMessage(), e);
     }
   }
 }

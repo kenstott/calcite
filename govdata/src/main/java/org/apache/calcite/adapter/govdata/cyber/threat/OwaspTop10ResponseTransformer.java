@@ -231,6 +231,7 @@ public class OwaspTop10ResponseTransformer implements ResponseTransformer {
       reader.close();
       conn.disconnect();
       return sb.toString();
+    // fallback-guard: allow one of 10 independently-fetched entries; caller skips-and-continues on null with a logged warning, not a silent full-fetch failure
     } catch (Exception e) {
       LOGGER.warn("OWASP: error fetching {}: {}", url, e.getMessage());
       return null;

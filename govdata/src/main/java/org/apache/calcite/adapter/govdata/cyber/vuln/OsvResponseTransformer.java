@@ -86,8 +86,8 @@ public class OsvResponseTransformer implements ResponseTransformer {
     LOGGER.info("OSV: fetching ecosystem {} from {}", ecosystem, url);
 
     byte[] zipBytes = fetchBytes(url);
-    if (zipBytes == null || zipBytes.length == 0) {
-      LOGGER.warn("OSV: empty response for ecosystem {}", ecosystem);
+    if (zipBytes.length == 0) {
+      LOGGER.warn("OSV: empty response body for ecosystem {}", ecosystem);
       return;
     }
 
@@ -211,9 +211,8 @@ public class OsvResponseTransformer implements ResponseTransformer {
 
       int status = conn.getResponseCode();
       if (status != 200) {
-        LOGGER.warn("OSV: HTTP {} for {}", status, url);
         conn.disconnect();
-        return null;
+        throw new RuntimeException("OSV: HTTP " + status + " for " + url);
       }
 
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -226,9 +225,11 @@ public class OsvResponseTransformer implements ResponseTransformer {
       }
       conn.disconnect();
       return baos.toByteArray();
-    } catch (Exception e) {
-      LOGGER.warn("OSV: error fetching {}: {}", url, e.getMessage());
-      return null;
+    } catch (IOException e) {
+      // A network/HTTP failure here previously became a masked "[]" success one call up
+      // (processEcosystem checked for a null zipBytes and silently returned with nothing added) —
+      // indistinguishable from "OSV genuinely published zero vulnerabilities for this ecosystem."
+      throw new RuntimeException("OSV: error fetching " + url + ": " + e.getMessage(), e);
     }
   }
 
