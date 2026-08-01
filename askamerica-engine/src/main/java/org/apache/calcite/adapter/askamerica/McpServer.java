@@ -427,9 +427,12 @@ public class McpServer {
             + "\"status\", \"level\", \"key\", \"rank\", \"count\", \"order\", "
             + "\"open\", \"close\", \"domain\", \"sequence\", \"period\", \"measure\", "
             + "\"hour\", \"month\", \"size\", \"source\". "
+            + "(4) A <> or = comparison against a nullable column silently drops every NULL row "
+            + "(standard SQL three-valued logic) — if you want NULLs included, add "
+            + "OR <column> IS NULL explicitly; do not assume <> excludes only the literal value. "
             + "Example: SELECT \"year\", \"type\", SUM(amount) AS total "
             + "FROM fec.individual_contributions "
-            + "WHERE \"year\" = '2024' AND memo_cd <> 'X' "
+            + "WHERE \"year\" = '2024' AND (memo_cd <> 'X' OR memo_cd IS NULL) "
             + "GROUP BY \"year\", \"type\". "
             + "Add FETCH FIRST N ROWS ONLY when exploring; omit for aggregations. "
             + "Statistical aggregates run in-engine — corr(y,x), regr_slope/regr_intercept/"
@@ -466,7 +469,10 @@ public class McpServer {
             + "optional name, agg (default avg), where; plus ONE key source matching 'on' — "
             + "time_col (a DATE column), year_col+period_col (BLS year + 'M01'), quarter_col "
             + "(BEA '2023Q1'), year_only_col (annual tables), or geo_col (a FIPS column when on "
-            + "is state/county/geo).");
+            + "is state/county/geo). value/where are composed into SQL, so the same dialect rules "
+            + "as the query tool apply: quote reserved words with double quotes (e.g. \"value\", "
+            + "\"year\", \"date\", \"type\", \"period\") and remember <> / = against a nullable "
+            + "column drops NULL rows unless you add OR <column> IS NULL in where.");
         alignProps.set("series", seriesProp);
         alignProps.set("on", prop("string",
             "Alignment key: 'day'|'month'|'quarter'|'year' (time) or 'state'|'county'|'geo' "
