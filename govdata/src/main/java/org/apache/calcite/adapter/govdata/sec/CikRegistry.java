@@ -371,6 +371,21 @@ public class CikRegistry {
       return Collections.emptyList();
     }
 
+    // A single "ciks" operand is sometimes a comma-joined list (e.g. GOVDATA_CIKS built by
+    // worker.sh via `paste -sd,`), not one identifier. No legitimate ticker/CIK/group/marker
+    // contains a comma, so split first and resolve each part independently — otherwise the
+    // whole string falls through to "assume raw CIK" below and is treated as one bogus CIK.
+    if (identifier.indexOf(',') >= 0) {
+      List<String> resolved = new ArrayList<>();
+      for (String part : identifier.split(",")) {
+        String trimmed = part.trim();
+        if (!trimmed.isEmpty()) {
+          resolved.addAll(resolveCiks(trimmed));
+        }
+      }
+      return resolved;
+    }
+
     // Ensure registry is loaded
     if (!initialized) {
       loadRegistry();
