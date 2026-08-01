@@ -2637,6 +2637,11 @@ public class IcebergMaterializer {
           LOGGER.info("Evolved Iceberg table '{}': added column(s) [{}], {} existing rows "
               + "preserved (no drop, no rewrite)",
               config.getTargetTableId(), addedColumns, existingColumnCount);
+          // The table's columns just changed, so any published schema cache now describes a
+          // schema that no longer exists (see IcebergMaterializationWriter.
+          // withdrawPublishedSchemaCache for the same rationale on the drop+recreate path).
+          // Withdraw it: readers fall back to the live read until seed generation republishes.
+          withdrawPublishedSchemaCache(evolved);
           return new TableSetupResult(evolved, false);
         }
         LOGGER.warn("Existing Iceberg table '{}' has {} columns but expected {}, and the "
@@ -2748,6 +2753,25 @@ public class IcebergMaterializer {
       table.refresh();
     }
     return table;
+  }
+
+  /**
+   * Deletes the warehouse-wide published Iceberg schema cache after a column addition.
+   *
+   * <p>See {@code IcebergMaterializationWriter.withdrawPublishedSchemaCache} for the identical
+   * rationale on the drop+recreate path: this table's committed schema no longer matches what
+   * the published cache describes, so every reader must be forced back onto a live read until
+   * the next seed generation republishes.
+   *
+   * @param table the table whose schema was just evolved, used to locate the warehouse
+   */
+  @SuppressWarnings("unchecked")
+  private void withdrawPublishedSchemaCache(Table table) {
+    if (table == null) {
+      return;
+    }
+    Map<String, String> hadoopConfig = (Map<String, String>) catalogConfig.get("hadoopConfig");
+    IcebergSchemaCache.unpublish(table.location(), hadoopConfig);
   }
 
   /**

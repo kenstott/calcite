@@ -226,10 +226,14 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       // Expected columns per the current FileSchema (already loaded — no S3 read).
       int expected = fsTable.getRowType(HEAL_TYPE_FACTORY).getFieldCount();
       // Actual columns the persistent DuckDB catalog view exposes (catalog-local — no S3 read).
+      // -1 means the probe itself failed (see catalogViewColumnCount): that is proof the catalog
+      // entry cannot be trusted, not evidence it is fine, so it must force a recreate exactly
+      // like a genuine count mismatch — never fall through as if nothing needed healing.
       int actual = catalogViewColumnCount(name);
-      if (actual > 0 && actual != expected) {
+      if (actual < 0 || (actual > 0 && actual != expected)) {
         LOGGER.info("Self-heal: catalog view \"{}\".\"{}\" exposes {} columns but the current "
-            + "schema has {} — recreating from iceberg_scan", schemaName, name, actual, expected);
+            + "schema has {} — recreating from iceberg_scan", schemaName, name,
+            actual < 0 ? "an unreadable count" : actual, expected);
         recreateIcebergView(name, record.sourceFile);
       }
     } catch (Exception e) {
@@ -237,7 +241,11 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     }
   }
 
-  /** Column count of a view in the DuckDB catalog; 0 when the view does not exist. */
+  /**
+   * Column count of a view in the DuckDB catalog: 0 when the view does not exist, -1 when the
+   * probe query itself failed (distinct from 0 — the caller must not treat a failed probe as
+   * "nothing to heal").
+   */
   private int catalogViewColumnCount(String name) {
     String sql = "SELECT COUNT(*) FROM information_schema.columns "
         + "WHERE table_schema = ? AND table_name = ?";
@@ -250,7 +258,9 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
         }
       }
     } catch (java.sql.SQLException e) {
-      LOGGER.debug("Could not read catalog column count for '{}': {}", name, e.getMessage());
+      LOGGER.debug("Catalog column-count probe failed for '{}' — forcing recreate: {}",
+          name, e.getMessage());
+      return -1;
     }
     return 0;
   }
