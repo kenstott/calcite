@@ -774,6 +774,56 @@ public class HttpSourceCoverageTest {
     source.close();
   }
 
+  /**
+   * Reproduces the FEC {@code cn.txt} corruption: a naive pipe-delimited source has no real
+   * quoting convention, so a single unmatched literal {@code "} in an earlier field (a name
+   * field with a stray/truncated quote, e.g. from a data-entry glitch) desyncs every delimiter
+   * for the rest of the line when the default RFC4180 quote-toggle is applied — {@code inQuotes}
+   * flips on and never flips back, so the party field several columns later merges into one
+   * corrupted blob together with everything after it. {@code quoted=false} must treat every
+   * {@code "} as ordinary data instead.
+   */
+  @Test void testParseDelimitedLineQuotedFalseTreatsQuoteAsLiteralData() throws Exception {
+    HttpSource source = createBasicSource();
+    Method method = HttpSource.class.getDeclaredMethod(
+        "parseDelimitedLine", String.class, char.class, boolean.class);
+    method.setAccessible(true);
+
+    String line = "H0001|SMITH, JOHN \"JACK|REP|2024";
+
+    // Default (quoted=true) behavior desyncs the fields: the single unmatched literal quote
+    // before JACK flips inQuotes permanently on, swallowing every remaining "|" as literal text
+    // instead of a field boundary — reproducing the reported bug (party ends up merged with the
+    // name and following columns, rather than its own clean "REP").
+    String[] corrupted = (String[]) method.invoke(source, line, '|', true);
+    assertTrue(corrupted.length < 4,
+        "quoted=true is expected to desync fields on this input; got " + corrupted.length);
+
+    // quoted=false: every "|" is a real field boundary regardless of literal quote characters.
+    String[] fixed = (String[]) method.invoke(source, line, '|', false);
+    assertEquals(4, fixed.length);
+    assertEquals("H0001", fixed[0]);
+    assertEquals("SMITH, JOHN \"JACK", fixed[1]);
+    assertEquals("REP", fixed[2]);
+    assertEquals("2024", fixed[3]);
+
+    source.close();
+  }
+
+  @Test void testStripQuotesIfPresentSkippedWhenNotQuoted() throws Exception {
+    HttpSource source = createBasicSource();
+    Method method = HttpSource.class.getDeclaredMethod(
+        "stripQuotesIfPresent", String.class, boolean.class);
+    method.setAccessible(true);
+
+    // quoted=true: a balanced leading/trailing pair is a CSV quote wrapper, stripped.
+    assertEquals("REP", method.invoke(null, "\"REP\"", true));
+    // quoted=false: the same characters are literal data (e.g. a nickname), left untouched.
+    assertEquals("\"JACK\"", method.invoke(null, "\"JACK\"", false));
+
+    source.close();
+  }
+
   // ---------------------------------------------------------------
   // 9. parseDelimitedResponse - CSV/TSV (via reflection)
   // ---------------------------------------------------------------

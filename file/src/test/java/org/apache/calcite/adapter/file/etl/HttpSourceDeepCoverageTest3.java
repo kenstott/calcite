@@ -102,11 +102,11 @@ class HttpSourceDeepCoverageTest3 {
     Constructor<?> ctor =
         innerClass.getDeclaredConstructor(HttpSource.class, InputStream.class, String.class, char.class,
         HttpSourceConfig.RowFilterConfig.class, HttpSourceConfig.WideToNarrowConfig.class,
-        boolean.class, String.class);
+        boolean.class, String.class, boolean.class);
     ctor.setAccessible(true);
     return (Iterator<Map<String, Object>>) ctor.newInstance(
         source, inputStream, cachePath, delimiter, filter, wideToNarrow,
-        hasHeader, columnNames);
+        hasHeader, columnNames, true);
   }
 
   private static Map<String, Object> map(Object... kv) {

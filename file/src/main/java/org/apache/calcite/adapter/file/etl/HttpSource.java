@@ -2185,7 +2185,7 @@ public class HttpSource implements DataSource {
     InputStream inputStream = storageProvider.openInputStream(cachePath);
     return new LazyCSVIterator(inputStream, cachePath, delimiter,
         config.getRowFilter(), config.getWideToNarrow(),
-        respConfig.isHasHeader(), respConfig.getColumnNames());
+        respConfig.isHasHeader(), respConfig.getColumnNames(), respConfig.isQuoted());
   }
 
   private Iterator<Map<String, Object>> parseFixedWidthResponseStreaming(String cachePath)
@@ -2303,6 +2303,7 @@ public class HttpSource implements DataSource {
   private class LazyCSVIterator implements Iterator<Map<String, Object>>, java.io.Closeable {
     private final BufferedReader reader;
     private final char delimiter;
+    private final boolean quoted;
     private final String[] headers;
     private final int filterColumnIndex;
     private final java.util.regex.Pattern filterRegex;
@@ -2325,8 +2326,9 @@ public class HttpSource implements DataSource {
     LazyCSVIterator(InputStream inputStream, String cachePath, char delimiter,
         HttpSourceConfig.RowFilterConfig filter,
         HttpSourceConfig.WideToNarrowConfig wideToNarrow,
-        boolean hasHeader, String columnNames) throws IOException {
+        boolean hasHeader, String columnNames, boolean quoted) throws IOException {
       this.delimiter = delimiter;
+      this.quoted = quoted;
       this.wideToNarrow = wideToNarrow;
       this.reader =
           new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
@@ -2345,7 +2347,7 @@ public class HttpSource implements DataSource {
       // Determine headers: use explicit columnNames, read from file, or generate positional
       if (!hasHeader && columnNames != null && !columnNames.isEmpty()) {
         // Headerless file with explicit column names from config
-        this.headers = parseDelimitedLine(columnNames, delimiter);
+        this.headers = parseDelimitedLine(columnNames, delimiter, quoted);
         LOGGER.info("Using {} explicit column names for headerless CSV (from cache: {})",
             headers.length, cachePath);
       } else if (hasHeader) {
@@ -2359,7 +2361,7 @@ public class HttpSource implements DataSource {
           exhausted = true;
           return;
         }
-        this.headers = parseDelimitedLine(headerLine, delimiter);
+        this.headers = parseDelimitedLine(headerLine, delimiter, quoted);
         LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
       } else {
         // Headerless file without explicit names — peek first line for column count
@@ -2372,7 +2374,7 @@ public class HttpSource implements DataSource {
           exhausted = true;
           return;
         }
-        String[] firstFields = parseDelimitedLine(firstLine, delimiter);
+        String[] firstFields = parseDelimitedLine(firstLine, delimiter, quoted);
         this.headers = new String[firstFields.length];
         for (int i = 0; i < firstFields.length; i++) {
           this.headers[i] = "field_" + i;
@@ -2460,7 +2462,7 @@ public class HttpSource implements DataSource {
             continue;
           }
 
-          String[] values = parseDelimitedLine(line, delimiter);
+          String[] values = parseDelimitedLine(line, delimiter, quoted);
 
           // Apply filter if configured
           if (filterColumnIndex >= 0 && filterRegex != null) {
@@ -2468,10 +2470,7 @@ public class HttpSource implements DataSource {
               skippedRows++;
               continue;
             }
-            String filterValue = values[filterColumnIndex].trim();
-            if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
-              filterValue = filterValue.substring(1, filterValue.length() - 1);
-            }
+            String filterValue = stripQuotesIfPresent(values[filterColumnIndex].trim(), quoted);
             if (!filterRegex.matcher(filterValue).find()) {
               skippedRows++;
               continue;
@@ -2485,10 +2484,7 @@ public class HttpSource implements DataSource {
             for (int idx : keyColumnIndices) {
               if (idx < values.length) {
                 String header = headers[idx].trim();
-                String value = values[idx].trim();
-                if (value.startsWith("\"") && value.endsWith("\"")) {
-                  value = value.substring(1, value.length() - 1);
-                }
+                String value = stripQuotesIfPresent(values[idx].trim(), quoted);
                 // Apply column name mapping: source name -> output name
                 String outputName = wideToNarrow.getOutputColumnName(header);
                 baseRow.put(outputName, parseValue(value));
@@ -2499,10 +2495,7 @@ public class HttpSource implements DataSource {
             for (int i = 0; i < valueColumnIndices.size(); i++) {
               int idx = valueColumnIndices.get(i);
               if (idx < values.length) {
-                String valueStr = values[idx].trim();
-                if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
-                  valueStr = valueStr.substring(1, valueStr.length() - 1);
-                }
+                String valueStr = stripQuotesIfPresent(values[idx].trim(), quoted);
 
                 // Skip null/empty values based on config
                 if (wideToNarrow.shouldSkipValue(valueStr)) {
@@ -2546,10 +2539,7 @@ public class HttpSource implements DataSource {
             Map<String, Object> row = new LinkedHashMap<String, Object>();
             for (int j = 0; j < headers.length && j < values.length; j++) {
               String header = headers[j].trim();
-              String value = values[j].trim();
-              if (value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length() - 1);
-              }
+              String value = stripQuotesIfPresent(values[j].trim(), quoted);
               Object parsed = parseValue(value);
               row.put(header, parsed);
             }
@@ -2657,9 +2647,10 @@ public class HttpSource implements DataSource {
       // Determine headers
       HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
       String[] headers;
+      boolean quoted = respConfig.isQuoted();
       if (!respConfig.isHasHeader() && respConfig.getColumnNames() != null) {
         // Headerless file with explicit column names
-        headers = parseDelimitedLine(respConfig.getColumnNames(), delimiter);
+        headers = parseDelimitedLine(respConfig.getColumnNames(), delimiter, quoted);
         LOGGER.debug("Using {} explicit column names for headerless CSV", headers.length);
       } else {
         // Parse header row from file
@@ -2667,7 +2658,7 @@ public class HttpSource implements DataSource {
         if (headerLine == null) {
           return result;
         }
-        headers = parseDelimitedLine(headerLine, delimiter);
+        headers = parseDelimitedLine(headerLine, delimiter, quoted);
         LOGGER.debug("Parsed {} columns from header", headers.length);
       }
 
@@ -2725,7 +2716,7 @@ public class HttpSource implements DataSource {
           continue;
         }
 
-        String[] values = parseDelimitedLine(line, delimiter);
+        String[] values = parseDelimitedLine(line, delimiter, quoted);
 
         // Apply filter if configured
         if (filterColumnIndex >= 0 && filterRegex != null) {
@@ -2733,11 +2724,7 @@ public class HttpSource implements DataSource {
             skippedRows++;
             continue;
           }
-          String filterValue = values[filterColumnIndex].trim();
-          // Remove quotes if present
-          if (filterValue.startsWith("\"") && filterValue.endsWith("\"")) {
-            filterValue = filterValue.substring(1, filterValue.length() - 1);
-          }
+          String filterValue = stripQuotesIfPresent(values[filterColumnIndex].trim(), quoted);
           if (!filterRegex.matcher(filterValue).find()) {
             skippedRows++;
             continue;
@@ -2751,10 +2738,7 @@ public class HttpSource implements DataSource {
           for (int idx : keyColumnIndices) {
             if (idx < values.length) {
               String header = headers[idx].trim();
-              String value = values[idx].trim();
-              if (value.startsWith("\"") && value.endsWith("\"")) {
-                value = value.substring(1, value.length() - 1);
-              }
+              String value = stripQuotesIfPresent(values[idx].trim(), quoted);
               baseRow.put(header, parseValue(value));
             }
           }
@@ -2763,10 +2747,7 @@ public class HttpSource implements DataSource {
           for (int i = 0; i < valueColumnIndices.size(); i++) {
             int idx = valueColumnIndices.get(i);
             if (idx < values.length) {
-              String valueStr = values[idx].trim();
-              if (valueStr.startsWith("\"") && valueStr.endsWith("\"")) {
-                valueStr = valueStr.substring(1, valueStr.length() - 1);
-              }
+              String valueStr = stripQuotesIfPresent(values[idx].trim(), quoted);
 
               // Skip null/empty values based on config
               if (wideToNarrow.shouldSkipValue(valueStr)) {
@@ -2794,12 +2775,7 @@ public class HttpSource implements DataSource {
           Map<String, Object> row = new LinkedHashMap<String, Object>();
           for (int j = 0; j < headers.length && j < values.length; j++) {
             String header = headers[j].trim();
-            String value = values[j].trim();
-
-            // Remove surrounding quotes if present
-            if (value.startsWith("\"") && value.endsWith("\"")) {
-              value = value.substring(1, value.length() - 1);
-            }
+            String value = stripQuotesIfPresent(values[j].trim(), quoted);
 
             // Try to parse as number
             Object parsed = parseValue(value);
@@ -2833,13 +2809,44 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Parses a single delimited line, handling quoted fields.
+   * Parses a single delimited line, treating {@code "} as an RFC4180 quote character.
    *
    * @param line The line to parse
    * @param delimiter The delimiter character (comma for CSV, tab for TSV)
    * @return Array of field values
    */
   private String[] parseDelimitedLine(String line, char delimiter) {
+    return parseDelimitedLine(line, delimiter, true);
+  }
+
+  /**
+   * Parses a single delimited line.
+   *
+   * @param line The line to parse
+   * @param delimiter The delimiter character (comma for CSV, tab for TSV, "|" for FEC bulk files)
+   * @param quoted whether {@code "} is an RFC4180 quote character wrapping a field (doubled to
+   *     escape a literal quote) rather than ordinary literal data. When false, {@code "} is
+   *     treated like any other character and every occurrence of {@code delimiter} splits a new
+   *     field — this is what sources with no real quoting convention (e.g. FEC's pipe-delimited
+   *     bulk files, which use {@code "} literally in names like {@code SMITH, JOHN "JACK"})
+   *     actually need: applying quote semantics there desyncs field boundaries for the rest of
+   *     the line whenever a field has an odd count of literal quotes.
+   * @return Array of field values
+   */
+  private String[] parseDelimitedLine(String line, char delimiter, boolean quoted) {
+    if (!quoted) {
+      List<String> fields = new ArrayList<String>();
+      int start = 0;
+      for (int i = 0; i < line.length(); i++) {
+        if (line.charAt(i) == delimiter) {
+          fields.add(line.substring(start, i));
+          start = i + 1;
+        }
+      }
+      fields.add(line.substring(start));
+      return fields.toArray(new String[0]);
+    }
+
     List<String> fields = new ArrayList<String>();
     StringBuilder current = new StringBuilder();
     boolean inQuotes = false;
@@ -2865,6 +2872,19 @@ public class HttpSource implements DataSource {
     fields.add(current.toString());
 
     return fields.toArray(new String[0]);
+  }
+
+  /**
+   * Strips a leading+trailing RFC4180 quote pair from a field value, or returns it unchanged
+   * when {@code quoted} is false — a source with no real quoting convention may legitimately
+   * have literal leading/trailing quote characters (e.g. a nickname like {@code "JACK"}) that
+   * must not be stripped.
+   */
+  private static String stripQuotesIfPresent(String value, boolean quoted) {
+    if (quoted && value.startsWith("\"") && value.endsWith("\"") && value.length() >= 2) {
+      return value.substring(1, value.length() - 1);
+    }
+    return value;
   }
 
   /**

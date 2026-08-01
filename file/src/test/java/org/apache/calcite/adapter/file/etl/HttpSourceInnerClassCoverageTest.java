@@ -76,12 +76,13 @@ public class HttpSourceInnerClassCoverageTest {
         HttpSourceConfig.RowFilterConfig.class,
         HttpSourceConfig.WideToNarrowConfig.class,
         boolean.class,
-        String.class);
+        String.class,
+        boolean.class);
     constructor.setAccessible(true);
 
     return (Iterator<Map<String, Object>>) constructor.newInstance(
         source, inputStream, cachePath, delimiter, filter, wideToNarrow,
-        hasHeader, columnNames);
+        hasHeader, columnNames, true);
   }
 
   @Test void testBasicCSVParsing() throws Exception {

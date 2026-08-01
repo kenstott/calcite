@@ -225,4 +225,24 @@ class CoverageAndExternalSourcesTest {
     JsonNode out = MAPPER.readTree(ExternalSources.suggest("", 3));
     assertEquals(3, out.path("sources").size());
   }
+
+  /**
+   * Reproduces the reported bug: a nonsense topic sharing no real relevance with any source
+   * still matched NWS and openFDA at a full-confidence-looking score. Root cause: "for" (a
+   * stopword) is a substring of the NWS topic keyword "forecast" and of "forecasts"/"forecast"
+   * in its prose fields — three incidental contains() hits added up to a nonzero score with no
+   * floor to filter it out.
+   */
+  @Test void nonsenseTopicWithAStopwordInsideARealKeywordRefuses() throws Exception {
+    JsonNode out = MAPPER.readTree(
+        ExternalSources.suggest("recipe for chocolate chip cookies", 5));
+    assertEquals(0, out.path("sources").size(),
+        "\"for\" incidentally substring-matching \"forecast\" must not count as relevance");
+    assertTrue(out.path("note").asText().contains("unavailable"));
+  }
+
+  @Test void aGenuineStopwordOnlyTopicAlsoRefuses() throws Exception {
+    JsonNode out = MAPPER.readTree(ExternalSources.suggest("the of and for", 5));
+    assertEquals(0, out.path("sources").size());
+  }
 }
