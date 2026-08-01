@@ -186,12 +186,14 @@ public final class RetryableHttp {
     value = value.trim();
     try {
       return Long.parseLong(value) * 1000L;   // delta-seconds form
+    // fallback-guard: allow retryAfterMillis's javadoc documents -1 as the sentinel for an absent/unparseable Retry-After header
     } catch (NumberFormatException notSeconds) {
       try {                                    // HTTP-date form (RFC 1123)
         long whenMs = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
             .toInstant().toEpochMilli();
         long deltaMs = whenMs - System.currentTimeMillis();
         return deltaMs > 0 ? deltaMs : 0L;
+      // fallback-guard: allow same retryAfterMillis -1 sentinel contract as the delta-seconds branch above, for the HTTP-date parse failure
       } catch (DateTimeParseException notDate) {
         return -1L;
       }

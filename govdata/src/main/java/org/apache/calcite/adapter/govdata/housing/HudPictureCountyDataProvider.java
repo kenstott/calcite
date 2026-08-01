@@ -254,6 +254,7 @@ public class HudPictureCountyDataProvider implements DataProvider {
       }
       try {
         return Double.valueOf(s);
+      // fallback-guard: allow blank/"NA" already handled above; malformed text just reinforces the same null-for-missing semantics
       } catch (NumberFormatException e) {
         return null;
       }

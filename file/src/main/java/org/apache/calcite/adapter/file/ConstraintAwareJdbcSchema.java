@@ -133,6 +133,7 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
           cols.add(f.getName());
         }
         return cols;
+      // fallback-guard: allow TableConstraints.java explicitly documents that a null from this resolver falls back to positional column mapping for FK definitions, a designed degrade path.
       } catch (RuntimeException e) {
         return null;
       }

@@ -191,6 +191,7 @@ final class FiscalHttp {
         return Long.valueOf((long) Double.parseDouble(t));
       }
       return Long.valueOf(Long.parseLong(t));
+    // fallback-guard: allow javadoc explicitly documents "blank or unparseable becomes null (never throws)" -- a deliberately designed nullable parser
     } catch (NumberFormatException e) {
       return null;
     }
@@ -210,6 +211,7 @@ final class FiscalHttp {
     }
     try {
       return Double.valueOf(Double.parseDouble(t));
+    // fallback-guard: allow same documented nullable-parser contract as toLong ("never throws")
     } catch (NumberFormatException e) {
       return null;
     }

@@ -175,6 +175,7 @@ public class ClickHouseConfig {
     }
     try {
       return Long.parseLong(numberPart) * multiplier;
+    // fallback-guard: allow parseMemorySetting falls back to the documented 4GB default, same pattern as ModelOperand's default-value getters
     } catch (NumberFormatException e) {
       return 4L * 1024 * 1024 * 1024; // 4GB default
     }
@@ -191,6 +192,7 @@ public class ClickHouseConfig {
     try {
       Double.parseDouble(value);
       return true;
+    // fallback-guard: allow isNumericValue is a Double.parseDouble probe used purely as a type-sniffing predicate
     } catch (NumberFormatException e) {
       return false;
     }

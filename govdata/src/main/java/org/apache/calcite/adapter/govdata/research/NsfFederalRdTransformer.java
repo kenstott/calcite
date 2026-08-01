@@ -66,8 +66,7 @@ public class NsfFederalRdTransformer extends EiaBulkXlsxTransformer {
       workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes));
       return parseFederalTable(workbook);
     } catch (Exception e) {
-      LOGGER.error("Failed to parse NSF Federal R&D XLSX from {}: {}", url, e.getMessage());
-      return "[]";
+      throw new RuntimeException("Failed to parse NSF Federal R&D XLSX from " + url, e);
     } finally {
       if (workbook != null) {
         try {

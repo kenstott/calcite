@@ -1500,6 +1500,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
       try {
         return String.format("%" + format.replaceAll("^%", ""), fieldValue);
+      // fallback-guard: allow printf-expression evaluator follows TRY_CAST semantics; null is the documented not-evaluable result
       } catch (IllegalFormatException e) {
         LOGGER.debug("printf format error for '{}': {}", format, e.getMessage());
         return null;
@@ -1688,6 +1689,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           // Unknown type - return as string
           return strValue;
       }
+    // fallback-guard: allow castValue documents TRY_CAST-style null-on-parse-failure semantics
     } catch (NumberFormatException e) {
       // Like TRY_CAST - return null on parse failure
       LOGGER.debug("Failed to cast '{}' to {}: {}", strValue, targetType, e.getMessage());
@@ -1853,6 +1855,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         default:
           return value;
       }
+    // fallback-guard: allow parsePartitionValue documents log-and-return-null on parse failure, same TRY_CAST convention
     } catch (NumberFormatException e) {
       // If parsing fails, log and return null
       LOGGER.debug("Could not parse partition value '{}' as {}: {}",
@@ -2457,8 +2460,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       return partitions;
 
     } catch (Exception e) {
-      LOGGER.warn("Failed to read existing partitions from {}: {}", tableId, e.getMessage());
-      return partitions;
+      // A partial/empty result here is trusted as ground truth by EtlPipeline's
+      // skip-if-materialized check (see getExistingPartitions callers) -- swallowing a real
+      // manifest-read failure as "no existing partitions" risks re-materializing already-written
+      // data as a duplicate, or skipping a partition that genuinely still needs writing.
+      throw new RuntimeException(
+          "Failed to read existing partitions from " + tableId, e);
     }
   }
 }

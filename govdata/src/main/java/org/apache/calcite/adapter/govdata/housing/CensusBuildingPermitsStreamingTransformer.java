@@ -146,6 +146,7 @@ public class CensusBuildingPermitsStreamingTransformer implements ResponseTransf
     }
     try {
       return (int) Double.parseDouble(s);
+    // fallback-guard: allow nullable-field parser; malformed text correctly yields null, not a fabricated integer
     } catch (NumberFormatException e) {
       return null;
     }

@@ -104,6 +104,7 @@ public class SchemaConfigParser {
   private static SchemaStrategy.ParquetStrategy parseParquetStrategy(String strategy) {
     try {
       return SchemaStrategy.ParquetStrategy.valueOf(strategy.toUpperCase());
+    // fallback-guard: allow lenient-config-enum idiom, logs a warning and substitutes the documented default
     } catch (IllegalArgumentException e) {
       LOGGER.warn("Unknown Parquet strategy: {}, using LATEST_SCHEMA_WINS", strategy);
       return SchemaStrategy.ParquetStrategy.LATEST_SCHEMA_WINS;
@@ -113,6 +114,7 @@ public class SchemaConfigParser {
   private static SchemaStrategy.CsvStrategy parseCsvStrategy(String strategy) {
     try {
       return SchemaStrategy.CsvStrategy.valueOf(strategy.toUpperCase());
+    // fallback-guard: allow lenient-config-enum idiom, logs a warning and substitutes the documented default
     } catch (IllegalArgumentException e) {
       LOGGER.warn("Unknown CSV strategy: {}, using RICHEST_FILE", strategy);
       return SchemaStrategy.CsvStrategy.RICHEST_FILE;
@@ -122,6 +124,7 @@ public class SchemaConfigParser {
   private static SchemaStrategy.JsonStrategy parseJsonStrategy(String strategy) {
     try {
       return SchemaStrategy.JsonStrategy.valueOf(strategy.toUpperCase());
+    // fallback-guard: allow lenient-config-enum idiom, logs a warning and substitutes the documented default
     } catch (IllegalArgumentException e) {
       LOGGER.warn("Unknown JSON strategy: {}, using LATEST_FILE", strategy);
       return SchemaStrategy.JsonStrategy.LATEST_FILE;
@@ -138,6 +141,7 @@ public class SchemaConfigParser {
   private static SchemaStrategy.ValidationLevel parseValidationLevel(String level) {
     try {
       return SchemaStrategy.ValidationLevel.valueOf(level.toUpperCase());
+    // fallback-guard: allow lenient-config-enum idiom, logs a warning and substitutes the documented default
     } catch (IllegalArgumentException e) {
       LOGGER.warn("Unknown validation level: {}, using WARN", level);
       return SchemaStrategy.ValidationLevel.WARN;

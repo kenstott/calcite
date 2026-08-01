@@ -49,6 +49,7 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     byte[] zipBytes;
     try {
       zipBytes = downloadBytes(url);
+    // fallback-guard: allow narrow download-only catch; parse failures below rethrow as RuntimeException instead of being swallowed
     } catch (IOException e) {
       // Archive genuinely absent (e.g. a year EIA has not yet published): legitimate
       // "no data" signal — emit an empty result rather than failing the run.

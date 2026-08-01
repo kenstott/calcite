@@ -131,8 +131,8 @@ public class UsdaRuralUrbanTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Error transforming USDA Rural-Urban data: {}", e.getMessage(), e);
-      return "[]";
+      throw new RuntimeException(
+          "Error transforming USDA Rural-Urban data for " + context.getUrl(), e);
     }
   }
 

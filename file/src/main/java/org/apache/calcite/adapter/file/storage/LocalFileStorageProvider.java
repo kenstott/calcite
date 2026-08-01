@@ -157,6 +157,7 @@ public class LocalFileStorageProvider implements StorageProvider {
       try {
         java.net.URI uri = new java.net.URI(path);
         return new File(uri).exists();
+      // fallback-guard: allow a malformed "file:" URI genuinely cannot exist, matching File.exists()'s own no-throw contract
       } catch (java.net.URISyntaxException e) {
         return false;
       }
@@ -169,6 +170,7 @@ public class LocalFileStorageProvider implements StorageProvider {
       try {
         java.net.URI uri = new java.net.URI(path);
         return new File(uri).isDirectory();
+      // fallback-guard: allow same malformed-URI-means-false semantics as the neighboring exists() method
       } catch (java.net.URISyntaxException e) {
         return false;
       }

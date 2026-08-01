@@ -263,6 +263,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       LOGGER.info("Created baseline snapshot with {} files for table '{}'", fileMap.size(), tableName);
       return baseline;
 
+    // fallback-guard: allow null baseline is treated by filesChangedComparedToBaseline() as "no baseline, must refresh"
     } catch (Exception e) {
       LOGGER.error("Failed to create baseline snapshot: {}", e.getMessage(), e);
       return null;
@@ -316,6 +317,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
               return true;
             }
           }
+        // fallback-guard: allow fail-safe direction, triggers a refresh rather than reporting no changes
         } catch (Exception e) {
           LOGGER.debug("Failed to get metadata for file '{}': {}", filePath, e.getMessage());
           return true; // Assume changed if we can't check
@@ -333,6 +335,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       LOGGER.debug("No file changes detected for table '{}'", tableName);
       return false;
 
+    // fallback-guard: allow fail-safe direction, consistent with the inner catch above; forces a refresh rather than masking the error
     } catch (Exception e) {
       LOGGER.error("Error checking for file changes: {}", e.getMessage(), e);
       return true; // Assume changed on error

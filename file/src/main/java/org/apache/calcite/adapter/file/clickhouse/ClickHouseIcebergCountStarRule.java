@@ -296,6 +296,7 @@ public class ClickHouseIcebergCountStarRule extends RelOptRule {
           totalRecords, tableLocation);
       return totalRecords;
 
+    // fallback-guard: allow Same planner-rule pattern: null from the Iceberg row-count read means the COUNT(*) rewrite rule doesn't fire and the real scan plan is used.
     } catch (Exception e) {
       LOGGER.debug("[CH-ICEBERG-COUNT*] Failed to read row count from Iceberg: {}",
           e.getMessage());
@@ -325,6 +326,7 @@ public class ClickHouseIcebergCountStarRule extends RelOptRule {
           aggregate.getCluster(),
           rowType,
           ImmutableList.of(ImmutableList.of(literal)));
+    // fallback-guard: allow Same planner-rule pattern for VALUES-node construction: null means the rule doesn't fire, falling back to the real (correct) plan.
     } catch (Exception e) {
       LOGGER.error("[CH-ICEBERG-COUNT*] Failed to create COUNT(*) VALUES node", e);
       return null;

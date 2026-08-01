@@ -601,6 +601,7 @@ public class HooksConfig {
       String normalized = value.toUpperCase().replace("-", "_").replace(" ", "_");
       try {
         return ErrorAction.valueOf(normalized);
+      // fallback-guard: allow Defaulting an unrecognized error-action string to ErrorAction.FAIL is the strict, safe-direction default (halt rather than silently continue), not a masked failure.
       } catch (IllegalArgumentException e) {
         return ErrorAction.FAIL;
       }

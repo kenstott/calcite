@@ -210,6 +210,7 @@ public final class IcebergSchemaCache {
     }
     try {
       return md5Hex(java.nio.file.Files.readAllBytes(f.toPath()));
+    // fallback-guard: allow localFileDigest's javadoc documents null meaning no readable local cache, forcing the safe download path
     } catch (IOException e) {
       LOGGER.warn("Could not digest schema cache {}: {}", f, e.getMessage());
       return null;
@@ -374,6 +375,7 @@ public final class IcebergSchemaCache {
         return null;
       }
       return etag.toLowerCase(java.util.Locale.ROOT);
+    // fallback-guard: allow etagDigest's javadoc documents null on HEAD failure/non-MD5 ETag, forcing a safe re-download-and-recompare
     } catch (IOException | RuntimeException e) {
       LOGGER.debug("HEAD of {} failed: {}", path, e.toString());
       return null;
@@ -447,6 +449,7 @@ public final class IcebergSchemaCache {
       LOGGER.info("Published Iceberg schema cache: {} tables, {} bytes, digest {} -> {}",
           ENTRIES.size(), bytes.length, md5Hex(bytes), root + PUBLISHED_KEY);
       return true;
+    // fallback-guard: allow publish() returns false on failure, a properly distinguishable boolean signal from true
     } catch (IOException | RuntimeException e) {
       LOGGER.warn("Failed to publish Iceberg schema cache to {}: {}",
           root + PUBLISHED_KEY, e.toString());
@@ -494,6 +497,7 @@ public final class IcebergSchemaCache {
       LOGGER.info("Iceberg schema cache written: {} tables -> {}",
           ENTRIES.size(), target.getAbsolutePath());
       return true;
+    // fallback-guard: allow save() returns false on IOException, the same distinguishable boolean success/failure contract
     } catch (IOException e) {
       LOGGER.warn("Could not write Iceberg schema cache {}: {}", target, e.getMessage());
       return false;
@@ -531,6 +535,7 @@ public final class IcebergSchemaCache {
       LOGGER.info("Installed bundled Iceberg schema cache -> {} ({} bytes)",
           target.getAbsolutePath(), target.length());
       return true;
+    // fallback-guard: allow installBundled() returns false on failure; javadoc clarifies this is a cold-start optimization, never an override
     } catch (IOException e) {
       LOGGER.warn("Could not install bundled Iceberg schema cache: {}", e.getMessage());
       return false;
@@ -577,6 +582,7 @@ public final class IcebergSchemaCache {
         return null;
       }
       return scheme + "://" + authority + "/";
+    // fallback-guard: allow bucketRoot's javadoc documents null when the path names no bucket, a safe degrade shared with the not-a-bucket-URI case
     } catch (java.net.URISyntaxException e) {
       return null;
     }

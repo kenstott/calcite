@@ -165,9 +165,8 @@ public class DroughtMonitorTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Drought Monitor: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("Drought Monitor: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

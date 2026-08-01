@@ -174,9 +174,8 @@ public class ClimateNormalsTransformer implements ResponseTransformer {
       return output.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Climate Normals: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("Climate Normals: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

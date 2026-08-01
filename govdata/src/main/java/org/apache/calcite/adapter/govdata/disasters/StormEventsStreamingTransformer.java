@@ -265,6 +265,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     }
     try {
       return (int) Double.parseDouble(v);
+    // fallback-guard: allow per-field numeric parser for one CSV cell; null just marks that field unparseable
     } catch (NumberFormatException e) {
       return null;
     }
@@ -276,6 +277,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     }
     try {
       return Double.parseDouble(v);
+    // fallback-guard: allow per-field numeric parser for one CSV cell; null just marks that field unparseable
     } catch (NumberFormatException e) {
       return null;
     }
@@ -304,6 +306,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     }
     try {
       return Double.parseDouble(s) * mult;
+    // fallback-guard: allow per-value K/M/B damage-notation parse; null is a documented per-value outcome
     } catch (NumberFormatException e) {
       return null;
     }

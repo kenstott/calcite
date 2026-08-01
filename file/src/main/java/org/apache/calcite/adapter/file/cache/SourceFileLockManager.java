@@ -88,6 +88,7 @@ public class SourceFileLockManager {
         channel.close();
         raf.close();
 
+      // fallback-guard: allow Textbook handling of the expected OverlappingFileLockException case (this JVM already holds the lock), a well-understood Java NIO idiom.
       } catch (OverlappingFileLockException e) {
         // This JVM already has a lock on this file
         LockInfo existing = ACTIVE_LOCKS.get(path);

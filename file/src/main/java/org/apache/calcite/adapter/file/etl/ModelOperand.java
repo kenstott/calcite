@@ -78,6 +78,7 @@ public final class ModelOperand {
     }
     try {
       return Integer.parseInt(s.trim());
+    // fallback-guard: allow getInt's javadoc documents returning defaultValue on an unparseable value
     } catch (NumberFormatException e) {
       return defaultValue;
     }
@@ -95,6 +96,7 @@ public final class ModelOperand {
     }
     try {
       return Long.parseLong(s.trim());
+    // fallback-guard: allow getLong has the same documented default-value contract as getInt
     } catch (NumberFormatException e) {
       return defaultValue;
     }

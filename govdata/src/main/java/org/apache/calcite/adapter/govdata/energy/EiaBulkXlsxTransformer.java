@@ -52,8 +52,7 @@ public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
         workbook.close();
       }
     } catch (Exception e) {
-      LOGGER.error("Failed to parse XLSX from {}: {}", url, e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA bulk XLSX: failed to parse from " + url, e);
     }
   }
 
@@ -104,9 +103,11 @@ public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
     if (cellType == CellType.FORMULA) {
       try {
         return String.valueOf(cell.getStringCellValue());
+      // fallback-guard: allow standard POI formula-cell fallback to the cached numeric value when cached string type doesn't match
       } catch (Exception e) {
         try {
           return String.valueOf(cell.getNumericCellValue());
+        // fallback-guard: allow inner formula-cell fallback; null means neither cached string nor numeric was readable for one display string
         } catch (Exception ex) {
           return null;
         }
@@ -130,6 +131,7 @@ public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
       }
       try {
         return Double.parseDouble(s.replace(",", ""));
+      // fallback-guard: allow per-cell numeric parser; null marks one cell unparseable
       } catch (NumberFormatException e) {
         return null;
       }
@@ -137,6 +139,7 @@ public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
     if (cellType == CellType.FORMULA) {
       try {
         return cell.getNumericCellValue();
+      // fallback-guard: allow formula-cell fallback; a formula cell without a cached numeric value yields null for that one cell
       } catch (Exception e) {
         return null;
       }

@@ -106,9 +106,8 @@ public class EiaRetailSalesTransformer extends EiaV2Transformer implements Respo
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA Retail Sales: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException(
+          "EIA Retail Sales: failed to parse response for " + context.getUrl(), e);
     }
   }
 }

@@ -518,6 +518,7 @@ public class TigerFieldNormalizer {
         return null;
       }
       return Double.parseDouble(strValue);
+    // fallback-guard: allow nullable numeric parse helper, consistent with this class's other null-on-failure normalization methods
     } catch (NumberFormatException e) {
       return null;
     }

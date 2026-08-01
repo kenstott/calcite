@@ -153,6 +153,7 @@ public class ColumnStatistics {
         default:
           return 0.3;
       }
+    // fallback-guard: allow same approximate selectivity constant already used by this method's own default switch branch
     } catch (Exception e) {
       return 0.3; // Fallback for comparison errors
     }

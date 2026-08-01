@@ -116,9 +116,8 @@ public class NwsAlertTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("NWS Alert: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("NWS Alert: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

@@ -281,6 +281,7 @@ public class CensusDataTransformer {
       } else {
         return Long.parseLong(stringValue);
       }
+    // fallback-guard: allow untyped heuristic path with no declared column-type mapping; the raw string is exactly what convertValue() already stores for unmapped fields
     } catch (NumberFormatException e) {
       return stringValue;
     }

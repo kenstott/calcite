@@ -267,6 +267,7 @@ public interface StorageProvider {
       return timeDiff > 1000;
 
     } catch (IOException e) {
+      // fallback-guard: allow fails safe by assuming 'changed' when metadata can't be read, forcing a safe re-sync
       // If we can't get current metadata, assume changed
       return true;
     }

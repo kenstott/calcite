@@ -414,6 +414,7 @@ public class DocumentSource {
         return labels[labels.length - 2] + "." + labels[labels.length - 1];
       }
       return host;
+    // fallback-guard: allow rateLimitKey degrading to a shared 'default' bucket on a malformed URL only affects throttling granularity, not data correctness; a best-effort utility.
     } catch (RuntimeException e) {
       return "default";
     }

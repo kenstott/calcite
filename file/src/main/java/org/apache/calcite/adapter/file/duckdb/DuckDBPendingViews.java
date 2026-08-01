@@ -182,6 +182,7 @@ public final class DuckDBPendingViews {
       stmt.execute(String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS %s",
           pv.duckdbSchema, pv.viewName, pv.viewSql));
       return null;
+    // fallback-guard: allow Javadoc states 'Returns null on success, else the error' — the exception is returned as a value to the caller, not swallowed at all.
     } catch (SQLException createEx) {
       return createEx;
     }

@@ -97,9 +97,8 @@ public class CdeTrendsTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDE Trends: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE Trends: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 }

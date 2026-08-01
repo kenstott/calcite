@@ -140,6 +140,7 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
         if (original != null && original != node) {
           return countTableScans(original);
         }
+      // fallback-guard: allow The class javadoc directly above explains this design: an unfamiliar/uninspectable node must return NOT_SIMPLE so the rule stops rather than silently returning a wrong count — the exact opposite of masking.
       } catch (Exception e) {
         // Cannot inspect it, so cannot prove it is a single scan.
         return NOT_SIMPLE;
@@ -431,6 +432,7 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
           totalRecords, snapshotId, tableLocation);
       return new long[]{totalRecords, snapshotId};
 
+    // fallback-guard: allow Consistent with the sibling Iceberg count-star rules: null from the metadata read means the COUNT(*) rewrite doesn't fire, falling back to a real scan.
     } catch (Exception e) {
       LOGGER.warn("[ICEBERG COUNT*] Failed to read count/snapshot from Iceberg table at '{}': {}",
           tableLocation, e.getMessage(), e);
@@ -463,6 +465,7 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
           aggregate.getCluster(),
           rowType,
           ImmutableList.of(ImmutableList.of(literal)));
+    // fallback-guard: allow Same VALUES-node-construction pattern as the other count-star rules: null means the rule doesn't fire.
     } catch (Exception e) {
       LOGGER.error("Failed to create COUNT(*) VALUES node", e);
       return null;

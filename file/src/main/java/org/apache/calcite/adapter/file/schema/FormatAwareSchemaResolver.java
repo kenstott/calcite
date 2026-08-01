@@ -105,6 +105,7 @@ public class FormatAwareSchemaResolver {
       }
       // Default to CSV
       return "csv";
+    // fallback-guard: allow mirrors the same "no recognized magic number -> csv" default already used on the success path above
     } catch (IOException e) {
       LOGGER.warn("Failed to detect format for file: {}, defaulting to csv", file.getName());
       return "csv";
@@ -404,6 +405,7 @@ public class FormatAwareSchemaResolver {
         }
       }
       return 0;
+    // fallback-guard: allow used only to rank/compare candidate files for the "richest file" strategy, not the resolved schema
     } catch (Exception e) {
       LOGGER.warn("Failed to count CSV columns in file: {}", file.getName());
       return 0;

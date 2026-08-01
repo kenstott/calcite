@@ -94,9 +94,7 @@ public class CdeAgencyTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDE Agency: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE Agency: Failed to parse response for " + context.getUrl(), e);
     }
   }
 

@@ -241,6 +241,7 @@ public class StatisticsCache {
         default:
           return value;
       }
+    // fallback-guard: allow logged at WARN; keeps the original string rather than losing the value or fabricating a typed default
     } catch (Exception e) {
       LOGGER.warn("Failed to deserialize value '{}' as type '{}': {}", value, type, e.getMessage());
       return value; // Return as string if parsing fails

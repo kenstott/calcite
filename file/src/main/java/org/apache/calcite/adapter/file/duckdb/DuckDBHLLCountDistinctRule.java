@@ -292,6 +292,7 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
           rowType,
           ImmutableList.of(ImmutableList.copyOf(values)));
 
+    // fallback-guard: allow Same planner-rule VALUES-node pattern: null means the HLL rewrite doesn't fire.
     } catch (Exception e) {
       LOGGER.error("Failed to create HLL VALUES node", e);
       return null;

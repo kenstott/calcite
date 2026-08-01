@@ -180,6 +180,7 @@ public class FhfaHpiStreamingTransformer implements StreamingResponseTransformer
     }
     try {
       return (int) Double.parseDouble(v);
+    // fallback-guard: allow nullable-field helper, safe-parse idiom shared across housing transformers
     } catch (NumberFormatException e) {
       return null;
     }
@@ -191,6 +192,7 @@ public class FhfaHpiStreamingTransformer implements StreamingResponseTransformer
     }
     try {
       return Double.parseDouble(v);
+    // fallback-guard: allow double counterpart of intg(); same nullable-field safe-parse idiom
     } catch (NumberFormatException e) {
       return null;
     }

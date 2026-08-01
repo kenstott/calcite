@@ -92,9 +92,7 @@ public class BjsSodaTransformer implements ResponseTransformer {
       return root.toString();
 
     } catch (Exception e) {
-      LOGGER.error("BJS SODA: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("BJS SODA: Failed to parse response for " + context.getUrl(), e);
     }
   }
 }

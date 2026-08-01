@@ -1388,6 +1388,7 @@ public class XbrlToParquetConverter implements FileConverter {
       int filingYear = Integer.parseInt(filingDate.substring(0, 4));
       String candidate = filingYear + "-" + monthDay;
       return candidate.compareTo(filingDate) <= 0 ? candidate : (filingYear - 1) + "-" + monthDay;
+    // fallback-guard: allow null-on-failure feeds into the nullable-date handling already used throughout this file
     } catch (Exception e) {
       return null;
     }
@@ -1940,6 +1941,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
       return xbrlPath;
 
+    // fallback-guard: allow documented safe at the caller (falls back to downloading from EDGAR); costs a request, never wrong data
     } catch (Exception e) {
       LOGGER.debug("Failed to find companion XBRL for {}: {}",
           htmlPath, e.getMessage());
@@ -2012,6 +2014,7 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
       return null;
+    // fallback-guard: allow documented design guarantee below — listing failure must look like "not cached" so the caller falls back to EDGAR
     } catch (Exception e) {
       // A listing failure must look like "not cached" so the caller falls back to EDGAR. Costing
       // a request is always recoverable; skipping a filing's facts is not.
@@ -2036,6 +2039,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
       String prefix = new String(head, 0, filled, StandardCharsets.UTF_8);
       return XBRL_INSTANCE_ROOT.matcher(prefix).find();
+    // fallback-guard: allow read failure only causes fallback to EDGAR per the documented design above
     } catch (Exception e) {
       LOGGER.debug("Could not sniff {} as an XBRL instance: {}", path, e.getMessage());
       return false;
@@ -2052,6 +2056,7 @@ public class XbrlToParquetConverter implements FileConverter {
   private boolean fileExists(String path) {
     try {
       return storageProvider.exists(path);
+    // fallback-guard: allow documented above — a storage error must not be reported as cached; falling through to download is always safe
     } catch (Exception e) {
       LOGGER.debug("exists() failed for {} — treating as absent: {}", path, e.getMessage());
       return false;
@@ -2076,6 +2081,7 @@ public class XbrlToParquetConverter implements FileConverter {
         out.write(buf, 0, n);
       }
       return new String(out.toByteArray(), StandardCharsets.UTF_8);
+    // fallback-guard: allow documented above — mirrors fileExists; unreadable cache entry must look like a miss so caller re-fetches
     } catch (Exception e) {
       LOGGER.debug("Could not read cached {} — refetching: {}", path, e.getMessage());
       return null;
@@ -2220,6 +2226,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       return null;
+    // fallback-guard: allow one parsing strategy in a documented multi-strategy XBRL filename resolution; null already means "not found" when the InstanceReport/Report tags are absent, so folding parse errors into the same return is consistent with the caller's chain
     } catch (Exception e) {
       LOGGER.debug("Failed to parse FilingSummary.xml: {}",
           e.getMessage());
@@ -2632,6 +2639,7 @@ public class XbrlToParquetConverter implements FileConverter {
         hex.append(String.format("%02x", hash[i]));
       }
       return accession + "_" + seq + "_" + hex;
+    // fallback-guard: allow SHA-256 is JVM-guaranteed available; this checked-exception path is effectively unreachable
     } catch (java.security.NoSuchAlgorithmException e) {
       return accession + "_" + seq;
     }
@@ -3604,6 +3612,7 @@ public class XbrlToParquetConverter implements FileConverter {
       try {
         URI baseUri = URI.create(baseUrl);
         return baseUri.getScheme() + "://" + baseUri.getHost() + relativeUrl;
+      // fallback-guard: allow bad candidate URL fails loudly at the subsequent HTTP fetch, so the parse error is never masked as success
       } catch (Exception e) {
         return baseUrl + relativeUrl;
       }
@@ -3647,6 +3656,7 @@ public class XbrlToParquetConverter implements FileConverter {
           doc.getDocumentElement() != null
               ? doc.getDocumentElement().getChildNodes().getLength() : 0);
       return doc;
+    // fallback-guard: allow documented last-resort XML fallback parser; javadoc already contracts null on failure, and it's the final strategy in the strict-XML-then-JSoup chain
     } catch (Exception e) {
       LOGGER.warn("JSoup fallback also failed for {}: {}",
           filePath.substring(filePath.lastIndexOf('/') + 1), e.getMessage());
@@ -3863,6 +3873,7 @@ public class XbrlToParquetConverter implements FileConverter {
         return -1;
       }
       return Math.min(seconds, 60L) * 1000L;
+    // fallback-guard: allow -1 is the same sentinel already used for a missing header; only affects backoff timing, not data correctness
     } catch (NumberFormatException e) {
       return -1;
     }
@@ -3951,6 +3962,7 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       } catch (IncompleteFetchException e) {
         throw e;
+      // fallback-guard: allow already retried with exponential backoff above; null here is the same documented "download failed" sentinel returned for a non-200 response a few lines up in this method
       } catch (Exception e) {
         String msg = e.getMessage();
         boolean retryable = isRetryableException(msg);
@@ -4068,6 +4080,7 @@ public class XbrlToParquetConverter implements FileConverter {
       try (InputStream is = sanitizeXmlStream(storageProvider.openInputStream(sourceFilePath))) {
         doc = builder.parse(is);
       }
+    // fallback-guard: allow does not return here — falls back to parseWithJsoupFallback and continues, mirrors the strict-XML-then-JSoup pattern used elsewhere in this file
     } catch (org.xml.sax.SAXParseException e) {
       LOGGER.info("XML parse failed for insider form {}: {} — falling back to JSoup", fileName, e.getMessage());
       doc = parseWithJsoupFallback(sourceFilePath);
@@ -6343,6 +6356,7 @@ public class XbrlToParquetConverter implements FileConverter {
       }
 
       return null;
+    // fallback-guard: allow exception path returns the same null the non-exceptional "nothing found" path above already produces
     } catch (Exception e) {
       LOGGER.warn("Error extracting period end date: " + e.getMessage());
       return null;
@@ -6563,6 +6577,7 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
       return fallbackXml;
+    // fallback-guard: allow documented 13F info-table lookup strategy; @return contract says null lets the caller fall back to guessing
     } catch (Exception e) {
       LOGGER.debug("13F index.json lookup failed for {}: {}", baseUrl, e.getMessage());
       return null;
@@ -7206,6 +7221,7 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     try {
       return Double.parseDouble(value.replace(",", ""));
+    // fallback-guard: allow documented nullable-parser idiom — javadoc above states "returning null on failure"
     } catch (NumberFormatException e) {
       return null;
     }

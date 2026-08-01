@@ -269,6 +269,7 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
     }
     try {
       return Integer.valueOf(v.toString().trim());
+    // fallback-guard: allow documented nullable numeric coercion helper, same idiom as toDouble below it
     } catch (NumberFormatException e) {
       return null;
     }
@@ -283,6 +284,7 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
     }
     try {
       return Double.valueOf(v.toString().trim());
+    // fallback-guard: allow documented nullable numeric coercion idiom, same as toInt above it
     } catch (NumberFormatException e) {
       return null;
     }

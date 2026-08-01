@@ -313,6 +313,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       processEnvironmentVariables(defaults);
 
       return defaults;
+    // fallback-guard: allow extends the already-documented "no defaults available" null (missing resource, two lines above) to malformed JSON
     } catch (Exception e) {
       LOGGER.warn("Failed to load defaults from sec-schema-factory.defaults.json: " + e.getMessage());
       return null;
@@ -1797,6 +1798,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (value instanceof String) {
       try {
         return Integer.parseInt((String) value);
+      // fallback-guard: allow textbook config-default idiom; caller-supplied defaultValue with a logged warning
       } catch (NumberFormatException e) {
         LOGGER.warn("Invalid integer value for {}: {}", key, value);
         return defaultValue;
@@ -2014,6 +2016,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return (FileConverter) clazz
             .getConstructor(StorageProvider.class, boolean.class)
             .newInstance(converterStorageProvider, enableVectorization);
+      // fallback-guard: allow normal Java reflection idiom for overload discovery (try 2-arg ctor, fall back to 1-arg)
       } catch (NoSuchMethodException e) {
         // Fall back to single-arg constructor (vectorization disabled)
         return (FileConverter) clazz
@@ -3464,6 +3467,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         return null;
       }
 
+    // fallback-guard: allow one strategy in a documented multi-strategy XBRL filename resolution chain; failure reason recorded in cacheManifest before falling to next strategy
     } catch (Exception e) {
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("FilingSummary.xml not available for {} {}: {}", cik, accession, e.getMessage());
@@ -3513,6 +3517,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
         return null;
       }
+    // fallback-guard: allow one parsing strategy in the documented multi-strategy XBRL filename resolution chain; returns null per its own @return contract, letting the caller's chain try the next strategy
     } catch (Exception e) {
       LOGGER.debug("Failed to parse FilingSummary.xml: {}", e.getMessage());
       return null;
@@ -3557,6 +3562,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
       return xbrlFilename;
 
+    // fallback-guard: allow heuristic naming strategy in a fallback chain of filename guesses; null just means this strategy produced no candidate
     } catch (Exception e) {
       LOGGER.debug("Failed to construct XBRL filename for CIK {}: {}", cik, e.getMessage());
       return null;
@@ -4043,6 +4049,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
                 return false;
               }
 
+            // fallback-guard: allow stock-price cache-freshness check; treating a metadata-read error as "not cached" only triggers a safe redundant re-download
             } catch (Exception e) {
               // File doesn't exist or can't be accessed
               LOGGER.debug("Stock price file not cached or accessible: {}", parquetPath);
@@ -4053,6 +4060,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
 
       return true; // All stock price files are cached and fresh
+    // fallback-guard: allow same cache-freshness check at the outer method level; assume-not-cached triggers a safe re-download
     } catch (Exception e) {
       LOGGER.warn("Error checking stock price cache: " + e.getMessage());
       return false; // Assume not cached if we can't check

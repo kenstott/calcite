@@ -163,6 +163,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       StorageProvider.FileMetadata meta = storageProvider().getMetadata(path);
       return meta != null
           && (System.currentTimeMillis() - meta.getLastModified()) < ttlMs;
+    // fallback-guard: allow conservative cache-freshness probe; failure just forces a safe re-download, never fabricates cached data as valid
     } catch (IOException e) {
       return false;
     }
@@ -258,6 +259,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       com.fasterxml.jackson.databind.JsonNode root = METADATA_MAPPER.readTree(body);
       METADATA_MEMO.put(productId, root);
       return root;
+    // fallback-guard: allow documented optional probe; null disables freshness reuse and caller falls back to TTL-based caching
     } catch (Exception e) {
       LOGGER.debug("Patents freshness: metadata probe failed for {}: {}", productId, e.getMessage());
       return null;
@@ -1027,6 +1029,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     }
     try {
       return Integer.parseInt(v.trim());
+    // fallback-guard: allow typed row-map nullable-value helper; null correctly signals unparseable, not a fabricated integer
     } catch (NumberFormatException e) {
       return null;
     }
@@ -1038,6 +1041,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     }
     try {
       return Double.parseDouble(v.trim());
+    // fallback-guard: allow doubleVal() mirroring intVal(), same nullable-field safe-parse idiom
     } catch (NumberFormatException e) {
       return null;
     }

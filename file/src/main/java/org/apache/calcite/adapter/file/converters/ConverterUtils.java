@@ -157,6 +157,7 @@ public final class ConverterUtils {
     try {
       Double.parseDouble(str);
       return true;
+    // fallback-guard: allow isNumeric is a textbook is-this-parseable predicate; NumberFormatException from Double.parseDouble is the expected signal for 'not numeric'.
     } catch (NumberFormatException e) {
       return false;
     }

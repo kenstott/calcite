@@ -96,8 +96,7 @@ public class FedRegisterAgenciesTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("FedRegister Agencies: failed to parse response: {}", e.getMessage());
-      return "[]";
+      throw new RuntimeException("FedRegister Agencies: failed to parse response", e);
     }
   }
 

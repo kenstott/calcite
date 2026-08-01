@@ -132,6 +132,7 @@ public class JsonPathConverter {
           try {
             int index = Integer.parseInt(indexStr);
             current = current.get(index);
+          // fallback-guard: allow JsonPath-style navigation helper: an invalid array index returning null (not-found) matches the same lookup-or-null contract used throughout the method for missing/null nodes.
           } catch (NumberFormatException e) {
             return null;
           }

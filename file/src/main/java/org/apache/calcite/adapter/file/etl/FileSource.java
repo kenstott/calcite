@@ -299,6 +299,7 @@ public class FileSource implements DataSource {
       case FORMULA:
         try {
           return cell.getNumericCellValue();
+        // fallback-guard: allow Standard Apache POI idiom: a FORMULA cell whose cached value isn't numeric falls back to the string accessor, a normal cell-type coercion, not failure masking.
         } catch (Exception e) {
           return cell.getStringCellValue();
         }

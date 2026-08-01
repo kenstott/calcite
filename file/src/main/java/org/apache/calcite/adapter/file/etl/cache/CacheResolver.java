@@ -129,6 +129,7 @@ public class CacheResolver {
       Files.write(path, content);
       return localPath;
 
+    // fallback-guard: allow resolve()'s javadoc documents null on any tier miss; an I/O error degrades to the same safe re-fetch-from-origin path
     } catch (IOException e) {
       LOGGER.warn("Failed to retrieve from S3 bundle for key '{}': {}",
           sourceKey, e.getMessage());

@@ -84,8 +84,7 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
       return out.toString();
 
     } catch (Exception e) {
-      LOGGER.error("{} transform failed: {}", getClass().getSimpleName(), e.getMessage());
-      return "[]";
+      throw new RuntimeException(getClass().getSimpleName() + " transform failed for " + url, e);
     }
   }
 

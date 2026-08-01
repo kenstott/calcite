@@ -104,18 +104,36 @@ public class FiaTreeGrmTransformer implements StreamingResponseTransformer {
       String[] hdr = headerLine.split(",", -1);
       int idxCn = indexOf(hdr, "CN");
       int idxSpcd = indexOf(hdr, "SPCD");
+      long rowsRead = 0;
+      long rowsMalformed = 0;
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.isEmpty()) {
           continue;
         }
+        rowsRead++;
         String[] cols = line.split(",", -1);
-        String cn = strAt(cols, idxCn);
-        int spcd = intAt(cols, idxSpcd);
-        if (!cn.isEmpty() && spcd > 0) {
-          map.put(cn, spcd);
+        try {
+          String cn = strAt(cols, idxCn);
+          int spcd = intAt(cols, idxSpcd);
+          if (!cn.isEmpty() && spcd > 0) {
+            map.put(cn, spcd);
+          }
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // pollute the species lookup — skip and count just this row rather than fabricate a
+          // value, and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("fia_tree_grm[{}]: skipping malformed TREE row {} ({})",
+              state, rowsRead, e.getMessage());
         }
       }
+      if (rowsMalformed > 0) {
+        LOGGER.warn("fia_tree_grm[{}]: {} TREE row(s) skipped due to malformed numeric fields",
+            state, rowsMalformed);
+      }
+      LOGGER.info("fia_tree_grm[{}]: TREE rows read={} malformed={} mapped={}",
+          state, rowsRead, rowsMalformed, map.size());
     }
     return map;
   }
@@ -140,6 +158,7 @@ public class FiaTreeGrmTransformer implements StreamingResponseTransformer {
 
       long rowsRead = 0;
       long rowsKept = 0;
+      long rowsMalformed = 0;
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.isEmpty()) {
@@ -147,32 +166,46 @@ public class FiaTreeGrmTransformer implements StreamingResponseTransformer {
         }
         rowsRead++;
         String[] cols = line.split(",", -1);
-        String treCn = strAt(cols, idxTreCn);
-        Integer spcd = treSpcd.get(treCn);
-        if (spcd == null) {
-          continue;
+        try {
+          String treCn = strAt(cols, idxTreCn);
+          Integer spcd = treSpcd.get(treCn);
+          if (spcd == null) {
+            continue;
+          }
+          int invyr = intAt(cols, idxInvyr);
+          if (invyr <= 0) {
+            continue;
+          }
+          String estnType = strAt(cols, idxEstnType);
+          if (estnType.isEmpty()) {
+            estnType = "null";
+          }
+          String key = invyr + "|" + spcd + "|" + estnType;
+          double[] acc = groups.get(key);
+          if (acc == null) {
+            acc = new double[4];
+            groups.put(key, acc);
+          }
+          acc[0] += doubleAt(cols, idxAnnGrow);
+          acc[1] += doubleAt(cols, idxRem);
+          acc[2] += doubleAt(cols, idxMort);
+          acc[3] += 1.0;
+          rowsKept++;
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // pollute the aggregate — skip and count just this row rather than fabricate a value,
+          // and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("fia_tree_grm[{}]: skipping malformed GRM row {} ({})",
+              state, rowsRead, e.getMessage());
         }
-        int invyr = intAt(cols, idxInvyr);
-        if (invyr <= 0) {
-          continue;
-        }
-        String estnType = strAt(cols, idxEstnType);
-        if (estnType.isEmpty()) {
-          estnType = "null";
-        }
-        rowsKept++;
-        String key = invyr + "|" + spcd + "|" + estnType;
-        double[] acc = groups.get(key);
-        if (acc == null) {
-          acc = new double[4];
-          groups.put(key, acc);
-        }
-        acc[0] += doubleAt(cols, idxAnnGrow);
-        acc[1] += doubleAt(cols, idxRem);
-        acc[2] += doubleAt(cols, idxMort);
-        acc[3] += 1.0;
       }
-      LOGGER.info("fia_tree_grm[{}]: GRM rows read={} kept={}", state, rowsRead, rowsKept);
+      if (rowsMalformed > 0) {
+        LOGGER.warn("fia_tree_grm[{}]: {} GRM row(s) skipped due to malformed numeric fields",
+            state, rowsMalformed);
+      }
+      LOGGER.info("fia_tree_grm[{}]: GRM rows read={} kept={} malformed={}",
+          state, rowsRead, rowsKept, rowsMalformed);
     }
     return groups;
   }
@@ -203,16 +236,16 @@ public class FiaTreeGrmTransformer implements StreamingResponseTransformer {
     return cols[idx].trim();
   }
 
+  // fallback-guard: allow index-out-of-range/empty means "column not present in this row" — a
+  // real, benign case distinct from a malformed value, so 0 there is a legitimate zero-field
+  // default. A genuinely malformed (non-empty, non-numeric) value is NOT caught here — it
+  // propagates as NumberFormatException so the per-row loop can skip+log instead of fabricating.
   private static int intAt(String[] cols, int idx) {
     String v = strAt(cols, idx);
     if (v.isEmpty()) {
       return 0;
     }
-    try {
-      return (int) Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return (int) Double.parseDouble(v);
   }
 
   private static double doubleAt(String[] cols, int idx) {
@@ -220,10 +253,6 @@ public class FiaTreeGrmTransformer implements StreamingResponseTransformer {
     if (v.isEmpty()) {
       return 0.0;
     }
-    try {
-      return Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0.0;
-    }
+    return Double.parseDouble(v);
   }
 }

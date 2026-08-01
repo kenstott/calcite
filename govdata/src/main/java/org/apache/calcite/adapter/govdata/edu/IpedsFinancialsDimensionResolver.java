@@ -37,6 +37,7 @@ public class IpedsFinancialsDimensionResolver implements DimensionResolver {
     int year;
     try {
       year = Integer.parseInt(yearStr);
+    // fallback-guard: allow DimensionResolver.resolve() is documented to return an empty (never null) list when there is nothing to iterate; a malformed year context maps to exactly that signal
     } catch (NumberFormatException e) {
       return Collections.emptyList();
     }

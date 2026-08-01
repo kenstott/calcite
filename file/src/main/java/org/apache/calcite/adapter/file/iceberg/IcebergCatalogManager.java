@@ -711,9 +711,11 @@ public class IcebergCatalogManager {
           alternates.add(tableId);
         }
       }
-    } catch (Exception e) {
-      // Namespace may not exist yet, return empty list
-      LOGGER.debug("Could not list tables in namespace {}: {}", ns, e.getMessage());
+    // fallback-guard: allow narrowly catches only NoSuchNamespaceException, genuinely distinguishable from a catalog/auth/network failure
+    } catch (org.apache.iceberg.exceptions.NoSuchNamespaceException e) {
+      // Genuinely distinguishable from a real catalog/auth/network failure: the namespace
+      // simply hasn't been created yet, so there are no alternate tables to find.
+      LOGGER.debug("Namespace {} does not exist yet: {}", ns, e.getMessage());
       return alternates;
     }
 

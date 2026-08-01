@@ -767,6 +767,7 @@ public class ParquetReorganizer {
       LOGGER.debug("Found {} distinct {} values via directory listing: {}",
           values.size(), partitionColumn, values);
 
+    // fallback-guard: allow falls back to a real alternate computation via SQL rather than a fabricated placeholder
     } catch (java.io.IOException e) {
       LOGGER.warn("Failed to list directories for {}: {}", partitionColumn, e.getMessage());
       // Fall back to SQL query if listing fails
@@ -950,6 +951,7 @@ public class ParquetReorganizer {
     try {
       Long.parseLong(str);
       return true;
+    // fallback-guard: allow correct implementation of the isNumeric predicate itself, not a masked failure
     } catch (NumberFormatException e) {
       return false;
     }

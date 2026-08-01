@@ -57,8 +57,7 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
       byte[] zipBytes = downloadBytes(url);
       return parseEia861Zip(zipBytes, year);
     } catch (Exception e) {
-      LOGGER.error("Failed to parse EIA-861 ZIP from {}: {}", url, e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA-861: failed to parse ZIP from " + url, e);
     }
   }
 

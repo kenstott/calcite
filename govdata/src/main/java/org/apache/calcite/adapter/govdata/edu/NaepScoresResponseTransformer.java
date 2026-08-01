@@ -96,8 +96,8 @@ public class NaepScoresResponseTransformer implements ResponseTransformer {
       return out.toString();
 
     } catch (Exception e) {
-      LOGGER.error("NAEP: transform failed for {}: {}", context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("NAEP Scores: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

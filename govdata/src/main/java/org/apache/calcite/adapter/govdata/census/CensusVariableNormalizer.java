@@ -161,6 +161,7 @@ public class CensusVariableNormalizer implements VariableNormalizer {
     }
     try {
       return Integer.parseInt(yearStr);
+    // fallback-guard: allow documented fallback for a best-effort variable-name lookup; worst case is the original API code passing through unrenamed, not wrong data
     } catch (NumberFormatException e) {
       return java.time.Year.now(java.time.ZoneOffset.UTC).getValue();
     }

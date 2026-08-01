@@ -464,6 +464,7 @@ public class EtlPipelineConfig {
         java.lang.reflect.Method convertMethod =
             objectMapperClass.getMethod("convertValue", Object.class, Class.class);
         return (Map<String, Object>) convertMethod.invoke(mapper, obj, Map.class);
+      // fallback-guard: allow Javadoc explicitly documents '@return Map representation, or null if not convertible' as the contract for this reflection-based JsonNode-to-Map helper.
       } catch (Exception e) {
         // If reflection fails, return null
         return null;

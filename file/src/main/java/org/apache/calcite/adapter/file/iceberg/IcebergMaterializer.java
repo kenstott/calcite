@@ -988,10 +988,28 @@ public class IcebergMaterializer {
         }
 
         return true;
+      // fallback-guard: allow logs the conflict and falls through to the same retry-with-backoff path as any other failure; a batch that never converges reports failure via maxRetries exhaustion, not a blind assumed success
       } catch (CommitFailedException e) {
-        // Another writer committed - assume idempotent, skip
-        LOGGER.warn("Batch {} already committed by another writer, skipping", batch);
-        return true;
+        // Iceberg's optimistic-concurrency conflict signal. It does NOT mean this batch's data
+        // was written by the other writer -- that was previously assumed without verification,
+        // which could silently drop a batch that lost the race for something else entirely. Fall
+        // through to the same retry-with-backoff path as any other failure below: a genuine
+        // transient conflict resolves on retry (re-reading the exclude set first), and a batch
+        // that never converges correctly reports failure via the maxRetries exhaustion below,
+        // instead of a blind assumed success.
+        String message = e.getMessage();
+        LOGGER.warn("Batch {} hit a commit conflict (attempt {}/{}): {}",
+            batch, attempts, maxRetries, message);
+        if (attempts < maxRetries) {
+          try {
+            Thread.sleep(retryDelayMs * (1L << (attempts - 1)));
+          // fallback-guard: allow InterruptedException branch correctly restores the interrupt flag and returns false (failure), not success
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return false;
+          }
+        }
+      // fallback-guard: allow true-return here is confined to the documented 'no files found' case; every other exception falls through to a retry-with-backoff loop that returns false
       } catch (Exception e) {
         String message = e.getMessage();
 
@@ -1022,6 +1040,7 @@ public class IcebergMaterializer {
         if (attempts < maxRetries) {
           try {
             Thread.sleep(retryDelayMs * (1L << (attempts - 1))); // 30s, 60s, 120s, 240s
+          // fallback-guard: allow InterruptedException branch correctly restores the interrupt flag and returns false (failure), not success
           } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             return false;
@@ -2423,6 +2442,7 @@ public class IcebergMaterializer {
       sourcePathsCache.put(cacheKey, pathsMap);
       return cikToAccessions;
 
+    // fallback-guard: allow getSourceAccessions's javadoc documents null on listing failure; its only caller checks for null and propagates it as a distinct failure signal
     } catch (Exception e) {
       LOGGER.warn("Failed to list source accessions for year {} ({}): {}",
           year, fileSuffix, e.getMessage());
@@ -2921,6 +2941,7 @@ public class IcebergMaterializer {
         LOGGER.info("Iceberg scan: {} committed accessions for {}/year={} ({} newly tracked)",
             icebergAccessions.size(), config.getTargetTableId(), yearValue, newlyMarked);
         return icebergAccessions;
+      // fallback-guard: allow falls back to the tracker, a real secondary source of truth, to avoid re-processing known-committed data when Iceberg is unreachable
       } catch (Exception e) {
         // Iceberg unreachable — fall back to tracker to avoid re-processing known-committed data.
         Set<String> trackedAccessions =
@@ -2986,8 +3007,15 @@ public class IcebergMaterializer {
       }
       LOGGER.debug("Found {} existing accessions in Iceberg for year {}", accessions.size(), yearValue);
     } catch (Exception e) {
-      // Table may not exist yet or other error - that's OK, return empty set
-      LOGGER.debug("Could not query Iceberg for accessions (table may not exist): {}", e.getMessage());
+      // The only caller (above) already confirmed the table exists before calling in, so a
+      // failure here is a genuine query error, not benign absence. Swallowing it to an empty set
+      // previously let the caller cache "0 accessions" against the current snapshot id via
+      // markTableComplete, which then short-circuits every future run for this snapshot without
+      // ever re-scanning Iceberg -- a transient query failure would have permanently looked like
+      // an empty table.
+      throw new RuntimeException(
+          "Failed to query Iceberg for existing accessions at " + icebergLocation
+          + (yearValue == null ? "" : " year=" + yearValue), e);
     }
 
     return accessions;
@@ -3168,6 +3196,7 @@ public class IcebergMaterializer {
             maxLastModified, scanned, basePath);
       }
       s3WatermarkCache.put(wmKey, maxLastModified);
+    // fallback-guard: allow watermark IOException fallback of 0 only suppresses the fast-path skip-optimization, forcing full safe re-materialization instead of skipping needed work
     } catch (IOException e) {
       LOGGER.warn("Failed to compute S3 source file watermark for {}: {}", basePath, e.getMessage());
       return 0;

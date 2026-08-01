@@ -67,6 +67,7 @@ public class UsaSpendingCountyProvider implements DataProvider {
     int fy;
     try {
       fy = Integer.parseInt(year.trim());
+    // fallback-guard: allow narrow guard on a framework-supplied dimension value, before any download/parse; bad value is logged
     } catch (NumberFormatException e) {
       LOGGER.warn("usaspending_by_county: non-numeric year {}", year);
       return Collections.emptyIterator();

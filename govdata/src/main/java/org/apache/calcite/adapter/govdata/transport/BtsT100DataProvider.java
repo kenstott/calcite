@@ -272,6 +272,7 @@ public class BtsT100DataProvider implements DataProvider {
   private static Double parseDouble(String s) {
     try {
       return Double.valueOf(s);
+    // fallback-guard: allow private nullable-field parser for a CSV column value; caller already treats null as legitimate missing value
     } catch (NumberFormatException e) {
       return null;
     }

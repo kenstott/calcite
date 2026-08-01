@@ -155,6 +155,7 @@ public class PersistentStorageCache {
     try {
       return Files.readAllBytes(dataFile.toPath());
     } catch (IOException e) {
+      // fallback-guard: allow documented nullable cache accessor; unreadable cache file is logged and treated as a cache miss
       LOGGER.warn("Failed to read cached data for path '{}': {}", path, e.getMessage());
       return null;
     }
@@ -376,6 +377,7 @@ public class PersistentStorageCache {
       }
       return hexString.toString().substring(0, 16); // Use first 16 chars
     } catch (NoSuchAlgorithmException e) {
+      // fallback-guard: allow catches NoSuchAlgorithmException for SHA-256, a JLS-mandated algorithm present on every JVM, so this path is effectively unreachable
       // Fallback to simple hash
       return String.valueOf(Math.abs(input.hashCode()));
     }

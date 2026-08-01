@@ -147,6 +147,7 @@ public class VectorizedFileEnumerator implements Enumerator<@Nullable Object[]> 
 
       return input;
 
+    // fallback-guard: allow the enclosing method's success path already returns the input unchanged (transform not yet implemented), so the catch path returns the same value
     } catch (Exception e) {
       LOGGER.warn("Error in vectorized processing, falling back to pass-through: {}",
                  e.getMessage());

@@ -186,8 +186,8 @@ final class FiaStateArchive {
         return validatorOf(conn);
       }
       return null;
+    // fallback-guard: allow no freshness signal available; null forces caller to re-download rather than assume the cache is current
     } catch (IOException e) {
-      // No freshness signal available — caller re-downloads (cannot prove the cache is current).
       LOGGER.warn("FIA HEAD probe failed for {}: {}", url, e.getMessage());
       return null;
     } finally {
@@ -213,6 +213,7 @@ final class FiaStateArchive {
         String value = new String(bos.toByteArray(), StandardCharsets.UTF_8).trim();
         return value.isEmpty() ? null : value;
       }
+    // fallback-guard: allow absent-if-unreadable cache sidecar lookup; null safely triggers a full re-fetch, not stale/wrong data
     } catch (IOException e) {
       LOGGER.warn("FIA Last-Modified sidecar read failed for {}: {}", sidecar, e.getMessage());
       return null;

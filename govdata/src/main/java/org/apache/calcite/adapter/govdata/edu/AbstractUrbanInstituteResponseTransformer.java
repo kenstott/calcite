@@ -66,8 +66,8 @@ abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordRes
       LOGGER.warn("Urban Institute: no results array in response for {}", context.getUrl());
       return "[]";
     } catch (Exception e) {
-      LOGGER.error("Urban Institute: transform failed for {}: {}", context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("Urban Institute: transform failed for "
+          + context.getUrl(), e);
     }
   }
 

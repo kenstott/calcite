@@ -105,6 +105,7 @@ public class RedisDistributedLock implements AutoCloseable {
       return new RedisDistributedLock(pool, resourceName,
           TimeUnit.MINUTES.toMillis(5)); // 5 minute default timeout
 
+    // fallback-guard: allow Comment explicitly documents this as an optional-dependency probe: 'Redis not available, fall back to file locks' — a designed graceful degradation to SourceFileLockManager's file-based locking.
     } catch (Exception e) {
       // Redis not available, fall back to file locks
       return null;

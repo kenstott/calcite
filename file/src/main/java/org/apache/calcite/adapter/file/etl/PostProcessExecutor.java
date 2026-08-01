@@ -198,6 +198,7 @@ public class PostProcessExecutor {
       LOGGER.info("Post-process '{}' completed successfully", config.getName());
       return true;
 
+    // fallback-guard: allow delegates to handleFailure(), which throws or returns false per the configured onFailure policy; never masks failure as success
     } catch (IOException | InterruptedException e) {
       String msg =
           String.format("Post-process '%s' execution error: %s", config.getName(), e.getMessage());

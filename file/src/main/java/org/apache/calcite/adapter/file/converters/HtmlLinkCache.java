@@ -207,6 +207,7 @@ public class HtmlLinkCache {
           if (!base.getHost().equalsIgnoreCase(link.getHost())) {
             return false;
           }
+        // fallback-guard: allow Link-crawl filter: a malformed URL when checking domain restrictions safely defaults to 'don't follow this link', not a data-correctness issue.
         } catch (URISyntaxException e) {
           return false;
         }
@@ -227,6 +228,7 @@ public class HtmlLinkCache {
           if (!allowed) {
             return false;
           }
+        // fallback-guard: allow Same link-crawl filter pattern for the allowed-domains check: malformed URL safely defaults to 'don't follow'.
         } catch (URISyntaxException e) {
           return false;
         }
@@ -240,6 +242,7 @@ public class HtmlLinkCache {
         URI baseUri = new URI(base);
         URI resolved = baseUri.resolve(relative);
         return resolved.toString();
+      // fallback-guard: allow resolveUrl degrades to returning the original relative string unresolved on URISyntaxException, a reasonable best-effort utility fallback.
       } catch (URISyntaxException e) {
         return relative;
       }
@@ -487,6 +490,7 @@ public class HtmlLinkCache {
     @Override public URL url() {
       try {
         return new URI(path).toURL();
+      // fallback-guard: allow StringSource is explicitly a test helper class ('Simple string-based Source implementation for testing'), so this is low-risk test scaffolding.
       } catch (URISyntaxException | MalformedURLException e) {
         return null;
       }
@@ -511,6 +515,7 @@ public class HtmlLinkCache {
     @Override public String protocol() {
       try {
         return new URI(path).toURL().getProtocol();
+      // fallback-guard: allow Same StringSource test helper class; protocol() returning 'unknown' on failure is cosmetic test scaffolding.
       } catch (URISyntaxException | MalformedURLException e) {
         return "unknown";
       }

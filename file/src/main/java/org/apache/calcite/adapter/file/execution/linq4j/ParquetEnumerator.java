@@ -698,6 +698,7 @@ public class ParquetEnumerator<E> implements Enumerator<E> {
         .mapToLong(batch -> {
           try {
             return Files.exists(batch.spillFile) ? Files.size(batch.spillFile) : 0;
+          // fallback-guard: allow getTotalSpillSize is an unused diagnostic disk-usage statistic; a failed per-file lookup contributing 0 is not correctness-affecting
           } catch (IOException e) {
             return 0;
           }

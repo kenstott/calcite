@@ -146,6 +146,7 @@ public class NpsIrmaTransformer implements ResponseTransformer {
     }
     try {
       return Integer.parseInt(text);
+    // fallback-guard: allow logged nullable XML field parser; null correctly distinguishes malformed data from a real integer
     } catch (NumberFormatException e) {
       LOGGER.warn("nps_visitation: could not parse integer from element {}: {}", tagName, text);
       return null;

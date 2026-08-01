@@ -133,6 +133,7 @@ public class OnrrRevenueTransformer implements ResponseTransformer {
     }
     try {
       return Integer.parseInt(text.trim());
+    // fallback-guard: allow nullable-field parser, standard safe-parse idiom
     } catch (NumberFormatException e) {
       return null;
     }
@@ -148,6 +149,7 @@ public class OnrrRevenueTransformer implements ResponseTransformer {
     }
     try {
       return Double.parseDouble(val.asText().replaceAll(",", ""));
+    // fallback-guard: allow nullable-field parser, same idiom as intFromText() in this class
     } catch (NumberFormatException e) {
       return null;
     }

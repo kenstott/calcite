@@ -138,6 +138,7 @@ final class FreshnessCheck {
         node = step(node, segment);
       }
       return node == null || node.isNull() ? null : node.asText();
+    // fallback-guard: allow The only caller, FreshnessCheck.changed(), explicitly treats a null current token as 'changed' (forces reprocessing), so a JSON-parse failure here safely triggers a re-fetch rather than silently skipping a stale source.
     } catch (Exception e) {
       return null;
     }
@@ -162,6 +163,7 @@ final class FreshnessCheck {
       }
       try {
         current = current.get(Integer.parseInt(rest.substring(1, close).trim()));
+      // fallback-guard: allow Sub-helper of the same JSON path navigator; an invalid array index returning null matches the established navigate-or-null contract used throughout jsonValue/step.
       } catch (NumberFormatException e) {
         return null;
       }
@@ -180,6 +182,7 @@ final class FreshnessCheck {
         sb.append(Character.forDigit(b & 0xf, 16));
       }
       return sb.toString();
+    // fallback-guard: allow SHA-256 is a JVM-mandated algorithm so this exception is effectively unreachable; consistent with the equivalent sha256Hex helper in EtlPipeline.
     } catch (Exception e) {
       return null;
     }

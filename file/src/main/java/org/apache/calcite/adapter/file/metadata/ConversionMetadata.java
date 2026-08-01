@@ -310,6 +310,7 @@ public class ConversionMetadata {
         LOGGER.debug("Local file timestamp check for {}: stored={}, current={}, changed={}",
             originalFile, timestamp, currentTimestamp, changed);
         return changed;
+      // fallback-guard: allow fail-safe direction, forces a refresh rather than reporting unchanged
       } catch (Exception e) {
         LOGGER.warn("Failed to check timestamp for {}: {}", originalFile, e.getMessage());
         return true; // Conservative: assume changed on error
@@ -1165,6 +1166,7 @@ public class ConversionMetadata {
     try {
       String key = convertedFile.getCanonicalPath();
       return conversions.get(key);
+    // fallback-guard: allow documented nullable-finder contract, null already means not-found for this accessor
     } catch (IOException e) {
       LOGGER.error("Failed to get conversion record", e);
       return null;
@@ -1198,6 +1200,7 @@ public class ConversionMetadata {
 
       LOGGER.debug("No matching record found for sourceFile: {}", sourcePath);
       return null;
+    // fallback-guard: allow documented nullable-finder contract, reuses the same not-found sentinel as the success path above
     } catch (IOException e) {
       LOGGER.error("Failed to find conversion record by source file", e);
       return null;
@@ -1386,6 +1389,7 @@ public class ConversionMetadata {
 
       LOGGER.debug("No conversion record found for converted file: {}", canonicalPath);
       return null;
+    // fallback-guard: allow documented nullable-finder contract, same not-found sentinel as this file's other lookup methods
     } catch (IOException e) {
       LOGGER.error("Failed to get conversion record by converted file", e);
       return null;

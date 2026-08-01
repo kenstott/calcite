@@ -2219,6 +2219,7 @@ public abstract class AbstractGovDataDownloader {
       }
 
     } catch (NumberFormatException e) {
+      // fallback-guard: allow per-column-type JSON-to-value converter; a malformed numeric field becomes a logged, null cell value
       LOGGER.warn("Failed to convert value for column '{}' (type: {}): {}. Value: {}",
           columnName, columnType, e.getMessage(), jsonValue);
       return null;
@@ -5246,6 +5247,7 @@ public abstract class AbstractGovDataDownloader {
       return meta != null
           && (System.currentTimeMillis() - meta.getLastModified()) < ttlMs;
     } catch (IOException e) {
+      // fallback-guard: allow fails safe: an unreadable cache entry is treated as invalid, forcing a safe re-download
       return false;
     }
   }

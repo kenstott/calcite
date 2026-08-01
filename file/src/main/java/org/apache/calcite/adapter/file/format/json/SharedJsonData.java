@@ -78,6 +78,7 @@ public class SharedJsonData {
 
         // at() returns MissingNode if path doesn't exist
         return result.isMissingNode() ? null : result;
+      // fallback-guard: allow getDataAtPath is declared @Nullable; comment documents path-not-found and evaluation-error as the same outcome by design
       } catch (Exception e) {
         // Path not found or evaluation error
         return null;

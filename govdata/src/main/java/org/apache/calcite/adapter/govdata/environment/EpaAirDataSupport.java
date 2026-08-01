@@ -86,6 +86,7 @@ final class EpaAirDataSupport {
     }
     try {
       return Double.valueOf(trimmed);
+    // fallback-guard: allow nullable numeric parser where null represents an absent/unparseable optional value, not a fabricated number
     } catch (NumberFormatException e) {
       return null;
     }
@@ -102,6 +103,7 @@ final class EpaAirDataSupport {
     }
     try {
       return Integer.valueOf(trimmed);
+    // fallback-guard: allow fallback path re-parses decimal-formatted integers; ultimate failure still routes through parseDouble's own null-on-failure return
     } catch (NumberFormatException e) {
       // Some count columns arrive as "350.0"; fall back to a double parse.
       Double d = parseDouble(trimmed);

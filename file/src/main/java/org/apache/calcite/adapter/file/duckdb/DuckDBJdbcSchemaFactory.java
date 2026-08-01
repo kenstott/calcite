@@ -959,6 +959,7 @@ public class DuckDBJdbcSchemaFactory {
       java.nio.file.Files.copy(base.toPath(), numbered.toPath());
       LOGGER.info("Seeded DuckDB catalog copy {} from {}", numberedCatalogPath, baseCatalogPath);
       return true;
+    // fallback-guard: allow Javadoc explicitly documents this as 'Best-effort: returns false ... when ... the copy fails', with the caller understood to rebuild views from scratch; logged at warn.
     } catch (Exception e) {
       LOGGER.warn("Could not seed catalog copy {} from {} ({}); will rebuild views",
           numberedCatalogPath, baseCatalogPath, e.getMessage());

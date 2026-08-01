@@ -267,6 +267,7 @@ public final class VariableResolver {
     // Parse as integer
     try {
       return Integer.parseInt(resolved.trim());
+    // fallback-guard: allow resolveInteger's javadoc documents returning null when the value is not resolvable as an integer
     } catch (NumberFormatException e) {
       return null;
     }

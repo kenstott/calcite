@@ -123,9 +123,8 @@ public class CdeSupplementalTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDE Supplemental: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE Supplemental: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 }

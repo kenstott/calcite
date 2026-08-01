@@ -1214,6 +1214,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       Source source = resolveSource(url);
       File file = source.file();
       return file == null ? null : file.getAbsolutePath();
+    // fallback-guard: allow Method is explicitly documented as returning null when a url can't be resolved to a local file, and the exception is logged at debug with the message.
     } catch (Exception e) {
       LOGGER.debug("Could not resolve explicit table url '{}' to a local file: {}",
           url, e.getMessage());
@@ -3675,6 +3676,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             .getConstructor(org.apache.calcite.rel.type.RelProtoDataType.class,
                 arrowFileReaderClass, java.io.File.class)
             .newInstance(null, arrowFileReader, file);
+      // fallback-guard: allow Fallback from a newer Arrow constructor to the older one on NoSuchMethodException is a deliberate reflection-based API-compatibility shim, not failure masking.
       } catch (NoSuchMethodException e) {
         // Fall back to old constructor for compatibility
         return (org.apache.calcite.schema.Table) arrowTableClass
@@ -3929,6 +3931,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           // Return ParquetTranslatableTable for non-refreshable tables
           return new ParquetTranslatableTable(parquetFile, source, name);
 
+        // fallback-guard: allow Parquet-cache creation failure is logged at ERROR and degrades to a still-correct JsonScannableTable (slower but not wrong data), per the explicit 'Fall back to JSON table if parquet conversion fails' comment.
         } catch (Exception e) {
           LOGGER.error("Failed to create parquet cache for PARQUET engine: {}", e.getMessage(), e);
           // Fall back to JSON table if parquet conversion fails
@@ -4742,6 +4745,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         }
         LOGGER.debug("findMatchingFiles: local fallback found {} files", result.size());
         return result;
+      // fallback-guard: allow logs the walk failure at ERROR and returns the partial results already accumulated, rather than losing them to a crash
       } catch (IOException e) {
         LOGGER.error("findMatchingFiles: error walking directory: {}", e.getMessage());
         return result;
@@ -5155,6 +5159,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
       // Check for typical Calcite model structure
       return root.has("version") && root.has("schemas");
+    // fallback-guard: allow isCalciteModelFile is a heuristic probe; treating an unreadable JSON as 'not a model file' is the documented, low-risk default (comment: 'If we can't read it, assume it's not a model file').
     } catch (Exception e) {
       // If we can't read it, assume it's not a model file
       return false;

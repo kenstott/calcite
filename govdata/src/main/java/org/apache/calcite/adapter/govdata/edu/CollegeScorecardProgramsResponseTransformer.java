@@ -143,9 +143,8 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
       return out.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Scorecard Programs: transform failed for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("College Scorecard Programs: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

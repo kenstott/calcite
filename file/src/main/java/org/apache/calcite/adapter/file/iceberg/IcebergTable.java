@@ -360,6 +360,7 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
       LOGGER.debug("Iceberg table row count from metadata: {}", totalRecords);
       return buildStatistic(cachedRowCount);
 
+    // fallback-guard: allow Statistics.UNKNOWN is Calcite's documented sentinel for unknown cardinality, handled distinctly by the planner
     } catch (Exception e) {
       LOGGER.warn("Failed to get Iceberg statistics: {}", e.getMessage());
       return constraintConfig != null ? buildStatistic(null) : Statistics.UNKNOWN;

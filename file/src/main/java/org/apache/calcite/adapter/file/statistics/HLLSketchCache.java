@@ -309,6 +309,7 @@ public class HLLSketchCache {
       // The caller should use putSketch() if they want to cache it
 
       return sketch;
+    // fallback-guard: allow standard cache-miss-on-load-failure pattern, forces caller to recompute rather than use corrupted stats
     } catch (IOException e) {
       LOGGER.warn("Failed to load HLL sketch from {}: {}", sketchFile, e.getMessage());
       return null;

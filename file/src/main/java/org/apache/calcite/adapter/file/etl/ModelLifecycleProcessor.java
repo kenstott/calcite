@@ -672,6 +672,7 @@ public class ModelLifecycleProcessor {
       }
 
       return SchemaConfig.fromMap(configMap);
+    // fallback-guard: allow logged at ERROR and the only caller throws IllegalStateException on a null result, so failure surfaces loudly
     } catch (Exception e) {
       LOGGER.error("Error loading schema config from {}", resourcePath, e);
       return null;

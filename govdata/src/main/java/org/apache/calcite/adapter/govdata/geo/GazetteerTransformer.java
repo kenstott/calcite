@@ -85,8 +85,8 @@ public class GazetteerTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Error transforming Gazetteer data: {}", e.getMessage(), e);
-      return "[]";
+      throw new RuntimeException(
+          "Error transforming Gazetteer data for " + context.getUrl(), e);
     }
   }
 
@@ -206,6 +206,7 @@ public class GazetteerTransformer implements ResponseTransformer {
           return value / 2589988.11; // square meters to square miles
         }
         return value;
+      // fallback-guard: allow duplicate of GazetteerDataProvider's nullable numeric helper; null represents an absent/unparseable optional value
       } catch (NumberFormatException e) {
         return null;
       }
@@ -218,6 +219,7 @@ public class GazetteerTransformer implements ResponseTransformer {
     if (strValue != null) {
       try {
         return Integer.parseInt(strValue.replace(",", ""));
+      // fallback-guard: allow same nullable numeric helper pattern as getDoubleValue in this class
       } catch (NumberFormatException e) {
         return null;
       }

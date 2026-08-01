@@ -110,6 +110,7 @@ public class StooqBulkProxy {
       LOGGER.info("Found ticker {} in bulk zip: {} records", ticker, records.size());
       return records;
 
+    // fallback-guard: allow documented "fallback to HTTP API on any error"; caller treats empty result as try-next-source
     } catch (Exception e) {
       LOGGER.warn("Error looking up ticker {} in bulk zip: {}", ticker, e.getMessage());
       return Collections.emptyList();  // Fallback to HTTP API on any error
@@ -459,6 +460,7 @@ public class StooqBulkProxy {
         byte[] bytes = readAllBytes(in);
         return new String(bytes, StandardCharsets.UTF_8).trim();
       }
+    // fallback-guard: allow documented null-on-absent/unreadable; unreadable marker triggers a safe redo of the fingerprint check
     } catch (IOException e) {
       LOGGER.warn("Could not read bulk-ingest marker {}: {}", markerPath, e.getMessage());
       return null;

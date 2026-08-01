@@ -251,6 +251,7 @@ public class ParquetTranslatableTable extends AbstractTable implements Translata
       File cacheDir = parquetFile.getParentFile();
       cachedStatistics = statisticsBuilder.buildStatistics(source, cacheDir);
       return cachedStatistics;
+    // fallback-guard: allow statistics are inherently an approximation for planner cost estimation, not returned query data; a coarser file-size-based estimate on failure only affects plan choice, not correctness
     } catch (Exception e) {
       // Fall back to basic estimates if statistics generation fails
       long estimatedRows = Math.max(1, parquetFile.length() / 100);

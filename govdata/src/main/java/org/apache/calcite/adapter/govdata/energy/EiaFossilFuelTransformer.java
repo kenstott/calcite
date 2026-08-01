@@ -110,9 +110,8 @@ public class EiaFossilFuelTransformer extends EiaV2Transformer implements Respon
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA Fossil Fuel: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA Fossil Fuel: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

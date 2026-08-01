@@ -3205,6 +3205,7 @@ public class SecDataFetcher {
         return null;
       }
       return MAPPER.readTree(conn.getInputStream());
+    // fallback-guard: allow readSubmissionsJson already returns null for a non-200 response by design; this folds parse/network errors into that same documented not-found sentinel
     } catch (Exception e) {
       LOGGER.warn("Failed to read {}: {}", url, e.getMessage());
       return null;
@@ -3251,6 +3252,7 @@ public class SecDataFetcher {
           .mapToLong(path -> {
             try {
               return Files.size(path);
+            // fallback-guard: allow cache-stats display total only; a per-file size failure just omits that file from the KB total shown in getCacheStats()
             } catch (IOException e) {
               return 0;
             }

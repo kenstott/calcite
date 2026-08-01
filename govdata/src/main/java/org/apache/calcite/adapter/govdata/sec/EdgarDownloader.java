@@ -487,6 +487,7 @@ public class EdgarDownloader {
         }
       }
       return fallbackXml;
+    // fallback-guard: allow one strategy in a documented multi-strategy 13F info-table lookup; null lets the caller fall back to guessing, mirroring XbrlToParquetConverter#find13FInfoTableFromIndexJson
     } catch (Exception e) {
       LOGGER.debug("13F index lookup failed for " + accessionNoDash + ": " + e.getMessage());
       return null;
@@ -518,6 +519,7 @@ public class EdgarDownloader {
         }
         return out.toByteArray();
       }
+    // fallback-guard: allow fetchBytes is documented to return null on any non-200/error; this is the contract, not masking
     } catch (Exception e) {
       LOGGER.debug("fetchBytes failed for " + url + ": " + e.getMessage());
       return null;

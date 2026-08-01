@@ -168,6 +168,7 @@ public class EtlVerifier {
 
     try {
       Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
+    // fallback-guard: allow verify() returns a process exit code; EXIT_FAILED is distinct from EXIT_SUCCESS/EXIT_ISSUES so the caller can fully distinguish this failure
     } catch (ClassNotFoundException e) {
       logError("GovData driver not found. Ensure govdata JAR is in classpath.");
       return EXIT_FAILED;
@@ -231,6 +232,7 @@ public class EtlVerifier {
         return EXIT_SUCCESS;
       }
 
+    // fallback-guard: allow same exit-code contract as the ClassNotFoundException branch; EXIT_FAILED clearly signals a connection failure via the process exit status
     } catch (SQLException e) {
       logError("Connection failed: " + e.getMessage());
       if (verbose) {

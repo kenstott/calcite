@@ -645,6 +645,7 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     }
     try {
       return Integer.parseInt(y);
+    // fallback-guard: allow documented sentinel, "0 when absent/non-numeric" per this method's own javadoc
     } catch (NumberFormatException e) {
       return 0;
     }

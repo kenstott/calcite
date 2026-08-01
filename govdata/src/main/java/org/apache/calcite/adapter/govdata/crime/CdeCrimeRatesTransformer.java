@@ -70,9 +70,7 @@ public class CdeCrimeRatesTransformer implements ResponseTransformer {
       return transformObjectResponse(root, context);
 
     } catch (Exception e) {
-      LOGGER.error("CDE Crime: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE Crime: Failed to parse response for " + context.getUrl(), e);
     }
   }
 

@@ -100,9 +100,8 @@ public class EiaRefineryOperationsTransformer extends EiaV2Transformer
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA Refinery Operations: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA Refinery Operations: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 }

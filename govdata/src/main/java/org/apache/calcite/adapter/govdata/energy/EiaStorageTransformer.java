@@ -107,9 +107,8 @@ public class EiaStorageTransformer extends EiaV2Transformer implements ResponseT
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA Storage: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException(
+          "EIA Storage: failed to parse response for " + context.getUrl(), e);
     }
   }
 
@@ -128,6 +127,7 @@ public class EiaStorageTransformer extends EiaV2Transformer implements ResponseT
       cal.setFirstDayOfWeek(Calendar.MONDAY);
       cal.set(year, month, day);
       return cal.get(Calendar.WEEK_OF_YEAR);
+    // fallback-guard: allow narrow helper deriving an optional ISO-week field from an already format-validated date string; null just leaves that derived column empty
     } catch (Exception e) {
       return null;
     }

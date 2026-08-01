@@ -203,6 +203,7 @@ public class WhoGhoTransformer implements StreamingResponseTransformer {
     }
     try {
       return Double.parseDouble(s);
+    // fallback-guard: allow nullable-field coercion helper; null correctly signals unparseable, not a fabricated value
     } catch (NumberFormatException e) {
       return null;
     }
@@ -221,6 +222,7 @@ public class WhoGhoTransformer implements StreamingResponseTransformer {
     }
     try {
       return Integer.parseInt(s.substring(0, 4));
+    // fallback-guard: allow nullable-field coercion helper mirroring toDouble(); malformed text yields null
     } catch (NumberFormatException e) {
       return null;
     }

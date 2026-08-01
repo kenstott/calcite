@@ -353,6 +353,7 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
     }
     try {
       return Integer.parseInt(val.trim());
+    // fallback-guard: allow caller-supplied default for a config property; bad value and default are logged
     } catch (NumberFormatException e) {
       LOGGER.warn("NvdPublishedWindow: invalid integer property '{}={}', using default {}",
           key, val, defaultValue);

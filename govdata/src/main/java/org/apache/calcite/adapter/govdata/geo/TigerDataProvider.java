@@ -255,6 +255,7 @@ public class TigerDataProvider implements StorageAwareDataProvider {
         }
       }
       return tempDir;
+    // fallback-guard: allow optional cache-read fast path; failure falls through to the real extraction/processing path rather than fabricating a result
     } catch (Exception e) {
       LOGGER.debug("Cache restore failed for {}: {}", cachePath, e.getMessage());
       return null;
@@ -824,6 +825,7 @@ public class TigerDataProvider implements StorageAwareDataProvider {
     if (val instanceof String) {
       try {
         return Double.parseDouble((String) val);
+      // fallback-guard: allow nullable numeric attribute parser for an optional shapefile feature attribute
       } catch (NumberFormatException e) {
         return null;
       }

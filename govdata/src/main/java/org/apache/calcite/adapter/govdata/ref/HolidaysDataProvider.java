@@ -112,6 +112,7 @@ public class HolidaysDataProvider implements DataProvider {
     String body;
     try {
       body = get(url);
+    // fallback-guard: allow bounded per-country batch continuation — one country's fetch failure is logged and skipped, the loop continues to the next of ~200 countries
     } catch (IOException e) {
       LOGGER.warn("HolidaysDataProvider: {} {} failed: {}", code, year, e.getMessage());
       return rows;

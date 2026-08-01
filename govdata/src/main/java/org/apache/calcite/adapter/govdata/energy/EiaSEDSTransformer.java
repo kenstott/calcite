@@ -114,9 +114,8 @@ public class EiaSEDSTransformer extends EiaV2Transformer implements ResponseTran
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA SEDS: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException(
+          "EIA SEDS: failed to parse response for " + context.getUrl(), e);
     }
   }
 

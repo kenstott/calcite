@@ -152,8 +152,8 @@ public class UsdaRucaTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Error transforming USDA RUCA data: {}", e.getMessage(), e);
-      return "[]";
+      throw new RuntimeException(
+          "Error transforming USDA RUCA data for " + context.getUrl(), e);
     }
   }
 

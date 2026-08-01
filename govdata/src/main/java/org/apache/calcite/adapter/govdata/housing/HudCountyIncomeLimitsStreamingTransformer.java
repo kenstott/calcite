@@ -286,6 +286,7 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
     }
     try {
       return (int) Double.parseDouble(s);
+    // fallback-guard: allow nullable-integer coercion helper identical in shape to the other housing transformers' safe parsers
     } catch (NumberFormatException e) {
       return null;
     }

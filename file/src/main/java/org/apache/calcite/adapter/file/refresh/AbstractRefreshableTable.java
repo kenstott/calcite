@@ -100,6 +100,7 @@ public abstract class AbstractRefreshableTable extends AbstractTable implements 
       }
 
       return changed;
+    // fallback-guard: allow fail-safe direction, forces a refresh instead of masking the failure as unchanged
     } catch (IOException e) {
       LOGGER.warn("Failed to fetch remote file metadata for " + source.path(), e);
       // If we can't check, assume it might have changed

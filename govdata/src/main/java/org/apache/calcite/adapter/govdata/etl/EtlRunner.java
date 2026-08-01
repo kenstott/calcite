@@ -292,9 +292,11 @@ public class EtlRunner {
         return true;
       }
 
+    // fallback-guard: allow processSchema()'s return type is an explicit success/failure boolean; false is the intended, checked failure signal, and the driver-missing condition is logged distinctly
     } catch (ClassNotFoundException e) {
       logWarn("GovData driver not found. Ensure govdata JAR is in classpath.");
       return false;
+    // fallback-guard: allow same boolean-contract as the ClassNotFoundException branch; false is deliberately the failure signal and the exception is logged
     } catch (Exception e) {
       logWarn("Failed to process schema " + schema.getName() + ": " + e.getMessage());
       if (config.isVerbose()) {

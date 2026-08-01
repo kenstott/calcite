@@ -192,6 +192,7 @@ public class ParquetConversionUtil {
           sourceTime, parquetTime, needsConversion);
 
       return needsConversion;
+    // fallback-guard: allow needsConversion(Source,...) fails open: logs 'assuming conversion needed' and returns true, triggering reconversion rather than silently skipping a needed one
     } catch (Exception e) {
       LOGGER.warn("Error checking conversion timestamps, assuming conversion needed: {}", e.getMessage());
       return true;
@@ -216,6 +217,7 @@ public class ParquetConversionUtil {
           sourceTime, parquetTime, needsConversion);
 
       return needsConversion;
+    // fallback-guard: allow needsConversion(File,...) is the identical fail-open pattern as the Source-based overload above
     } catch (Exception e) {
       LOGGER.warn("Error checking conversion timestamps, assuming conversion needed: {}", e.getMessage());
       return true;

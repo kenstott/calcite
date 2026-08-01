@@ -293,6 +293,7 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
           return value / 2589988.11; // square meters to square miles
         }
         return value;
+      // fallback-guard: allow nullable numeric parse helper (with unit conversion) matching this class's documented get*Value null-on-failure pattern
       } catch (NumberFormatException e) {
         return null;
       }
@@ -305,6 +306,7 @@ public class GazetteerDataProvider implements StorageAwareDataProvider {
     if (strValue != null) {
       try {
         return Integer.parseInt(strValue.replace(",", ""));
+      // fallback-guard: allow same nullable numeric parse helper pattern as getDoubleValue in this class
       } catch (NumberFormatException e) {
         return null;
       }

@@ -47,8 +47,7 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
         workbook.close();
       }
     } catch (Exception e) {
-      LOGGER.error("Failed to parse EIA-860M XLSX from {}: {}", url, e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA-860M: failed to parse XLSX from " + url, e);
     }
   }
 
@@ -85,6 +84,7 @@ public class Eia860MCapacityChangesTransformer extends EiaBulkXlsxTransformer {
     }
     try {
       return Integer.parseInt(s.trim());
+    // fallback-guard: allow per-field parser for the snapshotYear/snapshotMonth dimension strings; null flags one derived field as unknown
     } catch (NumberFormatException e) {
       return null;
     }

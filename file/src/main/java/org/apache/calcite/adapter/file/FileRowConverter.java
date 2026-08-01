@@ -372,6 +372,7 @@ public class FileRowConverter {
           // Clean up malformed scientific notation (e.g., ".197427137EE8" -> ".197427137E8")
           String cleanedString = string.replaceAll("([Ee])\\1+", "$1");
           return numberFormat.parse(cleanedString).doubleValue();
+        // fallback-guard: allow This catch doesn't return a fallback default; it retries with Double.parseDouble as a genuinely different parse strategy for malformed scientific notation.
         } catch (ParseException e) {
           // If parsing still fails, try parsing as a plain double
           try {

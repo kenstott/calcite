@@ -477,6 +477,7 @@ public class OtxResponseTransformer implements ResponseTransformer {
         return null;
       }
       return (ObjectNode) node;
+    // fallback-guard: allow best-effort resume state; a read failure only costs resume granularity, never correctness
     } catch (Exception e) {
       LOGGER.warn("OTX: checkpoint read failed ({}) — starting fresh", e.getMessage());
       return null;

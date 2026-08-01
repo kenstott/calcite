@@ -56,9 +56,11 @@ public final class ClickHouseExecutionEngine {
     try {
       Class.forName("com.clickhouse.jdbc.ClickHouseDriver");
       return true;
+    // fallback-guard: allow isAvailable's javadoc documents this as a classpath-driver capability probe
     } catch (ClassNotFoundException e) {
       LOGGER.debug("ClickHouse JDBC driver not found on classpath: {}", e.getMessage());
       return false;
+    // fallback-guard: allow same classpath-availability probe, broadened as a safety net
     } catch (Exception e) {
       LOGGER.debug("Error checking ClickHouse availability: {}", e.getMessage());
       return false;

@@ -204,6 +204,7 @@ public class SftpStorageProvider implements StorageProvider {
           if (!hasChanged(path, cachedMetadata)) {
             return new java.io.ByteArrayInputStream(cachedData);
           }
+        // fallback-guard: allow deliberate stale-cache fallback, used identically across all storage providers in this package
         } catch (IOException e) {
           // If we can't check freshness, use cached data anyway
           return new java.io.ByteArrayInputStream(cachedData);
@@ -323,6 +324,7 @@ public class SftpStorageProvider implements StorageProvider {
         return String.format(Locale.ROOT, "sftp://%s@%s%s",
             baseUri.username, baseUri.host, resolvedPath);
       }
+    // fallback-guard: allow best-effort intermediate path string, same pattern as the Ftp/Http providers; downstream I/O surfaces a bad path
     } catch (IOException e) {
       // Fallback
       if (basePath.endsWith("/")) {

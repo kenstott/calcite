@@ -109,8 +109,8 @@ public class NaepAchievementLevelsResponseTransformer implements ResponseTransfo
       return out.toString();
 
     } catch (Exception e) {
-      LOGGER.error("NAEP-ALD: transform failed for {}: {}", context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("NAEP Achievement Levels: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

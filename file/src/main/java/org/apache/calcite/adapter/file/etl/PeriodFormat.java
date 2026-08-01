@@ -108,6 +108,7 @@ final class PeriodFormat {
     }
     try {
       return Integer.parseInt(digits);
+    // fallback-guard: allow width() is an internal zero-padding helper for a format string; the fallback is a cosmetic display value, not business data
     } catch (NumberFormatException e) {
       return 1;
     }
@@ -135,6 +136,7 @@ final class PeriodFormat {
   private static Integer parseInt(String value) {
     try {
       return Integer.valueOf(value.trim());
+    // fallback-guard: allow parseInt backs render(), whose javadoc documents non-numeric values are returned unchanged
     } catch (NumberFormatException e) {
       return null;
     }

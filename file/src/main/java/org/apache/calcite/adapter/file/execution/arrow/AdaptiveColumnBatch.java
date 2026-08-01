@@ -169,6 +169,7 @@ public class AdaptiveColumnBatch implements AutoCloseable {
           default:
             return ((ColumnBatch) delegate).getIntColumn(columnIndex);
         }
+      // fallback-guard: allow createColumnReader falls back to the always-available basic ColumnBatch reader, a real implementation not a fake value
       } catch (Exception e) {
         LOGGER.warn("Failed to create {} column reader, falling back to basic: {}",
                    level, e.getMessage());
@@ -235,6 +236,7 @@ public class AdaptiveColumnBatch implements AutoCloseable {
           default:
             return ((ColumnBatch) delegate).getDoubleColumn(columnIndex);
         }
+      // fallback-guard: allow same fast-path-to-real-fallback pattern as the int-column reader, for doubles
       } catch (Exception e) {
         LOGGER.warn("Failed to create {} double column reader, falling back to basic: {}",
                    level, e.getMessage());
@@ -320,6 +322,7 @@ public class AdaptiveColumnBatch implements AutoCloseable {
       // Check for CUDA/Arrow GPU support
       return System.getProperty("arrow.gpu.enabled", "false").equals("true") ||
              System.getenv("ARROW_GPU_ENABLED") != null;
+    // fallback-guard: allow detectGPUCompute is a capability probe; probe failure and unavailability are the same outcome
     } catch (Exception e) {
       return false;
     }
@@ -337,9 +340,11 @@ public class AdaptiveColumnBatch implements AutoCloseable {
       LOGGER.debug("Vector API available: true, Architecture: {}", osArch);
       return isX86_64; // Assume AVX support on modern x86_64
 
+    // fallback-guard: allow ClassNotFoundException is the expected Vector-API-not-on-classpath capability-probe outcome
     } catch (ClassNotFoundException e) {
       LOGGER.debug("Vector API not available - add --add-modules jdk.incubator.vector for 4-8x speedup");
       return false;
+    // fallback-guard: allow broader safety net around the same SIMD capability probe
     } catch (Exception e) {
       LOGGER.debug("SIMD detection failed: {}", e.getMessage());
       return false;
@@ -350,6 +355,7 @@ public class AdaptiveColumnBatch implements AutoCloseable {
     try {
       // Compression support is always available (built into our implementation)
       return true;
+    // fallback-guard: allow detectCompressionSupport is a trivial always-true capability probe with no real failure mode today
     } catch (Exception e) {
       return false;
     }

@@ -67,6 +67,7 @@ public abstract class EiaV2Transformer {
     try {
       int month = Integer.parseInt(parts[1]);
       return month;
+    // fallback-guard: allow returns null for an optional month field, consistent with this class's nullable-parse helpers
     } catch (NumberFormatException e) {
       return null;
     }
@@ -137,6 +138,7 @@ public abstract class EiaV2Transformer {
       }
       try {
         return Double.parseDouble(text);
+      // fallback-guard: allow safeDouble is the shared nullable numeric parser used by getDouble/getLong; null correctly represents an absent/unparseable optional value
       } catch (NumberFormatException e) {
         return null;
       }

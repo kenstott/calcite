@@ -50,8 +50,7 @@ public class MitreAttackResponseTransformer implements ResponseTransformer {
     try {
       bundle = MAPPER.readTree(response);
     } catch (Exception e) {
-      LOGGER.error("MitreAttack: failed to parse STIX bundle: {}", e.getMessage());
-      return "[]";
+      throw new RuntimeException("MitreAttack: failed to parse STIX bundle", e);
     }
 
     JsonNode objects = bundle.path("objects");

@@ -233,6 +233,7 @@ public class FileConversionManager {
       // CSV, Parquet, and other direct-use files don't need conversion
       return false;
 
+    // fallback-guard: allow logs the conversion failure at ERROR and returns false, a legitimate 'not converted' signal, not a fabricated success
     } catch (Exception e) {
       LOGGER.error("Failed to convert file {}: {}", sourceFile.getName(), e.getMessage(), e);
       return false;
@@ -328,6 +329,7 @@ public class FileConversionManager {
       }
 
       return current;
+    // fallback-guard: allow findOriginalSource's javadoc documents returning the input file 'if no conversion history', which covers the error case too; low-risk, logged at debug.
     } catch (Exception e) {
       LOGGER.debug("Could not find original source for {}: {}", file.getName(), e.getMessage());
       return file;
@@ -379,6 +381,7 @@ public class FileConversionManager {
       LOGGER.debug("Change detection for {}: hasChanged={}", sourceFile.getName(), hasChanged);
       return hasChanged;
 
+    // fallback-guard: allow isConversionNeeded's fallback is explicitly commented 'Conservative: convert if we can't check', a safe fail-open default, logged at warn.
     } catch (Exception e) {
       LOGGER.warn("Failed to check conversion metadata for {}: {}", sourceFile.getName(), e.getMessage());
       return true; // Conservative: convert if we can't check
@@ -397,6 +400,7 @@ public class FileConversionManager {
         StorageProvider provider = StorageProviderFactory.createFromUrl(filePath);
         StorageProvider.FileMetadata currentMetadata = provider.getMetadata(filePath);
         return record.hasChangedViaMetadata(currentMetadata);
+      // fallback-guard: allow checkFileChanged's remote-metadata fallback is explicitly commented 'Conservative: assume changed if we can't check', logged at warn.
       } catch (Exception e) {
         LOGGER.warn("Failed to get metadata for remote file {}: {}", filePath, e.getMessage());
         return true; // Conservative: assume changed if we can't check
@@ -489,6 +493,7 @@ public class FileConversionManager {
       }
 
       return true;
+    // fallback-guard: allow logs the conversion failure at ERROR and returns false, a legitimate 'not converted' signal, not a fabricated success
     } catch (Exception e) {
       LOGGER.error("Failed to convert Excel file {}: {}", sourceFile.getName(), e.getMessage());
       return false;

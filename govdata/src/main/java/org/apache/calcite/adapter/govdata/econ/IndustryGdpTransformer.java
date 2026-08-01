@@ -290,6 +290,7 @@ public class IndustryGdpTransformer implements ResponseTransformer {
         double parsed = Double.parseDouble(trimmed);
         // Return as string to avoid precision loss in JSON
         return String.valueOf(parsed);
+      // fallback-guard: allow documented per-value cleanup; BEA special/unparseable values normalize to null
       } catch (NumberFormatException e) {
         LOGGER.warn("IndustryGDP: Could not parse scientific notation: {}", trimmed);
         return null;

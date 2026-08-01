@@ -240,6 +240,7 @@ public final class VectorizedArrowExecutionEngine {
 
       return filtered;
 
+    // fallback-guard: allow vectorized filter fast path falls back to the real standard filter() implementation on failure
     } catch (Exception e) {
       LOGGER.warn("ColumnBatch filter failed, falling back to standard filter: {}", e.getMessage());
       return filter(input, columnIndex, predicate);
@@ -257,18 +258,21 @@ public final class VectorizedArrowExecutionEngine {
       ColumnBatch.IntColumnReader intCol = batch.getIntColumn(columnIndex);
       return intCol.filter(value -> predicate.test(value));
 
+    // fallback-guard: allow type-dispatch chain (int->double->string->boolean); each branch computes a genuine result for the matching type
     } catch (IllegalArgumentException e1) {
       try {
         // Try double column
         ColumnBatch.DoubleColumnReader doubleCol = batch.getDoubleColumn(columnIndex);
         return doubleCol.filter(value -> predicate.test(value));
 
+      // fallback-guard: allow second link in the same type-dispatch chain as above
       } catch (IllegalArgumentException e2) {
         try {
           // Try string column
           ColumnBatch.StringColumnReader stringCol = batch.getStringColumn(columnIndex);
           return stringCol.filter(value -> predicate.test(value));
 
+        // fallback-guard: allow third link in the same type-dispatch chain; boolean branch still computes a real result
         } catch (IllegalArgumentException e3) {
           try {
             // Try boolean column
@@ -283,6 +287,7 @@ public final class VectorizedArrowExecutionEngine {
             }
             return selection;
 
+          // fallback-guard: allow final fallback in the dispatch chain still computes a real, correct selection for the actual column type
           } catch (IllegalArgumentException e4) {
             // Fall back to generic row-by-row processing
             boolean[] selection = new boolean[batch.getRowCount()];
@@ -312,6 +317,7 @@ public final class VectorizedArrowExecutionEngine {
     // Try zero-copy approach with selection vector
     try {
       return createFilteredOutputZeroCopy(input, selection, selectedCount);
+    // fallback-guard: allow zero-copy path falls back to createFilteredOutputWithCopy, the correct if slower implementation
     } catch (Exception e) {
       LOGGER.debug("Zero-copy filtering failed, falling back to copying: {}", e.getMessage());
       return createFilteredOutputWithCopy(input, selection, selectedCount);
@@ -414,6 +420,7 @@ public final class VectorizedArrowExecutionEngine {
 
       return result;
 
+    // fallback-guard: allow vectorized sum falls back to aggregateSum(), the standard correct implementation
     } catch (Exception e) {
       LOGGER.warn("ColumnBatch sum failed, falling back to standard sum: {}", e.getMessage());
       return aggregateSum(input, columnIndex);

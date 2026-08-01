@@ -382,6 +382,7 @@ public class TigerShapefileParser {
           return null;
       }
 
+    // fallback-guard: allow per-record geometry parse; null is filtered the same way as this method's own explicit "unsupported shape type" null-return branch -- a single malformed shape is skipped, not the whole layer
     } catch (Exception e) {
       LOGGER.debug("Error parsing shape record: {}", e.getMessage());
       return null;
@@ -458,6 +459,7 @@ public class TigerShapefileParser {
 
       return polygon;
 
+    // fallback-guard: allow per-geometry graceful-skip pattern; the catch is a backstop behind several explicit early "return null" structural checks already in this method
     } catch (Exception e) {
       LOGGER.debug("Error parsing polygon with JTS: {}", e.getMessage());
       return null;
@@ -499,6 +501,7 @@ public class TigerShapefileParser {
 
       return GEOMETRY_FACTORY.createLineString(coords.toArray(new Coordinate[0]));
 
+    // fallback-guard: allow same per-geometry graceful-skip pattern as parsePolygonWithJTS
     } catch (Exception e) {
       LOGGER.debug("Error parsing polyline with JTS: {}", e.getMessage());
       return null;
@@ -534,6 +537,7 @@ public class TigerShapefileParser {
 
       return GEOMETRY_FACTORY.createMultiPoint(points.toArray(new Point[0]));
 
+    // fallback-guard: allow same per-geometry graceful-skip pattern as the other JTS shape parsers
     } catch (Exception e) {
       LOGGER.debug("Error parsing multipoint with JTS: {}", e.getMessage());
       return null;
@@ -602,6 +606,7 @@ public class TigerShapefileParser {
     try {
       Geometry geometry = (Geometry) geomObj;
       return geometry.toText();
+    // fallback-guard: allow extracting WKT text from a geometry object; null is a normal way to represent a missing/unreadable geometry field
     } catch (Exception e) {
       LOGGER.warn("Error extracting geometry: {}", e.getMessage());
       return null;

@@ -274,6 +274,7 @@ public class NsfHerdTransformer implements StreamingResponseTransformer {
       }
       try {
         return Integer.parseInt(v.trim());
+      // fallback-guard: allow nullable-field helper; null correctly signals unparseable, standard safe-parse idiom
       } catch (NumberFormatException e) {
         return null;
       }
@@ -285,6 +286,7 @@ public class NsfHerdTransformer implements StreamingResponseTransformer {
       }
       try {
         return Double.parseDouble(v.replace(",", ""));
+      // fallback-guard: allow dbl() mirroring intVal() in this class, same nullable-field idiom
       } catch (NumberFormatException e) {
         return null;
       }

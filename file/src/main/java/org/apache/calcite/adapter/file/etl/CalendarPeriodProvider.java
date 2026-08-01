@@ -232,6 +232,7 @@ final class CalendarPeriodProvider {
     }
     try {
       return Integer.valueOf(value.trim());
+    // fallback-guard: allow Method is literally named intOrNull; a parse-or-null helper with the contract in its name.
     } catch (NumberFormatException e) {
       return null;
     }

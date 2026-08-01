@@ -140,6 +140,7 @@ public class Irs990Provider implements DataProvider {
         HttpURLConnection conn = FiscalHttp.openGet(zipUrl);
         zis = new ZipInputStream(conn.getInputStream());
         return true;
+      // fallback-guard: allow comment below documents the design ("A single missing/failed batch should not abort the whole year"); narrowly scoped to one ZIP batch, iteration continues to the next
       } catch (IOException e) {
         // A single missing/failed batch should not abort the whole year.
         LOGGER.warn("exempt_org_990: skipping batch {} ({})", zipUrl, e.getMessage());
@@ -279,6 +280,7 @@ public class Irs990Provider implements DataProvider {
           out.put(field, txt);
         }
       }
+    // fallback-guard: allow per-record catch that skips a single unparseable XBRL return (logged at debug) without failing the whole batch; the null result is filtered out downstream the same as a missing EIN
     } catch (Exception e) {
       LOGGER.debug("exempt_org_990: skipping unparseable return {} ({})", objectId, e.getMessage());
       return null;

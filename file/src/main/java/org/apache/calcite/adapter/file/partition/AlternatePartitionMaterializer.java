@@ -277,6 +277,7 @@ public class AlternatePartitionMaterializer {
       LOGGER.info("Successfully materialized alternate '{}' (simple mode)", alternateName);
       return true;
 
+    // fallback-guard: allow method's contract is a boolean success/failure flag, false on exception is the correct signal
     } catch (Exception e) {
       LOGGER.error("Failed to materialize alternate '{}': {}", alternateName, e.getMessage());
       return false;

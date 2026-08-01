@@ -115,6 +115,7 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
     try {
       year  = Integer.parseInt(yearStr);
       month = Integer.parseInt(monthStr);
+    // fallback-guard: allow narrow guard on framework-supplied dimension values, before any download/parse; bad value is logged
     } catch (NumberFormatException e) {
       LOGGER.warn("fr_documents: invalid year/month: year={}, month={}", yearStr, monthStr);
       return Collections.emptyIterator();

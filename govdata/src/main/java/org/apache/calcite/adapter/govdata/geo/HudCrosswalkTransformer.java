@@ -81,8 +81,8 @@ public class HudCrosswalkTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Error transforming HUD crosswalk: {}", e.getMessage(), e);
-      return "[]";
+      throw new RuntimeException(
+          "Error transforming HUD crosswalk for " + context.getUrl(), e);
     }
   }
 

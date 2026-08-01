@@ -60,6 +60,7 @@ public class FiaDownWoodyDebrisTransformer implements StreamingResponseTransform
     // acc[0] = sum(weight*tons), acc[1] = sum(weight), acc[2] = record_count
     Map<String, double[]> groups = new LinkedHashMap<String, double[]>();
     long rowsRead = 0;
+    long rowsMalformed = 0;
     try (FiaStateArchive.EntryHandle entry = FiaStateArchive.openEntry(state, DWM_ENTRY);
          BufferedReader reader = new BufferedReader(
              new InputStreamReader(entry.stream, StandardCharsets.UTF_8))) {
@@ -89,32 +90,41 @@ public class FiaDownWoodyDebrisTransformer implements StreamingResponseTransform
         }
         rowsRead++;
         String[] cols = line.split(",", -1);
-        int invyr = intAt(cols, idxInvyr);
-        if (invyr <= 0) {
-          continue;
-        }
+        try {
+          int invyr = intAt(cols, idxInvyr);
+          if (invyr <= 0) {
+            continue;
+          }
 
-        double cwdProp = doubleAt(cols, idxCondCwd);
-        double cwdTons = doubleAt(cols, idxCwdAdj);
-        if (cwdProp > 0 || cwdTons > 0) {
-          addRow(groups, invyr, "coarse_woody", cwdProp, cwdTons);
-        }
+          double cwdProp = doubleAt(cols, idxCondCwd);
+          double cwdTons = doubleAt(cols, idxCwdAdj);
+          if (cwdProp > 0 || cwdTons > 0) {
+            addRow(groups, invyr, "coarse_woody", cwdProp, cwdTons);
+          }
 
-        double fwdSmProp = doubleAt(cols, idxCondFwdSm);
-        double fwdMdProp = doubleAt(cols, idxCondFwdMd);
-        double fwdLgProp = doubleAt(cols, idxCondFwdLg);
-        double fwdProp = (fwdSmProp + fwdMdProp + fwdLgProp) / 3.0;
-        double fwdTons = doubleAt(cols, idxFwdSmAdj)
-            + doubleAt(cols, idxFwdMdAdj)
-            + doubleAt(cols, idxFwdLgAdj);
-        if (fwdProp > 0 || fwdTons > 0) {
-          addRow(groups, invyr, "fine_woody", fwdProp, fwdTons);
-        }
+          double fwdSmProp = doubleAt(cols, idxCondFwdSm);
+          double fwdMdProp = doubleAt(cols, idxCondFwdMd);
+          double fwdLgProp = doubleAt(cols, idxCondFwdLg);
+          double fwdProp = (fwdSmProp + fwdMdProp + fwdLgProp) / 3.0;
+          double fwdTons = doubleAt(cols, idxFwdSmAdj)
+              + doubleAt(cols, idxFwdMdAdj)
+              + doubleAt(cols, idxFwdLgAdj);
+          if (fwdProp > 0 || fwdTons > 0) {
+            addRow(groups, invyr, "fine_woody", fwdProp, fwdTons);
+          }
 
-        double duffProp = doubleAt(cols, idxCondDuff);
-        double duffTons = doubleAt(cols, idxDuffBio) + doubleAt(cols, idxLitterBio);
-        if (duffProp > 0 || duffTons > 0) {
-          addRow(groups, invyr, "duff_litter", duffProp, duffTons);
+          double duffProp = doubleAt(cols, idxCondDuff);
+          double duffTons = doubleAt(cols, idxDuffBio) + doubleAt(cols, idxLitterBio);
+          if (duffProp > 0 || duffTons > 0) {
+            addRow(groups, invyr, "duff_litter", duffProp, duffTons);
+          }
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // pollute the weighted average — skip and count just this row rather than fabricate a
+          // value, and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("fia_down_woody_debris[{}]: skipping malformed row {} ({})",
+              state, rowsRead, e.getMessage());
         }
       }
     }
@@ -134,8 +144,12 @@ public class FiaDownWoodyDebrisTransformer implements StreamingResponseTransform
       result.add(row);
     }
 
-    LOGGER.info("fia_down_woody_debris[{}]: rows read={} groups={}",
-        state, rowsRead, result.size());
+    if (rowsMalformed > 0) {
+      LOGGER.warn("fia_down_woody_debris[{}]: {} row(s) skipped due to malformed numeric fields",
+          state, rowsMalformed);
+    }
+    LOGGER.info("fia_down_woody_debris[{}]: rows read={} malformed={} groups={}",
+        state, rowsRead, rowsMalformed, result.size());
     return result.iterator();
   }
 
@@ -178,16 +192,16 @@ public class FiaDownWoodyDebrisTransformer implements StreamingResponseTransform
     return cols[idx].trim();
   }
 
+  // fallback-guard: allow index-out-of-range/empty means "column not present in this row" — a
+  // real, benign case distinct from a malformed value, so 0 there is a legitimate zero-field
+  // default. A genuinely malformed (non-empty, non-numeric) value is NOT caught here — it
+  // propagates as NumberFormatException so the per-row loop can skip+log instead of fabricating.
   private static int intAt(String[] cols, int idx) {
     String v = strAt(cols, idx);
     if (v.isEmpty()) {
       return 0;
     }
-    try {
-      return (int) Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return (int) Double.parseDouble(v);
   }
 
   private static double doubleAt(String[] cols, int idx) {
@@ -195,10 +209,6 @@ public class FiaDownWoodyDebrisTransformer implements StreamingResponseTransform
     if (v.isEmpty()) {
       return 0.0;
     }
-    try {
-      return Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0.0;
-    }
+    return Double.parseDouble(v);
   }
 }

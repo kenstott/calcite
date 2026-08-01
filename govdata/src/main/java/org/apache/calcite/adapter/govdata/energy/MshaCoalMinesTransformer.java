@@ -87,8 +87,8 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
           return "[]";
         }
       } catch (Exception zipEx) {
-        LOGGER.warn("MSHA Coal Mines: failed to download/extract ZIP from {}: {}", url, zipEx.getMessage());
-        return "[]";
+        throw new RuntimeException(
+            "MSHA Coal Mines: failed to download/extract ZIP from " + url, zipEx);
       }
       // Parse the pipe-delimited production CSV
       List<Map<String, String>> prodRows = parsePipeDelimited(prodText);
@@ -165,8 +165,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("MSHA Coal Mines: failed to parse response: {}", e.getMessage());
-      return "[]";
+      throw new RuntimeException("MSHA Coal Mines: failed to parse production response", e);
     }
   }
 
@@ -228,6 +227,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
           LOGGER.warn("MSHA Mines: could not find Mines.txt or Mines.csv in ZIP");
           return new HashMap<>();
         }
+      // fallback-guard: allow optional reference-data enrichment; downstream already treats a missing/empty mineRef entry as null enrichment fields, and falls through to the (possibly stale) local cache below rather than losing the primary production data
       } catch (Exception e) {
         LOGGER.warn("MSHA Mines: failed to download reference data: {}", e.getMessage());
         if (!cacheFile.exists()) {
@@ -260,6 +260,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
         }
       }
       return result;
+    // fallback-guard: allow same optional-enrichment fallback as loadMinesReference's download path; caller already renders a missing entry as null enrichment fields on the primary production data
     } catch (Exception e) {
       LOGGER.warn("MSHA Mines: failed to read cached reference file: {}", e.getMessage());
       return new HashMap<>();
@@ -371,6 +372,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
         return conn.getHeaderField("Last-Modified");
       }
       return null;
+    // fallback-guard: allow best-effort HTTP HEAD probe used only for a caching decision; null is the documented "unavailable" outcome and does not affect data correctness
     } catch (IOException e) {
       LOGGER.warn("MSHA Mines: HEAD probe failed for {}: {}", url, e.getMessage());
       return null;
@@ -401,6 +403,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
       } finally {
         in.close();
       }
+    // fallback-guard: allow reading a local cache sidecar; null means "no cached value," which safely falls back to a fresh Last-Modified check rather than fabricating data
     } catch (IOException e) {
       LOGGER.warn("MSHA Mines: Last-Modified sidecar read failed: {}", e.getMessage());
       return null;
@@ -456,6 +459,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
     }
     try {
       return Double.parseDouble(val.trim().replace(",", ""));
+    // fallback-guard: allow straightforward nullable CSV-cell parser for an optional numeric field (avg_mine_height_inches), matching this class's other null-on-failure helpers
     } catch (NumberFormatException e) {
       return null;
     }

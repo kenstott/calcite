@@ -187,6 +187,7 @@ public final class EmbeddingService {
         marker.setExecutable(true, false);
       }
       return cache.getAbsolutePath();
+    // fallback-guard: allow optional bundled-embedder probe, unavailable and extraction-failed are treated as the same outcome
     } catch (Exception ex) {
       LOGGER.warn("Failed to extract bundled embedder: {}", ex.getMessage());
       return null;

@@ -56,9 +56,8 @@ public class FedRegisterDocumentsTransformer implements ResponseTransformer {
       return results.toString();
 
     } catch (Exception e) {
-      LOGGER.error("FedRegister Documents: failed to parse response for doc_type={}: {}",
-          docType, e.getMessage());
-      return "[]";
+      throw new RuntimeException(
+          "FedRegister Documents: failed to parse response for doc_type=" + docType, e);
     }
   }
 

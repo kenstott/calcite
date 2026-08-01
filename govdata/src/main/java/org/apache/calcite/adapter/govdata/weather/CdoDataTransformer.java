@@ -116,9 +116,8 @@ public class CdoDataTransformer implements ResponseTransformer {
       return output.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDO Data: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDO Data: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

@@ -140,6 +140,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     }
     try {
       return Double.parseDouble(s);
+    // fallback-guard: allow per-field value parser while mapping a single row's columns; null marks that one value unparseable
     } catch (NumberFormatException e) {
       return null;
     }

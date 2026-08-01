@@ -219,6 +219,7 @@ public class HttpStorageProvider implements StorageProvider {
           if (!hasChanged(path, cachedMetadata)) {
             return new ByteArrayInputStream(cachedData);
           }
+        // fallback-guard: allow deliberate stale-cache fallback, used identically across all storage providers in this package
         } catch (IOException e) {
           // If we can't check freshness, use cached data anyway
           return new ByteArrayInputStream(cachedData);
@@ -322,6 +323,7 @@ public class HttpStorageProvider implements StorageProvider {
       } finally {
         conn.disconnect();
       }
+    // fallback-guard: allow mirrors StorageProvider.exists() contract of returning false when existence can't be determined (network/parse failure)
     } catch (IOException | URISyntaxException e) {
       return false;
     }
@@ -341,6 +343,7 @@ public class HttpStorageProvider implements StorageProvider {
       URI baseUri = new URI(basePath);
       URI resolved = baseUri.resolve(relativePath);
       return resolved.toString();
+    // fallback-guard: allow best-effort intermediate path string, same pattern as the Ftp/Sftp providers; downstream I/O surfaces a bad path
     } catch (Exception e) {
       // Fallback to simple string concatenation
       if (basePath.endsWith("/")) {

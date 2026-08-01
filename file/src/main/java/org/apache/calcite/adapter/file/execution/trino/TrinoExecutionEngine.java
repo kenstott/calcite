@@ -62,9 +62,11 @@ public final class TrinoExecutionEngine {
     try {
       Class.forName("io.trino.jdbc.TrinoDriver");
       return true;
+    // fallback-guard: allow classpath availability probe; absence of the driver class is logged and correctly reported as false, not masked as available
     } catch (ClassNotFoundException e) {
       LOGGER.debug("Trino JDBC driver not found on classpath: {}", e.getMessage());
       return false;
+    // fallback-guard: allow same availability-probe contract as the ClassNotFoundException case above, logged and reported as unavailable
     } catch (Exception e) {
       LOGGER.debug("Error checking Trino JDBC availability: {}", e.getMessage());
       return false;
@@ -83,6 +85,7 @@ public final class TrinoExecutionEngine {
       socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
       LOGGER.debug("Trino server reachable at {}:{}", host, port);
       return true;
+    // fallback-guard: allow isServerReachable is the identical documented TCP-reachability-probe pattern as Spark's
     } catch (IOException e) {
       LOGGER.debug("Trino server not reachable at {}:{}: {}", host, port, e.getMessage());
       return false;

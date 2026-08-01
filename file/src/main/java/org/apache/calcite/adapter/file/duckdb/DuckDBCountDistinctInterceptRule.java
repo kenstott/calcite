@@ -140,6 +140,7 @@ public class DuckDBCountDistinctInterceptRule extends RelOptRule {
       return LogicalValues.create(aggregate.getCluster(),
           aggregate.getRowType(),
           tuples.build());
+    // fallback-guard: allow Same Calcite planner-rule VALUES-node pattern as the ClickHouse rules: null means the rule doesn't fire and the real plan is used.
     } catch (Exception e) {
       LOGGER.error("Failed to create VALUES node", e);
       return null;

@@ -291,6 +291,7 @@ public final class CsvTypeConverter {
       int millisSinceMidnight = (int) (localTime.toNanoOfDay() / 1_000_000L);
       LOGGER.debug("Successfully parsed time '{}' using default formatter, returning millis: {}", value, millisSinceMidnight);
       return Integer.valueOf(millisSinceMidnight);
+    // fallback-guard: allow parseTime's final fallback null mirrors the project's TRY_CAST-style lenient-cast convention, logged at WARN
     } catch (DateTimeParseException e) {
       LOGGER.warn("Failed to parse time: '{}' - returning null", value);
       return null;
@@ -386,6 +387,7 @@ public final class CsvTypeConverter {
         LOGGER.debug("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed '{}' as OffsetDateTime, UTC millis: {} ===",
             value, utcMillis);
         return Long.valueOf(utcMillis);
+      // fallback-guard: allow the shown return only fires on a nested ZonedDateTime parse's genuine success; a further failure falls through to the next formatter
       } catch (DateTimeParseException e) {
         LOGGER.debug("Failed to parse as OffsetDateTime '{}' with formatter: {}", value, e.getMessage());
         try {

@@ -772,6 +772,7 @@ public class StooqDownloader {
     }
     try {
       return Double.parseDouble(value);
+    // fallback-guard: allow documented nullable-field parser for a CSV column
     } catch (NumberFormatException e) {
       return null;
     }
@@ -783,6 +784,7 @@ public class StooqDownloader {
     }
     try {
       return Long.parseLong(value);
+    // fallback-guard: allow same documented nullable-field-parser idiom as parseDouble above it
     } catch (NumberFormatException e) {
       return null;
     }

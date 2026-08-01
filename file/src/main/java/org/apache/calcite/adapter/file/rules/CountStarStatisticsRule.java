@@ -193,6 +193,7 @@ public class CountStarStatisticsRule extends RelRule<CountStarStatisticsRule.Con
         if (original != null && original != node) {
           return countPlainTableScans(original);
         }
+      // fallback-guard: allow NOT_SIMPLE just opts the plan out of the count(*) optimization, planner takes the normal safe path
       } catch (Exception e) {
         return NOT_SIMPLE;
       }

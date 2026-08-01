@@ -599,6 +599,7 @@ public class DuckDBPartitionStatusStore implements PipelineTracker, AutoCloseabl
 
       return unprocessedIndices;
 
+    // fallback-guard: allow conservatively returns all as unprocessed, biasing toward redoing work rather than skipping it
     } catch (SQLException e) {
       LOGGER.warn("Bulk filtering failed for {}, falling back to per-item check: {}",
           alternateName, e.getMessage());

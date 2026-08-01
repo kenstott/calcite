@@ -137,8 +137,8 @@ public class CollegeScorecardResponseTransformer implements ResponseTransformer 
       return out.toString();
 
     } catch (Exception e) {
-      LOGGER.error("Scorecard: transform failed for {}: {}", context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("College Scorecard: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 }

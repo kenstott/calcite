@@ -121,9 +121,8 @@ public class EiaPetroleumStocksTransformer extends EiaV2Transformer implements R
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA Petroleum Stocks: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA Petroleum Stocks: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 
@@ -142,6 +141,7 @@ public class EiaPetroleumStocksTransformer extends EiaV2Transformer implements R
       cal.setFirstDayOfWeek(Calendar.MONDAY);
       cal.set(year, month, day);
       return cal.get(Calendar.WEEK_OF_YEAR);
+    // fallback-guard: allow per-field derived-value helper; null means an ISO week couldn't be computed for one period string
     } catch (Exception e) {
       return null;
     }

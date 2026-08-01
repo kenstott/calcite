@@ -325,6 +325,7 @@ public class SsaBenefitsProvider implements DataProvider {
       if (cell.getCellType() == CellType.FORMULA) {
         return Double.valueOf(cell.getNumericCellValue());
       }
+    // fallback-guard: allow extends the method's existing explicit "-", "(X)", "N/A" suppression-marker-to-null handling; covers other unreadable cell shapes under the same suppressed/unavailable null semantics
     } catch (Exception e) {
       return null;
     }

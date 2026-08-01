@@ -207,6 +207,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
       try {
         return String.valueOf(Integer.parseInt(digits));
       } catch (NumberFormatException e) {
+        // fallback-guard: allow best-effort CSV field parser returning null for a malformed FAO region code
         return null;
       }
     }
@@ -219,6 +220,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
       try {
         return Integer.parseInt(y.substring(0, 4));
       } catch (NumberFormatException e) {
+        // fallback-guard: allow best-effort nullable CSV-parse idiom applied to a malformed year cell
         return null;
       }
     }
@@ -243,6 +245,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
       try {
         return Integer.parseInt(v.trim());
       } catch (NumberFormatException e) {
+        // fallback-guard: allow generic best-effort integer parser, null for malformed input, matching the file's other nullable-parse helpers
         return null;
       }
     }
@@ -254,6 +257,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
       try {
         return Double.parseDouble(v);
       } catch (NumberFormatException e) {
+        // fallback-guard: allow double-parsing counterpart to m49()/year()/intOrNull(), same best-effort nullable-parse idiom
         return null;
       }
     }

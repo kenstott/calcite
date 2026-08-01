@@ -112,24 +112,42 @@ public class FiaMetricsTransformer implements StreamingResponseTransformer {
       int idxOwngrpcd = indexOf(hdr, "OWNGRPCD");
       int idxFortypcd = indexOf(hdr, "FORTYPCD");
       int idxCondprop = indexOf(hdr, "CONDPROP_UNADJ");
+      long rowsRead = 0;
+      long rowsMalformed = 0;
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.isEmpty()) {
           continue;
         }
+        rowsRead++;
         String[] cols = line.split(",", -1);
-        if (intAt(cols, idxCondStatus) != 1) {
-          continue;
+        try {
+          if (intAt(cols, idxCondStatus) != 1) {
+            continue;
+          }
+          String pltCn = strAt(cols, idxPltCn);
+          String condId = strAt(cols, idxCondId);
+          int invyr = intAt(cols, idxInvyr);
+          String typGrp = FiaLookups.resolveTypGrp(intAt(cols, idxFortypcd));
+          String ownGrp = FiaLookups.resolveOwnGrp(intAt(cols, idxOwngrpcd));
+          double condprop = doubleAt(cols, idxCondprop);
+          map.put(pltCn + "|" + condId,
+              new CondEntry(invyr, typGrp, ownGrp, condprop));
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // pollute the weighted average — skip and count just this row rather than fabricate a
+          // value, and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("forest_metrics[{}]: skipping malformed COND row {} ({})",
+              state, rowsRead, e.getMessage());
         }
-        String pltCn = strAt(cols, idxPltCn);
-        String condId = strAt(cols, idxCondId);
-        int invyr = intAt(cols, idxInvyr);
-        String typGrp = FiaLookups.resolveTypGrp(intAt(cols, idxFortypcd));
-        String ownGrp = FiaLookups.resolveOwnGrp(intAt(cols, idxOwngrpcd));
-        double condprop = doubleAt(cols, idxCondprop);
-        map.put(pltCn + "|" + condId,
-            new CondEntry(invyr, typGrp, ownGrp, condprop));
       }
+      if (rowsMalformed > 0) {
+        LOGGER.warn("forest_metrics[{}]: {} COND row(s) skipped due to malformed numeric fields",
+            state, rowsMalformed);
+      }
+      LOGGER.info("forest_metrics[{}]: COND rows read={} malformed={} kept={}",
+          state, rowsRead, rowsMalformed, map.size());
     }
     return map;
   }
@@ -154,6 +172,7 @@ public class FiaMetricsTransformer implements StreamingResponseTransformer {
 
       long rowsRead = 0;
       long rowsKept = 0;
+      long rowsMalformed = 0;
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.isEmpty()) {
@@ -161,27 +180,41 @@ public class FiaMetricsTransformer implements StreamingResponseTransformer {
         }
         rowsRead++;
         String[] cols = line.split(",", -1);
-        if (intAt(cols, idxStatuscd) != 1) {
-          continue;
+        try {
+          if (intAt(cols, idxStatuscd) != 1) {
+            continue;
+          }
+          CondEntry cond = condMap.get(strAt(cols, idxPltCn) + "|" + strAt(cols, idxCondId));
+          if (cond == null) {
+            continue;
+          }
+          double tpa = doubleAt(cols, idxTpa);
+          double vol = doubleAt(cols, idxVol);
+          double carbon = doubleAt(cols, idxCarbon);
+          double condprop = cond.condprop;
+          double[] acc = groups.get(groupKey(cond.invyr, cond.typGrp, cond.ownGrp));
+          if (acc == null) {
+            continue;
+          }
+          acc[1] += tpa * condprop;
+          acc[2] += tpa * vol * condprop;
+          acc[3] += tpa * carbon * condprop / 2000.0; // lbs → tons
+          rowsKept++;
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // pollute the weighted average — skip and count just this row rather than fabricate a
+          // value, and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("forest_metrics[{}]: skipping malformed TREE row {} ({})",
+              state, rowsRead, e.getMessage());
         }
-        CondEntry cond = condMap.get(strAt(cols, idxPltCn) + "|" + strAt(cols, idxCondId));
-        if (cond == null) {
-          continue;
-        }
-        double tpa = doubleAt(cols, idxTpa);
-        double vol = doubleAt(cols, idxVol);
-        double carbon = doubleAt(cols, idxCarbon);
-        double condprop = cond.condprop;
-        rowsKept++;
-        double[] acc = groups.get(groupKey(cond.invyr, cond.typGrp, cond.ownGrp));
-        if (acc == null) {
-          continue;
-        }
-        acc[1] += tpa * condprop;
-        acc[2] += tpa * vol * condprop;
-        acc[3] += tpa * carbon * condprop / 2000.0; // lbs → tons
       }
-      LOGGER.info("forest_metrics[{}]: tree rows read={} kept={}", state, rowsRead, rowsKept);
+      if (rowsMalformed > 0) {
+        LOGGER.warn("forest_metrics[{}]: {} TREE row(s) skipped due to malformed numeric fields",
+            state, rowsMalformed);
+      }
+      LOGGER.info("forest_metrics[{}]: tree rows read={} kept={} malformed={}",
+          state, rowsRead, rowsKept, rowsMalformed);
     }
   }
 
@@ -215,16 +248,16 @@ public class FiaMetricsTransformer implements StreamingResponseTransformer {
     return cols[idx].trim();
   }
 
+  // fallback-guard: allow index-out-of-range/empty means "column not present in this row" — a
+  // real, benign case distinct from a malformed value, so 0 there is a legitimate zero-field
+  // default. A genuinely malformed (non-empty, non-numeric) value is NOT caught here — it
+  // propagates as NumberFormatException so the per-row loop can skip+log instead of fabricating.
   private static int intAt(String[] cols, int idx) {
     String v = strAt(cols, idx);
     if (v.isEmpty()) {
       return 0;
     }
-    try {
-      return (int) Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return (int) Double.parseDouble(v);
   }
 
   private static double doubleAt(String[] cols, int idx) {
@@ -232,11 +265,7 @@ public class FiaMetricsTransformer implements StreamingResponseTransformer {
     if (v.isEmpty()) {
       return 0.0;
     }
-    try {
-      return Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0.0;
-    }
+    return Double.parseDouble(v);
   }
 
   private static final class CondEntry {

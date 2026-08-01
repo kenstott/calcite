@@ -172,6 +172,7 @@ public class FiaPlotsTransformer implements StreamingResponseTransformer {
     }
     try {
       return (int) Double.parseDouble(v);
+    // fallback-guard: allow explicitly nullable counterpart to intAt() in this file; correctly returns null, not a fabricated number
     } catch (NumberFormatException e) {
       return null;
     }
@@ -184,6 +185,7 @@ public class FiaPlotsTransformer implements StreamingResponseTransformer {
     }
     try {
       return Double.parseDouble(v);
+    // fallback-guard: allow double counterpart of intOrNull(); same proper nullable-field parser
     } catch (NumberFormatException e) {
       return null;
     }

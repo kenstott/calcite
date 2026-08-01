@@ -52,8 +52,7 @@ public class NsfNationalRdTransformer extends EiaBulkXlsxTransformer {
       workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes));
       return parseNationalTable(workbook);
     } catch (Exception e) {
-      LOGGER.error("Failed to parse NSF National R&D XLSX from {}: {}", url, e.getMessage());
-      return "[]";
+      throw new RuntimeException("Failed to parse NSF National R&D XLSX from " + url, e);
     } finally {
       if (workbook != null) {
         try {
@@ -179,6 +178,7 @@ public class NsfNationalRdTransformer extends EiaBulkXlsxTransformer {
     int year;
     try {
       year = Integer.parseInt(prefix);
+    // fallback-guard: allow defensive guard in documented "return null if not a plausible year" heuristic parser; digits already validated above
     } catch (NumberFormatException e) {
       return null;
     }

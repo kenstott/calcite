@@ -167,6 +167,7 @@ public class DuckDBConfig {
     try {
       Double.parseDouble(value);
       return true;
+    // fallback-guard: allow isNumericValue is the same numeric-sniffing predicate pattern as ClickHouseConfig
     } catch (NumberFormatException e) {
       return false;
     }

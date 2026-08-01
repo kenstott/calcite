@@ -127,6 +127,7 @@ public class UsfsFactsTransformer implements ResponseTransformer {
     }
     try {
       return Integer.parseInt(text.trim());
+    // fallback-guard: allow logged nullable-field parser, same pattern as NpsIrmaTransformer's parseChildInt()
     } catch (NumberFormatException e) {
       LOGGER.warn("timber_sales: could not parse integer from field {}: {}", field, text);
       return null;

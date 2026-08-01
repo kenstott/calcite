@@ -257,6 +257,7 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
           return rs.getInt(1);
         }
       }
+    // fallback-guard: allow -1 is a distinguishable sentinel the caller branches on to force a recreate, never mistaken for "nothing to heal" (the bug this method was fixed for).
     } catch (java.sql.SQLException e) {
       LOGGER.debug("Catalog column-count probe failed for '{}' — forcing recreate: {}",
           name, e.getMessage());

@@ -84,6 +84,7 @@ public class HmsSmokeDailyTransformer implements ResponseTransformer {
           array.size(), context.getUrl());
       return response;
 
+    // fallback-guard: allow documented pass-through behavior for this source — class javadoc: HMS Smoke always requires offline geopandas preprocessing, so any non-preprocessed response logs and degrades to an empty result by design, not just on unexpected parse errors
     } catch (Exception e) {
       LOGGER.warn("HMS Smoke: Response is not pre-processed JSON. HMS smoke data requires "
           + "offline geopandas spatial join. See weather-enhanced.md for ETL instructions. "

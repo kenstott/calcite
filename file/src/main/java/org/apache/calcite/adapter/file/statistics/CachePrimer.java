@@ -236,6 +236,7 @@ public class CachePrimer {
                   tableTimings.put(table.toString(), duration);
                   LOGGER.debug("Primed {} in {} ms", table, duration);
                   return true;
+                // fallback-guard: allow failure is recorded in the shared failures list surfaced via PrimingResult, not hidden by the false return
                 } catch (Exception e) {
                   failures.add(table.toString() + ": " + e.getMessage());
                   LOGGER.warn("Failed to prime {}: {}", table, e.getMessage());
@@ -391,6 +392,7 @@ public class CachePrimer {
   public static PrimingResult primeForTesting(String jdbcUrl, String schemaName) {
     try (Connection conn = DriverManager.getConnection(jdbcUrl)) {
       return primeSchema(conn, schemaName);
+    // fallback-guard: allow packages the caught exception's message into the returned PrimingResult's error list, not hidden from the caller
     } catch (Exception e) {
       LOGGER.error("Failed to prime cache for testing", e);
       return new PrimingResult(0, 0, 0, 0, 0,

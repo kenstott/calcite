@@ -734,6 +734,7 @@ public class HttpSource implements DataSource {
         LOGGER.debug("Fetched page with {} records (total yielded: {})", pageData.size(), totalYielded);
         return true;
 
+      // fallback-guard: allow logs the fetch failure at ERROR and halts pagination (hasMore=false, return false), a legitimate failure signal, not a fabricated page
       } catch (IOException e) {
         LOGGER.error("Error fetching paginated data: {}", e.getMessage());
         hasMore = false;
@@ -900,6 +901,7 @@ public class HttpSource implements DataSource {
         LOGGER.debug("CSV_STREAM batch: {} records (total yielded: {})", pageData.size(), totalYielded);
         return true;
 
+      // fallback-guard: allow logs the batch failure at ERROR and halts the stream (hasMore=false, return false), a legitimate failure signal, not a fabricated batch
       } catch (IOException e) {
         LOGGER.error("Error in CSV_STREAM batch: {}", e.getMessage());
         hasMore = false;
@@ -1431,6 +1433,7 @@ public class HttpSource implements DataSource {
     }
     try {
       return Math.min(RETRY_AFTER_CAP_MS, Long.parseLong(ra.trim()) * 1000L);
+    // fallback-guard: allow Retry-After parsing tries delta-seconds first and, on NumberFormatException, retries with HTTP-date parsing via conn.getHeaderFieldDate — a genuine alternate-format parse strategy, not a masked failure.
     } catch (NumberFormatException notSeconds) {
       long when = conn.getHeaderFieldDate("Retry-After", -1L);
       if (when > 0L) {
@@ -3479,6 +3482,7 @@ public class HttpSource implements DataSource {
         hex.append(String.format("%02x", b));
       }
       return "h_" + hex.toString();
+    // fallback-guard: allow MD5 is a JVM-mandated algorithm so NoSuchAlgorithmException is effectively unreachable; the fallback (truncate to 200 chars) is a reasonable degrade for an unreachable path.
     } catch (java.security.NoSuchAlgorithmException e) {
       return sanitized.substring(0, 200);
     }
@@ -3501,6 +3505,7 @@ public class HttpSource implements DataSource {
       }
       LOGGER.debug("Raw cache miss: {}", cachePath);
       return false;
+    // fallback-guard: allow hasValidRawCache treats an IOException while checking cache existence as a cache miss, which forces a re-fetch rather than trusting an unverifiable cache — the safe direction, logged at debug.
     } catch (IOException e) {
       LOGGER.debug("Error checking raw cache: {}", e.getMessage());
       return false;

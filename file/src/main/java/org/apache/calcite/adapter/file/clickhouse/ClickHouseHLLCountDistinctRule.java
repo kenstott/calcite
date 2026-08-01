@@ -261,6 +261,7 @@ public class ClickHouseHLLCountDistinctRule extends RelOptRule {
           rowType,
           ImmutableList.of(ImmutableList.copyOf(values)));
 
+    // fallback-guard: allow Calcite planner-rule optimization: null return means 'don't rewrite', and the caller only calls call.transformTo() when non-null, so the original correct plan is used instead.
     } catch (Exception e) {
       LOGGER.error("[CH-HLL] Failed to create HLL VALUES node", e);
       return null;

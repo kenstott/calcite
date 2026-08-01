@@ -491,6 +491,7 @@ public class DocumentETLProcessor {
     String primaryDocument;
     try {
       primaryDocument = fetchPrimaryDocumentFromSubmissions(documentSource, cik, accession);
+    // fallback-guard: allow The IOException is not swallowed silently — it's captured into the returned DocumentETLResult's errors list and failedCount, a proper error-as-value result the caller can inspect.
     } catch (IOException e) {
       LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession, e.getMessage());
       if (documentTracker != null) {
@@ -1074,6 +1075,7 @@ public class DocumentETLProcessor {
     }
     try {
       return Integer.parseInt(json.substring(numStart, numEnd));
+    // fallback-guard: allow Hand-rolled JSON scanner's filingCount extractor defaults to 0 on both 'field absent' and 'malformed number', consistent with its own established default-to-0 contract for a non-critical metadata count field.
     } catch (NumberFormatException e) {
       return 0;
     }
@@ -1275,6 +1277,7 @@ public class DocumentETLProcessor {
       // Assume 00-50 is 2000-2050, 51-99 is 1951-1999
       int year = yy <= 50 ? 2000 + yy : 1900 + yy;
       return String.valueOf(year);
+    // fallback-guard: allow extractYearFromAccession's null return for a malformed CIK/accession is a documented parse-or-null helper consistent with the class's other extraction helpers.
     } catch (NumberFormatException e) {
       return null;
     }
@@ -1421,6 +1424,7 @@ public class DocumentETLProcessor {
       }
       try {
         return Integer.parseInt(date.substring(0, 4));
+      // fallback-guard: allow The call site explicitly documents the fallback: 'If we can't parse dates, include the file to be safe' — parseYear's -1 sentinel is a deliberate, safe-direction design.
       } catch (NumberFormatException e) {
         return -1;
       }

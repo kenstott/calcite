@@ -56,6 +56,7 @@ public class StorageProviderFile extends File {
       try {
         return storageProvider.exists(fileEntry.getPath());
       } catch (IOException e) {
+        // fallback-guard: allow mirrors java.io.File.exists()'s own contract of returning false when existence can't be determined
         return false;
       }
     }
@@ -84,6 +85,7 @@ public class StorageProviderFile extends File {
       try {
         return storageProvider.delete(fileEntry.getPath());
       } catch (IOException e) {
+        // fallback-guard: allow mirrors java.io.File.delete()'s contract of returning false on any failure
         return false;
       }
     }
@@ -100,6 +102,7 @@ public class StorageProviderFile extends File {
         }
         return true;
       } catch (IOException e) {
+        // fallback-guard: allow mirrors java.io.File.mkdirs()'s contract of returning false on failure
         return false;
       }
     }

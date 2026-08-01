@@ -57,6 +57,7 @@ public class FiaDatamartTransformer implements StreamingResponseTransformer {
     Map<String, double[]> agg = new LinkedHashMap<String, double[]>();
     long rowsRead = 0;
     long rowsKept = 0;
+    long rowsMalformed = 0;
     try (FiaStateArchive.EntryHandle entry = FiaStateArchive.openEntry(state, COND_ENTRY);
          BufferedReader reader = new BufferedReader(
              new InputStreamReader(entry.stream, StandardCharsets.UTF_8))) {
@@ -80,24 +81,33 @@ public class FiaDatamartTransformer implements StreamingResponseTransformer {
         }
         rowsRead++;
         String[] cols = line.split(",", -1);
-        if (intAt(cols, idxCondStatus) != 1) {
-          continue;
-        }
-        rowsKept++;
-        int invyr = intAt(cols, idxInvyr);
-        String typGrp = FiaLookups.resolveTypGrp(intAt(cols, idxFortypcd));
-        String ownGrp = FiaLookups.resolveOwnGrp(intAt(cols, idxOwngrpcd));
-        double condprop = doubleAt(cols, idxCondprop);
-        double balive = doubleAt(cols, idxBalive);
+        try {
+          if (intAt(cols, idxCondStatus) != 1) {
+            continue;
+          }
+          int invyr = intAt(cols, idxInvyr);
+          String typGrp = FiaLookups.resolveTypGrp(intAt(cols, idxFortypcd));
+          String ownGrp = FiaLookups.resolveOwnGrp(intAt(cols, idxOwngrpcd));
+          double condprop = doubleAt(cols, idxCondprop);
+          double balive = doubleAt(cols, idxBalive);
 
-        String key = invyr + "|" + typGrp + "|" + ownGrp;
-        double[] acc = agg.get(key);
-        if (acc == null) {
-          acc = new double[2];
-          agg.put(key, acc);
+          String key = invyr + "|" + typGrp + "|" + ownGrp;
+          double[] acc = agg.get(key);
+          if (acc == null) {
+            acc = new double[2];
+            agg.put(key, acc);
+          }
+          acc[0] += condprop;
+          acc[1] += balive * condprop;
+          rowsKept++;
+        } catch (NumberFormatException e) {
+          // A genuinely malformed (non-empty, non-numeric) field must not silently become 0 and
+          // pollute the weighted average — skip and count just this row rather than fabricate a
+          // value, and rather than abort the whole state's file over one bad byte.
+          rowsMalformed++;
+          LOGGER.warn("forest_inventory[{}]: skipping malformed row {} ({})",
+              state, rowsRead, e.getMessage());
         }
-        acc[0] += condprop;
-        acc[1] += balive * condprop;
       }
     }
 
@@ -114,8 +124,12 @@ public class FiaDatamartTransformer implements StreamingResponseTransformer {
       result.add(row);
     }
 
-    LOGGER.info("forest_inventory[{}]: rows read={} kept={} groups={}",
-        state, rowsRead, rowsKept, result.size());
+    if (rowsMalformed > 0) {
+      LOGGER.warn("forest_inventory[{}]: {} row(s) skipped due to malformed numeric fields",
+          state, rowsMalformed);
+    }
+    LOGGER.info("forest_inventory[{}]: rows read={} kept={} malformed={} groups={}",
+        state, rowsRead, rowsKept, rowsMalformed, result.size());
     return result.iterator();
   }
 
@@ -138,6 +152,10 @@ public class FiaDatamartTransformer implements StreamingResponseTransformer {
     return -1;
   }
 
+  // fallback-guard: allow index-out-of-range/empty means "column not present in this row" — a
+  // real, benign case distinct from a malformed value, so 0 there is a legitimate zero-field
+  // default. A genuinely malformed (non-empty, non-numeric) value is NOT caught here — it
+  // propagates as NumberFormatException so the per-row loop can skip+log instead of fabricating.
   private static int intAt(String[] cols, int idx) {
     if (idx < 0 || idx >= cols.length) {
       return 0;
@@ -146,11 +164,7 @@ public class FiaDatamartTransformer implements StreamingResponseTransformer {
     if (v.isEmpty()) {
       return 0;
     }
-    try {
-      return (int) Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0;
-    }
+    return (int) Double.parseDouble(v);
   }
 
   private static double doubleAt(String[] cols, int idx) {
@@ -161,10 +175,6 @@ public class FiaDatamartTransformer implements StreamingResponseTransformer {
     if (v.isEmpty()) {
       return 0.0;
     }
-    try {
-      return Double.parseDouble(v);
-    } catch (NumberFormatException e) {
-      return 0.0;
-    }
+    return Double.parseDouble(v);
   }
 }

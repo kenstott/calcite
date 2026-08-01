@@ -127,6 +127,7 @@ public class TigerVtdDimensionResolver implements DimensionResolver {
     int yearInt;
     try {
       yearInt = Integer.parseInt(year);
+    // fallback-guard: allow invalid year format falls back to ALL_STATE_FIPS, the same documented fail-open behavior already used when year is entirely missing -- over-inclusive, not silently wrong data
     } catch (NumberFormatException e) {
       LOGGER.warn("Invalid year format: {}", year);
       return ALL_STATE_FIPS;

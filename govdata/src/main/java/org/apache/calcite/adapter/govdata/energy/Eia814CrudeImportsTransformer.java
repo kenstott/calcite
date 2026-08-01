@@ -48,6 +48,7 @@ public class Eia814CrudeImportsTransformer extends EiaBulkXlsxTransformer {
     int year;
     try {
       year = Integer.parseInt(yearStr);
+    // fallback-guard: allow narrow guard on a single framework-supplied dimension value, before any download/parse; bad value is logged
     } catch (NumberFormatException e) {
       LOGGER.warn("EIA-814: invalid year dimension value: {}", yearStr);
       return "[]";

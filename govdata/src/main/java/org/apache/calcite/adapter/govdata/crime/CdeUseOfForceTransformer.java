@@ -123,9 +123,7 @@ public class CdeUseOfForceTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDE UoF: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE UoF: Failed to parse response for " + context.getUrl(), e);
     }
   }
 

@@ -283,6 +283,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
           if (!hasChanged(path, cachedMetadata)) {
             return new java.io.ByteArrayInputStream(cachedData);
           }
+        // fallback-guard: allow deliberate stale-cache fallback, used identically across all storage providers in this package
         } catch (IOException e) {
           // If we can't check freshness, use cached data anyway
           return new java.io.ByteArrayInputStream(cachedData);

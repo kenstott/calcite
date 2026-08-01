@@ -112,9 +112,7 @@ public class CdePoliceEmploymentTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDE PE: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE PE: Failed to parse response for " + context.getUrl(), e);
     }
   }
 

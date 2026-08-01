@@ -209,6 +209,7 @@ public class FiaPopEvaluationsTransformer implements StreamingResponseTransforme
     }
     try {
       return (int) Double.parseDouble(v);
+    // fallback-guard: allow nullable-field helper, same safe pattern as FiaPlotsTransformer's intOrNull()
     } catch (NumberFormatException e) {
       return null;
     }

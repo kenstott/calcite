@@ -366,6 +366,7 @@ public class S3StorageProvider implements StorageProvider {
           if (!hasChanged(path, cachedMetadata)) {
             return new java.io.ByteArrayInputStream(cachedData);
           }
+        // fallback-guard: allow deliberate stale-cache fallback, used identically across all storage providers in this package
         } catch (IOException e) {
           // If we can't check freshness, use cached data anyway
           return new java.io.ByteArrayInputStream(cachedData);
@@ -488,6 +489,7 @@ public class S3StorageProvider implements StorageProvider {
     try {
       s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
       return true;
+    // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal; other exceptions still propagate, per exists() above
     } catch (NoSuchKeyException notFound) {
       return false;
     }

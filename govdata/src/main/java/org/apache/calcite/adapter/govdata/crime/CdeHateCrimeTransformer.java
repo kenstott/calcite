@@ -99,9 +99,8 @@ public class CdeHateCrimeTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("CDE HateCrime: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("CDE HateCrime: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

@@ -59,6 +59,7 @@ public class SoiMigrationProvider implements DataProvider {
     int yr;
     try {
       yr = Integer.parseInt(year.trim());
+    // fallback-guard: allow narrow guard on a framework-supplied dimension value, before any download/parse; bad value is logged
     } catch (NumberFormatException e) {
       LOGGER.warn("county_migration_flows: non-numeric year {}", year);
       return Collections.emptyIterator();
@@ -163,6 +164,7 @@ public class SoiMigrationProvider implements DataProvider {
   private static int asInt(String s) {
     try {
       return Integer.parseInt(s.trim());
+    // fallback-guard: allow intentional design: unparseable FIPS values are IRS "summary bucket" rows meant to be filtered out via the 999 sentinel, not real per-county records
     } catch (NumberFormatException e) {
       return 999;  // treat unparseable FIPS as a summary bucket -> filtered
     }

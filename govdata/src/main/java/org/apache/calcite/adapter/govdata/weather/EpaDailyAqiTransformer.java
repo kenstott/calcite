@@ -128,9 +128,8 @@ public class EpaDailyAqiTransformer implements ResponseTransformer {
       return output.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EPA Daily AQI: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("EPA Daily AQI: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

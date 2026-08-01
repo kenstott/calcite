@@ -118,9 +118,8 @@ public class NwsStationTransformer implements ResponseTransformer {
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("NWS Station: Failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("NWS Station: Failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 

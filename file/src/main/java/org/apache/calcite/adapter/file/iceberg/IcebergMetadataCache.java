@@ -112,6 +112,7 @@ public final class IcebergMetadataCache {
         sb.append(Character.forDigit((b >> 4) & 0xf, 16)).append(Character.forDigit(b & 0xf, 16));
       }
       return sb.toString();
+    // fallback-guard: allow sha256's catch is documented as unreachable for SHA-256; degrades only the cache filename derivation, not correctness
     } catch (Exception e) {
       // Cannot happen for SHA-256; degrade to a path-derived name rather than fail the read.
       return Integer.toHexString(s.hashCode());
@@ -150,6 +151,7 @@ public final class IcebergMetadataCache {
       try {
         populate(delegate.newInputFile(path), local);
         return org.apache.iceberg.Files.localInput(local);
+      // fallback-guard: allow comment documents a cache write failure must never fail a read that would otherwise succeed; fallback is the real delegate read
       } catch (IOException | RuntimeException e) {
         // A cache write failure must never fail a read that would otherwise succeed.
         LOGGER.debug("Iceberg metadata cache miss-and-populate failed for {}: {}",

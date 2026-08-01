@@ -233,6 +233,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       geoSchemaConfig = JSON_MAPPER.readTree(is);
       LOGGER.debug("Loaded geo-schema.json configuration");
       return geoSchemaConfig;
+    // fallback-guard: allow explicitly documented degrade path (logged "using hardcoded URLs"), matching the adjacent is==null branch that also returns null to trigger the same fallback
     } catch (Exception e) {
       LOGGER.warn("Failed to load geo-schema.json: {} - using hardcoded URLs", e.getMessage());
       return null;
@@ -2190,6 +2191,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
     try {
       java.util.List<FileEntry> files = storageProvider.listFiles(categoryPath, true);
       return files.stream().anyMatch(f -> !f.isDirectory() && f.getPath().endsWith(".shp"));
+    // fallback-guard: allow isShapefileAvailable is a boolean existence-probe method; an I/O failure while checking is folded into "not available," matching a File.exists()-style contract
     } catch (IOException e) {
       LOGGER.warn("Failed to check shapefile availability: {}", e.getMessage());
       return false;
@@ -2339,6 +2341,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
 
       return false; // Parquet is up-to-date, no processing needed
 
+    // fallback-guard: allow documented fail-safe ("Error checking - process to be safe") that causes more work (reprocessing) rather than silently skipping -- the opposite of masking a failure as success
     } catch (IOException e) {
       LOGGER.warn("Failed to check output file for {} year {}: {}", dataType, year, e.getMessage());
       return true; // Error checking - process to be safe

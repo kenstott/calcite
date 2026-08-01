@@ -135,9 +135,8 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
       return result.toString();
 
     } catch (Exception e) {
-      LOGGER.error("EIA Electricity Generation: failed to parse response for {}: {}",
-          context.getUrl(), e.getMessage());
-      return "[]";
+      throw new RuntimeException("EIA Electricity Generation: failed to parse response for "
+          + context.getUrl(), e);
     }
   }
 }

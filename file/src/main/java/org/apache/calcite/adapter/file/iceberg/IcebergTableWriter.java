@@ -766,10 +766,12 @@ public class IcebergTableWriter {
           try {
             // ISO 8601 with Z suffix (e.g. "2026-06-04T13:38:30Z")
             return LocalDateTime.ofInstant(Instant.parse(s), ZoneOffset.UTC);
+          // fallback-guard: allow second real parse attempt in an alternate ISO-8601 format, not a fabricated value
           } catch (Exception e1) {
             try {
               // ISO 8601 without timezone (e.g. "2026-06-04T13:38:30")
               return LocalDateTime.parse(s);
+            // fallback-guard: allow final parse attempt in a documented two-format cascade; failure is logged at WARN with the raw value before returning null
             } catch (Exception e2) {
               LOGGER.warn("Could not parse timestamp string '{}': {}", s, e2.getMessage());
               return null;
@@ -787,6 +789,7 @@ public class IcebergTableWriter {
           try {
             Object arrayData = ((java.sql.Array) value).getArray();
             return convertArrayToList(arrayData, elementType);
+          // fallback-guard: allow logs the SQL Array conversion failure at WARN before returning null, visible rather than silent
           } catch (java.sql.SQLException e) {
             LOGGER.warn("Failed to convert SQL Array: {}", e.getMessage());
             return null;

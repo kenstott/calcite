@@ -260,6 +260,7 @@ public class HttpSourceConfig {
       try {
         int year = Integer.parseInt(yearStr);
         return year >= rule.getYearMin() && year <= rule.getYearMax();
+      // fallback-guard: allow unparseable year yields no match, the normal predicate outcome for this optional URL-selection filter
       } catch (NumberFormatException e) {
         return false;
       }
@@ -1000,15 +1001,17 @@ public class HttpSourceConfig {
       }
 
       AuthType type;
+      // Convert camelCase or kebab-case to UPPER_SNAKE_CASE
+      String normalized = typeStr
+          .replaceAll("([a-z])([A-Z])", "$1_$2")  // camelCase -> camel_Case
+          .replace("-", "_")                       // kebab-case -> kebab_case
+          .toUpperCase();
       try {
-        // Convert camelCase or kebab-case to UPPER_SNAKE_CASE
-        String normalized = typeStr
-            .replaceAll("([a-z])([A-Z])", "$1_$2")  // camelCase -> camel_Case
-            .replace("-", "_")                       // kebab-case -> kebab_case
-            .toUpperCase();
         type = AuthType.valueOf(normalized);
       } catch (IllegalArgumentException e) {
-        return none();
+        throw new IllegalArgumentException(
+            "Unknown auth.type '" + typeStr + "' — expected one of "
+            + java.util.Arrays.toString(AuthType.values()), e);
       }
 
       String locationStr = (String) map.get("location");
@@ -1846,6 +1849,7 @@ public class HttpSourceConfig {
           year = Integer.parseInt(String.valueOf(yearValue).trim());
         }
         return year >= yearStart && year <= yearEnd;
+      // fallback-guard: allow isYearInRange documents skipping rows with invalid year values as deliberate row-filtering policy
       } catch (NumberFormatException e) {
         return false;  // Skip rows with invalid year values
       }

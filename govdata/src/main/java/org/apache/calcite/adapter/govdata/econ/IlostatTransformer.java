@@ -220,6 +220,7 @@ public class IlostatTransformer implements StreamingResponseTransformer {
       }
       try {
         return Integer.parseInt(time.substring(0, 4));
+      // fallback-guard: allow per-row field parser; caller treats null as "no parseable year -> skip"
       } catch (NumberFormatException e) {
         return null;
       }
@@ -244,6 +245,7 @@ public class IlostatTransformer implements StreamingResponseTransformer {
       }
       try {
         return Double.parseDouble(v);
+      // fallback-guard: allow per-field numeric parser for a single observation value
       } catch (NumberFormatException e) {
         return null;
       }

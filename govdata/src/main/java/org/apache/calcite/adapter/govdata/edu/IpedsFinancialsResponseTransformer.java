@@ -227,6 +227,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
   private static boolean isProvisional(String yearStr) {
     try {
       return Integer.parseInt(yearStr) >= PROVISIONAL_YEAR_THRESHOLD;
+    // fallback-guard: allow narrow guard on a framework-supplied dimension value for a low-stakes provisional-flag computation; consistent with this codebase's dimension-value-guard pattern
     } catch (NumberFormatException e) {
       return false;
     }

@@ -206,6 +206,7 @@ public class CpsVotingTable extends AbstractTable implements ScannableTable {
     }
     try {
       return Integer.parseInt(value);
+    // fallback-guard: allow same -1 "no value" sentinel this method already returns above for a null/empty code, consistent with CPS's own missing-data convention
     } catch (NumberFormatException e) {
       return -1;
     }

@@ -1571,6 +1571,7 @@ public class EtlPipeline {
           .memorySnapshots(memSnapshots)
           .build();
 
+    // fallback-guard: allow The top-level pipeline failure is captured into EtlResult with .failed(true) and .failureMessage(e.getMessage()) plus incrementalTracker.invalidateTableCompletion — a proper distinguishable error result, not a silent fallback.
     } catch (Exception e) {
       long elapsed = System.currentTimeMillis() - startTime;
       String errorMsg =
@@ -3031,6 +3032,7 @@ public class EtlPipeline {
           pipelineName, baseDirectory);
       return false;
 
+    // fallback-guard: allow deliberate, logged fail-safe: an unverifiable check assumes data exists rather than risking a redundant reprocess
     } catch (IOException e) {
       // If we can't verify, assume data exists to avoid unnecessary reprocessing
       LOGGER.warn("Could not verify data existence for '{}': {} - assuming exists",
@@ -3160,6 +3162,7 @@ public class EtlPipeline {
           catalog.close();
         }
       }
+    // fallback-guard: allow The single caller (EtlPipeline around line 520-527) explicitly documents and implements a compensating fallback: 'If we couldn't read from Iceberg ... use the tracker's cached row count as the authoritative figure' — the 0 return is a known, handled signal.
     } catch (Exception e) {
       LOGGER.warn("Failed to read row count from Iceberg for '{}': {}", tableLocation, e.getMessage());
       return 0;
@@ -3275,6 +3278,7 @@ public class EtlPipeline {
           catalog.close();
         }
       }
+    // fallback-guard: allow readEtlPropertiesFromIceberg is a fast-path cache lookup (per its class javadoc); null is the standard 'cache unavailable' contract for such an accessor, and it currently has no caller so nothing is masked in practice.
     } catch (Exception e) {
       LOGGER.debug("Failed to read ETL properties from Iceberg for '{}': {}",
           tableLocation, e.getMessage());
@@ -3445,6 +3449,7 @@ public class EtlPipeline {
     }
     try {
       return Integer.parseInt(System.getProperty("calcite.etl.threads", "1"));
+    // fallback-guard: allow Javadoc explicitly documents 'Returns 1 (sequential) if neither is set' as the designed default when the system property is malformed.
     } catch (NumberFormatException e) {
       return 1;
     }
@@ -3503,6 +3508,7 @@ public class EtlPipeline {
         hex.insert(0, '0');
       }
       return hex.toString();
+    // fallback-guard: allow NoSuchAlgorithmException for SHA-256 cannot occur on any conforming JVM (a required algorithm); javadoc documents 'null if hashing fails' as the contract.
     } catch (java.security.NoSuchAlgorithmException e) {
       LOGGER.warn("SHA-256 unavailable for row hashing: {}", e.getMessage());
       return null;
@@ -3535,6 +3541,7 @@ public class EtlPipeline {
       long la = Long.parseLong(a.trim());
       long lb = Long.parseLong(b.trim());
       return Long.compare(la, lb);
+    // fallback-guard: allow The javadoc directly above explains this as an intentional two-strategy comparison: numeric compare when both parse, lexicographic fallback otherwise — not a masked failure.
     } catch (NumberFormatException e) {
       return a.compareTo(b);
     }
@@ -3823,6 +3830,7 @@ public class EtlPipeline {
       int year;
       try {
         year = Integer.parseInt(yearStr);
+      // fallback-guard: allow Outer catch's comment states the design intent for the whole method: 'Never fail a batch due to period-bounds computation'; unparseable year just skips this best-effort enrichment.
       } catch (NumberFormatException e) {
         return variables;
       }
@@ -3842,6 +3850,7 @@ public class EtlPipeline {
         int q;
         try {
           q = Integer.parseInt(qStr.trim());
+        // fallback-guard: allow Same best-effort period-bounds enrichment design; malformed quarter skips enrichment, doesn't fail the batch.
         } catch (NumberFormatException e) {
           return variables;
         }
@@ -3861,6 +3870,7 @@ public class EtlPipeline {
         int month;
         try {
           month = Integer.parseInt(mStr.trim());
+        // fallback-guard: allow Same best-effort period-bounds enrichment design for month.
         } catch (NumberFormatException e) {
           return variables;
         }
@@ -3878,6 +3888,7 @@ public class EtlPipeline {
         int week;
         try {
           week = Integer.parseInt(wStr.trim());
+        // fallback-guard: allow Same best-effort period-bounds enrichment design for week.
         } catch (NumberFormatException e) {
           return variables;
         }
@@ -3902,6 +3913,7 @@ public class EtlPipeline {
         try {
           month = Integer.parseInt(mStr.trim());
           day = Integer.parseInt(dStr.trim());
+        // fallback-guard: allow Same best-effort period-bounds enrichment design for day/month.
         } catch (NumberFormatException e) {
           return variables;
         }
@@ -3923,6 +3935,7 @@ public class EtlPipeline {
       enriched.put("period_end", end.toString());
       return enriched;
 
+    // fallback-guard: allow Outer catch for the whole method, explicitly commented 'Never fail a batch due to period-bounds computation' and logged at debug.
     } catch (Exception e) {
       // Never fail a batch due to period-bounds computation
       LOGGER.debug("enrichWithPeriodBoundsInternal failed for {} / {}: {}",

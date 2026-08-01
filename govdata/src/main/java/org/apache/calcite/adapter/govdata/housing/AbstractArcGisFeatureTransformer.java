@@ -226,6 +226,7 @@ abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTran
     }
     try {
       return (int) Double.parseDouble(s);
+    // fallback-guard: allow shared nullable-integer coercion helper for ArcGIS feature transformers; malformed text yields null
     } catch (NumberFormatException e) {
       return null;
     }
@@ -244,6 +245,7 @@ abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTran
     }
     try {
       return Double.parseDouble(s);
+    // fallback-guard: allow double counterpart of intg(); same nullable-field safe-parse pattern
     } catch (NumberFormatException e) {
       return null;
     }

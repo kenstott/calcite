@@ -122,6 +122,7 @@ public class ConcurrentSpilloverManager {
             .filter(dir -> {
               try {
                 return Files.getLastModifiedTime(dir).toMillis() < cutoffTime;
+              // fallback-guard: allow Filter predicate inside a background directory-cleanup routine; failing to read mtime is treated as 'not old enough to delete', which fails safe (skips deletion) rather than risking data loss.
               } catch (IOException e) {
                 return false;
               }
