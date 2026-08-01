@@ -17,8 +17,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Keyless public API endpoints that sit next to the askamerica corpus, loaded once
@@ -56,6 +59,23 @@ final class ExternalSources {
         + "relying on it, and report a persistent gap with report_issue.";
 
     private static volatile JsonNode root;
+
+    /**
+     * Common short English words excluded from scoring. Without this, a word like "for" in a
+     * completely unrelated topic (e.g. "recipe for chocolate chip cookies") is a substring of a
+     * real topic keyword like "forecast", producing a nonzero score for a query that has nothing
+     * to do with the source — the {@code contains()} check that catches genuine partial matches
+     * ("droughts" for "drought") cannot distinguish that from an incidental stopword collision.
+     */
+    private static final Set<String> STOPWORDS = new HashSet<>(Arrays.asList(
+        "a", "an", "the", "and", "or", "but", "for", "nor", "so", "yet", "of", "to", "in", "on",
+        "at", "by", "with", "from", "into", "onto", "is", "are", "was", "were", "be", "been",
+        "being", "this", "that", "these", "those", "it", "its", "as", "if", "than", "then"));
+
+    /** Score below which a match is considered incidental rather than genuinely relevant — one
+     *  weak "covers"/"gap" prose hit (1 point) is exactly the kind of noise this excludes;
+     *  reaching it requires at least one real topic-substring match (4) or better. */
+    private static final int MIN_RELEVANT_SCORE = 4;
 
     private ExternalSources() {
     }
@@ -103,11 +123,17 @@ final class ExternalSources {
                 matches.add(entry(s, 0));
             }
         } else {
-            String[] toks = topic.toLowerCase(Locale.ROOT).split("\\s+");
+            String[] rawToks = topic.toLowerCase(Locale.ROOT).split("\\s+");
+            List<String> toks = new ArrayList<>();
+            for (String tk : rawToks) {
+                if (!tk.isEmpty() && !STOPWORDS.contains(tk)) {
+                    toks.add(tk);
+                }
+            }
             List<ObjectNode> hits = new ArrayList<>();
             for (JsonNode s : root()) {
                 int score = score(toks, s);
-                if (score > 0) {
+                if (score >= MIN_RELEVANT_SCORE) {
                     hits.add(entry(s, score));
                 }
             }
@@ -134,7 +160,7 @@ final class ExternalSources {
     }
 
     /** Topic keywords carry the most weight; prose fields break ties. */
-    private static int score(String[] toks, JsonNode s) {
+    private static int score(List<String> toks, JsonNode s) {
         int score = 0;
         for (String tk : toks) {
             if (tk.isEmpty()) {
