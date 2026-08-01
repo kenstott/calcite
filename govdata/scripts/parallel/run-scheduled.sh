@@ -27,6 +27,7 @@ load_env
 LOG_DIR="$SCRIPT_DIR/runs"
 ERROR_LOG="$LOG_DIR/errors.log"
 R2_LOG="$LOG_DIR/r2-sync.log"   # detailed R2 sync output — tailed by pool_status.py
+CATCHUP_LOG="$LOG_DIR/r2-catchup.log"  # comprehensive backstop sync output
 PID_FILE="$LOG_DIR/pids/scheduled.pid"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -291,6 +292,34 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   ) &
   _sync_pid=$!
   log_error "INFO: R2 sync daemon started (PID $_sync_pid, continuous every ${R2_SYNC_INTERVAL}s; log: $R2_LOG)"
+
+  # Comprehensive backstop: sync-to-r2.sh HOLDS a schema's sentinel entirely while it has
+  # a live writer, with no bound on how long that hold can last. A schema busy across many
+  # consecutive worker runs (backfill years, a reprocess chain) can go days without ever
+  # getting an idle window to slice through, and nothing surfaces that — the sentinel just
+  # sits there silently (observed: sec held 4 days, 2026-07-28 to 2026-08-01, while
+  # historical-year backfill + a fix-sec repair chain kept it continuously active). This
+  # runs far less often (default 24h, vs. the sliced sync's 60s) because a full
+  # `rclone sync --checksum` pays real R2 LIST costs the sliced pass is designed to avoid —
+  # it exists to bound the *worst case* staleness, not to replace the primary path.
+  CATCHUP_INTERVAL="${GOVDATA_R2_CATCHUP_INTERVAL:-86400}"
+  (
+    while true; do
+      sleep "$CATCHUP_INTERVAL"
+      if [ -f "$CATCHUP_LOG" ] && [ "$(stat -c%s "$CATCHUP_LOG" 2>/dev/null || echo 0)" -gt 5242880 ]; then
+        mv -f "$CATCHUP_LOG" "$CATCHUP_LOG.1"
+      fi
+      echo "[$(ts)] R2 catchup starting" >> "$CATCHUP_LOG"
+      if "$SCRIPT_DIR/catchup-sync-r2.sh" >> "$CATCHUP_LOG" 2>&1; then
+        echo "[$(ts)] R2 catchup complete" >> "$CATCHUP_LOG"
+      else
+        echo "[$(ts)] R2 catchup FAILED (will retry next cycle)" >> "$CATCHUP_LOG"
+        log_error "WARNING: R2 catchup sync failed (will retry next cycle)"
+      fi
+    done
+  ) &
+  _catchup_pid=$!
+  log_error "INFO: R2 catchup daemon started (PID $_catchup_pid, every ${CATCHUP_INTERVAL}s; log: $CATCHUP_LOG)"
 fi
 
 while true; do

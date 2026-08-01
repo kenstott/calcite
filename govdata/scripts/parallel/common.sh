@@ -1187,6 +1187,33 @@ run_etl_inline() {
   return $exit_code
 }
 
+# Detect schemas with a live ETL writer, from run-pool's pid/exit markers under
+# scripts/parallel/runs/pids/. A schema is "active" when it has a live
+# worker-<schema>-<mode>.pid with no matching .exit marker. All sec_* workers write the
+# shared sec/ tree and collapse to the single 'sec' schema. Shared by sync-to-r2.sh
+# (per-slice) and catchup-sync-r2.sh (full comprehensive pass) — both must treat "active"
+# identically, since syncing a live Iceberg table races its own compaction the same way
+# regardless of which sync strategy is copying it.
+# Usage: detect_active_schemas <pid_dir>  → sets ACTIVE_SCHEMAS (space-padded string)
+detect_active_schemas() {
+  local _pid_dir=$1
+  ACTIVE_SCHEMAS=""
+  [ -d "$_pid_dir" ] || return 0
+  local _pf _id _wpid _rest _schema
+  for _pf in "$_pid_dir"/worker-*.pid; do
+    [ -e "$_pf" ] || continue
+    _id=$(basename "$_pf" .pid)                        # worker-<schema>-<mode>
+    [ -f "$_pid_dir/${_id}.exit" ] && continue         # worker already finished
+    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
+    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
+    _rest=${_id#worker-}                               # <schema>-<mode>
+    _schema=${_rest%-*}                                # strip the -<mode> suffix
+    case "$_schema" in sec_*|sec) _schema=sec ;; esac  # sec_* all write sec/
+    case " $ACTIVE_SCHEMAS " in *" $_schema "*) continue ;; esac      # dedup
+    ACTIVE_SCHEMAS="$ACTIVE_SCHEMAS $_schema"
+  done
+}
+
 log_info() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }

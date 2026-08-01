@@ -88,25 +88,10 @@ log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s ($( $DRY_RUN &&
 # source 404 NoSuchKey — and pass 2 could advance the R2 pointer to a snapshot whose
 # manifests didn't finish uploading, exposing a torn snapshot to R2 readers. So a schema
 # with a live writer is SKIPPED this pass and its sentinel HELD; it resumes from that held
-# sentinel once the writer finishes. A schema is "active" when run-pool has a live
-# worker-<schema>-<mode>.pid with no matching .exit marker. All sec_* workers write the
-# shared sec/ tree, so they collapse to the single 'sec' schema.
-_pid_dir="$SCRIPT_DIR/runs/pids"
-_active_schemas=""
-if [ -d "$_pid_dir" ]; then
-  for _pf in "$_pid_dir"/worker-*.pid; do
-    [ -e "$_pf" ] || continue
-    _id=$(basename "$_pf" .pid)                        # worker-<schema>-<mode>
-    [ -f "$_pid_dir/${_id}.exit" ] && continue         # worker already finished
-    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
-    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
-    _rest=${_id#worker-}                               # <schema>-<mode>
-    _schema=${_rest%-*}                                # strip the -<mode> suffix
-    case "$_schema" in sec_*|sec) _schema=sec ;; esac  # sec_* all write sec/
-    case " $_active_schemas " in *" $_schema "*) continue ;; esac      # dedup
-    _active_schemas="$_active_schemas $_schema"
-  done
-fi
+# sentinel once the writer finishes. See common.sh's detect_active_schemas for the shared
+# liveness check (also used by catchup-sync-r2.sh).
+detect_active_schemas "$SCRIPT_DIR/runs/pids"
+_active_schemas="$ACTIVE_SCHEMAS"
 if [ -n "$_active_schemas" ]; then
   log_info "sync-to-r2: holding active-writer schema(s) this pass —${_active_schemas}"
 fi
