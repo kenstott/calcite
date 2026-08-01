@@ -240,9 +240,11 @@ partitionedTables:
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats field-crop statistics (production, area planted, area
-      harvested, yield) by county and state. Tall layout — filter statisticcat_desc
-      for a specific measure and unit_desc for its unit. Joins to geo.counties via
-      state_fips_code+county_code and to disasters drought/storm tables by county+year.
+      harvested, yield) by county and state, annual. Tall layout — filter
+      statisticcat_desc for a specific measure and unit_desc for its unit. Joins to
+      geo.counties via the derived county_fips column and to geo.states via
+      state_fips_code; also joinable to disasters drought/storm tables by county+year
+      for yield-impact analysis.
 
     dimensions:
       type:
@@ -310,10 +312,13 @@ partitionedTables:
     pattern: "type=nass_livestock_inventory/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
-      USDA NASS QuickStats livestock and poultry inventory (head counts) by county
-      and state — cattle, hogs, sheep, chickens, turkeys, etc. Tall layout; use
-      commodity_desc + class_desc for a specific animal class and unit_desc for the
-      unit (HEAD). Joins to geo.counties and to census rural demographics.
+      USDA NASS QuickStats livestock and poultry inventory head counts by county and
+      state, annual — cattle, hogs, sheep, chickens, turkeys, etc. Fetched with
+      statisticcat_desc=INVENTORY only, so production/marketings for animals &
+      products are not in this table. Tall layout; use commodity_desc + class_desc
+      for a specific animal class and unit_desc for the unit (HEAD). Joins to
+      geo.counties via the derived county_fips column and to geo.states via
+      state_fips_code.
 
     dimensions:
       type:

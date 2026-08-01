@@ -159,11 +159,13 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       NHTSA vehicle safety recall campaigns — one row per recall (NHTSA
-      campaign id). All-history to current (~30K campaigns), served as a single
-      Socrata JSON export, so this is a snapshot table: the whole set is
-      re-fetched and the partition overwritten each run. The affected make /
-      model / year set is rolled into the description text (not exploded).
-      Source: data.transportation.gov/resource/6axg-epim.json.
+      campaign id), with component, estimated potentially-affected unit count,
+      recall type (Vehicle/Equipment/Tire/Child Seat), and park-outside /
+      do-not-drive advisory flags. All-history to current (~30K campaigns),
+      served as a single Socrata JSON export, so this is a snapshot table: the
+      whole set is re-fetched and the partition overwritten each run. The
+      affected make / model / year set is rolled into the description text
+      (not exploded). Source: data.transportation.gov/resource/6axg-epim.json.
 
     dimensions:
       type:
@@ -271,10 +273,12 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       NHTSA consumer safety-defect complaints — one row per complaint component
-      record since 1995 (all-history bulk flat file, refreshed daily). No header
-      row; the fixed 51-field TAB layout (CMPL.txt spec) is declared via
-      columnNames. Snapshot: the whole file is re-fetched and the partition
-      overwritten each run. In DQ mode dqRowLimit caps the sample. Source:
+      record since 1995 (all-history bulk flat file, refreshed daily), carrying
+      crash/fire flags, injury and death counts, mileage at failure, and
+      free-text complaint description, keyed to manufacturer/make/model/
+      model_year with both the consumer's state (state_abbr) and the incident
+      state (state_of_incident). Snapshot: the whole file is re-fetched and the
+      partition overwritten each run. Source:
       static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip.
     dqRowLimit: 200000
 
@@ -441,11 +445,13 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       NHTSA Fatality Analysis Reporting System — one row per fatal traffic crash
-      (accident.csv, grain ST_CASE) for the given data year. FARS coded columns
-      each have a decoded *NAME sibling; a curated subset is projected here.
-      Delta by year: past years immutable, newest complete year (effective_year
-      = year - 2) re-fetched. Joins to geo.counties via county_fips. Source:
-      static.nhtsa.gov/nhtsa/downloads/FARS/{year}/National/FARS{year}NationalCSV.zip.
+      (accident.csv, grain ST_CASE) for the given data year, with fatality,
+      person, vehicle, and pedestrian counts, crash date/hour/day-of-week,
+      lat/lon, and decoded conditions (weather, light, manner of collision,
+      roadway function). Delta by year: past years immutable, newest complete
+      year (effective_year = year - 2) re-fetched. Joins to geo.counties via
+      county_fips; see fatal_crashes_by_state_year for the state x year rollup.
+      Source: static.nhtsa.gov/nhtsa/downloads/FARS/{year}/National/FARS{year}NationalCSV.zip.
 
     dimensions:
       type:
@@ -1272,16 +1278,17 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       FMCSA Company Census File — one row per USDOT-registered motor carrier
-      (~4.47M rows), carrying registration, fleet size, operation type, and
-      (for carriers that received a compliance review) the assigned safety
-      rating. Bulk CSV export of DOT Socrata dataset az4n-8mr2 — the whole set
-      is downloaded in one unpaginated request and the partition overwritten
-      each run, so this is a snapshot. Crash/inspection/out-of-service metrics
-      are NOT on this file (only ~54K carriers are ever rated); they publish as
-      separate per-event SMS datasets (SMS Input - Crash 4wxs-vbns / aayw-vxb3,
-      SMS Input - Inspection rbkj-cgst) and would be their own raw tables + a
-      rollup view, per the one-source-per-table rule. In DQ mode dqRowLimit caps
-      the sample. Source:
+      (~4.47M rows), carrying registration, fleet size (drivers, CDL drivers,
+      power/truck/bus units), operation type, hazmat authorization, and (for
+      carriers that received a compliance review) the assigned safety rating
+      and a per-carrier recordable_crash_rate. Event-level crash/inspection/
+      out-of-service records are NOT on this file (only ~54K carriers are ever
+      rated); they publish as separate per-event SMS datasets (SMS Input -
+      Crash 4wxs-vbns / aayw-vxb3, SMS Input - Inspection rbkj-cgst) and would
+      be their own raw tables + a rollup view, per the one-source-per-table
+      rule. Bulk CSV export of DOT Socrata dataset az4n-8mr2 — the whole set is
+      downloaded in one unpaginated request and the partition overwritten each
+      run, so this is a snapshot. Source:
       data.transportation.gov/api/views/az4n-8mr2/rows.csv?accessType=DOWNLOAD.
     dqRowLimit: 200000
 
@@ -1870,15 +1877,18 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       NTSB aviation accident & incident database — one row per aircraft involved
-      in an event (all events 1982-present). The download (avall.zip, ~95MB) is a
-      single Microsoft Access database (avall.mdb, ~553MB) read in-JVM with
-      Jackcess by NtsbAviationTransformer: the `aircraft` table (grain ev_id +
-      Aircraft_Key) is streamed and joined to `events` (ev_id) and the
-      `narratives.narr_cause` probable-cause text. The MDB has no county column,
-      so only state_fips is derived (from USPS ev_state). Snapshot: the whole MDB
-      is re-ingested and the partition overwritten each run. event_year is a
-      column (not a partition) since one file carries all years. Source:
-      data.ntsb.gov/avdata/avall.zip.
+      in an event (all events 1982-present), with injury severity and
+      fatal/serious/minor injury counts, aircraft damage level, FAR operating
+      part, phase-of-flight code, probable-cause narrative, and event lat/lon.
+      The download (avall.zip, ~95MB) is a single Microsoft Access database
+      (avall.mdb, ~553MB) read in-JVM with Jackcess by NtsbAviationTransformer:
+      the `aircraft` table (grain ev_id + Aircraft_Key) is streamed and joined
+      to `events` (ev_id) and the `narratives.narr_cause` probable-cause text.
+      The MDB has no county column, so only state_fips is derived (from USPS
+      ev_state). Snapshot: the whole MDB is re-ingested and the partition
+      overwritten each run. event_year is a column (not a partition) since one
+      file carries all years; aircraft_n_number joins to
+      faa_aircraft_master.n_number. Source: data.ntsb.gov/avdata/avall.zip.
 
     dimensions:
       type:
@@ -2356,8 +2366,10 @@ views:
 
   - name: airline_ontime_by_carrier_month
     comment: >
-      Monthly on-time summary by reporting carrier: flight counts, average
-      arrival delay, and cancellation rate. The headline punctuality rollup.
+      Monthly on-time summary by reporting carrier (nationwide, not by route):
+      flight counts, average arrival delay, cancellation rate, and the share of
+      departures delayed 15+ minutes (pct_dep_delayed_15). The headline
+      punctuality rollup over airline_ontime.
     sql: >
       SELECT
         o.year,
@@ -2373,8 +2385,9 @@ views:
 
   - name: fatal_crashes_by_state_year
     comment: >
-      Fatal crashes and total fatalities by state and year — the core FARS
-      rollup, joinable to geo.states and census population for per-capita rates.
+      Fatal crashes, total fatalities, and pedestrians involved by state and
+      year — the core FARS rollup over fatal_crashes, joinable to geo.states
+      and census population for per-capita rates.
     sql: >
       SELECT
         f.year,
@@ -2388,8 +2401,9 @@ views:
 
   - name: transit_ridership_by_agency_year
     comment: >
-      Annual transit ridership (unlinked passenger trips) by agency and mode,
-      summed from the monthly series.
+      Annual transit ridership by agency, mode, and state: unlinked passenger
+      trips and vehicle revenue miles, summed from the monthly
+      transit_ridership series.
     sql: >
       SELECT
         CAST(EXTRACT(YEAR FROM t.ride_date) AS INTEGER) AS year,

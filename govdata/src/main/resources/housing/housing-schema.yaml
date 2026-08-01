@@ -935,13 +935,17 @@ partitionedTables:
     pattern: "type=hud_subsidized_housing/*.parquet"
     partitions: *static_partitions
     comment: >
-      HUD "A Picture of Subsidized Households" — the all-HUD-programs summary of
-      assisted-housing units and residents, by census tract (December 2020
-      snapshot). One row per tract (Summary of All HUD Programs). Static table:
-      the whole layer is re-paginated and the partition overwritten each run.
-      census_tract is the 11-digit tract GEOID; joins to geo.counties via
-      county_fips and to geo.state_ref via state_abbr. Source: HUD Open Data
-      ArcGIS Snapshot_HUD_Picture_Subsidized_Households FeatureServer.
+      HUD "A Picture of Subsidized Households" — the all-HUD-programs summary
+      of assisted-housing units and residents, by census tract (December 2020
+      snapshot): total_units, people_total, people_per_unit, avg_hh_income,
+      and pct_disabled. One row per tract (program = 'Summary of All HUD
+      Programs' only). Static table: the whole layer is re-paginated and the
+      partition overwritten each run. For the richer county-level, per-program,
+      per-year profile (occupancy, tenant rent, HUD spending, more demographic
+      shares) see hud_subsidized_county. census_tract is the 11-digit tract
+      GEOID; joins to geo.counties via county_fips and to geo.state_ref via
+      state_abbr. Source: HUD Open Data ArcGIS
+      Snapshot_HUD_Picture_Subsidized_Households FeatureServer.
 
     dimensions:
       type:
@@ -1309,9 +1313,14 @@ views:
 
   - name: housing_hpi_state_annual
     comment: >
-      State-level FHFA purchase-only price index, one row per state per year
-      (December/Q4 reading). place_id is the USPS abbreviation — ready to join
-      geo.states.state_abbr and to sec homebuilder/REIT filings by state.
+      State-level FHFA purchase-only price index, one row per (year, state).
+      index_sa_year_end is the maximum seasonally-adjusted index value seen for
+      that state within the year (not necessarily the December/Q4 reading) and
+      index_sa_year_avg is the mean across all periods; the query does not
+      filter by frequency, so monthly and quarterly readings for the same
+      state/year are aggregated together. place_id is the USPS abbreviation —
+      ready to join geo.states.state_abbr and to sec homebuilder/REIT filings
+      by state.
     sql: >
       SELECT
         h.data_year,
@@ -1325,9 +1334,12 @@ views:
 
   - name: housing_permits_by_county
     comment: >
-      Total permitted housing units by county and year across all structure
-      sizes. Primary housing-supply measure; joins to geo.counties and to
-      census population for permits-per-capita.
+      County-year rollup of building_permits: total_units (all structure
+      sizes), single_family_units (1-unit only), multifamily_units (2-unit
+      through 5-plus-unit combined), and total_valuation (summed construction
+      value across all structure sizes). Primary housing-supply measure; joins
+      to geo.counties via county_fips (permits-per-capita requires an external
+      population join, e.g. census).
     sql: >
       SELECT
         b.year,
@@ -1413,10 +1425,13 @@ views:
 
   - name: housing_subsidized_by_county
     comment: >
-      County rollup of the tract-grain HUD Picture of Subsidized Households
-      snapshot: total subsidized units and assisted residents per county
-      (all-HUD-programs summary). Recovers the plan's county grain from the
-      ArcGIS tract layer. Joins to geo.counties via county_fips.
+      County rollup of the tract-grain hud_subsidized_housing ArcGIS snapshot
+      (all-HUD-programs summary): tract_count, summed total_units and
+      people_total, and avg_pct_disabled per county. Recovers county grain from
+      the tract-level source. For a richer per-program, per-year county profile
+      (occupancy, income, tenant rent, HUD spending, more demographic shares),
+      see hud_subsidized_county / housing_subsidized_profile_by_county. Joins
+      to geo.counties via county_fips.
     sql: >
       SELECT
         s.county_fips,
@@ -1430,10 +1445,13 @@ views:
 
   - name: housing_subsidized_profile_by_county
     comment: >
-      County resident profile for all HUD programs combined (program_code = 1)
-      from hud_subsidized_county — units, average income, HUD subsidy, and the
-      minority / female-headed / elderly / disabled shares for the latest loaded
-      years. Joins to geo.counties via county_fips.
+      County-year resident profile for all HUD programs combined
+      (program_code = '1') from hud_subsidized_county, across all loaded
+      years: total_units, pct_occupied, avg_hh_income, avg_tenant_rent,
+      avg_hud_spending, and the pct_minority / pct_female_head / pct_elderly /
+      pct_disabled shares. Joins to geo.counties via county_fips. For a
+      lighter, tract-derived county rollup across all HUD programs combined,
+      see housing_subsidized_by_county.
     sql: >
       SELECT
         c.year,

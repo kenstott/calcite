@@ -310,8 +310,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      FDA drug enforcement (recall) actions. Joins to fda_ndc_products via
-      labeler_name (text) or openfda.product_ndc (structural, ~70% populated).
+      FDA drug enforcement (recall) actions, one row per recall_number with severity
+      classification (Class I/II/III), status (Terminated/Ongoing/Pending), and
+      voluntary vs. FDA-mandated origin. Joins to fda_ndc_products only via
+      recalling_firm/labeler_name text match — no structural NDC column is present
+      in this table.
 
     columns:
       - name: recall_number
@@ -579,8 +582,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      FDA medical device recall (enforcement) actions. Complementary to
-      fda_drug_recalls; same classification scheme (Class I/II/III).
+      FDA medical device recall (enforcement) actions, one row per cfres_id.
+      Complementary to fda_drug_recalls, but carries recall_status (Terminated/Ongoing)
+      and root_cause_description instead of a Class I/II/III severity field — this
+      table has no classification column. Includes product_code (device classification
+      code) and k_numbers (510(k) premarket notification numbers).
 
     columns:
       - name: cfres_id
@@ -712,8 +718,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      Clinical trial studies from clinicaltrials.gov. Primary key: nct_id.
-      Joins to clinical_trial_conditions (nct_id) and clinical_trial_interventions (nct_id).
+      Clinical trial studies from clinicaltrials.gov, one row per nct_id (PK) with
+      overall_status, study_type, phase, enrollment_count, lead_sponsor, funder_type,
+      and start/primary-completion/completion/update dates. Restricted by default to
+      studies with a last-update-post-date on or after 2020-01-01. Joins to
+      clinical_trial_conditions and clinical_trial_interventions (both on nct_id); see
+      the trial_full view for a pre-joined denormalized version.
 
     columns:
       - name: nct_id
@@ -1027,8 +1037,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      COVID-19 vaccination rates and counts by demographic group.
-      Warning: data frozen at 2023-05-12; no recent updates.
+      COVID-19 vaccination cumulative counts and population percentages (dose 1,
+      primary series complete, booster, bivalent booster) at the US national level by
+      report date and demographic_category (age group, race/ethnicity, or overall) —
+      no state or county breakdown. Warning: source data frozen at 2023-05-12; no
+      updates since.
 
     columns:
       - name: date
@@ -1131,8 +1144,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      Medicare/Medicaid hospital quality ratings and metrics. One row per facility.
-      Primary key: facility_id.
+      Medicare/Medicaid hospital quality ratings and metrics, one row per facility
+      (PK: facility_id) with location (city/state/zip/county), hospital_type,
+      hospital_ownership, overall_rating (1-5 stars), and counts of mortality/safety/
+      readmission measures better or worse than the national benchmark. Facility-level;
+      see hospital_quality_by_state for a state-level aggregate and
+      hospital_county_summary for a county-level aggregate.
 
     columns:
       - name: facility_id
@@ -1283,8 +1300,9 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      Medicaid drug utilization and reimbursement by state, drug (NDC), year/quarter.
-      Composite PK: (state, ndc, year, quarter). Default dataset is 2023 data.
+      Medicaid drug utilization and reimbursement by state, drug (NDC), year/quarter,
+      and utilization_type (FFSU fee-for-service vs. MCOU managed care). Composite PK:
+      (state, ndc, year, quarter, utilization_type). Default dataset is 2023 data.
 
     columns:
       - name: state
@@ -1411,8 +1429,12 @@ partitionedTables:
     releaseWindow:
       dow: [1]              # CDC publishes weekly updates Fridays; Monday catches them
     comment: >
-      CDC/NCHS mortality statistics. Unions annual (bi63-dtpu) and weekly provisional
-      (muzy-jte6) data. source_type dimension distinguishes the two.
+      CDC/NCHS mortality statistics at the state level (annual data also includes a
+      United States total row). Unions annual (bi63-dtpu: NCHS leading/113-cause
+      deaths and age-adjusted rate per 100,000, 2000 US standard population) and
+      weekly provisional (muzy-jte6: COVID-19 deaths by MMWR week-ending date) data;
+      source_type distinguishes the two, and age_adjusted_rate is populated for
+      annual rows only.
     columns:
       - name: year
         comment: "Data year of deaths; MMWR year for weekly rows"
@@ -2012,8 +2034,11 @@ views:
 
   - name: medicaid_drug_spend
     comment: >
-      Medicaid drug utilization enriched with NDC product details and RxNorm name.
-      Enables spend analysis by brand, generic, labeler, and rxcui.
+      Medicaid drug utilization enriched with NDC product details and RxNorm name, at
+      the same (state, year, quarter, ndc, utilization_type) grain as
+      medicaid_drug_utilization — no aggregation. Enables spend analysis by brand,
+      generic, labeler, and rxcui. For annual state+drug totals see drug_spend_trends;
+      for state+year totals across all drugs see medicaid_spend_by_state_geo.
     sql: >
       SELECT
         m.state,
@@ -2040,8 +2065,13 @@ views:
 
   - name: public_health_indicators
     comment: >
-      State-year summary combining CDC mortality totals with BRFSS risk-factor averages.
-      Rows where BRFSS has data but mortality does not appear with NULL death columns and vice versa.
+      State-year summary combining CDC mortality totals (total_deaths,
+      avg_age_adjusted_rate, distinct_causes) with BRFSS risk-factor averages
+      (brfss_question_count, avg_risk_factor_pct) via FULL OUTER JOIN — rows where
+      BRFSS has data but mortality does not appear with NULL death columns and vice
+      versa. For a mortality-driven version with state geography see
+      health_social_equity; for unaggregated per-cause/per-question detail see
+      mortality_brfss_by_state.
     sql: >
       SELECT
         COALESCE(m.year,  b.year)  AS year,
@@ -2059,7 +2089,10 @@ views:
 
   - name: hospital_quality_by_state
     comment: >
-      State-level hospital quality summary: counts, average ratings, and quality tier breakdown.
+      State-level hospital quality summary: counts, average ratings, and quality tier
+      breakdown, aggregated from all cms_hospital_quality facility rows in the state.
+      For facility-level detail with county geography see hospital_with_geography;
+      for a county-level aggregate see hospital_county_summary.
     sql: >
       SELECT
         state,
@@ -2079,7 +2112,10 @@ views:
   - name: hospital_with_geography
     comment: >
       Hospital quality records enriched with county FIPS, county name, and
-      rural-urban classification via the dominant-county ZIP crosswalk.
+      rural-urban classification via the dominant-county ZIP crosswalk. One row per
+      facility (same grain as cms_hospital_quality) — see hospital_quality_by_state
+      for a state-level aggregate and hospital_county_summary for a county-level
+      aggregate.
     sql: >
       SELECT
         h.facility_id,
@@ -2117,8 +2153,10 @@ views:
 
   - name: medicaid_spend_by_state_geo
     comment: >
-      Medicaid spend aggregated by state and year, enriched with state name and FIPS
-      for choropleth-ready geographic analysis.
+      Medicaid spend aggregated by state and year across all drugs, enriched with
+      state name and FIPS for choropleth-ready geographic analysis. For a per-drug
+      breakout see drug_spend_trends, and for unaggregated per-quarter rows see
+      medicaid_drug_spend.
     sql: >
       SELECT
         s.state_fips,
@@ -2136,8 +2174,12 @@ views:
   - name: mortality_brfss_by_state
     comment: >
       CDC annual mortality joined to BRFSS risk factors, both enriched with state
-      geography. One row per state/year/cause/question combination — filter on
-      cause_name and question to avoid cross-product explosion.
+      geography. One row per state/year/cause/question combination (LEFT JOIN, so
+      every mortality cause row is paired with every matching BRFSS question row) —
+      filter on cause_name and question to avoid cross-product explosion. For
+      pre-aggregated state/year totals see public_health_indicators (full outer join,
+      retains BRFSS-only rows) or health_social_equity (mortality-driven, with
+      geography).
     sql: >
       SELECT
         gs.state_fips,
@@ -2202,6 +2244,8 @@ views:
     comment: >
       Aggregates CMS hospital quality metrics to county level via ZIP-county crosswalk.
       One row per county — enables county-level healthcare access and quality analysis.
+      See hospital_with_geography for the underlying facility-level rows with county
+      geography, and hospital_quality_by_state for a state-level aggregate.
     sql: >
       SELECT
         c.county_fips,
@@ -2224,7 +2268,9 @@ views:
     comment: >
       Annual Medicaid drug spend aggregated from quarterly utilization data, enriched
       with NDC product details. One row per state+year+ndc — enables year-over-year
-      spend trend analysis by brand, generic, and labeler.
+      spend trend analysis by brand, generic, and labeler. For unaggregated per-quarter
+      rows see medicaid_drug_spend; for state+year totals across all drugs see
+      medicaid_spend_by_state_geo.
     sql: >
       SELECT
         m.state,
@@ -2243,9 +2289,12 @@ views:
 
   - name: health_social_equity
     comment: >
-      State-year health equity view: CDC mortality layered with BRFSS behavioral risk
-      factors, enriched with geographic identifiers. One row per state+year — filter
-      on cause_name to focus on a specific cause of death.
+      State-year health equity view: CDC annual mortality (deaths summed across all
+      causes — cause_name is not broken out in this view) layered with BRFSS
+      behavioral risk-factor prevalence, enriched with state name/FIPS geography. One
+      row per state+year (LEFT JOIN from mortality, so BRFSS-only state-years are
+      dropped). For a per-cause, per-question breakdown see mortality_brfss_by_state;
+      for a version that also retains BRFSS-only rows see public_health_indicators.
     sql: >
       SELECT
         m.state                                          AS state_abbr,

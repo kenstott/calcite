@@ -460,10 +460,14 @@ partitionedTables:
     pattern: "type=cdo_station/state_fips=*/*.parquet"
     partitions: *cdo_station_partitions
     comment: >
-      NOAA CDO weather station metadata. Includes GHCND station ID, name,
-      coordinates, elevation, data coverage dates, and coverage fraction.
+      NOAA CDO weather station metadata (GHCND and COOP network stations).
+      Includes CDO station ID, name, coordinates, elevation, data coverage
+      date range (min_date/max_date), and coverage fraction (datacoverage).
       One row per station. Cross-references geo.states via state_fips.
-      Requires NOAA_CDO_TOKEN environment variable.
+      Requires NOAA_CDO_TOKEN environment variable. Unlike
+      ghcnd_stations_with_county (no auth required), this table carries no
+      county_fips — use ghcnd_stations_with_county for county-level station
+      joins.
 
     dimensions:
       type:
@@ -557,8 +561,10 @@ partitionedTables:
       NOAA CDO Global Summary of the Month (GSOM) data. Includes temperature
       (TAVG, TMAX, TMIN), precipitation (PRCP), snowfall (SNOW), and other
       monthly climate metrics per station. One row per station+month+datatype.
-      Cross-references geo.states via state_fips and cdo_stations via station_id.
-      Requires NOAA_CDO_TOKEN environment variable.
+      Monthly companion to cdo_annual_summaries (GSOY, same station network
+      at annual grain). Cross-references geo.states via state_fips and
+      cdo_stations via station_id. Requires NOAA_CDO_TOKEN environment
+      variable.
 
     # DQ sample cap (GOVDATA_DQ mode): CDO GSOM returns one row per station×month×datatype, paged
     # 1000/request per year×state. Each combo is its own fetch-unit, so the cap samples every combo
@@ -652,10 +658,14 @@ partitionedTables:
     pattern: "type=cdo_annual/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      NOAA CDO Global Summary of the Year (GSOY) data. Includes annual temperature,
-      precipitation, and other climate metrics per station. One row per
-      station+datatype+year. Cross-references geo.states via state_fips and
-      cdo_stations via station_id. Requires NOAA_CDO_TOKEN environment variable.
+      NOAA CDO Global Summary of the Year (GSOY) data — annual temperature,
+      precipitation, and other climate metrics (see the datatype column for
+      the specific element code of each row) per station. One row per
+      station+datatype+year. Annual companion to cdo_monthly_summaries
+      (GSOM, same station network at monthly grain — use that table for
+      TAVG/TMAX/TMIN/PRCP/SNOW by month). Cross-references geo.states via
+      state_fips and cdo_stations via station_id. Requires NOAA_CDO_TOKEN
+      environment variable.
 
     dimensions:
       type:
@@ -839,10 +849,13 @@ partitionedTables:
     comment: >
       NOAA GHCN-Daily station observations from NCEI annual bulk files
       (https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/YYYY.csv.gz).
-      One row per station per day. Wide-format with daily temperature, precipitation,
-      snow, and wind in metric units (°C, mm, m/s). Q_FLAG-filtered (only rows that
-      passed all NCEI quality checks are included). Cross-references
-      ghcnd_stations_with_county via station_id for county_fips joins. No auth needed.
+      One row per station per day (station-level grain): tmax_c, tmin_c,
+      tavg_c, prcp_mm, snow_mm, snwd_mm, and awnd_ms, in metric units
+      (°C, mm, m/s). Q_FLAG-filtered (only rows that passed all NCEI quality
+      checks are included). Cross-references ghcnd_stations_with_county via
+      station_id for county_fips joins; the weather_daily_by_county view
+      pre-aggregates this table to county-level daily means for anyone who
+      wants county grain instead of per-station rows. No auth needed.
 
     # DQ sampling for this table is done inside GhcndBulkDataProvider (station-stride, GOVDATA_DQ
     # mode) rather than the engine's first-N dqRowLimit: the by_year file is sorted by station_id
@@ -1065,12 +1078,16 @@ partitionedTables:
     partitions: *hms_partitions
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
-      level. Daily smoke coverage by density category (light/medium/heavy). Available
+      level. Daily smoke coverage by density category (smoke_coverage_pct,
+      heavy_smoke_pct, medium_smoke_pct, light_smoke_pct). Available
       2005-present. Downloads daily smoke polygon shapefiles from NESDIS
       (https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/),
       performs a JTS spatial intersection against TIGER/Line county boundaries, and
       emits per-county coverage percentages. One batch per year+month; each batch
-      processes all days in that month. Uses HmsSmokeSpatialJoinProvider.
+      processes all days in that month. The raw smoke plume polygon geometries
+      (WKT) behind these percentages are retained separately in
+      hms_smoke_polygons for spatial re-analysis against other boundaries.
+      Uses HmsSmokeSpatialJoinProvider.
 
     dimensions:
       type:

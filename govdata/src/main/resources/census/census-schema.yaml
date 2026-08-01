@@ -327,8 +327,10 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Household and family income statistics from ACS including median household income
-      and per capita income at state and county levels.
+      Household median income and per capita income from the ACS 5-Year survey,
+      at state and county levels. A smoothed 5-year period estimate, published
+      about 2 years behind the current year. For a more current but state-only,
+      single-year estimate (wider margin of error) see acs1_income.
 
     dimensions:
       type:
@@ -397,8 +399,8 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Housing characteristics from ACS including total housing units, occupancy status,
-      median home value, and median rent.
+      Housing unit counts, occupancy status (occupied/vacant), median home value, and
+      median gross rent from the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -482,8 +484,10 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Educational attainment from ACS including high school graduation rates
-      and bachelor's degree attainment for population 25 years and over.
+      Educational attainment counts for population 25 and over from the ACS 5-Year survey,
+      at state and county levels — population 25+, high school diploma, bachelor's degree,
+      master's degree, and doctorate. See the education_attainment view for derived rate
+      percentages.
 
     dimensions:
       type:
@@ -576,8 +580,10 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Employment status and labor force participation from ACS including
-      employed, unemployed, and labor force participation rates.
+      Labor force status counts (civilian labor force, employed, unemployed, not in labor
+      force) from the ACS 5-Year survey, at state and county levels. Raw counts only — see
+      the unemployment_rate view for derived unemployment and labor-force-participation
+      percentages.
 
     dimensions:
       type:
@@ -658,8 +664,10 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Poverty statistics from ACS including population below poverty level
-      and poverty rates by demographic groups.
+      Poverty universe (population for whom poverty status is determined) and count below
+      poverty level from the ACS 5-Year survey, at state and county levels. Raw counts only,
+      with no demographic breakdown — see the poverty_rate view for the derived poverty
+      percentage.
 
     dimensions:
       type:
@@ -734,9 +742,10 @@ partitionedTables:
     pattern: "type=decennial/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Decennial Census population from 2000, 2010, and 2020. Unified schema
-      across all years with columns normalized to canonical names regardless
-      of year-specific API variable codes (P001001 vs P1_001N, etc.).
+      Decennial Census total population plus White/Black/Asian-alone race counts, at state
+      and county levels, for census years 2000, 2010, and 2020 (every 10 years). Unified
+      schema across all years with columns normalized to canonical names regardless of
+      year-specific API variable codes (P001001 vs P1_001N, etc.).
 
     dimensions:
       type:
@@ -821,8 +830,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Detailed race and Hispanic/Latino origin demographics from ACS including
-      population counts by race categories and Hispanic origin status.
+      Population counts by race (White, Black, American Indian/Alaska Native, Asian, Pacific
+      Islander, other, two-or-more) and by Hispanic/Latino origin, from the ACS 5-Year survey,
+      at state and county levels.
 
     dimensions:
       type:
@@ -919,7 +929,8 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Age distribution from ACS including median age and population by age groups.
+      Median age and population counts by age bracket (under 5, 5-17, 18-64, 65+) from the
+      ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -996,8 +1007,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Commuting patterns from ACS including means of transportation to work,
-      travel time, and work-from-home statistics.
+      Commute mode counts (drove alone, carpooled, public transit, walked, bicycled, worked
+      from home) and mean travel time to work, from the ACS 5-Year survey, at state and
+      county levels.
 
     dimensions:
       type:
@@ -1089,7 +1101,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Health insurance coverage from ACS including coverage rates by age and type.
+      Health insurance coverage counts (with/without coverage, public, private) from the ACS
+      5-Year survey, at state and county levels. Raw counts, not rates, and not broken out
+      by age (age groups are summed into the totals).
 
     dimensions:
       type:
@@ -1168,7 +1182,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Language spoken at home from ACS including English proficiency.
+      Population 5+ counts by language spoken at home (English only, Spanish, Spanish with
+      limited English proficiency, other Indo-European, Asian/Pacific Island, other), from
+      the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1255,7 +1271,8 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Disability status from ACS including types of disabilities.
+      Population counts with any disability and by disability type (hearing, vision,
+      cognitive, ambulatory), from the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1339,7 +1356,8 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Veteran status from ACS including veteran population by period of service.
+      Veteran and nonveteran population counts, with a male/female veteran breakdown, from
+      the ACS 5-Year survey, at state and county levels. No breakdown by period of service.
 
     dimensions:
       type:
@@ -1416,7 +1434,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Geographic mobility from ACS showing where people moved from in the past year.
+      Population counts by prior-year residence (same house, moved within county, moved
+      from a different county in the same state, moved from a different state, moved from
+      abroad), from the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1500,7 +1520,10 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Employment by occupation category from ACS.
+      Employed civilian population counts by broad occupation category (management/business/
+      science/arts, service, sales/office, natural resources/construction/maintenance,
+      production/transportation/moving), from the ACS 5-Year survey, at state and county
+      levels.
 
     dimensions:
       type:
@@ -1582,7 +1605,10 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Employment by industry sector from ACS.
+      Employed civilian population counts across 13 broad industry sectors (agriculture,
+      construction, manufacturing, trade, transportation, information, finance, professional
+      services, education/health, arts/entertainment, other services, public administration),
+      from the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1704,7 +1730,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Internet and computer access from ACS showing digital connectivity.
+      Household counts with/without an internet subscription and with/without a computer,
+      plus a with-broadband count (no corresponding without-broadband column), from the
+      ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1788,7 +1816,8 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Nativity and citizenship status from ACS including foreign-born population.
+      Population counts by nativity and citizenship (native born, foreign born, naturalized
+      citizen, not a citizen), from the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1865,7 +1894,8 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Marital status from ACS for population 15 years and over.
+      Marital status counts (never married, married, separated, widowed, divorced) by sex,
+      for population 15 and over, from the ACS 5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -1983,7 +2013,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Household type and family composition from ACS.
+      Household counts by type (family vs nonfamily, married-couple, single householder with
+      no spouse, living alone) plus average household size, from the ACS 5-Year survey, at
+      state and county levels.
 
     dimensions:
       type:
@@ -2075,7 +2107,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Housing tenure showing homeownership vs rental status from ACS.
+      Occupied housing unit counts by tenure (owner-occupied vs renter-occupied), plus
+      median home value, median gross rent, and median year structure built, from the ACS
+      5-Year survey, at state and county levels.
 
     dimensions:
       type:
@@ -2157,7 +2191,9 @@ partitionedTables:
     pattern: "type=acs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Household income distribution showing income brackets from ACS.
+      Household counts by ACS income bracket (under $10k through $200k+) plus
+      total households and the Gini index of income inequality, from the ACS
+      5-Year survey at state and county levels.
 
     dimensions:
       type:
@@ -2251,7 +2287,8 @@ partitionedTables:
     pattern: "type=decennial/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Decennial Census housing unit counts and occupancy from 2000, 2010, 2020.
+      Total, occupied, and vacant housing unit counts from the Decennial Census, at state
+      and county levels, for census years 2000, 2010, and 2020 (every 10 years).
 
     dimensions:
       type:
@@ -2333,10 +2370,9 @@ partitionedTables:
     pattern: "type=pep/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Population Estimates Program (PEP) annual population estimates.
-      Uses dimension resolver to handle API differences:
-      - 2019 and earlier: pep/population endpoint with POP, DENSITY
-      - 2020+: pep/charv endpoint with POP and YEAR filter
+      Population Estimates Program (PEP) annual population estimate, at state and county
+      levels, for the years between decennial censuses. The 2019 vintage also includes a
+      population density column; other vintages carry population only.
 
     dimensions:
       type:
@@ -2515,8 +2551,10 @@ partitionedTables:
     pattern: "type=acs1/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      ACS 1-Year population estimates. More current than 5-year but only
-      available for areas with 65,000+ population.
+      ACS 1-Year population estimates (total, male, female population, median
+      age), state level only (areas with 65,000+ population — no county
+      breakout). More current than the 5-year table but based on a smaller
+      annual sample, so estimates carry wider margins of error.
 
     dimensions:
       type:
@@ -2587,7 +2625,11 @@ partitionedTables:
     pattern: "type=acs1/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      ACS 1-Year income statistics for areas with 65,000+ population.
+      Household median income and per capita income from the ACS 1-Year survey,
+      state level only (areas with 65,000+ population — no county breakout).
+      More current than the 5-year acs_income table (about 1 year behind vs. 2),
+      but based on a smaller annual sample, so estimates carry wider margins of
+      error.
 
     dimensions:
       type:
@@ -2762,9 +2804,9 @@ partitionedTables:
     pattern: "type=saipe/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Small Area Income and Poverty Estimates (SAIPE) provides annual county-level
-      estimates of income and poverty including median household income and
-      poverty rates by age group.
+      Small Area Income and Poverty Estimates (SAIPE) annual estimates of median household
+      income, poverty count, and poverty rate (all ages and ages 0-17), at state and county
+      levels.
 
     dimensions:
       type:
@@ -2851,8 +2893,8 @@ partitionedTables:
     pattern: "type=sahie/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Small Area Health Insurance Estimates (SAHIE) provides county-level
-      estimates of health insurance coverage rates.
+      Small Area Health Insurance Estimates (SAHIE) annual estimates of insured/uninsured
+      population counts and insured/uninsured rates, at state and county levels.
 
     dimensions:
       type:
@@ -2934,8 +2976,9 @@ partitionedTables:
     pattern: "type=bds/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Business Dynamics Statistics tracks job creation, destruction, firm
-      births and deaths at state level by industry and firm characteristics.
+      Business Dynamics Statistics annual job creation, job destruction, net job creation,
+      establishment, firm, and employee counts, at state level. No industry or firm-
+      characteristics breakdown in this table.
 
     dimensions:
       type:
@@ -3026,8 +3069,9 @@ partitionedTables:
     pattern: "type=abs/year=*/geography=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Annual Business Survey provides data on business owner characteristics
-      including demographics, education, and veteran status.
+      Annual Business Survey (ABS) employer-firm counts, sales receipts, employee counts,
+      and annual payroll, at state level. No owner-demographic (race, sex, veteran,
+      education) breakdown in this table.
 
     dimensions:
       type:
@@ -3114,9 +3158,9 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      Nonemployer Statistics covers businesses with no paid employees,
-      typically self-employed individuals operating unincorporated businesses.
-      Partitioned by year only (not geography) to reduce file count.
+      Nonemployer Statistics establishment counts and total receipts by NAICS industry, for
+      businesses with no paid employees (self-employed/unincorporated), at state and county
+      levels. Physically partitioned by year only (not geography) to reduce file count.
 
     dimensions:
       type:
@@ -3328,10 +3372,9 @@ partitionedTables:
         - name: time
           type: VARCHAR
     comment: >
-      Quarterly Workforce Indicators tracks employment, earnings, job creation,
-      and worker turnover by demographics (age, sex) and industry.
-      Note: QWI API doesn't support wildcard states - must iterate per state.
-      Partitioned by time (YYYY-QN format) to reduce file count vs per-state.
+      Quarterly Workforce Indicators (QWI) beginning-of-quarter employment, stable
+      employment, hires, separations, and average monthly earnings of stable workers, at
+      state level by quarter (YYYY-QN). No age, sex, or industry breakdown in this table.
 
     dimensions:
       type:
@@ -3438,8 +3481,9 @@ partitionedTables:
         - name: state
           type: string
     comment: >
-      LEHD Origin-Destination Employment Statistics (LODES) Workplace Area
-      Characteristics (WAC). Downloaded from lehd.ces.census.gov/data/lodes/.
+      LEHD Origin-Destination Employment Statistics (LODES) Workplace Area Characteristics
+      (WAC): total job counts at the workplace census block level, broken out by worker age
+      bracket (<=29, 30-54, 55+) and by monthly earnings tier, partitioned by state and year.
 
     dimensions:
       type:
@@ -3607,8 +3651,10 @@ tables:
   - name: income_summary
     type: view
     comment: >
-      State-level income summary showing median household income and per capita
-      income by year. Aggregates data from acs_income table.
+      State-level median household income and per capita income by year, from
+      the ACS 5-Year acs_income table — about 2 years behind the current year.
+      For a more current, single-year state estimate query acs1_income
+      directly (no equivalent view exists for it yet).
     sql: >
       SELECT
         state,

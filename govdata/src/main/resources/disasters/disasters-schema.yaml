@@ -249,10 +249,11 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       FEMA Public Assistance grants to state/local governments and nonprofits
-      for disaster recovery. Largest dollar-value FEMA dataset. One row per
-      funded project worksheet. Partitioned by declaration year. Joins to
-      disaster_declarations by disaster_number (many-to-one; not a declared FK)
-      and to geo.counties via county_fips.
+      for disaster recovery — approved project_amount, federal_share_obligated,
+      and total_obligated (USD) per funded project worksheet. Largest
+      dollar-value FEMA dataset; one row per project worksheet, partitioned by
+      declaration year. Joins to disaster_declarations by disaster_number
+      (many-to-one; not a declared FK) and to geo.counties via county_fips.
       Source: fema.gov/api/open/v2/PublicAssistanceFundedProjectsDetails.
 
     dimensions:
@@ -378,11 +379,13 @@ partitionedTables:
     pattern: "type=hazard_mitigation_projects/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      FEMA Hazard Mitigation Assistance projects (HMGP, BRIC, FMA, PDM, LPDM).
-      Pre- and post-disaster investment in resilience. One row per project.
-      Partitioned by program fiscal year (programFy). Joins to geo.counties via
-      county_fips and to disaster_declarations by disaster_number (nullable for
-      non-disaster BRIC/FMA programs). Source (API v4):
+      FEMA Hazard Mitigation Assistance projects (program_area: HMGP, BRIC,
+      FMA, PDM, LPDM) — pre- and post-disaster resilience investment with
+      project_amount, federal_share_obligated, and cost_share_percentage per
+      project. One row per project, partitioned by program fiscal year
+      (programFy). Joins to geo.counties via county_fips and to
+      disaster_declarations by disaster_number (nullable for non-disaster
+      BRIC/FMA programs). Source (API v4):
       fema.gov/api/open/v4/HazardMitigationAssistanceProjects.
 
     dimensions:
@@ -504,9 +507,12 @@ partitionedTables:
     pattern: "type=nfip_claims/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Paid NFIP flood-insurance claims. One row per claim. ~2.7M rows.
-      Partitioned by year of loss. Key signal for disaster severity and
-      uninsured-loss estimation. Joins to geo.counties via county_fips and to
+      Paid NFIP flood-insurance claims — amount_paid_building,
+      amount_paid_contents, and amount_paid_icc per claim, plus
+      total_building_coverage/total_contents_coverage for exposure context.
+      One row per claim, partitioned by year of loss. Distinct from
+      nfip_policies (policy-term coverage/premium transactions, not realized
+      losses). Joins to geo.counties via county_fips and to
       disaster_declarations / wildfire_perimeters by county+date overlap.
       Source: fema.gov/api/open/v2/FimaNfipClaims.
 
@@ -637,9 +643,12 @@ partitionedTables:
     partitions: *standard_partitions
     dqRowLimit: 50000
     comment: >
-      NFIP flood-insurance policy transactions. One row per policy term. VERY
+      NFIP flood-insurance policy transactions — policy_cost,
+      total_insurance_premium, total_building_coverage, and
+      total_contents_coverage per policy term. One row per policy term. VERY
       LARGE (~74M rows all-history; several million per year). Partitioned by
       policy effective year. dqRowLimit caps DQ sampling; prod loads everything.
+      Distinct from nfip_claims (realized paid losses, not premium/coverage).
       Joins to geo.counties via county_fips and census_tract. Source:
       fema.gov/api/open/v2/FimaNfipPolicies.
 
@@ -770,13 +779,12 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       NOAA NCEI Storm Events Database — one row per storm event detail record
-      (tornadoes, floods, hurricanes, hail, winter storms, wildfires, etc.).
-      Streamed from the per-year gzip CSV
-      (StormEvents_details-ftp_v1.0_d{year}_c{procdate}.csv.gz); the processing
-      date suffix varies, so the streaming transformer lists the NCEI directory
-      to resolve the current file for the requested year. Damage figures are
-      converted from K/M/B notation to USD doubles. Joins to geo.counties and to
-      disaster_declarations by county+date overlap.
+      (tornadoes, floods, hurricanes, hail, winter storms, wildfires, etc.)
+      with event magnitude, direct/indirect deaths and injuries, and
+      property/crop damage (damage_property, damage_crops; converted from
+      K/M/B notation to USD). Partitioned by year, streamed from the per-year
+      NCEI gzip CSV. Joins to geo.counties and to disaster_declarations by
+      county+date overlap.
 
     dimensions:
       type:
@@ -897,14 +905,14 @@ partitionedTables:
     pattern: "type=wildfire_perimeters/*.parquet"
     partitions: *static_partitions
     comment: >
-      NIFC WFIGS Interagency wildfire perimeters. One row per fire perimeter
-      (~39k features). Snapshot table (overwritePartitions) refreshed on cadence.
-      The streaming transformer pages the FeatureServer via resultOffset (the
-      layer exceeds the ArcGIS transfer cap) and converts each Esri ring polygon
-      to simplified WKT via JTS (EsriGeometryConverter). fire_year is derived
-      from the fire discovery date. Joins to geo.counties via county_fips (from
-      point-of-origin FIPS) and to nfip_claims for post-fire flood exposure.
-      Source: WFIGS_Interagency_Perimeters/FeatureServer/0.
+      NIFC WFIGS Interagency wildfire perimeters — one row per fire perimeter
+      (~39k features) with a simplified WGS84 perimeter polygon (geometry_wkt),
+      gis_acres/final_acres burned area, and fire_cause (Human / Natural /
+      Undetermined). Snapshot table with no year partition (refreshed via
+      overwritePartitions); fire_year is derived from the fire discovery date.
+      Joins to geo.counties via county_fips (from point-of-origin FIPS) and to
+      nfip_claims for post-fire flood exposure. Source:
+      WFIGS_Interagency_Perimeters/FeatureServer/0.
 
     dimensions:
       type:
@@ -1122,9 +1130,12 @@ views:
 
   - name: disasters_declarations_by_state_year
     comment: >
-      Annual disaster-declaration counts by state and incident type. Aggregates
-      the county-program rows to distinct disasters per state/year. Ready to join
-      sec.filing_metadata on state for risk-disclosure research.
+      Annual disaster-declaration counts by state, incident_type, and year —
+      disaster_count plus counts of declarations with IA (Individual
+      Assistance) and PA (Public Assistance) programs declared. Aggregates the
+      county-program rows in disaster_declarations to distinct disasters per
+      state/year/incident_type. Ready to join sec.filing_metadata on state for
+      risk-disclosure research.
     sql: >
       SELECT
         d.year,
@@ -1138,9 +1149,11 @@ views:
 
   - name: disasters_pa_obligated_by_county
     comment: >
-      Total Public Assistance federal obligations by county and declaration year.
-      Joins to geo.counties for mapping; the next natural join is to
-      econ.bls_employment for disaster-affected employment analysis.
+      Public Assistance federal obligations aggregated by county, incident_type,
+      and declaration year — project_count, total_project_amount, and
+      total_federal_obligated (USD). Joins to geo.counties for mapping; a
+      natural next join is to econ employment data for disaster-affected
+      labor-market analysis.
     sql: >
       SELECT
         p.year,
@@ -1155,9 +1168,10 @@ views:
 
   - name: disasters_nfip_claims_by_county
     comment: >
-      Paid NFIP flood claims aggregated by county and year of loss. Key measure
-      of insured flood loss; joins to disaster_declarations and
-      wildfire_perimeters by county for post-event exposure analysis.
+      Paid NFIP flood claims aggregated by county and year of loss —
+      claim_count, total_paid_building, total_paid_contents, and total_paid
+      (USD). Key measure of insured flood loss; joins to disaster_declarations
+      and wildfire_perimeters by county for post-event exposure analysis.
     sql: >
       SELECT
         c.year,
@@ -1172,9 +1186,11 @@ views:
 
   - name: disasters_storm_impact_by_county
     comment: >
-      Storm-event human and economic impact aggregated by county and year.
-      Joins to disaster_declarations by county to link storm episodes to FEMA
-      declarations, and to econ employment for economic-impact research.
+      Storm-event human and economic impact aggregated by county and year —
+      event_count, total_deaths, total_injuries, total_property_damage, and
+      total_crop_damage (USD). Joins to disaster_declarations by county to
+      link storm episodes to FEMA declarations, and to econ employment data
+      for economic-impact research.
     sql: >
       SELECT
         s.year,

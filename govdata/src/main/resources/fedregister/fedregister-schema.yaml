@@ -20,10 +20,12 @@ materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 comment: >
   U.S. Federal Register documents from govinfo.gov bulk XML archives.
   Covers final rules, proposed rules, notices, and presidential documents (executive
-  orders, proclamations, memoranda) from 1994 to present. Key cross-reference fields:
-  cfr_references (links to affected CFR titles/parts by industry), rin (Regulatory
-  Identifier Number — tracks rulemaking lifecycle from NPRM to final rule),
-  docket_ids (links to regulations.gov comment dockets).
+  orders, proclamations, memoranda), partitioned by publication year and month from
+  2010 to present by default (start year configurable via GOVDATA_START_YEAR). Key
+  cross-reference fields: cfr_references (links to affected CFR titles/parts by
+  industry), rin (Regulatory Identifier Number — tracks rulemaking lifecycle from
+  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Single
+  table in this schema: see fr_documents for the full column list.
 
 # ============================================================================
 # COLUMN TEMPLATES

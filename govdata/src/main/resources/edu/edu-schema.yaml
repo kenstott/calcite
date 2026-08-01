@@ -442,10 +442,13 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      NAEP (National Assessment of Educational Progress) state-level results.
-      One row per state × year × subject × grade × subgroup.
-      jurisdiction=0 is the national aggregate. Joins to ccd_districts via fips=state_fips.
-      Available biennially (even years for grade 4/8 main NAEP).
+      NAEP (National Assessment of Educational Progress) state-level mean scale scores for
+      grade 4 and grade 8 math/reading. One row per jurisdiction × year × subject × grade ×
+      variable_type × subgroup_name; jurisdiction=0 is the national aggregate, otherwise state
+      FIPS (joins to ccd_districts.fips or geo.states.state_fips). Administered in odd years
+      2013-2019, then 2022 and 2024 (COVID-19 postponed the 2021 cycle) — not a strict biennial
+      cadence. Proficiency-level (below_basic/basic/proficient/advanced) breakdowns are in the
+      separate naep_achievement_levels table, joinable via the full key.
 
     columns:
       - name: jurisdiction
@@ -721,10 +724,18 @@ partitionedTables:
     dqRowLimit: 5000
 
     comment: >
-      CRDC school-level equity data consolidated from four Urban Institute sub-endpoints.
-      crdc_topic dimension selects the sub-endpoint: directory, chronic-absenteeism,
-      offenses, teachers-staff. Join to ccd_schools via ncessch. crdc_id = ncessch for
-      most schools. Available biennially (2013, 2015, 2017, 2020, 2021); 2021 is latest.
+      CRDC school-level civil-rights/equity data consolidated from four Urban Institute
+      sub-endpoints, selected via the crdc_topic dimension: directory (charter/magnet/
+      alternative-school flags), chronic-absenteeism (chronically-absent student counts by
+      race/sex/disability/LEP subgroup), offenses (firearm, homicide, rape, and assault
+      incident counts), and teachers-staff (FTE teachers/certified-vs-uncertified/counselors/
+      psychologists/nurses/security/law-enforcement). Each row belongs to exactly one
+      crdc_topic, so most columns are null outside their topic's rows. Joins to ccd_schools
+      via ncessch (crdc_id equals ncessch for schools in the NCES universe; null ncessch
+      means a non-NCES private/charter school with only a crdc_id). Collected by the
+      Dept of Education Office for Civil Rights on an irregular, roughly-biennial
+      schedule (known survey years include 2011, 2013, 2015, 2017, and the 2020-21
+      cycle published as year 2022) — not a strict 2-year interval.
 
     columns:
       - name: crdc_id
@@ -1149,11 +1160,14 @@ partitionedTables:
     dqRowLimit: 5000
 
     comment: >
-      NCES IPEDS Completions survey (C_A bulk CSV). One row per (unitid, year, cipcode,
-      majornum, award_level). Race/ethnicity and sex counts are wide columns (ctotalt,
-      caiant, casiat, cbkaat, chispt, cnhpit, cwhitt, c2mort, cunknt, cnralt and
-      per-sex _m/_w variants). cipcode is the full 6-digit dotted string (e.g. "52.0101").
-      Source: nces.ed.gov/ipeds/datacenter/data/C{year}_A.zip. Available 2010–present.
+      NCES IPEDS Completions survey (C_A bulk CSV) — degrees/certificates awarded. One row
+      per (unitid, year, cipcode, majornum, award_level). Race/ethnicity and sex counts are
+      wide columns (ctotalt, caiant, casiat, cbkaat, chispt, cnhpit, cwhitt, c2mort, cunknt,
+      cnralt and per-sex _m/_w variants). cipcode is the full 6-digit dotted string
+      (e.g. "52.0101"). Source: nces.ed.gov/ipeds/datacenter/data/C{effective_year}_A.zip.
+      Configured from 2010 but the source has a 3-year publication lag, so the latest
+      loaded vintage is about 3 years behind the current year (final revised files only;
+      provisional-only vintages are skipped).
 
     columns:
       - name: unitid
@@ -1620,6 +1634,9 @@ partitionedTables:
       level_of_study: 1=undergraduate, 2=graduate.
       tuition_type: 1=in-district, 2=in-state, 3=out-of-state, 4=out-of-district.
       Use tuition_type=2 for in-state and tuition_type=3 for out-of-state comparisons.
+      Data only available through year=2021 (the Urban Institute academic-year-tuition
+      endpoint has no more recent years); use ipeds_institutions/college_scorecard for
+      more current institution data.
 
     columns:
       - name: unitid
@@ -1738,6 +1755,8 @@ partitionedTables:
       vintage year. Joins to ipeds_institutions via id=unitid or ope8_id=opeid.
       API key required (API_DATA_GOV); PrivacySuppressed values are null.
       Earnings field is mean (not median) at 10yr — median available at 8yr.
+      For program-level (CIP code / credential) earnings, see college_scorecard_programs
+      (finer grain, same source).
 
     columns:
       - name: id
@@ -1936,7 +1955,9 @@ partitionedTables:
       One row per institution × program × credential level per year.
       Earnings by field of study — the most granular post-graduation outcome data.
       Joins to ipeds_completions via (unitid=unit_id, cipcode LIKE cip_code+'%').
-      PrivacySuppressed values are null.
+      PrivacySuppressed values are null. Institution-level scorecard outcomes (overall
+      earnings, debt, completion rate) are in college_scorecard; this table breaks
+      those out by field of study instead.
 
     columns:
       - name: unit_id
@@ -2053,9 +2074,10 @@ views:
 
   - name: district_resources
     comment: >
-      District enrollment and staffing resource ratios. Joins CCD district
-      directory to school-level lunch program aggregates for a poverty proxy.
-      One row per district per year.
+      District-level pupil_teacher_ratio (enrollment / teachers_total_fte) and
+      district_frpl_rate, a free/reduced-price-lunch poverty proxy computed by summing
+      free_or_reduced_price_lunch and enrollment from ccd_schools per (leaid, year) and
+      joining to ccd_districts. One row per district per year.
     sql: >
       SELECT
         d.leaid,
@@ -2101,10 +2123,12 @@ views:
 
   - name: school_equity_profile
     comment: >
-      School-level equity view joining CCD enrollment data with CRDC safety and
-      staffing metrics. Uses CRDC teachers-staff topic for staffing, offenses topic
-      for safety incidents. Filters CRDC to total subgroup (race=MF) to avoid
-      row multiplication from disaggregated chronic absenteeism rows.
+      School-level equity view joining ccd_schools (enrollment, free_or_reduced_price_lunch
+      poverty proxy) with two crdc_schools sub-endpoint topics: teachers-staff (counselor,
+      psychologist, certified/uncertified teacher FTE) and offenses (firearm and rape
+      incident counts). CRDC year is mapped to the closest CRDC survey year at or below the
+      school year, capped at 2013/2015/2017 — CRDC data for years after 2017 is not matched.
+      One row per school per year; CRDC columns are null where no match exists.
     sql: >
       SELECT
         s.ncessch,
@@ -2140,9 +2164,10 @@ views:
 
   - name: institution_outcomes
     comment: >
-      Higher education institution outcomes: IPEDS directory joined to College
-      Scorecard earnings and debt, plus in-state undergraduate tuition from ipeds_tuition.
-      One row per institution per year. Covers both 2yr and 4yr institutions.
+      Higher education institution outcomes: ipeds_institutions directory joined to
+      college_scorecard earnings/debt/completion outcomes, plus both in-state and
+      out-of-state full-time undergraduate tuition from ipeds_tuition (level_of_study=1).
+      One row per institution per year, covering all institution levels (4yr, 2-4yr, <2yr).
     sql: >
       SELECT
         i.unitid,
@@ -2182,9 +2207,11 @@ views:
 
   - name: field_of_study_roi
     comment: >
-      Program-level return on investment: College Scorecard earnings by CIP code
-      and credential joined to IPEDS completions counts. Enables ranking fields
-      of study by earnings at 1yr, 4yr, and 5yr after completion.
+      Program-level return on investment: college_scorecard_programs earnings by CIP code
+      and credential level (including ipeds_awards, a completions count sourced from the
+      Scorecard API itself) joined to ipeds_institutions for institution name, state, and
+      sector context. Enables ranking fields of study by median earnings at 1yr, 4yr, and
+      5yr after completion, including Pell vs. non-Pell earnings gaps.
     sql: >
       SELECT
         p.unit_id,
@@ -2208,9 +2235,13 @@ views:
 
   - name: district_charter_profile
     comment: >
-      District-level summary of school types: charter, magnet, Title I, and virtual
-      school counts derived from ccd_schools. Joins to ccd_districts for district
-      name and enrollment context. One row per district per year.
+      District-level summary of school types and equity metrics aggregated from
+      ccd_schools: counts of charter, magnet, virtual, Title I schoolwide/eligible, and
+      open schools, plus charter_share (charter fraction of schools) and
+      district_frpl_rate (free/reduced-price-lunch share of aggregated school
+      enrollment). Joins to ccd_districts for district name, FIPS, and district-level
+      enrollment/teacher FTE context. One row per district per year via an inner join
+      — districts with no matching ccd_schools rows are excluded.
     sql: >
       SELECT
         d.leaid,
@@ -2246,7 +2277,9 @@ views:
       year by summing ctotalt — the grand total of awards across all races and
       both sexes — for majornum=1 (first-major) rows. Joins to ipeds_institutions
       for institutional context.
-      award_level codes: 3=Associate, 5=Bachelor, 7=Master, 17/18/19=Doctoral.
+      award_level codes: 1/2=Certificate (<1yr/1-2yr), 3=Associate, 5=Bachelor,
+      7=Master, 17/18/19=Doctoral. completions_total is the grand sum across all
+      award levels, not just those broken out individually.
     sql: >
       SELECT
         i.unitid,
@@ -2278,10 +2311,13 @@ views:
 
   - name: ipeds_financial_efficiency
     comment: >
-      Institution-level financial efficiency ratios from IPEDS Finance survey.
-      tuition_dependency = net_tuition / total_revenue; a ratio > 0.70 signals
-      heavy reliance on tuition. Form type is preserved so GASB/FASB institutions
-      can be filtered or compared. One row per institution per fiscal year.
+      Institution-level financial efficiency ratios from ipeds_financials joined to
+      ipeds_institutions: tuition_dependency_ratio (net tuition / total current revenue;
+      >0.70 signals heavy tuition reliance), salary_share_of_expenses (total salaries /
+      total current expenses), and institutional_discount_rate (total student aid /
+      gross tuition and fees). form_type (F1A=GASB public, F2/F3=FASB private) is
+      preserved so institution types can be filtered or compared. One row per
+      institution per fiscal year.
     sql: >
       SELECT
         f.unitid,
@@ -2307,9 +2343,13 @@ views:
 
   - name: district_naep_spending
     comment: >
-      Achievement gap analysis: NAEP state scores joined to district resource
-      levels. Aggregates district data to state level for NAEP join. Enables
-      correlation of per-pupil resources with assessment outcomes.
+      State-level correlation view: naep_scores (filtered to variable_type=TOTAL,
+      subgroup_name='All students') joined to ccd_districts/ccd_schools data aggregated
+      to the state level — total_enrollment (sum), avg_pupil_teacher_ratio (average of
+      each district's enrollment/teachers_total_fte), avg_frpl_rate (state free/reduced
+      lunch share), and district_count. Enables correlating per-pupil staffing and
+      poverty resources with NAEP outcomes. One row per jurisdiction × year × subject ×
+      grade; jurisdiction=0 (national aggregate) will not match any state's district data.
     sql: >
       SELECT
         n.jurisdiction,
@@ -2346,11 +2386,12 @@ views:
 
   - name: institution_county_context
     comment: >
-      IPEDS institutions enriched with county name from geo.counties.
-      Joins via county_fips_str (zero-padded 5-digit FIPS computed by transformer).
-      geo.counties is partitioned by year; this view uses the latest available geo year.
-      Requires geo schema present in the same Calcite model.
-      One row per institution per year (geo join may expand slightly if multi-year geo present).
+      IPEDS institutions enriched with county name and state FIPS from geo.counties,
+      joined via county_fips_str (zero-padded 5-digit FIPS computed by transformer) to
+      geo.counties.county_fips. No year filter is applied on either side, so if
+      geo.counties holds multiple years for a county, the join fans out to one row per
+      (institution, geo.counties year) rather than staying one row per institution per
+      year. Requires the geo schema present in the same Calcite model.
     sql: >
       SELECT
         i.unitid,

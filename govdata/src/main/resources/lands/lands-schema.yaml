@@ -193,7 +193,8 @@ partitionedTables:
       completed harvest activity. Joins to national_forests via forest_code and to
       geo.states via state_abbr. Units_accomplished and uom describe harvest volume
       (CCF, MBF, ACRE, etc.). Enables analysis of federal timber activity by
-      forest, district, and year. Source: EDW_TimberHarvest_01/MapServer/{layer}
+      forest, district, and year. Also carries cost_per_uom (USD per unit of measure)
+      for harvest cost analysis. Source: EDW_TimberHarvest_01/MapServer/{layer}
       where layer is dispatched per year by UsfsTimberLayerResolver — layer 11
       covers 2021+, layer 0 covers 2011-2020, layers 1-7 cover earlier eras
       back to 1820. All layers publish the identical 71-field schema.
@@ -1059,11 +1060,13 @@ partitionedTables:
     pattern: "type=nps_visitation/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      National Park Service annual and monthly visitation statistics from the IRMA
-      Statistics API. One row per unit_code × visit_year × visit_month. Covers
-      recreational visits, overnight stays, backcountry use, and concession lodging.
-      Joins to nps_units via unit_code and to econ.bls_employment via county_fips
-      (from nps_units join) for gateway-county tourism employment correlation.
+      National Park Service monthly visitation statistics from the IRMA Statistics
+      API. One row per unit_code × visit_year × visit_month (no annual summary
+      rows), with recreation_visits and non_recreation_visits as the two visit-count
+      metrics. Joins to nps_units via unit_code. See lands_nps_gateway_impact and
+      lands_nps_gateway_employment for pre-built annual aggregations per unit; note
+      nps_units carries no county_fips, so county-level employment correlation is
+      not directly supported.
 
     dimensions:
       type:
@@ -1207,12 +1210,13 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       Office of Natural Resources Revenue (ONRR) royalty payments for oil, gas, coal,
-      and other minerals extracted from federal and tribal lands. One row per
-      fiscal-year × commodity × revenue-type × state × county combination. Full
-      history from FY 2004 in a single bulk download. Primary financial link between
-      BLM-managed subsurface rights and SEC 10-K disclosures for E&P and mining
-      companies. Source: revenuedata.onrr.gov (domain moved from revenuedata.doi.gov
-      in 2024). Refreshed quarterly as ONRR publishes new data.
+      and other minerals extracted from federal and tribal lands, full history from
+      FY 2004 in a single bulk download. Row grain follows the primary key:
+      fiscal_year × county_fips × land_class × commodity × revenue_type × product;
+      state_name/county_name/county_fips are null for offshore rows, which carry
+      offshore_region instead. Primary financial link between BLM-managed subsurface
+      rights and SEC 10-K disclosures for E&P and mining companies. Source:
+      revenuedata.onrr.gov (domain moved from revenuedata.doi.gov in 2024).
 
     dimensions:
       type:
@@ -1440,7 +1444,8 @@ views:
       Joins forest_inventory (basal area from COND CSV) with forest_metrics (live-tree
       volume and carbon from TREE CSV) on the shared composite key. Provides a single
       row per state × forest type group × ownership class × inventory year with all
-      five FIA-derived metrics. Use for carbon-stock trend analysis, timber-volume
+      four FIA-derived metrics (basal_area_sqft, trees_per_acre, live_volume_cuft,
+      carbon_stock_tons). Use for carbon-stock trend analysis, timber-volume
       benchmarking, and cross-schema joins to sec.filing_metadata or econ.fred_indicators.
     sql: >
       SELECT
@@ -1482,9 +1487,11 @@ views:
 
   - name: lands_nps_gateway_impact
     comment: >
-      Joins NPS monthly visitation to park unit metadata for gateway economic impact
-      analysis. Aggregates to annual totals per unit. Ready to join with
-      econ.bls_employment on county data from nps_units.
+      Aggregates nps_visitation monthly recreation and non-recreation visit counts to
+      annual totals per park unit, joined to nps_units for unit_name, unit_type, and
+      state_abbr. Same grain and result set as lands_nps_gateway_employment (which
+      aliases visit_year as year); nps_units carries no county_fips, so any downstream
+      employment/wage join must go through state_abbr rather than an exact county match.
     sql: >
       SELECT
         v.visit_year,
@@ -1500,10 +1507,13 @@ views:
 
   - name: lands_onrr_by_state_commodity
     comment: >
-      Aggregates ONRR federal mineral royalty revenues by state, commodity, and fiscal
-      year. Uses state_name directly (no FIPS join needed). Enables correlation with
+      Aggregates ONRR federal mineral royalty revenues by state, commodity, land
+      class, revenue type, and fiscal year (all commodities, not just energy). Uses
+      state_name directly (no FIPS join needed). Enables correlation with
       sec.filing_metadata company_name for E&P royalty exposure analysis and with
-      econ.state_wages for energy sector employment vs. revenue trends.
+      econ.state_wages for energy sector employment vs. revenue trends. For an
+      energy-only subset that drops the revenue_type breakout, see
+      lands_onrr_energy_revenues.
     sql: >
       SELECT
         r.fiscal_year,
@@ -1518,11 +1528,13 @@ views:
 
   - name: lands_nps_gateway_employment
     comment: >
-      Correlates NPS annual park visitation with county-level employment and wages
-      (econ.county_wages, BLS QCEW). Aggregates monthly visitation to annual totals
-      per park unit, then joins to county_wages for the same year, total-industry rows
-      (industry_code=10, own_code=0). Note: nps_units no longer carries county_fips;
-      this view joins on state_abbr as a proxy for state-level employment context.
+      Identical aggregation to lands_nps_gateway_impact — nps_visitation monthly
+      recreation and non-recreation visit counts rolled up to annual totals per park
+      unit, joined to nps_units for unit_name, unit_type, and state_abbr — with
+      visit_year aliased as year. Does not itself join to econ.county_wages or any
+      employment table; nps_units carries no county_fips, so a downstream
+      employment/wage join must use state_abbr as a state-level proxy rather than an
+      exact county match.
     sql: >
       SELECT
         v.visit_year                                              AS year,
@@ -1538,10 +1550,12 @@ views:
 
   - name: lands_onrr_energy_revenues
     comment: >
-      Aggregates ONRR federal mineral royalty revenues by state and fiscal year for
-      the energy commodities (Oil, Gas, Coal). Enables trend analysis of federal
-      energy royalty production by state. The next natural join is to
-      sec.filing_metadata on fiscal_year to correlate with E&P company 10-K filings.
+      Aggregates ONRR federal mineral royalty revenues by state and fiscal year,
+      filtered to energy commodities (Oil, Gas, Coal, Natural Gas, and
+      "Oil & Gas (Unspecified)"); drops the revenue_type breakout that
+      lands_onrr_by_state_commodity keeps. Enables trend analysis of federal energy
+      royalty production by state. The next natural join is to sec.filing_metadata
+      on fiscal_year to correlate with E&P company 10-K filings.
     sql: >
       SELECT
         r.fiscal_year,

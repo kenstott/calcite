@@ -560,8 +560,10 @@ partitionedTables:
     pattern: "type=uof/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      FBI CDE use of force data by state and year. Includes participation rates,
-      incident reports, and demographic breakdowns.
+      FBI CDE use of force data by state and year, flattened into generic
+      section/category/label rows with a single numeric value that may be a count
+      or a percentage (see the value column). One row per state + year + section
+      + category + label.
 
     dimensions:
       type:
@@ -1356,9 +1358,12 @@ partitionedTables:
     pattern: "type=arrest/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      FBI CDE arrest data by state and offense category. Includes monthly arrest
-      counts broken down by age group, sex, and race. Covers drug abuse, DUI,
-      violent crime, property crime, and 20+ other categories.
+      FBI CDE arrest data by state, aggregated to annual (Jan-Dec) totals for all
+      offenses combined — the offense dimension is fixed to 'all', so individual
+      offense categories (e.g., drug abuse, DUI, violent crime) are not broken out.
+      Counts are broken down by age group, sex, race, and ethnicity via the
+      section/category/label columns. One row per state + year + section + category
+      + label.
 
     dimensions:
       type:
@@ -1423,9 +1428,11 @@ partitionedTables:
     pattern: "type=shr/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      FBI CDE Supplementary Homicide Reports. Victim and offender demographics
-      for homicide incidents including age, sex, race, relationship, weapon,
-      and circumstance details.
+      FBI CDE Supplementary Homicide Report data, aggregated to annual (Jan-Dec)
+      counts by state — not incident-level microdata. Victim and offender
+      demographics for homicide incidents including age, sex, race, relationship,
+      weapon, and circumstance details, flattened into section/category/label rows
+      with a count. One row per state + year + section + category + label.
 
     dimensions:
       type:
@@ -1810,9 +1817,14 @@ partitionedTables:
     pattern: "type=ncvs/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Bureau of Justice Statistics National Crime Victimization Survey (NCVS) personal
-      victimization microdata from 1993 onwards. Contains ~40+ fields including crime type,
-      notification status, weapon use, injury, offender demographics, location, and survey weights.
+      Bureau of Justice Statistics NCVS personal victimization microdata, one row
+      per victimization incident recorded by survey respondents, covering 2010
+      onward by default (start year configurable) and lagging about 2 years behind
+      the current year. Contains 17 fields including crime/offense type codes,
+      police notification status, weapon use, injury, offender age and sex,
+      location (region/MSA), and person survey weight (newwgt). Use
+      bjs_ncvs_personal_pop as the survey-respondent denominator for computing
+      victimization rates.
 
     dimensions:
       type:
@@ -1953,6 +1965,7 @@ partitionedTables:
       Bureau of Justice Statistics NCVS personal population data. Demographic
       information for all survey respondents regardless of victimization status.
       Includes age, sex, race, Hispanic origin, marital status, education, income.
+      Same 2010-onward coverage and ~2-year publish lag as bjs_ncvs_personal.
       Used as denominator for computing victimization rates from bjs_ncvs_personal.
 
     dimensions:
@@ -2075,9 +2088,13 @@ partitionedTables:
     pattern: "type=ncvs_hh/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Bureau of Justice Statistics NCVS household victimization data. Property
-      crime victimizations including burglary, theft, motor vehicle theft, and
-      vandalism. One row per household victimization incident.
+      Bureau of Justice Statistics NCVS household victimization microdata, one row
+      per household-level victimization incident, coded by newcrime/newoff crime
+      and offense type codes. Includes police notification status, region/MSA,
+      household income bracket, and household victimization weight (wgtviccy).
+      Same 2010-onward coverage and ~2-year publish lag as bjs_ncvs_personal.
+      Cross-references bjs_ncvs_household_pop as the denominator for household
+      victimization rates.
 
     dimensions:
       type:
@@ -2191,9 +2208,12 @@ partitionedTables:
     pattern: "type=ncvs_hh_pop/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      Bureau of Justice Statistics NCVS household population data. Demographic
-      data for all participating households regardless of victimization. Used as
-      denominator for computing property crime victimization rates.
+      Bureau of Justice Statistics NCVS household population data — demographic
+      data (region, MSA, household income bracket, household size) for all
+      participating households regardless of victimization, with household weight
+      (wgthhcy). Same 2010-onward coverage and ~2-year publish lag as
+      bjs_ncvs_personal. Used as the denominator for computing bjs_ncvs_household
+      victimization rates.
 
     dimensions:
       type:
@@ -2390,9 +2410,11 @@ views:
 
   - name: crime_enforcement_equity
     comment: >
-      Correlates annual FBI CDE offense rates with police employment by state and year.
-      Monthly offense rows are averaged to produce annual rates. One row per
-      state+year+offense_code — enables enforcement resource allocation analysis.
+      Correlates FBI CDE monthly offense and clearance rates — averaged across each
+      year's reported months, NOT summed to a true annual rate (see
+      cde_offenses.offense_rate for why AVG understates the annual figure) — with
+      police employment and an offense-rate-per-officer ratio, by state, year, and
+      offense_code. One row per state + year + offense_code.
     sql: >
       SELECT
         o.state_abbr,

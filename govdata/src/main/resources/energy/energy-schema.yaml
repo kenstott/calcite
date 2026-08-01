@@ -335,10 +335,11 @@ partitionedTables:
     pattern: "type=eia_elec_price/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EIA API v2 retail electricity sales data. Annual (and optionally monthly) average
-      price (cents/kWh), revenue (million dollars), sales (million kWh), and customer
-      counts by state and sector. One row per state + sector + year (+ month if available).
-      Cross-references geo.states via state_abbr.
+      EIA API v2 retail electricity sales data, fetched at annual frequency (the source URL
+      hardcodes frequency=annual, so price_month exists in the schema but is always null here).
+      Average price (cents/kWh), revenue (million dollars), sales (million kWh), and customer
+      counts by state and sector. One row per state + sector + year. Cross-references geo.states
+      via state_abbr.
 
     dimensions:
       type:
@@ -1791,7 +1792,8 @@ views:
       eia_electricity_generation by state and year, computing total generation
       and generation by broad fuel category (renewables, nuclear, fossil, other).
       Calculates renewable percentage and fossil percentage for trend analysis.
-      One row per state + year. Joins geo.states for full state name and FIPS.
+      One row per state + year. State name comes from eia_electricity_generation's own
+      state_description column (no join to geo.states, and no FIPS code is included).
     sql: >
       SELECT
         g.state_abbr,
@@ -1868,7 +1870,7 @@ views:
       Aggregates eia_capacity_changes by state, expected change year, technology, fuel
       category, and change type. Provides a forward-looking pipeline of new capacity
       entering service and old capacity retiring. One row per state + change_year +
-      technology + fuel_category + change_type.
+      change_month + technology + fuel_category + change_type.
     sql: >
       SELECT
         c.state_abbr,
@@ -1919,10 +1921,10 @@ views:
 
   - name: weekly_gas_storage_signal
     comment: >
-      Weekly natural gas working gas storage levels (SAW series) with year-over-year
-      comparison. Uses LAG window function to compute the prior year same-week volume
-      for YoY delta and percent change calculation. One row per region + report date.
-      Useful as a market signal for gas price forecasting.
+      Weekly natural gas working gas storage levels (storage_type_code = 'SWO') with
+      year-over-year comparison. Uses LAG window function to compute the prior year
+      same-week volume for YoY delta and percent change calculation. One row per
+      region + report date. Useful as a market signal for gas price forecasting.
     sql: >
       SELECT
         s.report_date,
@@ -1961,7 +1963,8 @@ views:
       State-level energy burden estimate joining annual residential electricity prices
       with state energy consumption. Computes an implied annual residential electricity
       bill estimate from average price and total residential electricity sales divided
-      by customer count. One row per state + year. Joins geo.states for full state name.
+      by customer count. One row per state + year. State name comes from
+      eia_electricity_prices' own state_description column (no join to geo.states).
     sql: >
       SELECT
         p.state_abbr,
@@ -1990,10 +1993,11 @@ views:
   - name: refinery_utilization_summary
     comment: >
       Refinery utilization summary pivoted from tall eia_refinery_operations data.
-      Uses CASE expressions on process_code to pivot key series into named columns:
-      crude_input_kbd (crude distillation input), operable_capacity_kbd (operable
-      distillation capacity), and utilization_rate (crude input / operable capacity).
-      One row per EIA area + PADD + report year + report month.
+      Uses CASE expressions on process_code/series_id to pivot key series into named
+      columns: crude_input_kbd, operable_capacity_kbd, utilization_rate_pct (all taken
+      directly from the source series), catalytic_cracking_kbd, coking_kbd, and
+      reforming_kbd, plus a locally computed computed_utilization_pct (crude_input_kbd /
+      operable_capacity_kbd). One row per EIA area + PADD + report year + report month.
     sql: >
       SELECT
         r.eia_area_code,

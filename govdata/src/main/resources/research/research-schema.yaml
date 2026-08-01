@@ -248,8 +248,9 @@ partitionedTables:
       agency" (funding_source=Federal, federal_agency=column) and "Nonfederal
       expenditures by field and source" (funding_source=column). Values in USD
       thousands. Carries the IPEDS UnitID crosswalk into edu and state_fips into
-      geo; the finest-grained NCSES table and the state×year R&D-spend half of the
-      patents-per-R&D-dollar productivity join.
+      geo; the finest-grained NCSES table (institution grain). For the state×year
+      rollup used in the patents-per-R&D-dollar productivity join, see
+      research_herd_rd_by_state_year.
 
     # HERD survey year is published ~14 months after fiscal-year end; the newest
     # available data year lags the current publish year by ~2 → iterate the publish
@@ -390,9 +391,13 @@ views:
 
   - name: research_herd_rd_by_state_year
     comment: >
-      HERD R&D expenditure aggregated to state × year — the R&D-spend half of the
-      patents-per-R&D-dollar productivity ratio. Join to patents.patent_assignees
-      (grant counts by state_fips × grant_year) to compute innovation input ÷ output.
+      HERD R&D expenditure rolled up from nsf_herd_by_institution (institution
+      grain) to state × year: total rd_expenditure_usd_thousand, the
+      federal-funded subset (federal_rd_usd_thousand), and a distinct
+      institution_count, for rows with a resolved state_fips. This is the
+      R&D-spend half of the patents-per-R&D-dollar productivity ratio — join to
+      patents.patent_assignees (grant counts by state_fips × grant_year) to
+      compute innovation input ÷ output.
     sql: >
       SELECT
         h.year,

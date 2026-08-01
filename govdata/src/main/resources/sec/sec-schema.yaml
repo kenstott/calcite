@@ -471,11 +471,13 @@ partitionedTables:
       enabled: false
 
     comment: >
-      XBRL financial facts extracted from 10-K (annual) and 10-Q (quarterly) filings.
-      Contains structured data for balance sheet, income statement, and cash flow items
-      using standardized US-GAAP taxonomy (e.g., Assets, Revenue, NetIncome).
-      Use for: financial ratio analysis, trend analysis across quarters/years, peer
-      comparisons, screening for specific metrics, and building financial models.
+      Raw XBRL facts extracted from 10-K/10-Q/20-F filings, one row per (cik, accession_number,
+      concept, context_ref) using native US-GAAP concept names (e.g. us-gaap:Assets,
+      us-gaap:Revenues) — variant concepts for the same metric are NOT consolidated here.
+      Carries both the original text value and a derived value_numeric (value_numeric_method
+      records direct vs. heuristic conversion), plus unit_ref_normalized for the canonical unit.
+      For canonical metric names, dollar-scaled values, and consolidated-vs-segment filtering,
+      use the financial_facts view built on top of this table.
 
     columns:
       - *cik_column
@@ -659,6 +661,8 @@ partitionedTables:
       company's financial condition, results of operations, and known risks/uncertainties.
       Use for: sentiment analysis, risk factor monitoring, NLP-based insights, comparing
       management tone across periods, and identifying forward-looking statements.
+      For a pre-chunked, embedding-ready version of this same text, see vectorized_chunks
+      (source_type='mda_paragraph').
 
     columns:
       - *cik_column
@@ -746,7 +750,9 @@ partitionedTables:
     comment: >
       XBRL linkbase relationships from 10-K and 10-Q filings showing how financial
       concepts connect (e.g., Assets = CurrentAssets + NoncurrentAssets). Includes
-      calculation links (mathematical rollups) and presentation links (display order).
+      calculation links (mathematical rollups), presentation links (display order), and
+      definition links (dimensional/hypercube structure via context_element and closed,
+      with arc_use/arc_priority resolving prohibited vs. asserted arcs).
       Use for: validating financial statement math, reconstructing statement hierarchy,
       understanding concept relationships, and building automated financial models.
 
@@ -1230,9 +1236,12 @@ partitionedTables:
     comment: >
       Earnings-related content from 8-K filings (Item 2.02 - Results of Operations).
       8-K forms are "current reports" filed within 4 days of material events; Item 2.02
-      covers earnings releases with quarterly results, guidance, and press release text.
-      Use for: earnings surprise analysis, guidance tracking, management commentary on
-      results, and correlating announcements with stock price movements.
+      covers earnings releases with quarterly results, guidance, and press release text,
+      split into prepared_remarks vs qa_session paragraphs with speaker_name/speaker_role
+      for the Q&A portion. Use for: earnings surprise analysis, guidance tracking,
+      management commentary on results, and correlating announcements with stock price
+      movements. For a pre-chunked, embedding-ready version of this same text, see
+      vectorized_chunks (source_type='earnings').
 
     columns:
       - *cik_column
@@ -1316,8 +1325,10 @@ partitionedTables:
       enabled: false
 
     comment: >
-      Daily OHLCV stock price data for SEC-reporting companies.
-      Stooq API source (bulk S3 cache checked first via StooqBulkProxy).
+      Daily open/high/low/close/volume stock prices, one row per (ticker, date), plus
+      adjusted_close (close price adjusted for splits and dividends) for computing returns
+      across corporate actions. Sourced from Stooq (bulk S3 zip checked first via
+      StooqBulkProxy, HTTP API fallback) and linkable back to SEC filers via cik.
       Use for: event studies, volatility analysis, price correlation studies.
 
     columns:
@@ -1395,11 +1406,13 @@ partitionedTables:
     enabled: "${ENABLE_VECTORIZATION:true}"
 
     comment: >
-      Semantic text chunks from 10-K and 10-Q filings with Jina embeddings.
-      Text is chunked (SemanticTextChunker), enriched with context tags and
-      cross-references (SecTextVectorizer), then normalized for temporal/monetary
-      consistency (TextNormalizer). Embeddings computed via DuckDB quackformers.
-      Use for: semantic similarity search, RAG Q&A, and topic clustering.
+      Semantic text chunks (source_type: mda_paragraph, footnote, risk_factor, or earnings)
+      drawn from the same 10-K/10-Q MD&A and 8-K earnings content as mda_sections and
+      earnings_transcripts, each chunked (SemanticTextChunker), enriched with context tags
+      and cross-references (SecTextVectorizer), normalized for temporal/monetary consistency
+      (TextNormalizer), and carrying a 384-dim embedding for similarity search. Use for:
+      semantic similarity search, RAG Q&A, and topic clustering; use mda_sections /
+      earnings_transcripts directly for plain-text reads without the embedding overhead.
 
     columns:
       - *cik_column
@@ -1654,7 +1667,13 @@ views:
         AND fm.filing_date = latest.max_date
 
   - name: revenue_trends
-    comment: Revenue line items across quarters for trend analysis
+    comment: >
+      Revenue-tagged XBRL facts (any concept whose name matches '%Revenue%') joined to
+      company_name/ticker, one row per matching concept per period_end. Uses a simple
+      substring match rather than the curated concept_aliases mapping in the financial_facts
+      view, so it can include non-revenue concepts (e.g. DeferredRevenue) or miss unmapped
+      revenue tags — prefer financial_facts (canonical_name='revenue') for precise revenue
+      trend analysis.
     sql: >
       SELECT
         fm.company_name,
@@ -1668,7 +1687,10 @@ views:
       ORDER BY fm.cik, fli.period_end
 
   - name: insider_activity_summary
-    comment: Aggregated insider trading activity by company
+    comment: >
+      Transaction count, total shares, and average price per share from insider_transactions,
+      aggregated by company and transaction_code — purchases ('P') and sales ('S') only;
+      awards, holdings, and other codes are excluded.
     sql: >
       SELECT
         fm.company_name,

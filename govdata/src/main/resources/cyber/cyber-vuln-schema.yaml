@@ -43,9 +43,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      MITRE Common Weakness Enumeration (CWE) catalog. Canonical dimension table
-      for weakness classifications referenced by NVD CVEs, CAPEC patterns,
-      OSV entries, and OWASP Top 10. Sourced from cwec_latest.xml.zip.
+      MITRE Common Weakness Enumeration (CWE) catalog, one row per CWE ID (e.g.,
+      CWE-79) with name, abstraction level (Class/Base/Variant/Compound),
+      structure, status, and description. Full-catalog snapshot sourced from
+      cwec_latest.xml.zip, refreshed weekly. Canonical dimension joined to NVD
+      CVEs via vulnerability_cwes, to CISA KEV via kev_cwes, and to
+      cyber_threat.owasp_top10 in the vuln_threat_chain view.
 
     columns:
       - name: cwe_id
@@ -151,9 +154,13 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      NVD CVE 2.0 canonical vulnerability records. One row per CVE. CVSS V31
-      preferred; falls back to V2 when V31 absent. CVSS V40 stored when present.
-      Paginated ingest via startIndex + resultsPerPage (max 2000). ~347k CVEs total.
+      NVD CVE 2.0 canonical vulnerability records, one row per CVE, partitioned
+      by publication year and quarter (coverage from 1999 to present, ~347k CVEs
+      total). Stores CVSS v2 and v3.1 base scores with their vector strings,
+      plus a CVSS v4.0 base score (no v4.0 vector column), vuln_status, and
+      pipe-delimited CWE IDs. The canonical CVE registry — see kev_catalog for
+      the smaller subset known to be actively exploited, and vulnerability_cwes
+      for the CVE-to-CWE junction.
 
     columns:
       - name: cve_id
@@ -405,10 +412,13 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      CISA Known Exploited Vulnerabilities (KEV) catalog. Single JSON file,
-      ~1,585 entries. No ETag/delta endpoint; diff on catalogVersion field
-      (format YYYY.MM.DD). notes field is semicolon-delimited string of URLs,
-      not an array. cwes array may be empty on older entries.
+      CISA Known Exploited Vulnerabilities (KEV) catalog: one row per CVE known
+      to be actively exploited in the wild, ~1,585 entries. Carries
+      vendor_project, product, vulnerability_name, date_added to KEV, the FCEB
+      remediation due_date, and a known_ransomware_use flag — no CVSS scores are
+      included here. A curated subset of the full NVD catalog in vulnerabilities
+      (join on cve_id); see kev_enriched or kev_cross_threat for KEV joined with
+      NVD CVSS scores and CWE names.
 
     columns:
       - name: cve_id
@@ -591,11 +601,14 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      OSV (Open Source Vulnerabilities) records. One row per OSV entry. Ecosystems
-      are a dimension (one per-ecosystem all.zip fetched per combination); the
-      transformer standardizes a single ecosystem read from the dimension context.
-      Includes OSV-native entries without a CVE assignment. CVE-aliased entries are also
-      cross-referenced in vuln_cross_refs.
+      OSV (Open Source Vulnerabilities) records for open-source package
+      ecosystems (PyPI, npm, Go, Maven, RubyGems, NuGet, Packagist, Hex, Pub,
+      CRAN), one row per OSV entry (osv_id, e.g. GHSA-xxxx, PYSEC-2021-xxx),
+      partitioned by ecosystem and refreshed weekly. Carries severity
+      type/score, package name and purl, and pipe-delimited alias IDs including
+      CVE IDs where assigned — includes OSV-native entries with no CVE
+      assignment. Not part of vuln_cross_refs, which is sourced solely from
+      GitHub Security Advisories.
 
     columns:
       - name: osv_id
@@ -834,11 +847,12 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      CISA cybersecurity advisory metadata. Sourced from CISA's official CSAF
-      GitHub repository (cisagov/CSAF, branch develop). The CsafAdvisoryDimensionResolver
-      reads the IT/white index.txt to enumerate per-year advisory paths, and the engine
-      fetches each CSAF 2.0 JSON file; CisaAdvisoryResponseTransformer emits one row per
-      advisory with severity, CVE IDs, and affected systems.
+      CISA cybersecurity advisory metadata, one row per advisory (e.g.,
+      AA24-001A, ICSA-24-001-01), partitioned by year from 2017 to present and
+      refreshed weekly. Carries title, published_date, severity label,
+      pipe-delimited CVE IDs mentioned in the advisory, and a short
+      affected_systems description. Sourced from CISA's official CSAF 2.0 JSON
+      feed (cisagov/CSAF GitHub repo).
 
     columns:
       - name: advisory_id
@@ -945,8 +959,11 @@ views:
 
   - name: kev_enriched
     comment: >
-      KEV entries enriched with NVD vulnerability data via LEFT JOIN.
-      Orphaned KEV entries (no matching NVD record) still appear with NULL NVD columns.
+      KEV entries enriched with the matching NVD record via LEFT JOIN — one row
+      per KEV entry, adding published/last_modified dates, vuln_status, full
+      description_en, and CVSS v2/v3.1/v4.0 scores. Orphaned KEV entries (no
+      matching NVD record) still appear with NULL NVD columns. For CWE taxonomy
+      names instead of full NVD fields, see kev_cross_threat.
     sql: >
       SELECT k.cve_id, k.vendor_project, k.product, k.vulnerability_name,
              k.date_added, k.short_description, k.required_action, k.due_date,
@@ -1007,9 +1024,11 @@ views:
 
   - name: kev_cross_threat
     comment: >
-      Enriches the CISA Known Exploited Vulnerabilities catalog with NVD CVSS scores
-      and CWE taxonomy names. Aggregates multiple CWE assignments per CVE into
-      comma-delimited strings. One row per CVE in KEV.
+      CISA KEV catalog enriched with NVD CVSS v2/v3.1 scores and CWE taxonomy
+      names via LEFT JOIN through vulnerability_cwes and cwe_catalog (not full
+      NVD description/status fields — see kev_enriched for those). One row per
+      CVE in KEV; multiple CWE assignments per CVE are aggregated into a
+      comma-delimited cwe_ids list and a semicolon-delimited cwe_names list.
     sql: >
       SELECT
         k.cve_id,

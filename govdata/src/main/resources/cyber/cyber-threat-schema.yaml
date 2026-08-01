@@ -67,11 +67,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      MITRE ATT&CK technique and sub-technique records from STIX2 bundle.
-      Technique ID is extracted from external_references where
-      source_name == "mitre-attack". Sub-technique parent resolved via
-      subtechnique-of relationship objects. Domain controlled by
-      CYBER_ATTACK_DOMAIN env var (enterprise, ics, mobile).
+      MITRE ATT&CK enterprise-domain technique and sub-technique records, one row per
+      technique, fetched from the enterprise-attack.json STIX2 bundle (sub-technique
+      parent resolved via subtechnique-of relationships). Carries per-technique platforms,
+      data sources, and detection guidance plus the ATT&CK version string; refreshed on
+      MITRE's April/October release cadence. Mapped to NIST 800-53 controls in
+      attack_to_nist_mappings below.
 
     columns:
       - name: technique_id
@@ -180,9 +181,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      URLhaus malicious URL indicators. Delivered as ZIP archive containing CSV;
-      must decompress before parsing. Comment lines prefixed with #.
-      Tags are comma-delimited. Partitioned by first_seen date for TTL pruning.
+      URLhaus (abuse.ch) malicious URL indicators, one row per reported URL, with
+      online/offline status, threat classification, and reporter tags, partitioned
+      by first_seen date. Snapshot re-fetched and overwritten per partition each run.
+      See active_threat_intel below for a normalized cross-indicator view spanning
+      ioc_urls, ioc_ips, and ioc_hashes.
 
     columns:
       - name: url_id
@@ -289,9 +292,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      MalwareBazaar malware sample hashes. Plain CSV (no ZIP). Comment lines
-      prefixed with #. vtpercent and imphash may be string "n/a" — coerce to null.
-      Partitioned by first_seen date for TTL pruning.
+      MalwareBazaar (abuse.ch) malware sample hashes — SHA-256/SHA-1/MD5 plus ssdeep
+      and TLSH fuzzy hashes — with file type, malware family signature, ClamAV
+      detection name, and VirusTotal detection percentage, one row per sample,
+      partitioned by first_seen date. See active_threat_intel below for a normalized
+      cross-indicator view spanning ioc_hashes, ioc_urls, and ioc_ips.
 
     columns:
       - name: sha256
@@ -417,9 +422,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      Feodo Tracker botnet C2 IP blocklist. JSON from /downloads/ipblocklist.json
-      (not botnet_ip_blacklist.json). ~5 active entries typically.
-      Partitioned by first_seen date for TTL pruning.
+      Feodo Tracker (abuse.ch) botnet command-and-control IP blocklist — typically
+      ~5 active entries — with port, online/offline status, ASN, AS name, associated
+      malware family, and geolocated country (joined to ref.countries), partitioned
+      by first_seen date. For a broader multi-source feed that also carries ip:port
+      indicators, see ioc_mixed (ThreatFox) below; see active_threat_intel for a
+      normalized cross-indicator view spanning ioc_ips, ioc_urls, and ioc_hashes.
 
     columns:
       - name: ip_address
@@ -520,10 +528,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      ThreatFox IOC feed covering ip:port, domain, url, md5_hash, and sha256_hash
-      indicator types. Auth-Key header is mandatory even for free tier; anonymous
-      POST returns {"error":"Unauthorized"}. Partitioned by first_seen date for
-      TTL pruning.
+      ThreatFox (abuse.ch) multi-type IOC feed covering ip:port, domain, url,
+      md5_hash, and sha256_hash indicators in a single table, with malware family,
+      threat type, confidence level (0-100), and an is_compromised (legitimate-asset)
+      flag, partitioned by first_seen date. Requires CYBER_THREATFOX_API_KEY. Distinct
+      source and indicator mix from the single-type ioc_ips/ioc_urls/ioc_hashes tables
+      (Feodo/URLhaus/MalwareBazaar).
 
     columns:
       - name: ioc_id
@@ -933,8 +943,9 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      OWASP Top 10 2021 entries parsed from Markdown files in the OWASP/Top10 GitHub repo.
-      No canonical JSON exists; 10 Markdown files are fetched and parsed by the transformer.
+      OWASP Top 10 (2021) web application security risk categories, ranked 1-10, each
+      with an overview and the pipe-delimited CWE IDs associated with that risk. One
+      row per entry; sourced from the OWASP/Top10 GitHub repo's Markdown docs.
 
     columns:
       - name: entry_id
@@ -1135,12 +1146,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      AlienVault OTX subscribed-pulse threat intelligence. Requires CYBER_OTX_API_KEY
-      environment variable (free registration at otx.alienvault.com). Keyset pagination
-      on `modified` (ascending sort + modified_since cursor), driven by
-      OtxResponseTransformer — OTX's own "next" cursor is offset-based and degrades to
-      20-40s per request at depth. Partitioned by first_seen (date portion of created)
-      for TTL pruning.
+      AlienVault OTX subscribed threat-intelligence pulses (curated reports), each with
+      targeted countries, malware families, mapped ATT&CK technique IDs, an IOC count,
+      and TLP classification, partitioned by first_seen (date portion of created).
+      Requires CYBER_OTX_API_KEY. Production daily runs append pulse version history
+      into each partition (query current state via max(modified) per pulse_id);
+      historical/DQ runs replace the partition wholesale.
 
     columns:
       - name: pulse_id
@@ -1307,8 +1318,10 @@ views:
 
   - name: active_threat_intel
     comment: >
-      Unified indicator-of-compromise view across IP, URL, and hash IOC tables.
-      Normalises all three sources to a common schema for cross-indicator analysis.
+      Row-per-indicator union of ioc_ips, ioc_urls, and ioc_hashes onto a common
+      (ioc_type, ioc_value, first_seen, country, threat, context) schema for
+      cross-indicator search. Does not include ioc_mixed (ThreatFox) or threat_pulses —
+      query those directly for ip:port/domain indicators or pulse-level context.
     sql: >
       SELECT
         'ip'        AS ioc_type,

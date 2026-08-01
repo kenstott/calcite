@@ -677,7 +677,9 @@ partitionedTables:
     pattern: "type=inflation_metrics/frequency=*/year=*/inflation_metrics.parquet"
     partitions: *standard_partitions
     comment: >
-      Consumer Price Index (CPI) and Producer Price Index (PPI) data tracking inflation across different categories of goods and services. Includes urban, regional, and sector-specific inflation rates.
+      National monthly CPI-U (all items and core, less food and energy) plus PPI final demand
+      finished goods — 3 index series (base period 1982-84=100), national level only, not rates.
+      For sub-national CPI breakdowns see regional_cpi (4 Census regions) and metro_cpi (20 metro areas).
     # Columns match BLS API response fields (series > data array)
     columns:
       - name: series
@@ -811,7 +813,9 @@ partitionedTables:
     pattern: "type=regional_cpi/frequency=*/year=*/regional_cpi.parquet"
     partitions: *standard_partitions
     comment: >
-      Consumer Price Index for 4 U.S. Census regions (Northeast, Midwest, South, West). Enables regional inflation comparisons and analysis of cost-of-living differences across major geographic areas.
+      Monthly CPI-U all items index level (not seasonally adjusted, base 1982-84=100) for the 4
+      U.S. Census regions (Northeast, Midwest, South, West). For metro-area-level CPI instead of
+      regional, see metro_cpi (20 metro areas).
     columns:
       - name: date
         type: date
@@ -945,7 +949,9 @@ partitionedTables:
         releaseMonth: 2  # BLS monthly data complete by mid-January
 
     comment: >
-      Consumer Price Index for 20 major U.S. metropolitan areas including NYC, LA, Chicago, Houston, Phoenix, and others. Critical for understanding local cost-of-living variations and metro-specific inflation trends.
+      Monthly CPI-U all items index level (not seasonally adjusted, base 1982-84=100) for 20 major
+      U.S. metropolitan areas (NYC, LA, Chicago, Houston, Phoenix, and others). For 4-region-level
+      CPI instead of metro, see regional_cpi.
     columns:
       - name: date
         type: date
@@ -1115,7 +1121,11 @@ partitionedTables:
     pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
     partitions: *standard_partitions
     comment: >
-      Employment by industry sector for all 53 U.S. jurisdictions (50 states + DC, plus Puerto Rico and the Virgin Islands) across 22 NAICS supersector codes. Includes total nonfarm employment, private sector employment, and breakdowns by major industry categories like manufacturing, construction, retail, healthcare, and government. Enables state-level industry analysis and cross-state economic comparisons.
+      Monthly employment by industry (22 NAICS supersectors: manufacturing, construction, retail,
+      healthcare, government, and others) for all 53 U.S. jurisdictions (50 states + DC, Puerto
+      Rico, Virgin Islands), from BLS SM series (not seasonally adjusted, statewide total nonfarm
+      all-employees series). For the metro-area version of the same series, see metro_industry
+      (27 major metros).
 
     # Dimension definitions for iteration
     dimensions:
@@ -1228,7 +1238,10 @@ partitionedTables:
     pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"
     partitions: *standard_partitions
     comment: >
-      Average weekly wages for all 51 U.S. jurisdictions (50 states + DC) from BLS QCEW (Quarterly Census of Employment and Wages). Provides state-level compensation data for understanding regional wage differences, cost-of-living adjustments, and economic competitiveness analysis.
+      Annual establishment counts, employment levels, total wages, and average weekly wage for
+      all 51 U.S. jurisdictions (50 states + DC), from BLS QCEW (Quarterly Census of Employment
+      and Wages, released with ~1-year lag). For the metro-area version, see metro_wages (27
+      metros, which also carries average annual pay).
 
     # Dimension definitions for iteration
     dimensions:
@@ -1344,7 +1357,10 @@ partitionedTables:
     pattern: "type=metro_industry/frequency=*/year=*/metro_industry.parquet"
     partitions: *standard_partitions
     comment: >
-      Employment by industry sector for 27 major U.S. metropolitan areas across 22 NAICS supersector codes. Covers major metros including NYC, LA, Chicago, Houston, and others with detailed industry breakdowns for manufacturing, retail, healthcare, financial activities, and government sectors. Enables metro-level industry analysis and cross-metro economic comparisons.
+      Monthly employment by industry (22 NAICS supersectors: manufacturing, retail, healthcare,
+      financial activities, government, and others) for 27 major U.S. metropolitan areas (NYC,
+      LA, Chicago, Houston, and others), from BLS SM series (not seasonally adjusted, all-employees
+      series). For the state-level version of the same series, see state_industry (53 jurisdictions).
 
     # Dimension definitions for iteration
     dimensions:
@@ -1456,7 +1472,10 @@ partitionedTables:
     pattern: "type=metro_wages/frequency=*/year=*/metro_wages.parquet"
     partitions: *standard_partitions
     comment: >
-      Average weekly wages for 27 major U.S. metropolitan areas from BLS QCEW (Quarterly Census of Employment and Wages). Provides metro-level compensation data for understanding local wage differences, cost-of-living adjustments, and metropolitan economic competitiveness analysis.
+      Annual establishment counts, employment levels, total wages, average weekly wage, and
+      average annual pay for 27 major U.S. metropolitan areas, from BLS QCEW (Quarterly Census of
+      Employment and Wages, released with ~1-year lag). For the state-level version, see
+      state_wages (51 jurisdictions).
     # Source columns from QCEW CSV (matching actual file structure)
     columns:
       - name: area_fips
@@ -1579,7 +1598,11 @@ partitionedTables:
     dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
-      County-level employment and wages from BLS QCEW (Quarterly Census of Employment and Wages) for all ~3,142 U.S. counties. Comprehensive data includes establishment counts, employment levels, total wages, and average weekly wages by industry (NAICS codes) and ownership type (private, federal, state, local government). Enables detailed county-level labor market analysis, industry concentration studies, and regional economic development research.
+      County-level establishment counts, employment levels, total annual wages, and average
+      weekly wage from BLS QCEW (Quarterly Census of Employment and Wages), broken out by NAICS
+      industry code and ownership type (private, federal, state, local government), for all
+      ~3,142 U.S. counties. Annual data released with ~1-year lag. See also county_wages, which
+      sources the same county-level QCEW feed.
     columns:
       - name: area_fips
         type: string
@@ -1685,7 +1708,10 @@ partitionedTables:
     dqRowLimit: 25000
     partitions: *standard_partitions
     comment: >
-      Average weekly wages for all 6,038 U.S. counties from BLS QCEW (Quarterly Census of Employment and Wages). Most granular geographic wage data available, enabling county-level compensation analysis, local labor market studies, and rural-urban wage comparisons. Essential for detailed regional economic analysis.
+      County-level establishment counts, employment levels, total annual wages, and average
+      weekly wage from BLS QCEW (Quarterly Census of Employment and Wages), for all 6,038
+      county-level area codes — the most granular geography in this schema. Annual data released
+      with ~1-year lag. See also county_qcew, which sources the same county-level QCEW feed.
     # Source columns from QCEW CSV (matching actual file structure)
     columns:
       - name: area_fips
@@ -1819,7 +1845,10 @@ partitionedTables:
           url: "https://download.bls.gov/pub/time.series/jt/jt.data.6.LayoffsDischarges"
           comment: Layoffs and discharges data
     comment: >
-      Job Openings and Labor Turnover Survey (JOLTS) data for 4 U.S. Census regions (Northeast, Midwest, South, West). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate. Provides critical insights into labor market dynamics, worker mobility, and regional employment trends.
+      Monthly JOLTS (Job Openings and Labor Turnover Survey) job openings, hires, total
+      separations, quits, and layoffs/discharges — rates and levels — for the U.S. national total
+      plus the 4 Census regions (Northeast, Midwest, South, West). For national industry-level
+      detail see jolts_industry; for state-level detail see jolts_state.
 
     # Dimension definitions for iteration
     dimensions:
@@ -1978,10 +2007,10 @@ partitionedTables:
           url: "https://download.bls.gov/pub/time.series/jt/jt.data.6.LayoffsDischarges"
           comment: Layoffs and discharges data
     comment: >
-      Job Openings and Labor Turnover Survey (JOLTS) data by industry sector at the national
-      level. Tracks job openings, hires, total separations, quits, and layoffs/discharges
-      (rates and levels) per JOLTS industry. Series ID encodes the industry at positions 4-9
-      with national geography (state=00) at positions 10-11.
+      Monthly JOLTS (Job Openings and Labor Turnover Survey) job openings, hires, total
+      separations, quits, and layoffs/discharges — rates and levels — broken out by industry
+      sector, national level only. For the regional/national-total version see jolts_regional;
+      for state-level detail see jolts_state.
     columns:
       # Series ID: JTS{industry:4-9}{state:10-11}{area:12-16}{sizeclass:17-18}{element+rate:19-21}
       - name: industry_code
@@ -2115,7 +2144,10 @@ partitionedTables:
           url: "https://download.bls.gov/pub/time.series/jt/jt.data.6.LayoffsDischarges"
           comment: Layoffs and discharges data
     comment: >
-      Job Openings and Labor Turnover Survey (JOLTS) data for all 51 U.S. jurisdictions (50 states + DC). Tracks job openings rate, hires rate, total separations rate, quits rate, and layoffs/discharges rate at state level. Provides state-specific insights into labor market dynamics, worker mobility, and employment trends for state-level policy analysis.
+      Monthly JOLTS (Job Openings and Labor Turnover Survey) job openings, hires, total
+      separations, quits, and layoffs/discharges — rates and levels — for all 51 U.S.
+      jurisdictions (50 states + DC), total nonfarm only. For the national-total/regional version
+      see jolts_regional; for national industry-level detail see jolts_industry.
     columns:
       # BLS TSV columns: series_id, year, period, value, footnote_codes
       # Series ID format for state data: JTS{state}{industry}{dataelement} (e.g., JTS01000000JOR)
@@ -2238,8 +2270,10 @@ partitionedTables:
     pattern: "type=wage_growth/frequency=*/year=*/wage_growth.parquet"
     partitions: *standard_partitions
     comment: >
-      Average hourly and weekly earnings from BLS Current Employment Statistics (CES).
-      Tracks wage growth trends across all private sector employees.
+      Monthly average hourly earnings (all employees, and production/nonsupervisory employees
+      separately) and average weekly earnings, nominal dollars, for total private employees
+      nationally — from BLS Current Employment Statistics (CES). Not inflation-adjusted; deflate
+      with inflation_metrics for real wage growth.
     columns:
       - name: date
         type: date
@@ -2352,7 +2386,10 @@ partitionedTables:
         - name: state_fips
           type: VARCHAR
     comment: >
-      State-level LAUS employment statistics including unemployment rates, employment levels, and labor force participation for all 51 U.S. jurisdictions. Source: BLS Local Area Unemployment Statistics (LAUS) program.
+      Monthly state-level unemployment rate, unemployment level, employment level, and civilian
+      labor force level (persons) for all 51 U.S. jurisdictions, from BLS Local Area Unemployment
+      Statistics (LAUS). This is labor force size, not the labor force participation rate (see
+      employment_statistics for the national participation rate).
 
     # Dimension definitions for iteration
     dimensions:
@@ -2507,7 +2544,11 @@ partitionedTables:
     pattern: "type=timeseries/frequency=daily/year=*/treasury_yields.parquet"
     partitions: *standard_partitions
     comment: >
-      Daily U.S. Treasury yield curve rates from 1-month to 30-year maturities. Includes nominal yields, TIPS yields, and yield curve shape indicators. Source: U.S. Treasury Direct API.
+      Average interest rates on U.S. Treasury securities (Treasury Bills, Notes, Bonds, TIPS, and
+      other security types) by security_type_desc/security_desc and record_date, from the
+      Treasury Fiscal Data "Average Interest Rates" API. This is one average rate per security
+      description, not a full yield curve broken out by specific maturity (1-month through
+      30-year).
     # Columns match Treasury Fiscal Data API response fields
     columns:
       - name: record_date
@@ -3317,9 +3358,10 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      State personal income from BEA Regional Economic Accounts (SAINC tables).
-      Uses bulk download approach - single 16MB ZIP file contains all data since 1929.
-      Much more efficient than per-year/geo/linecode API calls.
+      State-level personal income and its components — total personal income, population, per
+      capita income, wages and salaries, transfer receipts, and more — from all 12 active BEA
+      SAINC tables, annual, back to 1929, for all 50 states + DC. For county/MSA-level income
+      (and all other BEA regional topics: GDP, consumption, wages by industry), see regional_income.
 
     # Simplified dimensions - no per-API-call iteration needed
     dimensions:
@@ -3451,8 +3493,9 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      State GDP from BEA Regional Economic Accounts (SAGDP tables).
-      Uses bulk download approach - single 9.5MB ZIP file contains all data.
+      State-level GDP — summary, by-industry breakdowns, and chain-type quantity/price indexes —
+      from all 10 active BEA SAGDP tables, annual, for all 50 states + DC. For county/MSA-level
+      GDP see regional_income; for quarterly state GDP see state_quarterly_gdp.
 
     dimensions:
       type:
@@ -3577,8 +3620,9 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      State quarterly personal income from BEA Regional Economic Accounts (SQINC tables).
-      Uses bulk download approach - single 16.7MB ZIP file contains all data.
+      State-level personal income and its components, at quarterly cadence, from all 6 active
+      BEA SQINC tables, for all 50 states + DC. For the annual version see state_personal_income;
+      for county/MSA-level income see regional_income.
 
     dimensions:
       type:
@@ -3703,8 +3747,9 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      State quarterly GDP from BEA Regional Economic Accounts (SQGDP tables).
-      Uses bulk download approach - single 3.2MB ZIP file contains all data.
+      State-level GDP, at quarterly cadence, from all 5 active BEA SQGDP tables, for all 50
+      states + DC. For the annual version see state_gdp; for county/MSA-level GDP see
+      regional_income.
 
     dimensions:
       type:
@@ -3829,8 +3874,9 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      State personal consumption expenditures from BEA Regional Economic Accounts (SAPCE tables).
-      Uses bulk download approach - single 3.7MB ZIP file contains all data.
+      State-level personal consumption expenditures (PCE) by category, from all 4 active BEA
+      SAPCE tables, annual, for all 50 states + DC. For county/MSA-level BEA data see
+      regional_income.
 
     dimensions:
       type:
@@ -3957,7 +4003,12 @@ partitionedTables:
         - name: year
           type: INTEGER
     comment: >
-      State and regional personal income statistics from BEA Regional Economic Accounts. Includes total income, per capita income, and population by state.
+      State, county, MSA, and other sub-national (micropolitan, port, metro division, CSA)
+      personal income, GDP, consumption, wages, arts & culture, and outdoor recreation statistics
+      — all 63 BEA Regional Economic Accounts tables. The only source of county/MSA-level BEA
+      income and GDP in this schema; slower per-API-call ingestion than the state-only
+      bulk-download tables (state_personal_income, state_gdp, state_quarterly_income,
+      state_quarterly_gdp, state_consumption), which cover the same state-level topics faster.
 
     # Dimension definitions for iteration
     # IMPORTANT: Dimension order matters for context-aware resolution!
@@ -4234,7 +4285,9 @@ partitionedTables:
         - name: indicator
           type: VARCHAR
     comment: >
-      International Transactions Accounts (ITA) from BEA providing balance of payments statistics. Includes trade balance, current account, capital account, and income balances.
+      International Transactions Accounts (ITA) from BEA: annual, national-level balance of
+      payments — goods/services trade balances, exports and imports of goods and services,
+      current account, capital account, and primary/secondary income balances.
     columns:
       # Source columns from ItaDataTransformer output (snake_case)
       - name: data_value
@@ -4773,7 +4826,10 @@ partitionedTables:
     pattern: "type=gdp_statistics/frequency=*/year=*/gdp_statistics.parquet"
     partitions: *standard_partitions
     comment: >
-      Quarterly and annual GDP growth rates, nominal and real GDP values.
+      National GDP growth rates, nominal and real GDP levels, and other line items from BEA NIPA
+      table T10101, annual and quarterly. Sources the same T10101 table that's also included in
+      the broader national_accounts table (which covers 8 additional NIPA sections); for
+      industry-level GDP breakdowns see industry_gdp.
     columns:
       # Map BEA API field names to our column names
       - name: year
@@ -4906,7 +4962,10 @@ partitionedTables:
         - name: industry
           type: VARCHAR
     comment: >
-      GDP by Industry data from BEA showing value added by NAICS industry sectors. Provides comprehensive breakdown of economic output by industry including agriculture, mining, manufacturing, services, and government sectors. Available at both annual and quarterly frequencies for detailed sectoral analysis.
+      GDP by industry value added from BEA GDPbyIndustry dataset, national level, annual and
+      quarterly, limited to 5 industry group codes (31G, 52, 53, 54, GSLG) — see the
+      industry_description column for each group's name. Not a full NAICS sector breakdown;
+      agriculture and mining codes are not loaded.
     columns:
       # Source columns from IndustryGdpTransformer output (snake_case)
       - name: table_id
@@ -6501,7 +6560,11 @@ tables:
   - name: fred_indicators_enriched
     type: view
     sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators i JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.fred_series c ON i.series = c.series"
-    comment: Enriched fred_indicator observations with metadata such as series names, units, frequency, or others.
+    comment: >
+      FRED time series observations (series, date, value) enriched with series metadata:
+      series_name (title), units, frequency, seasonal_adjustment, last_updated,
+      observation_start/observation_end coverage window, and popularity — joins fred_indicators
+      to econ_reference.fred_series so callers don't need a manual lookup.
 
   - name: national_accounts_enriched
     type: view

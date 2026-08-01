@@ -168,10 +168,13 @@ partitionedTables:
     pattern: "type=air_quality_annual/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EPA AirData annual-summary air quality by monitor and pollutant (annual
-      mean, peak values, observation/valid-day counts) for PM2.5, Ozone, SO2,
-      NO2, and CO. Keyless national bulk file annual_conc_by_monitor_<year>.zip.
-      Moved here from the weather schema (air quality is a distinct domain).
+      EPA AirData annual-summary air quality — arithmetic mean concentration,
+      peak value, observation count, and valid-day count for PM2.5, Ozone, SO2,
+      NO2, and CO. Source file is one row per monitor per pollutant per year, but
+      no monitor/site id is retained here (only state_fips/county_fips), and the
+      annual file carries no AQI column, so aqi is always null here — for AQI use
+      air_quality_daily, which is also site-level. Keyless national bulk file
+      annual_conc_by_monitor_<year>.zip. Moved here from the weather schema.
       Joins geo.states via state_fips and geo.counties via county_fips.
     dqRowLimit: 25000
 
@@ -262,10 +265,13 @@ partitionedTables:
     pattern: "type=air_quality_daily/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EPA AirData daily-summary air quality by monitoring site. One row per site
-      per day per pollutant standard (mean, peak, AQI where applicable). Keyless
-      national bulk files daily_<param>_<year>.zip, one per pollutant-year.
-      Moved here from the weather schema. Joins geo.states/geo.counties.
+      EPA AirData daily-summary air quality by monitoring site — one row per
+      site per day per pollutant standard, with mean concentration, peak value,
+      AQI, and observation count (plus site lat/lon). Unlike air_quality_annual
+      (county-level, no AQI), this table retains site_number and a real AQI
+      value. Keyless national bulk files daily_<param>_<year>.zip, one per
+      pollutant-year. Moved here from the weather schema. Joins
+      geo.states/geo.counties.
     dqRowLimit: 5000
 
     dimensions:
@@ -376,10 +382,11 @@ partitionedTables:
     pattern: "type=aqs_monitors/*.parquet"
     partitions: *static_partitions
     comment: >
-      EPA AQS monitor metadata — one row per (site, parameter, POC) with
-      location, monitor type, networks, and operating span. Keyless reference
-      file aqs_monitors.zip. Snapshot; joins air_quality_daily by site and geo
-      by county_fips.
+      EPA AQS monitor metadata — one row per (site, parameter) with location
+      (lat/lon, local site name, city, CBSA name), monitor type, monitoring
+      networks, and operating span (first_year through last_sample_date).
+      Keyless reference file aqs_monitors.zip. Snapshot; joins air_quality_daily
+      by site and geo by county_fips.
 
     dimensions:
       type:
@@ -489,10 +496,12 @@ partitionedTables:
     pattern: "type=tri_releases/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EPA Toxics Release Inventory — one row per facility × chemical × reporting
-      form for the year, with on-site/off-site release and transfer amounts.
-      Per-year national bulk CSV (efservice mv_tri_basic_download). Delta by
-      year. Joins geo via state (abbr) + county name; frs_id links epa_facilities.
+      EPA Toxics Release Inventory — one row per facility × chemical × year,
+      with release amounts by pathway (fugitive air, stack air, surface water)
+      plus on-site, off-site, and total release totals, primary NAICS, and
+      facility location (city, county, state, zip, lat/lon). Per-year national
+      bulk CSV (efservice mv_tri_basic_download). Delta by year. Joins geo via
+      state_abbr + county name; frs_id links epa_facilities.
     dqRowLimit: 50000
 
     dimensions:
@@ -638,10 +647,12 @@ partitionedTables:
     pattern: "type=ghg_facilities/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      EPA GHGRP facility dimension — one row per reporting facility per year with
-      location, NAICS, parent company, and reported industry types. Envirofacts
-      efservice full-year CSV. Delta by year. Join ghg_emissions on
-      (facility_id, year); frs_id links epa_facilities.
+      EPA GHGRP facility dimension — one row per reporting facility per year
+      with location (city, state, county, zip, lat/lon), NAICS code, parent
+      company, reported industry types, and facility type (e.g. 'Direct
+      Emitter'). Envirofacts efservice full-year CSV. Delta by year. Join
+      ghg_emissions on (facility_id, year) for the emissions themselves;
+      frs_id links epa_facilities.
 
     dimensions:
       type:
@@ -1008,9 +1019,11 @@ partitionedTables:
     partitions: *state_partitions
     comment: >
       EPA SDWIS public water systems — one row per active public water system
-      (PWS) with type, population served, ownership, and source-water type.
-      Envirofacts efservice full-state CSV (active systems only). Snapshot.
-      pwsid joins drinking_water_violations; state_code joins geo.states.
+      (PWS) with type (CWS/NTNCWS/TNCWS), population served, service
+      connections count, owner type, and primary source-water type (ground vs.
+      surface). Envirofacts efservice full-state CSV (active systems only).
+      Snapshot. pwsid joins drinking_water_violations; state_abbr joins
+      geo.states.
 
     dimensions:
       type:
@@ -1123,9 +1136,11 @@ partitionedTables:
     partitions: *static_partitions
     comment: >
       EPA ECHO Exporter — one row per regulated facility (~1.5M) with registry
-      identity, location, and a rolled-up compliance/enforcement summary
-      (inspections, violations, penalties, per-statute compliance status). Keyless
-      weekly-snapshot bulk zip. registry_id links TRI/GHGRP frs_id; the
+      identity, location (address, lat/lon, NAICS/SIC codes), and a rolled-up
+      compliance/enforcement summary: inspection count and last-inspection date,
+      formal enforcement action count, total penalties, significant-noncompliance
+      flag, and overall plus per-statute (CAA/CWA/RCRA/SDWA) compliance status.
+      Keyless weekly-snapshot bulk zip. registry_id links TRI/GHGRP frs_id; the
       facility_compliance view projects the compliance subset.
     dqRowLimit: 100000
 
@@ -1280,10 +1295,11 @@ partitionedTables:
     partitions: *state_partitions
     comment: >
       EPA SDWIS drinking-water violations — one row per violation per public
-      water system (health-based & monitoring violations: contaminants, lead/
-      copper, treatment). Envirofacts efservice full-state CSV, filtered by
-      primacy_agency_code (the state column; the literal `state` column silently
-      no-ops). Snapshot. pwsid joins drinking_water.
+      water system, with violation type/category (MR=monitoring, MCL, TT, ...),
+      health-based and major-violation indicators, contaminant code, measured
+      value, and compliance period. Envirofacts efservice full-state CSV,
+      filtered by primacy_agency_code (the state column; the literal `state`
+      column silently no-ops). Snapshot. pwsid joins drinking_water.
     dqRowLimit: 50000
 
     dimensions:
@@ -1401,10 +1417,10 @@ partitionedTables:
     pattern: "type=superfund_sites/*.parquet"
     partitions: *static_partitions
     comment: >
-      EPA SEMS Superfund sites — one row per site with National Priorities List
-      status and location. Envirofacts efservice full table (national, ~55K).
-      Snapshot. npl_status_code 'F' = Final NPL. Joins geo via fips_code
-      (county) / state; lat/lon populated for NPL sites.
+      EPA SEMS Superfund sites — one row per site (national, ~55K) with site
+      name, street address, National Priorities List status (npl_status_code
+      'F' = Final NPL), federal-facility indicator, and location (county_fips,
+      state_abbr, lat/lon). Envirofacts efservice full table. Snapshot.
 
     dimensions:
       type:
@@ -1512,10 +1528,12 @@ partitionedTables:
     pattern: "type=rcra_facilities/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
-      EPA RCRAInfo hazardous-waste handlers — one row per current handler
-      (generators, transporters, treatment/storage/disposal). Envirofacts
-      efservice full-state CSV filtered to current_record='Y' (the table is
-      multi-cycle history). Snapshot. Joins geo via location_state + county_code.
+      EPA RCRAInfo hazardous-waste handlers — one row per current handler, with
+      generator status and activity flags (transporter, treatment/storage/
+      disposal, recycler) plus location (city, county_code, zip, lat/lon).
+      Envirofacts efservice full-state CSV filtered to current_record='Y' (the
+      source table is multi-cycle history). Snapshot. Joins geo.state_ref via
+      state_abbr.
     dqRowLimit: 50000
 
     dimensions:
@@ -1903,8 +1921,11 @@ views:
 
   - name: ghg_facility_annual
     comment: >
-      Per-facility annual greenhouse-gas emissions (total metric tons CO2e) with
-      geography, joining the emissions facts to the facility dimension.
+      Per-facility-year total greenhouse-gas emissions (SUM of co2e_emission
+      across sectors/subsectors/gases, in metric tons CO2e) with facility
+      location (state_abbr, county_fips, lat/lon) and NAICS code, joining
+      ghg_emissions to ghg_facilities on (facility_id, year). For gas/sector-
+      level detail, query ghg_emissions directly.
     sql: >
       SELECT
         f.year,
@@ -1924,8 +1945,10 @@ views:
 
   - name: facility_compliance
     comment: >
-      Compliance/enforcement projection of epa_facilities — identity plus the
-      inspection, penalty, and per-statute compliance-status columns.
+      Compliance/enforcement projection of epa_facilities — registry_id,
+      facility_name, state_abbr, plus significant-noncompliance flag,
+      inspection count, formal enforcement action count, total penalties, and
+      overall plus per-statute (CAA/CWA/RCRA/SDWA) compliance status.
     sql: >
       SELECT
         registry_id,
@@ -1944,8 +1967,10 @@ views:
 
   - name: air_quality_annual_by_county
     comment: >
-      County-year average of the annual mean concentration and peak AQI by
-      pollutant — the headline air-quality rollup, joinable to geo.counties.
+      County-year average concentration and peak value per pollutant, grouped
+      by parameter_name from air_quality_annual (whose aqi is always null, so
+      peak_aqi here is null too — for real AQI use air_quality_daily).
+      Joinable to geo.counties.
     sql: >
       SELECT
         a.year,

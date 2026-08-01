@@ -148,10 +148,12 @@ partitionedTables:
 
     comment: >
       GLEIF Legal Entity Identifier (LEI) records from the Global LEI Foundation
-      golden copy CSV. Contains entity registration details, jurisdiction, legal
-      form, addresses, and registration authority links. The
+      golden copy CSV — entity registration details, jurisdiction, legal form,
+      HQ/registered addresses, and registration authority links. The
       registration_authority_entity_id field contains the SEC CIK number for
-      entities registered with RA000602 (SEC).
+      entities registered with RA000602 (SEC). Append-only changelog: one row
+      per LEI per publish in which it changed, with last_update as the history
+      axis; use the current_gleif_entities view for the latest row per LEI.
       Source: GLEIF Golden Copy (goldencopy.gleif.org).
 
     columns:
@@ -279,10 +281,12 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      Bridge table mapping GLEIF LEI codes to SEC CIK numbers. Derived from
-      the GLEIF golden copy CSV filtered where registration_authority_id =
-      'RA000602' (SEC). Provides fast LEI <-> CIK lookups without scanning
-      the full GLEIF dataset.
+      Bridge table mapping GLEIF LEI codes to SEC CIK numbers (lei, cik,
+      legal_name, entity_status). Derived from the GLEIF golden copy CSV
+      filtered where registration_authority_id = 'RA000602' (SEC). Current
+      snapshot only, overwritten each run — unlike gleif_entities, which keeps
+      an append-only change history. Provides fast LEI <-> CIK lookups without
+      scanning the full GLEIF dataset.
 
     columns:
       - *lei_column
@@ -677,9 +681,11 @@ partitionedTables:
           type: VARCHAR
 
     comment: >
-      SEC EDGAR company ticker mapping. Contains ~10,000 active US exchange-listed
-      companies with their SEC CIK and ticker symbol. Sourced from the SEC EDGAR
-      company_tickers.json file (updated daily). Feeds the ticker dimension for
+      SEC EDGAR company ticker mapping: cik, ticker, title (registered company
+      name), and as_of (the UTC ingest date). ~10,000 active US exchange-listed
+      companies, sourced from the SEC EDGAR company_tickers.json file (updated
+      daily). Each run stamps a fresh as_of snapshot, so grouping by as_of
+      recovers ticker/name history over time. Feeds the ticker dimension for
       figi_instruments — enables the full chain LEI → CIK → ticker → FIGI within
       the ref schema with no dependency on other schemas.
       Source: https://www.sec.gov/files/company_tickers.json

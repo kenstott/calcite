@@ -390,7 +390,7 @@ partitionedTables:
         - name: type
           type: VARCHAR
     comment: >
-      BEA NIPA (National Income and Product Accounts) table reference catalog with section categorization. NIPA tables are organized into 8 sections: 1=Domestic Product & Income, 2=Personal Income & Outlays, 3=Government, 4=Foreign Transactions, 5=Saving & Investment, 6=Industry, 7=Supplemental, 8=Not Seasonally Adjusted. Downloaded early to enable dynamic table discovery and complete NIPA data collection.
+      BEA NIPA (National Income and Product Accounts) table reference catalog: maps each NIPA table_name code (e.g., 'T10105', 'T20100') to its BEA description. Static lookup only (table_name, description columns, no year/time dimension), downloaded early to enable dynamic discovery of available NIPA tables before the main NIPA data pull.
     # Columns match BEA API GetParameterValues response fields
     # API returns: {"BEAAPI": {"Results": {"ParamValue": [{"Key": "TableName", "Desc": "Description (A, Q)"}]}}}
     columns:
@@ -498,7 +498,7 @@ partitionedTables:
         - name: tablename
           type: VARCHAR
     comment: >
-      BEA Regional dataset LineCode catalog. Maps table-specific line codes to their descriptions for all 67 Regional tables (SAINC*, SQINC*, CAINC*, SAGDP*, SQGDP*, CAGDP*, etc.). Each BEA Regional table has its own set of valid LineCodes - this catalog is downloaded first to enable complete regional data collection without hardcoded limitations.
+      BEA Regional dataset LineCode catalog. Maps table-specific line codes (key) to their descriptions (desc) for the 56 tracked BEA Regional tables (SAINC*, SQINC*, CAINC*, SAGDP*, SQGDP*, CAGDP* series). Each Regional table has its own set of valid LineCodes, so this catalog is fetched first (one API call per tablename) to enable complete regional data collection without hardcoded LineCode limitations.
     # Columns match BEA API GetParameterValuesFiltered response fields
     # API returns: {"BEAAPI": {"Results": {"ParamValue": [{"Key": "10", "Desc": "Personal income"}]}}}
     columns:
@@ -732,7 +732,7 @@ partitionedTables:
         - name: category
           type: INTEGER
     comment: >
-      Complete FRED economic data series catalog with 841,000+ series partitioned by category/frequency/source/status. Status partition separates 'active' (currently updated) from 'discontinued' (no longer updated) series. Includes series metadata, categories, descriptions, units, frequency, and search capabilities. Enables efficient querying for either current data or historical analysis with partitions for major economic categories (national_accounts, labor_markets, finance, prices, etc.). Updated daily from FRED API with comprehensive coverage of all available economic time series for discovery and programmatic access.
+      FRED series discovery/metadata catalog: series id, title, observation date range (observation_start/observation_end), frequency, units, seasonal adjustment, last-updated timestamp, and popularity scores — one row per series, partitioned by category (7 top-level FRED categories: Production & Business Activity, Population/Employment/Labor Markets, National Accounts, Prices, Discontinued/Legacy, Money/Banking/Finance, International Data; up to 1000 series fetched per category). This is a lookup/discovery catalog only, not observation data — see econ.fred_indicators for the curated ~48-series time series values (enumerated in that table's series column comment).
     columns:
       - name: series
         type: string

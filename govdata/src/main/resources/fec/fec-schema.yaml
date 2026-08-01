@@ -641,10 +641,12 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      Itemized individual contributions to federal committees exceeding $200 in
-      an election cycle. Largest FEC dataset (~4-5GB per cycle, 20M+ records).
-      Contains donor name, employer, occupation, amount, date, and memo text.
-      Memo text is vectorized for inferred relationship discovery.
+      Itemized individual (donor-level) contributions to federal committees exceeding
+      $200 per cycle, with a transaction_type breakdown (15=contribution, 15E=earmarked,
+      22Y=refund). Largest FEC dataset (~4-5GB per cycle, 20M+ records); contains donor
+      name, employer, occupation, amount, date, and memo text (vectorized for inferred
+      relationship discovery). Distinct from committee_contributions (committee-to-candidate
+      money) and intercommittee_transactions (committee-to-committee transfers).
       Source: indiv{YY}.zip (pipe-delimited, no header).
 
     columns:
@@ -810,9 +812,12 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      Contributions from committees (PACs, party committees) to candidates.
-      Shows direct committee-to-candidate financial support including amount,
-      date, and purpose. Source: pas2{YY}.zip (pipe-delimited, no header).
+      Committee-to-candidate transactions (PACs, party committees), spanning direct
+      contributions and coordinated/independent spending via transaction_type codes
+      (24K=direct contribution, 24C=coordinated party expenditure, 24E=independent
+      for, 24A=independent against, 24F=communication cost for). Each row carries a
+      candidate_id, distinguishing it from intercommittee_transactions (committee-to-committee
+      transfers with no candidate link). Source: pas2{YY}.zip (pipe-delimited, no header).
 
     columns:
       - *committee_id_column
@@ -979,9 +984,10 @@ partitionedTables:
 
     comment: >
       Transactions between political committees — transfers, joint fundraising
-      allocations, and other inter-committee financial activity. Shows the flow
-      of money between PACs, party committees, and campaign committees.
-      Source: oth{YY}.zip (pipe-delimited, no header).
+      allocations, and other inter-committee financial activity — with no candidate_id
+      column, unlike committee_contributions (which links each row to a specific
+      candidate). Shows the flow of money between PACs, party committees, and campaign
+      committees. Source: oth{YY}.zip (pipe-delimited, no header).
 
     columns:
       - *committee_id_column
@@ -1503,7 +1509,10 @@ partitionedTables:
     comment: >
       Electioneering communications — broadcast, cable, or satellite ads that
       mention a federal candidate within 30 days of a primary or 60 days of a
-      general election. Source: ElectioneeringComm_{YYYY}.csv (CSV with headers).
+      general election. Carries the reported disbursement amount plus, when one ad
+      buy names multiple candidates, number_of_candidates and calculated_candidate_share
+      to apportion the cost per candidate. Source: ElectioneeringComm_{YYYY}.csv (CSV
+      with headers).
 
     columns:
       - name: candidate_id
@@ -1642,8 +1651,11 @@ partitionedTables:
 
     comment: >
       Communication costs reported by corporations and labor organizations for
-      internal communications (to employees, members) mentioning federal
-      candidates. Source: CommunicationCosts_{YYYY}.csv (CSV with headers).
+      internal communications (to employees, members) mentioning federal candidates,
+      with a support_oppose (S/O) flag per candidate. Distinct from
+      electioneering_communications, which covers public broadcast/cable/satellite ads
+      rather than internal member communications. Source: CommunicationCosts_{YYYY}.csv
+      (CSV with headers).
 
     columns:
       - name: committee_id
@@ -1777,9 +1789,13 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      Aggregated financial summary for each federal candidate per election cycle.
-      Includes total receipts, disbursements, cash on hand, debts, and individual/
-      PAC contribution breakdowns. Source: candidate_summary_{YYYY}.csv (CSV with headers).
+      Aggregated per-candidate financial summary for each election cycle — one row
+      per candidate, not a transaction. Includes total receipts, disbursements, cash
+      on hand, debts, and individual contributions split into itemized (>$200) vs
+      unitemized (<=$200), plus party/other-committee contribution totals. Rolls up
+      the transaction-level individual_contributions and committee_contributions
+      tables rather than replacing them. Source: candidate_summary_{YYYY}.csv (CSV
+      with headers).
 
     columns:
       - name: candidate_id
@@ -1973,9 +1989,12 @@ partitionedTables:
           type: INTEGER
 
     comment: >
-      Aggregated financial summary for each political committee per election
-      cycle. Includes total receipts, disbursements, cash on hand, debts,
-      contribution sources, and independent expenditures.
+      Aggregated per-committee financial summary for each election cycle — one row
+      per committee, not a transaction. Includes total receipts, disbursements, cash
+      on hand, debts, independent expenditures, party coordinated expenditures, and
+      the nonfederal (non-election-account) share of transfers and expenditures.
+      Rolls up the transaction-level committee_contributions and
+      intercommittee_transactions tables rather than replacing them.
       Source: committee_summary_{YYYY}.csv (CSV with headers).
 
     columns:
@@ -2378,9 +2397,10 @@ views:
 
   - name: active_candidates
     comment: >
-      Active federal candidates from the most recent election cycle.
-      Filters fec.candidates to rows where candidate_status = 'C' (certified active).
-      Single-schema view using only fec tables.
+      Federal candidates flagged as certified active (candidate_status = 'C') in
+      fec.candidates. Not filtered to a single cycle — rows span every loaded
+      election year, distinguished by the year column. Single-schema view using
+      only fec tables.
     sql: >
       SELECT
         candidate_id,

@@ -110,7 +110,10 @@ partitionedTables:
       2024-01-01; weekends and holidays produce no file (skipped cleanly).
       For new trades only: WHERE action_type = 'NEWT'. For live trades: exclude
       action_type IN ('TERM','CORR','EROR'). Join on dissemination_id /
-      original_dissemination_id to reconstruct amendment chains.
+      original_dissemination_id to reconstruct amendment chains. For a narrower,
+      asset-class-specific column set see rate_swaps, credit_default_swaps,
+      fx_derivatives, equity_derivatives, and commodity_derivatives; for daily
+      aggregate summaries see swap_activity and clearing_activity.
 
     columns:
       # --- Identity & lifecycle ---
@@ -858,14 +861,20 @@ views:
       uncleared_count (cleared='N').
       Primary dashboard for market activity monitoring, clearing adoption rates, and
       daily volume surveillance. Filter action_type = 'NEWT' for execution-only volumes.
+      For cleared volume broken out by CCP (settlement_location) instead of by
+      action_type, see clearing_activity.
 
   - name: clearing_activity
     type: view
     sql: "SELECT trade_date, asset_class, settlement_location, COUNT(*) AS cleared_trade_count, SUM(CASE WHEN notional_currency_leg1 = 'USD' THEN notional_amount_leg1 ELSE notional_amount_leg1 END) AS total_notional FROM ${CFTC_SCHEMA_NAME:cftc}.cftc_trades WHERE cleared = 'Y' AND action_type = 'NEWT' GROUP BY trade_date, asset_class, settlement_location"
     comment: >
       Cleared swap activity by CCP. Columns: trade_date, asset_class, settlement_location
-      (CCP name — LCH, CME, ICE), cleared_trade_count, total_notional. Enables CCP market
-      share analysis and clearing mandate compliance monitoring by asset class.
+      (CCP name — LCH, CME, ICE), cleared_trade_count, total_notional (raw sum of
+      notional_amount_leg1 in its native currency — not USD-normalized, unlike
+      swap_activity's total_usd_notional). Covers only cleared (cleared='Y'),
+      newly-executed (action_type='NEWT') trades; for activity across all action
+      types and cleared/uncleared status, grouped by action_type instead of CCP,
+      see swap_activity.
 
 # ============================================================================
 # END OF SCHEMA

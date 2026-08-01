@@ -185,12 +185,13 @@ partitionedTables:
     pattern: "type=patent_grants/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      One row per granted utility patent (design patents excluded by default;
-      set PATENTS_INCLUDE_DESIGN=true to include). Faithful recreation of g_patent.tsv —
-      no joins. patent_date carries the grant year, so the table self-partitions by
-      grant_year. Abstract, filing date, and figure counts live in their own faithful
-      tables (patent_abstracts, patent_applications, patent_figures), joined on patent_id
-      at query time.
+      One row per granted patent (patent_type utility or plant by default; design patents
+      excluded unless PATENTS_INCLUDE_DESIGN=true), with patent_date, patent_title, num_claims,
+      wipo_kind, and a withdrawn flag. Faithful recreation of g_patent.tsv, no joins, year-partitioned
+      by grant_year starting GOVDATA_START_YEAR (2010 by default) — narrower than the six full-dump
+      snapshot tables (patent_assignees, patent_inventors, patent_cpc_classes, patent_abstracts,
+      patent_applications, patent_figures), which cover all patents back to 1976 with no year cutoff.
+      Abstract, filing date, and figure counts live in those tables, joined on patent_id at query time.
 
     dimensions:
       type:
@@ -263,9 +264,11 @@ partitionedTables:
     partitions: *snapshot_partitions
     comment: >
       Faithful recreation of g_assignee_disambiguated.tsv — one row per patent-assignee
-      combination, keyed by patent_id, no joins and no year. location_id is the foreign key
-      into patent_locations; join there for geography and to patent_grants for a grant year.
-      Loaded once per quarter as a full snapshot.
+      combination (assignee_organization or first/last name, assignee_type, assignee_sequence),
+      keyed by patent_id, no joins and no year. Loaded once per quarter as a full snapshot
+      covering all patents back to 1976 (broader than patent_grants, which only materializes
+      GOVDATA_START_YEAR+/2010+, so older patent_ids here have no patent_grants row). location_id
+      is the foreign key into patent_locations for geography.
 
     dimensions:
       type:
@@ -337,9 +340,11 @@ partitionedTables:
     partitions: *snapshot_partitions
     comment: >
       Faithful recreation of g_inventor_disambiguated.tsv (~8 GB uncompressed) — one row per
-      patent-inventor combination, keyed by patent_id, no joins and no year. location_id is the
-      foreign key into patent_locations; join there for geography and to patent_grants for a
-      grant year. Loaded once per quarter as a full snapshot.
+      patent-inventor combination, keyed by patent_id, with an inferred gender_code useful for
+      diversity analysis. Loaded once per quarter as a full snapshot covering all patents back
+      to 1976 (broader than patent_grants, which only materializes GOVDATA_START_YEAR+/2010+, so
+      older patent_ids here have no patent_grants row). location_id is the foreign key into
+      patent_locations for geography.
 
     dimensions:
       type:
@@ -406,10 +411,11 @@ partitionedTables:
     pattern: "type=patent_cpc"
     partitions: *snapshot_partitions
     comment: >
-      Faithful recreation of g_cpc_current.tsv — one row per patent-CPC code combination,
-      keyed by patent_id, no joins and no year. CPC is the primary technology taxonomy for
-      patent analysis. Join to patent_grants on patent_id for a grant year. Loaded once per
-      quarter as a full snapshot.
+      Faithful recreation of g_cpc_current.tsv — one row per patent-CPC code combination
+      (cpc_section, cpc_class, cpc_subclass, cpc_group, cpc_type), keyed by patent_id; CPC is
+      the primary technology taxonomy for patent analysis. Loaded once per quarter as a full
+      snapshot covering all patents back to 1976 (broader than patent_grants, which only
+      materializes GOVDATA_START_YEAR+/2010+, so older patent_ids here have no patent_grants row).
 
     dimensions:
       type:
@@ -477,7 +483,9 @@ partitionedTables:
     partitions: *snapshot_partitions
     comment: >
       Faithful recreation of g_patent_abstract.tsv — one row per patent abstract, keyed by
-      patent_id. Join to patent_grants on patent_id for a grant year. Loaded once per quarter.
+      patent_id. Loaded once per quarter as a full snapshot covering all patents back to 1976
+      (broader than patent_grants, which only materializes GOVDATA_START_YEAR+/2010+, so older
+      patent_ids here have no patent_grants row).
 
     dimensions:
       type:
@@ -524,8 +532,10 @@ partitionedTables:
     pattern: "type=patent_applications"
     partitions: *snapshot_partitions
     comment: >
-      Faithful recreation of g_application.tsv — one row per application record, keyed by
-      patent_id. Join to patent_grants on patent_id for a grant year. Loaded once per quarter.
+      Faithful recreation of g_application.tsv — one row per application record (filing_date,
+      patent_application_type), keyed by patent_id. Loaded once per quarter as a full snapshot
+      covering all patents back to 1976 (broader than patent_grants, which only materializes
+      GOVDATA_START_YEAR+/2010+, so older patent_ids here have no patent_grants row).
 
     dimensions:
       type:
@@ -576,9 +586,10 @@ partitionedTables:
     pattern: "type=patent_figures"
     partitions: *snapshot_partitions
     comment: >
-      Faithful recreation of g_figures.tsv — one row per patent figure/sheet count record,
-      keyed by patent_id. Join to patent_grants on patent_id for a grant year. Loaded once
-      per quarter.
+      Faithful recreation of g_figures.tsv — one row per patent figure/sheet count record
+      (num_figures, num_sheets), keyed by patent_id. Loaded once per quarter as a full snapshot
+      covering all patents back to 1976 (broader than patent_grants, which only materializes
+      GOVDATA_START_YEAR+/2010+, so older patent_ids here have no patent_grants row).
 
     dimensions:
       type:
@@ -629,9 +640,10 @@ partitionedTables:
     pattern: "type=patent_locations"
     partitions: *snapshot_partitions
     comment: >
-      Faithful recreation of g_location_disambiguated.tsv — one row per disambiguated
-      location, keyed by location_id. FK target for patent_inventors.location_id and
-      patent_assignees.location_id. Loaded once per quarter.
+      Faithful recreation of g_location_disambiguated.tsv — one row per disambiguated location
+      (state_fips, county_fips, country_code, latitude, longitude), keyed by location_id. FK
+      target for patent_inventors.location_id and patent_assignees.location_id. Loaded once
+      per quarter as a full snapshot.
 
     dimensions:
       type:
