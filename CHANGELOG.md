@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.67.0](https://github.com/kenstott/calcite/compare/engine-v0.66.1...engine-v0.67.0) (2026-08-01)
+
+
+### Features
+
+* **askamerica-engine:** add render_chart tool via XChart ([99b8c6f](https://github.com/kenstott/calcite/commit/99b8c6f71fefe3cad2d9040babd6639c93baee57))
+* **file:** add columns to an Iceberg table instead of dropping it when they're safe to add ([97bed1a](https://github.com/kenstott/calcite/commit/97bed1ac1c31148348098789901c88c180fffc12))
+* **govdata:** add comprehensive R2 catch-up sync and sentinel staleness alerting ([958cad2](https://github.com/kenstott/calcite/commit/958cad2a57c807d00e9d303b04984fda23a01055))
+* **govdata:** add ref.gleif_relationships, the GLEIF Level 2 edge table ([38945ba](https://github.com/kenstott/calcite/commit/38945bac6b7b69ce006b0d263b9262d3ac99ba45))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** add relevance floor to suggest_external_sources ([e6f2e01](https://github.com/kenstott/calcite/commit/e6f2e016551bf3d156e53eb5a25e72c5486c3e7d))
+* **askamerica-engine:** correct describe_table's publication-lag math and search_catalog's relevance ranking ([0d23b0e](https://github.com/kenstott/calcite/commit/0d23b0e794d7723dc11a632a6a9b7c825e7abcdb))
+* **askamerica-engine:** fix fetch_aligned_series time-grain crash and state geo-key mismatch ([d7fd47a](https://github.com/kenstott/calcite/commit/d7fd47a962e2d2b38f9a710fc21151bab3ef5961))
+* **askamerica-engine:** stop dropping aliased result columns, fix fetch_aligned_series GROUP BY validation failures ([1f92dac](https://github.com/kenstott/calcite/commit/1f92dac130319c22b0aa8576e9fdd9f9006e6f57))
+* **askamerica-engine:** stop query/fetch_aligned_series docs from teaching a NULL-drop footgun ([fab3b3e](https://github.com/kenstott/calcite/commit/fab3b3e5e48dad0feb9737147ce84bc74c130ea3))
+* **askamerica-engine:** stop resetting the operating dir as a DriverManager side effect ([9bdcaf0](https://github.com/kenstott/calcite/commit/9bdcaf0ab32b4167c840a212f0e146d405d559b2))
+* complete the rule-6 fallback-value audit — last 27 sites, zero remaining ([ae4f443](https://github.com/kenstott/calcite/commit/ae4f443341a6b37a321b4756f7b25cac55761283))
+* **core:** add missing QUARTER case to DuckDBSqlDialect FLOOR unparse ([3cea92a](https://github.com/kenstott/calcite/commit/3cea92afbbd3cdd8b5bffe70b98ad856910724b0))
+* **core:** convert user-defined aggregate call arguments to declared types ([c2d4921](https://github.com/kenstott/calcite/commit/c2d4921a82fd1619c0af657794478f7edf19d120))
+* **cyber:** stop masking MalwareBazaar/URLhaus/OSV fetch failures as empty feeds ([5baaa44](https://github.com/kenstott/calcite/commit/5baaa4488b12f65ca24113d83a4b8e4688678445))
+* eliminate silent fallback values across file/ and govdata/ (CLAUDE.md rule 6) ([e64919b](https://github.com/kenstott/calcite/commit/e64919bd7a574a06f05fcdef77ebf206d157465f))
+* **file,lands:** stop fabricating timestamps and FIA plot codes on parse failure ([27f65df](https://github.com/kenstott/calcite/commit/27f65df96c27abc69c7794237e49aeb71a8e9fd3))
+* **file:** add DQ visibility to silent cell/value parse failures ([ba6fffa](https://github.com/kenstott/calcite/commit/ba6fffac10d9cea3f1316da883075af29a5426a1))
+* **file:** fetch a filer's overflow submission pages when an accession misses filings.recent ([d3c2727](https://github.com/kenstott/calcite/commit/d3c27270b596c54437a5c163703453e9770b6cad))
+* **file:** resolve computed_delta dateField against the column mapping ([e1765ac](https://github.com/kenstott/calcite/commit/e1765ac8b6d21dcddb34e4a891c9c49e1483da10))
+* **file:** stop FEC bulk-file quote characters from corrupting downstream columns ([a649bdc](https://github.com/kenstott/calcite/commit/a649bdc0022e3aeef32aab20443870b38f3e641e))
+* **file:** strip the XSL-viewer folder prefix for every form type, not just 3/4/5 ([dfded93](https://github.com/kenstott/calcite/commit/dfded937213868a6cd9b9f818eafb6aeec88f923))
+* **govdata:** add ref_dq.sql checks for gleif_relationships ([77b1ad8](https://github.com/kenstott/calcite/commit/77b1ad8e1511a930d15110fa884bd6ac0bed554e))
+* **govdata:** add SEC DQ regression gates for this session's fixed defects ([1797029](https://github.com/kenstott/calcite/commit/1797029f5236268284a3512b14a9c4f78febf326))
+* **govdata:** fail loud instead of silently recording SEC filings empty ([5e9d223](https://github.com/kenstott/calcite/commit/5e9d2239c57de622154c6174180e5349e9673196))
+* **govdata:** find XBRL elements by local name, whatever prefix the filer used ([8cec0e3](https://github.com/kenstott/calcite/commit/8cec0e3b57a9af6bfb16d2807d4c61559ac015eb))
+* **govdata:** let sec_primary run CIK-scoped like sec_secondary/sec_13f ([5664cb2](https://github.com/kenstott/calcite/commit/5664cb2a12c698d6c80fbf6b429410ceddc87b75))
+* **govdata:** log why SEC ETL extraction produced zero rows ([4bd6f7d](https://github.com/kenstott/calcite/commit/4bd6f7d68a7e4f289616c39a970ce1094ad753c4))
+* **govdata:** read XBRL relationships from the linkbases that publish them ([8a6ac4f](https://github.com/kenstott/calcite/commit/8a6ac4f49f2ff0b462300081f36f2b566a367ca9))
+* **govdata:** record which jar retired an accession, and clear 165 stale retirements ([b3660d6](https://github.com/kenstott/calcite/commit/b3660d62759638dc14a65cb1e98ae7724a8178cc))
+* **govdata:** stop concatenating a 13F manager's name with its address ([cb8608c](https://github.com/kenstott/calcite/commit/cb8608c9990075d3c9b3f0e41b47aacf7fa82765))
+* **govdata:** stop declaring state_fips as an Iceberg partition key on regional_employment ([252408b](https://github.com/kenstott/calcite/commit/252408bfaec602f190cfb87dda34b08e8fb48d40))
+* **govdata:** stop financial_facts SUM from double-counting segment breakdowns, document cde_offenses rate as monthly ([00e39f2](https://github.com/kenstott/calcite/commit/00e39f2b1903b5e44715eb1dbe22b5cb13459461))
+* **govdata:** strip EDGAR's XSLT-viewer path off primaryDocument before downloading it ([aabff10](https://github.com/kenstott/calcite/commit/aabff1033dd7a23b46f21d037bd113571b47c247))
+* **iceberg:** withdraw published schema cache on column-addition evolution ([a49e34b](https://github.com/kenstott/calcite/commit/a49e34bf004305afe5fa8029924ad026aa714bd3))
+* **sec,govdata:** stop masking filing-date parse and API-param extraction failures ([8ef8f1e](https://github.com/kenstott/calcite/commit/8ef8f1e6dd84b1a6d9d731aa53ca8ad1509a08b5))
+* **sec:** resolve comma-separated CIK lists in ciks operand ([c08df0d](https://github.com/kenstott/calcite/commit/c08df0d51ab9dd6e97d22b8104edbb4709fa184b))
+* **sec:** stop 8-K company_name from being the document filename ([5315c01](https://github.com/kenstott/calcite/commit/5315c0175cfde64ea875ac0e97b81d5ded9b4590))
+* **sec:** stop masking SEC index/ticker fetch failures as empty/fabricated data ([7720eaf](https://github.com/kenstott/calcite/commit/7720eaf30a1d0f2c8c318cc1927e2d397372e70e))
+
+
+### Performance Improvements
+
+* **file:** skip the committed-accession scan when the Iceberg snapshot is unchanged ([439c7ec](https://github.com/kenstott/calcite/commit/439c7ec45db46a98b0bc1e91bf9332c4f197c42a))
+
 ## [0.66.1](https://github.com/kenstott/calcite/compare/engine-v0.66.0...engine-v0.66.1) (2026-07-30)
 
 
