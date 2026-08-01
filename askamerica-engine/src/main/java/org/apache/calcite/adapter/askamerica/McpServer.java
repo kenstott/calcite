@@ -1414,35 +1414,68 @@ public class McpServer {
         return name;
     }
 
+    /** Validates {@code col} is a simple identifier, then double-quotes it. Every key column
+     *  this method feeds (time_col, year_col, period_col, quarter_col, year_only_col, geo_col)
+     *  is documented as a plain column reference, so quoting unconditionally — rather than only
+     *  when it happens to collide with {@link #RESERVED_IDENTIFIERS} — needs no reserved-word
+     *  detection and is a no-op for an already-safe name. Lower-cased first so a quoted reference
+     *  resolves the same column an unquoted one would under this connection's TO_LOWER casing. */
+    private static String quoteCol(String col, String what) {
+        return "\"" + checkIdent(col, what).toLowerCase(java.util.Locale.ROOT) + "\"";
+    }
+
     static String keyExpr(JsonNode spec, String on, String label) {
         if (TIME_GRAINS.contains(on)) {
+            // FLOOR(x TO <unit>), not date_trunc/make_date: both are DuckDB-native, not Calcite
+            // operators, and Calcite's JdbcProjectRule unconditionally refuses to push a Project
+            // down to a JDBC source at all if it contains a user-defined function — so even
+            // registering date_trunc/make_date as schema UDFs (matching the corr/regr_* pattern)
+            // can never push down here, since this key expression always sits inside a Project
+            // (the GROUP BY key), never inside an Aggregate the way corr/regr_* do. FLOOR(...TO
+            // unit), CAST, ||, CASE and ANSI SUBSTRING are all genuine Calcite-standard
+            // operators — never flagged user-defined — so they push through JdbcProjectRule, and
+            // Calcite's own dialect-aware unparse for FLOOR expands it into DuckDB's native
+            // date_trunc call at SQL-generation time.
+            String unit = on.toUpperCase(java.util.Locale.ROOT);
             String timeCol = specText(spec, "time_col");
             if (timeCol != null) {
+                timeCol = quoteCol(timeCol, "series " + label + ".time_col");
                 // CAST, not the raw column: most date-bearing columns in this warehouse are
-                // VARCHAR holding ISO-8601 text, and date_trunc on a VARCHAR fails outright — so
+                // VARCHAR holding ISO-8601 text, and FLOOR on a VARCHAR fails outright — so
                 // every time-grain alignment failed while the geo path, which passes its key
                 // column through untouched, worked. Casting covers both typings without the tool
                 // having to inspect types: DATE -> DATE is a no-op, and ISO text parses.
-                return "date_trunc('" + on + "', CAST(" + timeCol + " AS DATE))";
+                return "FLOOR(CAST(" + timeCol + " AS DATE) TO " + unit + ")";
             }
             String yearCol = specText(spec, "year_col");
             String periodCol = specText(spec, "period_col");
             if (yearCol != null && periodCol != null) {
-                // Same reason make_date's companion argument is already cast: year columns are
-                // just as often VARCHAR as INTEGER.
-                return "date_trunc('" + on + "', make_date(CAST(" + yearCol + " AS INTEGER)"
-                    + ", CAST(substr(" + periodCol + ", 2) AS INTEGER), 1))";
+                yearCol = quoteCol(yearCol, "series " + label + ".year_col");
+                periodCol = quoteCol(periodCol, "series " + label + ".period_col");
+                // year_col is just as often VARCHAR as INTEGER; period_col is BLS-style
+                // "M01".."M12", so its month digits (SUBSTRING from position 2) are already
+                // zero-padded to two characters. ANSI SUBSTRING(x FROM n), not substr(x, n): the
+                // comma-call substr(...) form isn't registered under this connection's fun
+                // libraries (standard,postgresql,spatial) at all, under any arity.
+                return "FLOOR(CAST(CAST(CAST(" + yearCol + " AS INTEGER) AS VARCHAR) || '-'"
+                    + " || SUBSTRING(" + periodCol + " FROM 2) || '-01' AS DATE) TO " + unit + ")";
             }
             String quarterCol = specText(spec, "quarter_col");
             if (quarterCol != null) {
-                return "date_trunc('" + on + "', make_date("
-                    + "CAST(substr(" + quarterCol + ", 1, 4) AS INTEGER), "
-                    + "(CAST(substr(" + quarterCol + ", 6, 1) AS INTEGER) - 1) * 3 + 1, 1))";
+                quarterCol = quoteCol(quarterCol, "series " + label + ".quarter_col");
+                // quarter_col is BEA-style "2023Q1"; map the quarter digit to its first month
+                // directly rather than computing then re-padding an arithmetic result.
+                String monthOfQuarter = "CASE SUBSTRING(" + quarterCol + " FROM 6 FOR 1) "
+                    + "WHEN '1' THEN '01' WHEN '2' THEN '04' "
+                    + "WHEN '3' THEN '07' WHEN '4' THEN '10' END";
+                return "FLOOR(CAST(SUBSTRING(" + quarterCol + " FROM 1 FOR 4) || '-' || "
+                    + monthOfQuarter + " || '-01' AS DATE) TO " + unit + ")";
             }
             String yearOnly = specText(spec, "year_only_col");
             if (yearOnly != null) {
-                return "date_trunc('" + on + "', make_date(CAST(" + yearOnly
-                    + " AS INTEGER), 1, 1))";
+                yearOnly = quoteCol(yearOnly, "series " + label + ".year_only_col");
+                return "FLOOR(CAST(CAST(CAST(" + yearOnly + " AS INTEGER) AS VARCHAR)"
+                    + " || '-01-01' AS DATE) TO " + unit + ")";
             }
             throw new IllegalArgumentException("series " + label + ": for on=" + on
                 + " give time_col | (year_col & period_col) | quarter_col | year_only_col");
@@ -1453,9 +1486,45 @@ public class McpServer {
                 throw new IllegalArgumentException(
                     "series " + label + ": for on=" + on + " give geo_col");
             }
-            return geoCol;
+            String col = quoteCol(geoCol, "series " + label + ".geo_col");
+            if (on.equals("state")) {
+                // Normalize to canonical state_fips via a LEFT JOIN against geo.state_ref (added
+                // to this series' FROM clause by stateGeoJoin below): two series whose geo_col
+                // happen to use different conventions (one a 2-digit FIPS code, the other a USPS
+                // abbreviation like "CA") otherwise produce a disjoint FULL OUTER JOIN, where
+                // every row is half-NULL because the raw key values never compare equal. Both
+                // forms resolve to the same state_fips here, so the join actually aligns.
+                // COALESCE falls back to the raw (cast) value so a code state_ref doesn't
+                // recognize (e.g. a territory) still gets a join key instead of being dropped —
+                // matching this method's existing behavior of trusting the caller's data.
+                return "COALESCE(gsr.state_fips, CAST(" + col + " AS VARCHAR))";
+            }
+            return col;
         }
         throw new IllegalArgumentException("on must be a time grain or geo level; got " + on);
+    }
+
+    /**
+     * The {@code LEFT JOIN geo.state_ref ...} fragment {@link #keyExpr} needs already spliced
+     * into a series' {@code FROM} clause when {@code on} is {@code state} — a correlated
+     * subquery can't be used instead because Calcite's validator does not resolve a subquery's
+     * correlation back to the outer FROM columns when that subquery is repeated in GROUP BY
+     * (the same key expression is deliberately repeated in both SELECT and GROUP BY; see
+     * {@link #buildAlignedSql}). Returns {@code null} for any other grain.
+     */
+    static String stateGeoJoin(JsonNode spec, String on, String label) {
+        if (!on.equals("state")) {
+            return null;
+        }
+        String geoCol = specText(spec, "geo_col");
+        if (geoCol == null) {
+            throw new IllegalArgumentException(
+                "series " + label + ": for on=" + on + " give geo_col");
+        }
+        String col = quoteCol(geoCol, "series " + label + ".geo_col");
+        String asVarchar = "CAST(" + col + " AS VARCHAR)";
+        return " LEFT JOIN geo.state_ref gsr ON gsr.state_fips = " + asVarchar
+            + " OR gsr.state_abbr = UPPER(" + asVarchar + ")";
     }
 
     private static String buildAlignedSql(JsonNode series, String on, String stat) {
@@ -1487,12 +1556,14 @@ public class McpServer {
                 throw new IllegalArgumentException("series[" + i + "].agg " + agg + " not allowed");
             }
             String key = keyExpr(spec, on, name);
+            String geoJoin = stateGeoJoin(spec, on, name);
+            String tableFrom = table + (geoJoin != null ? geoJoin : "");
             String where = specText(spec, "where");
             String whereClause = (where != null && !where.isEmpty()) ? (" WHERE " + where) : "";
             // Repeat the key expression in GROUP BY — this Calcite dialect rejects
             // ordinal GROUP BY (GROUP BY 1).
             ctes.add("s" + i + " AS (SELECT " + key + " AS k, " + agg + "(" + value + ") AS " + name
-                + " FROM " + table + whereClause + " GROUP BY " + key + ")");
+                + " FROM " + tableFrom + whereClause + " GROUP BY " + key + ")");
             cols.add(name);
         }
         StringBuilder from = new StringBuilder("s0");
