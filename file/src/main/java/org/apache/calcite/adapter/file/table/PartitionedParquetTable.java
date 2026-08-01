@@ -1292,8 +1292,8 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
       return new org.apache.calcite.adapter.file.statistics.TableStatistics(
           rowCount, 0, columnStats, null);
 
-    } catch (Exception e) {
       // fallback-guard: allow feeds getTableStatistics()/hasStatistics(), which null-checks and treats 'no statistics' as a legitimate distinct state
+    } catch (Exception e) {
       LOGGER.warn("Failed to compute statistics for table {}: {}", tableName, e.getMessage());
       return null;
     }

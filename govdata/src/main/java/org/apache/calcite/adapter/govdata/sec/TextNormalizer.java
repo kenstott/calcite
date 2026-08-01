@@ -474,14 +474,16 @@ public class TextNormalizer {
     if (date == null || date.isEmpty()) {
       return new int[]{java.time.LocalDate.now().getYear(), 1};
     }
-    try {
-      String[] parts = date.split("-");
-      int year = Integer.parseInt(parts[0]);
-      int month = parts.length > 1 ? Integer.parseInt(parts[1]) : 1;
-      return new int[]{year, month};
-    } catch (Exception e) {
-      return new int[]{java.time.LocalDate.now().getYear(), 1};
-    }
+    // The only caller (SecTextVectorizer) picks this path specifically when it HAS a filing date
+    // (falling back to the no-arg "current date" constructor itself when it doesn't) — so a
+    // malformed value here means the filing date is genuinely corrupt, not "not provided." Silently
+    // substituting today's year would resolve every relative date in a possibly decade-old filing
+    // against the wrong year with no signal to the caller that its explicit filing-date request was
+    // downgraded. Throw instead.
+    String[] parts = date.split("-");
+    int year = Integer.parseInt(parts[0]);
+    int month = parts.length > 1 ? Integer.parseInt(parts[1]) : 1;
+    return new int[]{year, month};
   }
 
   private int parseYear(String yearStr) {

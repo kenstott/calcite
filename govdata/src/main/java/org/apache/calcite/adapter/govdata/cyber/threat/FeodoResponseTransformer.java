@@ -139,8 +139,8 @@ public class FeodoResponseTransformer implements ResponseTransformer {
     }
     try {
       return Integer.parseInt(t);
-    } catch (NumberFormatException e) {
       // fallback-guard: allow canonical nullable JSON-field accessor: a missing or malformed numeric field becomes null
+    } catch (NumberFormatException e) {
       return null;
     }
   }

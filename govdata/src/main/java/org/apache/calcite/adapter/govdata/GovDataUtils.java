@@ -247,8 +247,8 @@ public final class GovDataUtils {
       @SuppressWarnings("unchecked")
       Map<String, Object> schema = mapper.readValue(is, Map.class);
       return (String) schema.get("comment");
-    } catch (IOException e) {
       // fallback-guard: allow cosmetic display text for the catalog; a logged failure to load it doesn't affect correctness of any actual data
+    } catch (IOException e) {
       LOGGER.warn("Error loading schema comment: {}", e.getMessage());
       return null;
     }

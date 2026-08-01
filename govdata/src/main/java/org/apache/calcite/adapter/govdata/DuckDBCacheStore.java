@@ -357,8 +357,8 @@ public class DuckDBCacheStore implements AutoCloseable {
 
         return true;
       }
-    } catch (SQLException e) {
       // fallback-guard: allow local cache-DB lookup; a SQLException is treated as a cache miss, which only triggers a redundant re-download
+    } catch (SQLException e) {
       LOGGER.warn("Error checking cache for {}: {}", cacheKey, e.getMessage());
       return false;
     }
@@ -461,8 +461,8 @@ public class DuckDBCacheStore implements AutoCloseable {
 
         return true;
       }
-    } catch (SQLException e) {
       // fallback-guard: allow treats a SQLException as 'not materialized', which only causes a safe re-materialization
+    } catch (SQLException e) {
       LOGGER.warn("Error checking materialization status for {}: {}", cacheKey, e.getMessage());
       return false;
     }
@@ -480,8 +480,8 @@ public class DuckDBCacheStore implements AutoCloseable {
       int updated = stmt.executeUpdate(sql);
       LOGGER.info("Reset materialization status for {} cache entries", updated);
       return updated;
-    } catch (SQLException e) {
       // fallback-guard: allow administrative bulk-update helper; on error, 0 rows reset simply means the reset didn't happen and is safe to retry
+    } catch (SQLException e) {
       LOGGER.error("Error resetting materializations: {}", e.getMessage());
       return 0;
     }
@@ -501,8 +501,8 @@ public class DuckDBCacheStore implements AutoCloseable {
       int updated = stmt.executeUpdate();
       LOGGER.info("Reset materialization status for {} entries matching {}", updated, tableName);
       return updated;
-    } catch (SQLException e) {
       // fallback-guard: allow mirrors resetAllMaterializations(): logged, safe-to-retry administrative cleanup
+    } catch (SQLException e) {
       LOGGER.error("Error resetting materializations for {}: {}", tableName, e.getMessage());
       return 0;
     }
@@ -679,8 +679,8 @@ public class DuckDBCacheStore implements AutoCloseable {
         // This handles the markUnavailable case
         return false;
       }
-    } catch (SQLException e) {
       // fallback-guard: allow follows the cache-miss-on-error convention used throughout this class; conservatively means 'not marked unavailable' and just retries
+    } catch (SQLException e) {
       LOGGER.warn("Error checking unavailable status for {}: {}", cacheKey, e.getMessage());
       return false;
     }
@@ -713,8 +713,8 @@ public class DuckDBCacheStore implements AutoCloseable {
       stmt.setString(1, keyPrefix + "%");
       int deleted = stmt.executeUpdate();
       return deleted;
-    } catch (SQLException e) {
       // fallback-guard: allow logged, non-critical cache cleanup helper where 0-deleted-on-error is a safe, retryable outcome
+    } catch (SQLException e) {
       LOGGER.warn("Error deleting cache entries with prefix {}: {}", keyPrefix, e.getMessage());
       return 0;
     }
@@ -734,8 +734,8 @@ public class DuckDBCacheStore implements AutoCloseable {
         LOGGER.info("Cleaned up {} expired cache entries", deleted);
       }
       return deleted;
-    } catch (SQLException e) {
       // fallback-guard: allow opportunistic cache maintenance; returning 0 on error just skips this cleanup pass rather than losing real data
+    } catch (SQLException e) {
       LOGGER.warn("Error cleaning up expired entries: {}", e.getMessage());
       return 0;
     }
@@ -794,8 +794,8 @@ public class DuckDBCacheStore implements AutoCloseable {
         }
         return rs.getString("series_ids");
       }
-    } catch (SQLException e) {
       // fallback-guard: allow returning null on a logged SQLException is a cache-miss that safely triggers a refetch of the catalog series
+    } catch (SQLException e) {
       LOGGER.warn("Error getting catalog series cache: {}", e.getMessage());
       return null;
     }
@@ -1212,8 +1212,8 @@ public class DuckDBCacheStore implements AutoCloseable {
         LOGGER.info("Deleted {} invalid cache entries (file_size=0) for table {}", deleted, tableName);
       }
       return deleted;
-    } catch (SQLException e) {
       // fallback-guard: allow follows the same logged, safe-to-retry administrative cleanup convention as the other DuckDBCacheStore maintenance methods
+    } catch (SQLException e) {
       LOGGER.warn("Error deleting invalid cache entries for {}: {}", tableName, e.getMessage());
       return 0;
     }

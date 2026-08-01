@@ -1084,9 +1084,13 @@ public abstract class AbstractGovDataDownloader {
           tableName);
       return new ArrayList<>();
     } catch (Exception e) {
-      LOGGER.error("Error extracting API list '{}' for table '{}': {}", listKey, tableName,
-          e.getMessage());
-      return new ArrayList<>();
+      // Genuinely missing config (above) legitimately means "no items" — but a parse/metadata-load
+      // failure here is a different thing entirely and must not collapse to the same empty result.
+      // Callers iterate this to build API fetch parameters, so an empty return here would silently
+      // shrink the fetch scope to zero and let the table's ETL run report success on no real data.
+      throw new RuntimeException(
+          "Error extracting API list '" + listKey + "' for table '" + tableName + "': "
+              + e.getMessage(), e);
     }
   }
 
@@ -1123,9 +1127,12 @@ public abstract class AbstractGovDataDownloader {
           tableName);
       return new LinkedHashMap<>();
     } catch (Exception e) {
-      LOGGER.error("Error extracting API set '{}' for table '{}': {}", objectKey, tableName,
-          e.getMessage());
-      return new LinkedHashMap<>();
+      // Same distinction as extractApiList: missing config (above) legitimately means "no items,"
+      // but a parse/metadata-load failure is not the same thing and must not silently shrink the
+      // fetch scope to zero.
+      throw new RuntimeException(
+          "Error extracting API set '" + objectKey + "' for table '" + tableName + "': "
+              + e.getMessage(), e);
     }
   }
 
@@ -2218,8 +2225,8 @@ public abstract class AbstractGovDataDownloader {
           return jsonValue.isTextual() ? jsonValue.asText() : jsonValue.toString();
       }
 
+    // fallback-guard: allow per-column-type JSON-to-value converter; a malformed numeric field becomes a logged, null cell value
     } catch (NumberFormatException e) {
-      // fallback-guard: allow per-column-type JSON-to-value converter; a malformed numeric field becomes a logged, null cell value
       LOGGER.warn("Failed to convert value for column '{}' (type: {}): {}. Value: {}",
           columnName, columnType, e.getMessage(), jsonValue);
       return null;
@@ -5246,8 +5253,8 @@ public abstract class AbstractGovDataDownloader {
       StorageProvider.FileMetadata meta = cacheStorageProvider.getMetadata(path);
       return meta != null
           && (System.currentTimeMillis() - meta.getLastModified()) < ttlMs;
+    // fallback-guard: allow fails safe: an unreadable cache entry is treated as invalid, forcing a safe re-download
     } catch (IOException e) {
-      // fallback-guard: allow fails safe: an unreadable cache entry is treated as invalid, forcing a safe re-download
       return false;
     }
   }

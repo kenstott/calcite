@@ -273,8 +273,8 @@ public class CisControlsResponseTransformer implements ResponseTransformer {
       reader.close();
       conn.disconnect();
       return sb.toString();
-    } catch (Exception e) {
       // fallback-guard: allow fetches optional supplementary description prose for enrichment only; failure just leaves that field null
+    } catch (Exception e) {
       LOGGER.debug("CisControls: error fetching {}: {}", url, e.getMessage());
       return null;
     }

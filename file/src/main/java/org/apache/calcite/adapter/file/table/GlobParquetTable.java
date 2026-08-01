@@ -175,8 +175,8 @@ public class GlobParquetTable extends AbstractTable
         sb.append(String.format(Locale.ROOT, "%02x", b));
       }
       return tableName + "_" + sb.substring(0, 8) + ".parquet";
-    } catch (NoSuchAlgorithmException e) {
       // fallback-guard: allow catches NoSuchAlgorithmException for MD5, which every JVM must provide, so this is dead-code-in-practice defensiveness
+    } catch (NoSuchAlgorithmException e) {
       // Fallback to simple name
       return tableName + "_cache.parquet";
     }

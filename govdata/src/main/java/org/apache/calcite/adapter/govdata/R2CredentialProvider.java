@@ -180,8 +180,8 @@ public final class R2CredentialProvider {
         return null;
       }
       return creds;
-    } catch (Exception e) {
       // fallback-guard: allow one tier of a documented multi-source credential resolution chain (disk cache -> baked defaults); null means 'try the next source'
+    } catch (Exception e) {
       LOGGER.debug("R2CredentialProvider: could not read disk cache: {}", e.getMessage());
       return null;
     }
@@ -194,8 +194,8 @@ public final class R2CredentialProvider {
       }
       Map<String, String> creds = MAPPER.readValue(in, MAP_TYPE);
       return isComplete(creds) ? creds : null;
-    } catch (IOException e) {
       // fallback-guard: allow next tier in the same credential-source fallback chain as loadDiskCache(), same null-means-try-next-source semantics
+    } catch (IOException e) {
       LOGGER.debug("R2CredentialProvider: could not read baked defaults: {}", e.getMessage());
       return null;
     }
@@ -268,8 +268,8 @@ public final class R2CredentialProvider {
     try {
       // Refresh a minute early so a long-running mount cannot straddle the expiry.
       return System.currentTimeMillis() >= Long.parseLong(at) - EXPIRY_MARGIN_MS;
-    } catch (NumberFormatException e) {
       // fallback-guard: allow fails safe: an unparsable expiry timestamp is treated as expired, forcing a credential refresh instead of trusting corrupted state
+    } catch (NumberFormatException e) {
       return true;
     }
   }

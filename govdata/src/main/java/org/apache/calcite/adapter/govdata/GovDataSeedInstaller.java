@@ -211,8 +211,8 @@ public final class GovDataSeedInstaller {
         return null;
       }
       return readAll(is);
-    } catch (IOException e) {
       // fallback-guard: allow documented 'or null if resource is absent' optional classpath-resource loader used only for seed installation bookkeeping
+    } catch (IOException e) {
       LOGGER.warn("Could not read seed resource {}: {}", resource, e.getMessage());
       return null;
     }
@@ -239,8 +239,8 @@ public final class GovDataSeedInstaller {
   private static String readFileText(File file) {
     try {
       return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8).trim();
-    } catch (IOException e) {
       // fallback-guard: allow reads an idempotency marker file, documented 'or null on error'; unreadable marker only risks a safe redundant reinstall
+    } catch (IOException e) {
       LOGGER.debug("Could not read seed marker {}: {}", file.getAbsolutePath(), e.getMessage());
       return null;
     }
