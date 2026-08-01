@@ -279,6 +279,29 @@ class HttpSourceConfigDeepTest {
     assertTrue(config.isHasHeader());
     assertNull(config.getColumnNames());
     assertNull(config.getDelimiter());
+    assertTrue(config.isQuoted());
+  }
+
+  @Test void testResponseConfigFromMapQuotedDefaultsTrue() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "csv");
+    map.put("delimiter", "|");
+
+    HttpSourceConfig.ResponseConfig config = HttpSourceConfig.ResponseConfig.fromMap(map);
+    assertTrue(config.isQuoted());
+  }
+
+  @Test void testResponseConfigFromMapQuotedFalse() {
+    // FEC bulk pipe-delimited files have no real quoting convention; "quoted: false" is what
+    // fec-schema.yaml sets so a literal " in a name field isn't treated as an RFC4180 quote
+    // character that desyncs every later column.
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("format", "csv");
+    map.put("delimiter", "|");
+    map.put("quoted", false);
+
+    HttpSourceConfig.ResponseConfig config = HttpSourceConfig.ResponseConfig.fromMap(map);
+    assertFalse(config.isQuoted());
   }
 
   @Test void testResponseConfigFromMapNull() {

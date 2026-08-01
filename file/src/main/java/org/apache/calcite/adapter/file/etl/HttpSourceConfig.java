@@ -1038,10 +1038,11 @@ public class HttpSourceConfig {
     private final String columnNames;
     private final String delimiter;
     private final String compressed;
+    private final boolean quoted;
 
     private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
         PaginationConfig pagination, boolean hasHeader, String columnNames, String delimiter,
-        String compressed) {
+        String compressed, boolean quoted) {
       this.format = format;
       this.dataPath = dataPath;
       this.errorPath = errorPath;
@@ -1050,11 +1051,12 @@ public class HttpSourceConfig {
       this.columnNames = columnNames;
       this.delimiter = delimiter;
       this.compressed = compressed;
+      this.quoted = quoted;
     }
 
     public static ResponseConfig defaults() {
       return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none(),
-          true, null, null, null);
+          true, null, null, null, true);
     }
 
     public ResponseFormat getFormat() {
@@ -1108,6 +1110,19 @@ public class HttpSourceConfig {
       return compressed;
     }
 
+    /**
+     * Whether {@code "} in this CSV/TSV source is an RFC4180 quote character wrapping a field
+     * (and doubled to escape a literal quote), as opposed to ordinary literal data with no
+     * quoting convention at all. Defaults to true. Set to false for sources like FEC's bulk
+     * pipe-delimited files, which never quote fields and use {@code "} literally (e.g. in
+     * nicknames like {@code SMITH, JOHN "JACK"}) — treating those as CSV quote characters
+     * desyncs field boundaries for the rest of the line whenever a field has an odd count of
+     * literal quotes, corrupting every column after it.
+     */
+    public boolean isQuoted() {
+      return quoted;
+    }
+
     @SuppressWarnings("unchecked")
     public static ResponseConfig fromMap(Map<String, Object> map) {
       if (map == null) {
@@ -1133,9 +1148,11 @@ public class HttpSourceConfig {
       String columnNames = (String) map.get("columnNames");
       String delimiter = (String) map.get("delimiter");
       String compressed = (String) map.get("compressed");
+      Object quotedObj = map.get("quoted");
+      boolean quoted = quotedObj == null || Boolean.TRUE.equals(quotedObj);
 
       return new ResponseConfig(format, dataPath, errorPath, pagination,
-          hasHeader, columnNames, delimiter, compressed);
+          hasHeader, columnNames, delimiter, compressed, quoted);
     }
   }
 
