@@ -17,6 +17,7 @@ import org.apache.iceberg.StaticTableOperations;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableMetadata;
 import org.apache.iceberg.aws.s3.S3FileIO;
+import org.apache.iceberg.exceptions.NotFoundException;
 import org.apache.iceberg.io.FileIO;
 
 import java.io.BufferedReader;
@@ -147,6 +148,20 @@ public final class S3FileIOTables {
     // key not found) as "no table yet"; other failures are surfaced instead of being silently
     // treated as absence, which would make createTable() (see IcebergCatalogManager) think it's
     // creating a brand new table and overwrite an existing one's metadata history.
+    //
+    // Both exception types below are the SAME underlying "key not found" condition, just
+    // wrapped differently depending on call path: newInputFile(...).newStream() (used here)
+    // returns Iceberg's own S3InputStream, which catches the SDK's NoSuchKeyException
+    // internally and rethrows it as org.apache.iceberg.exceptions.NotFoundException BEFORE
+    // it ever reaches this method — so the raw SDK exception is never actually observable
+    // through this code path, only Iceberg's wrapped one. The direct SDK catch is kept for
+    // any caller reached via a different S3FileIO code path that skips that wrapping.
+    // Confirmed via a brand-new schema's first-ever ETL run (officials, 2026-08-02): every
+    // existing schema's table already existed from prior runs, so this "does the table exist
+    // yet" probe had not actually been exercised against a truly absent table in a long
+    // time — the bug was latent, not something a new schema's config could trigger differently.
+    } catch (NotFoundException notFound) {
+      return false;
     } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
       return false;
     } catch (IOException e) {
