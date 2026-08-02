@@ -1,0 +1,718 @@
+# ============================================================================
+# U.S. Federal Officials Schema (OFFICIALS)
+# ============================================================================
+# Data Sources (official / primary only — no community-maintained aggregators):
+#   - Congress.gov API (api.congress.gov) — Library of Congress
+#     * /v3/member       — every House/Senate member, current + historical
+#     * /v3/nomination   — PAS (Senate-confirmed) presidential nominations,
+#                          the live appointed-officials pipeline
+#   - Federal Judicial Center (fjc.gov) — Administrative Office of the U.S. Courts
+#     * judges.csv       — every Article III judge, all appointments, career dates
+#
+# Explicitly out of scope for this schema:
+#   - unitedstates/congress-legislators (community GitHub project, not official)
+#   - Direct Bioguide scrape (bioguide.congress.gov blocks non-browser clients via
+#     Cloudflare; the same bioguide IDs/bios are exposed officially through the
+#     Congress.gov member endpoint instead)
+#   - Committee membership rosters — the Congress.gov API committee endpoint exposes
+#     committee metadata, reports, and documents but NOT member roster assignments;
+#     no official structured source for that was found. Revisit if one surfaces.
+#   - GPO Plum Book — official but published as a quadrennial PDF; govinfo.gov's
+#     structured collection endpoint is currently erroring server-side. Revisit.
+#   - State-level elected/appointed officials — no federal aggregator exists; each
+#     state runs its own SOS/legislature system. Separate future effort.
+#
+# Auth: API_DATA_GOV (free key from api.data.gov/signup) — already used by crime, edu
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:officials}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  Federally elected and federally appointed officeholders, sourced exclusively from
+  official U.S. government systems of record. `members` covers every person who has
+  served in the House or Senate (Congress.gov API, the modernized successor to the
+  Biographical Directory of the U.S. Congress). `nominations` covers PAS nominations —
+  the live pipeline of Senate-confirmed appointed officials, from receipt through
+  committee action to confirmation/withdrawal. `federal_judges` covers every Article III
+  judge ever commissioned, including appointing president and confirmation history, from
+  the Federal Judicial Center's own biographical database. No community-maintained
+  aggregator is used anywhere in this schema — every table traces to the government
+  body that is itself the system of record for that data.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_congress: &partition_congress
+    name: congress
+    type: INTEGER
+
+  type_partition: &type_partition
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  congress_partitions: &congress_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_congress
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # Congress.gov's nomination endpoint is filtered per-Congress (2-year window each).
+  # No "current" auto-detection exists for RANGE the way YEAR_RANGE has for calendar
+  # years, so both ends are explicit env-var knobs — bump GOVDATA_END_CONGRESS when a
+  # new Congress convenes (odd years, e.g. 2027 -> 120th).
+  # 117th Congress (2021-2023) is the backfill floor; deeper history is available on
+  # request via a lower GOVDATA_START_CONGRESS.
+  congress_range: &congress_range
+    type: range
+    start: "${GOVDATA_START_CONGRESS:117}"
+    end: "${GOVDATA_END_CONGRESS:119}"
+
+# ============================================================================
+# COMPACTION DEFAULTS
+# ============================================================================
+
+compaction_defaults: &compaction_defaults
+  runCompaction: true
+  compactionTargetFileSizeBytes: 134217728  # 128MB
+  compactionMinFiles: 5
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # MEMBERS — every House/Senate member, per Congress
+  # ---------------------------------------------------------------------------
+  - name: members
+    # CORRECTED 2026-08-01 after live verification: the bare /v3/member list endpoint
+    # (originally used here as a whole-roster snapshot) does NOT cover full history —
+    # docs state its list-level params (including currentMember) are silently ignored,
+    # and a live call confirmed it: total count 2,694 regardless of currentMember=false,
+    # while /v3/member/congress/93 (1973, one single historical Congress) alone returned
+    # 548 members — i.e. the "whole roster" endpoint holds barely 5 Congresses' worth.
+    # Fixed to fan out by `congress`, same as `nominations` and same live-verified row
+    # shape/transformer (CongressMemberTransformer handles both endpoints unchanged).
+    # A member serving N congresses now produces N rows (one per congress they served),
+    # each carrying that member's full career `terms_json` — bioguide_id+congress is the
+    # natural key, not bioguide_id alone.
+    pattern: "type=members/congress=*/*.parquet"
+    partitions: *congress_partitions
+    comment: >
+      Every House/Senate member per Congress they served, from the Congress.gov API
+      per-Congress member list endpoint (the modernized Biographical Directory of the
+      U.S. Congress). One row per (bioguide_id, congress) pair — a member serving
+      multiple congresses has multiple rows. `terms_json` is the member's full chamber
+      service history (all congresses, not just this row's), as a JSON array of
+      {chamber, start_year, end_year} — list-level terms carry chamber and year span
+      only, not per-Congress party/state/district (that finer grain requires an N+1
+      detail call per member and is not pulled in this table). Coverage is bounded by
+      `congress_range` (see dimension_values comment) — not full 1789-present history
+      by default. Cross-references geo.state_ref via state_name (full name; geo.states
+      is a year-vintaged boundary snapshot and not a valid FK target — see constraints
+      below). Territorial delegates (Puerto Rico, Guam, etc.) won't resolve against
+      state_ref, which covers 50 states + DC only.
+
+    dimensions:
+      type:
+        - members
+      congress: *congress_range
+
+    columns:
+      - name: bioguide_id
+        type: string
+        nullable: false
+        comment: Bioguide identifier (Biographical Directory of the U.S. Congress), e.g. L000174
+      - <<: *partition_congress
+      - name: name_last_first
+        type: string
+        nullable: true
+        comment: Member name in "Last, First Middle" order as returned by the API
+      - name: state_name
+        type: string
+        nullable: true
+        comment: Full state name represented (join key into geo.states.name, not FIPS/abbr)
+      - name: party_name
+        type: string
+        nullable: true
+        comment: Democratic, Republican, Independent, Independent Democrat, or Libertarian
+      - name: district
+        type: integer
+        nullable: true
+        comment: House district (0 = at-large/single-district state or territory); null for senators
+      - name: current_member
+        type: boolean
+        nullable: true
+        comment: >
+          Always null in this table. currentMember is an item/detail-level field
+          (/v3/member/{bioguideId}), not present on the list endpoint this table
+          fetches; deriving it would require an N+1 detail call per member. Reserved
+          column for a future enrichment pass rather than dropped, since downstream
+          queries may already reference it.
+      - name: terms_json
+        type: string
+        nullable: true
+        comment: >
+          JSON array of {chamber, start_year, end_year} — this member's FULL chamber
+          service history across all congresses (not scoped to this row's `congress`
+          column), in chronological order. Kept as JSON rather than a flattened table
+          (per one-source-one-table) pending confirmation that Calcite UNNEST works
+          cleanly over it.
+      - name: image_url
+        type: string
+        nullable: true
+        comment: Official portrait URL (depiction.imageUrl)
+      - name: member_url
+        type: string
+        nullable: true
+        comment: Referrer URL to the member's Congress.gov API detail record
+
+    source:
+      type: http
+      url: "https://api.congress.gov/v3/member/congress/{congress}"
+      method: GET
+      parameters:
+        api_key: "${API_DATA_GOV}"
+        currentMember: "false"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          limitParam: "limit"
+          offsetParam: "offset"
+          pageSize: 250
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      # Implemented and verified against a live keyed response (2026-08-01) against
+      # BOTH the bare and per-congress endpoints: terms arrives as the {"item": [...]}
+      # wrapper in both, confirming CongressMemberTransformer needs no changes for the
+      # per-congress URL — only this table's dimensions/source/partitioning changed.
+      responseTransformer: "org.apache.calcite.adapter.govdata.officials.CongressMemberTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=members/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: members
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # NOMINATIONS — PAS (Senate-confirmed) presidential nominations, per Congress
+  # ---------------------------------------------------------------------------
+  - name: nominations
+    pattern: "type=nominations/congress=*/*.parquet"
+    partitions: *congress_partitions
+    comment: >
+      Presidential nominations requiring Senate confirmation (PAS), from the
+      Congress.gov API nomination endpoint — this IS the appointed-officials pipeline:
+      received -> committee referral -> confirmed/withdrawn/returned. Verified against
+      a live keyed response (2026-08-01): `organization` is a real top-level field, not
+      an N+1-only one as originally assumed. `description` is populated for individually
+      -named nominees but is empty for isList=true batch nominations (e.g. Foreign
+      Service class promotions covering many officers at once) — the detail endpoint's
+      `isList` flag itself is not fetched here, so an empty description is the only
+      MVP signal that a row is a class nomination rather than a named appointee.
+      `latest_action_text` is the best single field for current status
+      (e.g. "Confirmed by the Senate by Voice Vote", "Nomination Withdrawn").
+
+    dimensions:
+      type:
+        - nominations
+      congress: *congress_range
+
+    columns:
+      - name: citation
+        type: string
+        nullable: false
+        comment: Nomination citation, e.g. PN1064 or PN78-4 for a partitioned nomination
+      - <<: *partition_congress
+      - name: number
+        type: integer
+        nullable: false
+        comment: Assigned nomination number within the Congress
+      - name: part_number
+        type: string
+        nullable: true
+        comment: Partition suffix when a multi-nominee nomination is split by confirmation path
+      - name: organization
+        type: string
+        nullable: true
+        comment: Organization the position sits in, e.g. "Department of State", "Foreign Service"
+      - name: description
+        type: string
+        nullable: true
+        comment: >
+          Free-text nominee name and position, e.g. "Jane Doe, of Ohio, to be...".
+          Empty for isList=true batch/class nominations — see table comment.
+      - name: is_civilian
+        type: boolean
+        nullable: true
+        comment: >
+          nominationType.isCivilian. Live responses only ever showed isCivilian=true
+          (isMilitary appears to be omitted rather than sent as false) — unverified
+          against an actual military nomination.
+      - name: is_privileged
+        type: boolean
+        nullable: true
+        comment: >
+          Whether entitled to expedited Senate procedure. Never observed populated at
+          list level in live samples; kept nullable pending a confirmed-present example.
+      - name: received_date
+        type: string
+        nullable: true
+        comment: Date received from the President (YYYY-MM-DD)
+      - name: latest_action_date
+        type: string
+        nullable: true
+        comment: Date of the latest Senate/President action (YYYY-MM-DD)
+      - name: latest_action_text
+        type: string
+        nullable: true
+        comment: >
+          Text of the latest action — the primary status signal (confirmed/withdrawn/
+          returned/pending committee action)
+      - name: update_date
+        type: string
+        nullable: true
+        comment: Last update timestamp on Congress.gov
+
+    source:
+      type: http
+      url: "https://api.congress.gov/v3/nomination/{congress}"
+      method: GET
+      parameters:
+        api_key: "${API_DATA_GOV}"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          limitParam: "limit"
+          offsetParam: "offset"
+          pageSize: 250
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      # Implemented and verified against a live keyed response (2026-08-01).
+      responseTransformer: "org.apache.calcite.adapter.govdata.officials.NominationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nominations/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: nominations
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # FEDERAL_JUDGES — every Article III judge, all appointments
+  # ---------------------------------------------------------------------------
+  - name: federal_judges
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=federal_judges/*.parquet"
+    partitions: *type_partition
+    comment: >
+      Every Article III federal judge ever commissioned, from the Federal Judicial
+      Center's own Biographical Directory of Article III Federal Judges export. Verified
+      against a live download (2026-08-01): the real CSV is 201 columns wide — up to 6
+      repeating groups of ~33 court/appointment columns each (a judge elevated District
+      -> Circuit -> retired-then-recalled etc. gets multiple groups), plus separate
+      "Other Federal Judicial Service", "School"/"Degree", and free-text career columns.
+      This table maps a curated 12-of-33 fields per group (the appointment-identity and
+      confirmation-timeline columns) and drops the education/career/committee-vote detail
+      for MVP scope — not a parsing limitation, a deliberate cut. Ingested as one row per
+      judge (one source, minimal reshape); a future `federal_judgeships` view could
+      UNION ALL the 6 groups into one row per appointment if downstream queries need
+      that grain.
+
+    dimensions:
+      type:
+        - federal_judges
+
+    columns:
+      - name: nid
+        type: string
+        nullable: false
+        comment: FJC judge name ID
+      - name: jid
+        type: string
+        nullable: false
+        comment: FJC judge ID (stable identifier, one per judge)
+      - name: last_name
+        type: string
+        nullable: true
+      - name: first_name
+        type: string
+        nullable: true
+      - name: middle_name
+        type: string
+        nullable: true
+      - name: suffix
+        type: string
+        nullable: true
+      - name: birth_year
+        type: integer
+        nullable: true
+      - name: gender
+        type: string
+        nullable: true
+      - name: race_or_ethnicity
+        type: string
+        nullable: true
+      # --- Appointment group 1 of 6 ---
+      - name: court_type_1
+        type: string
+        nullable: true
+        comment: Court Type
+      - name: court_name_1
+        type: string
+        nullable: true
+        comment: Court Name
+      - name: appointment_title_1
+        type: string
+        nullable: true
+        comment: Appointment Title (e.g. Judge, Chief Judge)
+      - name: appointing_president_1
+        type: string
+        nullable: true
+        comment: Appointing President
+      - name: party_of_appointing_president_1
+        type: string
+        nullable: true
+        comment: Party of Appointing President
+      - name: aba_rating_1
+        type: string
+        nullable: true
+        comment: American Bar Association rating at nomination
+      - name: nomination_date_1
+        type: string
+        nullable: true
+        comment: Nomination Date (YYYY-MM-DD)
+      - name: confirmation_date_1
+        type: string
+        nullable: true
+        comment: Confirmation Date (YYYY-MM-DD)
+      - name: commission_date_1
+        type: string
+        nullable: true
+        comment: Commission Date (YYYY-MM-DD)
+      - name: senior_status_date_1
+        type: string
+        nullable: true
+        comment: Senior Status Date (YYYY-MM-DD), if applicable
+      - name: termination_date_1
+        type: string
+        nullable: true
+        comment: Termination Date (YYYY-MM-DD), if applicable
+      - name: termination_reason_1
+        type: string
+        nullable: true
+        comment: Termination reason (e.g. Resignation, Death, Elevation)
+      # --- Appointment group 2 of 6 ---
+      - name: court_type_2
+        type: string
+        nullable: true
+      - name: court_name_2
+        type: string
+        nullable: true
+      - name: appointment_title_2
+        type: string
+        nullable: true
+      - name: appointing_president_2
+        type: string
+        nullable: true
+      - name: party_of_appointing_president_2
+        type: string
+        nullable: true
+      - name: aba_rating_2
+        type: string
+        nullable: true
+      - name: nomination_date_2
+        type: string
+        nullable: true
+      - name: confirmation_date_2
+        type: string
+        nullable: true
+      - name: commission_date_2
+        type: string
+        nullable: true
+      - name: senior_status_date_2
+        type: string
+        nullable: true
+      - name: termination_date_2
+        type: string
+        nullable: true
+      - name: termination_reason_2
+        type: string
+        nullable: true
+      # --- Appointment group 3 of 6 ---
+      - name: court_type_3
+        type: string
+        nullable: true
+      - name: court_name_3
+        type: string
+        nullable: true
+      - name: appointment_title_3
+        type: string
+        nullable: true
+      - name: appointing_president_3
+        type: string
+        nullable: true
+      - name: party_of_appointing_president_3
+        type: string
+        nullable: true
+      - name: aba_rating_3
+        type: string
+        nullable: true
+      - name: nomination_date_3
+        type: string
+        nullable: true
+      - name: confirmation_date_3
+        type: string
+        nullable: true
+      - name: commission_date_3
+        type: string
+        nullable: true
+      - name: senior_status_date_3
+        type: string
+        nullable: true
+      - name: termination_date_3
+        type: string
+        nullable: true
+      - name: termination_reason_3
+        type: string
+        nullable: true
+      # --- Appointment group 4 of 6 ---
+      - name: court_type_4
+        type: string
+        nullable: true
+      - name: court_name_4
+        type: string
+        nullable: true
+      - name: appointment_title_4
+        type: string
+        nullable: true
+      - name: appointing_president_4
+        type: string
+        nullable: true
+      - name: party_of_appointing_president_4
+        type: string
+        nullable: true
+      - name: aba_rating_4
+        type: string
+        nullable: true
+      - name: nomination_date_4
+        type: string
+        nullable: true
+      - name: confirmation_date_4
+        type: string
+        nullable: true
+      - name: commission_date_4
+        type: string
+        nullable: true
+      - name: senior_status_date_4
+        type: string
+        nullable: true
+      - name: termination_date_4
+        type: string
+        nullable: true
+      - name: termination_reason_4
+        type: string
+        nullable: true
+      # --- Appointment group 5 of 6 ---
+      - name: court_type_5
+        type: string
+        nullable: true
+      - name: court_name_5
+        type: string
+        nullable: true
+      - name: appointment_title_5
+        type: string
+        nullable: true
+      - name: appointing_president_5
+        type: string
+        nullable: true
+      - name: party_of_appointing_president_5
+        type: string
+        nullable: true
+      - name: aba_rating_5
+        type: string
+        nullable: true
+      - name: nomination_date_5
+        type: string
+        nullable: true
+      - name: confirmation_date_5
+        type: string
+        nullable: true
+      - name: commission_date_5
+        type: string
+        nullable: true
+      - name: senior_status_date_5
+        type: string
+        nullable: true
+      - name: termination_date_5
+        type: string
+        nullable: true
+      - name: termination_reason_5
+        type: string
+        nullable: true
+      # --- Appointment group 6 of 6 ---
+      - name: court_type_6
+        type: string
+        nullable: true
+      - name: court_name_6
+        type: string
+        nullable: true
+      - name: appointment_title_6
+        type: string
+        nullable: true
+      - name: appointing_president_6
+        type: string
+        nullable: true
+      - name: party_of_appointing_president_6
+        type: string
+        nullable: true
+      - name: aba_rating_6
+        type: string
+        nullable: true
+      - name: nomination_date_6
+        type: string
+        nullable: true
+      - name: confirmation_date_6
+        type: string
+        nullable: true
+      - name: commission_date_6
+        type: string
+        nullable: true
+      - name: senior_status_date_6
+        type: string
+        nullable: true
+      - name: termination_date_6
+        type: string
+        nullable: true
+      - name: termination_reason_6
+        type: string
+        nullable: true
+
+
+    source:
+      type: http
+      url: "https://www.fjc.gov/sites/default/files/history/judges.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      # CSV sources use rowTransformers (one CSV row -> zero or more output rows), not
+      # responseTransformer (whole-response reshape) — matches the environment schema's
+      # EpaAirDataAnnualTransformer pattern for its CSV tables. Verified against a live
+      # download (2026-08-01).
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.officials.FederalJudgesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=federal_judges/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: federal_judges
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+  members:
+    primaryKey: [bioguide_id, congress]
+    foreignKeys:
+      - columns: [state_name]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_name]
+        comment: >
+          Links member's represented state to the conformed state-identity dimension
+          (NOT geo.states — that table is year-vintaged and explicitly not a valid FK
+          target; state_ref is the canonical join point). Non-enforcing: state_ref
+          covers 50 states + DC only, so rows for non-voting territorial delegates
+          (Puerto Rico, Guam, American Samoa, U.S. Virgin Islands, Northern Mariana
+          Islands) will not resolve — that is expected, not a data error.
+    # No intra-schema FK to nominations/federal_judges: this table carries no column
+    # (bioguide_id or otherwise) that either of those tables also carries, so there is
+    # no reliable join key with the current MVP column set — not an oversight.
+  nominations:
+    # citation alone is NOT globally unique: PN numbering restarts each Congress, so
+    # e.g. "PN1" can exist once per Congress in this table's 117-119 range. Caught
+    # 2026-08-02 reviewing constraints — congress must be part of the key.
+    primaryKey: [congress, citation]
+    # No FK to members/geo: this table carries no bioguide_id, state, or FIPS column
+    # (nominee-level detail — including nominee state — needs an N+1 call per
+    # nomination and was cut for MVP scope, see the nominations table comment). Adding
+    # a state column later would make a geo.state_ref FK possible the same way as members.
+  federal_judges:
+    primaryKey: [jid]
+    # No FK to geo: court_name/court_type are free text (e.g. "U.S. District Court for
+    # the District of Maryland") with no structured state/FIPS column to key on. No FK
+    # to members/nominations either: appointing_president_N is a free-text name, not an
+    # ID — matching it to a member or nominee would be name-matching, not a real key
+    # relationship, and isn't attempted here.

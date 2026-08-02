@@ -630,6 +630,13 @@ generate_single_schema_model() {
     econ_reference)
       operand_body="\"dataSource\": \"econ_reference\""
       ;;
+    officials)
+      # No year dimension (members/nominations fan out by `congress`, an env-knob
+      # RANGE resolved from the schema YAML itself via ${GOVDATA_START_CONGRESS}/
+      # ${GOVDATA_END_CONGRESS}; federal_judges is a single etag-gated snapshot) —
+      # same year-agnostic shape as econ_reference above.
+      operand_body="\"dataSource\": \"officials\""
+      ;;
     ref)
       generate_ref_model "$output_file"
       return

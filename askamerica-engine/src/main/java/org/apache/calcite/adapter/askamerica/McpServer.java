@@ -74,7 +74,7 @@ public class McpServer {
 
     static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
-        + "fedregister,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
+        + "fedregister,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
         + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal";
 
     // Connections keyed by comma-joined source set. The all-schemas set is warmed at
@@ -360,7 +360,8 @@ public class McpServer {
             + "Schemas: sec (SEC filings/XBRL), geo (TIGER/FIPS), "
             + "econ (BLS/BEA), census (ACS), crime (FBI UCR), "
             + "weather (NOAA GHCND), ref (NAICS/SIC), fec (campaign finance), "
-            + "fedregister, cyber_vuln (NVD CVEs), cyber_threat (CISA KEV), "
+            + "fedregister, officials (Congress.gov members/nominations, FJC judges), "
+            + "cyber_vuln (NVD CVEs), cyber_threat (CISA KEV), "
             + "energy (EIA), health (CDC/CMS), edu (NCES), econ_reference, "
             + "patents (USPTO), lands (federal lands), disasters (FEMA/NOAA/WFIGS), "
             + "housing (FHFA/Census permits/HUD), "

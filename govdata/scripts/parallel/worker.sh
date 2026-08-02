@@ -32,6 +32,7 @@
 #   fec           <historical|daily>
 #   fedregister   <historical|daily>
 #   econ_reference <daily>          — BLS area/industry codes (year-agnostic)
+#   officials     <daily>           — Congress.gov members/nominations, FJC judges (congress-agnostic)
 #
 # Complex schemas (delegate to specialty worker scripts):
 #   cyber_threat  <historical|daily>
@@ -55,7 +56,7 @@ MODE="${2:-}"
 if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "Usage: $0 <schema> <mode>" >&2
   echo "  Schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
-  echo "           weather, ref, fec, fedregister, econ_reference," >&2
+  echo "           weather, ref, fec, fedregister, officials, econ_reference," >&2
   echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag" >&2
   exit 1
 fi
@@ -410,6 +411,12 @@ case "$SCHEMA" in
 
   econ_reference)
     run_etl_inline "$(build_inline_model econ_reference)" "$WORKER_ID"
+    ;;
+
+  # ── Federal officials — congress-addressed, not year-addressed ────────────
+
+  officials)
+    run_etl_inline "$(build_inline_model officials)" "$WORKER_ID"
     ;;
 
   # ── Complex multi-sub-run schemas — delegated to specialty scripts ─────────

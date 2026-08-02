@@ -38,6 +38,7 @@ import org.apache.calcite.adapter.govdata.transport.TransportSchemaFactory;
 import org.apache.calcite.adapter.govdata.environment.EnvironmentSchemaFactory;
 import org.apache.calcite.adapter.govdata.cftc.CftcSchemaFactory;
 import org.apache.calcite.adapter.govdata.lands.LandsSchemaFactory;
+import org.apache.calcite.adapter.govdata.officials.OfficialsSchemaFactory;
 import org.apache.calcite.adapter.govdata.patents.PatentsSchemaFactory;
 import org.apache.calcite.adapter.govdata.ref.RefSchemaFactory;
 import org.apache.calcite.adapter.govdata.research.ResearchSchemaFactory;
@@ -88,6 +89,8 @@ import org.apache.calcite.adapter.file.etl.VariableResolver;
  *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
  *   <li>fec - Federal Election Commission campaign finance data</li>
  *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
+ *   <li>officials - Federal elected/appointed officeholders (Congress.gov members and
+ *       nominations, FJC federal judges)</li>
  *   <li>cyber_vuln - Cybersecurity vulnerability data (NVD CVEs, CISA KEV, OSV, GitHub SA)</li>
  *   <li>cyber_threat - Cyber threat intelligence (ATT&CK, IOC feeds, exploits, standards)</li>
  *   <li>energy - U.S. energy data (EIA electricity, fossil fuel production, storage, prices)</li>
@@ -380,6 +383,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "fr":
         return new FedRegisterSchemaFactory();
 
+      case "officials":
+        return new OfficialsSchemaFactory();
+
       case "cyber_vuln":
       case "cybervuln":
         return new CyberSchemaFactory("cyber_vuln");
@@ -457,8 +463,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
-            + " fedregister, cyber_vuln, cyber_threat, health, energy, edu, patents, lands, cftc, ag,"
-            + " housing, transport, environment, research, fiscal");
+            + " fedregister, officials, cyber_vuln, cyber_threat, health, energy, edu, patents, lands,"
+            + " cftc, ag, housing, transport, environment, research, fiscal");
     }
   }
 

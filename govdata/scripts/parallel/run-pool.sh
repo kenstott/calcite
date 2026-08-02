@@ -108,7 +108,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal"
+  echo "                 ref, fec, fedregister, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -165,6 +165,10 @@ for arg in "$@"; do
       _add_sec_secondary_years
       _add_sec_13f_years
       queue+=(sec_prices:historical ref:daily fec:historical fedregister:historical)
+      # officials, like ref/econ_reference below: no point-in-time history to backfill
+      # separately — congress-period completion markers + etag freshness make a single
+      # recurring daily invocation self-backfilling (see historical) alias comment).
+      queue+=(officials:daily)
       queue+=(cyber_vuln:historical cyber_threat:historical cyber_vuln:daily cyber_threat:daily)
       queue+=(health:historical health:daily)
       queue+=(edu:historical edu:daily)
@@ -191,6 +195,10 @@ for arg in "$@"; do
       # Daily-only schemas are intentionally NOT here — they run only in the daily window:
       #   • ref, econ_reference — current-snapshot reference; no point-in-time history to backfill,
       #     freshness-gated in their YAML so daily re-ingests only when the source changed.
+      #   • officials — congress-addressed (not year-addressed); GOVDATA_START_CONGRESS/
+      #     GOVDATA_END_CONGRESS live as YAML-default env knobs, not worker-set year vars.
+      #     Congress-period completion markers + federal_judges' etag freshness make one
+      #     recurring daily invocation self-backfilling, so it never needs a :historical slot.
       #   • sec_prices — single bulk feed + top-up; its worker ignores mode and always loads the
       #     full range, so a historical slot would just duplicate the daily run.
       # cyber_threat is NOT here — all its tables are current-snapshot/delta feeds with no year
@@ -236,7 +244,7 @@ for arg in "$@"; do
       # Constrained to the 17 schemas that have *_dq.sql scripts.
       queue+=(
         sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
-        fec:dq fedregister:dq lands:dq health:dq patents:dq ref:dq
+        fec:dq fedregister:dq officials:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
         cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq
       )
@@ -248,7 +256,7 @@ for arg in "$@"; do
       export GOVDATA_RUN_MODE="historical"
       queue+=(
         sec:dq-rebuild sec_secondary:dq-rebuild sec_prices:dq-rebuild weather:dq-rebuild edu:dq-rebuild census:dq-rebuild econ:dq-rebuild
-        crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild
+        crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild officials:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
         cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild
@@ -261,7 +269,7 @@ for arg in "$@"; do
       export GOVDATA_RUN_MODE="historical"
       queue+=(
         sec:dq-etl-resume sec_secondary:dq-etl-resume sec_prices:dq-etl-resume weather:dq-etl-resume edu:dq-etl-resume census:dq-etl-resume econ:dq-etl-resume
-        crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume
+        crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume officials:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
         cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume
@@ -279,7 +287,7 @@ for arg in "$@"; do
         "sec_13f:${_cy}"
         "sec_prices:daily"
         ref:daily
-        fec:daily fedregister:daily
+        fec:daily fedregister:daily officials:daily
         cyber_vuln:daily cyber_threat:daily
         health:daily
         edu:daily

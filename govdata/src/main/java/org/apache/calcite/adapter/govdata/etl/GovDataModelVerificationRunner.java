@@ -80,6 +80,7 @@ public final class GovDataModelVerificationRunner {
     SCHEMA_YAML.put("ref", "/ref/ref-schema.yaml");
     SCHEMA_YAML.put("fec", "/fec/fec-schema.yaml");
     SCHEMA_YAML.put("fedregister", "/fedregister/fedregister-schema.yaml");
+    SCHEMA_YAML.put("officials", "/officials/officials-schema.yaml");
     SCHEMA_YAML.put("cyber_vuln", "/cyber/cyber-vuln-schema.yaml");
     SCHEMA_YAML.put("cyber_threat", "/cyber/cyber-threat-schema.yaml");
     SCHEMA_YAML.put("health", "/health/health-schema.yaml");
