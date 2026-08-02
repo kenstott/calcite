@@ -2373,6 +2373,112 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- LABOR PRODUCTIVITY ---
+  - name: labor_productivity
+    pattern: "type=labor_productivity/frequency=*/year=*/labor_productivity.parquet"
+    partitions: *standard_partitions
+    comment: >
+      BLS Major Sector Productivity and Costs (PR survey) labor productivity index — output per
+      hour of all persons, chained index (2017=100), seasonally adjusted, quarterly — for 6
+      major-sector series: business, nonfarm business, manufacturing, manufacturing durable
+      goods, manufacturing nondurable goods, and nonfinancial corporations. National grain only;
+      BLS does not publish this series by state. Verified live against api.bls.gov: coverage
+      begins 1947 for business/nonfarm business/nonfinancial corporations and 1987 for
+      manufacturing and its durable/nondurable subsectors (not a uniform 1976 start). Only the
+      productivity (output-per-hour) index is loaded — BLS's companion unit-labor-cost and
+      compensation series from the same PR survey (measure codes 06, 11, etc.) are not included.
+      Long-format: one row per (series, period) — ALWAYS filter on series.
+    columns:
+      - name: date
+        type: date
+        nullable: true
+        comment: >
+          Observation date, first day of the quarter, derived from the BLS year and period fields
+          (period Q01-Q04). BlsResponseTransformer emits year and period rather than a date.
+        expression: "year || '-' || LPAD(CAST(((CAST(SUBSTRING(period, 2, 2) AS INTEGER) - 1) * 3 + 1) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS PR series identifier. This table is long-format: one row per (series, period), so
+          ALWAYS filter on series. The 6 series loaded are all output-per-hour index (measure 09,
+          duration 3 = index level, 2017=100): PRS85006093 nonfarm business; PRS84006093 business;
+          PRS30006093 manufacturing; PRS31006093 manufacturing, durable goods; PRS32006093
+          manufacturing, nondurable goods; PRS88003093 nonfinancial corporations.
+      - name: value
+        type: double
+        nullable: true
+        comment: Labor productivity index value (output per hour of all persons, 2017=100)
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - labor_productivity
+      frequency: *quarterly_frequency
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2020}"
+        end: current
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      enabled: true
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid:  # BLS PR Major Sector Productivity, output per hour index (measure 09, duration 3)
+          - "PRS85006093"   # Nonfarm business
+          - "PRS84006093"   # Business
+          - "PRS30006093"   # Manufacturing
+          - "PRS31006093"   # Manufacturing, durable goods
+          - "PRS32006093"   # Manufacturing, nondurable goods
+          - "PRS88003093"   # Nonfinancial corporations
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        # NOTE: dataPath removed - BlsResponseTransformer handles extraction and flattening
+        errorPath: "message"  # BLS API returns errors in message array
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=labor_productivity/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+        emptyResultTtlMillis: 86400000  # Retry after 24 hours if no data
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
     pattern: "type=regional_employment/year=*/regional_employment.parquet"
@@ -3343,6 +3449,141 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- REGIONAL PRICE PARITIES ---
+  - name: regional_price_parities
+    pattern: "type=regional_price_parities/year=*/tablename=*/regional_price_parities.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+        - name: tablename
+          type: VARCHAR
+    comment: >
+      BEA Regional Price Parities (RPP): a cost-of-living index by state and Metropolitan
+      Statistical Area (MSA) relative to the national average (100.000), annual since 2008.
+      Verified live against apps.bea.gov/api/data (dataset Regional, tables SARPP/MARPP):
+      coverage 2008-2024 at verification time. tablename selects the geography: SARPP = state
+      (includes a GeoFips=00000 "United States" national baseline row, always rpp_index=100.000,
+      plus all 50 states + DC); MARPP = Metropolitan Statistical Areas only (no non-metro/rural,
+      micropolitan, or port-area coverage — BEA's port-level PARPP table is not loaded here).
+      line_code selects the price component: 1=All items, 2=Goods, 3=Services: Rents,
+      4=Services: Utilities, 5=Services: Other. An rpp_index of e.g. 88.901 means costs are
+      11.1% below the national average for that component/geography/year. (BEA's Regional
+      dataset also lists SARPP/MARPP among the 63 tables regional_income iterates, but that
+      table's line_code resolver only has reference data for SAINC/SQINC/CAINC/SAGDP/SQGDP/CAGDP
+      series, so regional_income never actually fetches RPP rows — this table is the source of
+      that data.)
+    columns:
+      - name: geo_fips
+        type: string
+        source: GeoFips
+        nullable: true
+        comment: 5-digit FIPS (state) or CBSA (MSA) code; '00000' = United States national baseline
+      - name: geo_name
+        type: string
+        source: GeoName
+        nullable: true
+        comment: State name (tablename=SARPP) or MSA name (tablename=MARPP)
+      - name: year
+        type: int
+        nullable: true
+        expression: "CAST(TimePeriod AS INTEGER)"
+        comment: Year of the RPP observation
+      - name: line_code
+        type: string
+        nullable: true
+        comment: >
+          BEA RPP line code — dimension-iterated per fetch, not present in the raw API row itself:
+          1=All items, 2=Goods, 3=Services: Rents, 4=Services: Utilities, 5=Services: Other.
+      - name: rpp_index
+        type: double
+        nullable: true
+        expression: "CASE WHEN DataValue IN ('(NA)', '(D)', '(NM)', '---') THEN NULL ELSE CAST(REPLACE(DataValue, ',', '') AS DOUBLE) END"
+        comment: >
+          Regional Price Parity index; 100.000 = national average cost of living for that
+          component (e.g. 88.901 means costs 11.1% below the national average)
+      - name: units
+        type: string
+        source: CL_UNIT
+        nullable: true
+        comment: Always 'Index' (BEA CL_UNIT field)
+
+    # HTTP Source configuration for EtlPipeline
+    # LineCode is single-valued per BEA API (MultipleAcceptedFlag=0, verified live), so it is an
+    # iterated dimension rather than a comma-joined parameter. GeoFips differs by geography
+    # (STATE for SARPP, MSA for MARPP); urlRules selects the MSA variant when tablename=MARPP.
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data?UserID={env:BEA_API_KEY}&method=GetData&DataSetName=Regional&TableName={tablename}&LineCode={line_code}&GeoFips=STATE&Year={effective_year}&ResultFormat=JSON"
+      method: GET
+      urlRules:
+        - url: "https://apps.bea.gov/api/data?UserID={env:BEA_API_KEY}&method=GetData&DataSetName=Regional&TableName={tablename}&LineCode={line_code}&GeoFips=MSA&Year={effective_year}&ResultFormat=JSON"
+          variableMatch:
+            tablename: MARPP
+      response:
+        format: json
+        # Note: dataPath removed because responseTransformer already extracts the data
+        errorPath: "BEAAPI.Results.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Custom hooks for BEA response handling (generic — same transformer as gdp_statistics/regional_income)
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    # Dimension definitions for ETL iteration
+    dimensions:
+      type:
+        - regional_price_parities
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: current
+        minYear: 2008  # RPP data floor, verified live via BEA GetData Year=ALL
+        dataLag: 1
+      tablename:
+        - SARPP   # State-level RPP
+        - MARPP   # MSA-level RPP
+      line_code:
+        - "1"   # All items
+        - "2"   # Goods
+        - "3"   # Services: Rents
+        - "4"   # Services: Utilities
+        - "5"   # Services: Other
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=regional_price_parities/year=*/tablename=*/"
+      partition:
+        columns: [type, year, tablename]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -6309,6 +6550,14 @@ constraints:
       - frequency
       - year
 
+  labor_productivity:
+    # series is required here (unlike wage_growth's PK above) — this table's own comment
+    # documents it as long-format, one row per (series, date); a PK without series would
+    # not actually be unique.
+    primaryKey:
+      - series
+      - date
+
   regional_employment:
     primaryKey:
       - type
@@ -6384,6 +6633,16 @@ constraints:
       - type
       - frequency
       - year
+
+  regional_price_parities:
+    primaryKey:
+      - tablename
+      - geo_fips
+      - line_code
+      - year
+    # No geo_fips FK: unlike regional_income (state-only), this table's geo_fips is a state
+    # FIPS for tablename=SARPP, an MSA/CBSA code for tablename=MARPP, or '00000' (the national
+    # baseline row) — a single FK to geo.states would misrepresent the MARPP and national rows.
 
   regional_income:
     primaryKey:

@@ -77,6 +77,8 @@ FROM (
   UNION ALL SELECT 'industry_gdp',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',         allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'trade_exports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',        allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'trade_imports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',        allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'labor_productivity',   (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',   allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'regional_price_parities', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1) t)
 ) src
 WHERE tbl NOT IN ('jolts_regional', 'jolts_state') OR n > 0;
 
@@ -131,6 +133,11 @@ FROM (
   -- streamed with a bounded DQ row cap; a low floor just confirms the partition ingested.
   UNION ALL SELECT 'trade_exports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',         allow_moved_paths := true)), 100
   UNION ALL SELECT 'trade_imports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',         allow_moved_paths := true)), 100
+  -- labor_productivity: 6 series x 4 quarters/year x DQ lookback window (2 years) = ~48 rows
+  UNION ALL SELECT 'labor_productivity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',    allow_moved_paths := true)), 10
+  -- regional_price_parities: 2 tablenames x 5 line_codes x (~52 areas for SARPP + ~387 for MARPP) is prod-scale;
+  -- DQ lookback window (2 years) still yields well over 100 rows.
+  UNION ALL SELECT 'regional_price_parities',(SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities',allow_moved_paths := true)), 100
 ) src;
 
 -- ============================================================================
@@ -167,6 +174,8 @@ SELECT 'gdp_statistics'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'industry_gdp'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',           allow_moved_paths := true) LIMIT 1;
 SELECT 'trade_exports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',          allow_moved_paths := true) LIMIT 1;
 SELECT 'trade_imports'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',          allow_moved_paths := true) LIMIT 1;
+SELECT 'labor_productivity'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',     allow_moved_paths := true) LIMIT 1;
+SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1;
 
 -- ============================================================================
 -- T4: ALL-NULL COLUMNS — no column should be 100% NULL
@@ -395,6 +404,20 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade
 WHERE null_percentage = 100.0
   -- quantity/quantity_unit/cif_charges are legitimately absent for many HS-6 import lines
   AND column_name NOT IN ('quantity', 'quantity_unit', 'cif_charges');
+
+-- labor_productivity
+INSERT INTO dq_results
+SELECT 'econ', 'labor_productivity', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- regional_price_parities
+INSERT INTO dq_results
+SELECT 'econ', 'regional_price_parities', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
 
 -- ============================================================================
 -- T5: ALL-SAME-VALUE — no non-null column should have only one distinct value
@@ -675,6 +698,23 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   -- type='trade'/direction='imports' are constant by design; quantity_unit is often one unit in a bounded sample
   AND column_name NOT IN ('type', 'direction', 'quantity_unit');
+
+-- labor_productivity
+INSERT INTO dq_results
+SELECT 'econ', 'labor_productivity', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'year');
+
+-- regional_price_parities
+INSERT INTO dq_results
+SELECT 'econ', 'regional_price_parities', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  -- units is constant ('Index') by design across all BEA RPP rows
+  AND column_name NOT IN ('type', 'units');
 
 -- ============================================================================
 -- T6: PK NULLS — SKIPPED
