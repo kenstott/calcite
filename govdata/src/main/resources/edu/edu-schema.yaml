@@ -48,6 +48,16 @@ partitionedTables:
       One row per LEA per school year (year = end year; 2022 = 2021-22).
       Primary join target for ccd_schools (leaid) and geo.school_districts (sd_lea = leaid).
       Staff FTE fields (teachers, counselors, psychologists) enable resource equity analysis.
+      Several numeric fields (number_of_schools, enrollment, spec_ed_students,
+      english_language_learners, teachers_total_fte, guidance_counselors_total_fte,
+      librarian_specialists_fte, staff_total_fte — see each column's own comment) carry
+      raw NCES CCD sentinel codes instead of a real count on some rows: -1 = Missing and
+      -2 = Not Applicable are NCES's own official codes (numeric fields, all CCD surveys
+      since 2002-03); -9 = does not meet NCES data quality standards is also an official
+      code, observed here on english_language_learners. These are meaningful metadata, not
+      corrupted data, so this raw table keeps them as-is — but any view aggregating these
+      fields (SUM/AVG/ratio) MUST exclude negative values first (value < 0), or the
+      sentinel codes get silently summed in as if they were real counts.
 
     columns:
       - name: leaid
@@ -117,27 +127,27 @@ partitionedTables:
       - name: number_of_schools
         type: int
         nullable: true
-        comment: Number of operational schools in LEA
+        comment: Number of operational schools in LEA. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: enrollment
         type: int
         nullable: true
-        comment: Total student enrollment (may be null for some administrative LEAs)
+        comment: Total student enrollment (may be null for some administrative LEAs). May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: spec_ed_students
         type: int
         nullable: true
-        comment: Students receiving special education services
+        comment: Students receiving special education services. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: english_language_learners
         type: int
         nullable: true
-        comment: English language learner students
+        comment: English language learner students. May carry a negative NCES CCD sentinel code (see table comment, incl. -9) instead of a real count.
       - name: teachers_total_fte
         type: double
         nullable: true
-        comment: Total FTE classroom teachers across all grade levels
+        comment: Total FTE classroom teachers across all grade levels. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: guidance_counselors_total_fte
         type: double
         nullable: true
-        comment: Total FTE guidance counselors
+        comment: Total FTE guidance counselors. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: school_counselors_fte
         type: double
         nullable: true
@@ -149,11 +159,11 @@ partitionedTables:
       - name: librarian_specialists_fte
         type: double
         nullable: true
-        comment: FTE librarian/media specialists
+        comment: FTE librarian/media specialists. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: staff_total_fte
         type: double
         nullable: true
-        comment: Total FTE all staff categories
+        comment: Total FTE all staff categories. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: state_leg_district_lower
         type: string
         nullable: true
@@ -245,6 +255,18 @@ partitionedTables:
       One row per school per year. Joins to ccd_districts via leaid.
       free_or_reduced_price_lunch enables poverty proxy at the school level.
       Biennial CRDC data joins via ncessch = crdc_schools.ncessch.
+      Numeric fields (enrollment, teachers_fte, free_lunch, reduced_price_lunch,
+      free_or_reduced_price_lunch, direct_certification — see each column's own comment)
+      carry raw NCES CCD sentinel codes instead of a real count on some rows: -1 = Missing
+      and -2 = Not Applicable are NCES's own official codes (numeric fields, all CCD
+      surveys since 2002-03); a further -3 is consistently present across all six fields
+      above but its exact NCES definition could not be confirmed against NCES/Urban
+      Institute documentation as of 2026-08-02 (checked live; do not assume it means the
+      same thing as -3 on unrelated datasets, e.g. IMLS's Public Libraries Survey — that's
+      a different codebook). These are meaningful metadata, not corrupted data, so this raw
+      table keeps them as-is — but any view aggregating these fields (SUM/AVG/ratio) MUST
+      exclude negative values first (value < 0), or the sentinel codes get silently summed
+      in as if they were real counts.
 
     columns:
       - name: ncessch
@@ -338,27 +360,27 @@ partitionedTables:
       - name: teachers_fte
         type: double
         nullable: true
-        comment: FTE classroom teachers
+        comment: FTE classroom teachers. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: enrollment
         type: int
         nullable: true
-        comment: Total student enrollment
+        comment: Total student enrollment. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: free_lunch
         type: int
         nullable: true
-        comment: Students approved for free lunch (NSLP)
+        comment: Students approved for free lunch (NSLP). May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: reduced_price_lunch
         type: int
         nullable: true
-        comment: Students approved for reduced-price lunch
+        comment: Students approved for reduced-price lunch. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: free_or_reduced_price_lunch
         type: int
         nullable: true
-        comment: Combined free+reduced lunch count; divide by enrollment for poverty proxy
+        comment: Combined free+reduced lunch count; divide by enrollment for poverty proxy. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count — exclude value < 0 before using in any ratio.
       - name: direct_certification
         type: int
         nullable: true
-        comment: Students directly certified for free meals (SNAP/TANF households)
+        comment: Students directly certified for free meals (SNAP/TANF households). May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: lunch_program
         type: int
         nullable: true
@@ -2077,7 +2099,12 @@ views:
       District-level pupil_teacher_ratio (enrollment / teachers_total_fte) and
       district_frpl_rate, a free/reduced-price-lunch poverty proxy computed by summing
       free_or_reduced_price_lunch and enrollment from ccd_schools per (leaid, year) and
-      joining to ccd_districts. One row per district per year.
+      joining to ccd_districts. One row per district per year. ccd_districts.enrollment
+      and teachers_total_fte and ccd_schools.free_or_reduced_price_lunch/enrollment all
+      carry negative NCES CCD sentinel codes on some rows (see those tables' comments) —
+      this view excludes them (value < 0 treated as null) before computing
+      pupil_teacher_ratio and before summing into district_frpl_count/frpl_rate, so a
+      sentinel code is never silently counted as a real value.
     sql: >
       SELECT
         d.leaid,
@@ -2087,19 +2114,20 @@ views:
         d.state_abbr,
         d.county_code,
         d.urban_centric_locale,
-        d.enrollment,
+        CASE WHEN d.enrollment >= 0 THEN d.enrollment END                       AS enrollment,
         d.number_of_schools,
-        d.teachers_total_fte,
+        CASE WHEN d.teachers_total_fte >= 0 THEN d.teachers_total_fte END       AS teachers_total_fte,
         d.guidance_counselors_total_fte,
         d.school_psychologists_fte,
-        d.enrollment / NULLIF(d.teachers_total_fte, 0)                    AS pupil_teacher_ratio,
-        s.free_or_reduced_price_lunch                                      AS district_frpl_count,
-        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)     AS frpl_rate
+        CASE WHEN d.enrollment >= 0 AND d.teachers_total_fte >= 0
+             THEN d.enrollment / NULLIF(d.teachers_total_fte, 0) END            AS pupil_teacher_ratio,
+        s.free_or_reduced_price_lunch                                          AS district_frpl_count,
+        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)          AS frpl_rate
       FROM ccd_districts d
       LEFT JOIN (
         SELECT leaid, year,
-               SUM(free_or_reduced_price_lunch) AS free_or_reduced_price_lunch,
-               SUM(enrollment)                  AS enrollment
+               SUM(CASE WHEN free_or_reduced_price_lunch >= 0 THEN free_or_reduced_price_lunch END) AS free_or_reduced_price_lunch,
+               SUM(CASE WHEN enrollment >= 0 THEN enrollment END)                                   AS enrollment
         FROM ccd_schools
         GROUP BY leaid, year
       ) s ON d.leaid = s.leaid AND d.year = s.year
@@ -2129,15 +2157,19 @@ views:
       incident counts). CRDC year is mapped to the closest CRDC survey year at or below the
       school year, capped at 2013/2015/2017 — CRDC data for years after 2017 is not matched.
       One row per school per year; CRDC columns are null where no match exists.
+      s.enrollment and s.free_or_reduced_price_lunch carry negative NCES CCD sentinel
+      codes on some rows (see ccd_schools' comment) — excluded (value < 0 treated as
+      null) here before exposing them and before computing frpl_rate.
     sql: >
       SELECT
         s.ncessch,
         s.school_name,
         s.leaid,
         s.year,
-        s.enrollment,
-        s.free_or_reduced_price_lunch,
-        s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0)  AS frpl_rate,
+        CASE WHEN s.enrollment >= 0 THEN s.enrollment END                             AS enrollment,
+        CASE WHEN s.free_or_reduced_price_lunch >= 0 THEN s.free_or_reduced_price_lunch END AS free_or_reduced_price_lunch,
+        CASE WHEN s.free_or_reduced_price_lunch >= 0 AND s.enrollment >= 0
+             THEN s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0) END    AS frpl_rate,
         s.charter,
         s.school_level,
         ts.counselors_fte,
@@ -2241,7 +2273,10 @@ views:
       district_frpl_rate (free/reduced-price-lunch share of aggregated school
       enrollment). Joins to ccd_districts for district name, FIPS, and district-level
       enrollment/teacher FTE context. One row per district per year via an inner join
-      — districts with no matching ccd_schools rows are excluded.
+      — districts with no matching ccd_schools rows are excluded. s.enrollment and
+      s.free_or_reduced_price_lunch carry negative NCES CCD sentinel codes on some rows
+      (see ccd_schools' comment) — excluded (value < 0 treated as null) before summing
+      into school_enrollment_sum and district_frpl_rate.
     sql: >
       SELECT
         d.leaid,
@@ -2258,9 +2293,9 @@ views:
         SUM(CASE WHEN s.title_i_schoolwide = 1 THEN 1 ELSE 0 END)          AS title_i_schoolwide_count,
         SUM(CASE WHEN s.title_i_eligible = 1 THEN 1 ELSE 0 END)            AS title_i_eligible_count,
         SUM(CASE WHEN s.school_status = 1 THEN 1 ELSE 0 END)               AS open_school_count,
-        SUM(s.enrollment)                                                   AS school_enrollment_sum,
-        SUM(s.free_or_reduced_price_lunch) * 1.0
-          / NULLIF(SUM(s.enrollment), 0)                                    AS district_frpl_rate,
+        SUM(CASE WHEN s.enrollment >= 0 THEN s.enrollment END)              AS school_enrollment_sum,
+        SUM(CASE WHEN s.free_or_reduced_price_lunch >= 0 THEN s.free_or_reduced_price_lunch END) * 1.0
+          / NULLIF(SUM(CASE WHEN s.enrollment >= 0 THEN s.enrollment END), 0) AS district_frpl_rate,
         SUM(CASE WHEN s.charter = 1 THEN 1 ELSE 0 END) * 1.0
           / NULLIF(COUNT(*), 0)                                             AS charter_share
       FROM ccd_districts d
@@ -2350,6 +2385,11 @@ views:
       lunch share), and district_count. Enables correlating per-pupil staffing and
       poverty resources with NAEP outcomes. One row per jurisdiction × year × subject ×
       grade; jurisdiction=0 (national aggregate) will not match any state's district data.
+      d2.enrollment, d2.teachers_total_fte, and ccd_schools.free_or_reduced_price_lunch
+      all carry negative NCES CCD sentinel codes on some rows (see those tables'
+      comments) — excluded (value < 0 treated as null) before computing
+      total_enrollment, avg_pupil_teacher_ratio, and avg_frpl_rate, so a sentinel code
+      is never silently counted as a real value.
     sql: >
       SELECT
         n.jurisdiction,
@@ -2367,13 +2407,16 @@ views:
         SELECT
           d2.fips,
           d2.year,
-          SUM(d2.enrollment)                                           AS total_enrollment,
-          AVG(d2.enrollment / NULLIF(d2.teachers_total_fte, 0))        AS avg_pupil_teacher_ratio,
+          SUM(CASE WHEN d2.enrollment >= 0 THEN d2.enrollment END)          AS total_enrollment,
+          AVG(CASE WHEN d2.enrollment >= 0 AND d2.teachers_total_fte >= 0
+                   THEN d2.enrollment / NULLIF(d2.teachers_total_fte, 0) END) AS avg_pupil_teacher_ratio,
           COUNT(*)                                                      AS district_count,
-          SUM(school_frpl.frpl_count) * 1.0 / NULLIF(SUM(d2.enrollment), 0) AS avg_frpl_rate
+          SUM(school_frpl.frpl_count) * 1.0
+            / NULLIF(SUM(CASE WHEN d2.enrollment >= 0 THEN d2.enrollment END), 0) AS avg_frpl_rate
         FROM edu.ccd_districts d2
         LEFT JOIN (
-          SELECT leaid, year, SUM(free_or_reduced_price_lunch) AS frpl_count
+          SELECT leaid, year,
+                 SUM(CASE WHEN free_or_reduced_price_lunch >= 0 THEN free_or_reduced_price_lunch END) AS frpl_count
           FROM edu.ccd_schools GROUP BY leaid, year
         ) school_frpl ON d2.leaid = school_frpl.leaid AND d2.year = school_frpl.year
         GROUP BY d2.fips, d2.year
