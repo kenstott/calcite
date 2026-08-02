@@ -5,7 +5,7 @@
 --         fda_device_recalls, clinical_trials, clinical_trial_conditions,
 --         clinical_trial_interventions, cdc_covid_vaccinations, cms_hospital_quality,
 --         medicaid_drug_utilization, cdc_mortality, cdc_brfss, cms_open_payments, rxnorm_drugs,
---         who_gho_indicators, cms_pos_facilities
+--         who_gho_indicators, cms_pos_facilities, ahrf_physician_supply
 -- All tables are Iceberg; reads via iceberg_scan.
 -- Partition columns per table:
 --   Most tables: 'type'
@@ -1187,6 +1187,64 @@ SELECT 'health', 'cms_pos_facilities', 'T7_hospital_beds_present',
 FROM (SELECT COUNT(*) AS n, SUM(bed_count) AS total_beds
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true)
   WHERE provider_category_code = '01' AND bed_count IS NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ahrf_physician_supply (HRSA AHRF county-level file; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T2_row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END, n, 3000, 'Expected >=3000 county rows (3,235 in the 2024-2025 release)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true) WHERE county_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true)
+  GROUP BY county_fips HAVING COUNT(*) > 1
+));
+
+-- T7 regression guard: primary_care_physicians_per_100k must be populated for a real
+-- majority of counties and stay within a plausible range — this is the target metric
+-- the table exists for (closes the physician-density eval gap).
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_supply', 'T7_pcp_rate_plausible',
+  CASE WHEN n > 1000 AND max_rate < 1000 THEN 'pass' ELSE 'fail' END, n, 1000,
+  'Counties with non-null primary_care_physicians_per_100k (n); max rate must stay < 1000/100k'
+FROM (SELECT COUNT(*) AS n, MAX(primary_care_physicians_per_100k) AS max_rate
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true)
+  WHERE primary_care_physicians_per_100k IS NOT NULL);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

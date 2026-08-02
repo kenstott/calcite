@@ -1441,6 +1441,148 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
+  # ==========================================================================
+  - name: ahrf_physician_supply
+    releaseWindow:
+      months: [8, 9, 10, 11, 12] # HRSA AHRF annual release; tech doc dated Aug, files last-modified Dec
+    pattern: "type=ahrf_physician_supply"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      HRSA Area Health Resources File (AHRF), county-level release — one row per U.S.
+      county (fips_st_cnty; 3,235 counties/county-equivalents in the 2024-2025 release,
+      including territories). AHRF ships raw physician/population COUNTS only — no
+      per-100k rate column exists upstream — so primary_care_physicians_per_100k and
+      total_active_physicians_per_100k are computed here from the matched count and
+      population columns. primary_care_physicians is HRSA's "Phys, Primary Care, Patient
+      Care" measure: non-federal MD+DO physicians in patient care, excluding hospital
+      residents and physicians aged 75+, sourced from the AMA Physician Masterfile.
+      total_active_physicians is all non-federal active MDs plus DOs (all specialties,
+      not primary-care-filtered). AHRF is a wide file — each variable is a family of
+      year-suffixed columns (e.g. phys_nf_prim_care_pc_exc_rsdt_23,
+      phys_nf_prim_care_pc_exc_rsdt_22, ...) rather than one row per year, and each
+      annual release adds a newest-year column while keeping older ones.
+      AhrfPhysicianSupplyTransformer scans the header at load time for the
+      highest-numbered suffix present and records which data year it picked in
+      physician_data_year / population_data_year — so a stale suffix never silently
+      ships; the years advance automatically as HRSA adds columns in future releases.
+      rural_urban_code is the USDA ERS Rural-Urban Continuum Code (1-9; lower = more
+      urban), useful for physician-shortage/rural-access analysis alongside the supply
+      counts. Source: data.hrsa.gov/data/download, "Area Health Resources Files" county
+      CSV distribution.
+
+    columns:
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: 5-digit county FIPS (fips_st_cnty) — PK
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: fips_st (2-digit; FK to geo.state_ref)
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: st_name_abbrev (2-letter USPS; FK to geo.state_ref)
+      - name: state_name
+        type: string
+        nullable: true
+        comment: st_name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: cnty_name
+      - name: rural_urban_code
+        type: string
+        nullable: true
+        comment: >
+          rural_urban_contnm_YY — USDA ERS Rural-Urban Continuum Code (1-9; lower codes
+          are more urban/metro), most-recent year available in this release
+      - name: population_estimate
+        type: long
+        nullable: true
+        comment: popn_est_YY — Census county population estimate, most-recent year available
+      - name: population_data_year
+        type: integer
+        nullable: true
+        comment: The YY this release's population_estimate reflects (e.g. 2024)
+      - name: primary_care_physicians
+        type: long
+        nullable: true
+        comment: >
+          phys_nf_prim_care_pc_exc_rsdt_YY — non-federal MD+DO primary care physicians in
+          patient care, excluding hospital residents and physicians aged 75+ (AMA
+          Physician Masterfile), most-recent year available
+      - name: physician_data_year
+        type: integer
+        nullable: true
+        comment: The YY this release's primary_care_physicians / total_active_physicians reflect (e.g. 2023)
+      - name: primary_care_physicians_per_100k
+        type: double
+        nullable: true
+        comment: Computed — primary_care_physicians / population_estimate * 100000
+      - name: total_active_physicians
+        type: long
+        nullable: true
+        comment: >
+          Computed sum of md_nf_activ_YY + do_nf_activ_YY (total non-federal active MDs
+          and DOs, all specialties — not primary-care-filtered) for physician_data_year
+      - name: total_active_physicians_per_100k
+        type: double
+        nullable: true
+        comment: Computed — total_active_physicians / population_estimate * 100000
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "ahrf_physician_supply"'
+
+    source:
+      type: http
+      # Discovery source: HRSA's AHRF download-listing page. AhrfPhysicianSupplyTransformer
+      # scans it for the newest county-level CSV zip link (the filename embeds a two-year
+      # release range with an inconsistent separator across releases — space, underscore,
+      # or none — so no single {year}-templatable URL pattern exists) and downloads it
+      # directly.
+      url: "https://data.hrsa.gov/data/download"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.AhrfPhysicianSupplyTransformer"
+
+    dimensions:
+      type:
+        - ahrf_physician_supply
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        runCompaction: true
+
+  # ==========================================================================
   # MEDICAID DRUG UTILIZATION — Socrata SODA API, ~2.5M records/year
   # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
   # ==========================================================================
@@ -2656,6 +2798,20 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Links facility county to geographic data (null when FIPS_CNTY_CD is unpopulated)
+
+  ahrf_physician_supply:
+    primaryKey: [county_fips]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links county state to geographic data
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links AHRF county row to geographic data
 
   rxnorm_drugs:
     primaryKey: [type, rxcui]
