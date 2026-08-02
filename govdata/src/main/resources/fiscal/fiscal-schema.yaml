@@ -1446,6 +1446,140 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # DOL WHD STATE MINIMUM WAGE HISTORY — single-page snapshot, multi-year output
+  # ---------------------------------------------------------------------------
+  - name: state_minimum_wage_history
+    pattern: "type=state_minimum_wage_history/year=*/*.parquet"
+    partitions: *standard_partitions
+    dataset_type: snapshot
+    comment: >
+      DOL Wage and Hour Division's published "Changes in Basic Minimum Wages in
+      Non-Farm Employment Under State Law" table (selected years, 1968 to
+      present) — one row per jurisdiction x published year. The single page
+      (dol.gov/agencies/whd/state/minimum-wage/history) holds six HTML tables
+      spanning disjoint "selected years" (1968-1981, 1988-1998, then every year
+      2000-present); years NOT shown on the page (e.g. 1969, 1973-1975,
+      1982-1987) are simply absent from this table, not a gap in ETL coverage.
+      55 jurisdictions per year: "Federal (FLSA)" (jurisdiction_type=FEDERAL),
+      the 50 states (STATE), District of Columbia (DISTRICT), and Guam/Puerto
+      Rico/U.S. Virgin Islands (TERRITORY — not in geo.state_ref, so
+      state_fips is null for these three and for the FEDERAL row).
+      raw_wage_text preserves DOL's own cell text verbatim, including its
+      inconsistencies ("N.A." vs "NA", inconsistent "$" prefixing, a stray
+      source typo like "4..65(g,,j)") — wage_amount (a clean hourly USD
+      figure) is populated ONLY for the unambiguous single-value case
+      (value_type=SINGLE); ranges (value_type=RANGE, e.g. a tipped-vs-standard
+      spread), dual-track values (value_type=DUAL_TRACK, e.g. the pre-1978
+      multi-track FLSA system or a state's two-tier law), "..." (NOT_APPLICABLE
+      — no separate jurisdiction law that year), "N.A."/"NA" (NOT_AVAILABLE),
+      and anything else unparseable (OTHER, e.g. a non-hourly "/day" or "/wk"
+      rate) are left null in wage_amount by design, never guessed — see
+      raw_wage_text for the ground truth in every case. increased_from_prior_column
+      reflects DOL's own bolding convention (its key states: "wage rates in bold
+      indicate an increase over the previous year's rate" — the previous YEAR
+      SHOWN, which is not always the previous calendar year before 2000).
+      footnote_codes carries the raw trailing footnote marker(s) from inside a
+      SINGLE cell's "[ ]"/"( )" (DOL's own lettered key on the source page
+      defines them; not reproduced here since the definitions are not per-row
+      data). dol.gov 403s every direct fetch from this build environment (a
+      domain-wide Akamai edge block, confirmed even at the site root) — the
+      same failure mode already solved in this schema for
+      ssa_benefits_by_geography, so StateMinWageTransformer follows that
+      precedent and fetches the page via the Wayback Machine
+      (FiscalHttp.fetchViaWayback) rather than dol.gov directly; source.url
+      below is the nominal/documentary URL, not what is actually requested.
+      DOL updates this page roughly annually (a new year column appended each
+      January); dataset_type=snapshot re-fetches and replaces the whole table
+      on every run since the fetch is a single small page.
+
+    dimensions:
+      type:
+        - state_minimum_wage_history
+
+    columns:
+      - <<: *partition_year
+        nullable: false
+      - name: jurisdiction_name
+        type: string
+        nullable: false
+        comment: >
+          Raw jurisdiction label as published: "Federal (FLSA)", a state name,
+          "District of Columbia", "Guam", "Puerto Rico", or "U.S. Virgin Islands"
+      - name: jurisdiction_type
+        type: string
+        nullable: false
+        comment: FEDERAL | STATE | DISTRICT | TERRITORY
+      - <<: *state_fips_column
+        comment: >
+          2-digit Census state FIPS (FK to geo.state_ref); populated only for
+          jurisdiction_type STATE/DISTRICT — null for FEDERAL and TERRITORY
+          rows (Guam/Puerto Rico/U.S. Virgin Islands are not in geo.state_ref)
+      - name: raw_wage_text
+        type: string
+        nullable: false
+        comment: Exact published cell text for this jurisdiction x year, verbatim (see table comment)
+      - name: wage_amount
+        type: double
+        nullable: true
+        comment: >
+          Parsed hourly wage in USD; populated ONLY when value_type=SINGLE —
+          null for RANGE/DUAL_TRACK/NOT_APPLICABLE/NOT_AVAILABLE/OTHER (never
+          a guessed or truncated number — see raw_wage_text)
+      - name: value_type
+        type: string
+        nullable: false
+        comment: SINGLE | RANGE | DUAL_TRACK | NOT_APPLICABLE | NOT_AVAILABLE | OTHER — classification of raw_wage_text
+      - name: increased_from_prior_column
+        type: boolean
+        nullable: false
+        comment: True when DOL bolded this cell (its own "increase over the previous year's rate" indicator)
+      - name: footnote_codes
+        type: string
+        nullable: true
+        comment: >
+          Raw footnote code(s) from inside a SINGLE cell's trailing "[ ]"/"( )",
+          verbatim (comma-separated when multiple); null otherwise. See DOL's
+          published Key section for definitions (not reproduced here)
+
+    source:
+      type: http
+      # Nominal/documentary source; StateMinWageTransformer fetches the page via
+      # the Wayback Machine instead (see FiscalHttp.fetchViaWayback) because
+      # dol.gov 403s direct fetches from this build environment.
+      url: "https://www.dol.gov/agencies/whd/state/minimum-wage/history"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.StateMinWageTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=state_minimum_wage_history/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: state_minimum_wage_history
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1574,6 +1708,17 @@ constraints:
       # No FK on county_fips: valid only for county-level units (gov_type_code=1);
       # state-level rows carry a non-county placeholder there, so a blanket FK
       # would misrepresent the contract for 5 of the 6 gov_type_code values.
+
+  state_minimum_wage_history:
+    primaryKey: [year, jurisdiction_name]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      # state_fips is null for jurisdiction_type FEDERAL/TERRITORY (Guam/Puerto
+      # Rico/U.S. Virgin Islands are not in geo.state_ref); the FK only applies
+      # to the STATE/DISTRICT rows where it is populated.
 
 # ============================================================================
 # VIEWS

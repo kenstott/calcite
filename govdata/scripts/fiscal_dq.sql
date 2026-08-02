@@ -4,7 +4,8 @@
 -- Tables: soi_income_by_zip, soi_income_by_county, county_migration_flows,
 --         exempt_org_master, exempt_org_990, usaspending_by_agency,
 --         usaspending_by_state, sba_loan_approvals, ssa_benefits_by_geography,
---         ssa_benefits_by_geography_acs, govt_finance_by_unit
+--         ssa_benefits_by_geography_acs, govt_finance_by_unit,
+--         state_minimum_wage_history
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns ('type' for all; also 'year' or 'program' where present).
 -- Large tables carry dqRowLimit and sample in DQ mode; T2 thresholds reflect the sample.
@@ -460,6 +461,63 @@ SELECT 'fiscal', 'govt_finance_by_unit', 'T7_gov_type_coverage',
   'Distinct gov_type_code values found (expect all 6: state/county/city/township/special district/school district)'
 FROM (SELECT COUNT(DISTINCT gov_type_code) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: state_minimum_wage_history (DOL WHD state minimum wage history; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T2_row_count',
+  CASE WHEN n >= 1500 THEN 'pass' ELSE 'fail' END, n, 1500, 'Expected >=1500 jurisdiction-year rows (55 jurisdictions x >=27 published years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year/jurisdiction_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true)
+  WHERE year IS NULL OR jurisdiction_name IS NULL);
+
+-- T7 regression guard: confirm the parser still sees all 4 jurisdiction types and still
+-- classifies a majority of cells as the unambiguous SINGLE value_type — a classifier
+-- regression that dumped everything into OTHER would pass T1/T2/T6 silently.
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T7_jurisdiction_type_coverage',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'warn' END, n, 4,
+  'Distinct jurisdiction_type values found (expect all 4: FEDERAL/STATE/DISTRICT/TERRITORY)'
+FROM (SELECT COUNT(DISTINCT jurisdiction_type) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'state_minimum_wage_history', 'T7_single_value_type_present',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000,
+  'Rows classified value_type=SINGLE (majority of cells are unambiguous single wage figures)'
+FROM (SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/state_minimum_wage_history', allow_moved_paths := true)
+  WHERE value_type = 'SINGLE');
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
