@@ -62,6 +62,27 @@ dependencies {
     implementation(project(":govdata"))
     implementation("com.formdev:flatlaf:3.3")
     implementation("org.knowm.xchart:xchart:4.0.4")
+    // Multivariate regression (OLS, 2SLS) and hypothesis tests for ols_regression,
+    // iv_2sls, diff_in_diff, and hypothesis_test — real matrix algebra DuckDB's
+    // single-pass SQL aggregates (corr, regr_slope, ...) can't express. Frozen/stable
+    // API (last release 2016); no transitive dependencies of its own.
+    implementation("org.apache.commons:commons-math3:3.6.1")
+    // Random forest / gradient boosting for flexible_regression, feature_importance, and
+    // as the nuisance-function learner in double_ml_ate — nonlinear ML that neither DuckDB
+    // SQL nor Commons Math's linear-model classes can do. Pure-JVM (no Python/native
+    // runtime), matching this server's existing bundled-JRE distribution model. Pinned to
+    // 4.3.0, not the newest 6.x line: 6.2.5's smile-base jar is compiled to Java 25 class
+    // files (major version 69), which this module's Java 21 compiler chain cannot read
+    // ("bad class file") — 4.3.0 targets Java 21 bytecode (major version 65) and is
+    // confirmed compatible. Re-check bytecode version before bumping past this.
+    implementation("com.github.haifengl:smile-core:4.3.0") {
+        // smile-base strictly pins duckdb_jdbc:1.2.0 (its own optional DataFrame-from-DuckDB
+        // reader, unused here — StatsMlEngine builds DataFrames directly from extracted
+        // columns) which conflicts with this module's actual duckdb_jdbc:1.4.4.0 and fails
+        // Gradle's consistent-resolution check on the test classpath. Excluding it leaves
+        // the project's own duckdb_jdbc version in charge everywhere.
+        exclude(group = "org.duckdb", module = "duckdb_jdbc")
+    }
 
     // log4j-slf4j-impl (not -slf4j2-impl) is the log4j2 binding for SLF4J 1.7, which is the API
     // version this jar actually ships. Pairs with govdata's bundled log4j2.xml.

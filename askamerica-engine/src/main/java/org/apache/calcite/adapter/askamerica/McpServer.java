@@ -34,6 +34,10 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -382,6 +386,35 @@ public class McpServer {
             + "can be judged; correlation is not causation. For cross-dataset relations use "
             + "fetch_aligned_series to align series on a shared date grain or FIPS key, and "
             + "resolve_geo to map place names to FIPS before joining. "
+            + "corr()/regr_*() only handle ONE predictor. For more than one predictor, a "
+            + "suspected instrumented/endogenous relationship, a treatment-vs-control policy "
+            + "comparison, or a significance test rather than a bare descriptive statistic, "
+            + "use the dedicated stats tools instead of hand-computing over query() rows: "
+            + "ols_regression (multivariate OLS — coefficients/SEs/p-values/R²), "
+            + "iv_2sls (two-stage least squares with a corrected-SE point estimate, not the "
+            + "upward-biased SEs a naive two-OLS-calls implementation gives), "
+            + "diff_in_diff (treatment*post interaction regression, with a parallel-trends "
+            + "caveat), hypothesis_test (t_test/anova/chi_square/ks_test — is a difference "
+            + "large enough to not plausibly be chance, given n), panel_fixed_effects (two-way "
+            + "entity+time fixed effects for panel/longitudinal data, e.g. state-year data — "
+            + "controls for both fixed state characteristics AND nationwide-per-year shocks, "
+            + "which diff_in_diff's simple dummies can't do with more than two periods), and "
+            + "robust_regression (OLS with heteroskedasticity-robust or cluster-robust SEs — "
+            + "use when observations aren't independent, e.g. repeated years of the same "
+            + "state). Each takes a SQL SELECT plus column-name role assignments and runs the "
+            + "FULL result set through real matrix algebra (Apache Commons Math), not the "
+            + "row-limited query() path. For nonlinear/interaction relationships a linear model "
+            + "can't capture, or a causal effect estimate that needs flexible ML nuisance "
+            + "models rather than a linear control set: flexible_regression (random forest / "
+            + "gradient boosting regression — in-sample fit + variable importance, NOT a "
+            + "substitute for a held-out test set), feature_importance (ranks predictors by "
+            + "how much a tree ensemble actually used them — not a causal ranking), and "
+            + "double_ml_ate (Chernozhukov et al. 2018 Double/Debiased ML average treatment "
+            + "effect — valid even with flexible ML nuisance functions, but still ASSUMES "
+            + "UNCONFOUNDEDNESS like any observational-data causal estimate; prefer iv_2sls "
+            + "when a genuine instrument is available instead of an unconfoundedness "
+            + "argument). These three run on Smile, a separate JVM ML dependency from the "
+            + "closed-form Commons Math tools above. "
             + "This is a versioned snapshot, not a live feed: describe_table reports a "
             + "table's declared coverage window, and an empty result outside that window "
             + "means the period is not published yet, not zero. Say so rather than "
@@ -512,6 +545,247 @@ public class McpServer {
             + "compute corr/regr in the engine. Use this for cross-dataset correlation or "
             + "regression; for a single-table statistic, just call query with corr()/regr_*().",
             schema(alignProps, new String[]{"series"})));
+
+        ObjectNode olsProps = MAPPER.createObjectNode();
+        olsProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome and predictor columns needed below, one row "
+            + "per observation. Same dialect rules as the query tool."));
+        olsProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ObjectNode predictorsProp = MAPPER.createObjectNode();
+        predictorsProp.put("type", "array");
+        predictorsProp.put("description",
+            "Column names of the independent variables (x). An intercept is added "
+            + "automatically — do not include one.");
+        olsProps.set("predictors", predictorsProp);
+        tools.add(
+            tool("ols_regression",
+            "Multivariate OLS regression (y ~ intercept + x1 + x2 + ...) with proper "
+            + "multiple covariates — coefficients, standard errors, t-stats, p-values, "
+            + "R²/adjusted R², and the overall F-test. Use this instead of corr()/regr_slope() "
+            + "in query() when you have more than one predictor; those SQL aggregates only "
+            + "do simple bivariate relationships.",
+            schema(olsProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode ivProps = MAPPER.createObjectNode();
+        ivProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome, endogenous, instrument, and control columns "
+            + "needed below, one row per observation."));
+        ivProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ivProps.set("endogenous", prop("string",
+            "Column name of the single endogenous regressor — the variable you suspect is "
+            + "correlated with the error term (reverse causality / omitted-variable bias) and "
+            + "want to instrument for."));
+        ObjectNode instrumentsProp = MAPPER.createObjectNode();
+        instrumentsProp.put("type", "array");
+        instrumentsProp.put("description",
+            "Column names of one or more instruments: variables that plausibly affect the "
+            + "endogenous regressor but have no direct effect on the outcome except through "
+            + "it. Instrument validity cannot be tested by this tool — it must be argued, not "
+            + "computed.");
+        ivProps.set("instruments", instrumentsProp);
+        ObjectNode ivControlsProp = MAPPER.createObjectNode();
+        ivControlsProp.put("type", "array");
+        ivControlsProp.put("description",
+            "Optional exogenous control column names, included in both stages. Omit for none.");
+        ivProps.set("controls", ivControlsProp);
+        tools.add(
+            tool("iv_2sls",
+            "Two-stage least squares (instrumental variables) for a single endogenous "
+            + "regressor. Returns the corrected-standard-error 2SLS coefficients "
+            + "(NOT the upward-biased SEs a naive 'two OLS calls' implementation would give) "
+            + "plus the first-stage F-statistic with a weak-instrument warning "
+            + "(Stock-Yogo rule of thumb: F < 10 is weak). Use when you suspect reverse "
+            + "causality or omitted-variable bias between a predictor and the outcome and "
+            + "have a plausible instrument — otherwise use ols_regression.",
+            schema(ivProps, new String[]{"sql", "outcome", "endogenous", "instruments"})));
+
+        ObjectNode didProps = MAPPER.createObjectNode();
+        didProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome, treatment, post, and control columns needed "
+            + "below, one row per observation (e.g. one row per unit-period)."));
+        didProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        didProps.set("treatment", prop("string",
+            "Column name of the treatment-group indicator (1 = treated unit, 0 = control "
+            + "unit) — constant within a unit across periods."));
+        didProps.set("post", prop("string",
+            "Column name of the post-period indicator (1 = after the policy/event, "
+            + "0 = before)."));
+        ObjectNode didControlsProp = MAPPER.createObjectNode();
+        didControlsProp.put("type", "array");
+        didControlsProp.put("description", "Optional control column names. Omit for none.");
+        didProps.set("controls", didControlsProp);
+        tools.add(
+            tool("diff_in_diff",
+            "Difference-in-differences: y ~ treatment + post + treatment*post + controls. "
+            + "did_estimate (the treatment*post interaction coefficient) is the estimated "
+            + "average treatment effect on the treated, valid under the parallel-trends "
+            + "assumption — this tool does not test parallel trends itself; check pre-period "
+            + "trends separately (e.g. with ols_regression on pre-period-only data) before "
+            + "trusting the estimate.",
+            schema(didProps, new String[]{"sql", "outcome", "treatment", "post"})));
+
+        ObjectNode testProps = MAPPER.createObjectNode();
+        testProps.set("sql", prop("string",
+            "SQL SELECT returning the columns needed below, one row per observation."));
+        testProps.set("test", prop("string",
+            "'t_test' (two-sample Welch's, or one-sample if one_sample_mu is given), "
+            + "'anova' (one-way, 2+ groups), 'chi_square' (test of independence between two "
+            + "categorical columns), or 'ks_test' (two-sample Kolmogorov-Smirnov, compares "
+            + "whole distributions, not just means)."));
+        testProps.set("value_col", prop("string",
+            "Numeric column to test. Required for t_test, anova, ks_test."));
+        testProps.set("group_col", prop("string",
+            "Categorical column whose distinct values define the groups. Required for anova "
+            + "and ks_test; required for t_test unless one_sample_mu is given (t_test needs "
+            + "exactly 2 distinct group values; ks_test needs exactly 2)."));
+        testProps.set("one_sample_mu", prop("number",
+            "For a one-sample t_test only: the hypothesized population mean to test value_col "
+            + "against. Omit group_col when using this."));
+        testProps.set("row_col", prop("string",
+            "For chi_square only: first categorical column (contingency table rows)."));
+        testProps.set("col_col", prop("string",
+            "For chi_square only: second categorical column (contingency table columns)."));
+        tools.add(
+            tool("hypothesis_test",
+            "Statistical significance tests: is a difference between groups (or from a fixed "
+            + "value, or between two distributions, or between two categorical variables) "
+            + "large enough to not plausibly be chance, given the sample size? Complements "
+            + "query()'s descriptive stats (corr, regr_*, stddev_samp, ...), which describe a "
+            + "relationship's strength but don't test its statistical significance.",
+            schema(testProps, new String[]{"sql", "test"})));
+
+        ObjectNode feProps = MAPPER.createObjectNode();
+        feProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome, predictor, entity, and time columns needed "
+            + "below, one row per unit-period observation."));
+        feProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ObjectNode fePredictorsProp = MAPPER.createObjectNode();
+        fePredictorsProp.put("type", "array");
+        fePredictorsProp.put("description",
+            "Column names of the independent variables. No intercept is reported — it's "
+            + "absorbed into the entity and time effects, not because none exists.");
+        feProps.set("predictors", fePredictorsProp);
+        feProps.set("entity_col", prop("string",
+            "Column identifying the unit (e.g. state, county, firm) — constant within a unit "
+            + "across periods."));
+        feProps.set("time_col", prop("string",
+            "Column identifying the period (e.g. year) — constant across units within a "
+            + "period."));
+        tools.add(
+            tool("panel_fixed_effects",
+            "Two-way (entity + time) fixed-effects panel regression via the within/demeaning "
+            + "estimator — controls for everything constant within an entity over time (e.g. "
+            + "fixed state characteristics) AND everything common to all entities in a given "
+            + "period (e.g. a nationwide shock), which diff_in_diff's simple treatment/post "
+            + "dummies can't do with more than two periods or a staggered treatment timing. "
+            + "Standard errors use the correct panel degrees of freedom "
+            + "(n - k - (numEntities + numTimes - 1)), not what a naive dummy-variable OLS "
+            + "would report if it didn't know about the absorbed fixed effects.",
+            schema(feProps, new String[]{"sql", "outcome", "predictors", "entity_col", "time_col"})));
+
+        ObjectNode robustProps = MAPPER.createObjectNode();
+        robustProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome, predictor, and (if using cluster_col) cluster "
+            + "columns needed below, one row per observation."));
+        robustProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ObjectNode robustPredictorsProp = MAPPER.createObjectNode();
+        robustPredictorsProp.put("type", "array");
+        robustPredictorsProp.put("description",
+            "Column names of the independent variables (x). An intercept is added "
+            + "automatically.");
+        robustProps.set("predictors", robustPredictorsProp);
+        robustProps.set("cluster_col", prop("string",
+            "Optional categorical column defining clusters whose errors may be correlated "
+            + "(e.g. state, so multiple years of the same state aren't treated as independent "
+            + "observations). Omit for heteroskedasticity-robust (White/HC1) SEs instead — "
+            + "valid when errors vary in magnitude across observations but aren't correlated "
+            + "within any grouping."));
+        tools.add(
+            tool("robust_regression",
+            "OLS with heteroskedasticity-robust (White/HC1) or cluster-robust standard errors "
+            + "— same coefficients as ols_regression, corrected SEs. Use when observations "
+            + "plausibly aren't independent (e.g. repeated observations of the same state "
+            + "over years) or error variance plausibly isn't constant — both are common in "
+            + "state/county panel data and understate uncertainty if ignored.",
+            schema(robustProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode flexProps = MAPPER.createObjectNode();
+        flexProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome and predictor columns needed below, one row "
+            + "per observation."));
+        flexProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ObjectNode flexPredictorsProp = MAPPER.createObjectNode();
+        flexPredictorsProp.put("type", "array");
+        flexPredictorsProp.put("description", "Column names of the predictor variables.");
+        flexProps.set("predictors", flexPredictorsProp);
+        flexProps.set("method", prop("string",
+            "'random_forest' (default if omitted) or 'gradient_boosting'."));
+        tools.add(
+            tool("flexible_regression",
+            "Random forest or gradient boosting regression — captures nonlinear relationships "
+            + "and interactions that ols_regression's linear form can't, at the cost of "
+            + "interpretability (no coefficients, just fit quality and variable importance). "
+            + "Use when you suspect the relationship isn't linear/additive, or as an "
+            + "exploratory check on whether a linear model is leaving real signal on the "
+            + "table; use ols_regression when you need interpretable, reportable coefficients.",
+            schema(flexProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode importanceProps = MAPPER.createObjectNode();
+        importanceProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome and predictor columns needed below, one row "
+            + "per observation."));
+        importanceProps.set("outcome", prop("string", "Column name of the outcome to predict."));
+        ObjectNode importancePredictorsProp = MAPPER.createObjectNode();
+        importancePredictorsProp.put("type", "array");
+        importancePredictorsProp.put("description",
+            "Column names of the candidate predictor variables to rank by importance.");
+        importanceProps.set("predictors", importancePredictorsProp);
+        importanceProps.set("method", prop("string",
+            "'random_forest' (default if omitted) or 'gradient_boosting'."));
+        tools.add(
+            tool("feature_importance",
+            "Ranks predictors by how much a random forest / gradient boosting model actually "
+            + "used them to predict the outcome (impurity decrease summed across trees) — "
+            + "captures nonlinear and interaction effects a bivariate corr() ranking would "
+            + "miss entirely. NOT a causal ranking and not necessarily monotonic — a variable "
+            + "can rank high because trees split on it a lot, not because increasing it "
+            + "increases the outcome.",
+            schema(importanceProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode dmlProps = MAPPER.createObjectNode();
+        dmlProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome, treatment, and control columns needed below, "
+            + "one row per observation."));
+        dmlProps.set("outcome", prop("string", "Column name of the outcome (y)."));
+        dmlProps.set("treatment", prop("string",
+            "Column name of the treatment/exposure variable whose average effect on the "
+            + "outcome you want to estimate (can be continuous or 0/1)."));
+        ObjectNode dmlControlsProp = MAPPER.createObjectNode();
+        dmlControlsProp.put("type", "array");
+        dmlControlsProp.put("description",
+            "Column names of control variables — at least one required. DML's validity rests "
+            + "entirely on these being SUFFICIENT to satisfy unconfoundedness; it cannot "
+            + "detect or correct for an insufficient control set.");
+        dmlProps.set("controls", dmlControlsProp);
+        dmlProps.set("folds", prop("integer",
+            "Number of cross-fitting folds (default 5). Each fold's nuisance models are "
+            + "trained on the other folds only, so no observation's residual comes from a "
+            + "model that saw that observation."));
+        dmlProps.set("method", prop("string",
+            "'random_forest' (default if omitted) or 'gradient_boosting' — the nuisance-"
+            + "function learner for both the treatment and outcome models."));
+        tools.add(
+            tool("double_ml_ate",
+            "Double/Debiased Machine Learning average treatment effect (Chernozhukov et al. "
+            + "2018): cross-fits flexible ML nuisance models for treatment and outcome, then "
+            + "estimates the treatment effect from the orthogonalized residuals — valid even "
+            + "though the nuisance models themselves are biased/noisy ML fits, UNLIKE plugging "
+            + "raw ML predictions into a naive comparison. Still ASSUMES UNCONFOUNDEDNESS — "
+            + "this corrects for how the nuisance functions are estimated, not for whether the "
+            + "controls are the right ones; that's a substantive claim about the data you must "
+            + "argue for, this tool cannot verify it. Prefer iv_2sls when you have a genuine "
+            + "instrument instead of an unconfoundedness argument.",
+            schema(dmlProps, new String[]{"sql", "outcome", "treatment", "controls"})));
 
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
@@ -828,6 +1102,109 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=fetch_aligned_series on=" + on
                         + " stat=" + stat);
                     text = fetchAlignedSeries(seriesNode, on, stat, alignLimit);
+                    break;
+                }
+                case "ols_regression": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    log.println("[askamerica-mcp] tool=ols_regression outcome=" + outcome
+                        + " predictors=" + predictors);
+                    text = olsRegressionTool(sql, outcome, predictors);
+                    break;
+                }
+                case "iv_2sls": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    String endogenous = args.path("endogenous").asText();
+                    List<String> instruments = textArray(args.path("instruments"));
+                    List<String> controls = textArray(args.path("controls"));
+                    log.println("[askamerica-mcp] tool=iv_2sls outcome=" + outcome
+                        + " endogenous=" + endogenous + " instruments=" + instruments);
+                    text = iv2slsTool(sql, outcome, endogenous, instruments, controls);
+                    break;
+                }
+                case "diff_in_diff": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    String treatment = args.path("treatment").asText();
+                    String post = args.path("post").asText();
+                    List<String> controls = textArray(args.path("controls"));
+                    log.println("[askamerica-mcp] tool=diff_in_diff outcome=" + outcome);
+                    text = diffInDiffTool(sql, outcome, treatment, post, controls);
+                    break;
+                }
+                case "hypothesis_test": {
+                    String sql = args.path("sql").asText();
+                    String test = args.path("test").asText();
+                    String valueCol = args.has("value_col") && !args.get("value_col").isNull()
+                        ? args.get("value_col").asText() : null;
+                    String groupCol = args.has("group_col") && !args.get("group_col").isNull()
+                        ? args.get("group_col").asText() : null;
+                    Double oneSampleMu = args.has("one_sample_mu")
+                        && !args.get("one_sample_mu").isNull()
+                        ? args.get("one_sample_mu").asDouble() : null;
+                    String rowCol = args.has("row_col") && !args.get("row_col").isNull()
+                        ? args.get("row_col").asText() : null;
+                    String colCol = args.has("col_col") && !args.get("col_col").isNull()
+                        ? args.get("col_col").asText() : null;
+                    log.println("[askamerica-mcp] tool=hypothesis_test test=" + test);
+                    text = hypothesisTestTool(sql, test, valueCol, groupCol, oneSampleMu,
+                        rowCol, colCol);
+                    break;
+                }
+                case "panel_fixed_effects": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    String entityCol = args.path("entity_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    log.println("[askamerica-mcp] tool=panel_fixed_effects outcome=" + outcome);
+                    text = panelFixedEffectsTool(sql, outcome, predictors, entityCol, timeCol);
+                    break;
+                }
+                case "robust_regression": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    String clusterCol = args.has("cluster_col") && !args.get("cluster_col").isNull()
+                        ? args.get("cluster_col").asText() : null;
+                    log.println("[askamerica-mcp] tool=robust_regression outcome=" + outcome);
+                    text = robustRegressionTool(sql, outcome, predictors, clusterCol);
+                    break;
+                }
+                case "flexible_regression": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    String method = args.has("method") && !args.get("method").isNull()
+                        ? args.get("method").asText() : null;
+                    log.println("[askamerica-mcp] tool=flexible_regression outcome=" + outcome);
+                    text = flexibleRegressionTool(sql, outcome, predictors, method);
+                    break;
+                }
+                case "feature_importance": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    String method = args.has("method") && !args.get("method").isNull()
+                        ? args.get("method").asText() : null;
+                    log.println("[askamerica-mcp] tool=feature_importance outcome=" + outcome);
+                    text = featureImportanceTool(sql, outcome, predictors, method);
+                    break;
+                }
+                case "double_ml_ate": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    String treatment = args.path("treatment").asText();
+                    List<String> controls = textArray(args.path("controls"));
+                    Integer folds = args.has("folds") && !args.get("folds").isNull()
+                        ? args.get("folds").asInt() : null;
+                    String method = args.has("method") && !args.get("method").isNull()
+                        ? args.get("method").asText() : null;
+                    log.println("[askamerica-mcp] tool=double_ml_ate outcome=" + outcome
+                        + " treatment=" + treatment);
+                    text = doubleMlAteTool(sql, outcome, treatment, controls, folds, method);
                     break;
                 }
                 case "render_chart": {
@@ -1834,6 +2211,256 @@ public class McpServer {
         return runSqlOn(sql, stat != null ? 5 : limit);
     }
 
+    /** Reads a JSON array-of-strings node into a {@link List}; treats a missing/null node as
+     *  empty rather than throwing, since several stats tools take optional string arrays
+     *  (e.g. controls). */
+    private static List<String> textArray(JsonNode node) {
+        List<String> out = new ArrayList<>();
+        if (node != null && node.isArray()) {
+            for (JsonNode n : node) {
+                out.add(n.asText());
+            }
+        }
+        return out;
+    }
+
+    // ─── Regression / hypothesis-test tools (StatsEngine) ────────────────────────
+
+    private static String olsRegressionTool(String sql, String outcome, List<String> predictors)
+            throws Exception {
+        String[] cols = new String[1 + predictors.size()];
+        cols[0] = outcome;
+        for (int i = 0; i < predictors.size(); i++) {
+            cols[1 + i] = predictors.get(i);
+        }
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols);
+        double[] y = ex.column(0);
+        double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
+        StatsEngine.OlsResult result = StatsEngine.ols(y, x, predictors.toArray(new String[0]));
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String iv2slsTool(String sql, String outcome, String endogenous,
+            List<String> instruments, List<String> controls) throws Exception {
+        List<String> cols = new ArrayList<>();
+        cols.add(outcome);
+        cols.add(endogenous);
+        cols.addAll(instruments);
+        cols.addAll(controls);
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols.toArray(new String[0]));
+        double[] y = ex.column(outcome);
+        double[] endog = ex.column(endogenous);
+        double[][] instr = ex.columnsFor(instruments.toArray(new String[0]));
+        double[][] ctrl = ex.columnsFor(controls.toArray(new String[0]));
+        StatsEngine.Iv2slsResult result = StatsEngine.iv2sls(y, endog, instr, ctrl,
+            instruments.toArray(new String[0]), controls.toArray(new String[0]));
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String diffInDiffTool(String sql, String outcome, String treatment,
+            String post, List<String> controls) throws Exception {
+        List<String> cols = new ArrayList<>();
+        cols.add(outcome);
+        cols.add(treatment);
+        cols.add(post);
+        cols.addAll(controls);
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols.toArray(new String[0]));
+        double[] y = ex.column(outcome);
+        double[] treat = ex.column(treatment);
+        double[] postCol = ex.column(post);
+        double[][] ctrl = ex.columnsFor(controls.toArray(new String[0]));
+        StatsEngine.DiffInDiffResult result = StatsEngine.diffInDiff(y, treat, postCol, ctrl,
+            controls.toArray(new String[0]));
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String hypothesisTestTool(String sql, String test, String valueCol,
+            String groupCol, Double oneSampleMu, String rowCol, String colCol) throws Exception {
+        Connection c = getCatalogConnection();
+        if ("chi_square".equals(test)) {
+            if (rowCol == null || colCol == null) {
+                throw new IllegalArgumentException(
+                    "chi_square requires row_col and col_col");
+            }
+            StatsEngine.ContingencyTable table =
+                StatsEngine.extractContingencyTable(c, sql, rowCol, colCol);
+            ObjectNode out = StatsEngine.hypothesisTest(MAPPER, test, java.util.Collections.emptyMap(),
+                null, table.counts);
+            ArrayNode rowLabels = MAPPER.createArrayNode();
+            table.rowLabels.forEach(rowLabels::add);
+            ArrayNode colLabels = MAPPER.createArrayNode();
+            table.colLabels.forEach(colLabels::add);
+            out.set("row_labels", rowLabels);
+            out.set("col_labels", colLabels);
+            return out.toString();
+        }
+        if (valueCol == null) {
+            throw new IllegalArgumentException("value_col is required for test '" + test + "'");
+        }
+        Map<String, double[]> groups;
+        if (groupCol != null) {
+            groups = StatsEngine.extractGroupedColumn(c, sql, groupCol, valueCol);
+        } else {
+            if (oneSampleMu == null) {
+                throw new IllegalArgumentException(
+                    "either group_col or one_sample_mu is required for test '" + test + "'");
+            }
+            StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, new String[]{valueCol});
+            groups = new LinkedHashMap<>();
+            groups.put(valueCol, ex.column(0));
+        }
+        ObjectNode out = StatsEngine.hypothesisTest(MAPPER, test, groups, oneSampleMu, null);
+        return out.toString();
+    }
+
+    private static String panelFixedEffectsTool(String sql, String outcome,
+            List<String> predictors, String entityCol, String timeCol) throws Exception {
+        List<String> numCols = new ArrayList<>();
+        numCols.add(outcome);
+        numCols.addAll(predictors);
+        Connection c = getCatalogConnection();
+        StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(c, sql,
+            numCols.toArray(new String[0]), new String[]{entityCol, timeCol});
+        double[] y = ex.column(outcome);
+        double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
+        String[] entityIds = ex.labelColumn(entityCol);
+        String[] timeIds = ex.labelColumn(timeCol);
+        StatsEngine.PanelFixedEffectsResult result = StatsEngine.panelFixedEffects(y, x,
+            predictors.toArray(new String[0]), entityIds, timeIds);
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String robustRegressionTool(String sql, String outcome,
+            List<String> predictors, String clusterCol) throws Exception {
+        List<String> numCols = new ArrayList<>();
+        numCols.add(outcome);
+        numCols.addAll(predictors);
+        Connection c = getCatalogConnection();
+        if (clusterCol != null) {
+            StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(c, sql,
+                numCols.toArray(new String[0]), new String[]{clusterCol});
+            double[] y = ex.column(outcome);
+            double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
+            String[] clusterIds = ex.labelColumn(clusterCol);
+            StatsEngine.RobustRegressionResult result = StatsEngine.robustRegression(y, x,
+                predictors.toArray(new String[0]), clusterIds);
+            ObjectNode out = result.toJson(MAPPER);
+            addExtractionMeta(out, ex);
+            return out.toString();
+        }
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, numCols.toArray(new String[0]));
+        double[] y = ex.column(0);
+        double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
+        StatsEngine.RobustRegressionResult result = StatsEngine.robustRegression(y, x,
+            predictors.toArray(new String[0]), null);
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String flexibleRegressionTool(String sql, String outcome,
+            List<String> predictors, String method) throws Exception {
+        String resolvedMethod = method != null ? method : "random_forest";
+        String[] cols = new String[1 + predictors.size()];
+        cols[0] = outcome;
+        for (int i = 0; i < predictors.size(); i++) {
+            cols[1 + i] = predictors.get(i);
+        }
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols);
+        double[] y = ex.column(0);
+        double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
+        StatsMlEngine.FlexibleRegressionResult result = StatsMlEngine.flexibleRegression(y, x,
+            outcome, predictors.toArray(new String[0]), resolvedMethod);
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String featureImportanceTool(String sql, String outcome,
+            List<String> predictors, String method) throws Exception {
+        String resolvedMethod = method != null ? method : "random_forest";
+        String[] predictorNames = predictors.toArray(new String[0]);
+        String[] cols = new String[1 + predictorNames.length];
+        cols[0] = outcome;
+        System.arraycopy(predictorNames, 0, cols, 1, predictorNames.length);
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols);
+        double[] y = ex.column(0);
+        double[][] x = ex.columnsFor(predictorNames);
+        StatsMlEngine.FlexibleRegressionResult result =
+            StatsMlEngine.flexibleRegression(y, x, outcome, predictorNames, resolvedMethod);
+
+        Integer[] order = new Integer[predictorNames.length];
+        for (int i = 0; i < order.length; i++) {
+            order[i] = i;
+        }
+        java.util.Arrays.sort(order,
+            (a, b) -> Double.compare(result.importance[b], result.importance[a]));
+
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("method", resolvedMethod);
+        out.put("n", result.n);
+        ArrayNode ranked = MAPPER.createArrayNode();
+        for (int idx : order) {
+            ObjectNode row = MAPPER.createObjectNode();
+            row.put("predictor", predictorNames[idx]);
+            row.put("importance", result.importance[idx]);
+            ranked.add(row);
+        }
+        out.set("ranked_importance", ranked);
+        out.put("note", "Ranked by impurity decrease summed across trees (" + resolvedMethod
+            + ") — reflects how much the model relied on each predictor to split, not a "
+            + "causal or necessarily monotonic effect size.");
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    private static String doubleMlAteTool(String sql, String outcome, String treatment,
+            List<String> controls, Integer folds, String method) throws Exception {
+        String resolvedMethod = method != null ? method : "random_forest";
+        int resolvedFolds = folds != null ? folds : 5;
+        List<String> cols = new ArrayList<>();
+        cols.add(outcome);
+        cols.add(treatment);
+        cols.addAll(controls);
+        Connection c = getCatalogConnection();
+        StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, cols.toArray(new String[0]));
+        double[] y = ex.column(outcome);
+        double[] treat = ex.column(treatment);
+        double[][] ctrl = ex.columnsFor(controls.toArray(new String[0]));
+        StatsMlEngine.DoubleMlResult result = StatsMlEngine.doubleMlAte(y, treat, ctrl,
+            controls.toArray(new String[0]), resolvedFolds, resolvedMethod);
+        ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    /** Attaches sample-size bookkeeping every stats tool result shares — how many source
+     *  rows the SQL returned vs. how many survived complete-case filtering, so a caller isn't
+     *  left guessing whether "n" in the result quietly excludes rows with a null. */
+    private static void addExtractionMeta(ObjectNode out, StatsEngine.Extraction ex) {
+        out.put("rows_returned_by_sql", ex.totalRows);
+        out.put("rows_dropped_for_null", ex.droppedForNull);
+    }
+
+    /** Same as {@link #addExtractionMeta(ObjectNode, StatsEngine.Extraction)} for the
+     *  labeled-extraction path (panel_fixed_effects, robust_regression with cluster_col). */
+    private static void addExtractionMeta(ObjectNode out, StatsEngine.LabeledExtraction ex) {
+        out.put("rows_returned_by_sql", ex.totalRows);
+        out.put("rows_dropped_for_null", ex.droppedForNull);
+    }
 
     /** Base for the AskAmerica API — system property, then env, then production. */
     private static String apiBase() {
