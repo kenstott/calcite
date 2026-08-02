@@ -36,12 +36,20 @@ import java.util.Map;
  *       {@code API_DATA_GOV}.</li>
  *   <li>{@code federal_judges} — every Article III judge ever commissioned, from the
  *       Federal Judicial Center's biographical directory export. No key required.</li>
+ *   <li>{@code electoral_college_votes} — Electoral College votes by state, President
+ *       and VP, from NARA's per-election results pages. No key required.</li>
+ *   <li>{@code presidential_election_results} — popular vote by state, from FEC's
+ *       official post-election results workbook. No key required, but only covers
+ *       years FEC published in this specific XLSX format (confirmed: 2024 only, as
+ *       of when this table was built — see the table's schema comment).</li>
  * </ul>
  *
- * <p>All three response/row transformers are implemented and verified against live
- * downloads (2026-08-01): {@code CongressMemberTransformer} and
- * {@code NominationTransformer} against a live keyed Congress.gov response,
- * {@code FederalJudgesTransformer} against a live FJC CSV download.
+ * <p>All five response transformers are implemented and verified against live
+ * downloads: {@code CongressMemberTransformer} and {@code NominationTransformer}
+ * against a live keyed Congress.gov response, {@code FederalJudgesTransformer}
+ * against a live FJC CSV download (2026-08-01); {@code ElectoralCollegeTransformer}
+ * against live NARA pages spanning 1824-2024, and {@code PresidentialResultsTransformer}
+ * against FEC's live 2024 discovery + workbook (2026-08-02).
  *
  * <p>Example model configuration:
  * <pre>

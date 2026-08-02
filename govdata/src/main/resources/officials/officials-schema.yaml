@@ -55,10 +55,20 @@ column_templates:
     name: congress
     type: INTEGER
 
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
   type_partition: &type_partition
     style: hive
     columnDefinitions:
       - *partition_type
+
+  year_partition: &year_partition
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
 
   congress_partitions: &congress_partitions
     style: hive
@@ -82,6 +92,17 @@ dimension_values:
     type: range
     start: "${GOVDATA_START_CONGRESS:117}"
     end: "${GOVDATA_END_CONGRESS:119}"
+
+  # Presidential elections are quadrennial. NOT anchored at 1789: the founding election's
+  # inauguration-year numbering (1789, then 1792 onward) breaks a fixed step=4 arithmetic
+  # sequence (1789 -> 1793 by step 4 lands one year off from the real next election, 1792).
+  # 1976 is a plain, arithmetic-clean modern floor — deeper history needs a one-off manual
+  # backfill of the irregular 1789 point, not attempted here. Bump both on each new cycle.
+  presidential_year_range: &presidential_year_range
+    type: range
+    start: "${GOVDATA_START_PRES_YEAR:1976}"
+    end: "${GOVDATA_END_PRES_YEAR:2024}"
+    step: 4
 
 # ============================================================================
 # COMPACTION DEFAULTS
@@ -678,6 +699,188 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # ELECTORAL_COLLEGE_VOTES — presidential/VP electoral votes by state, per election
+  # ---------------------------------------------------------------------------
+  - name: electoral_college_votes
+    pattern: "type=electoral_college_votes/year=*/*.parquet"
+    partitions: *year_partition
+    comment: >
+      Electoral College vote allocation by state, for President and Vice President,
+      from the National Archives (NARA) official per-election results page
+      (archives.gov/electoral-college/{year}) — the government's own record of the
+      Electoral College outcome, not a poll or projection. One row per
+      (year, state, office, candidate). Verified stable across 200 years of live
+      pages (1824, 1876, 1960, 1980, 2000, 2020, 2024): each page has a state-by-state
+      table whose "For President"/"For Vice-President" header groups carry a colspan
+      equal to however many candidates received at least one elector that year —
+      parsed dynamically, not a fixed column count. `candidate_party` is populated only
+      for the winner and the top losing candidate (the only two NARA names on the
+      page's own summary block); other candidates' party is null — NARA's per-election
+      page does not state it for anyone else, including write-in/faithless-elector
+      recipients. Coverage defaults to 1976-2024 (presidential_year_range) — see that
+      dimension's comment for why 1789 isn't the floor. Cross-references geo.state_ref
+      via state_name (same caveat as members: DC has 3 electoral votes since the 23rd
+      Amendment but is not itself a state, so 3-elector DC rows will not resolve
+      against a strict state_ref join in years before 1961 if the range is widened).
+
+    dimensions:
+      type:
+        - electoral_college_votes
+      year: *presidential_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: state_name
+        type: string
+        nullable: false
+        comment: Full state name as published by NARA (e.g. "California"); join key into geo.state_ref.state_name
+      - name: state_electoral_votes
+        type: integer
+        nullable: true
+        comment: Total electoral votes allocated to this state for this election
+      - name: office
+        type: string
+        nullable: false
+        comment: PRESIDENT or VICE_PRESIDENT
+      - name: candidate_name
+        type: string
+        nullable: false
+        comment: Candidate name as published by NARA (format varies by era, e.g. "Kamala D. Harris")
+      - name: candidate_home_state
+        type: string
+        nullable: true
+        comment: Candidate's home state as published ("... of California"); null when NARA's text doesn't follow that pattern
+      - name: candidate_party
+        type: string
+        nullable: true
+        comment: >
+          Party abbreviation, populated ONLY for the page's designated winner and main
+          opponent (the only two candidates NARA's summary block names with a party) —
+          null for every other candidate on the page, including anyone who received
+          faithless-elector or write-in votes.
+      - name: electoral_votes_won
+        type: integer
+        nullable: true
+        comment: Electoral votes this candidate won in this state ("-" in the source becomes 0, not null)
+
+    source:
+      type: http
+      url: "https://www.archives.gov/electoral-college/{year}"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      # Implemented and verified against live pages spanning 1824-2024 (2026-08-02).
+      responseTransformer: "org.apache.calcite.adapter.govdata.officials.ElectoralCollegeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=electoral_college_votes/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: electoral_college_votes
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # PRESIDENTIAL_ELECTION_RESULTS — popular vote by state, per election (FEC)
+  # ---------------------------------------------------------------------------
+  - name: presidential_election_results
+    pattern: "type=presidential_election_results/year=*/*.parquet"
+    partitions: *year_partition
+    comment: >
+      Popular vote totals by state and candidate for the presidential general
+      election, from the FEC's official post-election results workbook
+      (fec.gov, "{year} Presidential General Election Results", published as XLSX).
+      Richer than electoral_college_votes for the years it covers — actual vote
+      counts, not just elector allocation — but coverage is NOT full-history: FEC
+      only publishes this specific XLSX format for recent cycles (confirmed: 2024;
+      unconfirmed further back — the source page lists only PDF, not XLSX, for
+      cycles further back at the time this table was built, 2026-08-02). No
+      predictable per-year URL exists (each year's file lives behind an opaque
+      numeric document ID), so this transformer discovers the URL per year by
+      scraping FEC's static results-and-voting-information listing page rather than
+      templating a URL directly — a year with no matching link on that page yields
+      zero rows for this table, not an error; check the ETL log for
+      "no results link found" to distinguish "not published this way" from a real
+      failure. One row per (year, state, candidate). Cross-references geo.state_ref
+      via state_name.
+
+    dimensions:
+      type:
+        - presidential_election_results
+      year: *presidential_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: state_name
+        type: string
+        nullable: false
+        comment: Full state name (converted from the source's 2-letter postal code); join key into geo.state_ref.state_name
+      - name: state_electoral_votes
+        type: integer
+        nullable: true
+        comment: Total electoral votes allocated to this state (also carried on electoral_college_votes)
+      - name: candidate_name
+        type: string
+        nullable: false
+        comment: Candidate surname/label as published in the workbook's column header (format varies by year)
+      - name: popular_votes
+        type: long
+        nullable: true
+        comment: Popular votes received by this candidate in this state
+      - name: state_total_votes
+        type: long
+        nullable: true
+        comment: Total votes cast for President in this state, all candidates + write-ins
+
+    source:
+      type: http
+      url: "https://www.fec.gov/introduction-campaign-finance/election-results-and-voting-information/"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      # Implemented and verified against the live 2024 workbook (2026-08-02). Years
+      # without a discoverable XLSX link yield zero rows, not an error — see comment.
+      responseTransformer: "org.apache.calcite.adapter.govdata.officials.PresidentialResultsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=presidential_election_results/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: presidential_election_results
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -716,3 +919,139 @@ constraints:
     # to members/nominations either: appointing_president_N is a free-text name, not an
     # ID — matching it to a member or nominee would be name-matching, not a real key
     # relationship, and isn't attempted here.
+  electoral_college_votes:
+    primaryKey: [year, state_name, office, candidate_name]
+    foreignKeys:
+      - columns: [state_name]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_name]
+        comment: Non-enforcing beyond 50 states + DC, same caveat as members.state_name
+    # No FK to members: no shared ID (a president/VP is never a bioguide_id-bearing
+    # member of Congress in this table's data, even for the rare case of a sitting
+    # legislator on a ticket — NARA publishes name text only, not a Congress.gov ID).
+  presidential_election_results:
+    primaryKey: [year, state_name, candidate_name]
+    foreignKeys:
+      - columns: [state_name]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_name]
+        comment: Non-enforcing beyond 50 states + DC, same caveat as members.state_name
+    # No FK to electoral_college_votes: the two tables share (year, state_name) but not
+    # a matching candidate-name spelling/format guarantee (different source, different
+    # publisher) — join on (year, state_name) at query time rather than declaring a
+    # candidate-level FK this data doesn't actually guarantee.
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+
+views:
+
+  - name: state_political_index
+    comment: >
+      Composite Political Index (CPI) per state: 0.50*I_Pres + 0.30*I_Senate +
+      0.20*I_House, on a -100 (max Republican) to +100 (max Democratic) scale.
+      "Current" = the latest congress present in members (bounded by
+      GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS — not necessarily the literal
+      current Congress if those knobs haven't been bumped for a new session).
+
+      DEVIATION FROM THE ORIGINAL SPEC (deliberate, decided 2026-08-02): I_Pres was
+      specified as a two-party POPULAR vote share margin, blended 2:1 across the two
+      most recent presidential cycles. presidential_election_results only has 2024
+      (FEC hasn't published this XLSX format further back yet) and carries no party
+      column, so that could not be computed for two cycles today. Substituted a
+      two-party ELECTORAL vote share margin from electoral_college_votes instead —
+      it has full 1976-2024 history AND a real candidate_party column, so both cycles
+      resolve with no fuzzy join. This is a different statistic (EV share, not
+      popular-vote share) — do not treat i_pres as a popular-vote number.
+
+      Known caveats, not silently absorbed:
+      (1) candidate_party on electoral_college_votes is populated only for the page's
+      winner/main-opponent — reliable as 'D'/'R' in modern two-party-dominant
+      elections, but a state whose top-2 was NOT the two major parties would be
+      excluded from the margin calc for that year, not misattributed.
+      (2) party_name on members reflects Congress.gov's literal reported affiliation,
+      NOT caucus alignment — an independent who caucuses with a party (e.g. a
+      Sanders/King-style seat) is counted as neither s_d nor s_r, understating that
+      state's I_Senate versus its practical governing-coalition lean.
+      (3) i_pres degrades gracefully to M_t alone (via COALESCE) for a state with only
+      one presidential cycle on record instead of two — verified against a synthetic
+      single-cycle case, not just the two-cycle case.
+      (4) H_D/H_R (and S_D/S_R) denominators are exactly as the original formula
+      specified — vacant seats and non-D/R members are excluded from the denominator
+      entirely, not counted as a third bucket.
+    sql: >
+      SELECT
+        h.state_name,
+        0.50 * p.i_pres
+          + 0.30 * (100.0 * (s.s_d - s.s_r) / 2)
+          + 0.20 * (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0))          AS cpi,
+        p.i_pres,
+        (100.0 * (s.s_d - s.s_r) / 2)                                            AS i_senate,
+        (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0))                     AS i_house,
+        s.s_d, s.s_r, h.h_d, h.h_r,
+        p.margin_t, p.margin_t1, p.year_t, p.year_t1,
+        CASE
+          WHEN 0.50 * p.i_pres + 0.30 * (100.0 * (s.s_d - s.s_r) / 2) + 0.20 * (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0)) >= 50.0 THEN 'Solid Democratic'
+          WHEN 0.50 * p.i_pres + 0.30 * (100.0 * (s.s_d - s.s_r) / 2) + 0.20 * (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0)) >= 15.0 THEN 'Lean Democratic'
+          WHEN 0.50 * p.i_pres + 0.30 * (100.0 * (s.s_d - s.s_r) / 2) + 0.20 * (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0)) > -15.0 THEN 'Competitive / Battleground'
+          WHEN 0.50 * p.i_pres + 0.30 * (100.0 * (s.s_d - s.s_r) / 2) + 0.20 * (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0)) > -50.0 THEN 'Lean Republican'
+          ELSE 'Solid Republican'
+        END                                                                      AS political_lean
+      FROM (
+        SELECT
+          state_name,
+          SUM(CASE WHEN party_name = 'Democratic' THEN 1 ELSE 0 END) AS h_d,
+          SUM(CASE WHEN party_name = 'Republican' THEN 1 ELSE 0 END) AS h_r
+        FROM members
+        WHERE district IS NOT NULL AND congress = (SELECT MAX(congress) FROM members)
+        GROUP BY state_name
+      ) h
+      JOIN (
+        SELECT
+          state_name,
+          SUM(CASE WHEN party_name = 'Democratic' THEN 1 ELSE 0 END) AS s_d,
+          SUM(CASE WHEN party_name = 'Republican' THEN 1 ELSE 0 END) AS s_r
+        FROM members
+        WHERE district IS NULL AND congress = (SELECT MAX(congress) FROM members)
+        GROUP BY state_name
+      ) s ON s.state_name = h.state_name
+      JOIN (
+        SELECT
+          cur.state_name,
+          (2 * cur.margin + COALESCE(prev.margin, cur.margin)) / 3.0 AS i_pres,
+          cur.margin  AS margin_t,
+          prev.margin AS margin_t1,
+          cur.year    AS year_t,
+          prev.year   AS year_t1
+        FROM (
+          SELECT state_name, year, margin FROM (
+            SELECT
+              state_name, year,
+              100.0 * (SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
+                      - SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END))
+                / NULLIF(SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
+                        + SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END), 0) AS margin,
+              RANK() OVER (PARTITION BY state_name ORDER BY year DESC) AS yr_rank
+            FROM electoral_college_votes
+            WHERE office = 'PRESIDENT' AND candidate_party IN ('D', 'R')
+            GROUP BY state_name, year
+          ) ranked_cur WHERE yr_rank = 1
+        ) cur
+        LEFT JOIN (
+          SELECT state_name, year, margin FROM (
+            SELECT
+              state_name, year,
+              100.0 * (SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
+                      - SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END))
+                / NULLIF(SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
+                        + SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END), 0) AS margin,
+              RANK() OVER (PARTITION BY state_name ORDER BY year DESC) AS yr_rank
+            FROM electoral_college_votes
+            WHERE office = 'PRESIDENT' AND candidate_party IN ('D', 'R')
+            GROUP BY state_name, year
+          ) ranked_prev WHERE yr_rank = 2
+        ) prev ON prev.state_name = cur.state_name
+      ) p ON p.state_name = h.state_name

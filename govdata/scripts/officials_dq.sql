@@ -281,6 +281,151 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/official
       WHERE court_type_2 IS NOT NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: electoral_college_votes
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true));
+
+-- T2: row_count (default 1976-2024 = 13 elections; ~51 states x ~2-3 candidates-with-votes
+-- x 2 offices is a loose floor, not a tight expectation — third-party/faithless-elector
+-- rows vary the real count year to year)
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T2_row_count',
+  CASE WHEN n >= 1200 THEN 'pass' ELSE 'fail' END,
+  n, 1200, 'Expected at least 1200 rows across the default 1976-2024 range'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — candidate_party is EXPECTED mostly-null (only the page's winner/
+-- main-opponent get one), so exclude it rather than warn on a documented gap every run.
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'candidate_party', 'candidate_home_state')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL year, state_name, office, or candidate_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true)
+      WHERE year IS NULL OR state_name IS NULL OR office IS NULL OR candidate_name IS NULL);
+
+-- T7: office values
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T7_office_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with office NOT IN (''PRESIDENT'',''VICE_PRESIDENT'')'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true)
+      WHERE office NOT IN ('PRESIDENT', 'VICE_PRESIDENT'));
+
+-- T7: no state name carries a stray footnote digit (the exact bug caught and fixed
+-- 2026-08-02 on the 1824 page — regression guard, not just a format check)
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T7_state_name_footnote_regression',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'state_name values ending in a digit (footnote-marker leakage)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true)
+      WHERE regexp_matches(state_name, '[0-9]$'));
+
+-- T7: winner electoral vote total is plausible (270-538 majority range) per election year
+INSERT INTO dq_results
+SELECT 'officials', 'electoral_college_votes', 'T7_winner_ev_total_plausible',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Election years where the top PRESIDENT candidate''s summed electoral_votes_won is outside [270,538]'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT year, MAX(total) AS top_total
+    FROM (
+      SELECT year, candidate_name, SUM(electoral_votes_won) AS total
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/electoral_college_votes', allow_moved_paths := true)
+      WHERE office = 'PRESIDENT'
+      GROUP BY year, candidate_name
+    )
+    GROUP BY year
+    HAVING MAX(total) < 270 OR MAX(total) > 538
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: presidential_election_results
+-- ─────────────────────────────────────────────────────────────
+
+-- T0b: known-gap diagnostic — this table only covers years where FEC's per-year listing
+-- page had a discoverable presgeresults.xlsx link (confirmed: 2024 only, at build time).
+-- A row count far below electoral_college_votes' is the EXPECTED shape, not a failure by
+-- itself; T1/T2 below still gate on the years that ARE expected to have resolved.
+SELECT 'officials.presidential_election_results covers only the FEC-confirmed XLSX years (2024 at minimum) — a lower row count than electoral_college_votes across the same GOVDATA_START_PRES_YEAR/GOVDATA_END_PRES_YEAR range is expected, not a gap in this DQ pass.' AS note;
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_election_results', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan — 0 here means even the 2024 confirmed year failed to resolve, investigate'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_election_results', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_election_results', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_election_results', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_election_results', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_election_results', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL year, state_name, or candidate_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_election_results', allow_moved_paths := true)
+      WHERE year IS NULL OR state_name IS NULL OR candidate_name IS NULL);
+
+-- T7: no leftover "ELECTORAL VOTE:" columns leaked through as a candidate (regression
+-- guard for the header-skip logic in PresidentialResultsTransformer)
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_election_results', 'T7_no_electoral_vote_column_leak',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'candidate_name values starting with ELECTORAL VOTE (header-skip regression)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_election_results', allow_moved_paths := true)
+      WHERE candidate_name ILIKE 'ELECTORAL VOTE%');
+
+-- T7: popular_votes never exceeds state_total_votes for that state/year
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_election_results', 'T7_votes_within_state_total',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows where popular_votes > state_total_votes'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_election_results', allow_moved_paths := true)
+      WHERE popular_votes IS NOT NULL AND state_total_votes IS NOT NULL AND popular_votes > state_total_votes);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail
