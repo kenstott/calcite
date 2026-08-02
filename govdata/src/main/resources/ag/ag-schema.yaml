@@ -6,6 +6,10 @@
 #   - ERS Farm Income & Wealth  (bulk CSV)                            — no key
 #   - RMA Summary of Business   (bulk pipe-delimited txt)             — no key
 #   - FSA program payments                                            — (follow-on)
+#   - USGS NAWQA Pesticide National Synthesis Project (bulk tab-delimited txt, one
+#     table per year or per multi-year vintage; discovered by scraping the county-level
+#     usage-maps landing page) — no key
+
 #
 # Design: each ETL table mirrors exactly one upstream source (tall). Wide/pivot
 # reshaping and cross-source joins are done as SQL views, never in Java.
@@ -18,9 +22,11 @@ materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 comment: >
   USDA agricultural economics: crop production and livestock inventory (NASS
   QuickStats), farm income and wealth (ERS), and crop insurance experience
-  (RMA Summary of Business). County- and state-level, joinable to geo.counties /
-  geo.states via state_fips_code + county_code, to disasters (drought/storm) for
-  yield-impact analysis, and to econ.fred_indicators for commodity-price context.
+  (RMA Summary of Business); plus USGS estimated agricultural pesticide use by
+  county (NAWQA Pesticide National Synthesis Project). County- and state-level,
+  joinable to geo.counties / geo.states via state_fips_code + county_code, to
+  disasters (drought/storm) for yield-impact analysis, and to econ.fred_indicators
+  for commodity-price context.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -762,6 +768,108 @@ partitionedTables:
         stagingMode: local
       iceberg: *nass_iceberg
 
+  # ---------------------------------------------------------------------------
+  # PESTICIDE_USE_BY_COUNTY — USGS NAWQA county-level agricultural pesticide use
+  # ---------------------------------------------------------------------------
+  # Live-verified 2026-08-02 against water.usgs.gov/nawqa/pnsp/usage/maps/county-level/:
+  # not one bulk file per year on a predictable URL. 1992-2012 final estimates are
+  # direct per-year .txt files; 2013-17 final (ver 2.0) is ONE combined multi-year
+  # .txt; preliminary years since (2018, 2019 confirmed live) are each reachable only
+  # via a doi.org link to a ScienceBase item whose id is not derivable from the year.
+  # USGS's stated plan is a consolidated final 2018-22 release "in 2026", then resumed
+  # annual preliminary releases. UsgsPesticideCountyUseProvider re-scrapes the landing
+  # page every run (scoped to the "County-level"/"Preliminary county-level" sections,
+  # excluding the state-level-by-crop-group series and the superseded "Archived data"
+  # section), so newly published years are picked up with no code change. No year
+  # dimension: one fetch per run, partitioned by each row's own year column (same
+  # reason as ers_farm_income — a multi-vintage source with no single per-year URL).
+  - name: pesticide_use_by_county
+    pattern: "type=pesticide_use_by_county/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USGS NAWQA Pesticide National Synthesis Project estimated annual agricultural
+      pesticide use by county, active-ingredient compound, and year — low and high
+      estimate methods (epest_low_kg / epest_high_kg, kilograms applied) for the
+      conterminous United States, reflecting two different assumptions used when
+      Crop Reporting District-level survey data was incomplete. Compiled from every
+      county-level release the source currently publishes: final annual files for
+      1992-2012, the 2013-17 (ver 2.0) consolidated final release, and single-year
+      preliminary releases thereafter. Excludes seed-treatment pesticide application
+      beginning in 2015 (the survey provider discontinued those estimates) and
+      excludes the separate state-level-by-crop-group series (different grain, not
+      in this table). Joins to geo.counties via the derived county_fips column and
+      to geo.states via state_fips_code.
+
+    dimensions:
+      type:
+        - pesticide_use_by_county
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Data year (partition column), from the source file's own YEAR field
+      - name: compound
+        type: string
+        source: compound
+        nullable: true
+        comment: Pesticide active-ingredient compound name
+      - name: state_fips_code
+        type: string
+        source: state_fips_code
+        nullable: true
+        comment: 2-digit state FIPS code (FK to geo.states.state_fips)
+      - name: county_fips_code
+        type: string
+        source: county_fips_code
+        nullable: true
+        comment: 3-digit county FIPS code within state
+      - name: county_fips
+        type: string
+        source: county_fips
+        nullable: true
+        comment: 5-digit county FIPS (state+county, derived) — FK to geo.counties.county_fips
+      - name: epest_low_kg
+        type: double
+        source: epest_low_kg
+        nullable: true
+        comment: Low estimate of agricultural pesticide use (kilograms applied) for the compound/county/year
+      - name: epest_high_kg
+        type: double
+        source: epest_high_kg
+        nullable: true
+        comment: High estimate of agricultural pesticide use (kilograms applied) for the compound/county/year
+
+    source:
+      type: http
+      url: "https://water.usgs.gov/nawqa/pnsp/usage/maps/county-level/"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+      response:
+        format: json  # ignored: UsgsPesticideCountyUseProvider discovers and streams the files itself
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.UsgsPesticideCountyUseProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=pesticide_use_by_county/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        # Cumulative full-archive source re-fetched every run (like ers_farm_income):
+        # REPLACE each year partition rather than append, so re-runs don't duplicate rows.
+        <<: *nass_iceberg
+        overwritePartitions: true
+
   # ==========================================================================
   # INTERNATIONAL / UN FEED — FAO FAOSTAT
   # ==========================================================================
@@ -1009,6 +1117,26 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  pesticide_use_by_county:
+    # One row per compound x county x year.
+    primaryKey:
+      - type
+      - year
+      - compound
+      - state_fips_code
+      - county_fips_code
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        comment: USGS state FIPS to geo.states
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Derived 5-digit county FIPS to geo.counties
 
 # ============================================================================
 # VIEWS
