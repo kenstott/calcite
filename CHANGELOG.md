@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.68.0](https://github.com/kenstott/calcite/compare/engine-v0.67.0...engine-v0.68.0) (2026-08-02)
+
+
+### Features
+
+* **askamerica-engine:** add panel FE, robust SEs, and Smile-based ML stats tools ([bac54a4](https://github.com/kenstott/calcite/commit/bac54a403452926686dde9a437f6753933df9853))
+* **file:** add read-only Iceberg snapshot closure verifier ([c4ac824](https://github.com/kenstott/calcite/commit/c4ac824b69014bdce69ac9c0b9713c562ae34291))
+* **govdata:** add 4 new ACS/CPS tables to census schema ([2c76978](https://github.com/kenstott/calcite/commit/2c7697847a4d42d764f922bb28554dbd945496bd))
+* **govdata:** add ACS vehicle access table to census schema ([0ca60af](https://github.com/kenstott/calcite/commit/0ca60afcfb9b4919d41dc927e3ea492ed87e4ad9))
+* **govdata:** add BEA Regional Price Parities and BLS labor productivity to econ schema ([976ce2f](https://github.com/kenstott/calcite/commit/976ce2f216d7ccaaf969d2128652a28d9843ba1d))
+* **govdata:** add Census government finance Individual Unit File to fiscal schema ([3bbbee3](https://github.com/kenstott/calcite/commit/3bbbee3953f4ec66093d02c7a82eff912abc0d51))
+* **govdata:** add CMS Provider of Services facilities table to health schema ([87572fe](https://github.com/kenstott/calcite/commit/87572fef932c71a5782b3af8f4be2f3ef4f57f70))
+* **govdata:** add county_adjacency view to geo schema ([22f2d6a](https://github.com/kenstott/calcite/commit/22f2d6a6d3b99b0d355b6d2986c9d2cafc6bea89))
+* **govdata:** add DOL state minimum-wage history to fiscal schema ([e66cb85](https://github.com/kenstott/calcite/commit/e66cb855ffe41256518487141080f84740e3227c))
+* **govdata:** add electoral college and presidential election results to officials schema ([3eb0e3d](https://github.com/kenstott/calcite/commit/3eb0e3d4e5aad9709dbed512a829b700f9c4813a))
+* **govdata:** add EPA eGRID subregion emission rates to environment schema ([a070023](https://github.com/kenstott/calcite/commit/a0700234e6e8cc5d735c24643c397b86c94c4fd5))
+* **govdata:** add HRSA AHRF physician supply table to health schema ([7a53c06](https://github.com/kenstott/calcite/commit/7a53c0656ba4d23379bdbf382bd6e8985dd2c948))
+* **govdata:** add officials schema for federal elected/appointed officeholders ([04af9db](https://github.com/kenstott/calcite/commit/04af9dbf745cc4f5e21682b9ac2d75616f5d023c))
+* **govdata:** add public library outlets table to edu schema ([eeb7c72](https://github.com/kenstott/calcite/commit/eeb7c72255ac917491ddf0503c73459e7bf0515f))
+* **govdata:** add USGS pesticide use by county to ag schema ([0ba7ced](https://github.com/kenstott/calcite/commit/0ba7cedfd9918b752f2dc61f6d0af9a66c7fe487))
+* **iceberg:** add standalone accession-level repair tool ([821c432](https://github.com/kenstott/calcite/commit/821c4320ffc1fa43798eb0464ffc34cafc6bbbd9))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** bound cached schema-connection staleness with a TTL ([b82fafe](https://github.com/kenstott/calcite/commit/b82fafe75f5a8bd5e1912d6ee643056f0282d992))
+* **askamerica-engine:** fix render_chart null-as-zero bug, surface it in server instructions ([32c5948](https://github.com/kenstott/calcite/commit/32c5948d9c7ac722a397e4cf0430ce62b21ad31d))
+* **file:** handle Iceberg NotFoundException in S3 table-existence check ([6691917](https://github.com/kenstott/calcite/commit/6691917e76655ffe249b94d6d346397c4c12974d))
+* **govdata,edu:** exclude NCES CCD sentinel codes from ccd_schools/ccd_districts aggregates ([06a6f3e](https://github.com/kenstott/calcite/commit/06a6f3ef80f9f9fcf03bd6fab28a91ce7aec4be1))
+* **govdata,file:** rewrite R2 catch-up sync as version-pinned, not liveness-checked ([d1011e5](https://github.com/kenstott/calcite/commit/d1011e57a033a8379ad9bffbf99beccc26f037b1))
+* **govdata:** fix RUCC/RUCA year-window and RUCA CSV field-mapping bugs ([52b1813](https://github.com/kenstott/calcite/commit/52b1813cead8a8037b204d7c875ffd5a1acc4caa))
+* **govdata:** fix state-blind join fan-out in fiscal.federal_money_by_state_year ([d916d7a](https://github.com/kenstott/calcite/commit/d916d7aefa14a9c4f97a23770668e633ef749b79))
+
 ## [0.67.0](https://github.com/kenstott/calcite/compare/engine-v0.66.1...engine-v0.67.0) (2026-08-01)
 
 
