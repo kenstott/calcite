@@ -28,6 +28,7 @@
 
 INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs;  LOAD httpfs;
+INSTALL spatial; LOAD spatial;  -- needed for the county_adjacency view check (ST_Touches/ST_GeomFromText)
 
 SET s3_access_key_id     = '${AWS_ACCESS_KEY_ID}';
 SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}';
@@ -660,6 +661,76 @@ SELECT 'geo', tbl, 'existence',
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
+
+-- ============================================================================
+-- VIEW CHECKS — county_adjacency
+-- ============================================================================
+-- The view itself is not an Iceberg table (no s3:// path of its own) — it's a
+-- computed SQL view over counties, built directly against the latest TIGER
+-- vintage. Recompute its logic inline here against the raw counties table so
+-- this check is self-contained and doesn't require the full schema-factory
+-- view-registration pipeline that GOVDATA_DQ runs outside of.
+
+INSERT INTO dq_results
+WITH latest_year AS (
+  SELECT MAX(year) AS yr
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true)
+),
+c AS (
+  SELECT county_fips, state_fips, county_name, ST_GeomFromText(geometry) AS geom
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true), latest_year
+  WHERE year = latest_year.yr
+),
+adjacency AS (
+  SELECT a.county_fips, a.state_fips
+  FROM c a
+  JOIN c b ON b.county_fips <> a.county_fips AND ST_Touches(a.geom, b.geom)
+)
+SELECT 'geo', 'county_adjacency', 'existence',
+       CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+       COUNT(*)::VARCHAR, '1',
+       CASE WHEN COUNT(*) > 0 THEN 'readable' ELSE 'NO ROWS — adjacency view produced zero pairs' END
+FROM adjacency;
+
+-- T7 — coverage: every county in the latest vintage should have at least one
+-- adjacent neighbor, EXCEPT genuine islands that have no land border with any
+-- other county. Only Hawaii (state_fips='15', entirely island counties) is
+-- auto-excluded below — a real but incomplete list. Other genuinely isolated
+-- counties (e.g. Nantucket, MA) will still show up in the 'fail' list; that's
+-- expected until they're added to the exclusion below, not a false alarm to
+-- ignore — triage each flagged county_fips individually (island vs. a real
+-- geometry/adjacency defect) before extending this list.
+INSERT INTO dq_results
+WITH latest_year AS (
+  SELECT MAX(year) AS yr
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true)
+),
+c AS (
+  SELECT county_fips, state_fips, county_name, ST_GeomFromText(geometry) AS geom
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true), latest_year
+  WHERE year = latest_year.yr
+),
+neighbor_counts AS (
+  SELECT a.county_fips, a.state_fips, a.county_name,
+         COUNT(*) FILTER (WHERE b.county_fips IS NOT NULL) AS n_neighbors
+  FROM c a
+  LEFT JOIN c b ON b.county_fips <> a.county_fips AND ST_Touches(a.geom, b.geom)
+  GROUP BY a.county_fips, a.state_fips, a.county_name
+),
+isolated AS (
+  SELECT *,
+         -- Hawaii (state_fips '15') is entirely island counties with no land
+         -- border to any other county — an acknowledged exception, not a defect.
+         (state_fips = '15') AS is_acknowledged_island
+  FROM neighbor_counts
+  WHERE n_neighbors = 0
+)
+SELECT 'geo', 'county_adjacency', 'coverage',
+       CASE WHEN COALESCE(SUM(CASE WHEN NOT is_acknowledged_island THEN 1 ELSE 0 END), 0) = 0 THEN 'pass' ELSE 'fail' END,
+       COALESCE(SUM(CASE WHEN NOT is_acknowledged_island THEN 1 ELSE 0 END), 0)::VARCHAR, '0',
+       'counties with zero adjacent neighbors, excluding acknowledged island exceptions (Hawaii, state_fips=15): '
+         || COALESCE(STRING_AGG(CASE WHEN NOT is_acknowledged_island THEN county_fips END, ', '), 'none')
+FROM isolated;
 
 -- ============================================================================
 -- ALL DQ RESULTS

@@ -3217,3 +3217,50 @@ constraints:
       - columns: [huc8]
         targetTable: watersheds_huc8
         targetColumns: [huc8]
+
+# ============================================================================
+# VIEWS
+# ============================================================================
+# `sql:` here is executed directly against DuckDB as a literal
+# `CREATE VIEW ... AS <sql>` (see DuckDBJdbcSchemaFactory.registerSqlViews /
+# DuckDBPendingViews) — it is NOT parsed or validated by Calcite's SQL layer.
+# That means DuckDB-native functions (including the spatial extension's
+# ST_Touches/ST_GeomFromText, loaded as one of this connection's base
+# extensions — see DuckDBJdbcSchemaFactory's baseExts) run here exactly as
+# they would in a raw DuckDB session; Calcite's operator table is never
+# consulted for this SQL.
+
+views:
+
+  - name: county_adjacency
+    comment: >
+      One row per adjacent county pair (undirected, both directions present —
+      A/B and B/A each get a row) for the most recent TIGER vintage year
+      present in counties (MAX(year), not a hard-coded year — this table is
+      partitioned by TIGER vintage and a self-join across multiple vintages
+      would produce a cartesian blowup of spurious pairs). Adjacency is true
+      geometric adjacency (ST_Touches on the WKT boundary polygons via
+      DuckDB's spatial extension) — counties that share only a single point
+      (e.g. the Four Corners) count as touching, same as sharing a full
+      border segment. Island counties with no land or water-crossing land
+      border to any other county (all of Hawaii, plus isolated mainland
+      island counties) legitimately have zero rows here — see geo_dq.sql's
+      county_adjacency coverage check for the acknowledged-exception list.
+    sql: >
+      WITH latest_year AS (
+        SELECT MAX(year) AS yr FROM counties
+      ),
+      c AS (
+        SELECT county_fips, state_fips, county_name, ST_GeomFromText(geometry) AS geom
+        FROM counties, latest_year
+        WHERE year = latest_year.yr
+      )
+      SELECT
+        a.county_fips          AS county_fips,
+        a.state_fips           AS state_fips,
+        a.county_name          AS county_name,
+        b.county_fips          AS neighbor_county_fips,
+        b.state_fips           AS neighbor_state_fips,
+        b.county_name          AS neighbor_county_name
+      FROM c a
+      JOIN c b ON b.county_fips <> a.county_fips AND ST_Touches(a.geom, b.geom)
