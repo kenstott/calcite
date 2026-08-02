@@ -106,6 +106,9 @@ run_historical_cadence() {
   run_edu_model "edu-initial-ipeds" \
     '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition"' "$START" "$END"
 
+  run_edu_model "edu-initial-libraries" \
+    '"library_outlets"' "$START" "$END"
+
   if [ -n "${API_DATA_GOV:-}" ]; then
     run_edu_model "edu-initial-scorecard" \
       '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
@@ -141,6 +144,14 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_financials"; then
     run_edu_model "edu-annual-ipeds-finance" \
       '"ipeds_financials"' "$START"
+  fi
+
+  # library_outlets' year dimension is a plain bounded range (GOVDATA_START_PLS_YEAR..
+  # GOVDATA_END_PLS_YEAR), not a yearRange keyed off $START — re-verifying the whole
+  # range here (gated to its releaseWindow) is how it picks up a revised current year.
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "library_outlets"; then
+    run_edu_model "edu-annual-libraries" \
+      '"library_outlets"' "$START"
   fi
 }
 

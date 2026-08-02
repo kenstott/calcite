@@ -46,6 +46,7 @@ FROM (
   UNION ALL SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -86,6 +87,7 @@ FROM (
   UNION ALL SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true)
   UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)  -- dqRowLimit=3000/year
   UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
+  UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
 );
 
 -- ============================================================
@@ -104,6 +106,7 @@ SELECT 'ipeds_financials'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ
 SELECT 'college_scorecard'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1;
 SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
+SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
 -- T4: ALL-NULL COLUMNS
@@ -198,6 +201,16 @@ SELECT 'edu', 'naep_achievement_levels', 'all_null_cols',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels', allow_moved_paths=true))
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'library_outlets', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  -- square_feet/latitude/longitude legitimately null for some outlets (sentinel-code or
+  -- unreported source rows); library_id excluded from PK but never itself all-null.
+  AND column_name NOT IN ('type', 'year');
 
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
@@ -295,6 +308,14 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_a
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   -- variable_type, subgroup_name, is_displayable are constant by design (variable=TOTAL, All students)
   AND column_name NOT IN ('type', 'variable_type', 'subgroup_name', 'is_displayable');
+
+INSERT INTO dq_results
+SELECT 'edu', 'library_outlets', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  AND column_name NOT IN ('type', 'year');
 
 -- ============================================================
 -- T6: BUSINESS NON-NULLS
@@ -539,6 +560,43 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)
 );
 
+-- library_outlets PK: year, state, fscs_key, fscs_seq (NOT library_id — see table comment
+-- in edu-schema.yaml: library_id collides across distinct library systems in the source data)
+INSERT INTO dq_results
+SELECT 'edu', 'library_outlets', 'pk_nulls',
+  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(total AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN n1 > 0 THEN 'year:'      || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'state:'     || n2 ELSE NULL END,
+    CASE WHEN n3 > 0 THEN 'fscs_key:'  || n3 ELSE NULL END,
+    CASE WHEN n4 > 0 THEN 'fscs_seq:'  || n4 ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN year     IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN state    IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN fscs_key IS NULL THEN 1 ELSE 0 END) AS n3,
+    SUM(CASE WHEN fscs_seq IS NULL THEN 1 ELSE 0 END) AS n4,
+    SUM(CASE WHEN year IS NULL OR state IS NULL
+                      OR fscs_key IS NULL OR fscs_seq IS NULL THEN 1 ELSE 0 END) AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true)
+);
+
+-- library_outlets PK duplicate check (regression guard for the library_id-collision fix —
+-- (year, state, fscs_key, fscs_seq) must be unique even though library_id is not)
+INSERT INTO dq_results
+SELECT 'edu', 'library_outlets', 'pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '0', 'Duplicate (year, state, fscs_key, fscs_seq) rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT year, state, fscs_key, fscs_seq, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true)
+    GROUP BY year, state, fscs_key, fscs_seq HAVING COUNT(*) > 1
+  )
+);
+
 -- ============================================================
 -- T7: EXPECTED VALUE DISTRIBUTIONS
 -- Dimension columns must fall within known enumerated sets.
@@ -755,6 +813,30 @@ FROM (
   SELECT SUM(CASE WHEN enrollment < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools', allow_moved_paths=true)
   WHERE enrollment IS NOT NULL AND enrollment NOT IN (-1, -2, -3, -9)
+);
+
+-- library_outlets: outlet_type must be one of the four documented PLS codes
+INSERT INTO dq_results
+SELECT 'edu', 'library_outlets', 'outlet_type_distribution',
+  CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(bad AS VARCHAR), '0', vals
+FROM (
+  SELECT SUM(CASE WHEN outlet_type NOT IN ('CE','BR','BS','BM') THEN 1 ELSE 0 END) AS bad,
+         STRING_AGG(DISTINCT outlet_type, ', ' ORDER BY outlet_type) AS vals
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true)
+  WHERE outlet_type IS NOT NULL
+);
+
+-- library_outlets: no negative square_feet (the transformer already nulls NCES sentinels
+-- -1/-3/-4; any negative value reaching Iceberg is a transformer regression, not source data)
+INSERT INTO dq_results
+SELECT 'edu', 'library_outlets', 'negative_square_feet',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(CASE WHEN square_feet < 0 THEN 1 ELSE 0 END) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true)
+  WHERE square_feet IS NOT NULL
 );
 
 -- ============================================================

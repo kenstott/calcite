@@ -2088,6 +2088,144 @@ partitionedTables:
         snapshotRetentionDays: 1
         runCompaction: true
 
+  # ---------------------------------------------------------------------------
+  # IMLS PUBLIC LIBRARIES SURVEY — OUTLETS — pls_fy{year}_csv.zip (snapshot per year)
+  # ---------------------------------------------------------------------------
+  - name: library_outlets
+    releaseWindow:
+      months: [5, 6, 7, 8] # IMLS publishes the annual PLS release in this window
+    pattern: "year=*"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      IMLS Public Libraries Survey (PLS), outlet-level file — one row per
+      physical library outlet (central, branch, or bookmobile stop) x fiscal
+      year, the only PLS grain that carries square footage. IMLS lists every
+      fiscal year's ZIP on one static landing page (not a per-year URL), so
+      LibraryOutletsTransformer discovers the year's link from that page, then
+      the "outlet" CSV inside the ZIP (which also holds a separate
+      administrative-entity-level CSV with no square-footage column). Outlet
+      identity is (state, fscs_key, fscs_seq) — NOT the source's own library_id
+      field, which is not reliably unique/self-consistent in the raw data
+      (confirmed: over a thousand library_id values collide across two
+      different library systems in the FY2024 file). outlet_type: CE=Central,
+      BR=Branch, BS=Bookmobile Stop, BM=Bookmobile. square_feet is null
+      wherever the source carries an NCES missing/not-applicable/not-reported
+      sentinel rather than a real count. county_fips is derived from the first
+      5 digits of the source's 11-digit Census tract FIPS (no county FIPS
+      column is provided directly). Source:
+      imls.gov/research-evaluation/surveys/public-libraries-survey-pls.
+    dqRowLimit: 50000
+
+    columns:
+      - name: year
+        type: int
+        nullable: false
+        comment: PLS fiscal year — PK component
+      - name: state
+        type: string
+        nullable: false
+        comment: STABR, 2-letter USPS state code — PK component (FK to geo.state_ref)
+      - name: fscs_key
+        type: string
+        nullable: false
+        comment: FSCSKEY, the outlet's parent library system ID — PK component
+      - name: fscs_seq
+        type: string
+        nullable: false
+        comment: FSCS_SEQ, sequence number of this outlet within its library system — PK component
+      - name: library_id
+        type: string
+        nullable: true
+        comment: >
+          LIBID as reported (nominally FSCSKEY + '-' + FSCS_SEQ). NOT used as
+          the key — see the table comment on source data-quality collisions.
+      - name: library_name
+        type: string
+        nullable: true
+        comment: LIBNAME
+      - name: outlet_type
+        type: string
+        nullable: true
+        comment: C_OUT_TY (CE=Central, BR=Branch, BS=Bookmobile Stop, BM=Bookmobile)
+      - name: address
+        type: string
+        nullable: true
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        comment: CITY
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: ZIP
+      - name: county_name
+        type: string
+        nullable: true
+        comment: CNTY (name, not FIPS)
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: Derived from CENTRACT[0:5] (FK to geo.counties)
+      - name: square_feet
+        type: long
+        nullable: true
+        comment: SQ_FEET; null where the source carries a missing/not-applicable/not-reported sentinel
+      - name: latitude
+        type: double
+        nullable: true
+        comment: LATITUDE
+      - name: longitude
+        type: double
+        nullable: true
+        comment: LONGITUD
+
+    source:
+      type: http
+      # Discovery source: IMLS's single PLS landing page listing every fiscal year's ZIP.
+      # LibraryOutletsTransformer finds the year's pls_fy{year}_csv.zip link (the publish-date
+      # path segment is unrelated to the survey year) and downloads/extracts it directly.
+      url: "https://www.imls.gov/research-evaluation/surveys/public-libraries-survey-pls"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.LibraryOutletsTransformer"
+
+    dimensions:
+      year:
+        type: range
+        start: "${GOVDATA_START_PLS_YEAR:2014}"
+        end: "${GOVDATA_END_PLS_YEAR:2024}"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        runCompaction: true
+
 # ============================================================================
 # Views
 # ============================================================================
@@ -2657,3 +2795,17 @@ constraints:
         targetTable: ipeds_institutions
         targetColumns: [unitid, year]
         comment: Direct link to IPEDS directory; bypasses college_scorecard for joins against ipeds tables
+
+  library_outlets:
+    primaryKey: [year, state, fscs_key, fscs_seq]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links outlet state to geographic state record
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links outlet county to geo.counties (derived from CENTRACT, may be null)

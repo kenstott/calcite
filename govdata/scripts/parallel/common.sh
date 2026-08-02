@@ -619,7 +619,7 @@ generate_single_schema_model() {
       ${_YEAR_RANGE}"
       ;;
     edu)
-      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","naep_achievement_levels","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition"'
+      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","naep_achievement_levels","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition","library_outlets"'
       if [ -n "${API_DATA_GOV:-}" ]; then
         _EDU_TABLES="${_EDU_TABLES},\"college_scorecard\",\"college_scorecard_programs\""
       fi
