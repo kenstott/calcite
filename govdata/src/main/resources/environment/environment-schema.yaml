@@ -1,10 +1,11 @@
 # ============================================================================
 # U.S. Environment Schema (ENVIRONMENT)
 # ============================================================================
-# Data Sources (all keyless; verified live 2026-07-13):
+# Data Sources (all keyless; verified live 2026-07-13, eGRID verified 2026-08-02):
 #   - EPA AQS AirData      — air quality by monitor (moved here from weather)
 #   - EPA TRI              — Toxics Release Inventory (per-year bulk CSV)
 #   - EPA GHGRP            — greenhouse-gas facility emissions (Envirofacts)
+#   - EPA eGRID            — regional power-plant emission rates by fuel type (XLSX)
 #   - USGS NWIS            — surface-water sites + daily streamflow (RDB)
 #   - EPA SDWIS            — public drinking-water systems (Envirofacts)
 #   - EPA ECHO / FRS       — facility registry + compliance (ECHO Exporter)
@@ -118,6 +119,19 @@ dimension_values:
     minYear: 2010
     end: current
     dataLag: 2
+    descending: true
+
+  # EPA eGRID data year Y is historically published in January of Y+2 (verified across
+  # eGRID2018 through eGRID2023: each release lands 2025-01, 2024-01, 2023-01, 2022-01,
+  # 2021-02, or 2020-01/03). dataLag 2 + releaseMonth 2 targets the newest year that has
+  # actually been released (Feb also covers the occasional slip past January) rather than
+  # a nominal current-2 that could 404 in early January before that year's release lands.
+  egrid_year_range: &egrid_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    end: current
+    dataLag: 2
+    releaseMonth: 2
     descending: true
 
   # USGS daily values are near-real-time; dataLag 0 re-fetches the (partial)
@@ -830,6 +844,205 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: ghg_emissions
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # EPA eGRID SUBREGION EMISSION RATES — eGRID XLSX workbook, SRL<yy> tab (delta/year)
+  # ---------------------------------------------------------------------------
+  - name: egrid_emission_rates
+    pattern: "type=egrid_emission_rates/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EPA eGRID (Emissions & Generation Resource Integrated Database) regional emission
+      rates — one row per eGRID subregion per year (~27 subregions, e.g. RFCE, CAMX, ERCT),
+      with annual net/nonbaseload generation, total NOx/SO2/CO2/CO2e emissions, overall
+      output emission rates (lb/MWh, all fuels combined), and per-fuel-type output emission
+      rates for NOx/SO2/CO2 broken out by coal, oil, gas, and fossil-fuel-total (also
+      lb/MWh), plus each fuel's share of subregion generation (coal/oil/gas/nuclear/hydro/
+      renewables generation_pct). This is the SRL (subregion) tab of eGRID's multi-tab XLSX
+      workbook — the workbook also carries UNT/GEN/PLNT (unit/generator/plant-level) and
+      ST/BA/NRL/US (state/balancing-authority/NERC-region/national) tabs; none of those have
+      this fuel-type breakdown (plant-level rates are for the whole plant, dominated by its
+      single primary fuel) and none are in this table. EPA publishes eGRID roughly every 1-2
+      years, historically each January of year+2 (eGRID2023, released 2025-01 and revised
+      2025-06, covers 2023 generation/emissions). The download URL is unpredictable — it
+      embeds a publish date and a revision suffix that both vary by year and are not
+      derivable from the data year — so this transformer discovers the year's workbook link
+      by scraping EPA's historical-egrid-data listing page, falling back to download-data
+      for the most-recently-released vintage (not yet moved to the historical archive at
+      build time, 2026-08-02, eGRID2023 was download-data-only). A year with no discoverable
+      link yields zero rows for that year, not an error — check the ETL log for "no data
+      workbook link found" to distinguish "not published this way" from a real failure.
+
+    dimensions:
+      type:
+        - egrid_emission_rates
+      year: *egrid_year_range
+
+    columns:
+      - <<: *year_column
+      - name: subregion_acronym
+        type: string
+        nullable: false
+        comment: eGRID subregion acronym (e.g. RFCE, CAMX, ERCT); PK component
+      - name: subregion_name
+        type: string
+        nullable: true
+        comment: eGRID subregion name
+      - name: nameplate_capacity_mw
+        type: double
+        nullable: true
+        comment: Subregion total nameplate capacity (MW)
+      - name: annual_net_generation_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual net generation (MWh)
+      - name: annual_nonbaseload_generation_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual nonbaseload generation (MWh)
+      - name: annual_nox_emissions_tons
+        type: double
+        nullable: true
+        comment: Subregion annual NOx emissions (tons)
+      - name: annual_so2_emissions_tons
+        type: double
+        nullable: true
+        comment: Subregion annual SO2 emissions (tons)
+      - name: annual_co2_emissions_tons
+        type: double
+        nullable: true
+        comment: Subregion annual CO2 emissions (tons)
+      - name: annual_co2e_emissions_tons
+        type: double
+        nullable: true
+        comment: Subregion annual CO2-equivalent emissions (tons)
+      - name: nox_output_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual NOx total output emission rate, all fuels combined (lb/MWh)
+      - name: so2_output_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual SO2 total output emission rate, all fuels combined (lb/MWh)
+      - name: co2_output_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual CO2 total output emission rate, all fuels combined (lb/MWh)
+      - name: co2e_output_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual CO2e total output emission rate, all fuels combined (lb/MWh)
+      - name: coal_nox_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual NOx output emission rate, coal-fired generation only (lb/MWh)
+      - name: oil_nox_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual NOx output emission rate, oil-fired generation only (lb/MWh)
+      - name: gas_nox_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual NOx output emission rate, gas-fired generation only (lb/MWh)
+      - name: fossil_nox_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual NOx output emission rate, all fossil-fired generation (lb/MWh)
+      - name: coal_so2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual SO2 output emission rate, coal-fired generation only (lb/MWh)
+      - name: oil_so2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual SO2 output emission rate, oil-fired generation only (lb/MWh)
+      - name: gas_so2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual SO2 output emission rate, gas-fired generation only (lb/MWh)
+      - name: fossil_so2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual SO2 output emission rate, all fossil-fired generation (lb/MWh)
+      - name: coal_co2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual CO2 output emission rate, coal-fired generation only (lb/MWh)
+      - name: oil_co2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual CO2 output emission rate, oil-fired generation only (lb/MWh)
+      - name: gas_co2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual CO2 output emission rate, gas-fired generation only (lb/MWh)
+      - name: fossil_co2_rate_lb_per_mwh
+        type: double
+        nullable: true
+        comment: Subregion annual CO2 output emission rate, all fossil-fired generation (lb/MWh)
+      - name: coal_generation_pct
+        type: double
+        nullable: true
+        comment: Coal share of subregion annual generation (resource mix, percent)
+      - name: oil_generation_pct
+        type: double
+        nullable: true
+        comment: Oil share of subregion annual generation (resource mix, percent)
+      - name: gas_generation_pct
+        type: double
+        nullable: true
+        comment: Gas share of subregion annual generation (resource mix, percent)
+      - name: nuclear_generation_pct
+        type: double
+        nullable: true
+        comment: Nuclear share of subregion annual generation (resource mix, percent)
+      - name: hydro_generation_pct
+        type: double
+        nullable: true
+        comment: Hydro share of subregion annual generation (resource mix, percent)
+      - name: renewables_generation_pct
+        type: double
+        nullable: true
+        comment: Total renewables share of subregion annual generation (resource mix, percent)
+
+    source:
+      type: http
+      url: "https://www.epa.gov/egrid/historical-egrid-data"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      # Verified live against eGRID2018-eGRID2023 workbooks (2026-08-02); see class
+      # javadoc for the two-page discovery + POI XLSX parsing approach.
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.EgridTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=egrid_emission_rates/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: egrid_emission_rates
         runMaintenance: true
         snapshotRetentionDays: 1
         catalogType: hadoop
@@ -1833,6 +2046,9 @@ constraints:
       - columns: [facility_id, year]
         targetTable: ghg_facilities
         targetColumns: [facility_id, year]
+
+  egrid_emission_rates:
+    primaryKey: [year, subregion_acronym]
 
   water_sites:
     primaryKey: [site_no]

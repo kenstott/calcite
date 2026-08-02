@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- U.S. Environment Data Quality Checks
 -- Schema: environment
--- Air quality (AQS, moved from weather), TRI, GHGRP, USGS water, SDWIS, ECHO/FRS,
+-- Air quality (AQS, moved from weather), TRI, GHGRP, eGRID, USGS water, SDWIS, ECHO/FRS,
 -- Superfund, RCRA, Water Quality Portal. All Iceberg; single-nested iceberg_scan path.
 -- T4/T5 exclude partition columns (type[,year][,state]).
 
@@ -212,6 +212,41 @@ INSERT INTO dq_results
 SELECT 'environment', 'ghg_emissions', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL facility_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ghg_emissions', allow_moved_paths := true) WHERE facility_id IS NULL);
+
+-- ------------------------------------------------------------
+-- TABLE: egrid_emission_rates (partition cols: type, year)
+-- Small table: ~27 eGRID subregion rows per year (dataLag 2 + releaseMonth 2 — a DQ
+-- window starting later than current-2 yields zero rows for this table, not a defect).
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'egrid_emission_rates', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/egrid_emission_rates', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'egrid_emission_rates', 'T2_row_count',
+  CASE WHEN n >= 20 THEN 'pass' ELSE 'fail' END, n, 20, 'Expected >=20 rows (~27 subregions per covered year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/egrid_emission_rates', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/egrid_emission_rates', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'egrid_emission_rates', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/egrid_emission_rates', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'environment', 'egrid_emission_rates', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/egrid_emission_rates', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'environment', 'egrid_emission_rates', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL subregion_acronym rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/egrid_emission_rates', allow_moved_paths := true) WHERE subregion_acronym IS NULL);
 
 -- ------------------------------------------------------------
 -- TABLE: water_sites (partition cols: type, state)
