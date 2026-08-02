@@ -1280,6 +1280,167 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # CMS PROVIDER OF SERVICES FILE — data.cms.gov data.json discovery (snapshot, current quarter)
+  # ==========================================================================
+  - name: cms_pos_facilities
+    releaseWindow:
+      months: [1, 4, 7, 10] # CMS POS republishes quarterly
+    pattern: "type=cms_pos_facilities"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS Provider of Services File (POS) — identity, location, and bed-count fields
+      for every certified hospital and non-hospital facility, one row per
+      provider_number (CMS Certification Number, unique). The current-quarter
+      snapshot only (whole file replaced each release, per CMS's own accrualPeriodicity
+      of R/P3M — no history retained upstream to backfill). provider_category_code
+      is CMS's PRVDR_CTGRY_CD: 01=hospital, 06=psychiatric/behavioral residential
+      treatment, 12=clinic, 19=community mental health center, 21=other
+      (verified live against the 2026-Q2 file's actual category population; CMS's
+      own layout PDF, linked from the data.json dataset's describedBy field, has the
+      authoritative full code list). bed_count is the facility's total certified
+      beds; the curated sub-type columns (icf_iid/medicaid_nf/medicare_snf/hospice/
+      rehab/psych_unit/rehab_unit) break that total down by care type — most are
+      null/0 for non-bed facility categories (clinics, mental health centers).
+      county_fips is derived by concatenating FIPS_STATE_CD + FIPS_CNTY_CD (only
+      when both are present at their expected 2-digit/3-digit widths). Source:
+      data.cms.gov/data.json, dataset "Provider of Services File - Quality
+      Improvement and Evaluation System".
+
+    columns:
+      - name: provider_number
+        type: string
+        nullable: false
+        comment: CMS Certification Number (CCN) — PK
+      - name: provider_category_code
+        type: string
+        nullable: true
+        comment: PRVDR_CTGRY_CD (01=hospital, 06=psych/behavioral residential, 12=clinic, 19=community mental health, 21=other)
+      - name: provider_subtype_code
+        type: string
+        nullable: true
+        comment: PRVDR_CTGRY_SBTYP_CD, refines provider_category_code
+      - name: facility_name
+        type: string
+        nullable: true
+        comment: FAC_NAME
+      - name: city
+        type: string
+        nullable: true
+        comment: CITY_NAME
+      - name: state
+        type: string
+        nullable: true
+        comment: STATE_CD (2-letter USPS; FK to geo.state_ref)
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: ZIP_CD
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: FIPS_STATE_CD (2-digit; FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: Derived 5-digit county FIPS (FIPS_STATE_CD + FIPS_CNTY_CD; FK to geo.counties)
+      - name: ownership_code
+        type: string
+        nullable: true
+        comment: GNRL_CNTL_TYPE_CD (general control/ownership type)
+      - name: certification_date
+        type: string
+        nullable: true
+        comment: CRTFCTN_DT (YYYYMMDD)
+      - name: bed_count
+        type: long
+        nullable: true
+        comment: BED_CNT — total certified beds
+      - name: certified_bed_count
+        type: long
+        nullable: true
+        comment: CRTFD_BED_CNT
+      - name: icf_iid_bed_count
+        type: long
+        nullable: true
+        comment: ICFIID_BED_CNT — intermediate care facility for intellectual disabilities
+      - name: medicaid_nf_bed_count
+        type: long
+        nullable: true
+        comment: MDCD_NF_BED_CNT — Medicaid-certified nursing facility beds
+      - name: medicare_snf_bed_count
+        type: long
+        nullable: true
+        comment: MDCR_SNF_BED_CNT — Medicare-certified skilled nursing facility beds
+      - name: medicare_medicaid_snf_bed_count
+        type: long
+        nullable: true
+        comment: MDCR_MDCD_SNF_BED_CNT — dually-certified SNF beds
+      - name: hospice_bed_count
+        type: long
+        nullable: true
+        comment: HOSPC_BED_CNT
+      - name: rehab_bed_count
+        type: long
+        nullable: true
+        comment: REHAB_BED_CNT
+      - name: psych_unit_bed_count
+        type: long
+        nullable: true
+        comment: PSYCH_UNIT_BED_CNT — psychiatric unit within a non-psychiatric hospital
+      - name: rehab_unit_bed_count
+        type: long
+        nullable: true
+        comment: REHAB_UNIT_BED_CNT — rehab unit within a non-rehab hospital
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "cms_pos_facilities"'
+
+    source:
+      type: http
+      # Discovery source: CMS's site-wide DCAT catalog. CmsPosTransformer finds the
+      # "Provider of Services File - Quality Improvement and Evaluation System"
+      # dataset's newest CSV distribution (the downloadURL carries an opaque
+      # per-release UUID with no year-templatable pattern) and downloads it directly.
+      url: "https://data.cms.gov/data.json"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsPosTransformer"
+
+    dimensions:
+      type:
+        - cms_pos_facilities
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        runCompaction: true
+
+  # ==========================================================================
   # MEDICAID DRUG UTILIZATION — Socrata SODA API, ~2.5M records/year
   # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
   # ==========================================================================
@@ -2481,6 +2642,20 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
         comment: Links physician practice state to geographic data
+
+  cms_pos_facilities:
+    primaryKey: [provider_number]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links facility state to geographic data
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links facility county to geographic data (null when FIPS_CNTY_CD is unpopulated)
 
   rxnorm_drugs:
     primaryKey: [type, rxcui]

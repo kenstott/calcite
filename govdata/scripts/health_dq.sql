@@ -4,7 +4,8 @@
 -- Tables: fda_ndc_products, fda_drug_approvals, fda_drug_recalls, fda_adverse_events,
 --         fda_device_recalls, clinical_trials, clinical_trial_conditions,
 --         clinical_trial_interventions, cdc_covid_vaccinations, cms_hospital_quality,
---         medicaid_drug_utilization, cdc_mortality, cdc_brfss, cms_open_payments, rxnorm_drugs
+--         medicaid_drug_utilization, cdc_mortality, cdc_brfss, cms_open_payments, rxnorm_drugs,
+--         who_gho_indicators, cms_pos_facilities
 -- All tables are Iceberg; reads via iceberg_scan.
 -- Partition columns per table:
 --   Most tables: 'type'
@@ -1129,6 +1130,63 @@ SELECT 'health', 'rxnorm_drugs', 'T7_tty_coverage',
   n, 3, 'Distinct tty values (expect IN, BN, SCD)'
 FROM (SELECT COUNT(DISTINCT tty) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rxnorm_drugs', allow_moved_paths := true)
       WHERE tty IS NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cms_pos_facilities (CMS Provider of Services File; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Expected >=10000 facility rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL provider_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true) WHERE provider_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate provider_number rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT provider_number, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true)
+  GROUP BY provider_number HAVING COUNT(*) > 1
+));
+
+-- T7 regression guard: hospitals (category 01) must be present with real bed counts —
+-- this is the SIII view's sole health-side input.
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T7_hospital_beds_present',
+  CASE WHEN n > 0 AND total_beds > 0 THEN 'pass' ELSE 'fail' END, total_beds, 1,
+  'Hospitals (category 01) with a non-null bed_count; total beds summed'
+FROM (SELECT COUNT(*) AS n, SUM(bed_count) AS total_beds
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true)
+  WHERE provider_category_code = '01' AND bed_count IS NOT NULL);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

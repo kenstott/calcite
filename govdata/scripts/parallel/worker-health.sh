@@ -93,7 +93,7 @@ ENDJSON
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
-# Run all 16 health tables, grouped so a single model failure isolates to its group.
+# Run all 17 health tables, grouped so a single model failure isolates to its group.
 run_all_health_tables() {
   run_health_model "health-fda" \
     '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
@@ -108,7 +108,7 @@ run_all_health_tables() {
     '"cdc_covid_vaccinations", "cdc_mortality", "cdc_brfss"'
 
   run_health_model "health-cms-medicaid" \
-    '"cms_hospital_quality", "cms_open_payments", "medicaid_drug_utilization"'
+    '"cms_hospital_quality", "cms_open_payments", "medicaid_drug_utilization", "cms_pos_facilities"'
 
   run_health_model "health-rxnorm" \
     '"rxnorm_drugs"'
