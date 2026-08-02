@@ -187,6 +187,17 @@ dimension_values:
     dataLag: 2
     descending: true
 
+  # Census govs-finance "Individual Unit File" per-year landing pages
+  # (census.gov/data/datasets/{year}/econ/local/public-use-datasets.html) are
+  # confirmed live 2012 through 2024 (verified 2026-08-02); a plain bounded
+  # range (not yearRange/current) since the actual ZIP filename/casing is
+  # discovered per year by GovtFinanceTransformer, not templated, so there is
+  # no "current" auto-detection to anchor against.
+  govfin_year_range: &govfin_year_range
+    type: range
+    start: "${GOVDATA_START_GOVFIN_YEAR:2012}"
+    end: "${GOVDATA_END_GOVFIN_YEAR:2024}"
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -1330,6 +1341,111 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # CENSUS GOVS-FINANCE INDIVIDUAL UNIT FILE — Individual_Unit_File.zip (snapshot per year)
+  # ---------------------------------------------------------------------------
+  - name: govt_finance_by_unit
+    pattern: "type=govt_finance_by_unit/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      State & local government finance from Census's annual "Individual Unit
+      File" — one row per government unit x finance item code x year (long/tall
+      layout: amount_thousands is the single fact, item_code the dimension). The
+      landing page (census.gov/data/datasets/{year}/econ/local/public-use-datasets.html)
+      is fetched by the framework; GovtFinanceTransformer discovers and downloads
+      the actual ZIP link (filename is neither year-templatable nor stable —
+      confirmed live: 2023_Individual_Unit_Files.zip vs
+      2021_Individual_Unit_File.zip, singular/plural and casing both vary), then
+      parses the 32-char fixed-width data file inside it. item_code follows the
+      Census government finance classification manual (2006_classification_manual.pdf);
+      notable codes for capital-vs-operating comparisons: E12/F12 (elementary-
+      secondary education current operations / construction), E36/F36 (hospitals
+      current operations / construction), E61/F61 (parks & recreation current
+      operations / construction). gov_type_code: 0=state, 1=county, 2=city,
+      3=township, 4=special district, 5=independent school district
+      (3rd digit of the source ID field). unit_id is that government's unique
+      identifier within (state_fips, gov_type_code, county_fips) — not globally
+      unique alone. county_fips is the county OR county-type area the unit is
+      located in; for state-level rows (gov_type_code=0) this is not a valid
+      geo.counties FIPS. amount_thousands is in THOUSANDS of dollars and may be
+      negative (debt retirements, etc.). Source (per year):
+      census.gov/data/datasets/{year}/econ/local/public-use-datasets.html.
+    dqRowLimit: 100000
+
+    dimensions:
+      type:
+        - govt_finance_by_unit
+      year: *govfin_year_range
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: gov_type_code
+        type: string
+        nullable: false
+        comment: 3rd digit of source ID (0=state,1=county,2=city,3=township,4=special district,5=school district)
+      - name: gov_type_name
+        type: string
+        nullable: true
+        comment: Decoded gov_type_code label
+      - <<: *county_fips_column
+        nullable: false
+        comment: >
+          County or county-type area FIPS the unit is located in (source ID
+          positions 4-6). NOT a valid geo.counties key for state-level rows
+          (gov_type_code=0); see the FK comment below.
+      - name: unit_id
+        type: string
+        nullable: false
+        comment: Government unit identifier (source ID positions 7-12), unique within (state_fips, gov_type_code, county_fips)
+      - name: item_code
+        type: string
+        nullable: false
+        comment: Finance item code (Census government finance classification manual), e.g. E12/F12 education, E36/F36 hospitals, E61/F61 parks & recreation
+      - name: amount_thousands
+        type: long
+        nullable: true
+        comment: Amount for this item code, in thousands of dollars (may be negative)
+      - name: imputation_flag
+        type: string
+        nullable: true
+        comment: Imputation type / item data flag (source position 32)
+
+    source:
+      type: http
+      url: "https://www.census.gov/data/datasets/{year}/econ/local/public-use-datasets.html"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.GovtFinanceTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=govt_finance_by_unit/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: govt_finance_by_unit
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1448,6 +1564,17 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
 
+  govt_finance_by_unit:
+    primaryKey: [year, state_fips, gov_type_code, county_fips, unit_id, item_code]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      # No FK on county_fips: valid only for county-level units (gov_type_code=1);
+      # state-level rows carry a non-county placeholder there, so a blanket FK
+      # would misrepresent the contract for 5 of the 6 gov_type_code values.
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -1521,3 +1648,181 @@ views:
       FROM exempt_org_990 f
       LEFT JOIN exempt_org_master m
         ON m.ein = f.ein
+
+  - name: state_social_infrastructure_index
+    comment: >
+      Social Infrastructure Investment Index (SIII), per state per year, on a
+      0-100 scale: 100 * (0.30*pct_capex + 0.20*pct_opex + 0.15*pct_beds +
+      0.15*pct_pupil_teacher_inv + 0.10*pct_library + 0.10*pct_access_inv),
+      where each pct_* is that metric's PERCENT_RANK() among the 50 states + DC
+      for that year (0=lowest, 1=highest) — a relative ranking, not an absolute
+      scale, so a state's score can move year over year purely from other
+      states' movement even if its own raw metric is flat. Weights favor the
+      two direct government fiscal-investment flows (capex+opex, 50% combined)
+      over capacity/access proxies (50% combined), consistent with this being
+      a FISCAL-policy index first.
+
+      Components (all per-capita against census.acs_population, geography=state):
+        - capex/opex: fiscal.govt_finance_by_unit, item codes F12/F36/F61
+          (elementary-secondary/hospital/parks construction = capital outlay)
+          and E12/E36/E61 (same three functions, current operations = opex).
+          Summed across ALL gov_type_code (state+county+city+township+special
+          district+school district) within the state — this is a whole-state
+          total, not one government level.
+        - beds: health.cms_pos_facilities, provider_category_code='01'
+          (hospitals only) bed_count summed per state. KNOWN LIMITATION: this
+          source is a CURRENT-QUARTER SNAPSHOT with no year dimension — the
+          same beds-per-capita figure is broadcast across every year of the
+          view rather than reflecting that year's actual bed count. Treat
+          pct_beds as "current hospital capacity relative to other states,"
+          not a historical trend.
+        - pupil_teacher_inv: inverted (1 - percent_rank) SUM(enrollment) /
+          SUM(teachers_total_fte) from edu.ccd_districts — inverted because a
+          LOWER pupil-teacher ratio is the better outcome.
+        - library: edu.library_outlets total square_feet per state per year.
+        - access_inv: inverted (1 - percent_rank) average of
+          (no_internet_households / total_households) from census.acs_internet
+          and (no_vehicle_households / total_households) from
+          census.acs_vehicle_access — inverted because a LOWER no-access rate
+          is the better outcome. Both ACS components only exist from their
+          respective minYear forward (acs_internet: 2019+); years before that
+          get a NULL access_gap_pct and therefore NULL pct_access_inv, which
+          COALESCEs out of the weighted sum (see raw_score below) rather than
+          zeroing the state's score.
+
+      NULL-COMPONENT HANDLING: components missing for a given state/year
+      (COALESCE to NULL, not 0) are dropped from the weighted average, and the
+      denominator is renormalized to the weights of the components that ARE
+      present — a state missing only access data is scored on capex/opex/beds/
+      pupil_teacher alone (renormalized to sum to 100), not penalized to a
+      near-zero score by treating the missing metric as a 0.
+    sql: >
+      WITH years AS (
+        SELECT DISTINCT year FROM govt_finance_by_unit
+      ),
+      govfin AS (
+        SELECT
+          state_fips,
+          year,
+          SUM(CASE WHEN item_code IN ('F12', 'F36', 'F61') THEN amount_thousands ELSE 0 END) AS capex_thousands,
+          SUM(CASE WHEN item_code IN ('E12', 'E36', 'E61') THEN amount_thousands ELSE 0 END) AS opex_thousands
+        FROM govt_finance_by_unit
+        GROUP BY state_fips, year
+      ),
+      beds AS (
+        SELECT state_fips, SUM(bed_count) AS hospital_beds
+        FROM "health"."cms_pos_facilities"
+        WHERE provider_category_code = '01'
+        GROUP BY state_fips
+      ),
+      pupil_teacher AS (
+        SELECT
+          LPAD(CAST(fips AS VARCHAR), 2, '0') AS state_fips,
+          year,
+          SUM(enrollment)          AS total_enrollment,
+          SUM(teachers_total_fte)  AS total_teachers_fte
+        FROM "edu"."ccd_districts"
+        GROUP BY LPAD(CAST(fips AS VARCHAR), 2, '0'), year
+      ),
+      libraries AS (
+        SELECT
+          sr.state_fips,
+          lo.year,
+          SUM(lo.square_feet) AS total_library_sqft
+        FROM "edu"."library_outlets" lo
+        JOIN "geo"."state_ref" sr ON sr.state_abbr = lo.state
+        GROUP BY sr.state_fips, lo.year
+      ),
+      access AS (
+        SELECT
+          i.state AS state_fips,
+          i.year,
+          SUM(i.total_households)     AS total_households,
+          SUM(i.no_internet)          AS no_internet_households,
+          SUM(v.no_vehicle_households) AS no_vehicle_households
+        FROM "census"."acs_internet" i
+        LEFT JOIN "census"."acs_vehicle_access" v
+          ON v.state = i.state AND v.year = i.year AND v.geography = 'state'
+        WHERE i.geography = 'state'
+        GROUP BY i.state, i.year
+      ),
+      population AS (
+        SELECT state AS state_fips, year, total_population
+        FROM "census"."acs_population"
+        WHERE geography = 'state'
+      ),
+      base AS (
+        SELECT
+          sr.state_fips,
+          sr.state_name,
+          y.year,
+          p.total_population,
+          gf.capex_thousands,
+          gf.opex_thousands,
+          gf.capex_thousands * 1000.0 / NULLIF(p.total_population, 0) AS capex_per_capita,
+          gf.opex_thousands * 1000.0 / NULLIF(p.total_population, 0)  AS opex_per_capita,
+          b.hospital_beds,
+          b.hospital_beds * 100000.0 / NULLIF(p.total_population, 0)  AS beds_per_100k,
+          pt.total_enrollment,
+          pt.total_teachers_fte,
+          pt.total_enrollment / NULLIF(pt.total_teachers_fte, 0)      AS pupil_teacher_ratio,
+          lib.total_library_sqft,
+          lib.total_library_sqft / NULLIF(p.total_population, 0)      AS library_sqft_per_capita,
+          a.total_households,
+          a.no_internet_households,
+          a.no_vehicle_households,
+          (
+            (a.no_internet_households / NULLIF(a.total_households, 0))
+            + (a.no_vehicle_households / NULLIF(a.total_households, 0))
+          ) / 2.0 * 100.0                                             AS access_gap_pct
+        FROM "geo"."state_ref" sr
+        CROSS JOIN years y
+        LEFT JOIN govfin gf ON gf.state_fips = sr.state_fips AND gf.year = y.year
+        LEFT JOIN beds b ON b.state_fips = sr.state_fips
+        LEFT JOIN pupil_teacher pt ON pt.state_fips = sr.state_fips AND pt.year = y.year
+        LEFT JOIN libraries lib ON lib.state_fips = sr.state_fips AND lib.year = y.year
+        LEFT JOIN access a ON a.state_fips = sr.state_fips AND a.year = y.year
+        LEFT JOIN population p ON p.state_fips = sr.state_fips AND p.year = y.year
+      ),
+      ranked AS (
+        SELECT
+          *,
+          CASE WHEN capex_per_capita IS NOT NULL
+            THEN PERCENT_RANK() OVER (PARTITION BY year ORDER BY capex_per_capita) END AS pct_capex,
+          CASE WHEN opex_per_capita IS NOT NULL
+            THEN PERCENT_RANK() OVER (PARTITION BY year ORDER BY opex_per_capita) END AS pct_opex,
+          CASE WHEN beds_per_100k IS NOT NULL
+            THEN PERCENT_RANK() OVER (PARTITION BY year ORDER BY beds_per_100k) END AS pct_beds,
+          CASE WHEN pupil_teacher_ratio IS NOT NULL
+            THEN 1.0 - PERCENT_RANK() OVER (PARTITION BY year ORDER BY pupil_teacher_ratio) END AS pct_pupil_teacher_inv,
+          CASE WHEN library_sqft_per_capita IS NOT NULL
+            THEN PERCENT_RANK() OVER (PARTITION BY year ORDER BY library_sqft_per_capita) END AS pct_library,
+          CASE WHEN access_gap_pct IS NOT NULL
+            THEN 1.0 - PERCENT_RANK() OVER (PARTITION BY year ORDER BY access_gap_pct) END AS pct_access_inv
+        FROM base
+      )
+      SELECT
+        state_fips,
+        state_name,
+        year,
+        total_population,
+        capex_per_capita,
+        opex_per_capita,
+        beds_per_100k,
+        pupil_teacher_ratio,
+        library_sqft_per_capita,
+        access_gap_pct,
+        pct_capex, pct_opex, pct_beds, pct_pupil_teacher_inv, pct_library, pct_access_inv,
+        100.0 * (
+          COALESCE(0.30 * pct_capex, 0) + COALESCE(0.20 * pct_opex, 0)
+          + COALESCE(0.15 * pct_beds, 0) + COALESCE(0.15 * pct_pupil_teacher_inv, 0)
+          + COALESCE(0.10 * pct_library, 0) + COALESCE(0.10 * pct_access_inv, 0)
+        ) / NULLIF(
+          (CASE WHEN pct_capex IS NOT NULL THEN 0.30 ELSE 0 END)
+          + (CASE WHEN pct_opex IS NOT NULL THEN 0.20 ELSE 0 END)
+          + (CASE WHEN pct_beds IS NOT NULL THEN 0.15 ELSE 0 END)
+          + (CASE WHEN pct_pupil_teacher_inv IS NOT NULL THEN 0.15 ELSE 0 END)
+          + (CASE WHEN pct_library IS NOT NULL THEN 0.10 ELSE 0 END)
+          + (CASE WHEN pct_access_inv IS NOT NULL THEN 0.10 ELSE 0 END), 0
+        ) AS siii
+      FROM ranked

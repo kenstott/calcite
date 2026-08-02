@@ -3,7 +3,8 @@
 -- Schema: fiscal
 -- Tables: soi_income_by_zip, soi_income_by_county, county_migration_flows,
 --         exempt_org_master, exempt_org_990, usaspending_by_agency,
---         usaspending_by_state, sba_loan_approvals
+--         usaspending_by_state, sba_loan_approvals, ssa_benefits_by_geography,
+--         ssa_benefits_by_geography_acs, govt_finance_by_unit
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns ('type' for all; also 'year' or 'program' where present).
 -- Large tables carry dqRowLimit and sample in DQ mode; T2 thresholds reflect the sample.
@@ -402,6 +403,63 @@ INSERT INTO dq_results
 SELECT 'fiscal', 'ssa_benefits_by_geography_acs', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/ssa_benefits_by_geography_acs', allow_moved_paths := true) WHERE county_fips IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: govt_finance_by_unit (Census govs-finance Individual Unit File; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END, n, 5000, 'Expected >=5000 unit-item rows (DQ-sampled)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_fips/gov_type_code/unit_id/item_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true)
+  WHERE state_fips IS NULL OR gov_type_code IS NULL OR unit_id IS NULL OR item_code IS NULL);
+
+-- T7 regression guard: the SIII view depends on E12/F12/E36/F36/E61/F61 actually being
+-- present (confirmed real codes against the FY2023 technical documentation) — a parser
+-- regression that silently dropped these would break the view without failing T1/T2.
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T7_siii_item_codes_present',
+  CASE WHEN n = 6 THEN 'pass' ELSE 'fail' END, n, 6,
+  'Distinct SIII item codes found among E12/F12/E36/F36/E61/F61 (expect all 6)'
+FROM (SELECT COUNT(DISTINCT item_code) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true)
+  WHERE item_code IN ('E12', 'F12', 'E36', 'F36', 'E61', 'F61'));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'govt_finance_by_unit', 'T7_gov_type_coverage',
+  CASE WHEN n = 6 THEN 'pass' ELSE 'warn' END, n, 6,
+  'Distinct gov_type_code values found (expect all 6: state/county/city/township/special district/school district)'
+FROM (SELECT COUNT(DISTINCT gov_type_code) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/govt_finance_by_unit', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
