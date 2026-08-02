@@ -3681,6 +3681,511 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # ACS EARNINGS BY EDUCATION - Median earnings by sex and educational attainment (B20004)
+  # ---------------------------------------------------------------------------
+  - name: acs_earnings_by_education
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Median earnings in the past 12 months by sex and educational attainment, for
+      the population 25 years and over, from the ACS 5-Year survey table B20004,
+      state level only (no county breakout — the table is fetched with
+      for=state:*, unlike most other acs_* tables in this schema which also carry
+      a county grain). Reports total, male, and female median earnings (dollars)
+      at 6 attainment levels: less than high school, high school graduate
+      (includes equivalency), some college or associate's degree, bachelor's
+      degree, and graduate or professional degree. Complements acs_education
+      (population counts by attainment, no earnings) and acs_income (household
+      income, not tied to the householder's own educational attainment).
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: median_earnings_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_001E" AS BIGINT)'
+        comment: Median earnings, total population 25+ with earnings
+      - name: median_earnings_less_than_hs
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_002E" AS BIGINT)'
+        comment: Median earnings, less than high school graduate
+      - name: median_earnings_hs_graduate
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_003E" AS BIGINT)'
+        comment: Median earnings, high school graduate (includes equivalency)
+      - name: median_earnings_some_college
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_004E" AS BIGINT)'
+        comment: Median earnings, some college or associate's degree
+      - name: median_earnings_bachelors
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_005E" AS BIGINT)'
+        comment: Median earnings, bachelor's degree
+      - name: median_earnings_graduate_degree
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_006E" AS BIGINT)'
+        comment: Median earnings, graduate or professional degree
+      - name: median_earnings_male_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_007E" AS BIGINT)'
+        comment: Median earnings, male, total 25+ with earnings
+      - name: median_earnings_male_less_than_hs
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_008E" AS BIGINT)'
+        comment: Median earnings, male, less than high school graduate
+      - name: median_earnings_male_hs_graduate
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_009E" AS BIGINT)'
+        comment: Median earnings, male, high school graduate (includes equivalency)
+      - name: median_earnings_male_some_college
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_010E" AS BIGINT)'
+        comment: Median earnings, male, some college or associate's degree
+      - name: median_earnings_male_bachelors
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_011E" AS BIGINT)'
+        comment: Median earnings, male, bachelor's degree
+      - name: median_earnings_male_graduate_degree
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_012E" AS BIGINT)'
+        comment: Median earnings, male, graduate or professional degree
+      - name: median_earnings_female_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_013E" AS BIGINT)'
+        comment: Median earnings, female, total 25+ with earnings
+      - name: median_earnings_female_less_than_hs
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_014E" AS BIGINT)'
+        comment: Median earnings, female, less than high school graduate
+      - name: median_earnings_female_hs_graduate
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_015E" AS BIGINT)'
+        comment: Median earnings, female, high school graduate (includes equivalency)
+      - name: median_earnings_female_some_college
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_016E" AS BIGINT)'
+        comment: Median earnings, female, some college or associate's degree
+      - name: median_earnings_female_bachelors
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_017E" AS BIGINT)'
+        comment: Median earnings, female, bachelor's degree
+      - name: median_earnings_female_graduate_degree
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B20004_018E" AS BIGINT)'
+        comment: Median earnings, female, graduate or professional degree
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B20004_001E,B20004_002E,B20004_003E,B20004_004E,B20004_005E,B20004_006E,B20004_007E,B20004_008E,B20004_009E,B20004_010E,B20004_011E,B20004_012E,B20004_013E,B20004_014E,B20004_015E,B20004_016E,B20004_017E,B20004_018E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_earnings_by_education
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # ACS NATIVITY BY EDUCATION - Place of birth by educational attainment (B06009)
+  # ---------------------------------------------------------------------------
+  - name: acs_nativity_by_education
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Joint nativity-by-education counts for the population 25 years and over,
+      from the ACS 5-Year survey table B06009 (Place of Birth by Educational
+      Attainment in the United States), state level only (no county breakout).
+      Unlike acs_nativity (population by nativity only) and acs_education
+      (population by attainment only), this table carries the actual joint
+      counts — e.g. foreign_born_bachelors_or_higher is the real number of
+      foreign-born adults with a bachelor's degree or higher, not an estimate
+      derived by assuming independence across the two separate tables.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: pop_25_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_001E" AS BIGINT)'
+        comment: Total population 25 years and over
+      - name: foreign_born_pop_25_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_025E" AS BIGINT)'
+        comment: Foreign-born population 25 years and over
+      - name: foreign_born_less_than_hs
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_026E" AS BIGINT)'
+        comment: Foreign born, less than high school graduate
+      - name: foreign_born_hs_graduate
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_027E" AS BIGINT)'
+        comment: Foreign born, high school graduate (includes equivalency)
+      - name: foreign_born_some_college
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_028E" AS BIGINT)'
+        comment: Foreign born, some college or associate's degree
+      - name: foreign_born_bachelors
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_029E" AS BIGINT)'
+        comment: Foreign born, bachelor's degree
+      - name: foreign_born_graduate_degree
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_030E" AS BIGINT)'
+        comment: Foreign born, graduate or professional degree
+      - name: foreign_born_bachelors_or_higher
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_029E" AS BIGINT) + TRY_CAST(src."B06009_030E" AS BIGINT)'
+        comment: Foreign born with a bachelor's degree or higher (029E + 030E)
+      - name: native_bachelors_or_higher
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B06009_011E" AS BIGINT) + TRY_CAST(src."B06009_012E" AS BIGINT) + TRY_CAST(src."B06009_017E" AS BIGINT) + TRY_CAST(src."B06009_018E" AS BIGINT) + TRY_CAST(src."B06009_023E" AS BIGINT) + TRY_CAST(src."B06009_024E" AS BIGINT)'
+        comment: >
+          Native-born with a bachelor's degree or higher — sums the bachelor's
+          (011E/017E/023E) and graduate-or-professional (012E/018E/024E) cells
+          across B06009's three native-birthplace categories (born in state of
+          residence, born in another US state, native born outside the US).
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B06009_001E,B06009_011E,B06009_012E,B06009_017E,B06009_018E,B06009_023E,B06009_024E,B06009_025E,B06009_026E,B06009_027E,B06009_028E,B06009_029E,B06009_030E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_nativity_by_education
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # ACS INCOME BY NATIVITY - Median household income by nativity of householder (S0501)
+  # ---------------------------------------------------------------------------
+  - name: acs_income_by_nativity
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Median household income and household counts by nativity of the
+      householder (total, native, foreign born, foreign born naturalized
+      citizen, foreign born not a citizen), from the ACS 5-Year subject table
+      S0501 (Selected Characteristics of the Native and Foreign-Born
+      Populations), state level only (no county breakout). S0501 classifies
+      households by the nativity of the population column; row 089
+      (households_*) is the households-count denominator and row 101
+      (median_household_income_*) the dollar estimate, for each of the 5
+      nativity columns S0501 defines (C01 total, C02 native, C03 foreign born,
+      C04 foreign born naturalized citizen, C05 foreign born not a citizen).
+      Fetched from the acs5/subject endpoint (a different Census API dataset
+      path than the acs5 detailed-table endpoint the other acs_* tables in
+      this schema use).
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography:
+        - state
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: households_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_089E" AS BIGINT)'
+        comment: Total households
+      - name: households_native
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_089E" AS BIGINT)'
+        comment: Households classified under the native population
+      - name: households_foreign_born
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_089E" AS BIGINT)'
+        comment: Households classified under the foreign-born population
+      - name: households_naturalized
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C04_089E" AS BIGINT)'
+        comment: Households classified under the foreign-born, naturalized-citizen population
+      - name: households_noncitizen
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C05_089E" AS BIGINT)'
+        comment: Households classified under the foreign-born, not-a-citizen population
+      - name: median_household_income_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C01_101E" AS BIGINT)'
+        comment: Median household income, all households (dollars)
+      - name: median_household_income_native
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C02_101E" AS BIGINT)'
+        comment: Median household income, native population (dollars)
+      - name: median_household_income_foreign_born
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C03_101E" AS BIGINT)'
+        comment: Median household income, foreign-born population (dollars)
+      - name: median_household_income_naturalized
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C04_101E" AS BIGINT)'
+        comment: Median household income, foreign-born naturalized-citizen population (dollars)
+      - name: median_household_income_noncitizen
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S0501_C05_101E" AS BIGINT)'
+        comment: Median household income, foreign-born not-a-citizen population (dollars)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5/subject?get=NAME,S0501_C01_089E,S0501_C02_089E,S0501_C03_089E,S0501_C04_089E,S0501_C05_089E,S0501_C01_101E,S0501_C02_101E,S0501_C03_101E,S0501_C04_101E,S0501_C05_101E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_income_by_nativity
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+# ============================================================================
+# CPS VOTING AND REGISTRATION SUPPLEMENT
+# Census Bureau Current Population Survey biennial voting supplement — a
+# different survey vehicle than the ACS tables above, with person-level
+# microdata requiring weighted aggregation (see hooks.responseTransformer).
+# ============================================================================
+
+  # ---------------------------------------------------------------------------
+  # CPS VOTING SUPPLEMENT - Reported voting/registration rates by state
+  # ---------------------------------------------------------------------------
+  - name: cps_voting_supplement
+    pattern: "type=cps/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    comment: >
+      State-level reported voting and registration rates for the citizen
+      voting-age population, from the Census Bureau's Current Population
+      Survey (CPS) Voting and Registration Supplement — a biennial November
+      survey module (even years only: congressional and presidential election
+      years), not part of the ACS and not on the acs5 endpoint. The CPS API
+      (api.census.gov/data/{year}/cps/voting/nov) returns person-level survey
+      microdata (one row per respondent, with person weight PWSSWGT), not a
+      pre-tabulated table, so this table is a weighted state-level aggregation
+      of that microdata computed by CpsVotingSupplementTransformer:
+      voted_rate_pct / registered_rate_pct are the population-weighted share
+      of respondents answering "Yes" to PES1 (did you vote?) / PES2
+      (registered to vote?), among respondents who gave a Yes/No answer
+      (excluding "Not in Universe", "Refused", "Don't Know").
+      population_reported_voted / population_reported_registered are the
+      weighted denominators (the estimated citizen voting-age population that
+      answered the question); sample_size_voted / sample_size_registered are
+      the unweighted respondent counts backing each estimate, for
+      margin-of-error context. Available biennially from 1996 (the earliest
+      api.census.gov vintage for this dataset with PES1/PES2 variable coding
+      stable through the most recent cycle — the November 1994 file predates
+      api.census.gov and used different variable codes, PES3/PES4, for the
+      same two questions, so 1994 is not in this table).
+
+    dimensions:
+      type:
+        - cps
+      year:
+        type: yearRange
+        cadenceStart: 1996
+        cadenceLength: 2
+        start: "${GOVDATA_START_YEAR:1996}"
+        minYear: 1996           # earliest api.census.gov vintage; also sidesteps the 1994
+                                 # file's PES3/PES4 variable-name mismatch (see comment above)
+        dataLag: 0               # vintage-axis: partition year = survey year, not survey
+                                 # year - lag (same convention as decennial_years above). A
+                                 # not-yet-published cycle (e.g. 2026 before ~early 2027) 404s,
+                                 # handled by rateLimit.skipOn below.
+
+    columns:
+      - name: state
+        type: string
+        nullable: true
+        expression: 'src."state"'
+        comment: State FIPS code (2 digits), from the Census API for=state:* geography clause
+      - name: sample_size_voted
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."sample_size_voted" AS BIGINT)'
+        comment: Unweighted respondent count answering the vote question (PES1) Yes or No
+      - name: population_reported_voted
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."population_reported_voted" AS DOUBLE)'
+        comment: Weighted citizen voting-age population answering the vote question Yes or No
+      - name: population_voted
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."population_voted" AS DOUBLE)'
+        comment: Weighted population reporting they voted (PES1 = Yes)
+      - name: voted_rate_pct
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."voted_rate_pct" AS DOUBLE)'
+        comment: Reported voting rate — 100 * population_voted / population_reported_voted
+      - name: sample_size_registered
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."sample_size_registered" AS BIGINT)'
+        comment: Unweighted respondent count answering the registration question (PES2) Yes or No
+      - name: population_reported_registered
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."population_reported_registered" AS DOUBLE)'
+        comment: Weighted citizen voting-age population answering the registration question Yes or No
+      - name: population_registered
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."population_registered" AS DOUBLE)'
+        comment: Weighted population reporting they are registered (PES2 = Yes)
+      - name: registered_rate_pct
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."registered_rate_pct" AS DOUBLE)'
+        comment: Reported registration rate — 100 * population_registered / population_reported_registered
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{year}/cps/voting/nov?get=PES1,PES2,PWSSWGT&for=state:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        skipOn: [404]          # a not-yet-published cycle (e.g. 2026 before ~early 2027) 404s; skip, don't fail
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.CpsVotingSupplementTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cps/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: cps_voting_supplement
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 
 # ============================================================================
 # SQL VIEWS
@@ -4247,11 +4752,43 @@ constraints:
   # LODES Workplace
   lodes_workplace:
     primaryKey: [year, state, w_geocode]
+
+  acs_earnings_by_education:
+    primaryKey: [year, state]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  acs_nativity_by_education:
+    primaryKey: [year, state]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  acs_income_by_nativity:
+    primaryKey: [year, state]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  cps_voting_supplement:
+    primaryKey: [year, state]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 # ============================================================================
 # END OF SCHEMA
 # ============================================================================
 # STATISTICS:
-#   - 22 ACS 5-Year partitioned tables
+#   - 26 ACS 5-Year partitioned tables
 #   - 2 Decennial Census unified tables (population, housing)
 #   - 1 PEP table (population estimates)
 #   - 1 CBP table (county business patterns)
@@ -4266,8 +4803,9 @@ constraints:
 #   - 1 QWI table (workforce indicators)
 #   - 1 LODES table (commuting patterns)
 #   - 2 Trade tables (exports, imports)
+#   - 1 CPS Voting Supplement table (biennial voting/registration rates)
 #   - 5 SQL views (analytical aggregations)
-#   - Total: 39 tables + 5 views
+#   - Total: 42 tables + 5 views
 #   - Iceberg materialization with Hive partitioning
 #   - Support for state and county level geographies
 #   - Schema evolution: MappingFileVariableNormalizer + dimension resolvers
