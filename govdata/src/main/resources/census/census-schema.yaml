@@ -1810,6 +1810,72 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS VEHICLE ACCESS - Household vehicle availability (B08201)
+  # ---------------------------------------------------------------------------
+  - name: acs_vehicle_access
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Household counts by vehicle availability (no vehicle available vs. total
+      households), from the ACS 5-Year survey table B08201 (Household Size by
+      Vehicles Available), at state and county levels. no_vehicle_households /
+      total_households is the standard "vehicle access" deprivation rate used
+      alongside broadband (acs_internet) as a transportation/isolation proxy.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: total_households
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B08201_001E" AS BIGINT)'
+        comment: Total households
+      - name: no_vehicle_households
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B08201_002E" AS BIGINT)'
+        comment: Households with no vehicle available
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B08201_001E,B08201_002E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_vehicle_access
+        runMaintenance: true
+        snapshotRetentionDays: 1
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS NATIVITY - Nativity and citizenship status
   # ---------------------------------------------------------------------------
   - name: acs_nativity
@@ -3933,6 +3999,18 @@ constraints:
         targetColumns: [county_fips]
 
   acs_internet:
+    primaryKey: [year, geography, state, county]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_vehicle_access:
     primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]
