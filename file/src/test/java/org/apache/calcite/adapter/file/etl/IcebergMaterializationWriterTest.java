@@ -461,6 +461,56 @@ public class IcebergMaterializationWriterTest {
         "Should have written rows in the evolved schema write");
   }
 
+  @Test public void testDateFormatMismatchInJavaFallbackNullsRowInsteadOfFailingBatch()
+      throws Exception {
+    // Regression: DateParseFormat.parse() throws on a genuine mismatch (unlike the DuckDB
+    // primary path's null-safe TRY_STRPTIME). Before this fix, an uncaught throw here propagated
+    // out of transformRows, failed the whole batch after 3 retries, and left the entire table at
+    // 0 rows — found live when a misconfigured dateFormat on a fec column made every row in the
+    // batch fail identically (communication_costs DQ: T1_existence/T2_row_count both failed with
+    // value=0.0). Reproduced here by forcing the Java-fallback path with a deliberately-broken
+    // expression column alongside a dateFormat column whose value doesn't match the format.
+    File warehouseDir = new File(tempDir, "warehouse_dateformat_fallback");
+    warehouseDir.mkdirs();
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    ColumnConfig idCol = createColumnConfig("id", "INTEGER");
+    ColumnConfig dateCol = ColumnConfig.builder()
+        .name("transaction_date")
+        .type("date")
+        .source("raw_date")
+        .dateFormat("DD_MON_YY")
+        .build();
+    // Forces hasDuckDbExpressions=true AND makes the DuckDB primary path itself throw, so the
+    // whole batch falls back to the Java per-row loop that dispatches dateCol's Java parser.
+    ColumnConfig brokenCol = ColumnConfig.builder()
+        .name("broken")
+        .type("string")
+        .expression("NOT_A_REAL_FUNCTION(nonexistent_column)")
+        .build();
+
+    MaterializeConfig config =
+        buildIcebergConfig(
+            warehouseDir, "test_dateformat_fallback_table",
+            Arrays.asList(idCol, dateCol, brokenCol),
+            Collections.<String>emptyList());
+
+    writer.initialize(config);
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    // "20260330" is YYYYMMDD-shaped, not the DD-MON-YY shape this column (mis)declares —
+    // exactly the live mismatch that used to take the whole batch down.
+    row.put("raw_date", "20260330");
+    writer.writeBatch(Collections.singletonList(row).iterator(),
+        Collections.<String, String>emptyMap());
+    writer.commit();
+
+    assertEquals(1, writer.getTotalRowsWritten(),
+        "the row must still be written (with transaction_date NULL), not dropped by a failed batch");
+  }
+
   @Test public void testIcebergEmptyBatchReturnsZero() throws Exception {
     File warehouseDir = new File(tempDir, "warehouse_empty");
     warehouseDir.mkdirs();

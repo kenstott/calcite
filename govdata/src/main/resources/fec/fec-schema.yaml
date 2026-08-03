@@ -1716,9 +1716,13 @@ partitionedTables:
       - name: transaction_date
         type: date
         nullable: true
-        comment: Transaction date
+        comment: >
+          Transaction date. Unlike every other FEC bulk table (which use MMDDYYYY_OR_SLASH),
+          CommunicationCosts_{year}.csv's TRANSACTION_DT is YYYYMMDD (e.g. "20260330") — verified
+          directly against the raw cached response for both 2024 and 2026, not assumed from the
+          shared *transaction_date_column anchor other tables use.
         source: TRANSACTION_DT
-        dateFormat: DD_MON_YY
+        dateFormat: YYYYMMDD
       - name: amount
         type: double
         nullable: true

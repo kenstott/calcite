@@ -1255,7 +1255,26 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           // not for re-parsing here).
           Object rawValue = getValueCaseInsensitive(row, col.getEffectiveSource());
           if (rawValue != null) {
-            value = DateParseFormat.valueOf(col.getDateFormat()).parse(rawValue.toString());
+            try {
+              value = DateParseFormat.valueOf(col.getDateFormat()).parse(rawValue.toString());
+            } catch (Exception e) {
+              // DateParseFormat.parse() throws on a genuine mismatch (unlike the DuckDB primary
+              // path's null-safe TRY_STRPTIME). Uncaught, this propagated out of transformRows,
+              // failed the whole batch after 3 retries, and left the entire table at 0 rows —
+              // found live when a misconfigured dateFormat on one fec column (fixed separately
+              // in fec-schema.yaml) made every row in the batch fail identically. WARN-and-null
+              // by default, matching coerceValue's onCoercionFailure convention; FAIL still
+              // aborts when the column opts in.
+              if ("FAIL".equals(col.getOnCoercionFailure())) {
+                throw new IllegalStateException(
+                    "Column '" + col.getName() + "' value '" + rawValue
+                        + "' does not match dateFormat '" + col.getDateFormat() + "': "
+                        + e.getMessage(), e);
+              }
+              LOGGER.warn("Column '{}' value '{}' does not match dateFormat '{}', using NULL: {}",
+                  col.getName(), rawValue, col.getDateFormat(), e.getMessage());
+              value = null;
+            }
           }
         } else if (col.isComputed()) {
           String expr = col.getExpression();
