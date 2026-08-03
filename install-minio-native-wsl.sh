@@ -30,7 +30,15 @@ DATA_DIR="${MINIO_DATA_DIR:-/home/adminwsl/minio-data}"
 API_PORT="${MINIO_API_PORT:-9002}"
 CONSOLE_PORT="${MINIO_CONSOLE_PORT:-9003}"
 GUARD_BUCKET="${MINIO_GUARD_BUCKET:-govdata-parquet-v1}"   # must exist in DATA_DIR or refuse to start
-ENV_PROD="${MINIO_ENV_PROD:-/home/adminwsl/calcite/govdata/.env.prod}"  # source of the AWS_* creds
+# Path that must be a REAL separate mountpoint before minio starts (mountpoint -q).
+# A wsl --mount attachment never survives a WSL/Windows restart; without this check,
+# minio would silently start against the empty local directory tree left behind at
+# DATA_DIR's parent and serve/accept writes against the wrong disk. Defaults to
+# DATA_DIR's parent; set MINIO_REQUIRE_MOUNT="" to disable for a non-mounted DATA_DIR.
+REQUIRE_MOUNT_EXPLICIT="${MINIO_REQUIRE_MOUNT+set}"   # tracks whether the caller set it (even to "")
+REQUIRE_MOUNT="${MINIO_REQUIRE_MOUNT-$(dirname "${MINIO_DATA_DIR:-/home/adminwsl/minio-data}")}"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+ENV_PROD="${MINIO_ENV_PROD:-$SCRIPT_DIR/govdata/.env.prod}"  # source of the AWS_* creds
 RUN_USER="${MINIO_RUN_USER:-root}"     # data dir is root-owned; run as root to avoid chowning 151 GB
 ENV_FILE="/etc/default/minio"
 UNIT_FILE="/etc/systemd/system/minio.service"
@@ -78,6 +86,33 @@ fi
 # ---- 2. EnvironmentFile (0600, root-only) — creds + compression to match old --
 if [ -f "$ENV_FILE" ] && [ "${MINIO_FORCE_ENV:-0}" != 1 ]; then
   log "$ENV_FILE exists — keeping it (set MINIO_FORCE_ENV=1 to overwrite)"
+  # Sync bash-side vars (guard/cutover checks below, unit file templating) from
+  # what's ACTUALLY deployed in the kept file, not this invocation's env/defaults —
+  # otherwise a re-run without repeating every override regresses the guard to a
+  # wrong path (e.g. back to the /home/adminwsl default) instead of a no-op.
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  # MINIO_VOLUMES/MINIO_OPTS is the upstream MinIO convention and what this
+  # deployment actually uses; MINIO_DATA_DIR/MINIO_API_PORT/MINIO_CONSOLE_PORT is
+  # this script's own older convention — prefer whichever is really present.
+  DATA_DIR="${MINIO_VOLUMES:-${MINIO_DATA_DIR:-$DATA_DIR}}"
+  GUARD_BUCKET="${MINIO_GUARD_BUCKET:-$GUARD_BUCKET}"
+  if [ -n "${MINIO_OPTS:-}" ]; then
+    parsed_port="$(printf '%s' "$MINIO_OPTS" | grep -oE -- '--address[ =]*:[0-9]+' | grep -oE '[0-9]+$' || true)"
+    [ -n "$parsed_port" ] && API_PORT="$parsed_port"
+  else
+    API_PORT="${MINIO_API_PORT:-$API_PORT}"
+    CONSOLE_PORT="${MINIO_CONSOLE_PORT:-$CONSOLE_PORT}"
+  fi
+  [ -n "$REQUIRE_MOUNT_EXPLICIT" ] || REQUIRE_MOUNT="$(dirname "$DATA_DIR")"
+  # Append just the guard-bucket var if this kept file predates it — the unit's
+  # ExecStartPre references ${MINIO_GUARD_BUCKET} at systemd-runtime, not this
+  # script's bash-side default, so it must actually be IN the file to check the
+  # specific bucket instead of degrading to a bare volume-directory check.
+  grep -q '^MINIO_GUARD_BUCKET=' "$ENV_FILE" || {
+    log "adding missing MINIO_GUARD_BUCKET=$GUARD_BUCKET to $ENV_FILE"
+    printf 'MINIO_GUARD_BUCKET=%s\n' "$GUARD_BUCKET" >> "$ENV_FILE"
+  }
 else
   log "writing $ENV_FILE"
   umask 077
@@ -90,23 +125,29 @@ MINIO_ROOT_PASSWORD=${ROOT_PASSWORD}
 MINIO_COMPRESSION_ENABLE=on
 MINIO_COMPRESSION_EXTENSIONS=.txt,.csv,.tsv,.json,.xml,.xbrl,.xsd,.html,.log,.parquet
 MINIO_COMPRESSION_MIME_TYPES=text/*,application/xml,application/json,application/xbrl+xml,application/octet-stream
-# Consumed by minio.service ExecStart / guard (not MinIO's own vars).
-MINIO_DATA_DIR=${DATA_DIR}
-MINIO_API_PORT=${API_PORT}
-MINIO_CONSOLE_PORT=${CONSOLE_PORT}
+# MINIO_VOLUMES/MINIO_OPTS: the upstream MinIO convention, consumed directly by
+# minio.service's ExecStart. MINIO_GUARD_BUCKET is consumed only by the guard below.
+MINIO_VOLUMES="${DATA_DIR}"
+MINIO_OPTS="--address :${API_PORT} --console-address :${CONSOLE_PORT}"
 MINIO_GUARD_BUCKET=${GUARD_BUCKET}
 ENV
   chmod 600 "$ENV_FILE"
 fi
 
 # ---- 3. systemd unit ---------------------------------------------------------
+MOUNT_GUARD_LINE=""
+if [ -n "$REQUIRE_MOUNT" ]; then
+  log "guard: will refuse to start unless $REQUIRE_MOUNT is a real mountpoint"
+  MOUNT_GUARD_LINE="ExecStartPre=/usr/bin/mountpoint -q ${REQUIRE_MOUNT}"
+fi
+
 log "writing $UNIT_FILE"
 cat > "$UNIT_FILE" <<UNIT
 [Unit]
 Description=MinIO (native, WSL) — govdata object store
 Documentation=https://min.io/docs
 # local-fs.target guarantees /home (the real 151 GB store) is mounted first; the
-# ExecStartPre guard is belt-and-suspenders against serving an empty store.
+# ExecStartPre guards below are belt-and-suspenders against serving an empty store.
 After=local-fs.target network-online.target
 Wants=network-online.target
 
@@ -114,9 +155,16 @@ Wants=network-online.target
 Type=simple
 User=${RUN_USER}
 EnvironmentFile=${ENV_FILE}
+# Refuse to start if the data disk was never remounted (e.g. after a WSL restart
+# dropped the wsl --mount attachment) — checked BEFORE the directory-existence
+# guard below, since that one alone can't tell a real mount from a leftover local dir.
+${MOUNT_GUARD_LINE}
 # Refuse to start if the real data isn't visible (mirrors minio-w.sh guard).
-ExecStartPre=/usr/bin/test -d \${MINIO_DATA_DIR}/\${MINIO_GUARD_BUCKET}
-ExecStart=${BIN} server \${MINIO_DATA_DIR} --address :\${MINIO_API_PORT} --console-address :\${MINIO_CONSOLE_PORT}
+ExecStartPre=/usr/bin/test -d \${MINIO_VOLUMES}/\${MINIO_GUARD_BUCKET}
+# MINIO_OPTS is unbraced (\$VAR, not \${VAR}) — systemd only word-splits the
+# unbraced form; the braced form is passed as one single argument and minio
+# rejects it as an unrecognized flag.
+ExecStart=${BIN} server \$MINIO_OPTS \${MINIO_VOLUMES}
 Restart=always
 RestartSec=3
 # Give MinIO time to flush on stop.
