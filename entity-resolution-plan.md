@@ -312,6 +312,10 @@ no representative-picking, no list columns, nothing special-cased:
 
 | column | type | notes |
 |---|---|---|
+| `source_schema` | string | denormalized from the tall table's PK, e.g. `'fec'`, `'patents'`, `'sec'` — lets consumers filter/group by schema or table without a join back to `entity_org_bridge` |
+| `source_table` | string | e.g. `'committees'`, `'patent_assignees'` |
+| `source_column` | string | the name column this row's match came from, e.g. `'controller_name'` vs `'operator_name'` |
+| `source_key` | string | the registry's key_column value for this row (or normalized name for unstructured sources) |
 | `canonical_entity_id` | string | the LEI when present; the SEC CIK when EIN-matched but no LEI; else a deterministic hash of the first-seen `(source_schema, source_table, source_column, source_key)` — repeats across rows when a canonical org has multiple source mentions |
 | `canonical_name` | string | GLEIF `legal_name` when `lei` is populated, else the longest/most-complete raw source name seen; same value repeated across that entity's rows |
 | `lei` | string, nullable | |
@@ -363,6 +367,10 @@ different build path to get there:
 
 | column | type | notes |
 |---|---|---|
+| `source_schema` | string | denormalized, same purpose as on `canonical_org_entity` — filter/group by schema without a join |
+| `source_table` | string | |
+| `source_column` | string | |
+| `source_key` | string | this row's own source key (from the source's own deduped table, not `entity_person_bridge`'s pair-based key) |
 | `canonical_entity_id` | string | deterministic hash of the first-seen source key; no external hub key exists for individuals; repeats across rows when a canonical person has multiple source mentions |
 | `canonical_name` | string | best-available parsed `(first, last)` name |
 | `fec_candidate_id` / `fec_candidate_id_confidence` | string, nullable | |
