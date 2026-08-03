@@ -2197,3 +2197,50 @@ views:
         MAX(a.aqi)             AS peak_aqi
       FROM air_quality_annual a
       GROUP BY a.year, a.state_fips, a.county_fips, a.parameter_name
+
+  - name: environmental_burden_by_county
+    comment: >
+      County-year pollutant concentration (one row per pollutant, from
+      air_quality_annual) alongside ACS poverty rate and race/ethnicity
+      composition for the same county-year — a cross-schema join to
+      census.acs_poverty and census.acs_race_ethnicity on county_fips + year,
+      in the spirit of EPA's EJSCREEN environmental-justice methodology.
+      white_alone_pct and hispanic_latino_pct are separate race and ethnicity
+      measures (Hispanic/Latino can be of any race), not mutually exclusive
+      categories. aqi is always null here (annual file carries no AQI column)
+      — for site-level AQI use air_quality_daily.
+    sql: >
+      SELECT
+        aq.year,
+        aq.state_fips,
+        aq.county_fips,
+        aq.parameter_name,
+        AVG(aq.arithmetic_mean) AS avg_concentration,
+        MAX(aq.first_max_value) AS peak_value,
+        p.poverty_rate_pct,
+        re.total_race_population,
+        re.white_alone_pct,
+        re.hispanic_latino_pct
+      FROM air_quality_annual aq
+      LEFT JOIN (
+        SELECT
+          year,
+          county_fips,
+          ROUND(100.0 * below_poverty / NULLIF(poverty_universe, 0), 2) AS poverty_rate_pct
+        FROM "census"."acs_poverty"
+        WHERE geography = 'county'
+      ) p ON aq.county_fips = p.county_fips AND aq.year = p.year
+      LEFT JOIN (
+        SELECT
+          year,
+          county_fips,
+          white_alone + black_alone + american_indian_alone + asian_alone
+            + pacific_islander_alone + other_race_alone + two_or_more_races AS total_race_population,
+          ROUND(100.0 * white_alone / NULLIF(white_alone + black_alone + american_indian_alone
+            + asian_alone + pacific_islander_alone + other_race_alone + two_or_more_races, 0), 2) AS white_alone_pct,
+          ROUND(100.0 * hispanic_latino / NULLIF(hispanic_latino + not_hispanic_latino, 0), 2) AS hispanic_latino_pct
+        FROM "census"."acs_race_ethnicity"
+        WHERE geography = 'county'
+      ) re ON aq.county_fips = re.county_fips AND aq.year = re.year
+      GROUP BY aq.year, aq.state_fips, aq.county_fips, aq.parameter_name,
+        p.poverty_rate_pct, re.total_race_population, re.white_alone_pct, re.hispanic_latino_pct

@@ -512,5 +512,34 @@ SELECT 'environment', 'water_quality_samples', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL monitoring_location_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_quality_samples', allow_moved_paths := true) WHERE monitoring_location_id IS NULL);
 
+-- ============================================================================
+-- VIEW: environmental_burden_by_county (air_quality_annual left-joined cross-schema to
+-- census.acs_poverty and census.acs_race_ethnicity on county_fips+year)
+-- Views have no physical iceberg path, so the join is replicated here directly against
+-- the iceberg path of each base table. The real Calcite-path check lives in model-verify.
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'environment', 'environmental_burden_by_county', 'T7_census_poverty_join_coverage',
+  CASE WHEN matched > 0 THEN 'pass' ELSE 'warn' END, matched, 1,
+  'air_quality_annual county-years with a matching census.acs_poverty row (cross-schema join on county_fips+year)'
+FROM (
+  SELECT COUNT(*) AS matched
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/air_quality_annual', allow_moved_paths := true) aq
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty', allow_moved_paths := true) p
+    ON aq.county_fips = p.county_fips AND aq.year = p.year AND p.geography = 'county'
+);
+
+INSERT INTO dq_results
+SELECT 'environment', 'environmental_burden_by_county', 'T7_census_race_join_coverage',
+  CASE WHEN matched > 0 THEN 'pass' ELSE 'warn' END, matched, 1,
+  'air_quality_annual county-years with a matching census.acs_race_ethnicity row (cross-schema join on county_fips+year)'
+FROM (
+  SELECT COUNT(*) AS matched
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/air_quality_annual', allow_moved_paths := true) aq
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_race_ethnicity', allow_moved_paths := true) re
+    ON aq.county_fips = re.county_fips AND aq.year = re.year AND re.geography = 'county'
+);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results ORDER BY schema, tbl, test;

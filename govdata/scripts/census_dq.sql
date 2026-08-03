@@ -408,6 +408,47 @@ FROM (
 );
 
 -- ============================================================================
+-- VIEW: county_vulnerability_profile (acs_poverty/acs_age/acs_disability/acs_language
+-- joined at county grain, left-joined cross-schema to disasters.disaster_declarations)
+-- Views have no physical iceberg path, so the join is replicated here directly against
+-- the iceberg path of each base table. The real Calcite-path check lives in model-verify.
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'census', 'county_vulnerability_profile', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Row count from the county_vulnerability_profile join (acs_poverty/acs_age/acs_disability/acs_language on county_fips+year, geography=county)'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty', allow_moved_paths := true) p
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_age', allow_moved_paths := true) a
+    ON p.county_fips = a.county_fips AND p.year = a.year AND a.geography = 'county'
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_disability', allow_moved_paths := true) d
+    ON p.county_fips = d.county_fips AND p.year = d.year AND d.geography = 'county'
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_language', allow_moved_paths := true) l
+    ON p.county_fips = l.county_fips AND p.year = l.year AND l.geography = 'county'
+  WHERE p.geography = 'county'
+);
+
+INSERT INTO dq_results
+SELECT 'census', 'county_vulnerability_profile', 'T7_disaster_join_coverage',
+  CASE WHEN matched > 0 THEN 'pass' ELSE 'warn' END, matched, 1,
+  'County-years in the profile join with at least one matching disasters.disaster_declarations row (cross-schema join on county_fips)'
+FROM (
+  SELECT COUNT(*) AS matched
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty', allow_moved_paths := true) p
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_age', allow_moved_paths := true) a
+    ON p.county_fips = a.county_fips AND p.year = a.year AND a.geography = 'county'
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_disability', allow_moved_paths := true) d
+    ON p.county_fips = d.county_fips AND p.year = d.year AND d.geography = 'county'
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_language', allow_moved_paths := true) l
+    ON p.county_fips = l.county_fips AND p.year = l.year AND l.geography = 'county'
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/disaster_declarations', allow_moved_paths := true) fd
+    ON p.county_fips = fd.county_fips
+  WHERE p.geography = 'county'
+);
+
+-- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================
 

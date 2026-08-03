@@ -4301,6 +4301,62 @@ tables:
       FROM acs_employment
       WHERE geography = 'state'
 
+  # ---------------------------------------------------------------------------
+  # COUNTY_VULNERABILITY_PROFILE - CDC/ATSDR SVI-style county vulnerability
+  # ---------------------------------------------------------------------------
+  - name: county_vulnerability_profile
+    type: view
+    comment: >
+      County-year social vulnerability profile combining ACS poverty rate
+      (acs_poverty), senior/under-5 population share (acs_age), disability
+      rate (acs_disability), and Spanish-limited-English-proficiency rate
+      (acs_language) — the socioeconomic, household, and language themes of
+      the CDC/ATSDR Social Vulnerability Index. limited_english_pct covers
+      Spanish speakers with limited English proficiency only; acs_language
+      has no combined-language limited-English-proficiency total. Enriched
+      with a cross-schema join to disasters.disaster_declarations for
+      lifetime (not year-matched) declaration and Individual-Assistance
+      counts per county, since FEMA declarations are point-in-time events
+      that don't line up with the ACS 5-year survey vintage. One row per
+      county per ACS 5-year vintage.
+    sql: >
+      SELECT
+        p.year,
+        p.state,
+        p.county_fips,
+        p.geo_name,
+        p.poverty_universe,
+        p.below_poverty,
+        ROUND(100.0 * p.below_poverty / NULLIF(p.poverty_universe, 0), 2) AS poverty_rate_pct,
+        a.under_5_years,
+        a.age_65_and_over,
+        ROUND(100.0 * (a.under_5_years + a.age_65_and_over)
+          / NULLIF(a.under_5_years + a.age_5_to_17 + a.age_18_to_64 + a.age_65_and_over, 0), 2) AS pct_age_dependent,
+        d.total_population AS disability_universe,
+        d.with_disability,
+        ROUND(100.0 * d.with_disability / NULLIF(d.total_population, 0), 2) AS disability_rate_pct,
+        l.population_5_plus,
+        l.spanish_limited_english,
+        ROUND(100.0 * l.spanish_limited_english / NULLIF(l.population_5_plus, 0), 2) AS limited_english_pct,
+        COALESCE(fd.disaster_count, 0) AS lifetime_disaster_declarations,
+        COALESCE(fd.ia_declarations, 0) AS lifetime_ia_declarations
+      FROM acs_poverty p
+      JOIN acs_age a
+        ON p.county_fips = a.county_fips AND p.year = a.year AND a.geography = 'county'
+      JOIN acs_disability d
+        ON p.county_fips = d.county_fips AND p.year = d.year AND d.geography = 'county'
+      JOIN acs_language l
+        ON p.county_fips = l.county_fips AND p.year = l.year AND l.geography = 'county'
+      LEFT JOIN (
+        SELECT
+          county_fips,
+          COUNT(DISTINCT disaster_number) AS disaster_count,
+          SUM(CASE WHEN ia_program_declared THEN 1 ELSE 0 END) AS ia_declarations
+        FROM "disasters"."disaster_declarations"
+        GROUP BY county_fips
+      ) fd ON p.county_fips = fd.county_fips
+      WHERE p.geography = 'county'
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
