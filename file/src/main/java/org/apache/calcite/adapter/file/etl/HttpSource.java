@@ -2369,6 +2369,14 @@ public class HttpSource implements DataSource {
           exhausted = true;
           return;
         }
+        // A UTF-8 BOM (e.g. FAA's ReleasableAircraft.zip MASTER.txt) lands on the first header
+        // token since InputStreamReader with an explicit UTF-8 charset does not strip it, and
+        // String.trim() only removes chars <= U+0020 so it survives the per-row trim below too.
+        // Left in place it makes the first column's header text never match the schema's quoted
+        // src."<name>" reference, silently nulling that column for every row.
+        if (!headerLine.isEmpty() && headerLine.charAt(0) == (char) 0xFEFF) {
+          headerLine = headerLine.substring(1);
+        }
         this.headers = parseDelimitedLine(headerLine, delimiter, quoted);
         LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
       } else {

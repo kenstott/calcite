@@ -1636,7 +1636,7 @@ partitionedTables:
       - name: kit_model
         type: string
         nullable: true
-        expression: 'trim(src." KIT MODEL")'
+        expression: 'trim(src."KIT MODEL")'
         comment: Kit model (amateur-built)
       - name: mode_s_code_hex
         type: string

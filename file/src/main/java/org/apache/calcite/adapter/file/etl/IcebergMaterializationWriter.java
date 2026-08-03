@@ -1594,6 +1594,44 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         tmpJson.delete();
       }
 
+      // read_json_auto infers each column's type from the batch it was handed, so a source field
+      // that reads as purely numeric (e.g. single-digit registrant-type codes) comes back as
+      // BIGINT, and one that mixes numeric and text values across the batch comes back as JSON —
+      // but every expression below assumes VARCHAR (trim(), SUBSTRING(), strptime(), ...). A
+      // single such mismatch throws a binder error for the WHOLE composed SELECT further down,
+      // which is caught below and silently nulls out every computed column for the batch — that
+      // is exactly how faa_aircraft_master ended up 100% null (trim(BIGINT) has no overload).
+      // Normalizing every column back to its raw text form up front — json_extract_string unwraps
+      // JSON scalars without the surrounding quotes a plain CAST would leave in place, CAST
+      // handles everything else — keeps the source text available regardless of what
+      // read_json_auto inferred.
+      java.util.List<String> srcColumnNames = new java.util.ArrayList<String>();
+      try (ResultSet rsCols = stmt.executeQuery("SELECT * FROM _src LIMIT 0")) {
+        ResultSetMetaData m = rsCols.getMetaData();
+        for (int i = 1; i <= m.getColumnCount(); i++) {
+          srcColumnNames.add(m.getColumnLabel(i));
+        }
+      }
+      StringBuilder normalizeSel = new StringBuilder("SELECT ");
+      boolean firstNorm = true;
+      for (String colName : srcColumnNames) {
+        if (colName == null || colName.isEmpty()) {
+          continue;
+        }
+        String esc = colName.replace("\"", "\\\"");
+        if (!firstNorm) {
+          normalizeSel.append(", ");
+        }
+        firstNorm = false;
+        normalizeSel.append("CASE WHEN typeof(\"").append(esc).append("\") = 'JSON' THEN json_extract_string(\"")
+            .append(esc).append("\", '$') ELSE CAST(\"").append(esc).append("\" AS VARCHAR) END AS \"")
+            .append(esc).append('"');
+      }
+      if (!firstNorm) {
+        normalizeSel.append(" FROM _src");
+        stmt.execute("CREATE OR REPLACE TEMP TABLE _src AS " + normalizeSel);
+      }
+
       // Pad _src with any referenced source columns it lacks, as NULL. read_json_auto infers the
       // schema from the rows it was handed, so a batch whose rows omit a field — e.g. PEP
       // state-level responses carry no "county", and an empty Census response yields only "NAME" —
@@ -1604,11 +1642,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       // lets the SQL bind and evaluate: computed columns resolve correctly, and the genuinely-absent
       // fields are simply NULL.
       java.util.Set<String> existingLower = new java.util.HashSet<String>();
-      try (ResultSet rsCols = stmt.executeQuery("SELECT * FROM _src LIMIT 0")) {
-        ResultSetMetaData m = rsCols.getMetaData();
-        for (int i = 1; i <= m.getColumnCount(); i++) {
-          existingLower.add(m.getColumnLabel(i).toLowerCase(java.util.Locale.ROOT));
-        }
+      for (String colName : srcColumnNames) {
+        existingLower.add(colName.toLowerCase(java.util.Locale.ROOT));
       }
       java.util.Set<String> referenced = new java.util.LinkedHashSet<String>();
       java.util.regex.Pattern srcRef = java.util.regex.Pattern.compile("src\\.\"([^\"]+)\"");
