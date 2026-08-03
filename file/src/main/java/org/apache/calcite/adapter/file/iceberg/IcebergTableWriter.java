@@ -755,12 +755,21 @@ public class IcebergTableWriter {
    * that quoting survives as literal characters through this pipeline's JSON round-trip instead
    * of being stripped as CSV escaping. Only a matched pair at both ends is stripped, not any
    * embedded quote — this targets exactly that CSV-quoting artifact, not arbitrary malformed input.
+   *
+   * <p>Also strips a single trailing {@code '+'} — CFTC's SDR dissemination data marks
+   * notional/quantity amounts at or above the Part 43 large-trade disclosure threshold this way
+   * (e.g. {@code "250,000,000+"}); the underlying number is still real and should coerce, not
+   * fail. The censoring itself is not lost: a companion {@code *_at_or_above_threshold} column
+   * (see cftc-schema.yaml) captures it via its own expression against the raw value.
    */
   private static String stripThousandsSeparators(String s) {
     String result = s;
     if (result.length() >= 2 && result.charAt(0) == '"'
         && result.charAt(result.length() - 1) == '"') {
       result = result.substring(1, result.length() - 1);
+    }
+    if (!result.isEmpty() && result.charAt(result.length() - 1) == '+') {
+      result = result.substring(0, result.length() - 1);
     }
     if (result.indexOf(',') >= 0) {
       result = result.replace(",", "");
@@ -924,10 +933,48 @@ public class IcebergTableWriter {
         if (value.getClass().isArray()) {
           return convertArrayToList(fieldName, value, elementType);
         }
-        return value;
+        if (value instanceof String) {
+          return splitDelimitedList(fieldName, (String) value, elementType);
+        }
+        // Defensive fallback for any other JDBC wrapper type (e.g. org.duckdb.JsonNode, which
+        // DuckDB's read_json_auto can produce for a column it infers as JSON rather than
+        // VARCHAR). Without this, the wrapper object is written straight to Parquet and fails
+        // downstream with ClassCastException in Iceberg's ParquetValueWriters$CollectionWriter
+        // ("class org.duckdb.JsonNode cannot be cast to class java.util.Collection") — found
+        // live in the cftc DQ reingest. Treat its text form the same as a raw String value.
+        return splitDelimitedList(fieldName, value.toString(), elementType);
       default:
         return value;
     }
+  }
+
+  /**
+   * Splits a semicolon-delimited string into a List, coercing each segment to the target
+   * Iceberg element type — e.g. CFTC's amortization schedule dates
+   * ({@code "2030-01-31;2030-02-28;..."}) or tiered payment amounts. Strips a matched
+   * leading/trailing double-quote pair first (same CSV-quoting artifact {@link
+   * #stripThousandsSeparators} guards against for scalars). A per-element DROP_ROW (from an
+   * {@code onCoercionFailure: DROP} field) has no row-level meaning inside a list — treated as
+   * WARN (element becomes null) instead, a documented scope limitation shared with {@link
+   * #convertArrayToList}.
+   */
+  private java.util.List<Object> splitDelimitedList(String fieldName, String text,
+      org.apache.iceberg.types.Type elementType) {
+    String s = text;
+    if (s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"') {
+      s = s.substring(1, s.length() - 1);
+    }
+    String[] segments = s.split(";");
+    java.util.List<Object> result = new java.util.ArrayList<>(segments.length);
+    for (String segment : segments) {
+      String trimmed = segment.trim();
+      if (trimmed.isEmpty()) {
+        continue;
+      }
+      Object coerced = coerceValue(fieldName, trimmed, elementType);
+      result.add(coerced == DROP_ROW ? null : coerced);
+    }
+    return result;
   }
 
   /**

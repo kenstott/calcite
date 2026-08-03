@@ -76,8 +76,12 @@ public class ColumnConfig {
     if ((expr == null || expr.isEmpty()) && builder.dateFormat != null) {
       String effectiveSource = builder.source != null && !builder.source.isEmpty()
           ? builder.source : builder.name;
+      // CAST to VARCHAR: every DateParseFormat expression uses TRIM/LIKE/TRY_STRPTIME/LPAD on
+      // this reference, all of which require a string argument. Without the cast, a source
+      // field DuckDB infers as numeric (e.g. an unquoted 8-digit JSON date like 20260115) fails
+      // to bind — "No function matches trim(BIGINT)" — found live during the fec DQ reingest.
       expr = DateParseFormat.valueOf(builder.dateFormat)
-          .toExpression("src.\"" + effectiveSource + "\"");
+          .toExpression("CAST(src.\"" + effectiveSource + "\" AS VARCHAR)");
     }
     this.expression = expr;
   }

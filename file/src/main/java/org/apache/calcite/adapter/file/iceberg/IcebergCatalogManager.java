@@ -367,22 +367,28 @@ public class IcebergCatalogManager {
    */
   public static Table createTableFromColumns(Map<String, Object> config, String tableId,
       List<ColumnDef> columns, List<String> partitionColumns) {
-    // Build Iceberg schema from column definitions
+    // Build Iceberg schema from column definitions. A single shared counter assigns every field
+    // ID — top-level columns AND nested list-element IDs (see the mapToIcebergType overload
+    // below) — so no two fields can collide. Schema's constructor validates ID uniqueness
+    // eagerly (Schema.lazyIdToName is called from within <init>, not lazily as the name
+    // suggests), so IDs must be unique from the moment each NestedField is built; assigning
+    // fresh IDs to an already-constructed (and by then already-thrown) Schema is too late. This
+    // replaced a hardcoded element ID of 100 for every list column, which collided with any
+    // other list column (two lists both claiming 100) or the 100th+ top-level field — found
+    // live ("Multiple entries with same key: 100=settlement_currency_leg2 and
+    // 100=end_date_notional_leg1.element") once CFTC's 119-column schema got its first two
+    // array<> columns.
     List<Types.NestedField> fields = new ArrayList<Types.NestedField>();
-    int fieldId = 1;
+    java.util.concurrent.atomic.AtomicInteger nextId =
+        new java.util.concurrent.atomic.AtomicInteger(1);
     for (ColumnDef col : columns) {
+      int fieldId = nextId.getAndIncrement();
+      org.apache.iceberg.types.Type fieldType = mapToIcebergType(col.getType(), nextId);
       Types.NestedField field;
       if (col.getDoc() != null && !col.getDoc().isEmpty()) {
-        // Create field with documentation
-        field =
-            Types.NestedField.optional(fieldId++, col.getName(),
-            mapToIcebergType(col.getType()),
-            col.getDoc());
+        field = Types.NestedField.optional(fieldId, col.getName(), fieldType, col.getDoc());
       } else {
-        // Create field without documentation
-        field =
-            Types.NestedField.optional(fieldId++, col.getName(),
-            mapToIcebergType(col.getType()));
+        field = Types.NestedField.optional(fieldId, col.getName(), fieldType);
       }
       fields.add(field);
     }
@@ -399,13 +405,32 @@ public class IcebergCatalogManager {
   }
 
   /**
-   * Maps a string type name to an Iceberg Type.
-   * Supports basic types and array types (e.g., "array&lt;double&gt;").
+   * Maps a string type name to an Iceberg Type, for standalone Type resolution (e.g. comparing
+   * an expected vs. actual column type) where the result is never embedded in a {@link Schema}.
+   * A list type's element ID is a throwaway value from a private counter — fine here since
+   * nothing checks it for cross-field uniqueness, but NOT fine if the result is added to a
+   * Schema's field list; use {@link #mapToIcebergType(String, java.util.concurrent.atomic.AtomicInteger)}
+   * for that (see {@link #createTableFromColumns}).
    *
    * @param typeName The type name (e.g., "VARCHAR", "INTEGER", "array&lt;double&gt;")
    * @return The corresponding Iceberg type
    */
   static org.apache.iceberg.types.Type mapToIcebergType(String typeName) {
+    return mapToIcebergType(typeName, new java.util.concurrent.atomic.AtomicInteger(1));
+  }
+
+  /**
+   * Maps a string type name to an Iceberg Type, allocating every field ID (including a list
+   * type's element ID) from the given shared counter so a caller building a full {@link Schema}
+   * — where every ID must be globally unique from the moment each field is constructed — can
+   * pass one counter across all its columns.
+   *
+   * @param typeName The type name (e.g., "VARCHAR", "INTEGER", "array&lt;double&gt;")
+   * @param nextId shared ID counter; {@code getAndIncrement()} is called once per list type
+   * @return The corresponding Iceberg type
+   */
+  static org.apache.iceberg.types.Type mapToIcebergType(String typeName,
+      java.util.concurrent.atomic.AtomicInteger nextId) {
     if (typeName == null) {
       return Types.StringType.get();
     }
@@ -414,9 +439,8 @@ public class IcebergCatalogManager {
     String lowerType = typeName.toLowerCase();
     if (lowerType.startsWith("array<") && lowerType.endsWith(">")) {
       String elementType = typeName.substring(6, typeName.length() - 1).trim();
-      org.apache.iceberg.types.Type elementIcebergType = mapToIcebergType(elementType);
-      // Use element ID of 100 for list elements (standard convention)
-      return Types.ListType.ofOptional(100, elementIcebergType);
+      org.apache.iceberg.types.Type elementIcebergType = mapToIcebergType(elementType, nextId);
+      return Types.ListType.ofOptional(nextId.getAndIncrement(), elementIcebergType);
     }
 
     String upperType = typeName.toUpperCase();

@@ -371,9 +371,10 @@ class ColumnConfigTest {
 
     assertEquals("SLASH", config.getDateFormat());
     assertTrue(config.isComputed(), "a dateFormat column is computed (has a synthesized expression)");
+    String castCol = "CAST(src.\"Transaction Date\" AS VARCHAR)";
     assertEquals(
-        "CASE WHEN src.\"Transaction Date\" IS NULL OR TRIM(src.\"Transaction Date\") = '' "
-            + "THEN NULL ELSE TRY_STRPTIME(src.\"Transaction Date\", '%m/%d/%Y')::DATE END",
+        "CASE WHEN " + castCol + " IS NULL OR TRIM(" + castCol + ") = '' "
+            + "THEN NULL ELSE TRY_STRPTIME(" + castCol + ", '%m/%d/%Y')::DATE END",
         config.getExpression());
   }
 

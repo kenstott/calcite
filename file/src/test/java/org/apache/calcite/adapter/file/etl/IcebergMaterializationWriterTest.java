@@ -223,6 +223,92 @@ public class IcebergMaterializationWriterTest {
     assertEquals(org.apache.iceberg.types.Types.BooleanType.get(), byName.get("active"));
   }
 
+  @Test public void testDeclaredArrayColumnTypeCreatesListType() throws Exception {
+    // Regression: mapToIcebergType previously fell through "array<date>"/"array<double>" to
+    // STRING (the default case), silently dropping any declared list-typed column to a plain
+    // string — found while adding CFTC's semicolon-delimited multi-value fields (amortization
+    // schedule end dates, tiered payment amounts) as array<date>/array<double> columns.
+    File warehouseDir = new File(tempDir, "warehouse_array_type");
+    warehouseDir.mkdirs();
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    MaterializeConfig config =
+        buildIcebergConfig(
+            warehouseDir, "test_array_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("end_dates", "array<date>")),
+        Collections.<String>emptyList());
+
+    writer.initialize(config);
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("end_dates", "2030-01-31;2030-02-28;2030-03-31");
+    writer.writeBatch(Collections.singletonList(row).iterator(),
+        Collections.<String, String>emptyMap());
+    writer.commit();
+
+    String loc = writer.getTableLocation();
+    org.apache.iceberg.Table table =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(loc);
+    org.apache.iceberg.types.Types.NestedField field = table.schema().findField("end_dates");
+    assertTrue(field.type().isListType(), "array<date> must create an Iceberg ListType");
+    assertEquals(org.apache.iceberg.types.Types.DateType.get(),
+        field.type().asListType().elementType(), "list element type must be DATE");
+  }
+
+  @Test public void testMultipleArrayColumnsGetDistinctFieldIds() throws Exception {
+    // Regression: IcebergCatalogManager.mapToIcebergType hardcoded element ID 100 for every
+    // list column. With a single list column this is harmless, but a schema with two or more
+    // list columns (or, in a wide table, a list column plus a 100th+ top-level column) collides
+    // — Schema construction throws "Multiple entries with same key: 100=<field> and
+    // 100=<list>.element" from IndexByName. Found live in the cftc DQ reingest once
+    // end_date_notional_leg1 and other_payment_amount both became array<> columns.
+    File warehouseDir = new File(tempDir, "warehouse_array_ids");
+    warehouseDir.mkdirs();
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    MaterializeConfig config =
+        buildIcebergConfig(
+            warehouseDir, "test_array_ids_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("end_dates", "array<date>"),
+            createColumnConfig("payments", "array<double>")),
+        Collections.<String>emptyList());
+
+    writer.initialize(config);
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("end_dates", "2030-01-31;2030-02-28");
+    row.put("payments", "1.5;2.5");
+    writer.writeBatch(Collections.singletonList(row).iterator(),
+        Collections.<String, String>emptyMap());
+    writer.commit();
+
+    String loc = writer.getTableLocation();
+    org.apache.iceberg.Table table =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(loc);
+
+    // Walking every field (top-level + nested list elements) and collecting IDs would only
+    // prove the point if it doesn't throw first — the original bug threw during schema
+    // construction, before a table could even be created. Getting this far already proves the
+    // fix; assert uniqueness on top of that.
+    Set<Integer> ids = new HashSet<Integer>();
+    for (org.apache.iceberg.types.Types.NestedField f : table.schema().columns()) {
+      assertTrue(ids.add(f.fieldId()), "duplicate top-level field id: " + f.fieldId());
+      if (f.type().isListType()) {
+        int elementId = f.type().asListType().elementId();
+        assertTrue(ids.add(elementId), "duplicate list element id: " + elementId);
+      }
+    }
+    assertEquals(5, ids.size(), "id, end_dates, end_dates.element, payments, payments.element");
+  }
+
   @Test public void testIcebergInitializeRequiresIcebergFormat() throws Exception {
     File warehouseDir = new File(tempDir, "warehouse_format_check");
     warehouseDir.mkdirs();

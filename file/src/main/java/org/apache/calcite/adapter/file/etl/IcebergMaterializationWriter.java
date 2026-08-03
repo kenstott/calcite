@@ -630,6 +630,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (upperType.startsWith("VARCHAR") || upperType.startsWith("CHAR")) {
       return "STRING";
     }
+    if (upperType.startsWith("ARRAY<") && upperType.endsWith(">")) {
+      // Recurse on the element type and re-wrap; IcebergCatalogManager.mapToIcebergType resolves
+      // the resulting "array<ELEMENT>" string into a Types.ListType when the table is created.
+      String elementType = sqlType.substring(6, sqlType.length() - 1).trim();
+      return "array<" + mapToIcebergType(elementType) + ">";
+    }
     switch (upperType) {
       case "INTEGER":
       case "INT":

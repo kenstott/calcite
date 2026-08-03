@@ -238,6 +238,97 @@ class IcebergTableWriterCoercionPolicyTest {
     assertEquals(1, df.recordCount());
   }
 
+  // ---- CFTC large-trade threshold marker ("+" suffix) is a value, not a coercion failure ----
+  // (found live in the cftc DQ reingest — CFTC's Part 43 dissemination data marks
+  // notional/quantity amounts at or above the public disclosure threshold with a trailing '+',
+  // e.g. "250,000,000+"; the underlying number must still coerce. The censoring itself is
+  // captured separately by a companion *_at_or_above_threshold expression column in
+  // cftc-schema.yaml, not by this test — this test only covers the numeric-coercion half.)
+
+  @Test void testTrailingPlusThresholdMarkerStrippedFromDouble() throws Exception {
+    Table table = newTable(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "amount", Types.DoubleType.get()));
+    Map<String, String> policies = Collections.singletonMap("amount", "FAIL");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, policies);
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    records.add(row("censored", "amount", "250,000,000+"));
+    records.add(row("quoted-censored", "amount", "\"96,000,000+\""));
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(2, df.recordCount());
+  }
+
+  // ---- Semicolon-delimited multi-value fields become LIST elements ----
+  // (found live in the cftc DQ reingest — amortizing swaps report a schedule of end dates and
+  // tiered payments as one semicolon-delimited field instead of a single scalar, e.g.
+  // "2030-01-31;2030-02-28;2030-03-31".)
+
+  @Test void testSemicolonDelimitedStringBecomesDateList() throws Exception {
+    Table table = newTable(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "dates",
+            Types.ListType.ofOptional(100, Types.DateType.get())));
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    records.add(row("schedule", "dates", "2030-01-31;2030-02-28;2030-03-31"));
+    records.add(row("single", "dates", "2030-01-31"));
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(2, df.recordCount());
+  }
+
+  // ---- Non-String/List/Array wrapper types fall back to their text form ----
+  // (found live in the cftc DQ reingest — org.duckdb.JsonNode, DuckDB's JDBC representation for
+  // a column it infers as JSON rather than VARCHAR, was written straight to Parquet and failed
+  // with "class org.duckdb.JsonNode cannot be cast to class java.util.Collection" inside
+  // Iceberg's ParquetValueWriters$CollectionWriter. Simulated here with a minimal stand-in
+  // object rather than a real DuckDB connection.)
+
+  private static final class TextWrapper {
+    private final String text;
+    TextWrapper(String text) {
+      this.text = text;
+    }
+    @Override public String toString() {
+      return text;
+    }
+  }
+
+  @Test void testUnrecognizedWrapperTypeFallsBackToTextForm() throws Exception {
+    Table table = newTable(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "dates",
+            Types.ListType.ofOptional(100, Types.DateType.get())));
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    records.add(row("wrapped", "dates", new TextWrapper("2030-01-31;2030-02-28")));
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(1, df.recordCount());
+  }
+
+  @Test void testSemicolonDelimitedStringBecomesDoubleList() throws Exception {
+    Table table = newTable(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "amounts",
+            Types.ListType.ofOptional(100, Types.DoubleType.get())));
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    records.add(row("tiered", "amounts", "1,000,000;2,500,000;500,000"));
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(1, df.recordCount());
+  }
+
   // ---- TIMESTAMP coercion must always produce LocalDateTime, never epoch micros ----
   // (regression: BaseParquetWriter$TimestampWriter requires LocalDateTime for TIMESTAMP
   // WITHOUT TIMEZONE; a Long here throws ClassCastException at write time, caught live during

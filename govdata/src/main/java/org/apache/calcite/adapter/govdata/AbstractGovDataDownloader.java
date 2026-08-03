@@ -2081,7 +2081,11 @@ public abstract class AbstractGovDataDownloader {
         String fmt = colNode.get("dateFormat").asText().trim();
         String sourceName = colNode.has("source") ? colNode.get("source").asText()
             : colNode.has("sourceName") ? colNode.get("sourceName").asText() : colName;
-        expression = DateParseFormat.valueOf(fmt).toExpression(sourceName);
+        // CAST to VARCHAR: DateParseFormat expressions use TRIM/LIKE/TRY_STRPTIME/LPAD, all of
+        // which require a string argument — see ColumnConfig's matching cast for the failure
+        // this avoids ("No function matches trim(BIGINT)") when the source is DuckDB-inferred
+        // as numeric.
+        expression = DateParseFormat.valueOf(fmt).toExpression("CAST(" + sourceName + " AS VARCHAR)");
       }
 
       if (colName != null) {

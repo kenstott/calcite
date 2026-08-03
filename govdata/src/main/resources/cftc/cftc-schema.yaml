@@ -244,11 +244,28 @@ partitionedTables:
         nullable: true
         source: "Notional amount-Leg 1"
         comment: Notional principal amount for leg 1 (commas removed by DuckDB auto-detect)
+      - name: notional_amount_leg1_at_or_above_threshold
+        type: boolean
+        nullable: true
+        expression: 'TRY_CAST(src."Notional amount-Leg 1" AS VARCHAR) LIKE ''%+'''
+        comment: >
+          True when the source value carried a trailing '+' — CFTC's Part 43 large-trade
+          disclosure censoring marker, meaning the true notional is at or above the public
+          reporting threshold and notional_amount_leg1 reflects only that threshold, not the
+          real amount. Null when the source value itself is null.
       - name: notional_amount_leg2
         type: double
         nullable: true
         source: "Notional amount-Leg 2"
         comment: Notional principal amount for leg 2
+      - name: notional_amount_leg2_at_or_above_threshold
+        type: boolean
+        nullable: true
+        expression: 'TRY_CAST(src."Notional amount-Leg 2" AS VARCHAR) LIKE ''%+'''
+        comment: >
+          True when the source value carried a trailing '+' — see
+          notional_amount_leg1_at_or_above_threshold for the CFTC large-trade censoring
+          convention this reflects.
       - name: notional_currency_leg1
         type: string
         nullable: true
@@ -274,6 +291,14 @@ partitionedTables:
         nullable: true
         source: "Total notional quantity-Leg 1"
         comment: Aggregate quantity over the life of the swap leg 1
+      - name: total_notional_quantity_leg1_at_or_above_threshold
+        type: boolean
+        nullable: true
+        expression: 'TRY_CAST(src."Total notional quantity-Leg 1" AS VARCHAR) LIKE ''%+'''
+        comment: >
+          True when the source value carried a trailing '+' — see
+          notional_amount_leg1_at_or_above_threshold for the CFTC large-trade censoring
+          convention this reflects.
       - name: total_notional_quantity_leg2
         type: double
         nullable: true
@@ -330,10 +355,13 @@ partitionedTables:
         source: "Effective date of the notional amount-Leg 2"
         comment: Date the notional amount takes effect for leg 2
       - name: end_date_notional_leg1
-        type: date
+        type: array<date>
         nullable: true
         source: "End date of the notional amount-Leg 1"
-        comment: Date the notional amount expires for leg 1
+        comment: >
+          Date(s) the notional amount expires for leg 1. Usually a single date; amortizing swaps
+          report a semicolon-delimited schedule (e.g. "2030-01-31;2030-02-28;...") which is why
+          this is a list rather than a scalar date.
       - name: end_date_notional_leg2
         type: date
         nullable: true
@@ -602,10 +630,13 @@ partitionedTables:
 
       # --- Other payment ---
       - name: other_payment_amount
-        type: double
+        type: array<double>
         nullable: true
         source: "Other payment amount"
-        comment: Additional payment (e.g. upfront fee, points)
+        comment: >
+          Additional payment(s) (e.g. upfront fee, points). Usually a single amount; tiered
+          payment schedules report a semicolon-delimited list, which is why this is a list
+          rather than a scalar double.
       - name: other_payment_type
         type: string
         nullable: true
