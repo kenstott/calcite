@@ -44,6 +44,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -80,8 +81,23 @@ public class IcebergTableWriter {
   /** Absolute ceiling on records per compacted output file, independent of the byte estimate. */
   private static final int MAX_RECORDS_PER_COMPACTION_FILE = 2_000_000;
 
+  /**
+   * Sentinel returned by {@link #coerceValue(String, Object, org.apache.iceberg.types.Type)}
+   * when a column's {@code onCoercionFailure: DROP} policy applies to an unparseable value —
+   * the caller in {@link #writeRecords} drops the whole row rather than writing it with the
+   * sentinel in place of a real value.
+   */
+  private static final Object DROP_ROW = new Object();
+
   private final Table table;
   private final StorageProvider storageProvider;
+
+  /**
+   * Per-column {@code onCoercionFailure} policy ({@code FAIL}/{@code WARN}/{@code DROP}),
+   * keyed by field name. A column absent from this map behaves as {@code WARN} — log and
+   * write NULL — matching the historical (implicit, undocumented) behavior of this class.
+   */
+  private final Map<String, String> onCoercionFailurePolicies;
 
   /**
    * Runs a table-mutating operation under both serialization layers — the in-JVM per-table monitor
@@ -99,11 +115,26 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Creates a writer for the specified Iceberg table.
+   * Creates a writer for the specified Iceberg table. Every column behaves as
+   * {@code onCoercionFailure: WARN} (log and write NULL on an unparseable value) — the
+   * historical default, unchanged for callers that don't have per-column policy config
+   * available (maintenance/compaction call sites, not fresh-ingest materialization).
    */
   public IcebergTableWriter(Table table, StorageProvider storageProvider) {
+    this(table, storageProvider, Collections.<String, String>emptyMap());
+  }
+
+  /**
+   * Creates a writer for the specified Iceberg table with an explicit per-column
+   * {@code onCoercionFailure} policy map (field name -&gt; {@code FAIL}/{@code WARN}/
+   * {@code DROP}). A field absent from the map behaves as {@code WARN}.
+   */
+  public IcebergTableWriter(Table table, StorageProvider storageProvider,
+      Map<String, String> onCoercionFailurePolicies) {
     this.table = table;
     this.storageProvider = storageProvider;
+    this.onCoercionFailurePolicies = onCoercionFailurePolicies != null
+        ? onCoercionFailurePolicies : Collections.<String, String>emptyMap();
   }
 
 
@@ -565,13 +596,20 @@ public class IcebergTableWriter {
 
     // Convert Map records to GenericRecord
     List<Record> icebergRecords = new ArrayList<Record>(records.size());
+    rowLoop:
     for (Map<String, Object> row : records) {
       GenericRecord record = GenericRecord.create(schema);
       for (Types.NestedField field : schema.columns()) {
         String fieldName = field.name();
         Object value = getFieldValue(row, fieldName, partitionValues);
         if (value != null) {
-          record.setField(fieldName, coerceValue(value, field.type()));
+          Object coerced = coerceValue(fieldName, value, field.type());
+          if (coerced == DROP_ROW) {
+            // onCoercionFailure: DROP on this field — skip the row entirely rather than
+            // writing it with a missing/null value in a column that failed to parse.
+            continue rowLoop;
+          }
+          record.setField(fieldName, coerced);
         }
       }
       icebergRecords.add(record);
@@ -668,9 +706,56 @@ public class IcebergTableWriter {
   }
 
   /**
+   * True-like/false-like tokens for {@code BOOLEAN} coercion (case-insensitive). Anything
+   * outside these two sets is a genuine parse failure subject to {@code onCoercionFailure} —
+   * BOOLEAN is a tri-state (true/false/null) column, not a silent-false default the way
+   * {@code Boolean.parseBoolean} treats any non-"true" string.
+   */
+  private static final java.util.Set<String> BOOLEAN_TRUE_TOKENS =
+      new java.util.HashSet<>(java.util.Arrays.asList("true", "t", "yes", "y", "1"));
+  private static final java.util.Set<String> BOOLEAN_FALSE_TOKENS =
+      new java.util.HashSet<>(java.util.Arrays.asList("false", "f", "no", "n", "0"));
+
+  /**
+   * Applies this field's {@code onCoercionFailure} policy to a value that failed to parse as
+   * {@code targetTypeName}. {@code FAIL} throws (aborting the write); {@code DROP} logs and
+   * returns {@link #DROP_ROW} for the caller to act on; {@code WARN} (the default for a field
+   * with no configured policy) logs and returns {@code null} — the historical behavior of this
+   * class, made an explicit, visible choice instead of an implicit silent one.
+   */
+  private Object handleCoercionFailure(String fieldName, Object rawValue, String targetTypeName,
+      Exception cause) {
+    String policy = onCoercionFailurePolicies.getOrDefault(fieldName, "WARN");
+    if ("FAIL".equals(policy)) {
+      throw new IllegalStateException(
+          "Column '" + fieldName + "' value '" + rawValue + "' is not a valid " + targetTypeName
+              + " (table " + table.name() + ")", cause);
+    }
+    if ("DROP".equals(policy)) {
+      LOGGER.warn("Column '{}' value '{}' is not a valid {} — dropping row (table {})",
+          fieldName, rawValue, targetTypeName, table.name());
+      return DROP_ROW;
+    }
+    LOGGER.warn("Column '{}' value '{}' is not a valid {}, using NULL (table {})",
+        fieldName, rawValue, targetTypeName, table.name());
+    return null;
+  }
+
+  /**
+   * Strips thousands-separator commas from a numeric string (e.g. {@code "550,000,000"} -&gt;
+   * {@code "550000000"}) — real source data (e.g. CFTC notional amounts) is commonly formatted
+   * this way, and {@code Integer.parseInt}/{@code Long.parseLong}/{@code Float.parseFloat}/
+   * {@code Double.parseDouble} all reject the comma. A comma-formatted number is not malformed
+   * data — it should coerce to its value, not fall through to {@link #handleCoercionFailure}.
+   */
+  private static String stripThousandsSeparators(String s) {
+    return s.indexOf(',') >= 0 ? s.replace(",", "") : s;
+  }
+
+  /**
    * Coerces a value to the appropriate Iceberg type.
    */
-  private Object coerceValue(Object value, org.apache.iceberg.types.Type type) {
+  private Object coerceValue(String fieldName, Object value, org.apache.iceberg.types.Type type) {
     if (value == null) {
       return null;
     }
@@ -689,50 +774,49 @@ public class IcebergTableWriter {
           return ((Number) value).intValue();
         }
         try {
-          return Integer.parseInt(value.toString());
-        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
+          return Integer.parseInt(stripThousandsSeparators(value.toString()));
         } catch (NumberFormatException e) {
-          LOGGER.debug("Value '{}' is not a valid INTEGER, using NULL: {}", value, e.getMessage());
-          return null;
+          return handleCoercionFailure(fieldName, value, "INTEGER", e);
         }
       case LONG:
         if (value instanceof Number) {
           return ((Number) value).longValue();
         }
         try {
-          return Long.parseLong(value.toString());
-        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
+          return Long.parseLong(stripThousandsSeparators(value.toString()));
         } catch (NumberFormatException e) {
-          LOGGER.debug("Value '{}' is not a valid LONG, using NULL: {}", value, e.getMessage());
-          return null;
+          return handleCoercionFailure(fieldName, value, "LONG", e);
         }
       case FLOAT:
         if (value instanceof Number) {
           return ((Number) value).floatValue();
         }
         try {
-          return Float.parseFloat(value.toString());
-        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
+          return Float.parseFloat(stripThousandsSeparators(value.toString()));
         } catch (NumberFormatException e) {
-          LOGGER.debug("Value '{}' is not a valid FLOAT, using NULL: {}", value, e.getMessage());
-          return null;
+          return handleCoercionFailure(fieldName, value, "FLOAT", e);
         }
       case DOUBLE:
         if (value instanceof Number) {
           return ((Number) value).doubleValue();
         }
         try {
-          return Double.parseDouble(value.toString());
-        // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
+          return Double.parseDouble(stripThousandsSeparators(value.toString()));
         } catch (NumberFormatException e) {
-          LOGGER.debug("Value '{}' is not a valid DOUBLE, using NULL: {}", value, e.getMessage());
-          return null;
+          return handleCoercionFailure(fieldName, value, "DOUBLE", e);
         }
       case BOOLEAN:
         if (value instanceof Boolean) {
           return value;
         }
-        return Boolean.parseBoolean(value.toString());
+        String boolToken = value.toString().trim().toLowerCase(java.util.Locale.ROOT);
+        if (BOOLEAN_TRUE_TOKENS.contains(boolToken)) {
+          return Boolean.TRUE;
+        }
+        if (BOOLEAN_FALSE_TOKENS.contains(boolToken)) {
+          return Boolean.FALSE;
+        }
+        return handleCoercionFailure(fieldName, value, "BOOLEAN", null);
       case STRING:
         return value.toString();
       case DATE:
@@ -748,22 +832,25 @@ public class IcebergTableWriter {
         if (value instanceof String) {
           try {
             return java.time.LocalDate.parse((String) value);
-          // fallback-guard: allow non-empty unparseable value becomes null (correct null-aware semantics, matching this method's own "-" null-indicator handling above)
           } catch (Exception e) {
-            LOGGER.debug("Value '{}' is not a valid DATE, using NULL: {}", value, e.getMessage());
-            return null;
+            return handleCoercionFailure(fieldName, value, "DATE", e);
           }
         }
         return value;
       case TIMESTAMP:
+        // Iceberg's GenericRecord Parquet writer for TIMESTAMP WITHOUT TIMEZONE requires a
+        // java.time.LocalDateTime value specifically — every branch below must converge on
+        // that type, not epoch micros/millis (a Long here fails at write time with
+        // ClassCastException: Long cannot be cast to LocalDateTime, inside
+        // BaseParquetWriter$TimestampWriter).
         if (value instanceof LocalDateTime) {
-          return ((LocalDateTime) value).toInstant(ZoneOffset.UTC).toEpochMilli() * 1000;
+          return value;
         }
         if (value instanceof Instant) {
-          return ((Instant) value).toEpochMilli() * 1000;
+          return LocalDateTime.ofInstant((Instant) value, ZoneOffset.UTC);
         }
         if (value instanceof java.sql.Timestamp) {
-          return ((java.sql.Timestamp) value).getTime() * 1000;
+          return LocalDateTime.ofInstant(((java.sql.Timestamp) value).toInstant(), ZoneOffset.UTC);
         }
         if (value instanceof Long) {
           // DuckDB JDBC returns TIMESTAMP as microseconds since epoch — convert to LocalDateTime
@@ -784,10 +871,8 @@ public class IcebergTableWriter {
             try {
               // ISO 8601 without timezone (e.g. "2026-06-04T13:38:30")
               return LocalDateTime.parse(s);
-            // fallback-guard: allow final parse attempt in a documented two-format cascade; failure is logged at WARN with the raw value before returning null
             } catch (Exception e2) {
-              LOGGER.warn("Could not parse timestamp string '{}': {}", s, e2.getMessage());
-              return null;
+              return handleCoercionFailure(fieldName, value, "TIMESTAMP", e2);
             }
           }
         }
@@ -801,7 +886,7 @@ public class IcebergTableWriter {
         if (value instanceof java.sql.Array) {
           try {
             Object arrayData = ((java.sql.Array) value).getArray();
-            return convertArrayToList(arrayData, elementType);
+            return convertArrayToList(fieldName, arrayData, elementType);
           // fallback-guard: allow logs the SQL Array conversion failure at WARN before returning null, visible rather than silent
           } catch (java.sql.SQLException e) {
             LOGGER.warn("Failed to convert SQL Array: {}", e.getMessage());
@@ -809,16 +894,19 @@ public class IcebergTableWriter {
           }
         }
         if (value instanceof java.util.List) {
-          // Already a list, just coerce elements
+          // Already a list, just coerce elements. A per-element DROP_ROW (from an
+          // onCoercionFailure: DROP field) has no row-level meaning inside a list — it's
+          // treated as WARN (element becomes null) instead, a documented scope limitation.
           java.util.List<?> inputList = (java.util.List<?>) value;
           java.util.List<Object> result = new java.util.ArrayList<>(inputList.size());
           for (Object elem : inputList) {
-            result.add(coerceValue(elem, elementType));
+            Object coerced = coerceValue(fieldName, elem, elementType);
+            result.add(coerced == DROP_ROW ? null : coerced);
           }
           return result;
         }
         if (value.getClass().isArray()) {
-          return convertArrayToList(value, elementType);
+          return convertArrayToList(fieldName, value, elementType);
         }
         return value;
       default:
@@ -829,13 +917,15 @@ public class IcebergTableWriter {
   /**
    * Converts a Java array to a List, coercing elements to the target Iceberg type.
    */
-  private java.util.List<Object> convertArrayToList(Object arrayData,
+  private java.util.List<Object> convertArrayToList(String fieldName, Object arrayData,
       org.apache.iceberg.types.Type elementType) {
     int length = java.lang.reflect.Array.getLength(arrayData);
     java.util.List<Object> result = new java.util.ArrayList<>(length);
     for (int i = 0; i < length; i++) {
       Object elem = java.lang.reflect.Array.get(arrayData, i);
-      result.add(coerceValue(elem, elementType));
+      // See the DROP_ROW note in the List-branch above — same documented scope limitation.
+      Object coerced = coerceValue(fieldName, elem, elementType);
+      result.add(coerced == DROP_ROW ? null : coerced);
     }
     return result;
   }

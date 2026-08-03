@@ -49,6 +49,8 @@ public class ColumnConfig {
   private final String type;
   private final String source;
   private final String expression;
+  private final String dateFormat;
+  private final String onCoercionFailure;
   private final boolean required;
   private final boolean replace;
 
@@ -56,9 +58,28 @@ public class ColumnConfig {
     this.name = builder.name;
     this.type = builder.type;
     this.source = builder.source;
-    this.expression = builder.expression;
+    this.dateFormat = builder.dateFormat;
+    this.onCoercionFailure = builder.onCoercionFailure;
     this.required = builder.required != null ? builder.required : true;
     this.replace = builder.replace != null ? builder.replace : false;
+
+    if (builder.onCoercionFailure != null
+        && !("FAIL".equals(builder.onCoercionFailure)
+            || "WARN".equals(builder.onCoercionFailure)
+            || "DROP".equals(builder.onCoercionFailure))) {
+      throw new IllegalArgumentException(
+          "Column '" + builder.name + "': onCoercionFailure must be FAIL, WARN, or DROP, got '"
+              + builder.onCoercionFailure + "'");
+    }
+
+    String expr = builder.expression;
+    if ((expr == null || expr.isEmpty()) && builder.dateFormat != null) {
+      String effectiveSource = builder.source != null && !builder.source.isEmpty()
+          ? builder.source : builder.name;
+      expr = DateParseFormat.valueOf(builder.dateFormat)
+          .toExpression("src.\"" + effectiveSource + "\"");
+    }
+    this.expression = expr;
   }
 
   /**
@@ -85,10 +106,31 @@ public class ColumnConfig {
 
   /**
    * Returns the SQL expression for computed columns.
-   * The expression is evaluated by DuckDB during materialization.
+   * The expression is evaluated by DuckDB during materialization. For a column declared with
+   * {@code dateFormat:} instead of an explicit {@code expression:}, this is the
+   * auto-synthesized {@link DateParseFormat} expression, not literal YAML text.
    */
   public String getExpression() {
     return expression;
+  }
+
+  /**
+   * Returns the {@link DateParseFormat} name declared via {@code dateFormat:}, or {@code null}
+   * if this column didn't use that shorthand. Retained separately from {@link #getExpression()}
+   * so a Java-side (non-DuckDB) evaluation path can dispatch directly to
+   * {@link DateParseFormat#parse(String)} instead of re-parsing the generated SQL text.
+   */
+  public String getDateFormat() {
+    return dateFormat;
+  }
+
+  /**
+   * Returns this column's {@code onCoercionFailure} policy ({@code FAIL}/{@code WARN}/
+   * {@code DROP}), or {@code null} if unset — an unset column behaves as {@code WARN}
+   * (log and write NULL), matching this writer's historical default behavior.
+   */
+  public String getOnCoercionFailure() {
+    return onCoercionFailure;
   }
 
   /**
@@ -319,6 +361,8 @@ public class ColumnConfig {
     builder.type((String) map.get("type"));
     builder.source((String) map.get("source"));
     builder.expression((String) map.get("expression"));
+    builder.dateFormat((String) map.get("dateFormat"));
+    builder.onCoercionFailure((String) map.get("onCoercionFailure"));
 
     Object requiredObj = map.get("required");
     if (requiredObj instanceof Boolean) {
@@ -365,6 +409,8 @@ public class ColumnConfig {
     private String type;
     private String source;
     private String expression;
+    private String dateFormat;
+    private String onCoercionFailure;
     private Boolean required;
     private Boolean replace;
 
@@ -385,6 +431,16 @@ public class ColumnConfig {
 
     public Builder expression(String expression) {
       this.expression = expression;
+      return this;
+    }
+
+    public Builder dateFormat(String dateFormat) {
+      this.dateFormat = dateFormat;
+      return this;
+    }
+
+    public Builder onCoercionFailure(String onCoercionFailure) {
+      this.onCoercionFailure = onCoercionFailure;
       return this;
     }
 

@@ -117,6 +117,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private Map<String, Object> catalogConfig;
   private Table table;
   private IcebergTableWriter tableWriter;
+
+  /** Field name -&gt; {@code onCoercionFailure} policy, built in {@link #ensureTableExists}. */
+  private Map<String, String> onCoercionFailurePolicies = Collections.emptyMap();
   /**
    * When no columns are declared (FILE-186), Iceberg table creation is deferred to the first staged
    * batch so the schema can be inferred from the data itself. {@link #table}/{@link #tableWriter}
@@ -285,7 +288,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           + "from the first batch", targetTableId);
     } else {
       this.table = ensureTableExists(targetTableId);
-      this.tableWriter = new IcebergTableWriter(table, storageProvider);
+      this.tableWriter = new IcebergTableWriter(table, storageProvider, onCoercionFailurePolicies);
     }
 
     LOGGER.info("Initialized IcebergMaterializationWriter: table={}, warehouse={}",
@@ -463,6 +466,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     Map<String, String> lowerToActualName = new HashMap<String, String>();
     // Get column comments from config
     Map<String, String> columnComments = config.getColumnComments();
+    Map<String, String> newOnCoercionFailurePolicies = new HashMap<String, String>();
     if (columnConfigs != null && !columnConfigs.isEmpty()) {
       for (ColumnConfig colConfig : columnConfigs) {
         String icebergType = mapToIcebergType(colConfig.getType());
@@ -478,8 +482,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         expectedColumnNamesLower.add(lowerName);
         columnTypeMap.put(lowerName, icebergType);
         lowerToActualName.put(lowerName, colConfig.getName());
+        if (colConfig.getOnCoercionFailure() != null) {
+          newOnCoercionFailurePolicies.put(colConfig.getName(), colConfig.getOnCoercionFailure());
+        }
       }
     }
+    this.onCoercionFailurePolicies = newOnCoercionFailurePolicies;
 
     // Build partition column type map from partition config's columnDefinitions
     Map<String, String> partitionColumnTypeMap = new HashMap<String, String>();
@@ -1036,7 +1044,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         LOGGER.info("Created Iceberg table {} with schema inferred from the first batch ({} rows)",
             deferredTargetTableId, sampleRows.size());
       }
-      this.tableWriter = new IcebergTableWriter(table, storageProvider);
+      // No declared columns on this path (FILE-186 schema-inferred materialize), so
+      // onCoercionFailurePolicies is always empty here — every field behaves as WARN.
+      this.tableWriter = new IcebergTableWriter(table, storageProvider, onCoercionFailurePolicies);
       this.deferSchemaInference = false;
     } catch (IOException e) {
       throw e;
@@ -1231,7 +1241,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         String targetName = col.getName();
         Object value = null;
 
-        if (col.isComputed()) {
+        if (col.getDateFormat() != null) {
+          // Dispatch straight to the Java-side DateParseFormat parser instead of routing
+          // through evaluateExpression's generic SQL-pattern matcher, which doesn't recognize
+          // the TRY_STRPTIME-shaped SQL this column's expression was auto-synthesized from
+          // (that generated SQL is meant for the DuckDB primary path in transformRowsWithDuckDb,
+          // not for re-parsing here).
+          Object rawValue = getValueCaseInsensitive(row, col.getEffectiveSource());
+          if (rawValue != null) {
+            value = DateParseFormat.valueOf(col.getDateFormat()).parse(rawValue.toString());
+          }
+        } else if (col.isComputed()) {
           String expr = col.getExpression();
           if (expr != null) {
             if (partitionVariables != null) {

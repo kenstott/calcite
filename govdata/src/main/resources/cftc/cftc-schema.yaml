@@ -49,11 +49,12 @@ columnTemplates:
     name: trade_date
     type: date
     nullable: false
-    source: "trade_date"
+    expression: 'TRY_CAST(TRY_CAST(src."Event timestamp" AS TIMESTAMP) AS DATE)'
     comment: >
-      Calendar date of the trade — the date portion of Event timestamp. Populated by
-      CftcTradeDateTransformer (the DATE writer can't parse the full timestamp string, so the
-      transformer emits a clean YYYY-MM-DD into the 'trade_date' field, which this column maps).
+      UTC calendar date of event_timestamp — not a per-exchange local trading day; these are
+      OTC swaps with no single canonical session, and CFTC's own Part 43/45 dissemination
+      files bucket by UTC report day too. A trade executed late in the US session (after
+      ~19:00-20:00 ET) falls under the next UTC calendar date here.
 
   year_column: &year_column
     name: year
@@ -769,13 +770,6 @@ partitionedTables:
         skipOn: [403, 404]    # weekends, holidays, future dates, invalid day combos
       rawCache:
         enabled: true
-
-    hooks:
-      rowTransformers:
-        # Derives trade_date (date portion of Event timestamp) — the DATE writer can't parse
-        # the full timestamp string, so this emits a clean YYYY-MM-DD for the trade_date column.
-        - type: class
-          class: "org.apache.calcite.adapter.govdata.cftc.CftcTradeDateTransformer"
 
     materialize:
       enabled: true

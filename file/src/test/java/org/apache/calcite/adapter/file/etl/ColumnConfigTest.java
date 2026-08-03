@@ -358,4 +358,92 @@ class ColumnConfigTest {
     assertNotNull(config);
     assertFalse(config.isReplace());
   }
+
+  // ---- dateFormat ----
+
+  @Test void testDateFormatSynthesizesExpression() {
+    ColumnConfig config = ColumnConfig.builder()
+        .name("transaction_date")
+        .type("date")
+        .source("Transaction Date")
+        .dateFormat("SLASH")
+        .build();
+
+    assertEquals("SLASH", config.getDateFormat());
+    assertTrue(config.isComputed(), "a dateFormat column is computed (has a synthesized expression)");
+    assertEquals(
+        "CASE WHEN src.\"Transaction Date\" IS NULL OR TRIM(src.\"Transaction Date\") = '' "
+            + "THEN NULL ELSE TRY_STRPTIME(src.\"Transaction Date\", '%m/%d/%Y')::DATE END",
+        config.getExpression());
+  }
+
+  @Test void testDateFormatUsesNameWhenNoSource() {
+    ColumnConfig config = ColumnConfig.builder()
+        .name("effective_date")
+        .type("date")
+        .dateFormat("ISO")
+        .build();
+
+    assertTrue(config.getExpression().contains("src.\"effective_date\""));
+  }
+
+  @Test void testExplicitExpressionOverridesDateFormatSynthesis() {
+    ColumnConfig config = ColumnConfig.builder()
+        .name("d")
+        .type("date")
+        .dateFormat("ISO")
+        .expression("CUSTOM_EXPR")
+        .build();
+
+    // dateFormat is still reported (for the Java-fallback dispatch), but the explicit
+    // expression wins over auto-synthesis.
+    assertEquals("ISO", config.getDateFormat());
+    assertEquals("CUSTOM_EXPR", config.getExpression());
+  }
+
+  @Test void testDateFormatFromMap() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("name", "d");
+    map.put("type", "date");
+    map.put("dateFormat", "YYYYMMDD");
+
+    ColumnConfig config = ColumnConfig.fromMap(map);
+    assertEquals("YYYYMMDD", config.getDateFormat());
+    assertTrue(config.getExpression().contains("TRY_STRPTIME"));
+  }
+
+  @Test void testInvalidDateFormatNameThrows() {
+    assertThrows(IllegalArgumentException.class, () ->
+        ColumnConfig.builder().name("d").type("date").dateFormat("NOT_A_FORMAT").build());
+  }
+
+  // ---- onCoercionFailure ----
+
+  @Test void testOnCoercionFailureDefaultsToNull() {
+    ColumnConfig config = ColumnConfig.builder().name("x").type("integer").build();
+    assertNull(config.getOnCoercionFailure());
+  }
+
+  @Test void testOnCoercionFailureAcceptsValidPolicies() {
+    for (String policy : Arrays.asList("FAIL", "WARN", "DROP")) {
+      ColumnConfig config = ColumnConfig.builder()
+          .name("x").type("integer").onCoercionFailure(policy).build();
+      assertEquals(policy, config.getOnCoercionFailure());
+    }
+  }
+
+  @Test void testOnCoercionFailureRejectsInvalidPolicy() {
+    assertThrows(IllegalArgumentException.class, () ->
+        ColumnConfig.builder().name("x").type("integer").onCoercionFailure("IGNORE").build());
+  }
+
+  @Test void testOnCoercionFailureFromMap() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("name", "x");
+    map.put("type", "integer");
+    map.put("onCoercionFailure", "FAIL");
+
+    ColumnConfig config = ColumnConfig.fromMap(map);
+    assertEquals("FAIL", config.getOnCoercionFailure());
+  }
 }

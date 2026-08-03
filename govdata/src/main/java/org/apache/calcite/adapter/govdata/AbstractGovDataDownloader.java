@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.BulkDownloadConfig;
+import org.apache.calcite.adapter.file.etl.DateParseFormat;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
