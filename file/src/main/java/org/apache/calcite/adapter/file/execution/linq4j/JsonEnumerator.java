@@ -18,6 +18,7 @@ import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Source;
 import org.apache.calcite.util.trace.CalciteLogger;
@@ -31,10 +32,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -263,6 +272,11 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
 
     // Scan up to 10 rows to determine column types (to handle nulls in first row)
     Map<String, Class<?>> columnTypes = new HashMap<>();
+    // Candidate DATE/TIME/TIMESTAMP columns: every sampled String value for the column
+    // parses as the same ISO 8601 kind. Disqualified (and removed) on the first sampled
+    // value that isn't a String or doesn't match, or that matches a different ISO kind.
+    Map<String, SqlTypeName> dateColumnKinds = new HashMap<>();
+    Set<String> dateColumnDisqualified = new HashSet<>();
     int rowsToScan = Math.min(10, list.size());
 
     // First, collect all column names from the first row (or the jsonFieldMap for single objects)
@@ -282,17 +296,58 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
       }
 
       for (String key : row.keySet()) {
+        Object value = row.get(key);
+        if (value == null) {
+          continue;
+        }
         if (!columnTypes.containsKey(key)) {
-          Object value = row.get(key);
-          if (value != null) {
-            columnTypes.put(key, value.getClass());
+          columnTypes.put(key, value.getClass());
+        }
+        if (!dateColumnDisqualified.contains(key)) {
+          if (value instanceof String) {
+            SqlTypeName kind = detectIsoDateTimeKind((String) value);
+            if (kind == null) {
+              dateColumnDisqualified.add(key);
+              dateColumnKinds.remove(key);
+            } else {
+              SqlTypeName existingKind = dateColumnKinds.get(key);
+              if (existingKind == null) {
+                dateColumnKinds.put(key, kind);
+              } else if (existingKind != kind) {
+                dateColumnDisqualified.add(key);
+                dateColumnKinds.remove(key);
+              }
+            }
+          } else {
+            dateColumnDisqualified.add(key);
+            dateColumnKinds.remove(key);
           }
         }
       }
+    }
 
-      // If we've determined types for all columns, we can stop
-      if (columnTypes.size() == allColumns.size()) {
-        break;
+    // Promote every value in a confirmed date/time/timestamp column from its raw ISO string
+    // to the internal representation Calcite expects for that SQL type (epoch day / millis of
+    // day / epoch millis), across the whole list, not just the sampled rows.
+    for (Map.Entry<String, SqlTypeName> entry : dateColumnKinds.entrySet()) {
+      String key = entry.getKey();
+      SqlTypeName kind = entry.getValue();
+      for (Object rowObj : list) {
+        if (!(rowObj instanceof Map)) {
+          continue;
+        }
+        //noinspection unchecked
+        Map<String, Object> row = (Map<String, Object>) rowObj;
+        Object value = row.get(key);
+        if (value instanceof String) {
+          try {
+            row.put(key, convertIsoValue((String) value, kind));
+          } catch (DateTimeParseException e) {
+            LOGGER.warn("Column '" + key + "' was inferred as " + kind
+                + " but value '" + value + "' doesn't match; storing null");
+            row.put(key, null);
+          }
+        }
       }
     }
 
@@ -300,16 +355,83 @@ public class JsonEnumerator implements Enumerator<@Nullable Object[]> {
     final List<String> names = new ArrayList<String>(jsonFieldMap.size());
 
     for (Object key : jsonFieldMap.keySet()) {
-      // Use the discovered type, or default to String for columns that are all null
-      Class<?> clazz = columnTypes.getOrDefault(key.toString(), String.class);
-      final RelDataType type = typeFactory.createJavaType(clazz);
-      String columnName = org.apache.calcite.adapter.file.util.SmartCasing.applyCasing(key.toString(), columnNameCasing);
+      String keyStr = key.toString();
+      SqlTypeName dateKind = dateColumnKinds.get(keyStr);
+      final RelDataType type;
+      if (dateKind != null) {
+        type = typeFactory.createTypeWithNullability(typeFactory.createSqlType(dateKind), true);
+      } else {
+        // Use the discovered type, or default to String for columns that are all null
+        Class<?> clazz = columnTypes.getOrDefault(keyStr, String.class);
+        type = typeFactory.createJavaType(clazz);
+      }
+      String columnName = org.apache.calcite.adapter.file.util.SmartCasing.applyCasing(keyStr, columnNameCasing);
       names.add(columnName);
       types.add(type);
     }
 
     RelDataType relDataType = typeFactory.createStructType(Pair.zip(names, types));
     return new JsonDataConverter(relDataType, list);
+  }
+
+  /**
+   * Detects whether a string is one of the ISO 8601 forms produced by
+   * {@code ConverterUtils.setJsonValueWithTypeInference} (date, local datetime, or
+   * offset datetime) or a plain ISO local time. Order matters: offset datetime is checked
+   * before local datetime so a trailing zone offset isn't mistaken for a parse failure.
+   *
+   * @return the matching {@link SqlTypeName}, or null if the value doesn't match any of them
+   */
+  private static @Nullable SqlTypeName detectIsoDateTimeKind(String value) {
+    try {
+      OffsetDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+      return SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE;
+    } catch (DateTimeParseException e) {
+      // Not an offset datetime; try the next kind.
+    }
+    try {
+      LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+      return SqlTypeName.TIMESTAMP;
+    } catch (DateTimeParseException e) {
+      // Not a local datetime; try the next kind.
+    }
+    try {
+      LocalDate.parse(value, DateTimeFormatter.ISO_LOCAL_DATE);
+      return SqlTypeName.DATE;
+    } catch (DateTimeParseException e) {
+      // Not a date; try the next kind.
+    }
+    try {
+      LocalTime.parse(value, DateTimeFormatter.ISO_LOCAL_TIME);
+      return SqlTypeName.TIME;
+    } catch (DateTimeParseException e) {
+      return null;
+    }
+  }
+
+  /**
+   * Converts an ISO 8601 string already confirmed (via {@link #detectIsoDateTimeKind}) to
+   * match {@code kind} into the internal representation Calcite uses for that SQL type:
+   * epoch day (DATE), millis since midnight (TIME), or epoch millis (TIMESTAMP /
+   * TIMESTAMP_WITH_LOCAL_TIME_ZONE). TIMESTAMP values carry no timezone info, so the wall
+   * clock time is stored as if it were UTC, matching CsvTypeConverter's convention.
+   */
+  private static Object convertIsoValue(String value, SqlTypeName kind) {
+    switch (kind) {
+    case DATE:
+      return (int) LocalDate.parse(value, DateTimeFormatter.ISO_LOCAL_DATE).toEpochDay();
+    case TIME:
+      return (int) (LocalTime.parse(value, DateTimeFormatter.ISO_LOCAL_TIME).toNanoOfDay()
+          / 1_000_000L);
+    case TIMESTAMP:
+      return LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+          .toInstant(ZoneOffset.UTC).toEpochMilli();
+    case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+      return OffsetDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+          .toInstant().toEpochMilli();
+    default:
+      throw new IllegalStateException("Unexpected ISO date/time kind: " + kind);
+    }
   }
 
   @Override public Object[] current() {

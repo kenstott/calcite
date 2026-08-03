@@ -224,14 +224,36 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
      `XbrlToParquetConverter` is untouched by this change — that code path doesn't call
      `CsvTypeInferrer`).
 
-7. **G2** — promote canonicalized ISO date strings (HTML/XML/DOCX, and add to plain
-   JSON) to real DATE/TIMESTAMP SQL types instead of leaving them VARCHAR.
-   - **Data remediation: cache-clear**, same `.aperio` mechanism. Flag for later
-     re-check: if any govdata schema's `responseTransformer` internally reuses
-     `ConverterUtils` or `JsonFlattener` from `file/` (not confirmed either way in this
-     audit), that table would also need a `/data-fix --raw false` reprocess — verify
-     per-schema before treating govdata as unaffected here, unlike B2/G1 where we
-     positively confirmed no usage.
+7. **G2** ✅ *(done)* — `JsonEnumerator.deduceRowType` now detects columns whose sampled
+   String values are all the same ISO 8601 kind produced by
+   `ConverterUtils.setJsonValueWithTypeInference` (plain date, local datetime, or offset
+   datetime) or a plain ISO local time, and promotes the column to a real
+   `DATE`/`TIMESTAMP`/`TIMESTAMP_WITH_LOCAL_TIME_ZONE`/`TIME` SQL type instead of VARCHAR —
+   converting every row's value (not just the sampled ones) to Calcite's internal
+   representation (epoch day / epoch millis / millis-of-day), matching
+   `CsvTypeConverter`'s conventions exactly. A column is only promoted if *every* sampled
+   value matches the *same* ISO kind; any non-string or mismatched-kind value disqualifies
+   it back to VARCHAR, and any post-sample row that fails to parse becomes `null` with a
+   logged warning (the codebase's existing TRY_CAST-style convention) rather than
+   corrupting or crashing. This is the single shared code path used by hand-authored JSON
+   files and by every converter that funnels through the intermediate-JSON pipeline
+   (HTML/XML/DOCX/PPTX/Markdown), so no per-converter changes were needed.
+   - **Data remediation: cache-clear, file/ adapter only — confirmed zero govdata
+     impact.** Re-checked the flag from the original audit: govdata's `format: json`
+     entries in schema YAML describe the *HTTP response body format* consumed by
+     schema-specific `responseTransformer` Java classes (which write explicitly typed
+     columns straight to Iceberg/Parquet), not a `file/`-adapter model.json table —
+     govdata never constructs a `FileSchemaFactory`-backed JSON table and never
+     references `JsonScannableTable`/`JsonTable`/`JsonEnumerator` from `file/`. Same
+     "own Java converter, bypasses the shared pipeline" pattern already confirmed for
+     B2/G1/G4. Verified via `grep -rln "JsonScannableTable\|JsonEnumerator" govdata/src/main/java`
+     (no hits) and by reading a sample `format: json` table definition (cyber-vuln) to
+     confirm it's ETL config, not a file-adapter table declaration.
+   - Regression tests: `JsonTableDateInferenceTest` (row-type + data-list layer: DATE,
+     TIMESTAMP, TIMESTAMP_WITH_LOCAL_TIME_ZONE, TIME promotion; mixed-kind and ordinary
+     string columns correctly stay VARCHAR) and `JsonDateInferenceJdbcTest` (full
+     JDBC round-trip through the Parquet-cache layer, confirming `getDate`/`getTimestamp`
+     return correct values end-to-end, not just at the row-type layer).
 
 8. **G5** — revisit the single-bad-value-collapses-column rule (opt-in
    majority-type-with-per-row-null policy).
@@ -312,7 +334,5 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
   paper over an untyped/unscaled base column leaves the underlying defect in place
   indefinitely. `financial_facts` and any `cftc` views may still add real enrichment on
   top of the corrected base columns.
-- **G2 govdata exposure**: unlike B2/G1 (positively confirmed zero govdata usage), it's
-  not yet confirmed whether any govdata `responseTransformer` reuses `file/`'s
-  `ConverterUtils`/`JsonFlattener` internally — verify per-schema before this Phase 2
-  item ships, since that would add a `/data-fix` step this plan doesn't currently list.
+- **G2 govdata exposure**: resolved — confirmed zero govdata usage, same as B2/G1/G4. See
+  the G2 entry above for how this was verified.
