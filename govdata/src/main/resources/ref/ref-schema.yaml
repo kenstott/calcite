@@ -1730,11 +1730,459 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ==========================================================================
+  # ENTITY_ORG_BRIDGE — cross-schema org name resolution, tall audit log
+  # ==========================================================================
+  # No source: block — this table is populated entirely by EntityBridgeListener
+  # (org.apache.calcite.adapter.govdata.ref.EntityBridgeListener), wired below via
+  # hooks.tableLifecycleListener. It fires once (on this table's afterTable) and writes
+  # all four entity-resolution tables in a single pass. See entity-resolution-plan.md
+  # (repo root) for the full source registry and matching algorithm this implements.
+  - name: entity_org_bridge
+    comment: >
+      Tall audit/match log: one row per (source_schema, source_table, source_column,
+      source_key) org-name mention, carrying its best-match LEI (via GLEIF fuzzy/exact
+      match) or SEC CIK (via EIN exact match against sec.filing_metadata.irs_number).
+      Rebuilt in full every run by EntityBridgeListener from the org-type source
+      registry (fec, patents, sec, health, environment, energy, transport, fiscal).
+      Absence of a row below match_score 0.85 is a clean "no confident match" signal,
+      not a data gap. Primary consumers should generally query canonical_org_entity
+      instead; use this table when the full audit trail or per-source detail matters.
+
+    columns:
+      - name: source_schema
+        type: string
+        nullable: false
+        comment: Owning AskAmerica schema, e.g. 'fec', 'patents', 'sec'
+      - name: source_table
+        type: string
+        nullable: false
+        comment: Source table name, e.g. 'committees', 'patent_assignees'
+      - name: source_column
+        type: string
+        nullable: false
+        comment: Name column matched, e.g. 'connected_org_name'; disambiguates same-table dual-role columns (eia_coal_mines controller_name vs operator_name)
+      - name: source_key
+        type: string
+        nullable: false
+        comment: Registry key_column value; the normalized name itself for unstructured (name-only) sources
+      - name: source_name_raw
+        type: string
+        nullable: true
+        comment: Original source name, for audit
+      - name: source_name_normalized
+        type: string
+        nullable: true
+        comment: Normalized name (lowercase, punctuation/legal-suffix stripped), for debugging match misses
+      - name: lei
+        type: string
+        nullable: true
+        comment: GLEIF Legal Entity Identifier, populated for GLEIF-path matches
+      - name: sec_cik
+        type: string
+        nullable: true
+        comment: SEC CIK, populated for EIN-path matches via sec.filing_metadata.irs_number
+      - name: gleif_legal_name
+        type: string
+        nullable: true
+        comment: Denormalized from ref.gleif_entities, avoids a join for the common case
+      - name: match_method
+        type: string
+        nullable: false
+        comment: exact_ein | exact_normalized | fuzzy
+      - name: match_confidence
+        type: string
+        nullable: false
+        comment: high | low (fuzzy only; exact is always implicitly high)
+      - name: match_score
+        type: double
+        nullable: false
+        comment: 1.0 for exact; raw jaro_winkler_similarity for fuzzy
+      - name: match_run_id
+        type: string
+        nullable: false
+        comment: ISO timestamp of the build run, so bridge quality is diffable across reruns
+
+    hooks:
+      # enabled: true is REQUIRED here, not optional — SchemaConfig.fromMap's source-less-table
+      # pre-filter (SchemaConfig.java:262-275) checks this raw map key directly, with no
+      # default-true fallback, before EtlPipelineConfig/HooksConfig parsing ever runs. Without it
+      # this table is silently dropped from SchemaLifecycleProcessor's table list entirely — no
+      # error, no log line — and tableLifecycleListener never fires. Confirmed live: omitting this
+      # key excluded entity_org_bridge from a real 17-table processing run (18 declared, 17 seen).
+      enabled: true
+      tableLifecycleListener: "org.apache.calcite.adapter.govdata.ref.EntityBridgeListener"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      # targetTableId is set explicitly: the config.getName()-fallback that normally
+      # supplies it lives in EtlPipeline (EtlPipeline.java:685-699), which only runs for
+      # tables with a source: block. This table has none — EntityBridgeListener writes it
+      # directly via MaterializationWriterFactory, so the fallback path never executes.
+      targetTableId: entity_org_bridge
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+
+  # ==========================================================================
+  # ENTITY_PERSON_BRIDGE — cross-schema individual name resolution, tall pairwise log
+  # ==========================================================================
+  # No source: block — populated by EntityBridgeListener alongside entity_org_bridge
+  # (same run, same listener instance). See entity-resolution-plan.md.
+  - name: entity_person_bridge
+    comment: >
+      Tall N-way pairwise person-match log across person-type sources (fec.candidates,
+      sec.insider_transactions individual-type rows, health.cms_open_payments,
+      transport.faa_aircraft_registry individual-type registrants). One row per matched
+      pair of source entities; only holds rows where a match was found — most people
+      known to one source are never in another, so a "no match" majority is expected
+      and not written. A person appearing in 3+ sources yields multiple pairwise rows
+      rather than one N-ary row. Rebuilt in full every run.
+
+    columns:
+      - name: source_a_schema
+        type: string
+        nullable: false
+        comment: First side of the match — owning schema
+      - name: source_a_table
+        type: string
+        nullable: false
+        comment: First side of the match — source table
+      - name: source_a_key
+        type: string
+        nullable: false
+        comment: First side of the match — registry key_column value
+      - name: source_a_name_raw
+        type: string
+        nullable: true
+        comment: First side of the match — original raw name
+      - name: source_b_schema
+        type: string
+        nullable: false
+        comment: Second side of the match — owning schema
+      - name: source_b_table
+        type: string
+        nullable: false
+        comment: Second side of the match — source table
+      - name: source_b_key
+        type: string
+        nullable: false
+        comment: Second side of the match — registry key_column value
+      - name: source_b_name_raw
+        type: string
+        nullable: true
+        comment: Second side of the match — original raw name
+      - name: match_method
+        type: string
+        nullable: false
+        comment: exact_normalized | fuzzy_first_name
+      - name: match_confidence
+        type: string
+        nullable: false
+        comment: high | low — low is never silently promoted
+      - name: match_score
+        type: double
+        nullable: false
+        comment: First-name jaro_winkler_similarity for fuzzy rows; 1.0 for exact
+      - name: match_run_id
+        type: string
+        nullable: false
+        comment: ISO timestamp, diffable across reruns
+
+    hooks:
+      enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      targetTableId: entity_person_bridge
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+
+  # ==========================================================================
+  # CANONICAL_ORG_ENTITY — wide hub, one row per real-world org, nullable FKs
+  # ==========================================================================
+  # No source: block — pivoted from entity_org_bridge (plus each source's otherwise-
+  # unmatched rows) by EntityBridgeListener. Primary query interface most consumers
+  # should join against; the tall entity_org_bridge table is for the full audit trail
+  # or when a source is genuinely many-to-one against a canonical org (see
+  # patents_assignee_id / fmcsa_dot_number comments below).
+  - name: canonical_org_entity
+    comment: >
+      One row per real-world org known to any org-type registry source, whether or not
+      it cross-matched GLEIF/EIN — an org identified only in patents.patent_assignees
+      (never resolved) still gets a row here, with lei left null. Nullable FK columns
+      point at each source's natural key; a "_confidence" sibling column
+      (high | low | null) accompanies every FK. Several FKs (patents_assignee_id,
+      fmcsa_dot_number) are lossy many-to-one in practice — this table carries one
+      representative value; query entity_org_bridge for the complete set.
+
+    columns:
+      - name: canonical_entity_id
+        type: string
+        nullable: false
+        comment: Surrogate PK — the LEI when present; the SEC CIK when EIN-matched but no LEI; else a deterministic hash of the first-seen (source_schema, source_table, source_column, source_key)
+      - name: canonical_name
+        type: string
+        nullable: true
+        comment: GLEIF legal_name when lei is populated, else the longest/most-complete raw source name seen
+      - name: lei
+        type: string
+        nullable: true
+      - name: sec_cik
+        type: string
+        nullable: true
+        comment: Via EIN exact match against sec.filing_metadata.irs_number
+      - name: fec_committee_id
+        type: string
+        nullable: true
+        comment: Scalar FK, safe 1:1 — a committee represents one org
+      - name: fec_committee_id_confidence
+        type: string
+        nullable: true
+      - name: sec_reporting_person_cik
+        type: string
+        nullable: true
+        comment: Entity-type SEC insiders — SEC's own stable per-filer ID, safe 1:1
+      - name: sec_reporting_person_cik_confidence
+        type: string
+        nullable: true
+      - name: patents_assignee_id
+        type: string
+        nullable: true
+        comment: Lossy, many-to-one — see table comment
+      - name: patents_assignee_id_confidence
+        type: string
+        nullable: true
+      - name: fda_sponsor_name
+        type: string
+        nullable: true
+        comment: Unstructured source, keyed by normalized name
+      - name: fda_sponsor_name_confidence
+        type: string
+        nullable: true
+      - name: ghg_parent_company_name
+        type: string
+        nullable: true
+        comment: Unstructured source, keyed by normalized name
+      - name: ghg_parent_company_name_confidence
+        type: string
+        nullable: true
+      - name: cms_paying_entity_name
+        type: string
+        nullable: true
+        comment: Unstructured source, keyed by normalized name
+      - name: cms_paying_entity_name_confidence
+        type: string
+        nullable: true
+      - name: eia_utility_id
+        type: string
+        nullable: true
+      - name: eia_utility_id_confidence
+        type: string
+        nullable: true
+      - name: eia_coal_controller_name
+        type: string
+        nullable: true
+        comment: Mine controller — logically distinct from operator, same source table
+      - name: eia_coal_controller_name_confidence
+        type: string
+        nullable: true
+      - name: eia_coal_operator_name
+        type: string
+        nullable: true
+        comment: Mine operator — logically distinct from controller, same source table
+      - name: eia_coal_operator_name_confidence
+        type: string
+        nullable: true
+      - name: fmcsa_dot_number
+        type: string
+        nullable: true
+        comment: Lossy potential given ~4.47M-row source scale — see table comment
+      - name: fmcsa_dot_number_confidence
+        type: string
+        nullable: true
+      - name: faa_registrant_name
+        type: string
+        nullable: true
+        comment: Unstructured, entity-type registrants only (registrant_type != Individual)
+      - name: faa_registrant_name_confidence
+        type: string
+        nullable: true
+      - name: exempt_org_ein
+        type: string
+        nullable: true
+        comment: EIN exact-match hub key, alongside GLEIF LEI
+      - name: exempt_org_ein_confidence
+        type: string
+        nullable: true
+      - name: sba_borrower_name
+        type: string
+        nullable: true
+        comment: Unstructured, distinct role from lender on the same source table
+      - name: sba_borrower_name_confidence
+        type: string
+        nullable: true
+      - name: sba_lender_name
+        type: string
+        nullable: true
+        comment: Unstructured, distinct role from borrower on the same source table
+      - name: sba_lender_name_confidence
+        type: string
+        nullable: true
+
+    hooks:
+      enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      targetTableId: canonical_org_entity
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+
+  # ==========================================================================
+  # CANONICAL_PERSON_ENTITY — wide hub, one row per real-world individual
+  # ==========================================================================
+  # No source: block — pivoted from entity_person_bridge (plus each source's
+  # otherwise-unmatched rows) by EntityBridgeListener.
+  - name: canonical_person_entity
+    comment: >
+      One row per real-world person known to any person-type registry source, whether
+      or not they cross-matched another source. A row with 2+ FKs populated is a
+      person-track match (e.g. a political candidate who is also a corporate insider);
+      a row with only one FK populated is simply "known to that one source, never
+      cross-matched" — both are legitimate outcomes. No third-party canonical
+      individual registry exists (unlike GLEIF for orgs), so these FKs are direct
+      pairwise links between source pools, not resolutions to an external hub.
+
+    columns:
+      - name: canonical_entity_id
+        type: string
+        nullable: false
+        comment: Surrogate PK — deterministic hash of the first-seen source key; no external hub key exists for individuals
+      - name: canonical_name
+        type: string
+        nullable: true
+        comment: Best-available parsed (first, last) name
+      - name: fec_candidate_id
+        type: string
+        nullable: true
+      - name: fec_candidate_id_confidence
+        type: string
+        nullable: true
+      - name: sec_reporting_person_cik
+        type: string
+        nullable: true
+        comment: Already 1:1 by SEC's own construction
+      - name: sec_reporting_person_cik_confidence
+        type: string
+        nullable: true
+      - name: cms_physician_profile_id
+        type: string
+        nullable: true
+        comment: Already 1:1 by CMS's own construction
+      - name: cms_physician_profile_id_confidence
+        type: string
+        nullable: true
+      - name: faa_registrant_name
+        type: string
+        nullable: true
+        comment: Unstructured, individual-type registrants only
+      - name: faa_registrant_name_confidence
+        type: string
+        nullable: true
+
+    hooks:
+      enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      targetTableId: canonical_person_entity
+      output:
+        pattern: ""
+      partition:
+        columns: []
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
 
 constraints:
+
+  entity_org_bridge:
+    primaryKey: [source_schema, source_table, source_column, source_key]
+    comment: Single best match per source entity, so downstream joins stay unambiguous.
+    foreignKeys:
+      - columns: [lei]
+        targetTable: gleif_entities
+        targetColumns: [lei]
+        comment: GLEIF-path matches (nullable — many bridge rows have no LEI match)
+      - columns: [sec_cik]
+        targetSchema: "${SEC_SCHEMA_NAME:sec}"
+        targetTable: filings
+        targetColumns: [cik]
+        comment: EIN-path matches (nullable — most bridge rows have no EIN match)
+
+  entity_person_bridge:
+    primaryKey: [source_a_schema, source_a_table, source_a_key, source_b_schema, source_b_table, source_b_key]
+
+  canonical_org_entity:
+    primaryKey: [canonical_entity_id]
+    foreignKeys:
+      - columns: [lei]
+        targetTable: gleif_entities
+        targetColumns: [lei]
+
+  canonical_person_entity:
+    primaryKey: [canonical_entity_id]
 
   naics:
     primaryKey: [naics_code]
