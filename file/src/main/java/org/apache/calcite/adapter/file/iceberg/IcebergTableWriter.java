@@ -747,9 +747,25 @@ public class IcebergTableWriter {
    * this way, and {@code Integer.parseInt}/{@code Long.parseLong}/{@code Float.parseFloat}/
    * {@code Double.parseDouble} all reject the comma. A comma-formatted number is not malformed
    * data — it should coerce to its value, not fall through to {@link #handleCoercionFailure}.
+   *
+   * <p>Also strips a matched leading/trailing double-quote pair — verified live against CFTC
+   * data, where a comma-containing numeric field arrives as the literal string {@code
+   * "96,000,000"} (quote characters included in the string content, not log formatting): the
+   * source CSV quotes any field containing the comma delimiter per standard CSV convention, and
+   * that quoting survives as literal characters through this pipeline's JSON round-trip instead
+   * of being stripped as CSV escaping. Only a matched pair at both ends is stripped, not any
+   * embedded quote — this targets exactly that CSV-quoting artifact, not arbitrary malformed input.
    */
   private static String stripThousandsSeparators(String s) {
-    return s.indexOf(',') >= 0 ? s.replace(",", "") : s;
+    String result = s;
+    if (result.length() >= 2 && result.charAt(0) == '"'
+        && result.charAt(result.length() - 1) == '"') {
+      result = result.substring(1, result.length() - 1);
+    }
+    if (result.indexOf(',') >= 0) {
+      result = result.replace(",", "");
+    }
+    return result;
   }
 
   /**

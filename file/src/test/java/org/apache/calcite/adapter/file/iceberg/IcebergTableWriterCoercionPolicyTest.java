@@ -212,11 +212,15 @@ class IcebergTableWriterCoercionPolicyTest {
     records.add(row("notional", "amount", "550,000,000"));
     records.add(row("negative", "amount", "-12,834"));
     records.add(row("decimal", "amount", "714,147.23996"));
+    // The actual shape observed live in the cftc DQ run: the source CSV quotes any field
+    // containing the comma delimiter, and that quoting survives as literal characters (not
+    // just log formatting) through this pipeline's JSON round-trip.
+    records.add(row("quoted", "amount", "\"96,000,000\""));
 
-    // FAIL policy: if comma-stripping didn't work, this throws instead of writing successfully.
+    // FAIL policy: if comma/quote-stripping didn't work, this throws instead of writing.
     DataFile df = writer.writeRecords(records, null);
     assertNotNull(df);
-    assertEquals(3, df.recordCount());
+    assertEquals(4, df.recordCount());
   }
 
   @Test void testCommaFormattedIntegerParsesCorrectly() throws Exception {
