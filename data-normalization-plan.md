@@ -255,11 +255,38 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
      JDBC round-trip through the Parquet-cache layer, confirming `getDate`/`getTimestamp`
      return correct values end-to-end, not just at the row-type layer).
 
-8. **G5** — revisit the single-bad-value-collapses-column rule (opt-in
-   majority-type-with-per-row-null policy).
-   - **Data remediation: cache-clear**, opt-in — only affects tables whose owner
-     explicitly turns the new policy on, at which point their cache naturally needs
-     clearing to pick up the new column type.
+8. **G5** ✅ *(resolved as no-code-change, docs corrected)* — investigated wiring up
+   `confidenceThreshold` (documented in `file/docs/csv-type-inference.md`, default `0.95`,
+   but never actually consulted by `CsvTypeInferrer.determineType`'s VARCHAR-collapse path)
+   to tolerate a minority of unparseable sampled values instead of collapsing the whole
+   column to VARCHAR. Built and tested a version that did this, but it required one of two
+   things once the promoted type actually hit an unparseable value at conversion time:
+   silently convert it to null, or crash a query that previously always succeeded. The
+   first is exactly the "silent fallback value" `docs/testing/contradictions.md` decision
+   C-16 already resolved as **CODE-WRONG** against CLAUDE.md rule #6 — confirmed by
+   `ResolvedBugTargetsTest.badNumericValueRaises`, a pinned regression test asserting
+   numeric conversion *must* throw on an unparseable value, not coerce. Extending that
+   silent-null pattern to numeric/boolean conversion (previously correctly throwing) would
+   have made rule #6 compliance worse, not better. The second (promote-then-crash) trades
+   "always VARCHAR" for "usually typed, but a query that worked yesterday can start failing
+   today on the same file" — a real behavior change, not something to ship silently.
+   - **Resolution:** left `CsvTypeInferrer.determineType` and `CsvTypeConverter` as they
+     were (any single unparseable sampled value still collapses the column to VARCHAR,
+     unconditionally); reverted the exploratory `CsvTypeConverter` null-swallowing change.
+     Kept one harmless cleanup: Case 3 and Case 4's identical type-widening preference
+     lists were consolidated into a single `TYPE_WIDENING_PREFERENCE` constant (DRY, no
+     behavior change).
+   - Corrected `file/docs/csv-type-inference.md` instead: added a "Confidence Threshold"
+     section explaining `confidenceThreshold` is accepted and validated but currently a
+     no-op for this decision, and why (the same silent-null-vs-crash tradeoff above);
+     removed it from the "Financial Data"/"Mixed Format Data" examples and the
+     troubleshooting section, where it was presented as something that could be tuned.
+   - Added `CsvTypeInferenceTest.testMinorityUnparseableValueStillFallsBackToVarchar`
+     (`mostly-integers.csv`, 19 valid + 1 garbage value, `confidenceThreshold: 0.9`
+     configured) to pin the invariant that a comfortably-above-threshold column still
+     falls back to VARCHAR — guards against a future change silently reintroducing
+     promote-then-null.
+   - **Data remediation: none** — no behavior change shipped.
 
 9. **G6** — decide whether CSV type inference should default to enabled.
    - **Data remediation: potentially wide cache-clear.** This is the one Phase 2 item
@@ -324,8 +351,9 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
   Also since the doc already commits to "disabled by default" for backward
   compatibility ([csv-type-inference.md:214](file/docs/csv-type-inference.md#L214)),
   flipping the default reverses a documented compatibility guarantee.
-- **G5 policy**: whether to add an opt-in majority-type mode at all, since the current
-  behavior is a deliberate safety choice, not an oversight.
+- **G5 policy**: resolved — see the G5 entry above. `confidenceThreshold` stays a no-op for
+  the VARCHAR-collapse decision; there's no rule-6-compliant way to make it do anything
+  else without either silent nulling or promote-then-crash. Docs corrected instead of code.
 - **Phase 3 sequencing**: whether to hold G7 (turning on inference in govdata) until
   Phase 1/2 land, as recommended above, or treat them independently.
 - **G9/G8 scope**: resolved — remediate the base table via `/data-fix` for both.

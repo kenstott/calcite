@@ -225,6 +225,40 @@ public class CsvTypeInferenceTest {
   }
 
   /**
+   * G5 (investigated, not implemented): a column with a small minority of unparseable
+   * values stays VARCHAR, full stop - even though {@code confidenceThreshold} (0.9 in
+   * this model) is comfortably met by the 19/20 clean rows. Per
+   * docs/testing/contradictions.md C-16 (rule #6: no silent fallback values), a value
+   * that doesn't match an inferred type must raise a clear error, not silently become
+   * null - so there is no rule-6-compliant way to promote this column while still
+   * tolerating the one bad row, and confidenceThreshold has no effect on this decision.
+   * Pins that invariant so a future change can't reintroduce silent-null promotion here.
+   */
+  @Test void testMinorityUnparseableValueStillFallsBackToVarchar() throws Exception {
+    Properties info = new Properties();
+    String modelJson = buildModelJson();
+    info.put("model", "inline:" + modelJson);
+    BaseFileTest.applyEngineDefaults(info);
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
+      String sql = "SELECT * FROM csv_infer.mostly_integers ORDER BY id";
+
+      try (ResultSet rs = connection.createStatement().executeQuery(sql)) {
+        ResultSetMetaData metaData = rs.getMetaData();
+        assertEquals(Types.VARCHAR, metaData.getColumnType(2),
+            "one unparseable row must still collapse the whole column to VARCHAR");
+
+        int rowCount = 0;
+        while (rs.next()) {
+          rowCount++;
+          assertNotNull(rs.getString("value"), "every value, including the bad row, is a string");
+        }
+        assertEquals(20, rowCount, "all 20 rows must still be returned");
+      }
+    }
+  }
+
+  /**
    * Test direct type inferrer functionality.
    */
   @Test void testTypeInferrerDirectly() throws Exception {

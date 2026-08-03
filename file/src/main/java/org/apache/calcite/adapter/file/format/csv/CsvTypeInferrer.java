@@ -96,6 +96,20 @@ public class CsvTypeInferrer {
   private static final Pattern BOOLEAN_PATTERN =
       Pattern.compile("^(true|false|yes|no|y|n|t|f|0|1)$", Pattern.CASE_INSENSITIVE);
 
+  // Preference order when multiple compatible types are present in a sampled column:
+  // pick the first (most general) type that can hold values from every more-specific type
+  // below it. Excludes VARCHAR, which callers handle separately.
+  private static final SqlTypeName[] TYPE_WIDENING_PREFERENCE = {
+      SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, // Can hold any timestamp
+      SqlTypeName.TIMESTAMP,          // Can hold date + time
+      SqlTypeName.DATE,               // Date only
+      SqlTypeName.TIME,               // Time only
+      SqlTypeName.DOUBLE,             // Can hold any numeric
+      SqlTypeName.BIGINT,             // Can hold any integer
+      SqlTypeName.INTEGER,            // 32-bit integers
+      SqlTypeName.BOOLEAN             // Most specific
+  };
+
   /**
    * Configuration for type inference.
    */
@@ -533,8 +547,11 @@ public class CsvTypeInferrer {
       // Check if we have VARCHAR mixed with other types
       Integer varcharCount = typeCounts.get(SqlTypeName.VARCHAR);
       if (varcharCount != null && varcharCount > 0) {
-        // We have actual string values that aren't parseable as other types
-        // Must use VARCHAR for safety
+        // We have actual string values that aren't parseable as other types. Per
+        // docs/testing/contradictions.md C-16 (rule #6: no silent fallback values), a value
+        // that doesn't match an inferred type must raise a clear error at conversion time,
+        // not silently become null - so there is no rule-6-compliant way to promote this
+        // column while still tolerating the unparseable value. Must use VARCHAR for safety.
         LOGGER.debug("Column '{}': VARCHAR count={} > 0, must use VARCHAR for safety", columnName, varcharCount);
         boolean nullable = nullValues > 0 || config.makeAllNullable;
         return new ColumnTypeInfo(columnName, SqlTypeName.VARCHAR, nullable, null, 1.0, totalValues, nullValues);
@@ -546,21 +563,7 @@ public class CsvTypeInferrer {
       SqlTypeName bestType = null;
       int bestCount = 0;
 
-      // Priority order for type selection when multiple compatible types exist
-      // (more general types that can hold values from more specific types)
-      SqlTypeName[] typePreference = {
-          SqlTypeName.VARCHAR,           // Can hold anything
-          SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, // Can hold any timestamp
-          SqlTypeName.TIMESTAMP,          // Can hold date + time
-          SqlTypeName.DATE,               // Date only
-          SqlTypeName.TIME,               // Time only
-          SqlTypeName.DOUBLE,             // Can hold any numeric
-          SqlTypeName.BIGINT,             // Can hold any integer
-          SqlTypeName.INTEGER,            // 32-bit integers
-          SqlTypeName.BOOLEAN             // Most specific
-      };
-
-      for (SqlTypeName type : typePreference) {
+      for (SqlTypeName type : TYPE_WIDENING_PREFERENCE) {
         Integer count = typeCounts.get(type);
         if (count != null && count > 0) {
           bestType = type;

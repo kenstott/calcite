@@ -10,7 +10,9 @@ The File Adapter supports automatic type inference for CSV files. Instead of tre
 - **Sampling Strategy**: Configurable sampling rate to balance accuracy vs performance
 - **Safe Defaults**: All inferred types are nullable by default
 - **Temporal Type Support**: Detects dates, times, and timestamps including RFC-formatted strings
-- **Confidence Threshold**: Only uses inferred types when confidence is high enough
+- **Fail-Safe on Unparseable Values**: A single sampled value that doesn't match a
+  recognized type falls the whole column back to VARCHAR (see "Confidence Threshold"
+  below for why this isn't currently tunable)
 
 ## Configuration
 
@@ -33,7 +35,8 @@ The File Adapter supports automatic type inference for CSV files. Instead of tre
           "enabled": true,                    // Enable type inference (default: false)
           "samplingRate": 0.1,                // Sample 10% of rows (default: 0.1)
           "maxSampleRows": 1000,              // Max rows to sample (default: 1000)
-          "confidenceThreshold": 0.95,        // Min confidence for type (default: 0.95)
+          "confidenceThreshold": 0.95,        // Accepted but currently has no effect - see
+                                               // "Confidence Threshold" below
           "makeAllNullable": true,            // Make all types nullable (default: true)
           "nullableThreshold": 0.01,          // If makeAllNullable=false, null ratio threshold
           "inferDates": true,                 // Infer DATE types (default: true)
@@ -124,6 +127,27 @@ jdbc:calcite:model=inline:{
 ### String Type
 - **VARCHAR**: Default fallback for unrecognized patterns
 
+## Confidence Threshold
+
+`confidenceThreshold` is accepted in config and validated to `[0.0, 1.0]`, but it does not
+currently change any type-inference decision: a column falls back to VARCHAR the moment a
+single sampled value doesn't match a recognized type, regardless of how the rest of the
+column looks or what threshold is configured. This is intentional, not an oversight — the
+alternative (inferring a type for a column with a known-bad minority of values) would mean
+one of two things when a query actually reaches a non-conforming value: silently converting
+it to null, or crashing the query with an error not caused by anything the query itself did.
+The former is a fallback value with no upstream signal, exactly what CLAUDE.md rule #6 ("no
+silent fallback values") and `docs/testing/contradictions.md` (decision C-16) rule out for
+this codebase; the latter would turn a query that succeeds today into one that can fail
+later, for the same data, the first time it happens to scan the bad row. Neither is a
+change to make silently, so the setting is a no-op rather than a partial implementation of
+either.
+
+If a column has values a stricter or looser pattern should recognize (e.g. a currency
+symbol, a locale-specific decimal separator), fix the recognized-pattern rules themselves
+rather than reaching for `confidenceThreshold` — see `NumericFormats` for the numeric
+normalization already handled this way.
+
 ## Null Handling
 
 The type inferrer recognizes various null representations:
@@ -159,7 +183,6 @@ By default, all inferred types are nullable for safety. This can be configured:
   "csvTypeInference": {
     "enabled": true,
     "samplingRate": 0.5,          // Higher sampling for accuracy
-    "confidenceThreshold": 0.99,  // Require very high confidence
     "makeAllNullable": false,     // Some columns may be required
     "nullableThreshold": 0.001    // Very low null tolerance
   }
@@ -179,11 +202,15 @@ By default, all inferred types are nullable for safety. This can be configured:
 ```
 
 ### Mixed Format Data
+Raise `samplingRate`/`maxSampleRows` to see more of the file before deciding, and fix the
+recognized-pattern rules for whatever format is being missed (see "Confidence Threshold"
+above for why lowering `confidenceThreshold` isn't a way to work around messy data today).
 ```json
 {
   "csvTypeInference": {
     "enabled": true,
-    "confidenceThreshold": 0.8,   // Lower threshold for messy data
+    "samplingRate": 0.5,
+    "maxSampleRows": 5000,
     "makeAllNullable": true       // Always nullable for safety
   }
 }
@@ -194,14 +221,14 @@ By default, all inferred types are nullable for safety. This can be configured:
 ### Types Not Being Inferred
 1. Check if type inference is enabled
 2. Verify sampling rate is not too low
-3. Check confidence threshold - may be too high
-4. Review logs for inference details
+3. Increase max sample rows so more of the file is seen
+4. Review logs for inference details - look for which sampled value fell through to
+   VARCHAR (see "Confidence Threshold" above for why `confidenceThreshold` won't help here)
 
 ### Wrong Types Detected
 1. Increase sampling rate for better coverage
 2. Increase max sample rows
-3. Adjust confidence threshold
-4. Consider disabling specific type inference (dates, times, etc.)
+3. Consider disabling specific type inference (dates, times, etc.)
 
 ### Performance Issues
 1. Reduce sampling rate
