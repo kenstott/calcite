@@ -229,31 +229,31 @@ public final class CsvTypeConverter {
   }
 
   private Byte parseByte(String value) {
-    return Byte.valueOf(value);
+    return Byte.valueOf(NumericFormats.stripFormatting(value));
   }
 
   private Short parseShort(String value) {
-    return Short.valueOf(value);
+    return Short.valueOf(NumericFormats.stripFormatting(value));
   }
 
   private Integer parseInt(String value) {
-    return Integer.valueOf(value);
+    return Integer.valueOf(NumericFormats.stripFormatting(value));
   }
 
   private Long parseLong(String value) {
-    return Long.valueOf(value);
+    return Long.valueOf(NumericFormats.stripFormatting(value));
   }
 
   private Float parseFloat(String value) {
-    return Float.valueOf(value);
+    return Float.valueOf(NumericFormats.stripFormatting(value));
   }
 
   private Double parseDouble(String value) {
-    return Double.valueOf(value);
+    return Double.valueOf(NumericFormats.stripFormatting(value));
   }
 
   private BigDecimal parseDecimal(String value) {
-    return new BigDecimal(value);
+    return new BigDecimal(NumericFormats.stripFormatting(value));
   }
 
   private Integer parseDate(String value, @Nullable DateTimeFormatter inferredFormatter) {

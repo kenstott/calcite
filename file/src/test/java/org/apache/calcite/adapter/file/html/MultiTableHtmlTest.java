@@ -166,13 +166,14 @@ public class MultiTableHtmlTest extends BaseFileTest {
       ResultSet rs3 =
           statement.executeQuery("SELECT * FROM html.multi_table_test__inventory_status ORDER BY item");
 
+      // "Yes"/"No" are recognized boolean tokens and inferred as BOOLEAN, not left as strings.
       assertTrue(rs3.next());
       assertThat(rs3.getString("item"), is("Paper"));
-      assertThat(rs3.getString("reorder"), is("Yes"));
+      assertThat(rs3.getBoolean("reorder"), is(true));
 
       assertTrue(rs3.next());
       assertThat(rs3.getString("item"), is("Pencils"));
-      assertThat(rs3.getString("reorder"), is("No"));
+      assertThat(rs3.getBoolean("reorder"), is(false));
     }
   }
 

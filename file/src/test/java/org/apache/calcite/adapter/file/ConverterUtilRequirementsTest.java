@@ -171,7 +171,11 @@ public class ConverterUtilRequirementsTest {
     String json = new String(Files.readAllBytes(expected.toPath()), StandardCharsets.UTF_8);
     assertTrue(json.contains("\"Name\""), "header column 'Name' present");
     assertTrue(json.contains("\"Alice\""), "data value 'Alice' present");
-    assertTrue(json.contains("\"30\""), "data value '30' present");
+    // Type inference: the numeric-looking "30" is emitted as a JSON number, not a quoted string.
+    com.fasterxml.jackson.databind.JsonNode row =
+        new ObjectMapper().readTree(json).get(0);
+    assertTrue(row.get("Age").isNumber(), "data value 30 present as an inferred JSON number");
+    assertEquals(30L, row.get("Age").asLong(), "inferred numeric value");
   }
 
   @Test @Tag("FILE-105") void markdownEscapedPipeIsPreserved(@TempDir Path dir) throws Exception {

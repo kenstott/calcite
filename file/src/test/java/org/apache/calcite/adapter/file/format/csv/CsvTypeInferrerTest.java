@@ -224,6 +224,54 @@ public class CsvTypeInferrerTest {
     assertEquals(SqlTypeName.BOOLEAN, result.get(0).inferredType);
   }
 
+  @Test @DisplayName("inferTypes with thousands-separator column returns INTEGER")
+  void testInferTypesThousandsSeparatorColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("population\n1,234\n45,678\n999\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.INTEGER, result.get(0).inferredType);
+  }
+
+  @Test @DisplayName("inferTypes with currency column returns DOUBLE")
+  void testInferTypesCurrencyColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("price\n$1,234.56\n$99.00\n$5.50\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.DOUBLE, result.get(0).inferredType);
+  }
+
+  @Test @DisplayName("inferTypes with percent column returns INTEGER")
+  void testInferTypesPercentColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("rate\n12%\n50%\n99%\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.INTEGER, result.get(0).inferredType);
+  }
+
+  @Test @DisplayName("inferTypes with parenthetical-negative column returns INTEGER")
+  void testInferTypesParentheticalNegativeColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("balance\n(123)\n456\n(789)\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.INTEGER, result.get(0).inferredType);
+  }
+
   @Test @DisplayName("inferTypes with date column returns DATE")
   void testInferTypesDateColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("dt\n2024-01-15\n2024-02-20\n2024-03-25\n");

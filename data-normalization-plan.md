@@ -210,8 +210,15 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
      (see G8 below for the govdata-specific instance of this same gap, handled
      separately since it's a hand-authored YAML column, not this shared inference path).
 
-6. **G4** — add thousands-separator, currency-symbol, percent-sign, and
-   parenthetical-negative parsing to `CsvTypeInferrer`/`CsvTypeConverter`.
+6. **G4** ✅ *(done)* — added a shared `NumericFormats.stripFormatting` helper
+   (new file, `format/csv/NumericFormats.java`) used by both `CsvTypeInferrer`
+   (inference-time detection) and `CsvTypeConverter` (runtime parsing), so the two
+   stay consistent. Strips thousands separators, a `$`/`€`/`£`/`¥` currency symbol,
+   and a trailing `%` (stripped, not converted to a fraction — `"12%"` → `12`, not
+   `0.12`); converts an accounting-style `"(123)"` into `-123`. Confirmed zero
+   govdata impact (govdata never enables `csvTypeInference` and references neither
+   `CsvTypeInferrer`/`CsvTypeConverter` nor the new class). Regression tests added
+   to `CsvTypeConverterTest` and `CsvTypeInferrerTest`.
    - **Data remediation: cache-clear**, same mechanism as above. No govdata impact
      directly (govdata's own SEC/XBRL-specific parenthetical-negative handling in
      `XbrlToParquetConverter` is untouched by this change — that code path doesn't call

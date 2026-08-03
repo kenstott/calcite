@@ -126,6 +126,34 @@ public class CsvTypeConverterTest {
     assertNull(converter.convert("NULL", SqlTypeName.DECIMAL));
   }
 
+  // --- Formatted numeric conversions (thousands separators, currency, percent, parens) ---
+
+  @Test @DisplayName("convert INTEGER with thousands separator")
+  void testConvertIntegerWithThousandsSeparator() {
+    assertEquals(Integer.valueOf(1234), converter.convert("1,234", SqlTypeName.INTEGER));
+  }
+
+  @Test @DisplayName("convert DOUBLE with currency symbol and thousands separator")
+  void testConvertDoubleWithCurrencyAndThousandsSeparator() {
+    assertEquals(Double.valueOf(1234.56), converter.convert("$1,234.56", SqlTypeName.DOUBLE));
+  }
+
+  @Test @DisplayName("convert INTEGER with trailing percent sign")
+  void testConvertIntegerWithPercentSign() {
+    // The percent sign is stripped, not converted to a fraction: "12%" -> 12, not 0.12.
+    assertEquals(Integer.valueOf(12), converter.convert("12%", SqlTypeName.INTEGER));
+  }
+
+  @Test @DisplayName("convert INTEGER with accounting-style parenthetical negative")
+  void testConvertIntegerWithParentheticalNegative() {
+    assertEquals(Integer.valueOf(-123), converter.convert("(123)", SqlTypeName.INTEGER));
+  }
+
+  @Test @DisplayName("convert DOUBLE with parenthetical negative, thousands separator, and currency")
+  void testConvertDoubleWithParentheticalNegativeCurrencyAndThousands() {
+    assertEquals(Double.valueOf(-1234.56), converter.convert("($1,234.56)", SqlTypeName.DOUBLE));
+  }
+
   // --- Date/Time conversions ---
 
   @Test @DisplayName("convert DATE with ISO format")

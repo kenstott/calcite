@@ -245,7 +245,7 @@ public class ConverterDecompositionTest {
   // ============================================================ FILE-019 (pptx) ==================
 
   @Test @Tag("FILE-019")
-  void pptxEmitsOneJsonPerSlideTableAndKeepsRawStrings(@TempDir Path root) throws Exception {
+  void pptxEmitsOneJsonPerSlideTableAndInfersTypes(@TempDir Path root) throws Exception {
     File pptx = root.resolve("deck.pptx").toFile();
     try (XMLSlideShow ppt = new XMLSlideShow(); OutputStream out = Files.newOutputStream(pptx.toPath())) {
       // Slide 1: one table (header + 1 data row, with a numeric-looking cell).
@@ -273,15 +273,14 @@ public class ConverterDecompositionTest {
     assertEquals(expected, tableJsonNames(outDir),
         "pptx must decompose into exactly one JSON file per detected slide table");
 
-    // RAW trimmed strings: the numeric-looking "99" stays a JSON string (no type inference),
-    // contrasting with the docx behaviour above.
+    // Type inference: the "99" cell is emitted as a JSON number, matching the docx behaviour above.
     JsonNode s1 = readArray(outDir, "deck__slide1__table.json");
     assertEquals(1, s1.size(), "one data row on slide 1");
     JsonNode r0 = s1.get(0);
-    assertTrue(r0.get("value").isTextual(), "pptx keeps numeric-looking cell as a JSON string");
-    assertFalse(r0.get("value").isNumber(), "pptx must NOT infer a numeric type");
-    assertEquals("99", r0.get("value").asText(), "raw string value preserved");
-    assertEquals("latency", r0.get("metric").asText(), "raw header-keyed value");
+    assertTrue(r0.get("value").isNumber(), "numeric-looking pptx cell must be a JSON number");
+    assertFalse(r0.get("value").isTextual(), "numeric cell must NOT be a quoted string");
+    assertEquals(99L, r0.get("value").asLong(), "inferred numeric value");
+    assertEquals("latency", r0.get("metric").asText(), "text cell stays a string");
   }
 
   // ============================================================ helpers ==========================

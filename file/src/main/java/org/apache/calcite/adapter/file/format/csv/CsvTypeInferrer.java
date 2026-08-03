@@ -369,10 +369,15 @@ public class CsvTypeInferrer {
         return;
       }
 
+      // Strip thousands separators / currency symbols / percent signs / parenthetical
+      // negatives before pattern matching, so "$1,234.56", "12%", and "(123)" are
+      // recognized as numeric the same way CsvTypeConverter will later parse them.
+      String numericCandidate = NumericFormats.stripFormatting(value);
+
       // Try integer first (before boolean, since "0" and "1" could be either)
-      if (INTEGER_PATTERN.matcher(value).matches()) {
+      if (INTEGER_PATTERN.matcher(numericCandidate).matches()) {
         try {
-          long longVal = Long.parseLong(value);
+          long longVal = Long.parseLong(numericCandidate);
           if (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE) {
             incrementType(SqlTypeName.INTEGER);
           } else {
@@ -385,9 +390,9 @@ public class CsvTypeInferrer {
       }
 
       // Try float/double
-      if (FLOAT_PATTERN.matcher(value).matches()) {
+      if (FLOAT_PATTERN.matcher(numericCandidate).matches()) {
         try {
-          Double.parseDouble(value);
+          Double.parseDouble(numericCandidate);
           incrementType(SqlTypeName.DOUBLE);
           return;
         } catch (NumberFormatException e) {

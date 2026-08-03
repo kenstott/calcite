@@ -168,7 +168,7 @@ public class TableExtractionRequirementsTest {
    * The base name is PascalCase of the file name, so {@code notes.md} => {@code Notes}.
    */
   @Test @Tag("FILE-021")
-  void markdownEmitsOneJsonPerPipeTableAndKeepsRawStrings(@TempDir Path root) throws Exception {
+  void markdownEmitsOneJsonPerPipeTableAndInfersTypes(@TempDir Path root) throws Exception {
     String md =
         "| city | country |\n"
         + "| --- | --- |\n"
@@ -203,14 +203,13 @@ public class TableExtractionRequirementsTest {
     assertEquals("paris", r0.get("city").asText(), "first row city");
     assertEquals("france", r0.get("country").asText(), "first row country");
 
-    // RAW trimmed strings: the numeric-looking "12" stays a JSON string (no type inference),
-    // contrasting with the HTML behaviour above.
+    // Type inference: the "12" cell is emitted as a JSON number, matching the HTML behaviour above.
     JsonNode t2 = readArray(outDir, "Notes__Table2.json");
     assertEquals(1, t2.size(), "one data row in second markdown table");
     JsonNode w0 = t2.get(0);
-    assertTrue(w0.get("wins").isTextual(), "markdown keeps numeric-looking cell as a JSON string");
-    assertFalse(w0.get("wins").isNumber(), "markdown must NOT infer a numeric type");
-    assertEquals("12", w0.get("wins").asText(), "raw string value preserved");
+    assertTrue(w0.get("wins").isNumber(), "numeric-looking markdown cell must be a JSON number");
+    assertFalse(w0.get("wins").isTextual(), "numeric cell must NOT be a quoted string");
+    assertEquals(12L, w0.get("wins").asLong(), "inferred numeric value");
   }
 
   // ============================================================ FILE-102 (Excel multi-table) ====
