@@ -116,9 +116,12 @@ column_templates:
       - *partition_type
       - *partition_year
 
-  # Faithful append-only snapshot tables (patent_id / location_id keyed) carry no grant year.
-  # They partition by [type, quarter]: each quarterly full-dump release lands a new partition,
-  # so the table is append-only and old releases drop on whatever retention cadence applies.
+  # Faithful full-snapshot tables (patent_id / location_id keyed) carry no grant year.
+  # `quarter` is a row column and a cache-buster dimension only (govdata-data-cadence
+  # Pattern 8) — it is NOT an Iceberg partition column (see materialize.partition.columns
+  # below, which is [type] only). Each new quarter's full dump replaces the entire table
+  # via overwritePartitions, so exactly one quarter's data is ever present; the previous
+  # quarter is never retained and needs no separate retention/expiry step.
   snapshot_partitions: &snapshot_partitions
     style: hive
     columnDefinitions:
@@ -132,7 +135,8 @@ column_templates:
     compactionTargetFileSizeBytes: 134217728
     compactionMinFiles: 5
 
-  # Forever/snapshot tables load the whole dump in one shot into a single quarter partition.
+  # Forever/snapshot tables load the whole dump in one shot into the table's single [type]
+  # partition, fully replacing it each run (see snapshot_partitions comment above).
   # Inline compaction would re-merge millions of rows on every rebuild and dominate runtime —
   # defer it to a separate maintenance pass. Same warehouse, no inline compaction.
   patents_snapshot_iceberg_common: &patents_snapshot_iceberg_common
@@ -160,7 +164,8 @@ dimension_values:
   # Current release token (e.g. 2026Q2), injected by GovDataSchemaFactory. Not sent to any API.
   # Transformers stamp it into full-dump cache filenames so a new quarter lands a fresh path and
   # re-downloads the latest ODP bulk file (superseding the 90-day TTL); the snapshot tables also
-  # use it as their partition value so each quarterly release appends a new partition.
+  # stamp it onto every row as the `quarter` column, but it is not an Iceberg partition column
+  # (see snapshot_partitions comment) — each new quarter's dump replaces the whole table.
   current_quarter: &current_quarter
     - "${GOVDATA_CURRENT_QUARTER_TOKEN}"
 
@@ -323,7 +328,7 @@ partitionedTables:
       output:
         pattern: "type=patent_assignees"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
@@ -395,7 +400,7 @@ partitionedTables:
       output:
         pattern: "type=patent_inventors"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
@@ -466,7 +471,7 @@ partitionedTables:
       output:
         pattern: "type=patent_cpc"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
@@ -516,7 +521,7 @@ partitionedTables:
       output:
         pattern: "type=patent_abstracts"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
@@ -570,7 +575,7 @@ partitionedTables:
       output:
         pattern: "type=patent_applications"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
@@ -624,7 +629,7 @@ partitionedTables:
       output:
         pattern: "type=patent_figures"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
@@ -693,7 +698,7 @@ partitionedTables:
       output:
         pattern: "type=patent_locations"
       partition:
-        columns: [type, quarter]
+        columns: [type]
       iceberg:
         <<: *compaction_defaults
         <<: *patents_snapshot_iceberg_common
