@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.69.0](https://github.com/kenstott/calcite/compare/engine-v0.68.0...engine-v0.69.0) (2026-08-03)
+
+
+### Features
+
+* **cftc:** handle large-trade threshold markers and multi-value fields ([bcd4465](https://github.com/kenstott/calcite/commit/bcd44651c3dfe58fb7b22cc8ad48975221aa9908))
+* **govdata:** add county_vulnerability_profile and environmental_burden_by_county views ([dc848c1](https://github.com/kenstott/calcite/commit/dc848c181f1b70034917f225fd098606e09fdb15))
+* **govdata:** add patent_activity_by_county view; fix regional_linecodes duplication and state_economic_snapshot cartesian join ([8dcd950](https://github.com/kenstott/calcite/commit/8dcd950dbf40aef50788ee187e96ed61538ed336))
+
+
+### Bug Fixes
+
+* **etl:** stop silently nulling unparseable numeric/date/timestamp/boolean values ([9f2698a](https://github.com/kenstott/calcite/commit/9f2698a45c426aafbceaffdbbbe72fb3d413fafd))
+* **etl:** strip CSV-quoting artifact from numeric strings before parsing ([e8a9813](https://github.com/kenstott/calcite/commit/e8a981352dac1cd8af8893fb668de471aed00b0b))
+* **fec:** communication_costs date parsing + dateFormat fallback batch failure ([0ec89a2](https://github.com/kenstott/calcite/commit/0ec89a29749ad6e1eefed0b531c843f4c3d66a64))
+* **file:** stop CSV+expression ETL tables from silently going 100% null ([fe54d91](https://github.com/kenstott/calcite/commit/fe54d91c22b506fa3cb32818fec80bf97da7007c))
+* **govdata/fiscal:** follow SBA's DKAN-to-Drupal migration, add Wayback CDX retry ([3026ad3](https://github.com/kenstott/calcite/commit/3026ad3f5368ed125a202305cacad4d8773fded9))
+* **govdata:** close ETL/DQ pool gaps found in schema-integration audit ([a42270d](https://github.com/kenstott/calcite/commit/a42270dd901582f8830d24143e75b0fdd54d8210))
+* **govdata:** normalize energy schema's materializeDirectory/warehousePath convention ([5f6d5c9](https://github.com/kenstott/calcite/commit/5f6d5c985842bb0994a6498528070729fb5ae864))
+* **govdata:** queue ref:daily last so it more often sees same-day source data ([22fc796](https://github.com/kenstott/calcite/commit/22fc796f2a575f6e3d2576001aaa61c50e24b1f8))
+* **minio:** guard against silent fallback when the govdata drive isn't remounted ([be8ca9b](https://github.com/kenstott/calcite/commit/be8ca9bb4579db713f9bd54a927aa4fe66e6044b))
+* **patents:** stop quarterly snapshot tables from duplicating every quarter ([ed0a897](https://github.com/kenstott/calcite/commit/ed0a897b0a1a1175b43b367dea795205f8b33bc5))
+
 ## [0.68.0](https://github.com/kenstott/calcite/compare/engine-v0.67.0...engine-v0.68.0) (2026-08-02)
 
 
