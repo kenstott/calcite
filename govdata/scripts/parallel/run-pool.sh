@@ -164,7 +164,7 @@ for arg in "$@"; do
       queue+=(econ:historical census:historical geo:historical crime:historical weather:historical)
       _add_sec_secondary_years
       _add_sec_13f_years
-      queue+=(sec_prices:historical ref:daily fec:historical fedregister:historical)
+      queue+=(sec_prices:historical fec:historical fedregister:historical)
       # officials, like ref/econ_reference below: no point-in-time history to backfill
       # separately — congress-period completion markers + etag freshness make a single
       # recurring daily invocation self-backfilling (see historical) alias comment).
@@ -185,6 +185,8 @@ for arg in "$@"; do
       queue+=(research:historical research:daily)
       queue+=(fiscal:historical fiscal:daily)
       queue+=(econ_reference:daily)
+      # See the daily) alias below for why ref:daily is queued last here too.
+      queue+=(ref:daily)
       ;;
 
     historical)
@@ -289,7 +291,6 @@ for arg in "$@"; do
         "sec_secondary:${_cy}"
         "sec_13f:${_cy}"
         "sec_prices:daily"
-        ref:daily
         fec:daily fedregister:daily officials:daily
         cyber_vuln:daily cyber_threat:daily
         health:daily
@@ -304,6 +305,16 @@ for arg in "$@"; do
         research:daily
         fiscal:daily
         econ_reference:daily
+        # ref:daily is queued last, not for a hard ordering guarantee (this pool has none —
+        # admission is memory-budget-gated, not dependency-gated, so ref can still start
+        # concurrently with a still-running earlier slot) but because queue position is a real,
+        # if soft, bias on admission order: ref's entity-resolution bridge (EntityBridgeListener)
+        # reads live iceberg_scan snapshots of fec/patents/sec/health/environment/energy/
+        # transport/fiscal, so queuing it after them makes it more likely to see each schema's
+        # same-day data rather than yesterday's. Harmless either way if it doesn't: the bridge
+        # fully rebuilds (overwritePartitions: true) every day, so a same-day miss is at most a
+        # one-day-stale cross-reference that self-corrects on tomorrow's run, not a lasting gap.
+        ref:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
       ;;
