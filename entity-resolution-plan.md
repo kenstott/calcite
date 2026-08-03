@@ -111,6 +111,7 @@ first-token + state) may be needed just for this one source.
 | `sec.insider_transactions.reporting_person_name` (individual-type rows) | `reporting_person_cik` | structured | space-separated "LAST FIRST [MIDDLE]", no comma |
 | `health.cms_open_payments.physician_first_name` + `physician_last_name` | `physician_profile_id` | structured | **already split into first/last — no parsing needed**, CMS's own stable ID |
 | `transport.faa_aircraft_registry.registrant_name` (individual-type, via `registrant_type`) | *(name-only)* | **unstructured** | |
+| `patents.patent_inventors.name_first` + `name_last` | `inventor_id` | structured | **already split into first/last — no parsing needed**; PatentsView's own disambiguated ID, same scheme as `patent_assignees.assignee_id` on the org track; grain is `[patent_id, inventor_sequence]`, dedup to one row per `inventor_id` before matching; carries `gender_code` (PatentsView-inferred), usable as an optional plausibility signal but never a match criterion |
 
 ...matched **against each other**, N-way pairwise across all person-type sources within a
 block — there is no third-party canonical individual registry equivalent to GLEIF, so this
@@ -198,6 +199,8 @@ registry.
   parsing needed, use directly.
 - FAA individual-type registrants: verify the raw name format during implementation (not
   yet sampled) before assuming a parsing rule.
+- PatentsView inventors: already split into `name_first`/`name_last` — no parsing needed,
+  same shape as CMS.
 
 **Pipeline, deliberately more conservative than the org track**, run pairwise across every
 combination of person-type sources within a block, given the reputational stakes of a wrong
@@ -232,9 +235,17 @@ that connect a canonical entity to a dataset PK."
   adding a registry source needs no tall-table migration — only the wide table's fixed
   columns need one.
 - **Wide canonical-entity tables** (`canonical_org_entity`, `canonical_person_entity`) —
-  the hub. One row per real-world entity, nullable FK columns pointing at each dataset's
-  natural key. Primary query interface most consumers should join against. Built as a
-  pivot of the tall tables, not hand-maintained separately.
+  **same grain as the tall tables, one row per source mention** (not one row per real-world
+  entity — see the note after the column tables below for why). `canonical_entity_id`/
+  `canonical_name` are denormalized onto every row; the generic `source_schema`/
+  `source_table`/`source_key` triple is spread into named nullable FK columns, one per
+  registry source, with only the column matching that row's own source populated and every
+  other FK column null on that row. A row-level pivot of the tall table — `CASE WHEN
+  source_table = 'committees' THEN source_key END AS fec_committee_id`, etc. — not an
+  aggregation, so there's no representative-picking or collapsing to reason about. Primary
+  query interface most consumers should join against, precisely because the FK columns read
+  naturally (`WHERE patents_assignee_id IS NOT NULL`) instead of the tall table's generic
+  triple (`WHERE source_table = 'patent_assignees'`).
 
 ### Tall: `ref.entity_org_bridge`
 
@@ -288,75 +299,96 @@ tables.
 
 ### Wide: `ref.canonical_org_entity`
 
-One row per real-world org **known to any registry source**, not just ones with a GLEIF or
-EIN match — an org identified only in `patents.patent_assignees` (never resolved) still
+One row per **source mention** — same grain as `entity_org_bridge`, not one row per
+real-world org. An org identified only in `patents.patent_assignees` (never resolved) still
 gets a row here, with `lei` left null, so callers can query this table uniformly regardless
-of match status:
+of match status. A canonical org known to N registry sources has N rows, each with exactly
+one FK column populated (the one matching that row's own source) and every other FK column
+null; a canonical org with two `patents_assignee_id` matches (PatentsView's own
+disambiguation isn't perfect — the same company can carry two distinct `assignee_id`s that
+both fuzzy-match the same LEI) simply has two rows, both sharing the same
+`canonical_entity_id`/`canonical_name`, each with a different `patents_assignee_id` value —
+no representative-picking, no list columns, nothing special-cased:
 
 | column | type | notes |
 |---|---|---|
-| `canonical_entity_id` | string | surrogate PK — the LEI when present; the SEC CIK when EIN-matched but no LEI; else a deterministic hash of the first-seen `(source_schema, source_table, source_column, source_key)` |
-| `canonical_name` | string | GLEIF `legal_name` when `lei` is populated, else the longest/most-complete raw source name seen |
+| `canonical_entity_id` | string | the LEI when present; the SEC CIK when EIN-matched but no LEI; else a deterministic hash of the first-seen `(source_schema, source_table, source_column, source_key)` — repeats across rows when a canonical org has multiple source mentions |
+| `canonical_name` | string | GLEIF `legal_name` when `lei` is populated, else the longest/most-complete raw source name seen; same value repeated across that entity's rows |
 | `lei` | string, nullable | |
 | `sec_cik` | string, nullable | via EIN exact match |
-| `fec_committee_id` | string, nullable | scalar FK — safe 1:1, a committee represents one org |
-| `fec_committee_id_confidence` | string, nullable | |
-| `sec_reporting_person_cik` | string, nullable | entity-type SEC insiders — SEC's own stable per-filer ID, safe 1:1 |
-| `sec_reporting_person_cik_confidence` | string, nullable | |
-| `patents_assignee_id` | string, nullable | **lossy, many-to-one — see caveat below** |
-| `patents_assignee_id_confidence` | string, nullable | |
-| `fda_sponsor_name` | string, nullable | unstructured source — see caveat |
-| `fda_sponsor_name_confidence` | string, nullable | |
-| `ghg_parent_company_name` | string, nullable | unstructured source |
-| `ghg_parent_company_name_confidence` | string, nullable | |
-| `cms_paying_entity_name` | string, nullable | unstructured source |
-| `cms_paying_entity_name_confidence` | string, nullable | |
-| `eia_utility_id` | string, nullable | structured |
-| `eia_utility_id_confidence` | string, nullable | |
-| `eia_coal_controller_name` | string, nullable | unstructured; `eia_coal_operator_name` is a **separate** column — a mine's controller and operator are logically distinct orgs, don't collapse them |
-| `eia_coal_controller_name_confidence` / `eia_coal_operator_name` / `eia_coal_operator_name_confidence` | | |
-| `fmcsa_dot_number` | string, nullable | structured; **lossy potential given ~4.47M-row scale — see caveat** |
-| `fmcsa_dot_number_confidence` | string, nullable | |
-| `faa_registrant_name` | string, nullable | unstructured, entity-type registrants only |
-| `faa_registrant_name_confidence` | string, nullable | |
-| `exempt_org_ein` | string, nullable | structured, **EIN** |
-| `exempt_org_ein_confidence` | string, nullable | |
-| `sba_borrower_name` / `sba_lender_name` | string, nullable | unstructured, two distinct roles from the same table |
-| `sba_borrower_name_confidence` / `sba_lender_name_confidence` | string, nullable | |
+| `fec_committee_id` / `fec_committee_id_confidence` | string, nullable | populated only on the row whose source is `fec.committees` |
+| `sec_reporting_person_cik` / `sec_reporting_person_cik_confidence` | string, nullable | populated only on the row whose source is entity-type `sec.insider_transactions` |
+| `patents_assignee_id` / `patents_assignee_id_confidence` | string, nullable | populated only on the row whose source is `patents.patent_assignees`; a canonical org matching 2+ `assignee_id`s gets 2+ such rows |
+| `fda_sponsor_name` / `fda_sponsor_name_confidence` | string, nullable | unstructured source |
+| `ghg_parent_company_name` / `ghg_parent_company_name_confidence` | string, nullable | unstructured source |
+| `cms_paying_entity_name` / `cms_paying_entity_name_confidence` | string, nullable | unstructured source |
+| `eia_utility_id` / `eia_utility_id_confidence` | string, nullable | structured |
+| `eia_coal_controller_name` / `eia_coal_controller_name_confidence` | string, nullable | unstructured; `eia_coal_operator_name` is a **separate** column — a mine's controller and operator are logically distinct orgs, don't collapse them |
+| `eia_coal_operator_name` / `eia_coal_operator_name_confidence` | string, nullable | |
+| `fmcsa_dot_number` / `fmcsa_dot_number_confidence` | string, nullable | structured; a canonical org matching 2+ `dot_number`s (~4.47M-row source, see scale caveat) gets 2+ such rows, same as `patents_assignee_id` |
+| `faa_registrant_name` / `faa_registrant_name_confidence` | string, nullable | unstructured, entity-type registrants only |
+| `exempt_org_ein` / `exempt_org_ein_confidence` | string, nullable | structured, **EIN** |
+| `sba_borrower_name` / `sba_borrower_name_confidence` | string, nullable | unstructured |
+| `sba_lender_name` / `sba_lender_name_confidence` | string, nullable | unstructured, distinct role from borrower on the same source table |
 
-**Multiplicity caveat, called out rather than silently modeled around**: several sources
-(`patents_assignee_id` most prominently, but also `fmcsa_dot_number` and any other
-ID-keyed-but-many-per-org source) are genuinely many-to-one against a canonical org in
-practice — a single scalar column can only carry one representative value per canonical
-org, not the full set. Acceptable lossy convenience for the common "give me one row" case;
-any query needing the **complete** set for a canonical org must go back to the tall
-`entity_org_bridge` table (`WHERE lei = X AND source_schema = 'patents'`, etc.) — the wide
-table is a denormalized convenience view, not a substitute, whenever multiplicity matters.
+Primary key: `[source_schema, source_table, source_column, source_key]` — identical to
+`entity_org_bridge`'s, since this table shares its grain; `canonical_entity_id` is
+deliberately **not** unique here.
+
+A consumer wanting the traditional "one row per entity, everything at once" hub view can get
+it trivially at query time — `SELECT canonical_entity_id, canonical_name, MAX(lei),
+MAX(patents_assignee_id), ... FROM canonical_org_entity GROUP BY canonical_entity_id,
+canonical_name` (any aggregate works since at most one row supplies each column's value,
+`patents_assignee_id` aside, where `MAX` picks one of the 2+ arbitrarily — the same
+information a `list_agg` would give, just picked at query time instead of baked into the
+table). That aggregation, if it turns out to be a common enough access pattern, is a
+candidate for a plain SQL view layered on top later — not a reason to change this table's
+grain, which stays row-per-source-mention exactly like the tall table.
 
 ### Wide: `ref.canonical_person_entity`
 
-Same shape, for individuals — one row per real-world person known to any person-type
-registry source, whether or not they cross-matched:
+Same shape, for individuals, but built differently from the org side because the person
+tall table's grain is different: `entity_person_bridge` stores **matched pairs only** (two
+source keys per row, no `canonical_entity_id` column at all), not a census of every
+person-type-source entity the way `entity_org_bridge` is. Org matching is hub-and-spoke, so
+`canonical_entity_id` (the LEI/CIK) is directly computable per source row with no cross-row
+reasoning. Person matching has no hub — `canonical_entity_id` here can only be assigned by
+first computing **connected components over `entity_person_bridge`'s pairwise matches as
+graph edges** (two entities transitively linked through a shared third match belong to the
+same cluster), then emitting one row per person-type-source entity (from each source's own
+deduped table, not from `entity_person_bridge` directly — so an entity known to only one
+source and never matched still gets a row, tagged with a single-row cluster: a hash of its
+own source key). Grain is one row per source mention, same shape as the org table, just a
+different build path to get there:
 
 | column | type | notes |
 |---|---|---|
-| `canonical_entity_id` | string | surrogate PK — deterministic hash of the first-seen source key; no external hub key exists for individuals |
+| `canonical_entity_id` | string | deterministic hash of the first-seen source key; no external hub key exists for individuals; repeats across rows when a canonical person has multiple source mentions |
 | `canonical_name` | string | best-available parsed `(first, last)` name |
 | `fec_candidate_id` / `fec_candidate_id_confidence` | string, nullable | |
 | `sec_reporting_person_cik` / `sec_reporting_person_cik_confidence` | string, nullable | already 1:1 by SEC's own construction |
 | `cms_physician_profile_id` / `cms_physician_profile_id_confidence` | string, nullable | already 1:1 by CMS's own construction |
 | `faa_registrant_name` / `faa_registrant_name_confidence` | string, nullable | unstructured, individual-type registrants only |
+| `patents_inventor_id` / `patents_inventor_id_confidence` | string, nullable | PatentsView's own disambiguated ID; a canonical person cross-matched to 2 different `inventor_id`s (imperfect PatentsView disambiguation splitting one real inventor into two IDs) gets 2 such rows, same handling as `patents_assignee_id` on the org table — no special-casing needed here either |
 
-A row with 2+ FKs populated is a person-track match (e.g. a political candidate who is also
-a corporate insider, or a physician who is also a patent inventor's namesake — the latter
-not yet in scope since patent inventors weren't added to the person registry this round, see
-Explicitly Deferred). A row with only one FK populated is simply "known to that one source,
-never cross-matched" — both are legitimate, expected outcomes, not a partial-failure state.
+Primary key: `[source_schema, source_table, source_column, source_key]` — same shape as
+`canonical_org_entity`'s PK, **not** `entity_person_bridge`'s pair-based PK, since this
+table's grain is one row per person-type-source entity, not per matched pair.
 
-Both wide tables are built as a **pivot over the tall tables plus each source's
-otherwise-unmatched rows** (a `FULL OUTER JOIN`-shaped union in the same DuckDB SQL pass),
-not hand-maintained independently — same `materialize:` pattern (Iceberg,
-`overwritePartitions: true`) as the tall tables, since they're equally derived and
+A canonical entity with 2+ FK *types* populated across its rows is a person-track match
+(e.g. a political candidate who is also a corporate insider, or a physician who is also a
+patent inventor). An entity with only one FK type populated (however many rows, if that one
+source contributed more than one mention) is simply "known to that one source, never
+cross-matched" — both are legitimate, expected outcomes, not a partial-failure state.
+
+`canonical_org_entity` is built as a **row-level pivot of `entity_org_bridge` plus each
+source's otherwise-unmatched rows** (`CASE WHEN source_table = '...' THEN source_key END AS
+..._column` per registry source, all in one `SELECT`) — not an aggregation. `canonical_person_
+entity` is built by first resolving `canonical_entity_id` clusters via connected components
+over `entity_person_bridge`, then a similar per-source `CASE` pivot over each person-type
+source's own rows using the resolved cluster id — one extra step, same result shape. Neither
+is hand-maintained independently; same `materialize:` pattern (Iceberg,
+`overwritePartitions: true`) as the tall tables, since all four are equally derived and
 recomputable.
 
 ## Extension mechanism (Java-native)
@@ -401,9 +433,13 @@ hooks:
    person-track pipeline (N-way pairwise across every person-type registry entry) per the
    algorithm above — all in DuckDB SQL, reusing the same normalization logic throughout —
    producing the two tall bridge result sets.
-4. Pivots each tall result set (plus each source's otherwise-unmatched rows, via a `FULL
-   OUTER JOIN`-shaped union across every registry source of that entity type) into the two
-   wide canonical result sets.
+4. Pivots the org tall result set (plus its otherwise-unmatched rows, unioned in so
+   unresolved orgs still get a row) into `canonical_org_entity` via a row-level
+   `CASE`-per-source-column transform — same row count as the tall result set, no
+   aggregation. For persons, first resolves `canonical_entity_id` clusters via connected
+   components over the person tall result set's pairwise edges, then applies the same
+   per-source `CASE` pivot over each person-type source's own deduped rows (not the tall
+   result set itself, which only holds matched pairs) using the resolved cluster id.
 5. Collects each of the four result sets as its own `List<Map<String,Object>>` and commits
    into its respective Iceberg table via `IcebergTableWriter.writeRecords(...)`
    (`file/src/main/java/org/apache/calcite/adapter/file/iceberg/IcebergTableWriter.java:530`),
@@ -424,16 +460,18 @@ here.
 1. **`verify-tables` skill** (`govdata/scripts/model-verify.sh --source ref`) after a jar
    rebuild — confirms all four new tables are reachable and readable through the real
    Calcite→DuckDB path, and specifically that each declared primary key has **zero
-   duplicates** — the cheapest automated check that "one best match per entity" actually
-   holds, and that the wide-table pivot didn't fan out a canonical entity into more than one
-   row.
+   duplicates** — the cheapest automated check that the pivot's `CASE` transform didn't
+   double-write a row (each `(source_schema, source_table, source_column, source_key)` still
+   appears exactly once, in both the tall and the wide table, matching grain). Multiple wide
+   rows sharing one `canonical_entity_id` is expected, not a violation — the PK is on the
+   source-mention columns, not on `canonical_entity_id`.
 2. **`data-fix` skill** (`--schema ref --table entity_org_bridge`, run once — the listener
    rebuilds all four together) for the dev loop — drops the tables + tracker so the listener
    can be re-triggered repeatedly while tuning thresholds, without a full `ref` re-ingest.
 3. **Smoke-test SQL**, once live:
    ```sql
    -- Known companies should resolve exact/high-confidence in the wide table directly
-   SELECT canonical_name, lei, sec_cik, fec_committee_id, patents_assignee_id, exempt_org_ein
+   SELECT canonical_name, lei, sec_cik, fec_committee_id, exempt_org_ein
    FROM ref.canonical_org_entity
    WHERE canonical_name ILIKE '%boeing%' OR canonical_name ILIKE '%apple%'
       OR canonical_name ILIKE '%general electric%' OR canonical_name ILIKE '%lockheed%';
@@ -444,24 +482,35 @@ here.
    FROM ref.entity_org_bridge
    GROUP BY source_schema, source_table, source_column, match_method, match_confidence;
 
-   -- The payoff query this feature exists for: patent output joined to GLEIF-linked orgs
+   -- The payoff query this feature exists for: patent output joined to GLEIF-linked orgs.
+   -- Direct join — patents_assignee_id is a real column again; a canonical org matching 2+
+   -- assignee_ids just contributes 2+ rows here, both joining correctly.
    SELECT c.canonical_name, COUNT(DISTINCT pa.patent_id) AS patents
    FROM patents.patent_assignees pa
    JOIN ref.canonical_org_entity c ON c.patents_assignee_id = pa.assignee_id
    GROUP BY c.canonical_name ORDER BY patents DESC LIMIT 20;
 
-   -- A new cross-schema question this design enables: FDA sponsor R&D vs. patent output
-   SELECT c.canonical_name, c.fda_sponsor_name, COUNT(DISTINCT pa.patent_id) AS patents
-   FROM ref.canonical_org_entity c
-   JOIN patents.patent_assignees pa ON pa.assignee_id = c.patents_assignee_id
-   WHERE c.fda_sponsor_name IS NOT NULL
-   GROUP BY c.canonical_name, c.fda_sponsor_name ORDER BY patents DESC LIMIT 20;
+   -- A new cross-schema question this design enables: FDA sponsor R&D vs. patent output.
+   -- fda_sponsor_name and patents_assignee_id live on different rows for the same entity
+   -- (row-per-source-mention grain) — self-join on canonical_entity_id to bring them together.
+   SELECT fda.canonical_name, fda.fda_sponsor_name, COUNT(DISTINCT pa.patent_id) AS patents
+   FROM ref.canonical_org_entity fda
+   JOIN ref.canonical_org_entity pat ON pat.canonical_entity_id = fda.canonical_entity_id
+   JOIN patents.patent_assignees pa ON pa.assignee_id = pat.patents_assignee_id
+   WHERE fda.fda_sponsor_name IS NOT NULL AND pat.patents_assignee_id IS NOT NULL
+   GROUP BY fda.canonical_name, fda.fda_sponsor_name ORDER BY patents DESC LIMIT 20;
 
    -- Person track: any candidate who is also a corporate insider or a paid physician?
-   SELECT canonical_name, fec_candidate_id, sec_reporting_person_cik, cms_physician_profile_id
+   -- Each FK type lives on its own row at this grain, so group by canonical_entity_id and
+   -- check for 2+ distinct FK types present, same pattern as the FDA/patents self-join above.
+   SELECT canonical_entity_id, MAX(canonical_name) AS canonical_name,
+          MAX(fec_candidate_id) AS fec_candidate_id,
+          MAX(sec_reporting_person_cik) AS sec_reporting_person_cik,
+          MAX(cms_physician_profile_id) AS cms_physician_profile_id
    FROM ref.canonical_person_entity
-   WHERE (fec_candidate_id IS NOT NULL AND sec_reporting_person_cik IS NOT NULL)
-      OR (fec_candidate_id IS NOT NULL AND cms_physician_profile_id IS NOT NULL);
+   GROUP BY canonical_entity_id
+   HAVING (MAX(fec_candidate_id) IS NOT NULL AND MAX(sec_reporting_person_cik) IS NOT NULL)
+       OR (MAX(fec_candidate_id) IS NOT NULL AND MAX(cms_physician_profile_id) IS NOT NULL);
    ```
    Eyeball that the top-20 patent holders by matched-patent-count look like real large
    assignees (not an artifact of a bad blocking key merging distinct companies), and that
@@ -514,9 +563,10 @@ here.
   hub) — out of scope; org matching here is hub-and-spoke only, so two orgs that both fail
   to match GLEIF/EIN but would plausibly match each other are not linked. Revisit only if
   that gap turns out to matter in practice.
-- Further sources not included in this sweep: patent **inventors** (`patents.patent_inventors`,
-  a fourth potential person-type source — individuals, not orgs, deliberately not added
-  this round since it wasn't part of the live catalog sweep that produced this registry);
+- Further sources not included in this sweep (`patent_inventors` was originally listed here
+  too — deliberately not added in the first pass since it wasn't part of the live catalog
+  sweep that produced this registry, then added to the person-type source table above per
+  direct instruction):
   `health.clinical_trials.lead_sponsor` and `health.fda_drug_recalls.recalling_firm`/
   `labeler_name` (found during the sweep, both real org-name candidates, left out of the v1
   registry table above only because they weren't independently `describe_table`-confirmed
