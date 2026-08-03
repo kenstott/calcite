@@ -65,7 +65,20 @@ public class EntityBridgeListener implements TableLifecycleListener {
   /** The one table this listener is wired to in ref-schema.yaml; all others computed here too. */
   private static final String TRIGGER_TABLE = "entity_org_bridge";
 
-  private static final double FUZZY_HIGH_THRESHOLD = 0.92;
+  // 0.95, not the plan's original starting guess of 0.92 — hand-adjudicated against 60 real
+  // org-track candidate pairs sampled live (15 per 0.03-wide band from 0.85 to 0.99, after the
+  // remainder-scoring/recursive-suffix/person-routing fixes above): precision was ~60% at
+  // 0.95-0.99 vs ~47% at 0.92-0.95, a real jump, not noise (e.g. 0.92-0.95 still included false
+  // matches like "JAMES B WILLIAMSON"/"JAMES C WILLIAMSON TRUST" and "KAMALDEEP SINGH BHULLAR"/
+  // "AMANDEEP SINGH BHULLAR" scoring above true matches like "Y INVEST INC"/"Y Investment Ltd").
+  // This only affects the org-track (runOrgSource) — the person-track's matchPersonPair never
+  // assigns 'high' from a fuzzy match at all, by design (see its own comment), so it only ever
+  // reads FUZZY_LOW_THRESHOLD.
+  private static final double FUZZY_HIGH_THRESHOLD = 0.95;
+  // Left at the plan's original 0.85 — this band measured ~13-33% precision even after all
+  // fixes, but it's meant to be exactly that weak and always visibly flagged 'low', never
+  // silently trusted; sharpening it further trades away real matches for a tier that downstream
+  // consumers should already treat with suspicion regardless of its precise precision number.
   private static final double FUZZY_LOW_THRESHOLD = 0.85;
 
   /**
