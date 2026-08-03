@@ -2128,6 +2128,17 @@ partitionedTables:
       - name: faa_registrant_name_confidence
         type: string
         nullable: true
+      - name: patents_individual_assignee_id
+        type: string
+        nullable: true
+        comment: >
+          patents.patent_assignees rows where assignee_type is '4' (US individual) or '5'
+          (foreign individual) — a patent assigned directly to a person rather than a
+          company. Distinct from the org-track's patents_assignee_id (canonical_org_entity),
+          which only covers assignee_type '2'/'3' (company rows).
+      - name: patents_individual_assignee_id_confidence
+        type: string
+        nullable: true
 
     hooks:
       enabled: true

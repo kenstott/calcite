@@ -131,11 +131,18 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "fec", "committees", null,
           "s.connected_org_name", "s.committee_id", null,
           "connected_org_name", null, "s.year", "fec_committee_id"),
+      // assignee_type is PatentsView's raw numeric type code (a string, not the human-readable
+      // label the source column's own schema comment describes) — confirmed live against the
+      // physical Iceberg table: '2' = US company (8,305,494 rows), '3' = foreign company
+      // (8,809,668 rows), together 97.8% of all 17.5M rows. The literal strings 'US company'/
+      // 'foreign company' never occur in the actual data, so the original filter silently
+      // matched zero rows — this source contributed nothing despite being the plan's primary
+      // motivating use case (patent output joined to GLEIF-linked orgs).
       new OrgSource(
           "patents", "patent_assignees", null,
           "s.assignee_organization", "s.assignee_id", null,
           "assignee_organization",
-          "s.assignee_type IN ('US company','foreign company')", null,
+          "s.assignee_type IN ('2','3')", null,
           "patents_assignee_id"),
       new OrgSource(
           "sec", "insider_transactions", null,
@@ -224,7 +231,17 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "list_element(string_split(trim(s.registrant_name), ' '), 2)",
           "array_to_string(list_slice(string_split(trim(s.registrant_name), ' '), 3, "
               + "len(string_split(trim(s.registrant_name), ' '))), ' ')",
-          FAA_PERSON_FILTER, null, "faa_registrant_name"));
+          FAA_PERSON_FILTER, null, "faa_registrant_name"),
+      // assignee_type '4'/'5' (US/foreign individual) — a patent assigned directly to a person
+      // rather than a company; distinct from and excluded by the org-track's patents entry
+      // above (which requires '2'/'3'). Confirmed live: 167,198 rows, 99.5% with clean
+      // assignee_name_first/assignee_name_last already split — no comma/space parsing needed,
+      // same shape as cms_open_payments below.
+      new PersonSource(
+          "patents", "patent_assignees", null,
+          "s.assignee_id", "s.assignee_name_first || ' ' || s.assignee_name_last",
+          "s.assignee_name_last", "s.assignee_name_first", null,
+          "s.assignee_type IN ('4','5')", null, "patents_individual_assignee_id"));
 
   @Override public void beforeTable(TableContext context) {
     // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
