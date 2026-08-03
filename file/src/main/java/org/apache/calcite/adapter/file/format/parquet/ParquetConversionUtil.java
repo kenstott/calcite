@@ -991,7 +991,8 @@ public class ParquetConversionUtil {
           // Use the same type converter as LINQ4J engine
           try {
             org.apache.calcite.adapter.file.format.csv.CsvTypeConverter converter =
-                new org.apache.calcite.adapter.file.format.csv.CsvTypeConverter(null, null, true);
+                new org.apache.calcite.adapter.file.format.csv.CsvTypeConverter(
+                    org.apache.calcite.adapter.file.util.NullEquivalents.DEFAULT_NULL_EQUIVALENTS, true);
             Object converted = converter.convert(strValue, org.apache.calcite.sql.type.SqlTypeName.TIMESTAMP);
             if (converted != null) {
               long millis = (Long) converted;

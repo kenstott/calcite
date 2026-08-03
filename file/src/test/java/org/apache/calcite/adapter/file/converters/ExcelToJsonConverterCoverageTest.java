@@ -244,10 +244,17 @@ public class ExcelToJsonConverterCoverageTest {
 
     ArrayNode array = readJsonArray(jsonFile);
     assertEquals(1, array.size());
-    // The date cell value should be non-null (exact format depends on Date.toString / serialization)
     JsonNode dateNode = array.get(0).get("EventDate");
     assertNotNull(dateNode, "Date field should be present");
     assertFalse(dateNode.isNull(), "Date field should not be null");
+    // Regression: a date-formatted cell must serialize as a date string, not as raw
+    // epoch millis. Jackson's default WRITE_DATES_AS_TIMESTAMPS would otherwise turn
+    // this into a plain number, which downstream type inference reads back as a
+    // meaningless BIGINT column instead of a date.
+    assertTrue(dateNode.isTextual(),
+        "Date field should serialize as a date string, not a number (was: " + dateNode + ")");
+    assertTrue(dateNode.asText().contains("2024-06-15"),
+        "Date field should contain the actual date, was: " + dateNode.asText());
   }
 
   @Test void testConvertFormulaCells() throws IOException {

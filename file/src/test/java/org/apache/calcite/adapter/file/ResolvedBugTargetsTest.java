@@ -19,9 +19,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,10 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class ResolvedBugTargetsTest {
 
   private static CsvTypeConverter converter() {
-    Map<SqlTypeName, DateTimeFormatter> formatters = new HashMap<>();
-    formatters.put(SqlTypeName.DATE, DateTimeFormatter.ISO_LOCAL_DATE);
-    formatters.put(SqlTypeName.TIME, DateTimeFormatter.ISO_LOCAL_TIME);
-    return new CsvTypeConverter(formatters, NullEquivalents.DEFAULT_NULL_EQUIVALENTS, false);
+    return new CsvTypeConverter(NullEquivalents.DEFAULT_NULL_EQUIVALENTS, false);
   }
 
   // FILE-008 (C-16) — a non-null value violating an inferred type must surface an error, not coerce.

@@ -26,7 +26,6 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -64,25 +63,39 @@ public final class CsvTypeConverter {
       DateTimeFormatter.ofPattern("dd/MM/yyyy")
   };
 
-  private final Map<SqlTypeName, DateTimeFormatter> formatters;
   private final Set<String> nullEquivalents;
   @SuppressWarnings("UnusedVariable")
   private final boolean blankStringsAsNull;
 
-  public CsvTypeConverter(Map<SqlTypeName, DateTimeFormatter> formatters, Set<String> nullEquivalents, boolean blankStringsAsNull) {
-    this.formatters = formatters;
+  public CsvTypeConverter(Set<String> nullEquivalents, boolean blankStringsAsNull) {
     this.nullEquivalents = nullEquivalents;
     this.blankStringsAsNull = blankStringsAsNull;
   }
 
   /**
-   * Converts a string value to the target SQL type using the proven successful formatters.
+   * Converts a string value to the target SQL type using the built-in fallback formatters.
    *
    * @param value the string value to convert
    * @param targetType the target SQL type
    * @return the converted value, or null if the value represents null
    */
   public @Nullable Object convert(String value, SqlTypeName targetType) {
+    return convert(value, targetType, null);
+  }
+
+  /**
+   * Converts a string value to the target SQL type, preferring the formatter that was
+   * proven to match this column during type inference before falling back to the
+   * built-in formatter lists.
+   *
+   * @param value the string value to convert
+   * @param targetType the target SQL type
+   * @param inferredFormatter the formatter selected for this column during type inference,
+   *                          or null if none was recorded
+   * @return the converted value, or null if the value represents null
+   */
+  public @Nullable Object convert(String value, SqlTypeName targetType,
+      @Nullable DateTimeFormatter inferredFormatter) {
     LOGGER.debug("CsvTypeConverter.convert() called with value='{}' targetType={}", value, targetType);
     Object finalResult;
     switch (targetType) {
@@ -148,7 +161,7 @@ public final class CsvTypeConverter {
         LOGGER.debug("DATE conversion: value '{}' is null representation, returning null", value);
         finalResult = null;
       } else {
-        Object result = parseDate(value);
+        Object result = parseDate(value, inferredFormatter);
         LOGGER.debug("DATE conversion: value '{}' converted to: {} (type: {})", value, result, result.getClass().getSimpleName());
         finalResult = result;
       }
@@ -157,7 +170,7 @@ public final class CsvTypeConverter {
       if (isNullRepresentation(value)) {
         finalResult = null;
       } else {
-        finalResult = parseTime(value);
+        finalResult = parseTime(value, inferredFormatter);
       }
       break;
     case TIMESTAMP:
@@ -167,7 +180,7 @@ public final class CsvTypeConverter {
         LOGGER.debug("=== TIMESTAMPTZ DEBUG: Value is null representation for {} ===", targetType);
       } else {
         // TIMESTAMP = wall clock time, no timezone conversion
-        finalResult = parseTimestamp(value);
+        finalResult = parseTimestamp(value, inferredFormatter);
         LOGGER.debug("=== TIMESTAMPTZ DEBUG: parseTimestamp returned {} for {} field ===", finalResult, targetType);
       }
       break;
@@ -178,7 +191,7 @@ public final class CsvTypeConverter {
         LOGGER.debug("=== TIMESTAMPTZ DEBUG: Value is null representation for {} ===", targetType);
       } else {
         // TIMESTAMP_WITH_LOCAL_TIME_ZONE = timezone-aware, must convert to UTC
-        finalResult = parseTimestampWithTimezone(value);
+        finalResult = parseTimestampWithTimezone(value, inferredFormatter);
         LOGGER.debug("=== TIMESTAMPTZ DEBUG: parseTimestampWithTimezone returned {} for {} field ===", finalResult, targetType);
       }
       break;
@@ -204,10 +217,12 @@ public final class CsvTypeConverter {
 
   private Boolean parseBoolean(String value) {
     String lower = value.toLowerCase();
-    if ("true".equals(lower) || "1".equals(value) || "yes".equals(lower) || "y".equals(lower)) {
+    if ("true".equals(lower) || "1".equals(value) || "yes".equals(lower) || "y".equals(lower)
+        || "t".equals(lower)) {
       return Boolean.TRUE;
     }
-    if ("false".equals(lower) || "0".equals(value) || "no".equals(lower) || "n".equals(lower)) {
+    if ("false".equals(lower) || "0".equals(value) || "no".equals(lower) || "n".equals(lower)
+        || "f".equals(lower)) {
       return Boolean.FALSE;
     }
     throw new NumberFormatException("Cannot parse boolean: " + value);
@@ -241,15 +256,14 @@ public final class CsvTypeConverter {
     return new BigDecimal(value);
   }
 
-  private Integer parseDate(String value) {
-    DateTimeFormatter formatter = formatters.get(SqlTypeName.DATE);
-    if (formatter != null) {
+  private Integer parseDate(String value, @Nullable DateTimeFormatter inferredFormatter) {
+    if (inferredFormatter != null) {
       try {
-        LocalDate localDate = LocalDate.parse(value, formatter);
-        LOGGER.debug("Successfully parsed date '{}' using stored formatter, returning epoch day: {}", value, (int) localDate.toEpochDay());
+        LocalDate localDate = LocalDate.parse(value, inferredFormatter);
+        LOGGER.debug("Successfully parsed date '{}' using inferred formatter, returning epoch day: {}", value, (int) localDate.toEpochDay());
         return Integer.valueOf((int) localDate.toEpochDay());
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse date '{}' with stored formatter: {}", value, e.getMessage());
+        LOGGER.debug("Failed to parse date '{}' with inferred formatter: {}", value, e.getMessage());
       }
     }
 
@@ -268,18 +282,17 @@ public final class CsvTypeConverter {
     return null;
   }
 
-  private Integer parseTime(String value) {
-    DateTimeFormatter formatter = formatters.get(SqlTypeName.TIME);
-    if (formatter != null) {
+  private Integer parseTime(String value, @Nullable DateTimeFormatter inferredFormatter) {
+    if (inferredFormatter != null) {
       try {
-        LocalTime localTime = LocalTime.parse(value, formatter);
+        LocalTime localTime = LocalTime.parse(value, inferredFormatter);
         // Convert to milliseconds since midnight correctly
         // toNanoOfDay() gives nanoseconds, divide by 1_000_000 to get milliseconds
         int millisSinceMidnight = (int) (localTime.toNanoOfDay() / 1_000_000L);
-        LOGGER.debug("Successfully parsed time '{}' using stored formatter, returning millis: {}", value, millisSinceMidnight);
+        LOGGER.debug("Successfully parsed time '{}' using inferred formatter, returning millis: {}", value, millisSinceMidnight);
         return Integer.valueOf(millisSinceMidnight);
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse time '{}' with stored formatter: {}", value, e.getMessage());
+        LOGGER.debug("Failed to parse time '{}' with inferred formatter: {}", value, e.getMessage());
       }
     }
 
@@ -298,8 +311,20 @@ public final class CsvTypeConverter {
     }
   }
 
-  private Long parseTimestamp(String value) {
+  private Long parseTimestamp(String value, @Nullable DateTimeFormatter inferredFormatter) {
     LOGGER.debug("=== TIMESTAMP DEBUG: parseTimestamp called with value='{}' ===", value);
+
+    if (inferredFormatter != null) {
+      try {
+        LocalDateTime ldt = LocalDateTime.parse(value, inferredFormatter);
+        long millis = ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
+        LOGGER.debug("=== TIMESTAMP DEBUG: Parsed timestamp '{}' using inferred formatter, storing millis: {} ===",
+            value, millis);
+        return Long.valueOf(millis);
+      } catch (DateTimeParseException e) {
+        LOGGER.debug("Failed to parse timestamp '{}' with inferred formatter: {}", value, e.getMessage());
+      }
+    }
 
     // Try common timestamp formats
     for (DateTimeFormatter formatter : TIMESTAMP_FORMATTERS) {
@@ -335,8 +360,29 @@ public final class CsvTypeConverter {
     return null;
   }
 
-  private Long parseTimestampWithTimezone(String value) {
+  private Long parseTimestampWithTimezone(String value, @Nullable DateTimeFormatter inferredFormatter) {
     LOGGER.debug("parseTimestampWithTimezone called with value='{}'", value);
+
+    if (inferredFormatter != null) {
+      try {
+        OffsetDateTime odt = OffsetDateTime.parse(value, inferredFormatter);
+        long utcMillis = odt.toInstant().toEpochMilli();
+        LOGGER.debug("=== TIMESTAMPTZ DEBUG: Parsed '{}' as OffsetDateTime using inferred formatter, UTC millis: {} ===",
+            value, utcMillis);
+        return Long.valueOf(utcMillis);
+      } catch (DateTimeParseException e) {
+        LOGGER.debug("Failed to parse '{}' as OffsetDateTime with inferred formatter: {}", value, e.getMessage());
+        try {
+          ZonedDateTime zdt = ZonedDateTime.parse(value, inferredFormatter);
+          long utcMillis = zdt.toInstant().toEpochMilli();
+          LOGGER.debug("=== TIMESTAMPTZ DEBUG: Parsed '{}' as ZonedDateTime using inferred formatter, UTC millis: {} ===",
+              value, utcMillis);
+          return Long.valueOf(utcMillis);
+        } catch (DateTimeParseException e2) {
+          LOGGER.debug("Failed to parse '{}' as ZonedDateTime with inferred formatter: {}", value, e2.getMessage());
+        }
+      }
+    }
 
     // Timezone-aware formatters for TIMESTAMP_WITH_LOCAL_TIME_ZONE
     DateTimeFormatter[] TIMEZONE_AWARE_FORMATTERS = {
@@ -405,6 +451,6 @@ public final class CsvTypeConverter {
 
     // If no timezone parsing worked, log warning and fall back to wall clock parsing
     LOGGER.warn("=== TIMESTAMPTZ DEBUG: Failed to parse timezone from '{}', falling back to wall clock time ===", value);
-    return parseTimestamp(value);
+    return parseTimestamp(value, inferredFormatter);
   }
 }

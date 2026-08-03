@@ -40,6 +40,7 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -127,9 +128,27 @@ public class CsvEnumerator<E> implements Enumerator<E> {
   public CsvEnumerator(Source source, AtomicBoolean cancelFlag,
       List<RelDataType> fieldTypes, List<Integer> fields,
       CsvTypeInferrer.@Nullable TypeInferenceConfig typeInferenceConfig) {
+    this(source, cancelFlag, fieldTypes, fields, typeInferenceConfig, null);
+  }
+
+  /**
+   * Creates a CsvEnumerator that converts values using the formatter each column's type
+   * inference proved matches, so runtime parsing agrees with the formatter that was
+   * actually validated against sampled data (rather than re-guessing via a different
+   * built-in formatter order).
+   *
+   * @param fieldFormatters per-column DATE/TIME/TIMESTAMP formatter selected during type
+   *                        inference, aligned by index with {@code fieldTypes}; a null
+   *                        element or a null list means no specific formatter was inferred
+   *                        for that column
+   */
+  public CsvEnumerator(Source source, AtomicBoolean cancelFlag,
+      List<RelDataType> fieldTypes, List<Integer> fields,
+      CsvTypeInferrer.@Nullable TypeInferenceConfig typeInferenceConfig,
+      @Nullable List<@Nullable DateTimeFormatter> fieldFormatters) {
     //noinspection unchecked
     this(source, cancelFlag, false, null,
-        (RowConverter<E>) converter(fieldTypes, fields, typeInferenceConfig));
+        (RowConverter<E>) converter(fieldTypes, fields, typeInferenceConfig, fieldFormatters));
   }
 
   public CsvEnumerator(Source source, AtomicBoolean cancelFlag, boolean stream,
@@ -175,23 +194,12 @@ public class CsvEnumerator<E> implements Enumerator<E> {
 
   private static RowConverter<?> converter(List<RelDataType> fieldTypes,
       List<Integer> fields) {
-    // Create CsvTypeConverter with default settings for backward compatibility
-    CsvTypeConverter typeConverter =
-        new CsvTypeConverter(new java.util.HashMap<>(),
-        NullEquivalents.DEFAULT_NULL_EQUIVALENTS,
-        true); // default: blank strings as null
-
-    if (fields.size() == 1) {
-      final int field = fields.get(0);
-      RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
-      return new SingleColumnRowConverter(fieldType, field, typeConverter);
-    } else {
-      return arrayConverter(fieldTypes, fields, false, true, typeConverter);
-    }
+    return converter(fieldTypes, fields, null, null);
   }
 
   private static RowConverter<?> converter(List<RelDataType> fieldTypes,
-      List<Integer> fields, CsvTypeInferrer.@Nullable TypeInferenceConfig typeInferenceConfig) {
+      List<Integer> fields, CsvTypeInferrer.@Nullable TypeInferenceConfig typeInferenceConfig,
+      @Nullable List<@Nullable DateTimeFormatter> fieldFormatters) {
     // Determine blankStringsAsNull setting
     boolean blankStringsAsNull = true; // default
     if (typeInferenceConfig != null) {
@@ -202,16 +210,18 @@ public class CsvEnumerator<E> implements Enumerator<E> {
 
     // Always create CsvTypeConverter - no fallback needed
     CsvTypeConverter typeConverter =
-        new CsvTypeConverter(new java.util.HashMap<>(),
+        new CsvTypeConverter(
         typeInferenceConfig != null ? typeInferenceConfig.getNullEquivalents() : NullEquivalents.DEFAULT_NULL_EQUIVALENTS,
         blankStringsAsNull);
 
     if (fields.size() == 1) {
       final int field = fields.get(0);
       RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
-      return new SingleColumnRowConverter(fieldType, field, blankStringsAsNull, typeConverter);
+      DateTimeFormatter fieldFormatter =
+          fieldFormatters != null && field < fieldFormatters.size() ? fieldFormatters.get(field) : null;
+      return new SingleColumnRowConverter(fieldType, field, blankStringsAsNull, typeConverter, fieldFormatter);
     } else {
-      return arrayConverter(fieldTypes, fields, false, blankStringsAsNull, typeConverter);
+      return arrayConverter(fieldTypes, fields, false, blankStringsAsNull, typeConverter, fieldFormatters);
     }
   }
 
@@ -229,6 +239,13 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       List<RelDataType> fieldTypes, List<Integer> fields, boolean stream, boolean blankStringsAsNull,
       @Nullable CsvTypeConverter typeConverter) {
     return new ArrayRowConverter(fieldTypes, fields, stream, blankStringsAsNull, typeConverter);
+  }
+
+  public static RowConverter<@Nullable Object[]> arrayConverter(
+      List<RelDataType> fieldTypes, List<Integer> fields, boolean stream, boolean blankStringsAsNull,
+      @Nullable CsvTypeConverter typeConverter,
+      @Nullable List<@Nullable DateTimeFormatter> fieldFormatters) {
+    return new ArrayRowConverter(fieldTypes, fields, stream, blankStringsAsNull, typeConverter, fieldFormatters);
   }
 
 
@@ -544,6 +561,8 @@ public class CsvEnumerator<E> implements Enumerator<E> {
     final boolean blankStringsAsNull;
     /** Type converter that reuses the same parsing logic as type inference. */
     private final @Nullable CsvTypeConverter typeConverter;
+    /** Per-column formatter proven by type inference, aligned by index with fieldTypes. */
+    private final @Nullable List<@Nullable DateTimeFormatter> fieldFormatters;
 
     ArrayRowConverter(List<RelDataType> fieldTypes, List<Integer> fields,
         boolean stream) {
@@ -557,11 +576,18 @@ public class CsvEnumerator<E> implements Enumerator<E> {
 
     ArrayRowConverter(List<RelDataType> fieldTypes, List<Integer> fields,
         boolean stream, boolean blankStringsAsNull, @Nullable CsvTypeConverter typeConverter) {
+      this(fieldTypes, fields, stream, blankStringsAsNull, typeConverter, null);
+    }
+
+    ArrayRowConverter(List<RelDataType> fieldTypes, List<Integer> fields,
+        boolean stream, boolean blankStringsAsNull, @Nullable CsvTypeConverter typeConverter,
+        @Nullable List<@Nullable DateTimeFormatter> fieldFormatters) {
       this.fieldTypes = ImmutableNullableList.copyOf(fieldTypes);
       this.fields = ImmutableIntList.copyOf(fields);
       this.stream = stream;
       this.blankStringsAsNull = blankStringsAsNull;
       this.typeConverter = typeConverter;
+      this.fieldFormatters = fieldFormatters;
     }
 
     @Override public @Nullable Object[] convertRow(@Nullable String[] strings) {
@@ -590,7 +616,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
           throw new ArrayIndexOutOfBoundsException("Index " + field + " out of bounds for length " + strings.length);
         }
         RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
-        objects[i] = convert(fieldType, strings[field]);
+        objects[i] = convert(fieldType, fieldFormatter(field), strings[field]);
       }
       return objects;
     }
@@ -601,13 +627,18 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       for (int i = 0; i < fields.size(); i++) {
         int field = fields.get(i);
         RelDataType fieldType = field < fieldTypes.size() ? fieldTypes.get(field) : null;
-        objects[i + 1] = convert(fieldType, strings[field]);
+        objects[i + 1] = convert(fieldType, fieldFormatter(field), strings[field]);
       }
       return objects;
     }
 
+    private @Nullable DateTimeFormatter fieldFormatter(int field) {
+      return fieldFormatters != null && field < fieldFormatters.size() ? fieldFormatters.get(field) : null;
+    }
+
     @SuppressWarnings("JavaUtilDate")
-    private @Nullable Object convert(@Nullable RelDataType fieldType, @Nullable String string) {
+    private @Nullable Object convert(@Nullable RelDataType fieldType,
+        @Nullable DateTimeFormatter inferredFormatter, @Nullable String string) {
       if (fieldType == null || string == null || typeConverter == null) {
         LOGGER.debug("[ArrayRowConverter.convert] fieldType={}, string={} -> returning string as-is",
                     (fieldType != null ? fieldType.getSqlTypeName() : "null"),
@@ -618,7 +649,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
                   fieldType.getSqlTypeName(), string, blankStringsAsNull);
 
       LOGGER.debug("[ArrayRowConverter] Using CsvTypeConverter for fieldType={}, string='{}'", fieldType.getSqlTypeName(), string);
-      Object result = typeConverter.convert(string, fieldType.getSqlTypeName());
+      Object result = typeConverter.convert(string, fieldType.getSqlTypeName(), inferredFormatter);
       LOGGER.debug("[ArrayRowConverter] CsvTypeConverter returned: {} (type: {})", result, (result != null ? result.getClass().getSimpleName() : "null"));
       return result;
     }
@@ -677,16 +708,24 @@ public class CsvEnumerator<E> implements Enumerator<E> {
     @SuppressWarnings("UnusedVariable")
     private final boolean blankStringsAsNull;
     private final CsvTypeConverter typeConverter;
+    private final @Nullable DateTimeFormatter fieldFormatter;
 
     private SingleColumnRowConverter(RelDataType fieldType, int fieldIndex, CsvTypeConverter typeConverter) {
-      this(fieldType, fieldIndex, true, typeConverter); // default: blank strings as null
+      this(fieldType, fieldIndex, true, typeConverter, null); // default: blank strings as null
     }
 
-    private SingleColumnRowConverter(RelDataType fieldType, int fieldIndex, boolean blankStringsAsNull, CsvTypeConverter typeConverter) {
+    private SingleColumnRowConverter(RelDataType fieldType, int fieldIndex, boolean blankStringsAsNull,
+        CsvTypeConverter typeConverter) {
+      this(fieldType, fieldIndex, blankStringsAsNull, typeConverter, null);
+    }
+
+    private SingleColumnRowConverter(RelDataType fieldType, int fieldIndex, boolean blankStringsAsNull,
+        CsvTypeConverter typeConverter, @Nullable DateTimeFormatter fieldFormatter) {
       this.fieldType = fieldType;
       this.fieldIndex = fieldIndex;
       this.blankStringsAsNull = blankStringsAsNull;
       this.typeConverter = typeConverter;
+      this.fieldFormatter = fieldFormatter;
     }
 
     @Override public @Nullable Object convertRow(@Nullable String[] strings) {
@@ -699,7 +738,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
         return string;
       }
 
-      return typeConverter.convert(string, fieldType.getSqlTypeName());
+      return typeConverter.convert(string, fieldType.getSqlTypeName(), fieldFormatter);
     }
   }
 }

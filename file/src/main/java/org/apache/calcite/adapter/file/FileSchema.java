@@ -6186,6 +6186,18 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * Returns this schema's CSV type inference configuration, so callers that read CSV through a
+   * path other than {@link org.apache.calcite.adapter.file.table.CsvTable} (e.g. the DuckDB
+   * engine's native {@code read_csv_auto} views) can align their own null-token/date handling
+   * with what this schema's Java-side inference uses.
+   *
+   * @return the configuration, never null (disabled by default)
+   */
+  public CsvTypeInferrer.TypeInferenceConfig getCsvTypeInferenceConfig() {
+    return csvTypeInferenceConfig;
+  }
+
+  /**
    * Extracts field configurations from table definition for HTML header mapping.
    * This method eliminates code duplication across multiple HTML conversion locations.
    *

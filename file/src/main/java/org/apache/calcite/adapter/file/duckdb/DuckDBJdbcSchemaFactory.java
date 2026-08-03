@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.duckdb;
 // storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
+import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
@@ -25,6 +26,9 @@ import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.dialect.DuckDBSqlDialect;
 import org.apache.calcite.sql.parser.SqlParser;
 
+import com.google.common.annotations.VisibleForTesting;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -827,6 +831,54 @@ public class DuckDBJdbcSchemaFactory {
       return "read_csv_auto";
     }
     return null;
+  }
+
+  /**
+   * Builds the {@code read_csv_auto('path', ...)} / {@code read_json_auto('path')} call used to
+   * create a native DuckDB view, adding a {@code nullstr} hint for CSV/TSV so DuckDB's own type
+   * sniffing treats the same tokens as null that this schema's {@code csvTypeInference} config
+   * does — otherwise the DuckDB engine and the Enumerable/Parquet-cache engine can silently infer
+   * different column types for the same file depending on which engine runs the query.
+   *
+   * <p>This covers null-token parity only. DuckDB's {@code dateformat}/{@code timestampformat}
+   * are single, whole-file hints, but {@link CsvTypeInferrer} discovers a date/time format
+   * independently per column — the two are not reconcilable in general, so date/time format
+   * parity between the two engines is intentionally not attempted here; an ambiguous
+   * (e.g. day-first vs month-first) date column can still be read differently by each engine.
+   *
+   * <p>DuckDB's {@code nullstr} match is case-sensitive, while this schema's null-equivalent
+   * matching is case-insensitive, so both the upper- and lower-case spelling of each configured
+   * token are included; a token spelled with other mixed casing in the actual file still won't
+   * match, same as any other case DuckDB's own parameter can't express.
+   */
+  @VisibleForTesting
+  static String buildNativeReaderCall(String readFn, String sourcePath,
+      CsvTypeInferrer.@Nullable TypeInferenceConfig csvTypeInferenceConfig) {
+    String escapedPath = sourcePath.replace("'", "''");
+    if (!"read_csv_auto".equals(readFn) || csvTypeInferenceConfig == null
+        || !csvTypeInferenceConfig.isEnabled()) {
+      return String.format("%s('%s')", readFn, escapedPath);
+    }
+
+    java.util.Set<String> nullEquivalents = csvTypeInferenceConfig.getNullEquivalents();
+    if (nullEquivalents.isEmpty()) {
+      return String.format("%s('%s')", readFn, escapedPath);
+    }
+
+    java.util.LinkedHashSet<String> nullTokens = new java.util.LinkedHashSet<>();
+    for (String token : nullEquivalents) {
+      nullTokens.add(token.toUpperCase(java.util.Locale.ROOT));
+      nullTokens.add(token.toLowerCase(java.util.Locale.ROOT));
+    }
+    StringBuilder nullstrList = new StringBuilder();
+    for (String token : nullTokens) {
+      if (nullstrList.length() > 0) {
+        nullstrList.append(", ");
+      }
+      nullstrList.append('\'').append(token.replace("'", "''")).append('\'');
+    }
+
+    return String.format("%s('%s', nullstr=[%s])", readFn, escapedPath, nullstrList);
   }
 
   /**
@@ -1804,11 +1856,12 @@ public class DuckDBJdbcSchemaFactory {
           if (viewExists(conn, duckdbSchema, tableName)) {
             LOGGER.debug("⚡ Native view exists, skipped: {}.{}", duckdbSchema, tableName);
           } else {
+            String readCall = buildNativeReaderCall(readFn, sourcePath, fileSchema.getCsvTypeInferenceConfig());
             String sql =
-                String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM %s('%s')",
-                    duckdbSchema, tableName, readFn, sourcePath);
-            LOGGER.info("Creating DuckDB native view: \"{}.{}\" -> {}('{}')",
-                duckdbSchema, tableName, readFn, sourcePath);
+                String.format("CREATE VIEW IF NOT EXISTS \"%s\".\"%s\" AS SELECT * FROM %s",
+                    duckdbSchema, tableName, readCall);
+            LOGGER.info("Creating DuckDB native view: \"{}.{}\" -> {}",
+                duckdbSchema, tableName, readCall);
             try {
               conn.createStatement().execute(sql);
               viewCount++;

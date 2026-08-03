@@ -66,8 +66,11 @@ public class CsvScannableTable extends CsvTable implements ScannableTable {
 
     return new AbstractEnumerable<@Nullable Object[]>() {
       @Override public Enumerator<@Nullable Object[]> enumerator() {
-        return new CsvEnumerator<>(source, cancelFlag, false, null,
-            CsvEnumerator.arrayConverter(fieldTypes, fields, false));
+        // Route through the type-inference-aware constructor (same as
+        // CsvTranslatableTable) so values scanned for Parquet conversion are
+        // already properly typed, instead of passed through as raw strings.
+        return new CsvEnumerator<>(source, cancelFlag,
+            fieldTypes, fields, typeInferenceConfig, getFieldFormatters(typeFactory));
       }
     };
   }

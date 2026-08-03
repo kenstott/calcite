@@ -955,6 +955,11 @@ public class EtlPipeline {
                   partExecutor.submit(new Callable<Void>() {
                 @Override public Void call() {
                   int currentBatch = partProcessed.incrementAndGet();
+                  if (progressListener != null) {
+                    synchronized (writeLock) {
+                      progressListener.onBatchStart(currentBatch, neededCountFinal, variables);
+                    }
+                  }
                   try {
                     LOGGER.info("Processing batch {} (partition {}/{}) {}: {}",
                         currentBatch, piFinal + 1, partCountFinal,
@@ -965,6 +970,12 @@ public class EtlPipeline {
                     partRows.addAndGet(batchRows);
                     partSucceeded.incrementAndGet();
 
+                    if (progressListener != null) {
+                      synchronized (writeLock) {
+                        progressListener.onBatchComplete(currentBatch, neededCountFinal, (int) batchRows, null);
+                      }
+                    }
+
                     if (currentBatch % 10 == 0) {
                       System.gc();
                     }
@@ -973,6 +984,11 @@ public class EtlPipeline {
                         String.format("Batch %d (partition %d/%d) failed: %s", currentBatch, piFinal + 1, partCountFinal, e.getMessage());
                     LOGGER.error(errorMsg, e);
                     partErrors.add(errorMsg);
+                    if (progressListener != null) {
+                      synchronized (writeLock) {
+                        progressListener.onBatchComplete(currentBatch, neededCountFinal, 0, e);
+                      }
+                    }
 
                     EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
                         determineErrorAction(e, cfgFinal.getErrorHandling());
@@ -1210,6 +1226,11 @@ public class EtlPipeline {
                 executor.submit(new Callable<Void>() {
               @Override public Void call() {
                 int currentBatch = parallelProcessed.incrementAndGet();
+                if (progressListener != null) {
+                  synchronized (writeLock) {
+                    progressListener.onBatchStart(currentBatch, unitCountFinal, unit.getFetchVariables());
+                  }
+                }
                 try {
                   LOGGER.info("Processing batch {}/{}: fetch={} combos={}",
                       currentBatch, unitCountFinal,
@@ -1220,6 +1241,12 @@ public class EtlPipeline {
                   parallelTotalRows.addAndGet(batchRows);
                   parallelSucceeded.incrementAndGet();
 
+                  if (progressListener != null) {
+                    synchronized (writeLock) {
+                      progressListener.onBatchComplete(currentBatch, unitCountFinal, (int) batchRows, null);
+                    }
+                  }
+
                   if (currentBatch % 10 == 0) {
                     System.gc();
                   }
@@ -1228,6 +1255,11 @@ public class EtlPipeline {
                       String.format("Batch %d/%d failed: %s", currentBatch, unitCountFinal, e.getMessage());
                   LOGGER.error(errorMsg, e);
                   parallelErrors.add(errorMsg);
+                  if (progressListener != null) {
+                    synchronized (writeLock) {
+                      progressListener.onBatchComplete(currentBatch, unitCountFinal, 0, e);
+                    }
+                  }
 
                   EtlPipelineConfig.ErrorHandlingConfig.ErrorAction action =
                       determineErrorAction(e, cfgFinal.getErrorHandling());

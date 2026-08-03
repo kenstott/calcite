@@ -23,7 +23,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,6 +42,7 @@ public abstract class CsvTable extends AbstractTable {
   public final String columnCasing;
   private @Nullable RelDataType rowType;
   private @Nullable List<RelDataType> fieldTypes;
+  private @Nullable List<@Nullable DateTimeFormatter> fieldFormatters;
   protected final CsvTypeInferrer.TypeInferenceConfig typeInferenceConfig;
 
   /** Creates a CsvTable. */
@@ -122,6 +125,7 @@ public abstract class CsvTable extends AbstractTable {
               // Build a new row type with inferred types
               RelDataTypeFactory.Builder builder = typeFactory.builder();
               List<String> fieldNames = rowType.getFieldNames();
+              List<@Nullable DateTimeFormatter> formatters = new ArrayList<>(fieldNames.size());
 
               for (int i = 0; i < fieldNames.size(); i++) {
                 String fieldName = fieldNames.get(i);
@@ -133,17 +137,20 @@ public abstract class CsvTable extends AbstractTable {
                       fieldName, typeInfo.inferredType, typeInfo.inferredType);
                   fieldType = typeFactory.createSqlType(typeInfo.inferredType);
                   fieldType = typeFactory.createTypeWithNullability(fieldType, typeInfo.nullable);
+                  formatters.add(typeInfo.dateTimeFormatter);
                 } else {
                   // Fallback to VARCHAR for any extra columns
                   LOGGER.warn("Column {} has no inferred type, falling back to VARCHAR", fieldName);
                   fieldType = typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR);
                   fieldType = typeFactory.createTypeWithNullability(fieldType, true);
+                  formatters.add(null);
                 }
 
                 builder.add(fieldName, fieldType);
               }
 
               rowType = builder.build();
+              fieldFormatters = formatters;
               LOGGER.debug("Applied type inference, row type now has {} fields", rowType.getFieldCount());
             }
           } catch (Exception e) {
@@ -178,6 +185,21 @@ public abstract class CsvTable extends AbstractTable {
       }
     }
     return fieldTypes;
+  }
+
+  /**
+   * Returns the per-column {@link DateTimeFormatter} that type inference proved matches
+   * each column's DATE/TIME/TIMESTAMP values, aligned by index with {@link #getFieldTypes}.
+   * A null element means no specific formatter was inferred for that column (either the
+   * column isn't temporal, or type inference is disabled).
+   */
+  public List<@Nullable DateTimeFormatter> getFieldFormatters(RelDataTypeFactory typeFactory) {
+    // Ensure inference has run and fieldFormatters is populated.
+    getRowType(typeFactory);
+    if (fieldFormatters == null) {
+      return Collections.nCopies(getFieldTypes(typeFactory).size(), null);
+    }
+    return fieldFormatters;
   }
 
   /** Returns whether the table represents a stream. */

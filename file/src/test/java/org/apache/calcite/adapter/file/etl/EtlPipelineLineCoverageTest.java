@@ -138,6 +138,74 @@ public class EtlPipelineLineCoverageTest {
     assertTrue(fetchCount.get() >= 2, "Both batches should have been fetched");
   }
 
+  // Regression: the standard-mode parallel branch (threadCount > 1) used to never invoke
+  // ProgressListener.onBatchStart/onBatchComplete at all — only the sequential branch did.
+  @Test void testParallelExecutionInvokesProgressListenerCallbacks() throws IOException {
+    System.setProperty("calcite.etl.threads", "2");
+
+    Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
+    dims.put("year", DimensionConfig.builder()
+        .name("year")
+        .type(DimensionType.LIST)
+        .values(java.util.Arrays.asList("2023", "2024"))
+        .build());
+
+    EtlPipelineConfig config = buildConfigWithDimensions("parallel_progress_pipeline", dims);
+
+    when(mockTracker.getCachedCompletion(anyString())).thenReturn(null);
+    when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
+
+    Set<Integer> unprocessed = new HashSet<Integer>();
+    unprocessed.add(0);
+    unprocessed.add(1);
+    when(
+        mockTracker.filterUnprocessed(anyString(), anyString(), anyList())).thenReturn(unprocessed);
+
+    when(mockWriter.writeBatch(any(Iterator.class), anyMap())).thenReturn(5L);
+    when(mockWriter.getTableLocation()).thenReturn(tempDir.toString() + "/parallel_progress_pipeline");
+    when(mockWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
+
+    DataProvider dataProvider = new DataProvider() {
+      @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig cfg,
+          Map<String, String> variables) throws IOException {
+        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+        Map<String, Object> row = new HashMap<String, Object>();
+        row.put("id", 1);
+        row.put("value", "test");
+        rows.add(row);
+        return rows.iterator();
+      }
+    };
+
+    final AtomicInteger batchStartCount = new AtomicInteger(0);
+    final AtomicInteger batchCompleteCount = new AtomicInteger(0);
+    EtlPipeline.ProgressListener listener = new EtlPipeline.ProgressListener() {
+      @Override public void onPhaseStart(String phase, int totalBatches) { }
+
+      @Override public void onPhaseComplete(String phase, int totalBatches) { }
+
+      @Override public void onBatchStart(int batchIndex, int totalBatches,
+          Map<String, String> variables) {
+        batchStartCount.incrementAndGet();
+      }
+
+      @Override public void onBatchComplete(int batchIndex, int totalBatches,
+          int rowCount, Exception error) {
+        batchCompleteCount.incrementAndGet();
+      }
+    };
+
+    EtlPipeline pipeline =
+        new EtlPipeline(config, mockStorage, "/output", listener, mockTracker, dataProvider, null);
+
+    EtlResult result = pipeline.execute();
+    assertNotNull(result);
+    assertEquals(2, batchStartCount.get(),
+        "onBatchStart must fire for each batch even on the parallel execution path");
+    assertEquals(2, batchCompleteCount.get(),
+        "onBatchComplete must fire for each batch even on the parallel execution path");
+  }
+
   // --- Parallel execution with HttpSource parallel config ---
 
   @Test void testParallelExecutionViaHttpSourceConfig() throws IOException {

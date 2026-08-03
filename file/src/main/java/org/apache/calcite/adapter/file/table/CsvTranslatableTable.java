@@ -72,10 +72,11 @@ public class CsvTranslatableTable extends CsvTable
     return new AbstractEnumerable<Object>() {
       @Override public Enumerator<Object> enumerator() {
         JavaTypeFactory typeFactory = root.getTypeFactory();
-        // Use the constructor that accepts TypeInferenceConfig
+        // Use the constructor that accepts TypeInferenceConfig and the per-column
+        // formatters inference proved, so runtime parsing agrees with inference.
         return new CsvEnumerator<>(source, cancelFlag,
             getFieldTypes(typeFactory), ImmutableIntList.of(fields),
-            typeInferenceConfig);
+            typeInferenceConfig, getFieldFormatters(typeFactory));
       }
     };
   }

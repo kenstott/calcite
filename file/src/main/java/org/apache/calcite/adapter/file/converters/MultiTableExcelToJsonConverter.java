@@ -25,6 +25,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -106,6 +107,10 @@ public final class MultiTableExcelToJsonConverter {
     try (FileInputStream file = new FileInputStream(inputFile)) {
       Workbook workbook = WorkbookFactory.create(file);
       ObjectMapper mapper = new ObjectMapper();
+      // Date-formatted cells are written as java.util.Date via putPOJO below; without this,
+      // Jackson's default WRITE_DATES_AS_TIMESTAMPS serializes them as raw epoch millis,
+      // which downstream type inference then reads back as a meaningless BIGINT column.
+      mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
       FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
       String fileName = inputFile.getName();
       String rawBaseName = fileName.substring(0, fileName.lastIndexOf('.'));

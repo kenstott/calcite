@@ -241,6 +241,36 @@ class ConverterUtilsTest {
     assertFalse(node.get("key").booleanValue());
   }
 
+  @Test void testSetJsonValueBooleanYesNo() {
+    ObjectNode node = mapper.createObjectNode();
+    ConverterUtils.setJsonValueWithTypeInference(node, "yes", "yes");
+    ConverterUtils.setJsonValueWithTypeInference(node, "no", "No");
+    assertTrue(node.get("yes").isBoolean());
+    assertTrue(node.get("yes").booleanValue());
+    assertTrue(node.get("no").isBoolean());
+    assertFalse(node.get("no").booleanValue());
+  }
+
+  @Test void testSetJsonValueBooleanYN() {
+    ObjectNode node = mapper.createObjectNode();
+    ConverterUtils.setJsonValueWithTypeInference(node, "y", "Y");
+    ConverterUtils.setJsonValueWithTypeInference(node, "n", "n");
+    assertTrue(node.get("y").isBoolean());
+    assertTrue(node.get("y").booleanValue());
+    assertTrue(node.get("n").isBoolean());
+    assertFalse(node.get("n").booleanValue());
+  }
+
+  @Test void testSetJsonValueBooleanTF() {
+    ObjectNode node = mapper.createObjectNode();
+    ConverterUtils.setJsonValueWithTypeInference(node, "t", "T");
+    ConverterUtils.setJsonValueWithTypeInference(node, "f", "f");
+    assertTrue(node.get("t").isBoolean());
+    assertTrue(node.get("t").booleanValue());
+    assertTrue(node.get("f").isBoolean());
+    assertFalse(node.get("f").booleanValue());
+  }
+
   @Test void testSetJsonValuePlainString() {
     ObjectNode node = mapper.createObjectNode();
     ConverterUtils.setJsonValueWithTypeInference(node, "key", "hello world");

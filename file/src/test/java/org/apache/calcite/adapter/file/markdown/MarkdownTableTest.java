@@ -292,6 +292,32 @@ public class MarkdownTableTest {
     assertEquals(0, jsonFiles.length, "No JSON files should be created for empty Markdown");
   }
 
+  @Test public void testMarkdownTableAppliesTypeInference() throws Exception {
+    File typedFile = new File(tempDir, "typed_data.md");
+    try (FileWriter writer = new FileWriter(typedFile, StandardCharsets.UTF_8)) {
+      writer.write("# Typed Data\n\n");
+      writer.write("## Inventory\n\n");
+      writer.write("| Name   | Quantity | InStock |\n");
+      writer.write("|--------|----------|---------|\n");
+      writer.write("| Widget | 30       | true    |\n");
+      writer.write("| Gadget | 25       | false   |\n");
+    }
+
+    MarkdownTableScanner.scanAndConvertTables(typedFile, tempDir);
+
+    File jsonFile = new File(tempDir, "TypedData__Inventory.json");
+    assertTrue(jsonFile.exists(), "JSON file should be created");
+
+    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    com.fasterxml.jackson.databind.JsonNode array = mapper.readTree(jsonFile);
+    com.fasterxml.jackson.databind.JsonNode row = array.get(0);
+    assertTrue(row.get("Name").isTextual(), "Name should stay a string");
+    assertTrue(row.get("Quantity").isNumber(), "Quantity should be inferred as a number, not a string");
+    assertEquals(30, row.get("Quantity").asInt());
+    assertTrue(row.get("InStock").isBoolean(), "InStock should be inferred as a boolean, not a string");
+    assertTrue(row.get("InStock").asBoolean());
+  }
+
   @Test public void testMarkdownTableWithoutTitle() throws Exception {
     File noTitleFile = new File(tempDir, "no_title.md");
     try (FileWriter writer = new FileWriter(noTitleFile, StandardCharsets.UTF_8)) {

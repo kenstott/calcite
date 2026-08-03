@@ -90,7 +90,11 @@ public class CsvTypeInferrer {
 
   private static final Pattern INTEGER_PATTERN = Pattern.compile("^-?\\d+$");
   private static final Pattern FLOAT_PATTERN = Pattern.compile("^-?\\d*\\.\\d+([eE][+-]?\\d+)?$");
-  private static final Pattern BOOLEAN_PATTERN = Pattern.compile("^(true|false|TRUE|FALSE|True|False|0|1)$");
+  // Y/N/T/F are single letters, so a column of unrelated single-letter codes (e.g. a
+  // grade column using only "T"/"F") could be misclassified as boolean; accepted tradeoff
+  // for recognizing the common yes/no, Y/N, T/F boolean spellings CsvTypeConverter parses.
+  private static final Pattern BOOLEAN_PATTERN =
+      Pattern.compile("^(true|false|yes|no|y|n|t|f|0|1)$", Pattern.CASE_INSENSITIVE);
 
   /**
    * Configuration for type inference.

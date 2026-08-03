@@ -22,8 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,13 +38,11 @@ public class CsvTypeConverterTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(CsvTypeConverterTest.class);
 
   private CsvTypeConverter converter;
-  private Map<SqlTypeName, DateTimeFormatter> formatters;
 
   @BeforeEach
   void setUp() {
-    formatters = new HashMap<>();
     Set<String> nullEquivalents = NullEquivalents.DEFAULT_NULL_EQUIVALENTS;
-    converter = new CsvTypeConverter(formatters, nullEquivalents, false);
+    converter = new CsvTypeConverter(nullEquivalents, false);
   }
 
   // --- Boolean conversion ---
@@ -58,6 +54,8 @@ public class CsvTypeConverterTest {
     assertEquals(Boolean.TRUE, converter.convert("1", SqlTypeName.BOOLEAN));
     assertEquals(Boolean.TRUE, converter.convert("yes", SqlTypeName.BOOLEAN));
     assertEquals(Boolean.TRUE, converter.convert("y", SqlTypeName.BOOLEAN));
+    assertEquals(Boolean.TRUE, converter.convert("t", SqlTypeName.BOOLEAN));
+    assertEquals(Boolean.TRUE, converter.convert("T", SqlTypeName.BOOLEAN));
   }
 
   @Test @DisplayName("convert BOOLEAN false values")
@@ -67,6 +65,8 @@ public class CsvTypeConverterTest {
     assertEquals(Boolean.FALSE, converter.convert("0", SqlTypeName.BOOLEAN));
     assertEquals(Boolean.FALSE, converter.convert("no", SqlTypeName.BOOLEAN));
     assertEquals(Boolean.FALSE, converter.convert("n", SqlTypeName.BOOLEAN));
+    assertEquals(Boolean.FALSE, converter.convert("f", SqlTypeName.BOOLEAN));
+    assertEquals(Boolean.FALSE, converter.convert("F", SqlTypeName.BOOLEAN));
   }
 
   @Test @DisplayName("convert BOOLEAN null representation returns null")
@@ -142,12 +142,22 @@ public class CsvTypeConverterTest {
     assertNull(converter.convert("NULL", SqlTypeName.DATE));
   }
 
-  @Test @DisplayName("convert DATE with stored formatter")
+  @Test @DisplayName("convert DATE with inferred formatter")
   void testConvertDateWithStoredFormatter() {
-    formatters.put(SqlTypeName.DATE, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-    Object result = converter.convert("2024-06-15", SqlTypeName.DATE);
+    Object result = converter.convert("2024-06-15", SqlTypeName.DATE,
+        DateTimeFormatter.ofPattern("yyyy-MM-dd"));
     assertNotNull(result);
     assertTrue(result instanceof Integer);
+  }
+
+  @Test @DisplayName("convert DATE with inferred formatter disambiguates day-first values")
+  void testConvertDateWithInferredFormatterDisambiguatesDayFirst() {
+    // 25/12/2024 is unambiguous (no month 25), so this pins that the inferred
+    // day-first formatter is honored rather than the built-in month-first fallback.
+    Object result = converter.convert("25/12/2024", SqlTypeName.DATE,
+        DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+    assertNotNull(result);
+    assertEquals(java.time.LocalDate.of(2024, 12, 25).toEpochDay(), ((Integer) result).longValue());
   }
 
   @Test @DisplayName("convert TIME with ISO format")
@@ -164,10 +174,10 @@ public class CsvTypeConverterTest {
     assertNull(converter.convert("NULL", SqlTypeName.TIME));
   }
 
-  @Test @DisplayName("convert TIME with stored formatter")
+  @Test @DisplayName("convert TIME with inferred formatter")
   void testConvertTimeWithStoredFormatter() {
-    formatters.put(SqlTypeName.TIME, DateTimeFormatter.ofPattern("HH:mm:ss"));
-    Object result = converter.convert("14:45:30", SqlTypeName.TIME);
+    Object result = converter.convert("14:45:30", SqlTypeName.TIME,
+        DateTimeFormatter.ofPattern("HH:mm:ss"));
     assertNotNull(result);
     assertTrue(result instanceof Integer);
   }

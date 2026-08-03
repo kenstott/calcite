@@ -214,6 +214,30 @@ public class PptxTableScannerTest {
     assertEquals(2, array.size()); // 2 data rows
   }
 
+  @Test public void testScanAndConvertAppliesTypeInference() throws IOException {
+    String[][] data = {
+        {"Name", "Age", "Active"},
+        {"Alice", "30", "true"},
+        {"Bob", "25", "false"}
+    };
+
+    File pptxFile = createPptxWithTable(data);
+    File outputDir = new File(tempDir, "output");
+    outputDir.mkdirs();
+
+    PptxTableScanner.scanAndConvertTables(pptxFile, outputDir);
+
+    File[] jsonFiles = outputDir.listFiles((dir, name) -> name.endsWith(".json"));
+    assertNotNull(jsonFiles);
+    JsonNode array = MAPPER.readTree(jsonFiles[0]);
+    JsonNode row = array.get(0);
+    assertTrue(row.get("name").isTextual(), "name should stay a string");
+    assertTrue(row.get("age").isNumber(), "age should be inferred as a number, not a string");
+    assertEquals(30, row.get("age").asInt());
+    assertTrue(row.get("active").isBoolean(), "active should be inferred as a boolean, not a string");
+    assertTrue(row.get("active").asBoolean());
+  }
+
   @Test public void testScanAndConvertWithSlideTitle() throws IOException {
     String[][] data = {
         {"Product", "Sales"},

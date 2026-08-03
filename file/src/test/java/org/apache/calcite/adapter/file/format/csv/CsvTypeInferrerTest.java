@@ -188,6 +188,42 @@ public class CsvTypeInferrerTest {
     assertEquals(SqlTypeName.BOOLEAN, result.get(0).inferredType);
   }
 
+  @Test @DisplayName("inferTypes with Y/N column returns BOOLEAN")
+  void testInferTypesYesNoColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("active\nY\nN\ny\nn\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.BOOLEAN, result.get(0).inferredType);
+  }
+
+  @Test @DisplayName("inferTypes with yes/no column returns BOOLEAN")
+  void testInferTypesYesNoWordColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("subscribed\nyes\nno\nYes\nNo\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.BOOLEAN, result.get(0).inferredType);
+  }
+
+  @Test @DisplayName("inferTypes with T/F column returns BOOLEAN")
+  void testInferTypesTrueFalseLetterColumn() throws IOException, CsvValidationException {
+    File csv = writeCsv("flag\nT\nF\nt\nf\n");
+    TypeInferenceConfig config = fullSamplingConfig();
+
+    List<ColumnTypeInfo> result =
+        CsvTypeInferrer.inferTypes(Sources.of(csv), config, "TO_LOWER");
+
+    assertEquals(1, result.size());
+    assertEquals(SqlTypeName.BOOLEAN, result.get(0).inferredType);
+  }
+
   @Test @DisplayName("inferTypes with date column returns DATE")
   void testInferTypesDateColumn() throws IOException, CsvValidationException {
     File csv = writeCsv("dt\n2024-01-15\n2024-02-20\n2024-03-25\n");

@@ -464,9 +464,10 @@ public class HttpSourceTest {
     Map<String, Object> map = new HashMap<String, Object>();
     map.put("type", "nonexistent_auth");
 
-    HttpSourceConfig.AuthConfig auth = HttpSourceConfig.AuthConfig.fromMap(map);
-
-    assertEquals(HttpSourceConfig.AuthType.NONE, auth.getType());
+    // An explicitly-provided but unrecognized auth.type must raise, not silently
+    // fall back to NONE (CLAUDE.md rule 6 — no silent fallback values).
+    assertThrows(IllegalArgumentException.class,
+        () -> HttpSourceConfig.AuthConfig.fromMap(map));
   }
 
   @Test void testAuthConfigFromMapOAuth2() {

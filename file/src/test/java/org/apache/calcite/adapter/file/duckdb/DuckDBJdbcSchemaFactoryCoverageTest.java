@@ -352,4 +352,54 @@ class DuckDBJdbcSchemaFactoryCoverageTest {
     method.setAccessible(true);
     return (String) method.invoke(null, fileList);
   }
+
+  // =======================================================================
+  // buildNativeReaderCall tests (B3: DuckDB null-token parity with csvTypeInference)
+  // =======================================================================
+
+  @Test void testBuildNativeReaderCallNullConfigUnchanged() {
+    String call = DuckDBJdbcSchemaFactory.buildNativeReaderCall(
+        "read_csv_auto", "/data/file.csv", null);
+    assertEquals("read_csv_auto('/data/file.csv')", call);
+  }
+
+  @Test void testBuildNativeReaderCallDisabledConfigUnchanged() {
+    org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig disabled =
+        org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig.disabled();
+    String call = DuckDBJdbcSchemaFactory.buildNativeReaderCall(
+        "read_csv_auto", "/data/file.csv", disabled);
+    assertEquals("read_csv_auto('/data/file.csv')", call);
+  }
+
+  @Test void testBuildNativeReaderCallJsonNeverGetsNullstr() {
+    org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig enabled =
+        org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig.defaultConfig();
+    String call = DuckDBJdbcSchemaFactory.buildNativeReaderCall(
+        "read_json_auto", "/data/file.json", enabled);
+    assertEquals("read_json_auto('/data/file.json')", call);
+  }
+
+  @Test void testBuildNativeReaderCallEnabledConfigAddsNullstrBothCases() {
+    org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig enabled =
+        org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig.defaultConfig();
+    String call = DuckDBJdbcSchemaFactory.buildNativeReaderCall(
+        "read_csv_auto", "/data/file.csv", enabled);
+    assertTrue(call.startsWith("read_csv_auto('/data/file.csv', nullstr=["), call);
+    // Default null equivalents include NULL/NA/N/A/NONE/NIL — both cases must be present
+    // since DuckDB's nullstr match is case-sensitive but our inference is not.
+    assertTrue(call.contains("'NULL'") && call.contains("'null'"), call);
+    assertTrue(call.contains("'NA'") && call.contains("'na'"), call);
+  }
+
+  @Test void testBuildNativeReaderCallEscapesQuotesInPathAndTokens() {
+    java.util.Set<String> nullEquivalents = new java.util.HashSet<>();
+    nullEquivalents.add("O'NULL");
+    org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig config =
+        new org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer.TypeInferenceConfig(
+            true, 1.0, 100, 0.95, true, true, true, true, 0.0, nullEquivalents);
+    String call = DuckDBJdbcSchemaFactory.buildNativeReaderCall(
+        "read_csv_auto", "/data/it's.csv", config);
+    assertTrue(call.contains("/data/it''s.csv"), call);
+    assertTrue(call.contains("'O''NULL'") && call.contains("'o''null'"), call);
+  }
 }

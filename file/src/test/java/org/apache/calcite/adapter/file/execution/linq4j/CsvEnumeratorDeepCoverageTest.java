@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.execution.linq4j;
 
+import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
+import org.apache.calcite.adapter.file.table.CsvTranslatableTable;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataType;
@@ -27,6 +29,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -742,6 +746,50 @@ public class CsvEnumeratorDeepCoverageTest {
     try {
       assertTrue(enumerator.moveNext());
       assertNotNull(enumerator.current());
+    } finally {
+      enumerator.close();
+    }
+  }
+
+  // ====================================================================
+  // Enumerator honors the inferred per-column date formatter (regression for the
+  // formatter-threading bug: inference proved a day-first format, but runtime
+  // conversion was silently re-guessing with a different, month-first-first order)
+  // ====================================================================
+
+  @Test void testEnumeratorHonorsInferredDateFormatterForAmbiguousValues() throws Exception {
+    // Row 1 ("25/03/2024") is unambiguous day-first (25 cannot be a month), so type
+    // inference stores a day-first formatter for this column. Row 2 ("03/04/2024") is
+    // genuinely ambiguous between day-first and month-first, so it pins whether the
+    // enumerator actually uses the formatter inference proved, or a different built-in
+    // formatter order that happens to try month-first first.
+    Path csvFile = createCsvFile("day_first_dates.csv",
+        "id,event_date\n1,25/03/2024\n2,03/04/2024\n");
+    Source source = Sources.of(csvFile.toFile());
+
+    CsvTypeInferrer.TypeInferenceConfig config =
+        new CsvTypeInferrer.TypeInferenceConfig(true, 1.0, 100, 0.95, true, true, true, true, 0.0);
+    CsvTranslatableTable table = new CsvTranslatableTable(source, null, "UNCHANGED", config);
+
+    List<RelDataType> fieldTypes = table.getFieldTypes(typeFactory);
+    List<DateTimeFormatter> fieldFormatters = table.getFieldFormatters(typeFactory);
+    assertEquals(SqlTypeName.DATE, fieldTypes.get(1).getSqlTypeName(),
+        "event_date should be inferred as DATE");
+
+    AtomicBoolean cancel = new AtomicBoolean(false);
+    List<Integer> fields = Arrays.asList(0, 1);
+    CsvEnumerator<Object[]> enumerator =
+        new CsvEnumerator<>(source, cancel, fieldTypes, fields, config, fieldFormatters);
+    try {
+      assertTrue(enumerator.moveNext());
+      Object[] row1 = enumerator.current();
+      assertEquals(Integer.valueOf((int) LocalDate.of(2024, 3, 25).toEpochDay()), row1[1]);
+
+      assertTrue(enumerator.moveNext());
+      Object[] row2 = enumerator.current();
+      assertEquals(Integer.valueOf((int) LocalDate.of(2024, 4, 3).toEpochDay()), row2[1],
+          "Ambiguous '03/04/2024' must use the day-first formatter inference proved for "
+              + "this column, not a different built-in guess");
     } finally {
       enumerator.close();
     }

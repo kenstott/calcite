@@ -134,9 +134,17 @@ public final class ConverterUtils {
       }
     }
 
-    // Try boolean
-    if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
-      node.put(key, Boolean.parseBoolean(value));
+    // Try boolean. Y/N/T/F are single letters, so a column of unrelated single-letter
+    // codes could be misclassified as boolean; accepted tradeoff for recognizing the
+    // common yes/no, Y/N, T/F spellings alongside true/false.
+    if ("true".equalsIgnoreCase(value) || "yes".equalsIgnoreCase(value)
+        || "y".equalsIgnoreCase(value) || "t".equalsIgnoreCase(value)) {
+      node.put(key, true);
+      return;
+    }
+    if ("false".equalsIgnoreCase(value) || "no".equalsIgnoreCase(value)
+        || "n".equalsIgnoreCase(value) || "f".equalsIgnoreCase(value)) {
+      node.put(key, false);
       return;
     }
 
