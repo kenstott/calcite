@@ -111,8 +111,8 @@ if [ $# -eq 0 ]; then
   echo "                 ref, fec, fedregister, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
-  echo "    dq         — DQ checks only for all 17 DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
-  echo "    dq-rebuild — full ETL re-ingest + DQ for all 17 DQ schemas (memory-managed)"
+  echo "    dq         — DQ checks only for all DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
+  echo "    dq-rebuild — full ETL re-ingest + DQ for all DQ schemas (memory-managed)"
   exit 1
 fi
 
@@ -169,7 +169,10 @@ for arg in "$@"; do
       # separately — congress-period completion markers + etag freshness make a single
       # recurring daily invocation self-backfilling (see historical) alias comment).
       queue+=(officials:daily)
-      queue+=(cyber_vuln:historical cyber_threat:historical cyber_vuln:daily cyber_threat:daily)
+      # cyber_threat:historical is intentionally omitted — see the historical) alias comment
+      # below: worker-cyber.sh's historical case has no cyber_threat branch (daily-only feed),
+      # so queuing it here would just spin up a worker slot that does nothing.
+      queue+=(cyber_vuln:historical cyber_vuln:daily cyber_threat:daily)
       queue+=(health:historical health:daily)
       queue+=(edu:historical edu:daily)
       queue+=(energy:historical energy:daily)
@@ -241,9 +244,9 @@ for arg in "$@"; do
 
     dq)
       # DQ-only: run DuckDB checks against existing R2 data (no ETL).
-      # Constrained to the 17 schemas that have *_dq.sql scripts.
+      # Constrained to schemas that have *_dq.sql scripts.
       queue+=(
-        sec:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
+        sec:dq sec_secondary:dq sec_prices:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq officials:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
         cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq

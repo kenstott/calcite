@@ -55,9 +55,10 @@ MODE="${2:-}"
 
 if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "Usage: $0 <schema> <mode>" >&2
-  echo "  Schemas: sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
-  echo "           weather, ref, fec, fedregister, officials, econ_reference," >&2
-  echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag" >&2
+  echo "  Schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
+  echo "           weather, ref, fec, fedregister, officials, econ_reference, research," >&2
+  echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
+  echo "           housing, transport, environment, disasters, fiscal" >&2
   exit 1
 fi
 
@@ -509,10 +510,10 @@ case "$SCHEMA" in
 
   *)
     echo "Unknown schema: $SCHEMA" >&2
-    echo "Valid schemas: sec, sec_primary, sec_secondary, sec_prices, econ, census, geo, crime," >&2
-    echo "               weather, ref, fec, fedregister, econ_reference," >&2
+    echo "Valid schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
+    echo "               weather, ref, fec, fedregister, officials, econ_reference, research," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-    echo "               housing, transport, environment, fiscal" >&2
+    echo "               housing, transport, environment, disasters, fiscal" >&2
     exit 1
     ;;
 esac
