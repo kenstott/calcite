@@ -1017,11 +1017,12 @@ partitionedTables:
     comment: >
       Small Business Administration 7(a) and 504 loan approvals (FOIA public data),
       one row per approved loan — federal credit activity by borrower geography,
-      industry, lender, and approval fiscal year. Fanned out by program; each CSV
-      covers many years (year is a data column, not a partition). Reissued
-      quarterly, so the whole program partition is overwritten each run. Joins to
-      geo.state_ref via borrower_state and to ref by borrower name/EIN. Source:
-      data.sba.gov 7(a)-504 FOIA.
+      industry, lender, and approval fiscal year. Fanned out by program; each
+      program is split across several year-range CSVs on the source site (year
+      is a data column, not a partition), all streamed and concatenated by
+      SbaLoansProvider. Reissued quarterly, so the whole program partition is
+      overwritten each run. Joins to geo.state_ref via borrower_state and to
+      ref by borrower name/EIN. Source: data.sba.gov 7(a)-504 FOIA.
     dqRowLimit: 100000
 
     dimensions:
@@ -1061,15 +1062,11 @@ partitionedTables:
       - name: year
         type: integer
         nullable: true
-        comment: Approval fiscal year (ApprovalFiscalYear)
+        comment: Approval fiscal year (ApprovalFY)
       - name: delivery_method
         type: string
         nullable: true
-        comment: SBA delivery method / loan program subtype
-      - name: subprogram
-        type: string
-        nullable: true
-        comment: Subprogram description (subpgmdesc)
+        comment: SBA delivery/processing method (ProcessingMethod)
       - name: naics_code
         type: string
         nullable: true
@@ -1105,7 +1102,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://data.sba.gov/en/dataset/7-a-504-foia"
+      url: "https://data.sba.gov/dataset/7a-504-foia"
       method: GET
       response:
         format: csv

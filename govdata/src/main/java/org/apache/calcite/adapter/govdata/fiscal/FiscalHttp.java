@@ -10,6 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,8 +30,13 @@ import java.nio.charset.StandardCharsets;
  */
 final class FiscalHttp {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(FiscalHttp.class);
+
   /** IRS/SBA hosts serve non-browser clients erratically; present a browser UA. */
   static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) govdata-etl/1.0";
+
+  /** Retry budget for rate-limited (429) / transiently-unavailable (503) GETs. */
+  private static final int RETRYABLE_MAX_ATTEMPTS = 6;
 
   private FiscalHttp() {
   }
@@ -47,6 +55,39 @@ final class FiscalHttp {
       throw new IOException("HTTP " + code + " for GET " + url);
     }
     return conn;
+  }
+
+  /**
+   * Opens a GET connection like {@link #openGet}, but retries with exponential
+   * backoff (2s, 4s, 8s, 16s, 32s — up to {@link #RETRYABLE_MAX_ATTEMPTS}
+   * attempts) on HTTP 429/503, which archive.org's convenience endpoints (CDX,
+   * raw captures) return under sustained load rather than a permanent block.
+   */
+  static HttpURLConnection openGetWithRetry(String url) throws IOException {
+    IOException lastFailure = null;
+    for (int attempt = 1; attempt <= RETRYABLE_MAX_ATTEMPTS; attempt++) {
+      try {
+        return openGet(url);
+      } catch (IOException e) {
+        String msg = e.getMessage();
+        boolean retryable = msg != null && (msg.contains("HTTP 429") || msg.contains("HTTP 503"));
+        if (!retryable || attempt == RETRYABLE_MAX_ATTEMPTS) {
+          throw e;
+        }
+        lastFailure = e;
+        long backoffMs = 2000L << (attempt - 1);
+        LOGGER.warn("Retryable HTTP failure (attempt {}/{}), backing off {}ms: {}",
+            attempt, RETRYABLE_MAX_ATTEMPTS, backoffMs, msg);
+        try {
+          Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw new IOException("Interrupted while backing off GET " + url, ie);
+        }
+      }
+    }
+    // Unreachable: the loop always returns or throws on its final attempt.
+    throw lastFailure;
   }
 
   /** Opens a POST connection with a JSON body; throws on any non-2xx status. */
@@ -100,35 +141,43 @@ final class FiscalHttp {
 
   /**
    * Fetches a WAF-blocked file via the Wayback Machine (which is not WAF'd).
-   * Resolves the closest archived snapshot of {@code originalUrl} through the
-   * availability API, then downloads the raw ({@code id_}) capture. Fails loud if
-   * no snapshot exists. Transparently gunzips a gzip-wrapped capture.
+   * Resolves the most recent 200-status snapshot of {@code originalUrl} via
+   * the CDX search API, then downloads the raw ({@code id_}) capture. Fails
+   * loud if no snapshot exists. Transparently gunzips a gzip-wrapped capture.
+   *
+   * <p>Uses CDX rather than the {@code /wayback/available} convenience
+   * endpoint: the latter was found to 429 persistently (observed across
+   * repeated attempts spanning minutes) from this environment, while CDX
+   * served the same lookup successfully throughout. Both this call and the
+   * raw-capture download go through {@link #openGetWithRetry} as defense in
+   * depth against transient 429/503s from either endpoint.
    */
   static byte[] fetchViaWayback(String originalUrl) throws IOException {
-    String availUrl = "http://archive.org/wayback/available?url="
-        + java.net.URLEncoder.encode(originalUrl, "UTF-8");
+    String cdxUrl = "http://web.archive.org/cdx/search/cdx?url="
+        + java.net.URLEncoder.encode(originalUrl, "UTF-8")
+        + "&output=json&filter=statuscode:200&limit=-1";
     String json;
-    InputStream in = openGet(availUrl).getInputStream();
+    InputStream in = openGetWithRetry(cdxUrl).getInputStream();
     try {
       json = readAll(in);
     } finally {
       in.close();
     }
-    com.fasterxml.jackson.databind.JsonNode root =
+    com.fasterxml.jackson.databind.JsonNode rows =
         new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-    com.fasterxml.jackson.databind.JsonNode closest =
-        root.path("archived_snapshots").path("closest");
-    if (!closest.path("available").asBoolean(false)) {
-      throw new IOException("Wayback: no archived snapshot for " + originalUrl);
+    // rows[0] is the column header; rows[1] (if present) is the single most
+    // recent 200-status capture, since limit=-1 returns only the last row.
+    if (!rows.isArray() || rows.size() < 2) {
+      throw new IOException("Wayback CDX: no archived 200-status snapshot for " + originalUrl);
     }
-    String ts = closest.path("timestamp").asText(null);
+    String ts = rows.get(1).get(1).asText(null);
     if (ts == null) {
-      throw new IOException("Wayback: snapshot without timestamp for " + originalUrl);
+      throw new IOException("Wayback CDX: snapshot row without timestamp for " + originalUrl);
     }
     // Raw-capture form: /web/{TS}id_/<original-url>.
     String rawUrl = "http://web.archive.org/web/" + ts + "id_/" + originalUrl;
     byte[] bytes;
-    InputStream raw = openGet(rawUrl).getInputStream();
+    InputStream raw = openGetWithRetry(rawUrl).getInputStream();
     try {
       bytes = readBytes(raw);
     } finally {
