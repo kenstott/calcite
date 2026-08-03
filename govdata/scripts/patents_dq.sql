@@ -786,6 +786,64 @@ SELECT 'patents', tbl, 'existence',
 FROM counts;
 
 
+-- ============================================================================
+-- VIEW: patent_activity_by_county (patent_grants + primary-assignee patent_locations
+-- left-joined cross-schema to census.acs_education and econ.county_wages on
+-- county_fips+year). Views have no physical iceberg path, so the join is replicated
+-- here directly against the iceberg path of each base table. The real Calcite-path
+-- check lives in model-verify.
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_activity_by_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Row count from the patent_activity_by_county join (patent_grants joined to primary-assignee patent_locations, withdrawn excluded)'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true) pg
+  JOIN (
+    SELECT
+      patent_id,
+      arg_min(location_id, TRY_CAST(assignee_sequence AS INTEGER)) AS location_id
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
+    GROUP BY patent_id
+  ) pa ON pa.patent_id = pg.patent_id
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_locations', allow_moved_paths := true) pl
+    ON pl.location_id = pa.location_id
+  WHERE pg.withdrawn IS NOT TRUE
+    AND pl.county_fips IS NOT NULL
+);
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_activity_by_county', 'T7_census_education_join_coverage',
+  CASE WHEN matched > 0 THEN 'pass' ELSE 'warn' END, matched, 1,
+  'patent_activity_by_county county-years with a matching census.acs_education row (cross-schema join on county_fips+year)'
+FROM (
+  SELECT COUNT(*) AS matched
+  FROM (
+    SELECT
+      pg.grant_year,
+      pl.county_fips
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true) pg
+    JOIN (
+      SELECT
+        patent_id,
+        arg_min(location_id, TRY_CAST(assignee_sequence AS INTEGER)) AS location_id
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_assignees', allow_moved_paths := true)
+      GROUP BY patent_id
+    ) pa ON pa.patent_id = pg.patent_id
+    JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_locations', allow_moved_paths := true) pl
+      ON pl.location_id = pa.location_id
+    WHERE pg.withdrawn IS NOT TRUE
+      AND pl.county_fips IS NOT NULL
+  ) grants
+  JOIN (
+    SELECT "year", county_fips
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_education', allow_moved_paths := true)
+    WHERE geography = 'county'
+  ) edu ON edu.county_fips = grants.county_fips AND edu."year" = grants.grant_year
+);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

@@ -7049,18 +7049,24 @@ views:
 
   - name: state_economic_snapshot
     comment: >
-      State-level economic snapshot joining BLS QCEW state wages and JOLTS state labor
-      market data, enriched with geographic identifiers. QCEW carries no "series" — a
-      state/year has multiple rows keyed by own_code (0=all, 5=private) and industry_code
-      (10=total); filter those to select a specific wage aggregate. One row per
-      state+year+own_code+industry_code+jolts_series. Use state_fips to join with
-      geo.states, census, or health schemas.
+      State-month economic snapshot joining BLS QCEW annual state wages with JOLTS
+      monthly state labor-market data, enriched with geographic identifiers. Restricted
+      to own_code='0' (all ownership) and industry_code='10' (all industries) on the
+      QCEW side — the only state_wages row per state+year that is conceptually
+      comparable to jolts_state, which is total-nonfarm only with no industry
+      breakdown of its own (see jolts_state's comment); every other own_code/
+      industry_code combination would cross-multiply against every JOLTS month x
+      metric row for no added meaning. jolts_month (period, e.g. 'M01') is exposed
+      so the grain — one row per state+year+jolts_month+jolts_series — is explicit
+      in the output. Use state_fips to join with geo.states, census, or health
+      schemas.
     sql: >
       SELECT
         w.state_fips,
         gs.state_name,
         gs.state_abbr,
         w.year,
+        j.date                 AS jolts_month,
         w.own_code,
         w.industry_code,
         w.annual_avg_wkly_wage AS avg_weekly_wage,
@@ -7073,6 +7079,7 @@ views:
       LEFT JOIN jolts_state j
         ON w.state_fips = j.state_fips AND w.year = j.year
       LEFT JOIN "geo"."states" gs ON w.state_fips = gs.state_fips
+      WHERE w.own_code = '0' AND w.industry_code = '10'
 
   - name: fdi_data
     comment: >

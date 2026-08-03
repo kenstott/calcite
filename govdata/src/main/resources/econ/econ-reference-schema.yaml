@@ -168,10 +168,12 @@ partitionedTables:
         enabled: true
 
     # Dimension for partition variable
+    # No year dimension: jt.industry is a single static BLS reference file with no
+    # year parameter and no year column — a year dimension here only forces redundant
+    # re-fetches of identical content, one per year in the range.
     dimensions:
       type:
         - jolts_industries
-      year: *econ_reference_year_range
 
     # Materialization configuration
     materialize:
@@ -229,10 +231,12 @@ partitionedTables:
         enabled: true
 
     # Dimension for partition variable
+    # No year dimension: jt.dataelement is a single static BLS reference file with no
+    # year parameter and no year column — a year dimension here only forces redundant
+    # re-fetches of identical content, one per year in the range.
     dimensions:
       type:
         - jolts_dataelements
-      year: *econ_reference_year_range
 
     # Materialization configuration
     materialize:
@@ -695,7 +699,12 @@ partitionedTables:
         - CAGDP8
         - CAGDP9
         - CAGDP11
-      year: *econ_reference_year_range
+      # No year dimension: BEA's GetParameterValuesFiltered/LineCode call takes only
+      # TableName (no year parameter), the output has no year column, and the output
+      # path isn't partitioned by year. A year dimension here would re-fetch and
+      # re-append the identical LineCode catalog once per year in the range, onto the
+      # same tablename partition (partition/incrementalKeys are keyed by tablename
+      # only), duplicating rows on every ingest.
 
     # Custom hooks for BEA response handling
     hooks:
