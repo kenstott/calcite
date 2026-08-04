@@ -247,6 +247,13 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
       LOGGER.warn("[DUCKDB-HLL] Looking for HLL sketch: schema='{}', table='{}', column='{}' (original table: '{}')",
                    tableInfo.schemaName, cleanTableName, columnName, tableInfo.tableName);
 
+      // TODO wire to IcebergThetaStatistics.readNdv(): the published Puffin statistics are the
+      // durable source — versioned against the snapshot the query resolves and readable by any
+      // client of the bucket — whereas this cache is per-JVM and empty in a freshly started query
+      // process. Resolving the Iceberg table from the scan is ~150 lines of
+      // scan -> DuckDBJdbcSchema -> FileSchema -> conversion-record walking that currently lives
+      // inside DuckDBIcebergCountStarRule; that needs extracting to a shared helper first rather
+      // than duplicating it here.
       // Try to get HLL sketch from cache (now case-insensitive)
       HLLSketchCache cache = HLLSketchCache.getInstance();
       HyperLogLogSketch sketch =

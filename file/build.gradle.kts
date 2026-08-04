@@ -88,6 +88,12 @@ dependencies {
     api("org.apache.iceberg:iceberg-api:1.4.0")
     implementation("org.apache.iceberg:iceberg-core:1.4.0")
     implementation("org.apache.iceberg:iceberg-common:1.4.0")
+    // Theta sketches for Iceberg Puffin column statistics. Declared explicitly rather than
+    // relying on the com.yahoo.datasketches:sketches-core that arrives transitively via Calcite
+    // core: Iceberg's StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1 names the Apache
+    // serialization, and a blob written under that type must actually carry it or it fails at
+    // read time in Spark/Trino — long after the snapshot committed — rather than at write time.
+    implementation("org.apache.datasketches:datasketches-java:6.1.1")
     implementation("org.apache.iceberg:iceberg-parquet:1.4.0")
     implementation("org.apache.iceberg:iceberg-data:1.4.0")
     // iceberg-aws provides S3FileIO (AWS SDK v2) so the read path can load Iceberg

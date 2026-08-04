@@ -169,6 +169,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
   private final AtomicBoolean committedSuccessfully = new AtomicBoolean(false);
+
+  /**
+   * Per-column distinct-value sketches accumulated over the rows this writer commits, published
+   * as an Iceberg Puffin statistics file. Null when statistics collection is switched off.
+   */
+  private final org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics columnSketches =
+      "false".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "true"))
+          ? null
+          : new org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics();
   /** JVM shutdown hook registered in initialize() to emergency-commit staged files on SIGTERM. */
   private Thread shutdownHook;
 
@@ -926,6 +935,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Transform rows: map source field names to target column names
     List<Map<String, Object>> transformedRows = transformRows(rows, partitionVariables);
+
+    // Fold the written values into per-column distinct sketches. Done here, on the transformed
+    // rows, because these are the values that actually land in the table and they are already in
+    // memory — updating a sketch is O(1) per value and adds no I/O. A theta sketch cannot be
+    // reconstructed from a cardinality computed later, so this is the only point where a
+    // spec-compliant Iceberg statistics blob can be produced without re-reading the whole table.
+    if (columnSketches != null) {
+      for (Map<String, Object> row : transformedRows) {
+        columnSketches.addRow(row);
+      }
+    }
 
     // Build canonical partition key from sorted partition variables
     String partitionKey = buildPartitionKey(partitionVariables);
@@ -2286,6 +2306,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       int retentionDays = icebergConfig.getSnapshotRetentionDays();
       LOGGER.info("Running Iceberg maintenance with {}d snapshot retention", retentionDays);
       tableWriter.runMaintenance(retentionDays);
+    }
+
+    // Publish the column sketches against the snapshot that ended up current. Done after
+    // compaction and maintenance so the statistics describe the snapshot a reader will actually
+    // resolve — attaching them earlier would leave them pointing at a snapshot those steps
+    // superseded, and Iceberg statistics are keyed by snapshot id.
+    if (columnSketches != null && !columnSketches.isEmpty() && tableWriter != null) {
+      org.apache.iceberg.Table icebergTable = tableWriter.getTable();
+      if (icebergTable != null && icebergTable.currentSnapshot() != null) {
+        String statsPath = icebergTable.location() + "/metadata/stats-"
+            + icebergTable.currentSnapshot().snapshotId() + ".puffin";
+        columnSketches.commit(icebergTable, statsPath);
+      }
     }
 
     LOGGER.info("Iceberg commit complete: {} rows in {} batches",
