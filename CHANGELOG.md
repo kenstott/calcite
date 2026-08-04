@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.70.0](https://github.com/kenstott/calcite/compare/engine-v0.69.0...engine-v0.70.0) (2026-08-04)
+
+
+### Features
+
+* **file:** enable CSV type inference by default (G6) ([8e32185](https://github.com/kenstott/calcite/commit/8e321858a2fbf1e03814d0c08fb629c5fcfcaeaa))
+* **file:** implement confidenceThreshold promotion (C-08), amend C-16 ([05f8bdc](https://github.com/kenstott/calcite/commit/05f8bdc811522c9e51ad9629e80c80e40d4a5b66))
+
+
+### Bug Fixes
+
+* **file:** normalize numeric formatting (G4) and update stale tests for G1/G3 ([23a1a3c](https://github.com/kenstott/calcite/commit/23a1a3cde8c23089d89163daefecddc0acf41a64))
+* **file:** promote ISO date/timestamp JSON strings to typed columns (G2) ([3e520fd](https://github.com/kenstott/calcite/commit/3e520fd8831285fa855fc7a2e7dd86f8a8b15fba))
+* **file:** thread inferred date formatters, fix Excel date corruption, align DuckDB null-token inference, broaden type detection ([09bce20](https://github.com/kenstott/calcite/commit/09bce20935c6a3579796b8a71a4862b5e5e1fce0))
+* **govdata/sec:** apply iXBRL scale to value_numeric in the base table (G9) ([fa1280b](https://github.com/kenstott/calcite/commit/fa1280b96d333aebcaaeb92da08a8cadb343e532))
+
 ## [0.69.0](https://github.com/kenstott/calcite/compare/engine-v0.68.0...engine-v0.69.0) (2026-08-03)
 
 
