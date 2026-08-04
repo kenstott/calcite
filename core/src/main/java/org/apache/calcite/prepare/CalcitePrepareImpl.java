@@ -174,9 +174,21 @@ public class CalcitePrepareImpl implements CalcitePrepare {
           "values 1",
           "VALUES 1");
 
-  /** Simple LRU cache for Statement queries (not PreparedStatements).
-   * Enabled by system property: calcite.statement.cache.enabled (default: true).
-   * Size configured by: calcite.statement.cache.size (default: 1000).
+  /** Simple LRU cache of prepared plans for Statement queries (not
+   * PreparedStatements), for deployments that issue the same SQL repeatedly
+   * against a schema that does not change.
+   *
+   * <p>Off by default, because a cached plan cannot observe a schema change.
+   * Calcite guarantees each statement a read-consistent view of the schema, and
+   * a column added by DDL — or by any change to a backing database that a
+   * {@code JdbcSchema} reflects — must be visible to the next statement. The
+   * cache key cannot express that: the only schema version available here is a
+   * wall-clock timestamp taken per prepare, which changes on every call. Enable
+   * it only where the schema is known to be static for the connection's
+   * lifetime.
+   *
+   * <p>Enabled by system property: calcite.statement.cache.enabled (default:
+   * false). Size configured by: calcite.statement.cache.size (default: 1000).
    */
   private static final Cache<String, Object> STATEMENT_CACHE;
 
@@ -191,7 +203,7 @@ public class CalcitePrepareImpl implements CalcitePrepare {
 
   private static boolean isCacheEnabled() {
     return Boolean.parseBoolean(
-        System.getProperty("calcite.statement.cache.enabled", "true"));
+        System.getProperty("calcite.statement.cache.enabled", "false"));
   }
 
   public CalcitePrepareImpl() {
@@ -523,14 +535,19 @@ public class CalcitePrepareImpl implements CalcitePrepare {
       return simplePrepare(context, castNonNull(query.sql));
     }
 
-    // Simple plan cache for repeated identical queries on the SAME connection.
-    // The key includes the mutable root schema identity so that different connections
-    // (e.g. Trino vs ClickHouse) never share cached plans, even for identical SQL.
-    // We use getMutableRootSchema() because getRootSchema() creates a new snapshot
-    // per call, while the mutable root schema is stable per CalciteConnection.
+    // Plan cache for repeated identical queries on the SAME connection. Only a
+    // SQL query has a key: Query also carries a Queryable or a RelNode, whose
+    // sql is null, and two different expression trees would collide on it.
+    // The key identifies the mutable root schema, so that different connections
+    // (e.g. Trino vs ClickHouse) never share a plan for identical SQL --
+    // getMutableRootSchema() because getRootSchema() returns a fresh snapshot
+    // per call -- and carries maxRowCount and elementType, which the prepared
+    // signature bakes in and which the same SQL may be executed with either way.
     final String cacheKey;
-    if (isCacheEnabled()) {
+    if (isCacheEnabled() && query.sql != null) {
       cacheKey = System.identityHashCode(context.getMutableRootSchema())
+          + ":" + maxRowCount
+          + ":" + elementType
           + ":" + query.sql;
       @SuppressWarnings("unchecked")
       CalciteSignature<T> cached = (CalciteSignature<T>) STATEMENT_CACHE.getIfPresent(cacheKey);

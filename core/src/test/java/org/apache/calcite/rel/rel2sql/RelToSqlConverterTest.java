@@ -5668,8 +5668,10 @@ class RelToSqlConverterTest {
         + "FROM [foodmart].[employee]\n"
         + "OFFSET 1 ROWS\n"
         + "FETCH NEXT 1 ROWS ONLY";
-    final String expectedSybase = "SELECT TOP (1) START AT 1 *\n"
-        + "FROM foodmart.employee";
+    // Sybase SQL Anywhere / IQ spell this ROWS LIMIT n OFFSET m; see
+    // SybaseSqlDialect.unparseOffsetFetch.
+    final String expectedSybase = "SELECT *\n"
+        + "FROM foodmart.employee ROWS LIMIT 1 OFFSET 1";
     final String expectedPresto = "SELECT *\n"
         + "FROM \"foodmart\".\"employee\"\n"
         + "OFFSET 1\n"

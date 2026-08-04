@@ -52,6 +52,8 @@ public class SybaseSqlDialect extends SqlDialect {
 
   @Override public void unparseTopN(SqlWriter writer, @Nullable SqlNode offset,
       @Nullable SqlNode fetch) {
-    // No-op; see unparseTopN.
+    // Deliberately empty. Sybase spells the limit as a trailing
+    // "ROWS LIMIT n OFFSET m" rather than a leading TOP, so it is emitted by
+    // unparseOffsetFetch above; emitting anything here would duplicate it.
   }
 }
