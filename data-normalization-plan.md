@@ -288,13 +288,51 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
      promote-then-null.
    - **Data remediation: none** — no behavior change shipped.
 
-9. **G6** — decide whether CSV type inference should default to enabled.
-   - **Data remediation: potentially wide cache-clear.** This is the one Phase 2 item
-     that could touch every `file/`-adapter CSV table with no explicit
-     `csvTypeInference` setting today. If the default flips, every such table's cached
-     parquet needs regenerating (or the flip needs to ship alongside a one-time
-     "clear all `.aperio` caches" step) — call this out explicitly in the go/no-go
-     decision, since it's a much bigger blast radius than the other Phase 2 items.
+9. **G6** ✅ *(done)* — `csvTypeInference` now defaults to **enabled**. A schema with no
+   `csvTypeInference` block (or one omitting `enabled`) gets `defaultConfig()`'s settings;
+   `"enabled": false` remains an honored opt-out. Note there were two disagreeing
+   "defaults" before this: `defaultConfig()` (javadoc'd as "enabled", but dead code — zero
+   production call sites) and `fromMap()`'s absent-config branch (disabled), which is what
+   every real schema actually got. `fromMap(null)` now returns `defaultConfig()`, so the
+   two can't drift again.
+   - **Uncovered and fixed — declared header types were being overridden.** The flip
+     initially broke 31 tests. Root cause was a real precedence bug, not stale tests:
+     `CsvTable.getRowType` built the row type from the header (honoring Calcite's
+     `name:type` convention, e.g. `JOINEDAT:date`) and then *replaced it wholesale* with
+     sampled inference. Harmless while inference was opt-in and off; with it on by default
+     every explicitly declared type silently became whatever sampling guessed (declared
+     `:date` columns came back VARCHAR, so `getDate()` threw "cannot convert to Date").
+     Fixed by adding `CsvEnumerator.explicitlyTypedColumns(source)` and skipping inference
+     for those columns — a `name:type` header is the author stating the type outright, so
+     sampling must never override it (a column declared `:string` to preserve leading zeros
+     in zip codes would otherwise be re-inferred numeric). This fixed 29 of the 31.
+   - **Uncovered and fixed — a fractional `samplingRate` made schemas non-deterministic.**
+     The old `defaultConfig()` sampled at 0.1 via `Math.random()`, fine as an opt-in tuning
+     knob for large files but not as a default: the same file could infer *different* column
+     types on different runs, and any file with fewer than ~`1/samplingRate` rows routinely
+     drew zero rows and silently fell back to all-VARCHAR (this is why the 5-row
+     `nulldata.csv` was left untyped). A table's schema must not be a coin flip, so the
+     default sampling rate is now 1.0 — every row up to the existing 1000-row
+     `maxSampleRows` cap, which stays the (deterministic) way to bound cost on large files.
+     Documented the remaining hazard for anyone who still sets a fractional rate explicitly.
+   - Docs: `csv-type-inference.md`'s "Migration from Legacy Behavior" now states the new
+     default, shows the `"enabled": false` opt-out, and notes the `.aperio` cache-clear
+     needed for a table to pick up newly inferred types.
+   - Regression tests: `CsvTypeInferenceTest.testInferenceEnabledByDefaultWithNoConfig`
+     (no config block at all → INTEGER, using a 300-row fixture so the result can't hinge
+     on sampling luck) and `testExplicitlyDisabledInferenceStaysVarchar` (opt-out still
+     works); `CsvInferenceRequirementsTest`/`CsvTypeInferrerTest` updated for the new
+     defaults; `SqlIntegrationCoverageTest`'s three `nulldata` tests updated because
+     `amount` is now genuinely numeric (2 SQL NULLs / 3 non-null) rather than five
+     non-null empty strings.
+   - **Data remediation: cache-clear, file/ adapter only — confirmed zero govdata impact.**
+     Every `file/`-adapter CSV table with no explicit `csvTypeInference` setting will type
+     differently on next conversion, so its `.aperio/{schema}/*.parquet` cache entry needs
+     clearing to pick the new types up. govdata is unaffected: its only two
+     `FileSchemaFactory` usages are a Parquet directory (`SecEmbeddingSchemaFactory`) and
+     HTML table scraping (`SecDataFetcher`) — never CSV — and every govdata `.csv` source
+     is parsed by its own transformer classes, bypassing `FileSchema`/`CsvTypeInferrer`
+     entirely (same pattern already confirmed for B2/G1/G2/G4/G5).
 
 ### Phase 3 — govdata-specific fixes
 
@@ -344,13 +382,9 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
 
 - **B3 direction**: match DuckDB's inference to the Java inferrer's settings, or document
   and accept the divergence as engine-specific behavior.
-- **G6 default flip**: change `csvTypeInference` to enabled-by-default. This is a
-  behavior change for every existing CSV-backed schema that doesn't currently set the
-  flag — needs explicit sign-off given it could change column types (and thus query
-  results / client-side type handling) for consumers who never asked for inference.
-  Also since the doc already commits to "disabled by default" for backward
-  compatibility ([csv-type-inference.md:214](file/docs/csv-type-inference.md#L214)),
-  flipping the default reverses a documented compatibility guarantee.
+- **G6 default flip**: resolved — flipped to enabled-by-default; see the G6 entry above for
+  the two real bugs the flip exposed (declared header types being overridden, and
+  non-deterministic fractional sampling) and the cache-clear remediation.
 - **G5 policy**: resolved — see the G5 entry above. `confidenceThreshold` stays a no-op for
   the VARCHAR-collapse decision; there's no rule-6-compliant way to make it do anything
   else without either silent nulling or promote-then-crash. Docs corrected instead of code.

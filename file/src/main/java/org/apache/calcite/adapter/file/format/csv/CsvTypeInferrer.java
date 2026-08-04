@@ -162,14 +162,19 @@ public class CsvTypeInferrer {
     /**
      * Returns default configuration with safe defaults:
      * - Type inference enabled
-     * - 10% sampling rate
-     * - Max 1000 rows sampled
+     * - Every row sampled, up to the 1000-row cap
      * - 95% confidence threshold
      * - All temporal types inferred
      * - All types nullable (safe default)
+     *
+     * <p>The sampling rate is 1.0 rather than a fraction because a fractional rate draws rows
+     * with {@link Math#random()}: the same file can then infer different column types on
+     * different runs, and a file with fewer rows than {@code 1/samplingRate} often draws zero
+     * rows and silently falls back to all-VARCHAR. A table's schema must not be a coin flip, so
+     * the default reads every row up to {@code maxSampleRows} instead.
      */
     public static TypeInferenceConfig defaultConfig() {
-      return new TypeInferenceConfig(true, 0.1, 1000, 0.95, true, true, true, true, 0.0);
+      return new TypeInferenceConfig(true, 1.0, 1000, 0.95, true, true, true, true, 0.0);
     }
 
     /**
@@ -184,12 +189,12 @@ public class CsvTypeInferrer {
      */
     public static TypeInferenceConfig fromMap(@Nullable Map<String, Object> config) {
       if (config == null) {
-        // No config - return disabled with blankStringsAsNull = true
-        return new TypeInferenceConfig(false, 0, 0, 0, false, false, false, false, 0,
-            NullEquivalents.DEFAULT_NULL_EQUIVALENTS, true);
+        // No csvTypeInference block at all - use the same enabled-by-default settings as
+        // an explicit "csvTypeInference": {} would get (G6: matches defaultConfig()).
+        return defaultConfig();
       }
 
-      boolean enabled = Boolean.TRUE.equals(config.get("enabled"));
+      boolean enabled = getBoolean(config, "enabled", true);
 
       // When inference is not enabled, default to treating blank strings as null
       // Unless explicitly set to false
@@ -201,7 +206,9 @@ public class CsvTypeInferrer {
             NullEquivalents.DEFAULT_NULL_EQUIVALENTS, blankStringsAsNull);
       }
 
-      double samplingRate = getDouble(config, "samplingRate", 0.1);
+      // Default 1.0 (every row up to maxSampleRows) so inference is deterministic - see
+      // defaultConfig() for why a fractional default is unsafe.
+      double samplingRate = getDouble(config, "samplingRate", 1.0);
       int maxSampleRows = getInt(config, "maxSampleRows", 1000);
       double confidenceThreshold = getDouble(config, "confidenceThreshold", 0.95);
       boolean inferDates = getBoolean(config, "inferDates", true);

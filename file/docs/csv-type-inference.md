@@ -32,8 +32,8 @@ The File Adapter supports automatic type inference for CSV files. Instead of tre
 
         // CSV Type Inference Configuration
         "csvTypeInference": {
-          "enabled": true,                    // Enable type inference (default: false)
-          "samplingRate": 0.1,                // Sample 10% of rows (default: 0.1)
+          "enabled": true,                    // Enable type inference (default: true)
+          "samplingRate": 1.0,                // Fraction of rows to sample (default: 1.0)
           "maxSampleRows": 1000,              // Max rows to sample (default: 1000)
           "confidenceThreshold": 0.95,        // Accepted but currently has no effect - see
                                                // "Confidence Threshold" below
@@ -170,10 +170,18 @@ By default, all inferred types are nullable for safety. This can be configured:
 
 ## Performance Considerations
 
-1. **Sampling Rate**: Lower rates (e.g., 0.01) are faster but may miss patterns
+1. **Sampling Rate**: Defaults to 1.0 (every row, up to `maxSampleRows`). Lower rates are
+   faster on very large files but come with a real caveat — see the warning below.
 2. **Max Sample Rows**: Limits processing time for large files
 3. **Caching**: Inferred types are cached with the table schema
 4. **First Query Impact**: Type inference happens on first table access
+
+> **Warning — a fractional `samplingRate` makes inference non-deterministic.** Rows are kept
+> via `Math.random()`, so the same file can infer *different* column types on different runs,
+> and a file with fewer than roughly `1/samplingRate` rows will often draw zero rows and
+> silently fall back to all-VARCHAR. Prefer lowering `maxSampleRows` (deterministic: reads the
+> first N rows) over lowering `samplingRate`. Only set a fractional rate when you specifically
+> want a random spread across a large file and can accept run-to-run variation in column types.
 
 ## Example Use Cases
 
@@ -238,12 +246,30 @@ above for why lowering `confidenceThreshold` isn't a way to work around messy da
 
 ## Migration from Legacy Behavior
 
-To maintain backward compatibility, type inference is **disabled by default**. Existing schemas will continue to work unchanged. To enable:
+Type inference is **enabled by default** as of this version. A schema with no
+`csvTypeInference` block, or one that omits `enabled`, now gets the same settings as
+`defaultConfig()`: enabled, 10% sampling (up to 1000 rows), 95% confidence threshold, all
+temporal types inferred, all inferred types nullable. Previously the default was disabled
+(every CSV column stayed VARCHAR unless a schema explicitly opted in); that guarantee no
+longer holds for unconfigured schemas.
 
-1. Add `csvTypeInference` configuration to your schema
-2. Test with a small sampling rate first
-3. Adjust configuration based on results
-4. Consider table-specific overrides for special cases
+To keep the old all-VARCHAR behavior for a schema, set it explicitly:
+
+```json
+{
+  "csvTypeInference": {
+    "enabled": false
+  }
+}
+```
+
+For a schema adopting inference for the first time:
+
+1. Test with a small sampling rate first
+2. Adjust configuration based on results
+3. Consider table-specific overrides for special cases
+4. Clear any existing `.aperio/{schema}/*.parquet` cache so previously-VARCHAR-typed
+   columns reconvert with the newly inferred types on the next query
 
 ## Programmatic Usage
 

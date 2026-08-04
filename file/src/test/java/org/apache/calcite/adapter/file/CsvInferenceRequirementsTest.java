@@ -203,7 +203,9 @@ public class CsvInferenceRequirementsTest {
   @Test @Tag("FILE-052") void defaultConfigObjectIsEnabledWithExpectedDefaults() {
     TypeInferenceConfig c = TypeInferenceConfig.defaultConfig();
     assertTrue(c.isEnabled(), "the defaultConfig() convenience constructor is enabled");
-    assertEquals(0.1, c.getSamplingRate(), 0.0);
+    // 1.0, not a fraction: fractional rates sample via Math.random(), making inferred types
+    // non-deterministic run-to-run and often empty for small files.
+    assertEquals(1.0, c.getSamplingRate(), 0.0);
     assertEquals(1000, c.getMaxSampleRows());
     assertEquals(0.95, c.getConfidenceThreshold(), 0.0);
     assertTrue(c.isInferDates());
@@ -213,14 +215,19 @@ public class CsvInferenceRequirementsTest {
     assertEquals(0.0, c.getNullableThreshold(), 0.0);
   }
 
-  @Test @Tag("FILE-052") void schemaDefaultIsDisabledSoColumnsStayVarchar(@TempDir Path dir)
+  @Test @Tag("FILE-052") void schemaDefaultIsEnabledButStaysOptOutable(@TempDir Path dir)
       throws Exception {
-    // No operand -> fromMap(null) -> disabled, and blankStringsAsNull stays on.
+    // G6: no operand -> fromMap(null) -> the same enabled defaults as defaultConfig().
     TypeInferenceConfig none = TypeInferenceConfig.fromMap(null);
-    assertFalse(none.isEnabled(), "no csvTypeInference operand -> inference disabled");
-    assertTrue(none.isBlankStringsAsNull());
-    // An operand present but without enabled:true is still disabled (enabled is opt-in).
-    assertFalse(TypeInferenceConfig.fromMap(new HashMap<String, Object>()).isEnabled());
+    assertTrue(none.isEnabled(), "no csvTypeInference operand -> inference enabled by default");
+    // An operand present but omitting "enabled" also defaults to enabled.
+    assertTrue(TypeInferenceConfig.fromMap(new HashMap<String, Object>()).isEnabled());
+    // "enabled": false is still an explicit, honored opt-out.
+    Map<String, Object> off = new HashMap<String, Object>();
+    off.put("enabled", Boolean.FALSE);
+    TypeInferenceConfig disabled = TypeInferenceConfig.fromMap(off);
+    assertFalse(disabled.isEnabled(), "explicit enabled:false must still disable inference");
+    assertTrue(disabled.isBlankStringsAsNull());
     // Disabled inference returns NO column types -> the schema leaves every column VARCHAR.
     Path f = Files.createTempFile(dir, "novary", ".csv");
     Files.write(f, "v\n1\n2\n3\n".getBytes(StandardCharsets.UTF_8));
@@ -234,7 +241,7 @@ public class CsvInferenceRequirementsTest {
     m.put("enabled", Boolean.TRUE);
     TypeInferenceConfig c = TypeInferenceConfig.fromMap(m);
     assertTrue(c.isEnabled());
-    assertEquals(0.1, c.getSamplingRate(), 0.0);
+    assertEquals(1.0, c.getSamplingRate(), 0.0);
     assertEquals(1000, c.getMaxSampleRows());
     assertEquals(0.95, c.getConfidenceThreshold(), 0.0);
     assertTrue(c.isInferDates());

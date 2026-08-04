@@ -773,11 +773,12 @@ public class SqlIntegrationCoverageTest {
 
   @Test
   void testCsvEmptyValueFilter() throws Exception {
-    // CSV empty values are empty strings, not SQL NULLs
+    // G6: with inference enabled by default, "amount" is numeric, so its empty cells are
+    // SQL NULL rather than the empty strings they were when every column stayed VARCHAR.
     try (Connection conn = createConnection(tempDir.toString());
          Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery(
-             "select id from nulldata where amount = '' "
+             "select id from nulldata where amount is null "
                  + "order by cast(id as integer)")) {
       List<String> ids = collectColumn(rs);
       assertEquals(2, ids.size());
@@ -788,11 +789,11 @@ public class SqlIntegrationCoverageTest {
 
   @Test
   void testCsvNonEmptyValueFilter() throws Exception {
-    // CSV non-empty values
+    // CSV non-empty values (see testCsvEmptyValueFilter for why this is IS NOT NULL).
     try (Connection conn = createConnection(tempDir.toString());
          Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery(
-             "select id from nulldata where amount <> '' "
+             "select id from nulldata where amount is not null "
                  + "order by cast(id as integer)")) {
       List<String> ids = collectColumn(rs);
       assertEquals(3, ids.size());
@@ -1776,8 +1777,9 @@ public class SqlIntegrationCoverageTest {
 
   @Test
   void testCountWithEmptyColumn() throws Exception {
-    // CSV empty values are empty strings, not SQL NULLs.
-    // COUNT(col) counts non-null values, and empty strings are non-null.
+    // G6: with inference enabled by default "amount" is numeric, so its 2 empty cells are
+    // SQL NULL and COUNT(amount) skips them. They were non-null empty strings back when
+    // every column stayed VARCHAR (see testCsvEmptyValueFilter).
     try (Connection conn = createConnection(tempDir.toString());
          Statement stmt = conn.createStatement();
          ResultSet rs = stmt.executeQuery(
@@ -1785,7 +1787,7 @@ public class SqlIntegrationCoverageTest {
                  + "from nulldata")) {
       assertTrue(rs.next());
       assertEquals(5, rs.getInt(1)); // COUNT(*) counts all rows
-      assertEquals(5, rs.getInt(2)); // CSV empty strings are non-null
+      assertEquals(3, rs.getInt(2)); // COUNT(col) skips the 2 NULL amounts
     }
   }
 

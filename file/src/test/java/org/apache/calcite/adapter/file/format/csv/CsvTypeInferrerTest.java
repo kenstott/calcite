@@ -55,7 +55,7 @@ public class CsvTypeInferrerTest {
     TypeInferenceConfig config = TypeInferenceConfig.defaultConfig();
 
     assertTrue(config.isEnabled(), "should be enabled");
-    assertEquals(0.1, config.getSamplingRate(), 0.001);
+    assertEquals(1.0, config.getSamplingRate(), 0.001);
     assertEquals(1000, config.getMaxSampleRows());
     assertEquals(0.95, config.getConfidenceThreshold(), 0.001);
     assertTrue(config.isInferDates());
@@ -80,9 +80,22 @@ public class CsvTypeInferrerTest {
     assertFalse(config.isMakeAllNullable());
   }
 
-  @Test @DisplayName("fromMap with null returns disabled config with blankStringsAsNull=true")
-  void testFromMapNullReturnsDisabledWithBlankStringsAsNull() {
+  @Test @DisplayName("G6: fromMap with null returns the enabled defaultConfig() settings")
+  void testFromMapNullReturnsEnabledDefaults() {
     TypeInferenceConfig config = TypeInferenceConfig.fromMap(null);
+
+    assertTrue(config.isEnabled(), "no csvTypeInference block -> inference enabled by default");
+    assertEquals(1.0, config.getSamplingRate(), 0.001);
+    assertEquals(1000, config.getMaxSampleRows());
+    assertTrue(config.isMakeAllNullable());
+  }
+
+  @Test @DisplayName("G6: explicit enabled:false still disables and keeps blankStringsAsNull=true")
+  void testFromMapExplicitlyDisabledKeepsBlankStringsAsNull() {
+    Map<String, Object> map = new HashMap<>();
+    map.put("enabled", Boolean.FALSE);
+
+    TypeInferenceConfig config = TypeInferenceConfig.fromMap(map);
 
     assertFalse(config.isEnabled());
     assertTrue(config.isBlankStringsAsNull());

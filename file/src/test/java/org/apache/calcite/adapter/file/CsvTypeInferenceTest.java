@@ -16,12 +16,16 @@ import org.apache.calcite.util.Sources;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.*;
 import java.util.List;
 import java.util.Properties;
@@ -38,6 +42,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @Isolated  // Needs isolation due to engine-specific type inference behavior
 public class CsvTypeInferenceTest {
   private static final Logger LOGGER = LoggerFactory.getLogger(CsvTypeInferenceTest.class);
+
+  @TempDir
+  Path tempDir;
 
   /**
    * Test type inference on mixed data types.
@@ -90,9 +97,10 @@ public class CsvTypeInferenceTest {
   }
 
   /**
-   * Test that type inference is disabled by default.
+   * G6: {@code csvTypeInference.enabled: false} still opts a schema all the way out,
+   * keeping every column VARCHAR regardless of what the file's data looks like.
    */
-  @Test void testNoInferenceByDefault() throws Exception {
+  @Test void testExplicitlyDisabledInferenceStaysVarchar() throws Exception {
     Properties info = new Properties();
 
     String modelJson = buildModelJson();
@@ -103,19 +111,72 @@ public class CsvTypeInferenceTest {
       // Query a different file to avoid cache conflicts
       // This file is not used by the csv_infer schema, so it won't have cached types
       // Note: Table name is sanitized (hyphens replaced with underscores) for DuckDB compatibility
-      // The csv_no_infer schema doesn't use type inference, so no _inferred suffix
+      // The csv_no_infer schema explicitly disables type inference, so no _inferred suffix
       String sql = "SELECT * FROM csv_no_infer.no_inference_test LIMIT 1";
 
       try (ResultSet rs = connection.createStatement().executeQuery(sql)) {
         ResultSetMetaData metaData = rs.getMetaData();
 
-        // All columns should be VARCHAR when inference is disabled
+        // All columns should be VARCHAR when inference is explicitly disabled
         for (int i = 1; i <= metaData.getColumnCount(); i++) {
           assertEquals(Types.VARCHAR, metaData.getColumnType(i),
               "Column " + metaData.getColumnName(i) + " should be VARCHAR without inference");
         }
 
         // Verify we can read the data
+        assertTrue(rs.next(), "Should have at least one row");
+      }
+    }
+  }
+
+  /**
+   * G6: a schema with no {@code csvTypeInference} block at all now gets type inference
+   * enabled by default (previously it defaulted to disabled/VARCHAR-only). Uses its own
+   * isolated temp directory with a 300-row fixture - not {@link #buildModelJson()}'s
+   * shared, deliberately tiny fixtures - since the default {@code samplingRate} is only
+   * 0.1 and a handful of rows risks the random sampler (see
+   * {@code CsvTypeInferrer.analyzeValue}) drawing zero of them.
+   */
+  @Test void testInferenceEnabledByDefaultWithNoConfig() throws Exception {
+    File csvFile = tempDir.resolve("wide_integers.csv").toFile();
+    StringBuilder csvContent = new StringBuilder("id,value\n");
+    for (int i = 1; i <= 300; i++) {
+      csvContent.append(i).append(',').append(i * 10).append('\n');
+    }
+    Files.write(csvFile.toPath(), csvContent.toString().getBytes(StandardCharsets.UTF_8));
+
+    String modelJson = "{\n"
+        + "  \"version\": \"1.0\",\n"
+        + "  \"defaultSchema\": \"csv_default\",\n"
+        + "  \"schemas\": [{\n"
+        + "    \"name\": \"csv_default\",\n"
+        + "    \"type\": \"custom\",\n"
+        + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
+        + "    \"operand\": {\n"
+        + "      \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\",\n"
+        + "      \"ephemeralCache\": true\n"
+        + "    }\n"
+        + "  }]\n"
+        + "}\n";
+
+    Properties info = new Properties();
+    info.put("model", "inline:" + modelJson);
+    BaseFileTest.applyEngineDefaults(info);
+
+    try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
+      String sql = "SELECT * FROM csv_default.wide_integers";
+
+      try (ResultSet rs = connection.createStatement().executeQuery(sql)) {
+        ResultSetMetaData metaData = rs.getMetaData();
+        int idType = metaData.getColumnType(1);
+        assertTrue(idType == Types.INTEGER || idType == Types.BIGINT,
+            "id should be inferred as INTEGER/BIGINT with no csvTypeInference config at all, "
+                + "but was " + idType);
+        int valueType = metaData.getColumnType(2);
+        assertTrue(valueType == Types.INTEGER || valueType == Types.BIGINT,
+            "value should be inferred as INTEGER/BIGINT with no csvTypeInference config at "
+                + "all, but was " + valueType);
+
         assertTrue(rs.next(), "Should have at least one row");
       }
     }
@@ -530,14 +591,19 @@ public class CsvTypeInferenceTest {
     model.append("      }\n");
     model.append("    },\n");
 
-    // csv_no_infer schema without type inference
+    // csv_no_infer schema: explicitly opts OUT of type inference (G6 flipped the default
+    // to enabled, so this schema must say so explicitly to keep its old VARCHAR-only
+    // behavior - see testExplicitlyDisabledInferenceStaysVarchar).
     model.append("    {\n");
     model.append("      \"name\": \"csv_no_infer\",\n");
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
     model.append("        \"directory\": \"").append(resourceDir).append("\",\n");
-    model.append("        \"ephemeralCache\": true\n");
+    model.append("        \"ephemeralCache\": true,\n");
+    model.append("        \"csvTypeInference\": {\n");
+    model.append("          \"enabled\": false\n");
+    model.append("        }\n");
     model.append("      }\n");
     model.append("    }\n");
 

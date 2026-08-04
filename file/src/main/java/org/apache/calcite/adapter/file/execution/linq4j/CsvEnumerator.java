@@ -42,8 +42,10 @@ import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -360,6 +362,38 @@ public class CsvEnumerator<E> implements Enumerator<E> {
       types.add(typeFactory.createSqlType(SqlTypeName.VARCHAR));
     }
     return typeFactory.createStructType(Pair.zip(names, types));
+  }
+
+  /**
+   * Returns the indexes of columns whose header cell carries an explicit {@code name:type}
+   * declaration (e.g. {@code JOINEDAT:date}), as parsed by
+   * {@link #deduceRowType(JavaTypeFactory, Source, List, Boolean, String)}.
+   *
+   * <p>Those declarations are the author stating the column's type outright, so sampling-based
+   * inference must not override them - a column deliberately declared {@code :string} to keep
+   * leading zeros (zip codes, account numbers) would otherwise be silently re-inferred as a
+   * number. Indexes are relative to the non-stream column list, matching the order
+   * {@code deduceRowType} produces.
+   *
+   * @param source the CSV source to read the header from
+   * @return indexes of explicitly typed columns; empty if the header can't be read
+   */
+  public static Set<Integer> explicitlyTypedColumns(Source source) {
+    final Set<Integer> explicit = new HashSet<>();
+    try (CSVReader reader = openCsv(source)) {
+      String[] strings = reader.readNext();
+      if (strings != null) {
+        for (int i = 0; i < strings.length; i++) {
+          if (strings[i] != null && strings[i].indexOf(':') >= 0) {
+            explicit.add(i);
+          }
+        }
+      }
+    } catch (IOException | CsvValidationException e) {
+      LOGGER.warn("Could not read header to find explicitly typed columns for {}: {}",
+          source.path(), e.getMessage());
+    }
+    return explicit;
   }
 
   static CSVReader openCsv(Source source) throws IOException {

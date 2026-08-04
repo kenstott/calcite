@@ -122,6 +122,12 @@ public abstract class CsvTable extends AbstractTable {
               }
               LOGGER.debug("=== END TYPE INFERENCE RESULTS ===");
 
+              // A "name:type" header cell is the author declaring the column's type outright;
+              // sampling must never override it (a column declared :string to keep leading
+              // zeros would otherwise be re-inferred as a number).
+              java.util.Set<Integer> explicitlyTyped =
+                  CsvEnumerator.explicitlyTypedColumns(source);
+
               // Build a new row type with inferred types
               RelDataTypeFactory.Builder builder = typeFactory.builder();
               List<String> fieldNames = rowType.getFieldNames();
@@ -131,7 +137,12 @@ public abstract class CsvTable extends AbstractTable {
                 String fieldName = fieldNames.get(i);
                 RelDataType fieldType;
 
-                if (i < inferredTypes.size()) {
+                if (explicitlyTyped.contains(i)) {
+                  fieldType = rowType.getFieldList().get(i).getType();
+                  LOGGER.debug("Column {} declares its type in the header; keeping {}",
+                      fieldName, fieldType);
+                  formatters.add(null);
+                } else if (i < inferredTypes.size()) {
                   CsvTypeInferrer.ColumnTypeInfo typeInfo = inferredTypes.get(i);
                   LOGGER.info("Applying type to column {}: {} -> {}",
                       fieldName, typeInfo.inferredType, typeInfo.inferredType);
