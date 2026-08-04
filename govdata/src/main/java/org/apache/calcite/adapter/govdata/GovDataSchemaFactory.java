@@ -231,16 +231,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     String operatingDirectory = establishOperatingDirectory(dataSource, operand);
     IncrementalTracker tracker = createIncrementalTracker(operatingDirectory, name, operand);
 
-    // Publish this schema's stored column cardinalities into the process-local cache the
-    // COUNT(DISTINCT) rewrite rules read. HLLSketchCache is per-JVM, so without this a query
-    // server starts empty and never fills it — the rules fire on every COUNT(DISTINCT) and log
-    // "No HLL sketch found" before falling through to a full scan. One query per schema-open.
-    org.apache.calcite.adapter.file.statistics.PGColumnStatisticsStore statsStore =
-        org.apache.calcite.adapter.file.statistics.PGColumnStatisticsStore.fromOperand(operand);
-    if (statsStore != null) {
-      statsStore.loadInto(name,
-          org.apache.calcite.adapter.file.statistics.HLLSketchCache.getInstance());
-    }
 
     Map<String, Object> enrichedOperand = enrichOperand(operand, dataSource, name);
     enrichedOperand.put("operatingDirectory", operatingDirectory);

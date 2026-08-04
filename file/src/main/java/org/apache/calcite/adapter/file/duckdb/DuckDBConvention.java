@@ -50,6 +50,10 @@ public class DuckDBConvention extends JdbcConvention {
     // CRITICAL: Register HLL optimization rules FIRST before JDBC pushdown
     // This allows COUNT(DISTINCT) to be optimized with HLL sketches before
     // being pushed down to DuckDB as raw SQL
+    // Safe to leave on: the rule answers only APPROX_COUNT_DISTINCT — calls Calcite marks
+    // AggregateCall.isApproximate() — so it is a fast path for a query that asked for an estimate,
+    // never a silent downgrade of an exact COUNT(DISTINCT). Turn it off with
+    // -Dcalcite.file.statistics.hll.enabled=false to force even approximate counts to scan.
     String hllEnabled = System.getProperty("calcite.file.statistics.hll.enabled");
     LOGGER.debug("HLL property value: '{}'", hllEnabled);
 

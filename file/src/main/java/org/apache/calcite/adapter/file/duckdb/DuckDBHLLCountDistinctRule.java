@@ -76,10 +76,16 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
       return false;
     }
 
-    // Check if this has COUNT(DISTINCT)
+    // Only APPROXIMATE distinct counts. Answering an exact COUNT(DISTINCT) from a HyperLogLog
+    // sketch silently changes what the query returns — roughly 2% error on an aggregate whose SQL
+    // spelling promises an exact answer, with nothing in the result to say so. APPROX_COUNT_DISTINCT
+    // is how a caller asks for the estimate, and Calcite carries that intent all the way down as
+    // AggregateCall.isApproximate(); honouring it is what makes the sketch a fast path for the
+    // query that wanted it rather than a silent downgrade of the query that did not.
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
-      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
-        LOGGER.debug("Found COUNT(DISTINCT) in JDBC/DuckDB query");
+      if (aggCall.getAggregation().getKind() == SqlKind.COUNT
+          && aggCall.isDistinct() && aggCall.isApproximate()) {
+        LOGGER.debug("Found APPROX_COUNT_DISTINCT in JDBC/DuckDB query");
         return true;
       }
     }
@@ -125,7 +131,8 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
     boolean hasOptimizableCountDistinct = false;
 
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
-      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
+      if (aggCall.getAggregation().getKind() == SqlKind.COUNT
+          && aggCall.isDistinct() && aggCall.isApproximate()) {
         Long estimate = getHLLEstimate(tableInfo, input, aggCall);
         if (estimate != null) {
           hasOptimizableCountDistinct = true;
