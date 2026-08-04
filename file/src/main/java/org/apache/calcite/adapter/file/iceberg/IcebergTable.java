@@ -427,8 +427,10 @@ public class IcebergTable extends AbstractTable
         publishedNdv =
             org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(
                 loadIcebergTable());
-      } catch (Exception e) {
-        LOGGER.debug("Could not read published cardinality: {}", e.toString());
+      // Throwable: a statistics dependency that fails to initialize raises an Error, and losing a
+      // cardinality estimate must never take down the query that asked for it.
+      } catch (Throwable t) {
+        LOGGER.debug("Could not read published cardinality: {}", t.toString());
         publishedNdv = java.util.Collections.emptyMap();
       }
     }

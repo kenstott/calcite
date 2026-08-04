@@ -34,6 +34,41 @@ PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
 GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=768m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary -Xlog:gc}"
 
+# ── Java runtime for ETL workers ──────────────────────────────────────────────
+# Pinned to JDK 21, not whatever `java` resolves to on PATH. The ETL writes Iceberg
+# column statistics using Apache DataSketches, and datasketches-memory refuses to
+# initialise on anything past 21:
+#
+#   ExceptionInInitializerError
+#   Unsupported JDK Major Version. It must be one of 1.8, 8, 11, 17, 21: 25.0.4
+#
+# That fires in a static initialiser during startup, so a worker on a newer default
+# JDK dies before processing a single row rather than degrading — and this box's
+# default `java` is 25. Only the WRITE side has this constraint: statistics are read
+# from Puffin blob metadata with no DataSketches on the path, so query clients are
+# unaffected and need no particular JDK.
+#
+# Override with GOVDATA_JAVA_BIN to run under a different JVM.
+_resolve_java21() {
+  if [ -n "${GOVDATA_JAVA_BIN:-}" ]; then
+    echo "$GOVDATA_JAVA_BIN"; return
+  fi
+  if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ] \
+      && "$JAVA_HOME/bin/java" -version 2>&1 | head -1 | grep -q '"21\.'; then
+    echo "$JAVA_HOME/bin/java"; return
+  fi
+  for _c in /usr/lib/jvm/temurin-21-jdk-amd64/bin/java \
+            /usr/lib/jvm/java-21-openjdk-amd64/bin/java \
+            /usr/lib/jvm/*21*/bin/java; do
+    [ -x "$_c" ] && { echo "$_c"; return; }
+  done
+  # Fall back to PATH rather than refusing to run: a deployment without statistics
+  # enabled has no reason to require 21, and failing here would break those runs.
+  echo "java"
+}
+GOVDATA_JAVA_BIN="$(_resolve_java21)"
+export GOVDATA_JAVA_BIN
+
 # ── Worker scratch directory (must be disk-backed, not tmpfs) ──────────────────
 # Workers stage GB-scale artifacts in the JVM temp dir: source ZIPs (patents ships
 # a 384MB one), raw HTTP page caches, SEC staging batches, and DuckDB sort/join
@@ -1128,7 +1163,7 @@ run_etl() {
   # Ensure Ctrl-C kills the java process, not just tee
   trap 'kill 0' INT TERM
 
-  java \
+  "$GOVDATA_JAVA_BIN" \
     $GOVDATA_JAVA_OPTS \
     -Xms"${_HEAP_MIN}" \
     -Xmx"${_HEAP_MAX}" \
@@ -1176,7 +1211,7 @@ run_etl_inline() {
 
   trap 'kill 0' INT TERM
 
-  java \
+  "$GOVDATA_JAVA_BIN" \
     $GOVDATA_JAVA_OPTS \
     -Xms"${_HEAP_MIN}" \
     -Xmx"${_HEAP_MAX}" \

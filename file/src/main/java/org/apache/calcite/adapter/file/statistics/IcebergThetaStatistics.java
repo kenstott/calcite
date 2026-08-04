@@ -68,7 +68,12 @@ public final class IcebergThetaStatistics {
   /** Spec property name a reader consults for the cardinality without parsing the payload. */
   private static final String NDV_PROPERTY = "ndv";
 
-  private final Map<String, UpdateSketch> sketches = new LinkedHashMap<String, UpdateSketch>();
+  /** Partition key -> column -> sketch of the values this run wrote into that partition. */
+  private final Map<String, Map<String, UpdateSketch>> byPartition =
+      new LinkedHashMap<String, Map<String, UpdateSketch>>();
+
+  /** Property naming the partition a blob describes, so untouched ones can be carried forward. */
+  private static final String PARTITION_PROPERTY = "calcite.partition";
 
   /**
    * Folds one row's values into the per-column sketches.
@@ -76,9 +81,15 @@ public final class IcebergThetaStatistics {
    * <p>Nulls are skipped: a null is the absence of a value, not a distinct one, and Iceberg
    * already reports null counts separately from the manifests.
    */
-  public void addRow(Map<String, Object> row) {
+  public void addRow(String partitionKey, Map<String, Object> row) {
     if (row == null) {
       return;
+    }
+    String pk = partitionKey == null ? "" : partitionKey;
+    Map<String, UpdateSketch> sketches = byPartition.get(pk);
+    if (sketches == null) {
+      sketches = new LinkedHashMap<String, UpdateSketch>();
+      byPartition.put(pk, sketches);
     }
     for (Map.Entry<String, Object> e : row.entrySet()) {
       Object v = e.getValue();
@@ -97,14 +108,26 @@ public final class IcebergThetaStatistics {
   }
 
   public boolean isEmpty() {
-    return sketches.isEmpty();
+    return byPartition.isEmpty();
   }
 
   /** Cardinality estimate per column, for logging or direct use. */
   public Map<String, Long> estimates() {
+    Map<String, org.apache.datasketches.theta.Union> unions =
+        new LinkedHashMap<String, org.apache.datasketches.theta.Union>();
+    for (Map<String, UpdateSketch> perColumn : byPartition.values()) {
+      for (Map.Entry<String, UpdateSketch> e : perColumn.entrySet()) {
+        org.apache.datasketches.theta.Union u = unions.get(e.getKey());
+        if (u == null) {
+          u = org.apache.datasketches.theta.SetOperation.builder().buildUnion();
+          unions.put(e.getKey(), u);
+        }
+        u.union(e.getValue().compact());
+      }
+    }
     Map<String, Long> out = new LinkedHashMap<String, Long>();
-    for (Map.Entry<String, UpdateSketch> e : sketches.entrySet()) {
-      out.put(e.getKey(), (long) e.getValue().getEstimate());
+    for (Map.Entry<String, org.apache.datasketches.theta.Union> e : unions.entrySet()) {
+      out.put(e.getKey(), (long) e.getValue().getResult().getEstimate());
     }
     return out;
   }
@@ -117,39 +140,82 @@ public final class IcebergThetaStatistics {
    * rather than guessed, since a blob pointing at the wrong field would misinform every reader.
    */
   public void commit(Table table, String statisticsPath) {
-    if (sketches.isEmpty() || table == null) {
+    if (byPartition.isEmpty() || table == null) {
       return;
     }
     Snapshot snapshot = table.currentSnapshot();
     if (snapshot == null) {
-      return;   // nothing committed to describe
+      return;
     }
     try {
+      // Carry forward sketches for partitions this run did not touch. A run normally writes a
+      // slice, so most of the table's cardinality lives in blobs written by earlier runs; dropping
+      // them would report the slice as the whole table. Partitions this run DID write are
+      // superseded rather than merged — overwritePartitions replaces the data, and a theta union
+      // cannot subtract the values that went away.
+      List<Carried> carried = readCarryForward(table, byPartition.keySet());
+
       OutputFile out = table.io().newOutputFile(statisticsPath);
       List<BlobMetadata> written = new ArrayList<BlobMetadata>();
       long fileSize;
       long footerSize;
-      try (PuffinWriter writer = Puffin.write(out)
-          .createdBy("calcite-file-adapter")
-          .build()) {
-        for (Map.Entry<String, UpdateSketch> e : sketches.entrySet()) {
-          org.apache.iceberg.types.Types.NestedField field =
-              table.schema().findField(e.getKey().toLowerCase(Locale.ROOT));
-          if (field == null) {
+      try (PuffinWriter writer = Puffin.write(out).createdBy("calcite-file-adapter").build()) {
+        for (Carried c : carried) {
+          writer.add(new Blob(c.type, c.fields, snapshot.snapshotId(), snapshot.sequenceNumber(),
+              c.payload, null, c.properties));
+        }
+        for (Map.Entry<String, Map<String, UpdateSketch>> part : byPartition.entrySet()) {
+          for (Map.Entry<String, UpdateSketch> e : part.getValue().entrySet()) {
+            org.apache.iceberg.types.Types.NestedField field =
+                table.schema().findField(e.getKey().toLowerCase(Locale.ROOT));
+            if (field == null) {
+              continue;
+            }
+            CompactSketch compact = e.getValue().compact();
+            Map<String, String> props = new LinkedHashMap<String, String>();
+            props.put(NDV_PROPERTY, Long.toString((long) compact.getEstimate()));
+            props.put(PARTITION_PROPERTY, part.getKey());
+            writer.add(
+                new Blob(StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1,
+                    Collections.singletonList(field.fieldId()),
+                    snapshot.snapshotId(), snapshot.sequenceNumber(),
+                    ByteBuffer.wrap(compact.toByteArray()), null, props));
+          }
+        }
+        // Roll the per-partition sketches up and publish the answer as a plain number, so the
+        // READ path never has to deserialize a sketch. Reading otherwise pulls in
+        // datasketches-memory, whose static initializer rejects any JDK past 21 with an
+        // ExceptionInInitializerError — an Error, not an Exception, so it would escape the
+        // read-path guards and surface during query planning on a client we do not control. The
+        // sketches stay on disk purely so the NEXT write can merge with them; queries only need
+        // the total.
+        Map<Integer, org.apache.datasketches.theta.Union> rollup =
+            new LinkedHashMap<Integer, org.apache.datasketches.theta.Union>();
+        for (Carried c : carried) {
+          if (!StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1.equals(c.type)
+              || c.fields.size() != 1 || c.payload.remaining() == 0) {
             continue;
           }
-          CompactSketch compact = e.getValue().compact();
+          byte[] bytes = new byte[c.payload.remaining()];
+          c.payload.duplicate().get(bytes);
+          unionInto(rollup, c.fields.get(0), bytes);
+        }
+        for (Map.Entry<String, Map<String, UpdateSketch>> part : byPartition.entrySet()) {
+          for (Map.Entry<String, UpdateSketch> e : part.getValue().entrySet()) {
+            org.apache.iceberg.types.Types.NestedField field =
+                table.schema().findField(e.getKey().toLowerCase(Locale.ROOT));
+            if (field != null) {
+              unionInto(rollup, field.fieldId(), e.getValue().compact().toByteArray());
+            }
+          }
+        }
+        for (Map.Entry<Integer, org.apache.datasketches.theta.Union> e : rollup.entrySet()) {
           Map<String, String> props = new LinkedHashMap<String, String>();
-          props.put(NDV_PROPERTY, Long.toString((long) compact.getEstimate()));
+          props.put(NDV_PROPERTY, Long.toString((long) e.getValue().getResult().getEstimate()));
           writer.add(
-              new Blob(
-                  StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1,
-                  Collections.singletonList(field.fieldId()),
-                  snapshot.snapshotId(),
-                  snapshot.sequenceNumber(),
-                  ByteBuffer.wrap(compact.toByteArray()),
-                  null,
-                  props));
+              new Blob(NDV_BLOB_TYPE, Collections.singletonList(e.getKey()),
+                  snapshot.snapshotId(), snapshot.sequenceNumber(),
+                  ByteBuffer.wrap(new byte[0]), null, props));
         }
         writer.finish();
         for (org.apache.iceberg.puffin.BlobMetadata pm : writer.writtenBlobsMetadata()) {
@@ -165,13 +231,82 @@ public final class IcebergThetaStatistics {
           new GenericStatisticsFile(snapshot.snapshotId(), statisticsPath, fileSize, footerSize,
               written);
       table.updateStatistics().setStatistics(snapshot.snapshotId(), statsFile).commit();
-      LOGGER.info("Published Iceberg column statistics: {} sketches for snapshot {} at {}",
-          written.size(), snapshot.snapshotId(), statisticsPath);
+      LOGGER.info("Published column statistics: {} blobs ({} carried forward, {} partitions "
+          + "written) for snapshot {}", written.size(), carried.size(), byPartition.size(),
+          snapshot.snapshotId());
     } catch (Exception e) {
-      // Never fail the data commit for statistics.
-      LOGGER.warn("Could not publish Iceberg column statistics: {}", e.toString());
+      LOGGER.warn("Could not publish Iceberg column statistics", e);
     }
   }
+
+  private static void unionInto(Map<Integer, org.apache.datasketches.theta.Union> unions,
+      int fieldId, byte[] sketchBytes) {
+    org.apache.datasketches.theta.Union u = unions.get(fieldId);
+    if (u == null) {
+      u = org.apache.datasketches.theta.SetOperation.builder().buildUnion();
+      unions.put(fieldId, u);
+    }
+    u.union(org.apache.datasketches.theta.Sketches.wrapCompactSketch(
+        org.apache.datasketches.memory.Memory.wrap(sketchBytes)));
+  }
+
+  /** A blob copied unchanged from the previous statistics file. */
+  private static final class Carried {
+    String type;
+    List<Integer> fields;
+    ByteBuffer payload;
+    Map<String, String> properties;
+  }
+
+  /**
+   * Reads back blobs describing partitions this run did not write.
+   *
+   * <p>Payloads must be physically re-read: a Puffin file is immutable, so the new one has to
+   * contain every blob that should survive.
+   */
+  private static List<Carried> readCarryForward(Table table, java.util.Set<String> superseded) {
+    List<Carried> out = new ArrayList<Carried>();
+    if (table.currentSnapshot() == null) {
+      return out;
+    }
+    for (StatisticsFile sf : table.statisticsFiles()) {
+      try (org.apache.iceberg.puffin.PuffinReader reader =
+               Puffin.read(table.io().newInputFile(sf.path()))
+                   .withFileSize(sf.fileSizeInBytes())
+                   .withFooterSize(sf.fileFooterSizeInBytes())
+                   .build()) {
+        List<org.apache.iceberg.puffin.BlobMetadata> wanted =
+            new ArrayList<org.apache.iceberg.puffin.BlobMetadata>();
+        for (org.apache.iceberg.puffin.BlobMetadata bm : reader.fileMetadata().blobs()) {
+          String pk = bm.properties() == null ? null : bm.properties().get(PARTITION_PROPERTY);
+          // A blob with no partition property describes the whole table (the bootstrap) and cannot
+          // be reconciled with per-partition ones; drop it rather than double-count.
+          if (pk != null && !superseded.contains(pk)) {
+            wanted.add(bm);
+          }
+        }
+        if (wanted.isEmpty()) {
+          continue;
+        }
+        for (org.apache.iceberg.util.Pair<org.apache.iceberg.puffin.BlobMetadata, ByteBuffer> pair
+            : reader.readAll(wanted)) {
+          Carried c = new Carried();
+          c.type = pair.first().type();
+          c.fields = pair.first().inputFields();
+          c.properties = pair.first().properties();
+          ByteBuffer src = pair.second();
+          byte[] copy = new byte[src.remaining()];
+          src.duplicate().get(copy);
+          c.payload = ByteBuffer.wrap(copy);
+          out.add(c);
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Could not carry forward statistics from {}", sf.path(), e);
+      }
+    }
+    return out;
+  }
+
 
   /**
    * Blob type for a cardinality measured over the committed table rather than accumulated while
@@ -253,6 +388,104 @@ public final class IcebergThetaStatistics {
     }
   }
 
+  /**
+   * Builds per-partition sketches for a table that has none, by scanning it once.
+   *
+   * <p>This is the bootstrap, and it has to produce PER-PARTITION sketches rather than a
+   * whole-table number. A later run rewrites some partitions and carries the rest forward, which
+   * requires every partition to be represented separately; a single whole-table figure has no
+   * partition to attribute it to and cannot be reconciled with the ones a run replaces. Emitting
+   * one would leave the incremental path permanently unreachable — every run would find nothing to
+   * carry forward and rescan the whole table again.
+   *
+   * <p>Values are read rather than counted by the engine because a theta sketch cannot be rebuilt
+   * from a cardinality: {@code approx_count_distinct} returns a number, and the sketch is what
+   * makes later runs mergeable. So this pays a real scan — once per table, after which every run
+   * is incremental.
+   *
+   * <p>Partition keys are derived from the table's own partition spec and formatted to match the
+   * writer's {@code buildPartitionKey} — sorted {@code name=value} joined by {@code |} — because a
+   * key that does not match is a key that never gets superseded, leaving a stale partition sketch
+   * unioned in forever.
+   */
+  public static void bootstrapFromScan(Table table, String statisticsPath) {
+    if (table == null || table.currentSnapshot() == null) {
+      return;
+    }
+    List<String> partitionColumns = new ArrayList<String>();
+    for (org.apache.iceberg.PartitionField pf : table.spec().fields()) {
+      org.apache.iceberg.types.Types.NestedField src = table.schema().findField(pf.sourceId());
+      if (src != null) {
+        partitionColumns.add(src.name());
+      }
+    }
+    java.util.Collections.sort(partitionColumns);
+
+    IcebergThetaStatistics stats = new IcebergThetaStatistics();
+    long rows = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(table).build()) {
+      for (org.apache.iceberg.data.Record r : records) {
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        for (org.apache.iceberg.types.Types.NestedField f : table.schema().columns()) {
+          row.put(f.name(), r.getField(f.name()));
+        }
+        StringBuilder key = new StringBuilder();
+        for (String pc : partitionColumns) {
+          if (key.length() > 0) {
+            key.append('|');
+          }
+          key.append(pc).append('=').append(String.valueOf(row.get(pc)));
+        }
+        stats.addRow(key.toString(), row);
+        rows++;
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Could not scan {} to bootstrap column statistics", table.name(), e);
+      return;
+    }
+    if (stats.isEmpty()) {
+      return;
+    }
+    LOGGER.info("Bootstrapping column statistics from {} rows across {} partitions",
+        rows, stats.writtenPartitions().size());
+    stats.commit(table, statisticsPath);
+  }
+
+  /** Partition keys this instance holds sketches for. */
+  public java.util.Set<String> writtenPartitions() {
+    return byPartition.keySet();
+  }
+
+  /**
+   * True when the table holds per-partition sketches a later run can build on.
+   *
+   * <p>Deliberately NOT scoped to the current snapshot. Every write creates a new snapshot while
+   * statistics are keyed to the snapshot they were computed from, so a current-snapshot test is
+   * false immediately after any write — which sent every run down the full-rescan bootstrap and
+   * left the per-partition path unreachable, discarding the whole point of making the sketches
+   * mergeable. What matters is whether there is prior work to carry forward, not whether it is
+   * labelled with the snapshot this run just created.
+   */
+  public static boolean hasCarryForwardStatistics(Table table) {
+    if (table == null) {
+      return false;
+    }
+    for (StatisticsFile sf : table.statisticsFiles()) {
+      for (org.apache.iceberg.BlobMetadata bm : sf.blobMetadata()) {
+        // Only per-partition sketches can be carried forward. A whole-table measurement is a
+        // scalar with no partition to attribute it to, so it cannot be reconciled with the
+        // partitions a later run rewrites — a table holding only that must be re-measured.
+        if (StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1.equals(bm.type())
+            && bm.properties() != null
+            && bm.properties().get(PARTITION_PROPERTY) != null) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /** Measures distinct values for every column in one pass. */
   private static Map<String, Long> computeNdv(java.sql.Connection conn, String fromClause,
       List<String> columns) {
@@ -294,33 +527,38 @@ public final class IcebergThetaStatistics {
       return out;
     }
     long snapshotId = table.currentSnapshot().snapshotId();
+    // Deliberately reads ONLY blob metadata — the Puffin footer — and never a sketch payload.
+    // Deserializing one would pull in datasketches-memory, whose static initializer rejects any
+    // JDK past 21 and fails with an ExceptionInInitializerError. That is an Error, not an
+    // Exception, so it would bypass the guards here and surface during query planning on a client
+    // whose JDK we do not choose. The write side already rolls the per-partition sketches up and
+    // publishes the total, so a query only needs to read a number.
     try {
       for (StatisticsFile sf : table.statisticsFiles()) {
         if (sf.snapshotId() != snapshotId) {
-          // Statistics describe the snapshot they were computed from. Reading an older one would
-          // report cardinalities for data the query will not see.
+          // Statistics describe the snapshot they were computed from; an older one would report
+          // cardinalities for data this query will not read.
           continue;
         }
-        for (BlobMetadata blob : sf.blobMetadata()) {
-          // Either producer: a theta sketch accumulated during a full rewrite, or a cardinality
-          // measured over the committed table. Both carry the same `ndv` property.
-          if (!StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1.equals(blob.type())
-              && !NDV_BLOB_TYPE.equals(blob.type())) {
+        for (org.apache.iceberg.BlobMetadata bm : sf.blobMetadata()) {
+          if (!NDV_BLOB_TYPE.equals(bm.type()) || bm.fields().size() != 1) {
             continue;
           }
-          String ndv = blob.properties() == null ? null : blob.properties().get(NDV_PROPERTY);
-          if (ndv == null || blob.fields().size() != 1) {
+          String ndv = bm.properties() == null ? null : bm.properties().get(NDV_PROPERTY);
+          if (ndv == null) {
             continue;
           }
-          org.apache.iceberg.types.Types.NestedField field =
-              table.schema().findField(blob.fields().get(0));
-          if (field != null) {
-            out.put(field.name().toLowerCase(Locale.ROOT), Long.parseLong(ndv));
+          org.apache.iceberg.types.Types.NestedField f = table.schema().findField(bm.fields().get(0));
+          if (f != null) {
+            out.put(f.name().toLowerCase(Locale.ROOT), Long.parseLong(ndv));
           }
         }
       }
-    } catch (Exception e) {
-      LOGGER.debug("Could not read Iceberg column statistics: {}", e.toString());
+    // Throwable, not Exception: a missing or incompatible dependency raises an Error, and a
+    // statistic that cannot be read must degrade to "unknown" rather than fail the query that
+    // happened to touch this table.
+    } catch (Throwable t) {
+      LOGGER.debug("Could not read Iceberg column statistics: {}", t.toString());
       out.clear();
     }
     return out;

@@ -170,6 +170,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
   private final AtomicBoolean committedSuccessfully = new AtomicBoolean(false);
 
+  /** Per-partition, per-column sketches for the rows this run writes; null when statistics off. */
+  private final org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics columnSketches =
+      statisticsEnabled()
+          ? new org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics()
+          : null;
+
+  private static boolean statisticsEnabled() {
+    return "true".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "false"));
+  }
+
   /** JVM shutdown hook registered in initialize() to emergency-commit staged files on SIGTERM. */
   private Thread shutdownHook;
 
@@ -930,6 +940,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Build canonical partition key from sorted partition variables
     String partitionKey = buildPartitionKey(partitionVariables);
+
+    // Sketch the values as written. They are already materialized here, so an update is O(1) per
+    // value and costs no I/O — and scoping to this partition is what lets the commit supersede
+    // only what this run rewrote, leaving the rest of the table's statistics intact.
+    if (columnSketches != null) {
+      for (Map<String, Object> row : transformedRows) {
+        columnSketches.addRow(partitionKey, row);
+      }
+    }
 
     // Append transformed rows to partition buffer
     List<Map<String, Object>> buffer = partitionBuffers.get(partitionKey);
@@ -2312,36 +2331,41 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * planner back on the estimates it used before any of this existed. It must never fail a commit.
    */
   private void publishColumnStatistics() {
-    if (!"true".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "false"))
-        || tableWriter == null) {
+    if (!statisticsEnabled() || tableWriter == null || columnSketches == null) {
       return;
     }
     org.apache.iceberg.Table icebergTable = tableWriter.getTable();
     if (icebergTable == null || icebergTable.currentSnapshot() == null) {
       return;
     }
-    Connection conn = null;
+    // Unique per publication, not per snapshot. Statistics do not create a snapshot, so the
+    // bootstrap and a later per-partition update both describe the SAME snapshot id — deriving the
+    // name from it alone made the second write collide with the first
+    // (AlreadyExistsException from HadoopOutputFile.create) and silently abandon the update, so the
+    // table kept whatever statistics were published first.
+    String statsPath = icebergTable.location() + "/metadata/stats-"
+        + icebergTable.currentSnapshot().snapshotId() + "-"
+        + java.util.UUID.randomUUID() + ".puffin";
     try {
-      java.util.List<String> columns = new ArrayList<String>();
-      for (org.apache.iceberg.types.Types.NestedField f : icebergTable.schema().columns()) {
-        columns.add(f.name());
+      // Bootstrap: with no per-partition sketches stored there is nothing for this run's
+      // partitions to be merged into, so the partitions this run did NOT write would go
+      // unrepresented. Measure the committed table once. Every later run carries those sketches
+      // forward and replaces only what it rewrote, so this full scan happens once per table rather
+      // than once per run.
+      if (!org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics
+          .hasCarryForwardStatistics(icebergTable)) {
+        // Bootstrap: with no per-partition sketches stored, the partitions this run did NOT write
+        // have nothing representing them, so this run's own sketches would report a slice as the
+        // whole table. Scan once to establish every partition. It must produce per-partition
+        // sketches, not a whole-table figure — a single number has no partition to attribute it to,
+        // so later runs would find nothing to carry forward and rescan every time.
+        org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.bootstrapFromScan(
+            icebergTable, statsPath);
+        return;
       }
-      conn = createDuckDBConnection();
-      String from = "iceberg_scan('" + icebergTable.location() + "')";
-      String statsPath = icebergTable.location() + "/metadata/stats-"
-          + icebergTable.currentSnapshot().snapshotId() + ".puffin";
-      org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.publishMeasured(
-          icebergTable, statsPath, conn, from, columns);
+      columnSketches.commit(icebergTable, statsPath);
     } catch (Exception e) {
       LOGGER.warn("Column statistics not published (non-fatal): {}", e.toString());
-    } finally {
-      if (conn != null) {
-        try {
-          conn.close();
-        } catch (Exception ignored) {
-          // best effort
-        }
-      }
     }
   }
 
