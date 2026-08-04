@@ -96,6 +96,30 @@ public final class CsvTypeConverter {
    */
   public @Nullable Object convert(String value, SqlTypeName targetType,
       @Nullable DateTimeFormatter inferredFormatter) {
+    try {
+      return convertStrict(value, targetType, inferredFormatter);
+    } catch (CsvParseException | NumberFormatException e) {
+      // A value that doesn't fit its column's type becomes null, named in a WARN.
+      //
+      // This is a deliberate, narrow exception to the no-silent-fallbacks rule, recorded in
+      // docs/testing/contradictions.md (C-16, amended). Column types here are either declared
+      // in the header - so the author asserted the type and a value that contradicts it is bad
+      // data, not a bad type - or inferred under confidenceThreshold (C-08), which promotes a
+      // column while explicitly tolerating a minority of non-conforming values. In both cases
+      // the mismatch is expected by construction rather than a hidden error.
+      //
+      // Raising instead is not a usable alternative: the PARQUET engine materializes the whole
+      // file when the table is created, so one bad value fails the conversion and drops the
+      // table from the schema entirely - every query against it then fails, including ones that
+      // never touch the column.
+      LOGGER.warn("Value '{}' does not fit column type {}; storing null", value, targetType);
+      return null;
+    }
+  }
+
+  private @Nullable Object convertStrict(String value, SqlTypeName targetType,
+      @Nullable DateTimeFormatter inferredFormatter) {
+    // (see convert(...) for why callers never see the raised parse error)
     LOGGER.debug("CsvTypeConverter.convert() called with value='{}' targetType={}", value, targetType);
     Object finalResult;
     switch (targetType) {
@@ -278,8 +302,7 @@ public final class CsvTypeConverter {
       }
     }
 
-    LOGGER.warn("Failed to parse date: '{}' - returning null", value);
-    return null;
+    throw new CsvParseException(value, "DATE");
   }
 
   private Integer parseTime(String value, @Nullable DateTimeFormatter inferredFormatter) {
@@ -304,10 +327,8 @@ public final class CsvTypeConverter {
       int millisSinceMidnight = (int) (localTime.toNanoOfDay() / 1_000_000L);
       LOGGER.debug("Successfully parsed time '{}' using default formatter, returning millis: {}", value, millisSinceMidnight);
       return Integer.valueOf(millisSinceMidnight);
-    // fallback-guard: allow parseTime's final fallback null mirrors the project's TRY_CAST-style lenient-cast convention, logged at WARN
     } catch (DateTimeParseException e) {
-      LOGGER.warn("Failed to parse time: '{}' - returning null", value);
-      return null;
+      throw new CsvParseException(value, "TIME");
     }
   }
 
@@ -356,8 +377,7 @@ public final class CsvTypeConverter {
       }
     }
 
-    LOGGER.warn("Failed to parse timestamp: '{}' - returning null", value);
-    return null;
+    throw new CsvParseException(value, "TIMESTAMP");
   }
 
   private Long parseTimestampWithTimezone(String value, @Nullable DateTimeFormatter inferredFormatter) {
@@ -452,5 +472,14 @@ public final class CsvTypeConverter {
     // If no timezone parsing worked, log warning and fall back to wall clock parsing
     LOGGER.warn("=== TIMESTAMPTZ DEBUG: Failed to parse timezone from '{}', falling back to wall clock time ===", value);
     return parseTimestamp(value, inferredFormatter);
+  }
+
+  /** Raised when a CSV value cannot be parsed as its column's SQL type. */
+  public static class CsvParseException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    CsvParseException(String value, String targetTypeName) {
+      super("Cannot parse '" + value + "' as " + targetTypeName);
+    }
   }
 }

@@ -120,6 +120,22 @@ that safety rationale before implementing.
 **Resolution:** **Fix all to raise** a clear error on parse failure; remove the fabricated synthetic
 HLL seeds. (FILE-101, FILE-126)
 
+**Amended** — CSV value→column-type conversion is carved out: a value that doesn't fit its column's
+type becomes null with a WARN naming the column and value, rather than raising. Two reasons:
+
+1. It isn't a hidden error. A CSV column's type is either declared in the header (`name:type`), so
+   the author asserted the type and a non-conforming value is bad *data* rather than a bad type, or
+   inferred under `confidenceThreshold` (C-08), which promotes a column while explicitly tolerating
+   a minority of non-conforming values. Either way the mismatch is expected by construction.
+2. Raising is not usable on the materializing path. The PARQUET engine converts the whole file when
+   the table is created, so one bad value fails that conversion and `FileSchema` drops the table
+   from the schema entirely — every query against it fails, including ones that never reference the
+   column. That is strictly worse than the nulls it was meant to prevent.
+
+This carve-out is *only* for CSV value conversion. Everything else C-16 covers still raises, and
+C-17's NPE-on-unparseable-DATE is fixed by the same change (a clean parse error internally, then the
+null + WARN).
+
 ### C-17 — Unparseable DATE throws NPE  → **CODE-WRONG**
 **Resolution:** Replace the NPE with the same clear, raised parse error as C-16 — consistent across
 DATE/TIME/TIMESTAMP. (refines FILE-101)

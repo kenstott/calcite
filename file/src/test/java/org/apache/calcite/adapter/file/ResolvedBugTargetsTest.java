@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -35,28 +36,25 @@ public class ResolvedBugTargetsTest {
     return new CsvTypeConverter(NullEquivalents.DEFAULT_NULL_EQUIVALENTS, false);
   }
 
-  // FILE-008 (C-16) — a non-null value violating an inferred type must surface an error, not coerce.
-  // Numerics already comply (Integer/Double.valueOf throw); this pins that good behavior.
-  @Test @Tag("FILE-008") void badNumericValueRaises() {
-    assertThrows(NumberFormatException.class, () -> converter().convert("not_a_number", SqlTypeName.INTEGER));
-    assertThrows(NumberFormatException.class, () -> converter().convert("not_a_number", SqlTypeName.DOUBLE));
+  // FILE-008 (C-16, amended) — a value that doesn't fit its column's type becomes null with a WARN
+  // rather than raising. See the C-16 amendment in docs/testing/contradictions.md: the mismatch is
+  // expected by construction (declared header type, or a confidenceThreshold-promoted column per
+  // C-08), and raising instead fails the whole CSV→Parquet conversion, dropping the table from the
+  // schema. This pins the null so a future change can't silently make one bad row remove a table.
+  @Test @Tag("FILE-008") void badNumericValueBecomesNull() {
+    assertNull(converter().convert("not_a_number", SqlTypeName.INTEGER));
+    assertNull(converter().convert("not_a_number", SqlTypeName.DOUBLE));
   }
 
-  // The temporal path is where the silent fallback lives — currently returns null instead of raising.
-  @Test @Tag("FILE-008") @Tag("FILE-101")
-  @Disabled("blocked on C-16: an unparseable TIME/TIMESTAMP must raise, not silently return null")
-  void badTemporalValueRaises_target() {
-    assertThrows(RuntimeException.class, () -> converter().convert("not-a-time", SqlTypeName.TIME));
+  // C-17 — an unparseable DATE used to throw NullPointerException (a crash inside convert()); it
+  // must degrade to null like every other non-conforming value, never an NPE.
+  @Test @Tag("FILE-101") void badDateIsNullNotNpe() {
+    assertNull(converter().convert("not-a-date", SqlTypeName.DATE));
+    assertNull(converter().convert("not-a-time", SqlTypeName.TIME));
+    assertNull(converter().convert("not-a-timestamp", SqlTypeName.TIMESTAMP));
   }
 
-  // FILE-101 (C-17) — an unparseable DATE currently throws NullPointerException (a crash); the fix
-  // must surface a clean parse error instead.
-  @Test @Tag("FILE-101")
-  @Disabled("blocked on C-17: unparseable DATE must be a clean parse error, not a NullPointerException")
-  void badDateIsCleanErrorNotNpe_target() {
-    Throwable t = assertThrows(Throwable.class, () -> converter().convert("not-a-date", SqlTypeName.DATE));
-    assertFalse(t instanceof NullPointerException, "should be a clean parse error, not an NPE");
-  }
+
 
   // FILE-125 (C-19) — the DuckDB HLL rule must not write hard-coded /tmp debug artifacts on load.
   // (Static initializer writes the marker on first class load; the fix gates it behind a debug flag.)

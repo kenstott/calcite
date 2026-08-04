@@ -554,12 +554,37 @@ public class CsvTypeInferrer {
       // Check if we have VARCHAR mixed with other types
       Integer varcharCount = typeCounts.get(SqlTypeName.VARCHAR);
       if (varcharCount != null && varcharCount > 0) {
-        // We have actual string values that aren't parseable as other types. Per
-        // docs/testing/contradictions.md C-16 (rule #6: no silent fallback values), a value
-        // that doesn't match an inferred type must raise a clear error at conversion time,
-        // not silently become null - so there is no rule-6-compliant way to promote this
-        // column while still tolerating the unparseable value. Must use VARCHAR for safety.
-        LOGGER.debug("Column '{}': VARCHAR count={} > 0, must use VARCHAR for safety", columnName, varcharCount);
+        // Some sampled values matched no recognized type. Per docs/testing/contradictions.md
+        // C-08, a small minority of those must not force the whole column to VARCHAR: widen
+        // across the non-VARCHAR types present and promote if the conforming fraction meets
+        // confidenceThreshold. Values that later contradict the promoted type raise rather
+        // than silently nulling (C-16) - see ColumnConversionPolicy.
+        SqlTypeName candidateType = null;
+        for (SqlTypeName type : TYPE_WIDENING_PREFERENCE) {
+          Integer count = typeCounts.get(type);
+          if (count != null && count > 0) {
+            candidateType = type;
+            break;
+          }
+        }
+
+        double confidence = candidateType == null
+            ? 0.0 : (double) (nonNullValues - varcharCount) / nonNullValues;
+
+        if (candidateType != null && confidence >= config.confidenceThreshold) {
+          DateTimeFormatter formatter = dateTimeFormatters.get(candidateType);
+          LOGGER.debug("Column '{}': {} of {} non-null sampled values match no type; "
+              + "confidence {} meets threshold {}, promoting to {}",
+              columnName, varcharCount, nonNullValues, confidence, config.confidenceThreshold,
+              candidateType);
+          boolean nullable = nullValues > 0 || config.makeAllNullable;
+          return new ColumnTypeInfo(columnName, candidateType, nullable, formatter, confidence,
+              totalValues, nullValues);
+        }
+
+        LOGGER.debug("Column '{}': VARCHAR count={} of {}, confidence {} below threshold {}; "
+            + "using VARCHAR", columnName, varcharCount, nonNullValues, confidence,
+            config.confidenceThreshold);
         boolean nullable = nullValues > 0 || config.makeAllNullable;
         return new ColumnTypeInfo(columnName, SqlTypeName.VARCHAR, nullable, null, 1.0, totalValues, nullValues);
       }

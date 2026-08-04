@@ -103,8 +103,7 @@ public class CsvInferenceRequirementsTest {
   }
 
   @Test @Tag("FILE-096")
-  @Disabled("blocked on C-08: a minority of strings below 1-confidenceThreshold should promote, not force VARCHAR")
-  void confidenceThresholdPromotesMajority_target(@TempDir Path dir) throws Exception {
+  void confidenceThresholdPromotesMajority(@TempDir Path dir) throws Exception {
     // 19 integers + 1 stray string = 5% non-conforming, below 1 - 0.95; target is INTEGER.
     StringBuilder sb = new StringBuilder("v\n");
     for (int i = 0; i < 19; i++) {

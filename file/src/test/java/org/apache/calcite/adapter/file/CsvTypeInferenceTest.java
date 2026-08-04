@@ -286,35 +286,26 @@ public class CsvTypeInferenceTest {
   }
 
   /**
-   * G5 (investigated, not implemented): a column with a small minority of unparseable
-   * values stays VARCHAR, full stop - even though {@code confidenceThreshold} (0.9 in
-   * this model) is comfortably met by the 19/20 clean rows. Per
-   * docs/testing/contradictions.md C-16 (rule #6: no silent fallback values), a value
-   * that doesn't match an inferred type must raise a clear error, not silently become
-   * null - so there is no rule-6-compliant way to promote this column while still
-   * tolerating the one bad row, and confidenceThreshold has no effect on this decision.
-   * Pins that invariant so a future change can't reintroduce silent-null promotion here.
+   * G5/C-08: a column with a small minority of unparseable values is promoted to the
+   * majority type once the conforming fraction meets {@code confidenceThreshold} (0.9 in
+   * this model), instead of one bad value forcing the whole column to VARCHAR.
    */
-  @Test void testMinorityUnparseableValueStillFallsBackToVarchar() throws Exception {
+  @Test void testMinorityUnparseableValuePromotesColumn() throws Exception {
     Properties info = new Properties();
     String modelJson = buildModelJson();
     info.put("model", "inline:" + modelJson);
     BaseFileTest.applyEngineDefaults(info);
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:", info)) {
-      String sql = "SELECT * FROM csv_infer.mostly_integers ORDER BY id";
+      // 19 clean integers + 1 "not-a-number" = 0.95 confidence, above the model's 0.9.
+      String sql = "SELECT * FROM csv_infer.mostly_integers WHERE id = 1";
 
       try (ResultSet rs = connection.createStatement().executeQuery(sql)) {
         ResultSetMetaData metaData = rs.getMetaData();
-        assertEquals(Types.VARCHAR, metaData.getColumnType(2),
-            "one unparseable row must still collapse the whole column to VARCHAR");
-
-        int rowCount = 0;
-        while (rs.next()) {
-          rowCount++;
-          assertNotNull(rs.getString("value"), "every value, including the bad row, is a string");
-        }
-        assertEquals(20, rowCount, "all 20 rows must still be returned");
+        int valueType = metaData.getColumnType(2);
+        assertTrue(valueType == Types.INTEGER || valueType == Types.BIGINT,
+            "19/20 conforming values meet the 0.9 threshold, so the column should be "
+                + "INTEGER/BIGINT rather than VARCHAR, but was " + valueType);
       }
     }
   }

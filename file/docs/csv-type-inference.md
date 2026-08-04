@@ -10,9 +10,8 @@ The File Adapter supports automatic type inference for CSV files. Instead of tre
 - **Sampling Strategy**: Configurable sampling rate to balance accuracy vs performance
 - **Safe Defaults**: All inferred types are nullable by default
 - **Temporal Type Support**: Detects dates, times, and timestamps including RFC-formatted strings
-- **Fail-Safe on Unparseable Values**: A single sampled value that doesn't match a
-  recognized type falls the whole column back to VARCHAR (see "Confidence Threshold"
-  below for why this isn't currently tunable)
+- **Confidence Threshold**: A minority of non-conforming values doesn't force the whole
+  column to VARCHAR — the column is promoted and those values read as null
 
 ## Configuration
 
@@ -35,8 +34,7 @@ The File Adapter supports automatic type inference for CSV files. Instead of tre
           "enabled": true,                    // Enable type inference (default: true)
           "samplingRate": 1.0,                // Fraction of rows to sample (default: 1.0)
           "maxSampleRows": 1000,              // Max rows to sample (default: 1000)
-          "confidenceThreshold": 0.95,        // Accepted but currently has no effect - see
-                                               // "Confidence Threshold" below
+          "confidenceThreshold": 0.95,        // Min conforming fraction to type a column
           "makeAllNullable": true,            // Make all types nullable (default: true)
           "nullableThreshold": 0.01,          // If makeAllNullable=false, null ratio threshold
           "inferDates": true,                 // Infer DATE types (default: true)
@@ -129,24 +127,25 @@ jdbc:calcite:model=inline:{
 
 ## Confidence Threshold
 
-`confidenceThreshold` is accepted in config and validated to `[0.0, 1.0]`, but it does not
-currently change any type-inference decision: a column falls back to VARCHAR the moment a
-single sampled value doesn't match a recognized type, regardless of how the rest of the
-column looks or what threshold is configured. This is intentional, not an oversight — the
-alternative (inferring a type for a column with a known-bad minority of values) would mean
-one of two things when a query actually reaches a non-conforming value: silently converting
-it to null, or crashing the query with an error not caused by anything the query itself did.
-The former is a fallback value with no upstream signal, exactly what CLAUDE.md rule #6 ("no
-silent fallback values") and `docs/testing/contradictions.md` (decision C-16) rule out for
-this codebase; the latter would turn a query that succeeds today into one that can fail
-later, for the same data, the first time it happens to scan the bad row. Neither is a
-change to make silently, so the setting is a no-op rather than a partial implementation of
-either.
+`confidenceThreshold` (default 0.95) is the fraction of a column's non-null sampled values
+that must parse as a recognized type for the column to take that type. A minority below
+`1 − threshold` doesn't force the whole column to VARCHAR: the column is promoted, and the
+non-conforming values become **null**, each logged at WARN with the column and the value.
 
-If a column has values a stricter or looser pattern should recognize (e.g. a currency
-symbol, a locale-specific decimal separator), fix the recognized-pattern rules themselves
-rather than reaching for `confidenceThreshold` — see `NumericFormats` for the numeric
-normalization already handled this way.
+So a column of 1000 integers with 5 stray strings infers INTEGER (0.995 ≥ 0.95) and those 5
+rows read as null. Raise the threshold toward 1.0 to demand a cleaner column before
+promoting; lower it to tolerate messier data.
+
+Nulling rather than raising is a deliberate, documented exception to this codebase's
+no-silent-fallbacks rule (see `docs/testing/contradictions.md`, C-08 and the C-16
+amendment). The short version: the mismatch is expected by construction — you asked for a
+threshold that tolerates a minority — and raising is not usable here, because the Parquet
+engine converts the whole file when the table is created, so one bad value would drop the
+entire table from the schema rather than failing a single row.
+
+The same null-and-warn applies to a value that contradicts a type **declared** in the header
+(`amount:int` with a cell reading `n/a`): the author asserted the type, so the value is bad
+data, not a bad type.
 
 ## Null Handling
 
@@ -210,14 +209,13 @@ By default, all inferred types are nullable for safety. This can be configured:
 ```
 
 ### Mixed Format Data
-Raise `samplingRate`/`maxSampleRows` to see more of the file before deciding, and fix the
-recognized-pattern rules for whatever format is being missed (see "Confidence Threshold"
-above for why lowering `confidenceThreshold` isn't a way to work around messy data today).
+Lower `confidenceThreshold` to tolerate a larger minority of non-conforming values (they
+read as null), and raise `maxSampleRows` to see more of the file before deciding.
 ```json
 {
   "csvTypeInference": {
     "enabled": true,
-    "samplingRate": 0.5,
+    "confidenceThreshold": 0.8,   // Tolerate up to 20% non-conforming (they read as null)
     "maxSampleRows": 5000,
     "makeAllNullable": true       // Always nullable for safety
   }
@@ -230,8 +228,8 @@ above for why lowering `confidenceThreshold` isn't a way to work around messy da
 1. Check if type inference is enabled
 2. Verify sampling rate is not too low
 3. Increase max sample rows so more of the file is seen
-4. Review logs for inference details - look for which sampled value fell through to
-   VARCHAR (see "Confidence Threshold" above for why `confidenceThreshold` won't help here)
+4. Lower `confidenceThreshold` if a small minority of messy values is holding the column back
+5. Review logs for inference details - look for which sampled values fell through to VARCHAR
 
 ### Wrong Types Detected
 1. Increase sampling rate for better coverage

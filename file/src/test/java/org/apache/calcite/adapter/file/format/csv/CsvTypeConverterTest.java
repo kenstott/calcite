@@ -74,10 +74,9 @@ public class CsvTypeConverterTest {
     assertNull(converter.convert("NULL", SqlTypeName.BOOLEAN));
   }
 
-  @Test @DisplayName("convert BOOLEAN invalid throws NumberFormatException")
+  @Test @DisplayName("convert BOOLEAN invalid becomes null (C-16 amended)")
   void testConvertBooleanInvalid() {
-    assertThrows(NumberFormatException.class,
-        () -> converter.convert("maybe", SqlTypeName.BOOLEAN));
+    assertNull(converter.convert("maybe", SqlTypeName.BOOLEAN));
   }
 
   // --- Numeric conversions ---
@@ -274,12 +273,9 @@ public class CsvTypeConverterTest {
     assertTrue(result instanceof Long);
   }
 
-  @Test @DisplayName("convert unparseable date throws due to null result debug logging")
+  @Test @DisplayName("convert unparseable date becomes null, never an NPE (C-17)")
   void testConvertUnparseableDate() {
-    // parseDate returns null for unparseable dates, but the debug logging
-    // at line 157 calls result.getClass() which triggers NPE
-    assertThrows(NullPointerException.class,
-        () -> converter.convert("not-a-date", SqlTypeName.DATE));
+    assertNull(converter.convert("not-a-date", SqlTypeName.DATE));
   }
 
   @Test @DisplayName("convert unparseable time returns null")

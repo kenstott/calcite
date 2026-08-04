@@ -255,38 +255,44 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
      JDBC round-trip through the Parquet-cache layer, confirming `getDate`/`getTimestamp`
      return correct values end-to-end, not just at the row-type layer).
 
-8. **G5** ✅ *(resolved as no-code-change, docs corrected)* — investigated wiring up
-   `confidenceThreshold` (documented in `file/docs/csv-type-inference.md`, default `0.95`,
-   but never actually consulted by `CsvTypeInferrer.determineType`'s VARCHAR-collapse path)
-   to tolerate a minority of unparseable sampled values instead of collapsing the whole
-   column to VARCHAR. Built and tested a version that did this, but it required one of two
-   things once the promoted type actually hit an unparseable value at conversion time:
-   silently convert it to null, or crash a query that previously always succeeded. The
-   first is exactly the "silent fallback value" `docs/testing/contradictions.md` decision
-   C-16 already resolved as **CODE-WRONG** against CLAUDE.md rule #6 — confirmed by
-   `ResolvedBugTargetsTest.badNumericValueRaises`, a pinned regression test asserting
-   numeric conversion *must* throw on an unparseable value, not coerce. Extending that
-   silent-null pattern to numeric/boolean conversion (previously correctly throwing) would
-   have made rule #6 compliance worse, not better. The second (promote-then-crash) trades
-   "always VARCHAR" for "usually typed, but a query that worked yesterday can start failing
-   today on the same file" — a real behavior change, not something to ship silently.
-   - **Resolution:** left `CsvTypeInferrer.determineType` and `CsvTypeConverter` as they
-     were (any single unparseable sampled value still collapses the column to VARCHAR,
-     unconditionally); reverted the exploratory `CsvTypeConverter` null-swallowing change.
-     Kept one harmless cleanup: Case 3 and Case 4's identical type-widening preference
-     lists were consolidated into a single `TYPE_WIDENING_PREFERENCE` constant (DRY, no
-     behavior change).
-   - Corrected `file/docs/csv-type-inference.md` instead: added a "Confidence Threshold"
-     section explaining `confidenceThreshold` is accepted and validated but currently a
-     no-op for this decision, and why (the same silent-null-vs-crash tradeoff above);
-     removed it from the "Financial Data"/"Mixed Format Data" examples and the
-     troubleshooting section, where it was presented as something that could be tuned.
-   - Added `CsvTypeInferenceTest.testMinorityUnparseableValueStillFallsBackToVarchar`
-     (`mostly-integers.csv`, 19 valid + 1 garbage value, `confidenceThreshold: 0.9`
-     configured) to pin the invariant that a comfortably-above-threshold column still
-     falls back to VARCHAR — guards against a future change silently reintroducing
-     promote-then-null.
-   - **Data remediation: none** — no behavior change shipped.
+8. **G5 / C-08** ✅ *(done — supersedes an earlier, wrong resolution)* — `confidenceThreshold`
+   was documented and configurable but never consulted: a single unparseable value in the
+   sample forced the whole column to VARCHAR regardless of the threshold. It now works as
+   documented — the inferrer widens across the non-VARCHAR types present and promotes the
+   column when the conforming fraction meets `confidenceThreshold`.
+   - **Correction to the record.** I first closed G5 as "no rule-6-compliant way to do this"
+     and wrote that into the plan and `csv-type-inference.md`. That was wrong: I had found
+     `docs/testing/contradictions.md` C-16 (raise on parse failure) but missed **C-08**,
+     which already resolved this exact gap as CODE-WRONG with the instruction to implement
+     promotion, and even had a staged `@Disabled` target test waiting
+     (`CsvInferenceRequirementsTest.confidenceThresholdPromotesMajority`, now enabled). The
+     earlier commit is superseded by this one; the docs claiming promotion is impossible are
+     removed.
+   - **Parse-failure behavior: null + WARN, and C-16 amended to say so.** Implementing
+     promotion forces the question of what a scan does when it reaches one of the tolerated
+     non-conforming values. Raising (C-16 as originally written) turned out to be unusable:
+     the PARQUET engine materializes the whole file when the table is created, so one bad
+     value fails that conversion and `FileSchema` drops the table from the schema entirely —
+     every query then fails, including ones that never reference the column (observed:
+     `Object 'mostly_integers' not found within 'csv_infer'`). That is strictly worse than
+     the nulls it was meant to prevent. C-16 now carries an explicit amendment carving out
+     CSV value conversion, with the reasoning: the mismatch is expected by construction —
+     either the header declared the type (so the *data* is bad, not the type) or the column
+     was promoted under a threshold that tolerates a minority by definition — and the WARN
+     names the column and value, so nothing is silent.
+   - Fixes C-17 as a side effect: an unparseable DATE used to NPE inside `convert()` (the
+     debug log called `getClass()` on a null result). All temporal parsers now raise a clean
+     internal `CsvParseException`, which `convert()` turns into the same null + WARN.
+   - Regression tests: `CsvInferenceRequirementsTest.confidenceThresholdPromotesMajority`
+     (the previously staged C-08 target), `CsvTypeInferenceTest`
+     `testMinorityUnparseableValuePromotesColumn` (end-to-end JDBC: 19 clean integers + 1
+     garbage value at `confidenceThreshold` 0.9 → INTEGER column, table materializes),
+     `ResolvedBugTargetsTest.badNumericValueBecomesNull` and `badDateIsNullNotNpe` (replacing
+     the raise/NPE pins, so a future change can't make one bad row remove a table).
+   - **Data remediation: cache-clear, file/ adapter only — zero govdata impact** (govdata
+     never routes CSV through `CsvTypeInferrer`; see G6). Columns that previously fell back
+     to VARCHAR because of a small minority of bad values will now type properly, so affected
+     tables need their `.aperio/{schema}/*.parquet` cache entry cleared.
 
 9. **G6** ✅ *(done)* — `csvTypeInference` now defaults to **enabled**. A schema with no
    `csvTypeInference` block (or one omitting `enabled`) gets `defaultConfig()`'s settings;
@@ -385,9 +391,10 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
 - **G6 default flip**: resolved — flipped to enabled-by-default; see the G6 entry above for
   the two real bugs the flip exposed (declared header types being overridden, and
   non-deterministic fractional sampling) and the cache-clear remediation.
-- **G5 policy**: resolved — see the G5 entry above. `confidenceThreshold` stays a no-op for
-  the VARCHAR-collapse decision; there's no rule-6-compliant way to make it do anything
-  else without either silent nulling or promote-then-crash. Docs corrected instead of code.
+- **G5 policy**: resolved — `confidenceThreshold` promotion is implemented per C-08, and
+  C-16 is amended so a non-conforming CSV value becomes null + WARN rather than raising (see
+  the G5/C-08 entry above). This supersedes my earlier "no rule-6-compliant way" conclusion,
+  which was reached without having found C-08.
 - **Phase 3 sequencing**: whether to hold G7 (turning on inference in govdata) until
   Phase 1/2 land, as recommended above, or treat them independently.
 - **G9/G8 scope**: resolved — remediate the base table via `/data-fix` for both.
