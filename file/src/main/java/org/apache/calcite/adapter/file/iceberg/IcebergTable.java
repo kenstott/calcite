@@ -16,7 +16,13 @@ import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.metadata.RelMdUtil;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
+import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.CommentableTable;
+import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.NumberUtil;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
@@ -62,7 +68,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   <li>Hidden partitioning</li>
  * </ul>
  */
-public class IcebergTable extends AbstractTable implements ScannableTable, CommentableTable {
+public class IcebergTable extends AbstractTable
+    implements ScannableTable, CommentableTable,
+        org.apache.calcite.rel.metadata.BuiltInMetadata.DistinctRowCount.Handler {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTable.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -365,6 +373,66 @@ public class IcebergTable extends AbstractTable implements ScannableTable, Comme
       LOGGER.warn("Failed to get Iceberg statistics: {}", e.getMessage());
       return constraintConfig != null ? buildStatistic(null) : Statistics.UNKNOWN;
     }
+  }
+
+  /** Published per-column cardinality, resolved once per table instance. */
+  private @Nullable Map<String, Long> publishedNdv;
+
+  /**
+   * Supplies per-column cardinality to the planner from this table's published Iceberg statistics.
+   *
+   * <p>Calcite reaches this through {@code RelMdDistinctRowCount}, which unwraps a scan's table to
+   * a {@code DistinctRowCount.Handler}. Crucially, when a handler is present Calcite uses its
+   * answer and does NOT fall back — so a handler that returns null wherever it has nothing to say
+   * would destroy the estimate Calcite derives from declared unique keys. This therefore answers
+   * from published statistics where it can and otherwise reproduces exactly the default it
+   * displaced, so installing it can only add information.
+   *
+   * <p>Published values apply only to a single column with no predicate: the blobs describe one
+   * column each, combining them would assume an independence there is no evidence for, and a
+   * predicate's effect on distinctness is not something a whole-table sketch can describe.
+   */
+  @Override public @Nullable Double getDistinctRowCount(RelNode r, RelMetadataQuery mq,
+      ImmutableBitSet groupKey, @Nullable RexNode predicate) {
+    if (groupKey != null && groupKey.cardinality() == 1 && predicate == null) {
+      Map<String, Long> ndv = publishedNdv();
+      if (!ndv.isEmpty()) {
+        String column = r.getRowType().getFieldNames().get(groupKey.nth(0));
+        Long v = ndv.get(column.toLowerCase(java.util.Locale.ROOT));
+        if (v != null) {
+          return v.doubleValue();
+        }
+      }
+    }
+    // Calcite's default, reproduced rather than delegated: RelMdDistinctRowCount skips it entirely
+    // once a handler exists, and calling back through mq here would recurse into this method.
+    if (RelMdUtil.areColumnsDefinitelyUnique(mq, r, groupKey)) {
+      return NumberUtil.multiply(mq.getRowCount(r), mq.getSelectivity(r, predicate));
+    }
+    return null;
+  }
+
+  /**
+   * Reads the published statistics, loading table metadata fresh rather than reusing the cached
+   * {@link #icebergTable()} handle.
+   *
+   * <p>That handle is resolved at schema-open and pinned for the life of the instance, so a
+   * statistics file published afterwards — by the ETL run that wrote the data — would be invisible
+   * to it forever. Reading once through a fresh load and caching the result keeps the lookup off
+   * the per-query path while still seeing statistics that arrived after this schema was built.
+   */
+  private synchronized Map<String, Long> publishedNdv() {
+    if (publishedNdv == null) {
+      try {
+        publishedNdv =
+            org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(
+                loadIcebergTable());
+      } catch (Exception e) {
+        LOGGER.debug("Could not read published cardinality: {}", e.toString());
+        publishedNdv = java.util.Collections.emptyMap();
+      }
+    }
+    return publishedNdv;
   }
 
   private Statistic buildStatistic(@Nullable Double rowCount) {

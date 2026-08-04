@@ -219,13 +219,35 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
    * <p>This wrapper implements CommentableTable to delegate comment requests
    * to the underlying table if it supports comments.
    */
-  private static class ConstraintAwareJdbcTable implements CommentableTable {
+  private static class ConstraintAwareJdbcTable
+      implements CommentableTable, org.apache.calcite.schema.Wrapper {
     private final Table wrappedDelegate;
     private final Map<String, Object> constraintConfig;
     private final @Nullable String schemaName;
     private final @Nullable String tableName;
     private final java.util.function.@Nullable Function<java.util.List<String>, java.util.List<String>> targetColumnResolver;
     private Statistic statistic;  // Non-final to allow lazy initialization
+
+    /**
+     * Passes type-based lookups down to the wrapped table.
+     *
+     * <p>Calcite resolves per-query metadata handlers by unwrapping a scan's table. This class sits
+     * between RelOptTable and the table holding the statistics, so without delegating here the
+     * lookup stops at this wrapper — getStatistic() below already forwards row counts, but the
+     * handler path was blind.
+     */
+    @Override public <C extends Object> @Nullable C unwrap(Class<C> clazz) {
+      if (clazz.isInstance(this)) {
+        return clazz.cast(this);
+      }
+      if (clazz.isInstance(wrappedDelegate)) {
+        return clazz.cast(wrappedDelegate);
+      }
+      if (wrappedDelegate instanceof org.apache.calcite.schema.Wrapper) {
+        return ((org.apache.calcite.schema.Wrapper) wrappedDelegate).unwrap(clazz);
+      }
+      return null;
+    }
 
     public ConstraintAwareJdbcTable(Table wrappedDelegate,
                                     Map<String, Object> constraintConfig,

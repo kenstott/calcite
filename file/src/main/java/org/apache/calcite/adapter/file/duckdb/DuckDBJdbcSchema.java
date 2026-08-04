@@ -443,7 +443,8 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
    * JdbcTableScan, and the JDBC convention rules won't be registered.
    */
   private static class CommentableJdbcTableWrapper
-      implements Table, CommentableTable, org.apache.calcite.schema.TranslatableTable {
+      implements Table, CommentableTable, org.apache.calcite.schema.TranslatableTable,
+          org.apache.calcite.schema.Wrapper {
     private final Table jdbcTable;           // For query execution
     private final CommentableTable commentableTable;  // For metadata
 
@@ -468,6 +469,30 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
         return ((IcebergTable) commentableTable).getRowType(typeFactory);
       }
       return jdbcTable.getRowType(typeFactory);
+    }
+
+    /**
+     * Exposes the FileSchema table's interfaces to type-based lookups.
+     *
+     * <p>Statistics reach the planner two ways: {@link #getStatistic()} for row counts, and
+     * {@code unwrap} for the metadata handlers Calcite resolves per query. Delegating only the
+     * former left per-column cardinality unreachable. The metadata authority is the same for both.
+     */
+    @Override public <C extends Object> @org.checkerframework.checker.nullness.qual.Nullable C
+        unwrap(Class<C> clazz) {
+      if (clazz.isInstance(commentableTable)) {
+        return clazz.cast(commentableTable);
+      }
+      if (clazz.isInstance(jdbcTable)) {
+        return clazz.cast(jdbcTable);
+      }
+      if (commentableTable instanceof org.apache.calcite.schema.Wrapper) {
+        C c = ((org.apache.calcite.schema.Wrapper) commentableTable).unwrap(clazz);
+        if (c != null) {
+          return c;
+        }
+      }
+      return null;
     }
 
     @Override public Statistic getStatistic() {
