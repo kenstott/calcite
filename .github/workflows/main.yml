@@ -51,18 +51,18 @@ env:
   GUAVA: '21.0' # most jobs test against oldest Guava version
 
 jobs:
-  windows-jdk8:
+  windows-jdk11:
     if: github.event.action != 'labeled'
-    name: 'Windows (JDK 8)'
+    name: 'Windows (JDK 11)'
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v5
       with:
         fetch-depth: 50
-    - name: 'Set up JDK 8'
+    - name: 'Set up JDK 11'
       uses: actions/setup-java@v5
       with:
-        java-version: 8
+        java-version: 11
         distribution: 'zulu'
     - uses: burrunan/gradle-cache-action@v1
       name: Test
@@ -141,9 +141,9 @@ jobs:
           echo sqlsh
           call sqlsh.bat -o headers "select count(*) commits, author from (select substring(author, 1, position(' <' in author)-1) author from git_commits) group by author order by count(*) desc, author limit 20"
 
-  linux-jdk8-oldest-guava-tz:
+  linux-jdk11-oldest-guava-tz:
     if: github.event.action != 'labeled'
-    name: 'Linux (JDK 8, oldest Guava, America/New_York Timezone)'
+    name: 'Linux (JDK 11, oldest Guava, America/New_York Timezone)'
     runs-on: ubuntu-latest
     env:
       TZ: 'America/New_York' # flips between −05:00 and −04:00
@@ -151,10 +151,10 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
-      - name: 'Set up JDK 8'
+      - name: 'Set up JDK 11'
         uses: actions/setup-java@v5
         with:
-          java-version: 8
+          java-version: 11
           distribution: 'zulu'
       - uses: burrunan/gradle-cache-action@v1
         name: Test
@@ -163,9 +163,9 @@ jobs:
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA_MIN }} build
 
-  linux-jdk8-latest-guava-tz:
+  linux-jdk11-latest-guava-tz:
     if: github.event.action != 'labeled'
-    name: 'Linux (JDK 8, latest Guava, America/New_York Timezone)'
+    name: 'Linux (JDK 11, latest Guava, America/New_York Timezone)'
     runs-on: ubuntu-latest
     env:
       TZ: 'America/New_York' # flips between −05:00 and −04:00
@@ -173,10 +173,10 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
-      - name: 'Set up JDK 8'
+      - name: 'Set up JDK 11'
         uses: actions/setup-java@v5
         with:
-          java-version: 8
+          java-version: 11
           distribution: 'zulu'
       - uses: burrunan/gradle-cache-action@v1
         name: Test
@@ -396,21 +396,21 @@ jobs:
     # Run slow tests when the commit is on main or it is requested explicitly by adding an
     # appropriate label in the PR
     if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'slow-tests-needed')
-    name: 'Linux (JDK 8) Slow Tests'
+    name: 'Linux (JDK 11) Slow Tests'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
-      - name: 'Set up JDK 8'
+      - name: 'Set up JDK 11'
         uses: actions/setup-java@v5
         with:
-          java-version: 8
+          java-version: 11
           distribution: 'zulu'
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
-          job-id: jdk8
+          job-id: jdk11
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon testSlow
 

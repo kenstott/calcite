@@ -31,9 +31,15 @@ if [ -f "$GOVDATA_HOME/.env.prod" ]; then
 fi
 export GOVDATA_HOME
 
-# Ensure the embed venv exists (idempotent).
-if [ ! -x "$VENV/bin/python" ]; then
-  echo "[vss-local] embed venv missing — provisioning via vss-embed-setup.sh"
+# Ensure the embed venv exists AND carries its packages (idempotent). Testing for
+# bin/python alone is not enough: a venv whose package install was interrupted still
+# has the interpreter, so the guard passes forever and every run dies on the first
+# import instead of reprovisioning. Probe the same imports vss-embed-setup.sh does.
+if ! "$VENV/bin/python" - <<'PY' >/dev/null 2>&1
+import torch, sentence_transformers, duckdb, pyarrow  # noqa
+PY
+then
+  echo "[vss-local] embed venv missing or incomplete — provisioning via vss-embed-setup.sh"
   bash "$SCRIPT_DIR/vss-embed-setup.sh"
 fi
 PY="$VENV/bin/python"

@@ -888,16 +888,29 @@ public class IcebergTableWriter {
           if (s.isEmpty()) {
             return null;
           }
+          // Sources emit both the ISO-8601 form ("2026-02-10T10:54:31Z") and the SQL form with a
+          // space separator ("2026-02-10 10:54:31" — CFTC swaps, among others). Both denote the
+          // same instant, so normalize the separator to 'T' before parsing; treating the SQL form
+          // as unparseable nulls a column whose value was never actually malformed.
+          String iso = s.length() > 10 && s.charAt(10) == ' '
+              ? s.substring(0, 10) + 'T' + s.substring(11)
+              : s;
           try {
             // ISO 8601 with Z suffix (e.g. "2026-06-04T13:38:30Z")
-            return LocalDateTime.ofInstant(Instant.parse(s), ZoneOffset.UTC);
-          // fallback-guard: allow second real parse attempt in an alternate ISO-8601 format, not a fabricated value
+            return LocalDateTime.ofInstant(Instant.parse(iso), ZoneOffset.UTC);
+          // fallback-guard: allow further real parse attempts in alternate ISO-8601 shapes, not a fabricated value
           } catch (Exception e1) {
             try {
-              // ISO 8601 without timezone (e.g. "2026-06-04T13:38:30")
-              return LocalDateTime.parse(s);
+              // No zone/offset (e.g. "2026-06-04T13:38:30", "2026-02-10 10:54:31")
+              return LocalDateTime.parse(iso);
             } catch (Exception e2) {
-              return handleCoercionFailure(fieldName, value, "TIMESTAMP", e2);
+              try {
+                // Explicit numeric offset (e.g. "2026-06-04T13:38:30+00:00")
+                return java.time.OffsetDateTime.parse(iso)
+                    .withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
+              } catch (Exception e3) {
+                return handleCoercionFailure(fieldName, value, "TIMESTAMP", e3);
+              }
             }
           }
         }

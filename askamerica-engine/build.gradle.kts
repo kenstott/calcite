@@ -21,9 +21,10 @@ plugins {
 
 description = "AskAmerica MCP server — query US government data from Claude Desktop"
 
-// askamerica-engine depends on govdata which requires Java 11+. Skip on JDK 8 so the upstream
-// Calcite JDK 8 CI jobs don't fail on missing govdata classes.
-if (JavaVersion.current() < JavaVersion.VERSION_11) {
+// askamerica-engine depends on govdata (Java 11+) and on smile-base 4.x, which ships Java 21
+// bytecode (class file 65.0). Skip the module on anything older so the upstream Calcite CI jobs
+// running an older JDK do not fail on classes they cannot read.
+if (JavaVersion.current() < JavaVersion.VERSION_21) {
     afterEvaluate {
         tasks.withType<JavaCompile>().configureEach { enabled = false }
         tasks.withType<Test>().configureEach { enabled = false }
