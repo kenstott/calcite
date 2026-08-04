@@ -173,11 +173,25 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /**
    * Per-column distinct-value sketches accumulated over the rows this writer commits, published
    * as an Iceberg Puffin statistics file. Null when statistics collection is switched off.
+   *
+   * <p>OFF by default, because a sketch built here describes only the rows THIS run wrote, and
+   * most runs write a slice. With {@code overwritePartitions} the commit calls
+   * replacePartitionsDataFiles(), replacing just the partitions touched and leaving the rest of
+   * the table intact — so a daily run over the current year would publish that year's cardinality
+   * as the whole table's. Every run would overwrite the previous, correct value with a smaller
+   * wrong one, and nothing downstream could tell. Statistics that are silently wrong are worse
+   * than absent: the planner trusts them and cannot distinguish them from measured ones.
+   *
+   * <p>Correct partial-write handling needs per-partition sketches unioned at commit — theta
+   * sketches are mergeable, which is why the format was chosen — so that a replaced partition
+   * contributes its new sketch while untouched partitions keep theirs. Until that exists, enable
+   * with -Dcalcite.file.statistics.iceberg.enabled=true only for a run that rewrites a table in
+   * full.
    */
   private final org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics columnSketches =
-      "false".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "true"))
-          ? null
-          : new org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics();
+      "true".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "false"))
+          ? new org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics()
+          : null;
   /** JVM shutdown hook registered in initialize() to emergency-commit staged files on SIGTERM. */
   private Thread shutdownHook;
 
