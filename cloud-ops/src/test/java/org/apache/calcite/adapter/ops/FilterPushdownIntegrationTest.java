@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -59,9 +60,8 @@ public class FilterPushdownIntegrationTest {
   @BeforeEach
   public void setUp() {
     config = CloudOpsTestUtils.loadTestConfig();
-    if (config == null) {
-      throw new IllegalStateException("Real credentials required from local-test.properties file");
-    }
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
 
     SqlTypeFactoryImpl typeFactory =
         new SqlTypeFactoryImpl(org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);

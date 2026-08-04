@@ -23,6 +23,7 @@ import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayWithSize;
@@ -124,9 +125,8 @@ public class CloudOpsPerformanceTest {
   private CloudOpsConfig createTestConfig() {
     // Only use real credentials from local properties file
     CloudOpsConfig config = CloudOpsTestUtils.loadTestConfig();
-    if (config == null) {
-      throw new IllegalStateException("Real credentials required from local-test.properties file");
-    }
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
     return config;
   }
 }

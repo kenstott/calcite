@@ -42,6 +42,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -65,9 +66,8 @@ public class PaginationPushdownIntegrationTest {
   void setUp() throws SQLException {
     // Only use real credentials from local properties file
     config = CloudOpsTestUtils.loadTestConfig();
-    if (config == null) {
-      throw new IllegalStateException("Real credentials required from local-test.properties file");
-    }
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
 
     // Set up Calcite connection with cloud-ops schema
     Properties calciteProps = new Properties();

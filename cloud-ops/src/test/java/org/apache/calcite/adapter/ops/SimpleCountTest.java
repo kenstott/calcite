@@ -21,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import java.sql.*;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
 public class SimpleCountTest {
   public static void main(String[] args) throws Exception {
     new SimpleCountTest().getCounts();
@@ -28,6 +30,8 @@ public class SimpleCountTest {
 
   @Test public void getCounts() throws Exception {
     CloudOpsConfig config = CloudOpsTestUtils.loadTestConfig();
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
     String modelJson = CloudOpsTestUtils.createModelJson(config);
     Properties info = new Properties();
     info.setProperty("model", "inline:" + modelJson);

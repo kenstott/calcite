@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -79,9 +80,8 @@ public class CloudOpsSchemaTest {
   private CloudOpsConfig createTestConfig() {
     // Only use real credentials from local properties file
     CloudOpsConfig config = CloudOpsTestUtils.loadTestConfig();
-    if (config == null) {
-      throw new IllegalStateException("Real credentials required from local-test.properties file");
-    }
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
     return config;
   }
 }

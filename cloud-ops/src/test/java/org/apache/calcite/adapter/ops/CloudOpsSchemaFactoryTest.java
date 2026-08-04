@@ -124,6 +124,7 @@ public class CloudOpsSchemaFactoryTest {
     assertThat(schema, instanceOf(CloudOpsSchema.class));
 
     CloudOpsSchema governanceSchema = (CloudOpsSchema) schema;
-    assertThat(governanceSchema.getTableMap(), aMapWithSize(7)); // All 7 tables should be available
+    // 7 resource tables + the compute_security_groups junction table
+    assertThat(governanceSchema.getTableMap(), aMapWithSize(8));
   }
 }

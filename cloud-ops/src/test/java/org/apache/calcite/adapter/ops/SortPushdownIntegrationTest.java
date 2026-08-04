@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
 /**
  * Live integration tests for sort pushdown optimization.
  * Tests sort pushdown across Azure, AWS, and GCP providers using real cloud credentials.
@@ -54,9 +56,8 @@ public class SortPushdownIntegrationTest {
   static void setUp() throws Exception {
     // Load test configuration
     config = CloudOpsTestUtils.loadTestConfig();
-    if (config == null) {
-      throw new IllegalStateException("Real credentials required from local-test.properties file");
-    }
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
 
     // Set up Calcite connection with cloud-ops schema
     Properties info = new Properties();

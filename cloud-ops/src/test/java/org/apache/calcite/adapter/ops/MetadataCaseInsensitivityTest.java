@@ -29,6 +29,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -171,9 +172,8 @@ public class MetadataCaseInsensitivityTest {
   private CloudOpsConfig createTestConfig() {
     // Only use real credentials from local properties file
     CloudOpsConfig config = CloudOpsTestUtils.loadTestConfig();
-    if (config == null) {
-      throw new IllegalStateException("Real credentials required from local-test.properties file");
-    }
+    assumeTrue(config != null,
+        "Real credentials required from local-test.properties file");
     return config;
   }
 
