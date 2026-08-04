@@ -402,15 +402,26 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
     stated: a Y/N-looking column is only a boolean if its domain is actually two-valued,
     which has to be checked per column against the data rather than assumed from the name.
 
-12. **G7** — evaluate enabling `csvTypeInference` schema-by-schema for govdata tables
-    with no explicit `type:`/`TRY_CAST` override.
-    - **Data remediation: `/data-fix` reprocess per affected schema, sequenced after
-      Phase 1/2.** Any table that flips this on gets different (better) typing than it
-      has today, which is exactly the "already-materialized data is now stale" case —
-      each affected table needs `/data-fix --schema X --table Y --raw false` (raw cache
-      is XBRL/CSV bytes, untouched by this change, so no re-fetch). Explicitly sequence
-      this **after** Phase 1/2 land, since enabling inference before B1/G4/G5 are fixed
-      would bake those same bugs into 26 schemas' worth of freshly reprocessed data.
+12. **G7** ✅ *(resolved — keep the bespoke casts; no change)* — the item asked whether to
+    enable `csvTypeInference` schema-by-schema for govdata tables lacking an explicit
+    `type:`/`TRY_CAST`. Two findings retired it as written:
+    - **There is no flag to flip.** govdata never routes CSV through
+      `FileSchema`/`CsvTypeInferrer` at all. Its two `FileSchemaFactory` usages are a
+      Parquet directory (`SecEmbeddingSchemaFactory`) and HTML scraping (`SecDataFetcher`);
+      every govdata `.csv` source is parsed by its own per-schema transformer class writing
+      typed columns straight to Iceberg/Parquet. Turning `csvTypeInference` on for a govdata
+      schema would have no effect — which is also why G6's default flip had zero govdata
+      impact.
+    - **Migrating the transformers onto the shared inference path is the wrong trade.** The
+      hand-authored `type:`/`TRY_CAST` columns are explicit, reviewable, version-controlled
+      declarations of intent for authoritative sources with documented column semantics.
+      Inference is sampling-based and shaped by whatever happens to be in the file this
+      week. G6 already established the precedence rule for exactly this tension — a declared
+      type beats a sampled guess, because sampling can't know that a column of digits is an
+      identifier rather than a number. Replacing 26 schemas' declared types with guesses
+      would be a large, live-data refactor that trades certainty for inference and gains no
+      correctness.
+    - **Data remediation: none.** No behavior change, so nothing to reprocess.
 
 13. **G10** — scope a general fiscal-period-label parser for schemas beyond SEC, if
     warranted by actual query needs.
@@ -430,8 +441,8 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
   C-16 is amended so a non-conforming CSV value becomes null + WARN rather than raising (see
   the G5/C-08 entry above). This supersedes my earlier "no rule-6-compliant way" conclusion,
   which was reached without having found C-08.
-- **Phase 3 sequencing**: whether to hold G7 (turning on inference in govdata) until
-  Phase 1/2 land, as recommended above, or treat them independently.
+- **Phase 3 sequencing**: moot — G7 resolved as no-change (govdata does not use the CSV
+  inference path at all), so there is nothing to sequence after Phase 1/2.
 - **G9/G8 scope**: resolved — remediate the base table via `/data-fix` for both.
   Views are for enrichment (joins, derived labels, cross-references), not for
   simplifying remediation of a base-table correctness bug; a view that only exists to
