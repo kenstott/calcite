@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -87,7 +88,7 @@ public class EnvironmentVariableSubstitutor {
       return null;
     }
 
-    StringBuffer result = new StringBuffer();
+    StringBuilder result = new StringBuilder();
     Matcher matcher = ENV_VAR_PATTERN.matcher(input);
 
     while (matcher.find()) {
@@ -102,7 +103,8 @@ public class EnvironmentVariableSubstitutor {
               varName, defaultValue);
         } else {
           throw new IllegalArgumentException(
-              String.format("Environment variable '%s' is not defined and no default"
+              String.format(Locale.ROOT,
+                  "Environment variable '%s' is not defined and no default"
                   + " value was provided", varName));
         }
       } else {
@@ -166,7 +168,7 @@ public class EnvironmentVariableSubstitutor {
     // Pattern to match JSON string values that contain ONLY a variable (for type conversion)
     Pattern standaloneVarPattern = Pattern.compile("\"(\\$\\{[^:}]+(?::[^}]*)?\\})\"");
     Matcher standaloneMatcher = standaloneVarPattern.matcher(jsonString);
-    StringBuffer result = new StringBuffer();
+    StringBuilder result = new StringBuilder();
 
     while (standaloneMatcher.find()) {
       String variable = standaloneMatcher.group(1);
@@ -196,7 +198,7 @@ public class EnvironmentVariableSubstitutor {
     String intermediate = result.toString();
     Pattern mixedStringPattern = Pattern.compile("\"([^\"]*\\$\\{[^}]+\\}[^\"]*)\"");
     Matcher mixedMatcher = mixedStringPattern.matcher(intermediate);
-    StringBuffer finalResult = new StringBuffer();
+    StringBuilder finalResult = new StringBuilder();
 
     while (mixedMatcher.find()) {
       @Nullable String stringValue = mixedMatcher.group(1);

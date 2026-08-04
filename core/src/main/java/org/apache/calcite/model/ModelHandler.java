@@ -68,9 +68,8 @@ import java.util.Locale;
 import java.util.Map;
 import javax.sql.DataSource;
 
-import static java.util.Objects.requireNonNull;
-
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Reads a model and creates schema objects accordingly.

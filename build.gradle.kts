@@ -590,6 +590,13 @@ allprojects {
         val sourceSets: SourceSetContainer by project
 
         apply(plugin = "de.thetaphi.forbiddenapis")
+        // BSL modules are exempt from the Apache Calcite style checks, forbiddenApis
+        // included — the same exemption askamerica-engine already declares for itself.
+        // The plugin still has to be applied; the rest of the build configures its
+        // extension unconditionally.
+        if (project.name in bslModules) {
+            tasks.withType<CheckForbiddenApis>().configureEach { enabled = false }
+        }
         apply(plugin = "maven-publish")
 
         if (!skipJandex) {

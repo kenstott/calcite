@@ -25,6 +25,7 @@ import org.apache.calcite.schema.impl.AbstractSchema;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -111,7 +112,7 @@ public class ModelHandlerConstraintsTest {
 
     // Create temporary model file
     Path tempModel = Files.createTempFile("model-constraints-test", ".json");
-    Files.write(tempModel, modelJson.getBytes());
+    Files.write(tempModel, modelJson.getBytes(StandardCharsets.UTF_8));
 
     try {
       // Clear static test state
@@ -186,7 +187,7 @@ public class ModelHandlerConstraintsTest {
 
     // Create temporary model file
     Path tempModel = Files.createTempFile("model-no-constraints-test", ".json");
-    Files.write(tempModel, modelJson.getBytes());
+    Files.write(tempModel, modelJson.getBytes(StandardCharsets.UTF_8));
 
     try {
       // Clear static test state

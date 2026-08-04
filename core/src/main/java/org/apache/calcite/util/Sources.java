@@ -95,15 +95,15 @@ public abstract class Sources {
     } else if (uri.startsWith("http://") || uri.startsWith("https://")) {
       // HTTP/HTTPS resource
       try {
-        return new FileSource(new URL(uri));
-      } catch (MalformedURLException e) {
+        return new FileSource(new URI(uri).toURL());
+      } catch (MalformedURLException | URISyntaxException e) {
         throw new IllegalArgumentException("Invalid URL: " + uri, e);
       }
     } else if (uri.startsWith("file://")) {
       // File URL with explicit protocol
       try {
-        return new FileSource(new URL(uri));
-      } catch (MalformedURLException e) {
+        return new FileSource(new URI(uri).toURL());
+      } catch (MalformedURLException | URISyntaxException e) {
         // Fall back to treating as file path
         String path = uri.substring(7);  // Remove "file://"
         return new FileSource(new File(path));
@@ -115,8 +115,8 @@ public abstract class Sources {
     } else if (uri.startsWith("ftp://")) {
       // FTP resource
       try {
-        return new FileSource(new URL(uri));
-      } catch (MalformedURLException e) {
+        return new FileSource(new URI(uri).toURL());
+      } catch (MalformedURLException | URISyntaxException e) {
         throw new IllegalArgumentException("Invalid FTP URL: " + uri, e);
       }
     } else {
