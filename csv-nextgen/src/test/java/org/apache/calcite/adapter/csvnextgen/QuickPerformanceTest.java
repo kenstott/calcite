@@ -126,6 +126,9 @@ public class QuickPerformanceTest {
     CsvNextGenSchemaSimple schema =
         new CsvNextGenSchemaSimple(testDir, "linq4j", 1024, true);
     rootSchema.add("csvnextgen", schema);
+    // The queries below name tables unqualified, so make the adapter schema the
+    // default rather than the root, which holds no tables.
+    connection.setSchema("csvnextgen");
 
     System.out.println("Calcite connection established with CsvNextGen schema");
     return connection;

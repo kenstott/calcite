@@ -116,6 +116,9 @@ public class CsvNextGenPerformanceTest {
     CsvNextGenSchemaSimple schema =
         new CsvNextGenSchemaSimple(testDir, "linq4j", 1024, true);
     rootSchema.add("csvnextgen", schema);
+    // The queries below name tables unqualified, so make the adapter schema the
+    // default rather than the root, which holds no tables.
+    connection.setSchema("csvnextgen");
   }
 
   @Test public void testFullTableScanPerformance() throws SQLException {
