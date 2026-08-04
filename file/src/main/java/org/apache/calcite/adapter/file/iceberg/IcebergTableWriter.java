@@ -855,9 +855,21 @@ public class IcebergTableWriter {
           return ((java.sql.Date) value).toLocalDate();
         }
         if (value instanceof String) {
+          String d = ((String) value).trim();
           try {
-            return java.time.LocalDate.parse((String) value);
+            return java.time.LocalDate.parse(d);
+          // fallback-guard: allow a second real parse attempt on the leading date of a
+          // datetime string, not a fabricated value
           } catch (Exception e) {
+            // A DATE column fed a full datetime ("2026-02-10 10:54:31", "2026-02-10T10:54:31Z")
+            // carries a perfectly good date; take it rather than nulling the row's date entirely.
+            if (d.length() > 10 && (d.charAt(10) == ' ' || d.charAt(10) == 'T')) {
+              try {
+                return java.time.LocalDate.parse(d.substring(0, 10));
+              } catch (Exception e2) {
+                return handleCoercionFailure(fieldName, value, "DATE", e2);
+              }
+            }
             return handleCoercionFailure(fieldName, value, "DATE", e);
           }
         }
