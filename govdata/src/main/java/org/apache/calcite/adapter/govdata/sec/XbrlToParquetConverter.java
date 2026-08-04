@@ -21,6 +21,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.text.StringEscapeUtils;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jsoup.Jsoup;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -1134,20 +1136,23 @@ public class XbrlToParquetConverter implements FileConverter {
         }
         data.put("element_id", elementId);
 
-        // Resolve numeric value with provenance
+        // Resolve numeric value with provenance, applying the iXBRL scale factor so
+        // value_numeric is the value the filer reported rather than the one they displayed.
         if (cleanValue == null || cleanValue.isEmpty()) {
           data.put("value_numeric", null);
           data.put("value_numeric_method", null);
         } else {
+          Double parsed;
+          String method;
           try {
-            double numValue = Double.parseDouble(cleanValue.replaceAll(",", ""));
-            data.put("value_numeric", numValue);
-            data.put("value_numeric_method", "direct");
+            parsed = Double.parseDouble(cleanValue.replaceAll(",", ""));
+            method = "direct";
           } catch (NumberFormatException e) {
-            Double heuristic = applyNumericHeuristic(cleanValue);
-            data.put("value_numeric", heuristic);
-            data.put("value_numeric_method", heuristic != null ? "heuristic" : null);
+            parsed = applyNumericHeuristic(cleanValue);
+            method = parsed != null ? "heuristic" : null;
           }
+          data.put("value_numeric", applyScaleFactor(parsed, scaleInt));
+          data.put("value_numeric_method", method);
         }
 
         dataList.add(data);
@@ -1380,6 +1385,31 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
     return null;
+  }
+
+  /**
+   * Applies an iXBRL {@code scale} factor to a parsed fact value.
+   *
+   * <p>{@code ix:nonFraction/@scale} states that the text in the document is the value divided
+   * by 10^scale - a statement showing "in thousands" tags 1,234 with {@code scale="3"} to report
+   * 1,234,000. The scaled result is therefore the value the filer reported; the as-displayed text
+   * is kept verbatim in the {@code value} column, and {@code scale} itself is kept for provenance.
+   *
+   * <p>Traditional (non-inline) XBRL has no scale attribute and its element text is already the
+   * reported value; the caller records scale 0 for those, so this is a no-op.
+   *
+   * <p>Shifts via {@link BigDecimal} rather than multiplying by {@code Math.pow(10, scale)} so a
+   * scaled value is exact rather than carrying binary floating-point error into a dollar figure.
+   *
+   * @param value the parsed value as it appears in the document, or null if none could be parsed
+   * @param scale the fact's scale attribute, or null when the fact has none
+   * @return the reported value, or null when {@code value} is null
+   */
+  static @Nullable Double applyScaleFactor(@Nullable Double value, @Nullable Integer scale) {
+    if (value == null || scale == null || scale == 0) {
+      return value;
+    }
+    return BigDecimal.valueOf(value).scaleByPowerOfTen(scale).doubleValue();
   }
 
   private static String resolveRelativePeriodDate(String mmdd, String filingDate) {

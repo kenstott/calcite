@@ -342,19 +342,38 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
 
 ### Phase 3 — govdata-specific fixes
 
-10. **G9** — apply the XBRL scale multiplier in the base `financial_line_items` table,
-    not only in the `financial_facts` view.
-    - **Data remediation: fix the base table.** `value_numeric` is wrong (unscaled) in
-      `financial_line_items` today — that's a correctness bug in the base data, not
-      something a view should paper over. A view that applies the scale multiplier is
-      simplifying remediation, not adding enrichment, so it's the wrong tool here:
-      anyone who queries the base table directly (or a future view/join that forgets to
-      go through `financial_facts`) keeps getting silently wrong numbers. Remediate via
-      `/data-fix --schema sec --table financial_line_items --raw false` (full rewrite
-      from the preserved raw XBRL cache, no re-fetch from SEC) so `value_numeric` is
-      correct at the source of truth. `financial_facts` can stay as a view, but only for
-      genuine enrichment it adds beyond the corrected scale (joins, derived labels,
-      cross-references) — not as the only correct place to read the value from.
+10. **G9** ✅ *(code done; base-table reprocess still pending)* — `value_numeric` now carries
+    the value the filer *reported*, with the iXBRL `scale` factor applied at extraction
+    (`XbrlToParquetConverter.applyScaleFactor`), instead of the value as *displayed* in the
+    document.
+    - **Why this was a base-data bug, not a view convenience.** `ix:nonFraction/@scale` says
+      the document text is the value divided by 10^scale — a statement "in thousands" tags
+      1,234 with `scale="3"` to report 1,234,000. `value_numeric` stored the 1,234. Since
+      inline XBRL is mandatory for modern filings, that meant the base column silently mixed
+      two different things: the true value (traditional XBRL, no scale) and a display value
+      understated by 10^scale (iXBRL). Only `financial_facts.value_dollars` compensated.
+    - **A second consumer was already wrong**, which the original audit missed: the
+      `revenue_trends` view selects `fli.value_numeric AS revenue` with no scale applied, so
+      it under-reported revenue for every iXBRL filer. `edu.md`'s cross-schema example does
+      the same. Both become correct with the base-table fix and needed no edit — which is
+      exactly the argument for fixing the base column rather than teaching each new view to
+      remember the multiplication.
+    - Reconciled so scale is applied exactly once: `financial_facts.value_dollars` is now a
+      plain alias of `value_numeric` (kept so existing callers keep working) rather than
+      re-applying `POWER(10, scale)`. The `scale` column is retained for provenance, and the
+      as-displayed text is still in `value`, so nothing is lost.
+    - Scaling shifts the decimal exponent via `BigDecimal` rather than multiplying by
+      `Math.pow(10, scale)`, so a scaled dollar figure is exact (`1.1` at scale 3 is 1100.0,
+      not 1100.0000000000001). Pinned by `XbrlScaleFactorTest`.
+    - Updated `docs/requirements/govdata.yaml` GOV-008, whose scenario previously *required*
+      callers to compute `value_numeric * POWER(10, scale)` themselves; it now states the
+      opposite and warns against double-applying.
+    - **Data remediation: still required — the fix only changes newly written data.**
+      Existing `financial_line_items` parquet holds unscaled values, so it needs
+      `/data-fix --schema sec --table financial_line_items --raw false` (full rewrite from the
+      preserved raw XBRL cache, no re-fetch from SEC). Until that runs, the base table and any
+      view over it stay understated for iXBRL filings. **Not yet run — needs sign-off**, since
+      it rewrites a live table.
 
 11. **G8** — cast `cftc.cleared` (and audit other schemas for the same pattern) to
     BOOLEAN.

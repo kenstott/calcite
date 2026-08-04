@@ -132,7 +132,11 @@ column_templates:
     name: value_numeric
     type: double
     nullable: true
-    comment: Best-effort numeric representation; not the original filing value
+    comment: >
+      Best-effort numeric value as reported by the filer, with the iXBRL scale factor already
+      applied (a statement "in thousands" tagging 1,234 with scale=3 stores 1234000). The
+      as-displayed text is kept verbatim in the value column, and scale is kept for provenance.
+      Not a verbatim copy of the filing text; see value_numeric_method for how it was derived.
 
   value_numeric_method_column: &value_numeric_method
     name: value_numeric_method
@@ -519,7 +523,9 @@ partitionedTables:
       - name: scale
         type: int
         nullable: true
-        comment: Scale factor applied to the value
+        comment: >
+          iXBRL scale factor for this fact, already applied to value_numeric; retained for
+          provenance and to relate value_numeric back to the as-displayed value text.
 
 
     source:
@@ -1710,8 +1716,8 @@ views:
       Joins financial_line_items against an inline concept_aliases mapping to resolve XBRL
       concept variants (e.g. both us-gaap:Revenues and
       us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax map to canonical_name=revenue).
-      value_dollars applies the scale factor so callers never need to handle
-      value_numeric * POWER(10, scale) themselves.
+      value_dollars is retained as an alias of the (already scale-applied) value_numeric so
+      existing callers keep working; the scale factor is applied once, in the base table.
       WARNING: a filing reports one consolidated value per concept plus, separately, its
       segment/geography/product-line breakdown members under the same canonical_name and
       period — each context_ref is a distinct fact, so SUM(value_dollars) across all
@@ -1735,7 +1741,7 @@ views:
         li.decimals,
         li.scale,
         li.value_numeric,
-        li.value_numeric * POWER(10, COALESCE(li.scale, 0)) AS value_dollars,
+        li.value_numeric AS value_dollars,
         fc.segment IS NULL AS is_consolidated_total
       FROM financial_line_items li
       LEFT JOIN filing_contexts fc

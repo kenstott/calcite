@@ -130,15 +130,19 @@
   type: behavioral
   description: >
     In financial_line_items, value is the raw XBRL text and value_numeric is a best-effort numeric
-    representation (NOT the original filing value); unit_ref_normalized gives the canonical unit
+    representation of the value the filer reported, with the iXBRL scale factor already applied
+    (the as-displayed text stays in value); unit_ref_normalized gives the canonical unit
     (USD, shares, pure, usdPerShare) and is_instant=true marks a point-in-time fact vs a duration fact.
   scenario: >
     Given a financial_line_items row with a us-gaap concept
-    When value_numeric and scale are read
-    Then the true dollar amount is value_numeric * POWER(10, COALESCE(scale,0)) and unit_ref_normalized
-    names the canonical unit.
+    When value_numeric is read
+    Then it is already the true dollar amount - callers must NOT multiply by POWER(10, scale)
+    again - and unit_ref_normalized names the canonical unit.
   source: "sec-schema.yaml (financial_line_items ~454-541; value_numeric ~120-130; financial_facts view ~1617-1682)"
-  notes: "value_dollars in the financial_facts view applies the scale so callers need not."
+  notes: >
+    Scale is applied once, in the base table (XbrlToParquetConverter.applyScaleFactor).
+    value_dollars in the financial_facts view is now a plain alias of value_numeric, kept so
+    existing callers keep working; the scale column is retained for provenance.
   tests: []
 
 - id: GOV-009
