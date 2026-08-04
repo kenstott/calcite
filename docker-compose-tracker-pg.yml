@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
 # Local multi-writer Postgres for the pipeline tracker (the writable backend the
 # concurrent ETL pool requires; the in-process default is read-only and refuses
-# writes). Data lives on an ext4 BIND MOUNT under $HOME — NOT a /mnt/c Windows
-# path — because Postgres fsync on a 9p/Windows mount is slow and lock-fragile
+# writes). Data lives on an ext4 BIND MOUNT under $HOME -- NOT a /mnt/c Windows
+# path -- because Postgres fsync on a 9p/Windows mount is slow and lock-fragile
 # under WSL (same reason the Gradle caches live on ext4).
 #
 # Usage (from WSL):
@@ -28,7 +29,7 @@
 #   "trackerBackend": "pg",
 #   "trackerConfig": { "jdbcUrl": "jdbc:postgresql://localhost:5432/govdata",
 #                       "user": "govdata", "password": "govdata" }
-#
+
 version: '3.8'
 
 services:

@@ -1,4 +1,7 @@
 **/local.properties
+# Git-ignored local agent scratch/worktrees; Autostyle cannot read .gitignore
+# (https://github.com/autostyle/autostyle/issues/13), so exclude it explicitly.
+.claude/**
 **/.editorconfig
 **/.gitignore
 **/.gitattributes
@@ -58,6 +61,22 @@ sharepoint-list/**
 splunk/**
 cloud-ops/**
 askamerica-engine/**
+csv-nextgen/**
+driver-base/**
+file/**
+graphql/**
+openapi/**
+pgwire-calcite/**
+pgwire-cloudops/**
+pgwire-file/**
+pgwire-govdata/**
+pgwire-sharepoint/**
+pgwire-splunk/**
+trino-calcite/**
+trino-cloudops/**
+trino-file/**
+trino-sharepoint/**
+trino-splunk/**
 
 # Data schema YAML/SQL files (BSL project data)
 bls/**
@@ -96,16 +115,22 @@ archive/**
 djia-production-README.md
 djia-production-verification.sql
 test-*.sql
+install-minio-native-wsl.sh
+setup-wsl-tmp-drive.sh
+register-wsl-boot-task.ps1
+start-minio-with-disk.ps1
+docs/**
+ai.txt
+robots.txt
+optimize-files.md
+data-normalization-plan.md
+entity-resolution-plan.md
+semantic-search-plan.md
+issues-7-17-2026.md
+issues-*.md
 
-# file module: docs and dev files
-file/CLAUDE.md
-file/README.md
-file/TESTING.md
-file/raw-cache.md
-file/docs/**
-file/src/main/resources/org/apache/calcite/adapter/file/partition/create_partition_status.sql
-file/src/test/resources/etl-test/test-constants.yaml
-file/src/test/resources/test/minimal-schema.yaml
+# release-please artifacts
+CHANGELOG.md
+version.txt
+.python-version
 
-# driver-base Python files
-driver-base/src/main/python/**

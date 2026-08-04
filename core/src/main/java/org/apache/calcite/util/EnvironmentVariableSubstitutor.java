@@ -21,10 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.Objects;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Utility class for substituting environment variables in configuration strings.
@@ -64,7 +65,7 @@ public class EnvironmentVariableSubstitutor {
     // System properties take precedence for testing purposes
     Map<String, String> combined = new HashMap<>(System.getenv());
     System.getProperties().forEach((k, v) -> combined.put(k.toString(), v.toString()));
-    return Objects.requireNonNull(substitute(input, combined));
+    return requireNonNull(substitute(input, combined));
   }
 
   /**
@@ -136,7 +137,7 @@ public class EnvironmentVariableSubstitutor {
     // System properties take precedence for testing purposes
     Map<String, String> combined = new HashMap<>(System.getenv());
     System.getProperties().forEach((k, v) -> combined.put(k.toString(), v.toString()));
-    return Objects.requireNonNull(substituteInJson(jsonString, combined));
+    return requireNonNull(substituteInJson(jsonString, combined));
   }
 
   /**

@@ -277,4 +277,3 @@
 | [ ] | GOV-072 | MUST | behavioral | cyber / Write-mode & idempotence | threat_pulses (OTX) gates on freshness type:version (max pulse modified) with watermark_var otxModifiedSince … | — |
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
-

@@ -690,14 +690,14 @@ class UdfTest {
 
       try (Statement stmt = connection.createStatement()) {
         // "empid" is int; MyDoubleSumFunction#add declares (Double, Double, Double).
-        try (ResultSet rs = stmt.executeQuery(
-            "select POST.MY_DSUM(\"salary\", \"empid\") as r\n"
+        try (ResultSet rs =
+            stmt.executeQuery("select POST.MY_DSUM(\"salary\", \"empid\") as r\n"
             + "from \"hr\".\"emps\"")) {
           assertThat(rs.next(), is(true));
           assertThat(rs.getDouble("R"), is(560.0));
         }
-        try (ResultSet rs = stmt.executeQuery(
-            "select POST.MY_DSUM(\"salary\", \"empid\") as r, count(*) as n\n"
+        try (ResultSet rs =
+            stmt.executeQuery("select POST.MY_DSUM(\"salary\", \"empid\") as r, count(*) as n\n"
             + "from \"hr\".\"emps\"")) {
           assertThat(rs.next(), is(true));
           assertThat(rs.getDouble("R"), is(560.0));

@@ -29,6 +29,8 @@ import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
 import software.amazon.awssdk.services.s3.model.GetBucketLocationResponse;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * Utility class for reading S3 objects and getting S3 bucket information.
  */
@@ -57,8 +59,8 @@ public class S3Reader {
     if (!matcher.matches()) {
       throw new IOException("Invalid S3 URI: " + s3Uri);
     } else {
-      String bucketName = java.util.Objects.requireNonNull(matcher.group("bucket"), "bucket");
-      String key = java.util.Objects.requireNonNull(matcher.group("key"), "key");
+      String bucketName = requireNonNull(matcher.group("bucket"), "bucket");
+      String key = requireNonNull(matcher.group("key"), "key");
       byte[] bytes;
       S3Client s3Client = S3Client.builder().region(getBucketRegion(bucketName)).build();
       GetObjectRequest getObjectRequest =

@@ -18,11 +18,9 @@ package org.apache.calcite.adapter.arrow;
 
 import org.apache.calcite.config.CalciteSystemProperty;
 
-
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
-
 
 /**
  * JUnit5 extension to handle Arrow tests.

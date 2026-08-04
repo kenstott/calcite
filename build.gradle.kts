@@ -92,6 +92,18 @@ val skipJavadoc by props()
 val enableMavenLocal by props()
 val enableGradleMetadata by props()
 val werror by props(true) // treat javac warnings as errors
+
+// Modules distributed under the Business Source License rather than Apache-2.0.
+// They carry their own license headers and do not follow Apache Calcite's Java
+// conventions, so the autostyle license/style rules must not rewrite them.
+// .ratignore is the single source of truth: every `<module>/**` entry there that
+// names a Gradle subproject is treated as BSL.
+val bslModules: Set<String> =
+    rootDir.resolve(".ratignore").readLines()
+        .map { it.trim() }
+        .filter { it.endsWith("/**") && it.count { c -> c == '/' } == 1 }
+        .map { it.removeSuffix("/**") }
+        .toSet()
 // Inherited from stage-vote-release-plugin: skipSign, useGpgCmd
 // Inherited from gradle-extensions-plugin: slowSuiteLogThreshold=0L, slowTestLogThreshold=2000L
 
@@ -410,10 +422,14 @@ allprojects {
         }
     }
 
-    if (!skipAutostyle) {
+    if (!skipAutostyle && project.name !in bslModules) {
         apply(plugin = "com.github.autostyle")
         autostyle {
             kotlinGradle {
+                filter {
+                    // Autostyle does not support gitignore yet https://github.com/autostyle/autostyle/issues/13
+                    exclude(".claude/**")
+                }
                 license()
                 ktlint()
             }
@@ -434,6 +450,8 @@ allprojects {
                 filter {
                     include("**/*.md", "**/*.html")
                     exclude("**/test/**/*.html")
+                    // Autostyle does not support gitignore yet https://github.com/autostyle/autostyle/issues/13
+                    exclude(rootDir.resolve(".ratignore").readLines())
                 }
                 trimTrailingWhitespace()
                 endWithNewline()
@@ -501,7 +519,7 @@ allprojects {
         tasks.register("style") {
             group = LifecycleBasePlugin.VERIFICATION_GROUP
             description = "Formats code (license header, import order, whitespace at end of line, ...) and executes Checkstyle verifications"
-            if (!skipAutostyle) {
+            if (!skipAutostyle && project.name !in bslModules) {
                 dependsOn("autostyleApply")
             }
             if (!skipCheckstyle) {
@@ -586,7 +604,7 @@ allprojects {
             }
         }
 
-        if (!skipAutostyle) {
+        if (!skipAutostyle && project.name !in bslModules) {
             autostyle {
                 java {
                     filter.exclude(*javaccGeneratedPatterns +
