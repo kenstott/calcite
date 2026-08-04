@@ -325,7 +325,7 @@ partitionedTables:
       - name: fail_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(src."FAILDATE",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."FAILDATE",''''), ''%Y%m%d'') AS DATE)'
         comment: Date of incident
       - name: fire
         type: string
@@ -365,12 +365,12 @@ partitionedTables:
       - name: date_added
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(src."DATEA",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."DATEA",''''), ''%Y%m%d'') AS DATE)'
         comment: Date added to file
       - name: date_complaint_received
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(src."LDATE",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."LDATE",''''), ''%Y%m%d'') AS DATE)'
         comment: Date complaint received by NHTSA
       - name: miles
         type: integer
@@ -411,6 +411,14 @@ partitionedTables:
         format: csv
         delimiter: "\t"
         hasHeader: false
+        # FLAT_CMPL is a raw tab-delimited dump with no quoting convention: `"` is literal
+        # data, and NHTSA's own records carry it inside city names where an apostrophe was
+        # mangled (LAND O"LAKES, O"FALLON, "AUGUSTA — 85 such rows). Parsed as RFC4180 those
+        # open a quoted region that runs until the next `"` somewhere in a later record,
+        # merging records and shifting every column: MILES then lands in LDATE and fails the
+        # date expression. The file is perfectly rectangular otherwise (2,224,108 lines, 51
+        # fields each), so nothing here needs quote handling at all.
+        quoted: false
         columnNames: "CMPLID\tODINO\tMFR_NAME\tMAKETXT\tMODELTXT\tYEARTXT\tCRASH\tFAILDATE\tFIRE\tINJURED\tDEATHS\tCOMPDESC\tCITY\tSTATE\tVIN\tDATEA\tLDATE\tMILES\tOCCURENCES\tCDESCR\tCMPL_TYPE\tPOLICE_RPT_YN\tPURCH_DT\tORIG_OWNER_YN\tANTI_BRAKES_YN\tCRUISE_CONT_YN\tNUM_CYLS\tDRIVE_TRAIN\tFUEL_SYS\tFUEL_TYPE\tTRANS_TYPE\tVEH_SPEED\tDOT\tTIRE_SIZE\tLOC_OF_TIRE\tTIRE_FAIL_TYPE\tORIG_EQUIP_YN\tMANUF_DT\tSEAT_TYPE\tRESTRAINT_TYPE\tDEALER_NAME\tDEALER_TEL\tDEALER_CITY\tDEALER_STATE\tDEALER_ZIP\tPROD_TYPE\tREPAIRED_YN\tMEDICAL_ATTN\tVEHICLES_TOWED_YN\tSTATE_OF_INCIDENT\tVEHICLE_OPERATOR"
       rateLimit:
         requestsPerSecond: 1.0
@@ -1350,12 +1358,12 @@ partitionedTables:
       - name: safety_rating_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(src."SAFETY_RATING_DATE",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."SAFETY_RATING_DATE",''''), ''%Y%m%d'') AS DATE)'
         comment: Date of the most recent safety rating
       - name: review_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(src."REVIEW_DATE",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."REVIEW_DATE",''''), ''%Y%m%d'') AS DATE)'
         comment: Date of the most recent compliance review
       - name: total_drivers
         type: integer
@@ -1551,12 +1559,12 @@ partitionedTables:
       - name: last_action_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(trim(src."LAST ACTION DATE"),''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(trim(src."LAST ACTION DATE"),''''), ''%Y%m%d'') AS DATE)'
         comment: Date of last registration action
       - name: cert_issue_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(trim(src."CERT ISSUE DATE"),''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(trim(src."CERT ISSUE DATE"),''''), ''%Y%m%d'') AS DATE)'
         comment: Certificate issue date
       - name: certification
         type: string
@@ -1591,7 +1599,7 @@ partitionedTables:
       - name: airworthiness_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(trim(src."AIR WORTH DATE"),''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(trim(src."AIR WORTH DATE"),''''), ''%Y%m%d'') AS DATE)'
         comment: Date of original airworthiness certificate
       - name: other_names_1
         type: string
@@ -1621,7 +1629,7 @@ partitionedTables:
       - name: expiration_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(strptime(NULLIF(trim(src."EXPIRATION DATE"),''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(trim(src."EXPIRATION DATE"),''''), ''%Y%m%d'') AS DATE)'
         comment: Registration expiration date
       - name: unique_id
         type: string

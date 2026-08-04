@@ -1234,8 +1234,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       try {
         return transformRowsWithDuckDb(rows, columns, partitionVariables);
       } catch (Exception e) {
-        LOGGER.warn("DuckDB expression evaluation failed, falling back to Java evaluator: {}",
-            e.getMessage());
+        // State the blast radius. DuckDB fails the WHOLE batch on one bad value, and the Java
+        // evaluator below only recognizes a handful of expression shapes — anything else falls
+        // through to null. So a single malformed row can null a column for all N rows here, and
+        // the bare "falling back" wording read as a harmless downgrade rather than data loss.
+        LOGGER.warn("DuckDB expression evaluation failed for a batch of {} rows — falling back to "
+            + "the Java evaluator, which nulls any expression it cannot parse for EVERY row in "
+            + "this batch, not just the offending one: {}", rows.size(), e.getMessage());
       }
     }
 
