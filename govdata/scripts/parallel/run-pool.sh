@@ -436,6 +436,11 @@ cleanup() {
     local id="${active_labels[$_i]}"
     _cleanup_log "  Killing $id (session leader PID=$pid)"
     _kill_worker_session "$pid"
+    # Record the termination. The launcher wrapper writes .exit itself on the normal path,
+    # but a killed wrapper never reaches that line — so without this its .pid file outlives
+    # the run with no .exit beside it, and detect_active_schemas treats every such orphan as
+    # a candidate live writer forever. 143 = 128 + SIGTERM.
+    echo 143 > "$PID_DIR/${id}.exit"
   done
   _cleanup_log "=== All workers terminated ==="
   exit 130

@@ -1213,6 +1213,12 @@ detect_active_schemas() {
     [ -f "$_pid_dir/${_id}.exit" ] && continue         # worker already finished
     _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
     { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue  # pid not alive
+    # kill -0 only proves SOME process owns that pid, not that it is this worker. Orphan .pid
+    # files do accumulate (a run killed mid-flight leaves them behind), and once the kernel
+    # wraps pid_max those numbers get reused by unrelated processes — which would pin the
+    # schema "active" and stop it syncing indefinitely. Confirm identity: the launcher wrapper
+    # carries its own pid-file path in argv, so require that before believing the pid.
+    tr '\0' ' ' < "/proc/$_wpid/cmdline" 2>/dev/null | grep -qF "$_pf" || continue
     _rest=${_id#worker-}                               # <schema>-<mode>
     _schema=${_rest%-*}                                # strip the -<mode> suffix
     case "$_schema" in sec_*|sec) _schema=sec ;; esac  # sec_* all write sec/

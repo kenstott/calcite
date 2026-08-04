@@ -303,9 +303,25 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   # `rclone sync --checksum` pays real R2 LIST costs the sliced pass is designed to avoid —
   # it exists to bound the *worst case* staleness, not to replace the primary path.
   CATCHUP_INTERVAL="${GOVDATA_R2_CATCHUP_INTERVAL:-86400}"
+  # Schedule off a persisted last-run stamp, not off this process's start time. Sleeping the
+  # full interval first meant the daemon only ever fired if the runner survived that long
+  # uninterrupted — and every restart spawned a fresh daemon that began the countdown again.
+  # The runner is restarted more often than daily, so the backstop never once ran, and a
+  # continuously-written schema (sec) stayed held by the primary pass indefinitely with
+  # nothing to rescue it. The stamp survives restarts, so restart churn can no longer starve
+  # the catchup, and it still cannot run more than once per interval.
+  CATCHUP_STAMP="${HOME}/.r2-sync-state/.catchup-last"
+  mkdir -p "$(dirname "$CATCHUP_STAMP")"
   (
     while true; do
-      sleep "$CATCHUP_INTERVAL"
+      _last=0
+      [ -f "$CATCHUP_STAMP" ] && _last=$(cat "$CATCHUP_STAMP" 2>/dev/null)
+      [[ "$_last" =~ ^[0-9]+$ ]] || _last=0
+      _wait=$(( _last + CATCHUP_INTERVAL - $(date +%s) ))
+      if [ "$_wait" -gt 0 ]; then
+        sleep "$_wait"
+        continue
+      fi
       if [ -f "$CATCHUP_LOG" ] && [ "$(stat -c%s "$CATCHUP_LOG" 2>/dev/null || echo 0)" -gt 5242880 ]; then
         mv -f "$CATCHUP_LOG" "$CATCHUP_LOG.1"
       fi
@@ -316,6 +332,8 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
         echo "[$(ts)] R2 catchup FAILED (will retry next cycle)" >> "$CATCHUP_LOG"
         log_error "WARNING: R2 catchup sync failed (will retry next cycle)"
       fi
+      # Stamp on both outcomes: an unstamped failure would spin the loop on the next pass.
+      date +%s > "$CATCHUP_STAMP"
     done
   ) &
   _catchup_pid=$!
