@@ -50,15 +50,6 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
 
   static {
     INSTANCE = new DuckDBHLLCountDistinctRule();
-    try {
-      java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(
-          new java.io.FileOutputStream("/tmp/duckdb_hll_rule_loaded.txt"),
-          java.nio.charset.StandardCharsets.UTF_8));
-      writer.println("DuckDBHLLCountDistinctRule loaded at: " + java.time.Instant.now());
-      writer.close();
-    } catch (Exception e) {
-      // Ignore
-    }
   }
 
   @SuppressWarnings("deprecation")
@@ -97,30 +88,17 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
     final Aggregate aggregate = call.rel(0);
     final RelNode input = aggregate.getInput();
 
-    // Write to file to prove this was called
-    try {
-      java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(
-          new java.io.FileOutputStream("/tmp/duckdb_hll_rule_matched.txt", true),
-          java.nio.charset.StandardCharsets.UTF_8));
-      writer.println("Rule matched at: " + java.time.Instant.now());
-      writer.println("Aggregate: " + aggregate);
-      writer.close();
-    } catch (Exception e) {
-      // Ignore
-    }
-
-    LOGGER.warn("[DUCKDB-HLL] ===== RULE MATCHED! =====");
-    LOGGER.warn("[DUCKDB-HLL] Aggregate: {}", aggregate);
-    LOGGER.warn("[DUCKDB-HLL] Input type: {}", input.getClass().getName());
+    LOGGER.debug("Rule matched; aggregate={}, input type={}",
+        aggregate, input.getClass().getName());
 
     // Find the table scan in the input tree
     TableInfo tableInfo = findTableInfo(input);
     if (tableInfo == null) {
-      LOGGER.warn("[DUCKDB-HLL] Could not find table information in query tree");
+      LOGGER.debug("Could not find table information in query tree");
       return;
     }
 
-    LOGGER.warn("[DUCKDB-HLL] Found table: schema='{}', table='{}'",
+    LOGGER.debug("Found table: schema='{}', table='{}'",
                 tableInfo.schemaName, tableInfo.tableName);
     // Debug logging removed to avoid corrupting JSON output
     // LOGGER.debug("[DUCKDB-HLL]: Attempting to optimize COUNT(DISTINCT) for {}.{}",
@@ -147,15 +125,14 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
     }
 
     if (!hasOptimizableCountDistinct) {
-      LOGGER.warn("[DUCKDB-HLL] No HLL estimates available for optimization - query will be pushed to DuckDB");
+      LOGGER.debug("No HLL estimates available; leaving the query for DuckDB");
       return;
     }
 
     // Create VALUES node with HLL estimates
     RelNode valuesNode = createHLLValues(aggregate, hllEstimates);
     if (valuesNode != null) {
-      LOGGER.warn("[DUCKDB-HLL] ===== OPTIMIZATION SUCCESSFUL! =====");
-      LOGGER.warn("[DUCKDB-HLL] Replaced COUNT(DISTINCT) with HLL estimates: {}", hllEstimates);
+            LOGGER.debug("Replaced APPROX_COUNT_DISTINCT with HLL estimates: {}", hllEstimates);
       call.transformTo(valuesNode);
     }
   }
@@ -244,7 +221,7 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
       // Remove quotes from table name if present (DuckDB might have quoted names)
       String cleanTableName = tableInfo.tableName.replace("\"", "");
 
-      LOGGER.warn("[DUCKDB-HLL] Looking for HLL sketch: schema='{}', table='{}', column='{}' (original table: '{}')",
+      LOGGER.debug("Looking for HLL sketch: schema='{}', table='{}', column='{}' (original table: '{}')",
                    tableInfo.schemaName, cleanTableName, columnName, tableInfo.tableName);
 
       // Published Iceberg statistics first. They are written with the table, versioned against the
@@ -272,11 +249,11 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
 
       if (sketch != null) {
         long estimate = sketch.getEstimate();
-        LOGGER.warn("[DUCKDB-HLL] SUCCESS! Found HLL sketch for {}.{}.{}: estimate={}",
+        LOGGER.debug("Found HLL sketch for {}.{}.{}: estimate={}",
                    tableInfo.schemaName, cleanTableName, columnName, estimate);
         return estimate;
       } else {
-        LOGGER.warn("[DUCKDB-HLL] FAILED! No HLL sketch found for {}.{}.{}",
+        LOGGER.debug("No HLL sketch found for {}.{}.{}",
                    tableInfo.schemaName, cleanTableName, columnName);
       }
 

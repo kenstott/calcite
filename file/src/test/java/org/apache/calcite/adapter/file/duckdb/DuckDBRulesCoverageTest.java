@@ -261,14 +261,24 @@ public class DuckDBRulesCoverageTest {
   // DuckDBHLLCountDistinctRule - matches() tests
   // ====================================================================
 
-  @Test void testHLLMatchesDistinctCount() {
+  @Test void testHLLMatchesApproxDistinctCount() {
+    RelOptRuleCall call =
+        mockCallWithAggregate(
+            createMockAggregate(
+            ImmutableBitSet.of(),
+            Collections.singletonList(createApproxDistinctCountAggCall())));
+
+    assertTrue(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
+  }
+
+  @Test void testHLLRejectsExactDistinctCount() {
     RelOptRuleCall call =
         mockCallWithAggregate(
             createMockAggregate(
             ImmutableBitSet.of(),
             Collections.singletonList(createDistinctCountAggCall())));
 
-    assertTrue(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
+    assertFalse(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
   @Test void testHLLMatchesRejectsGroupBy() {
@@ -311,10 +321,10 @@ public class DuckDBRulesCoverageTest {
     assertFalse(DuckDBHLLCountDistinctRule.INSTANCE.matches(call));
   }
 
-  @Test void testHLLMatchesMultipleCallsOneDistinct() {
+  @Test void testHLLMatchesMultipleCallsOneApproxDistinct() {
     List<AggregateCall> aggCalls = new ArrayList<AggregateCall>();
     aggCalls.add(createCountStarAggCall());
-    aggCalls.add(createDistinctCountAggCall());
+    aggCalls.add(createApproxDistinctCountAggCall());
 
     RelOptRuleCall call =
         mockCallWithAggregate(createMockAggregate(ImmutableBitSet.of(), aggCalls));
@@ -629,6 +639,8 @@ public class DuckDBRulesCoverageTest {
     return aggCall;
   }
 
+  /** An exact {@code COUNT(DISTINCT x)}. The HLL rule must not match this: a
+   * sketch answers within about 2% and the SQL promises an exact number. */
   private AggregateCall createDistinctCountAggCall() {
     SqlAggFunction countFn = mock(SqlAggFunction.class);
     when(countFn.getKind()).thenReturn(SqlKind.COUNT);
@@ -636,6 +648,22 @@ public class DuckDBRulesCoverageTest {
     AggregateCall aggCall = mock(AggregateCall.class);
     when(aggCall.getAggregation()).thenReturn(countFn);
     when(aggCall.isDistinct()).thenReturn(true);
+    when(aggCall.isApproximate()).thenReturn(false);
+    when(aggCall.getArgList()).thenReturn(Collections.singletonList(0));
+    when(aggCall.getName()).thenReturn("EXPR$0");
+    return aggCall;
+  }
+
+  /** An {@code APPROX_COUNT_DISTINCT(x)}, which is how a caller asks for the
+   * estimate the HLL sketch can serve. */
+  private AggregateCall createApproxDistinctCountAggCall() {
+    SqlAggFunction countFn = mock(SqlAggFunction.class);
+    when(countFn.getKind()).thenReturn(SqlKind.COUNT);
+
+    AggregateCall aggCall = mock(AggregateCall.class);
+    when(aggCall.getAggregation()).thenReturn(countFn);
+    when(aggCall.isDistinct()).thenReturn(true);
+    when(aggCall.isApproximate()).thenReturn(true);
     when(aggCall.getArgList()).thenReturn(Collections.singletonList(0));
     when(aggCall.getName()).thenReturn("EXPR$0");
     return aggCall;
