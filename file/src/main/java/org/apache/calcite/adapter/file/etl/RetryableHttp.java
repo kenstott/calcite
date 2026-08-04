@@ -87,6 +87,39 @@ public final class RetryableHttp {
    * @throws HttpStatusException on a non-retryable non-200 status (e.g. 404)
    * @throws IOException         if retries are exhausted
    */
+  /**
+   * Decides whether an HTTP status warrants another attempt.
+   *
+   * <p>The transient-server family is retried by default: 429 (rate limited) plus the 5xx
+   * gateway/availability codes. 502 and 504 in particular are pure infrastructure hiccups —
+   * an upstream proxy that was momentarily unhealthy — and are among the most likely of all
+   * statuses to succeed on a second try; excluding them while retrying 500 stranded whole
+   * batches on an error that a single retry would usually have cleared.
+   *
+   * <p>A schema's {@code rateLimit.retryOn} adds to that baseline rather than replacing it.
+   * Every one of the ~197 declarations in the repo is some subset of the transient family
+   * ({@code [429, 503]}, {@code [429, 500, 503]}, {@code [500, 503]}) — they were written to
+   * name transient errors, not to opt out of the ones they happened to omit. Reading them as
+   * an override would therefore re-strand 502/504 on nearly every source and require editing
+   * all 197 to say what they already meant. Callers reaching this class directly (the
+   * streaming transformers) previously ignored the declaration outright.
+   */
+  private static boolean isRetryableStatus(int status,
+      HttpSourceConfig.RateLimitConfig rateLimit) {
+    if (status == 429 || status == 500 || status == 502 || status == 503 || status == 504) {
+      return true;
+    }
+    int[] declared = rateLimit != null ? rateLimit.getRetryOn() : null;
+    if (declared != null) {
+      for (int code : declared) {
+        if (code == status) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   public static HttpURLConnection openWithRetry(String url, Map<String, String> requestProps,
       HttpSourceConfig.RateLimitConfig rateLimit, boolean followRedirects) throws IOException {
     int maxRetries = rateLimit != null && rateLimit.getMaxRetries() > 0
@@ -124,7 +157,7 @@ public final class RetryableHttp {
       }
       long retryAfterMs = retryAfterMillis(conn);
       conn.disconnect();
-      if (status == 429 || status == 500 || status == 503) {
+      if (isRetryableStatus(status, rateLimit)) {
         last = new HttpStatusException(status, "HTTP " + status + " from " + url);
         LOGGER.warn("HTTP {} (attempt {}/{}) for {}{}", status, attempt + 1, maxRetries + 1, url,
             retryAfterMs >= 0 ? " — Retry-After " + (retryAfterMs / 1000) + "s" : "");
