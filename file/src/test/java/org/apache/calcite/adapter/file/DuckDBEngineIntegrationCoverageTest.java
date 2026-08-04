@@ -218,6 +218,7 @@ public class DuckDBEngineIntegrationCoverageTest {
         + "TO '%s' (FORMAT PARQUET)",
         rowCount, parquetFile.getAbsolutePath());
 
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process process = pb.start();
@@ -238,6 +239,7 @@ public class DuckDBEngineIntegrationCoverageTest {
     File parquetFile = new File(tempDir.toFile(), fileName);
     String sql =
         String.format("COPY (%s) TO '%s' (FORMAT PARQUET)", selectSql, parquetFile.getAbsolutePath());
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process process = pb.start();

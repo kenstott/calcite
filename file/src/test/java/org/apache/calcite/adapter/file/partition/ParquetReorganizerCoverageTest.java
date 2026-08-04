@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.partition;
 
+import org.apache.calcite.adapter.file.DuckDbCli;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -1107,6 +1108,7 @@ class ParquetReorganizerCoverageTest {
    */
   private void createParquetViaDuckDB(String path, String selectSql) throws Exception {
     String sql = "COPY (" + selectSql + ") TO '" + path + "' (FORMAT PARQUET)";
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process process = pb.start();

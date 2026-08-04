@@ -234,6 +234,7 @@ public class DuckDbHttpfsConstraintRequirementsTest {
   private void createParquet(String fileName, String selectSql) throws Exception {
     File out = new File(srcDir(), fileName);
     String sql = "COPY (" + selectSql + ") TO '" + out.getAbsolutePath() + "' (FORMAT PARQUET)";
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process proc = pb.start();

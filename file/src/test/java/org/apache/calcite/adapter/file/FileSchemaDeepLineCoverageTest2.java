@@ -85,6 +85,7 @@ class FileSchemaDeepLineCoverageTest2 {
   private File writeParquet(File d, String name) throws Exception {
     // Use DuckDB to create a test parquet file
     File parquetFile = new File(d, name);
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb =
         new ProcessBuilder("duckdb", "-c",
         "COPY (SELECT 1 AS id, 'alice' AS name UNION ALL SELECT 2, 'bob') "

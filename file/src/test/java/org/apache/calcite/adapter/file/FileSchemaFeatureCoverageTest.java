@@ -127,6 +127,7 @@ public class FileSchemaFeatureCoverageTest {
   /** Runs a DuckDB CLI command, returning true on success. */
   static boolean runDuckDB(String sql) {
     try {
+      DuckDbCli.assumeAvailable();
       ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
       pb.redirectErrorStream(true);
       Process p = pb.start();

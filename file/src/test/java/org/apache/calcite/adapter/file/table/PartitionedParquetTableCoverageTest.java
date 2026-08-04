@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.table;
 
+import org.apache.calcite.adapter.file.DuckDbCli;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
@@ -63,6 +64,7 @@ public class PartitionedParquetTableCoverageTest {
   private String createParquetFile(String fileName, String selectSql) {
     File file = tempDir.resolve(fileName).toFile();
     try {
+      DuckDbCli.assumeAvailable();
       ProcessBuilder pb = new ProcessBuilder("duckdb", "-c",
           "COPY (" + selectSql + ") TO '" + file.getAbsolutePath() + "' (FORMAT PARQUET)");
       pb.redirectErrorStream(true);

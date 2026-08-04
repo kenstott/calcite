@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.metadata;
 
+import org.apache.calcite.adapter.file.DuckDbCli;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -246,6 +247,7 @@ public class ConstraintMetadataJdbcTest {
   private void createParquet(String fileName, String selectSql) throws Exception {
     File out = new File(tempDir.toFile(), fileName);
     String sql = "COPY (" + selectSql + ") TO '" + out.getAbsolutePath() + "' (FORMAT PARQUET)";
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb = new ProcessBuilder("duckdb", "-c", sql);
     pb.redirectErrorStream(true);
     Process proc = pb.start();

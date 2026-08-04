@@ -902,6 +902,7 @@ class FileSchemaLineCoverageTest {
   @Test void testParquetFileDiscovery() throws Exception {
     File d = dir("parquet_discovery");
     File parquetFile = new File(d, "test_data.parquet");
+    DuckDbCli.assumeAvailable();
     ProcessBuilder pb =
         new ProcessBuilder("duckdb", "-c",
         "COPY (SELECT 1 AS id, 'hello' AS name) TO '" + parquetFile.getAbsolutePath()
