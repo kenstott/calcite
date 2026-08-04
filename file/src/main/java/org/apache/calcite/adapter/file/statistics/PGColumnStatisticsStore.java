@@ -61,6 +61,35 @@ public final class PGColumnStatisticsStore {
     this.namespace = namespace;
   }
 
+  /**
+   * Builds a store from the same configuration the pipeline tracker resolves, so statistics land
+   * in the same database and the same bucket-derived namespace without a second set of settings
+   * to keep in sync. Returns null when no PG tracker is configured — statistics are optional and
+   * a deployment without Postgres simply does not collect them.
+   *
+   * @param trackerConfig the {@code trackerConfig} operand map, may be null
+   */
+  public static PGColumnStatisticsStore fromTrackerConfig(Map<String, String> trackerConfig) {
+    Map<String, String> cfg = trackerConfig != null
+        ? trackerConfig : java.util.Collections.<String, String>emptyMap();
+    String jdbcUrl = cfg.get("jdbcUrl");
+    if (jdbcUrl == null) {
+      jdbcUrl = System.getenv("CALCITE_TRACKER_PG_URL");
+    }
+    if (jdbcUrl == null) {
+      return null;
+    }
+    String user = cfg.get("user");
+    if (user == null) {
+      user = System.getenv("CALCITE_TRACKER_PG_USER");
+    }
+    String password = cfg.get("password");
+    if (password == null) {
+      password = System.getenv("CALCITE_TRACKER_PG_PASSWORD");
+    }
+    return new PGColumnStatisticsStore(jdbcUrl, user, password, cfg.get("namespace"));
+  }
+
   private Connection open() throws SQLException {
     Connection c = user != null
         ? DriverManager.getConnection(jdbcUrl, user, password)

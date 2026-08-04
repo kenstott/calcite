@@ -417,12 +417,14 @@ public class StatisticsBuilder {
       }
 
       if (!columnFound) {
-        LOGGER.warn("Column {} not found in Parquet schema, using estimate", columnName);
-        // Fall back to estimate based on file size
-        for (int i = 0; i < Math.min(10000, estimatedDistinctCount); i++) {
-          hllSketch.add(columnName + "_" + i);
-        }
-        return hllSketch;
+        // No sketch rather than a fabricated one. This previously seeded the sketch with
+        // synthetic values (columnName + "_" + i), handing the planner a manufactured
+        // cardinality of up to 10000 for a column that does not exist in the file — an invented
+        // statistic is worse than none, because the planner trusts it and cannot tell it apart
+        // from a measured one. Null means "unknown", which callers already handle by falling
+        // back to their default estimates.
+        LOGGER.warn("Column {} not found in Parquet schema — no cardinality statistic", columnName);
+        return null;
       }
 
       // Read actual data and add to HLL sketch
@@ -459,16 +461,13 @@ public class StatisticsBuilder {
     } catch (java.io.FileNotFoundException e) {
       // File was deleted (likely during test cleanup) - this is expected behavior
       LOGGER.debug("File no longer exists during HLL generation (likely cleanup): {}", e.getMessage());
-      // Use simple fallback without error
-      for (int i = 0; i < Math.min(1000, estimatedDistinctCount); i++) {
-        hllSketch.add(columnName + "_" + i);
-      }
+      // No sketch rather than a fabricated one — see the column-not-found branch above.
+      return null;
     } catch (Exception e) {
-      LOGGER.error("Failed to generate HLL from actual data, using fallback: {}", e.getMessage());
-      // Fallback to estimate
-      for (int i = 0; i < Math.min(1000, estimatedDistinctCount); i++) {
-        hllSketch.add(columnName + "_" + i);
-      }
+      LOGGER.error("Failed to generate HLL from actual data — no cardinality statistic: {}",
+          e.getMessage());
+      // No sketch rather than a fabricated one — see the column-not-found branch above.
+      return null;
     }
 
     return hllSketch;
