@@ -42,6 +42,7 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.Calendar;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -1240,10 +1241,13 @@ public class FileAdapterTest {
           + "and \"jointime\" < {t '08:00:00'}";
       final ResultSet joinTime = statement.executeQuery(sql2);
       assertThat(joinTime.next(), is(true));
-      // TIME "07:15:56" = 7*3600000 + 15*60000 + 56*1000 = 26156000ms
-      // But CSV parser appears to apply timezone offset (bug in parser)
-      long timeMs = joinTime.getTime(1).getTime() % (24L * 60 * 60 * 1000);
-      assertThat(timeMs, is(44156000L));
+      // TIME "07:15:56" = 7*3600000 + 15*60000 + 56*1000 = 26156000ms.
+      // Read against an explicit UTC calendar: the no-argument getTime renders
+      // into the JVM default zone, so its millis depend on where the test runs.
+      long timeMs =
+          joinTime.getTime(1, Calendar.getInstance(TimeZone.getTimeZone("UTC")))
+              .getTime() % (24L * 60 * 60 * 1000);
+      assertThat(timeMs, is(26156000L));
 
       // timestamp
       final String sql3 = "select \"jointimes\",\n"
