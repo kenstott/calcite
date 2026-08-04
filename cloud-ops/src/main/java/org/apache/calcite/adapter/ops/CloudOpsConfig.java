@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.ops;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 
@@ -49,7 +50,7 @@ public class CloudOpsConfig {
       @JsonProperty("cacheEnabled") Boolean cacheEnabled,
       @JsonProperty("cacheTtlMinutes") Integer cacheTtlMinutes,
       @JsonProperty("cacheDebugMode") Boolean cacheDebugMode) {
-    this.providers = providers != null ? providers : List.of("azure", "gcp", "aws");
+    this.providers = providers != null ? providers : ImmutableList.of("azure", "gcp", "aws");
     this.azure = azure;
     this.gcp = gcp;
     this.aws = aws;

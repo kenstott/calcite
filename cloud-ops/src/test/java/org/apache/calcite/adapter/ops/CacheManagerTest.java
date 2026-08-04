@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.ops;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheValidator;
 
@@ -54,8 +56,8 @@ public class CacheManagerTest {
 
     String cacheKey = "test:basic:operation";
     List<Map<String, Object>> testData =
-        Arrays.asList(Map.of("id", "1", "name", "test1"),
-        Map.of("id", "2", "name", "test2"));
+        Arrays.asList(ImmutableMap.of("id", "1", "name", "test1"),
+        ImmutableMap.of("id", "2", "name", "test2"));
 
     // Test cache miss - should execute supplier
     List<Map<String, Object>> result1 = cacheManager.getOrCompute(cacheKey, () -> {
@@ -71,7 +73,7 @@ public class CacheManagerTest {
     List<Map<String, Object>> result2 = cacheManager.getOrCompute(cacheKey, () -> {
       apiCallCount.incrementAndGet();
       logger.debug("API call executed - count: {}", apiCallCount.get());
-      return Arrays.asList(Map.of("id", "999", "name", "should-not-appear"));
+      return Arrays.asList(ImmutableMap.of("id", "999", "name", "should-not-appear"));
     });
 
     assertEquals(testData, result2);
@@ -104,7 +106,7 @@ public class CacheManagerTest {
     logger.info("=== Testing Cache Invalidation ===");
 
     String cacheKey = "test:invalidation:key";
-    List<Map<String, Object>> testData = Arrays.asList(Map.of("test", "data"));
+    List<Map<String, Object>> testData = Arrays.asList(ImmutableMap.of("test", "data"));
 
     // Populate cache
     List<Map<String, Object>> result1 = cacheManager.getOrCompute(cacheKey, () -> {
@@ -120,7 +122,7 @@ public class CacheManagerTest {
     // Should execute supplier again after invalidation
     List<Map<String, Object>> result2 = cacheManager.getOrCompute(cacheKey, () -> {
       apiCallCount.incrementAndGet();
-      return Arrays.asList(Map.of("new", "data"));
+      return Arrays.asList(ImmutableMap.of("new", "data"));
     });
 
     assertEquals("data", result2.get(0).get("new"));
@@ -137,10 +139,10 @@ public class CacheManagerTest {
     String key2 = "metrics:test:2";
 
     // Generate some cache activity
-    cacheManager.getOrCompute(key1, () -> Arrays.asList(Map.of("id", "1"))); // Miss
-    cacheManager.getOrCompute(key1, () -> Arrays.asList(Map.of("id", "999"))); // Hit
-    cacheManager.getOrCompute(key2, () -> Arrays.asList(Map.of("id", "2"))); // Miss
-    cacheManager.getOrCompute(key2, () -> Arrays.asList(Map.of("id", "999"))); // Hit
+    cacheManager.getOrCompute(key1, () -> Arrays.asList(ImmutableMap.of("id", "1"))); // Miss
+    cacheManager.getOrCompute(key1, () -> Arrays.asList(ImmutableMap.of("id", "999"))); // Hit
+    cacheManager.getOrCompute(key2, () -> Arrays.asList(ImmutableMap.of("id", "2"))); // Miss
+    cacheManager.getOrCompute(key2, () -> Arrays.asList(ImmutableMap.of("id", "999"))); // Hit
 
     CloudOpsCacheManager.CacheMetrics metrics = cacheManager.getCacheMetrics();
 
@@ -168,7 +170,7 @@ public class CacheManagerTest {
     for (int i = 0; i < 10; i++) {
       String key = "eviction:test:" + i;
       final int id = i; // Make variable effectively final for lambda
-      smallCache.getOrCompute(key, () -> Arrays.asList(Map.of("id", String.valueOf(id))));
+      smallCache.getOrCompute(key, () -> Arrays.asList(ImmutableMap.of("id", String.valueOf(id))));
     }
 
     CloudOpsCacheManager.CacheMetrics metrics = smallCache.getCacheMetrics();

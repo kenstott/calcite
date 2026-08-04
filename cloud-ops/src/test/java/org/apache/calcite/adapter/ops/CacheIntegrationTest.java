@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.ops;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheValidator;
 
@@ -137,8 +139,8 @@ public class CacheIntegrationTest {
     long startTime = System.currentTimeMillis();
 
     List<Map<String, Object>> testData =
-        Arrays.asList(Map.of("cluster", "test-cluster-1", "region", "us-east-1"),
-        Map.of("cluster", "test-cluster-2", "region", "us-west-2"));
+        Arrays.asList(ImmutableMap.of("cluster", "test-cluster-1", "region", "us-east-1"),
+        ImmutableMap.of("cluster", "test-cluster-2", "region", "us-west-2"));
 
     // First call - cache miss
     List<Map<String, Object>> result1 = cacheManager.getOrCompute(cacheKey, () -> {
@@ -177,8 +179,8 @@ public class CacheIntegrationTest {
     String key2 = "invalidation:test:2";
 
     // Populate cache with multiple entries
-    List<Map<String, Object>> data1 = Arrays.asList(Map.of("id", "1"));
-    List<Map<String, Object>> data2 = Arrays.asList(Map.of("id", "2"));
+    List<Map<String, Object>> data1 = Arrays.asList(ImmutableMap.of("id", "1"));
+    List<Map<String, Object>> data2 = Arrays.asList(ImmutableMap.of("id", "2"));
 
     cacheManager.getOrCompute(key1, () -> data1);
     cacheManager.getOrCompute(key2, () -> data2);
@@ -190,7 +192,7 @@ public class CacheIntegrationTest {
     cacheManager.invalidate(key1);
 
     // key1 should be invalidated, key2 should still be cached
-    cacheManager.getOrCompute(key1, () -> Arrays.asList(Map.of("id", "1-new")));
+    cacheManager.getOrCompute(key1, () -> Arrays.asList(ImmutableMap.of("id", "1-new")));
     List<Map<String, Object>> stillCached = cacheManager.getOrCompute(key2, () -> {
       fail("Key2 should still be cached");
       return null;
@@ -213,9 +215,9 @@ public class CacheIntegrationTest {
     String awsKey = CloudOpsCacheManager.buildCacheKey("aws", "eks", "account1");
     String gcpKey = CloudOpsCacheManager.buildCacheKey("gcp", "gke", "project1");
 
-    List<Map<String, Object>> azureData = Arrays.asList(Map.of("provider", "azure", "clusters", 3));
-    List<Map<String, Object>> awsData = Arrays.asList(Map.of("provider", "aws", "clusters", 5));
-    List<Map<String, Object>> gcpData = Arrays.asList(Map.of("provider", "gcp", "clusters", 2));
+    List<Map<String, Object>> azureData = Arrays.asList(ImmutableMap.of("provider", "azure", "clusters", 3));
+    List<Map<String, Object>> awsData = Arrays.asList(ImmutableMap.of("provider", "aws", "clusters", 5));
+    List<Map<String, Object>> gcpData = Arrays.asList(ImmutableMap.of("provider", "gcp", "clusters", 2));
 
     // Cache data for all providers
     cacheManager.getOrCompute(azureKey, () -> azureData);
@@ -255,7 +257,7 @@ public class CacheIntegrationTest {
     for (int i = 0; i < 15; i++) {
       String key = "metrics:test:" + (i % 5); // Create some repeated keys for hits
       final int iteration = i; // Make variable effectively final for lambda
-      cacheManager.getOrCompute(key, () -> Arrays.asList(Map.of("iteration", iteration)));
+      cacheManager.getOrCompute(key, () -> Arrays.asList(ImmutableMap.of("iteration", iteration)));
     }
 
     CloudOpsCacheManager.CacheMetrics finalMetrics = cacheManager.getCacheMetrics();

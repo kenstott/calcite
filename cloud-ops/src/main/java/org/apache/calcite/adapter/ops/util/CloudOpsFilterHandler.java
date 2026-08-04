@@ -17,6 +17,9 @@ import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +32,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Handles filter pushdown optimization for multi-cloud query optimization.
@@ -45,7 +49,7 @@ public class CloudOpsFilterHandler {
 
   // Supported filter operations for pushdown
   private static final Set<SqlKind> PUSHABLE_OPERATIONS =
-      Set.of(SqlKind.EQUALS,
+      ImmutableSet.of(SqlKind.EQUALS,
       SqlKind.NOT_EQUALS,
       SqlKind.GREATER_THAN,
       SqlKind.GREATER_THAN_OR_EQUAL,
@@ -59,34 +63,34 @@ public class CloudOpsFilterHandler {
 
   // Field name mappings for different cloud providers
   private static final Map<String, ProviderFieldMapping> FIELD_MAPPINGS =
-      Map.of(
+      ImmutableMap.of(
           "azure", new ProviderFieldMapping(
-          Map.of(
-              "cloud_provider", "SubscriptionId", // Special handling needed
-              "account_id", "SubscriptionId",
-              "region", "location",
-              "cluster_name", "name",
-              "application", "Application",
-              "resource_name", "name",
-              "resource_type", "type")),
+          ImmutableMap.<String, String>builder()
+              .put("cloud_provider", "SubscriptionId") // Special handling needed
+              .put("account_id", "SubscriptionId")
+              .put("region", "location")
+              .put("cluster_name", "name")
+              .put("application", "Application")
+              .put("resource_name", "name")
+              .put("resource_type", "type").build()),
       "aws", new ProviderFieldMapping(
-          Map.of(
-              "cloud_provider", "provider", // Logical field
-              "account_id", "accountId",
-              "region", "region",
-              "cluster_name", "name",
-              "application", "tags.Application",
-              "resource_name", "name",
-              "resource_type", "resourceType")),
+          ImmutableMap.<String, String>builder()
+              .put("cloud_provider", "provider") // Logical field
+              .put("account_id", "accountId")
+              .put("region", "region")
+              .put("cluster_name", "name")
+              .put("application", "tags.Application")
+              .put("resource_name", "name")
+              .put("resource_type", "resourceType").build()),
       "gcp", new ProviderFieldMapping(
-          Map.of(
-              "cloud_provider", "provider", // Logical field
-              "account_id", "projectId",
-              "region", "region",
-              "cluster_name", "name",
-              "application", "labels.application",
-              "resource_name", "name",
-              "resource_type", "resourceType")));
+          ImmutableMap.<String, String>builder()
+              .put("cloud_provider", "provider") // Logical field
+              .put("account_id", "projectId")
+              .put("region", "region")
+              .put("cluster_name", "name")
+              .put("application", "labels.application")
+              .put("resource_name", "name")
+              .put("resource_type", "resourceType").build()));
 
   public CloudOpsFilterHandler(RelDataType rowType, List<RexNode> filters) {
     this.rowType = rowType;
@@ -157,11 +161,11 @@ public class CloudOpsFilterHandler {
         .flatMap(filter -> {
           if (filter.operation == SqlKind.EQUALS) {
             String stringValue = extractStringValue(filter.value);
-            return List.of(stringValue).stream();
+            return Stream.of(stringValue);
           } else if (filter.operation == SqlKind.IN && filter.values != null) {
             return filter.values.stream().map(this::extractStringValue);
           }
-          return List.<String>of().stream();
+          return Stream.empty();
         })
         .collect(Collectors.toSet());
   }
@@ -180,11 +184,11 @@ public class CloudOpsFilterHandler {
         .flatMap(filter -> {
           if (filter.operation == SqlKind.EQUALS) {
             String stringValue = extractStringValue(filter.value);
-            return List.of(stringValue).stream();
+            return Stream.of(stringValue);
           } else if (filter.operation == SqlKind.IN && filter.values != null) {
             return filter.values.stream().map(this::extractStringValue);
           }
-          return List.<String>of().stream();
+          return Stream.empty();
         })
         .collect(Collectors.toList());
   }

@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.ops;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.calcite.adapter.ops.util.CloudOpsFilterHandler;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexBuilder;
@@ -315,7 +317,7 @@ public class FilterPushdownIntegrationTest {
     // Verify AWS and Azure are not queried
     Map<String, Object> awsParams = filterHandler.getAWSFilterParameters();
     // Azure won't be queried due to provider filter
-    Map<String, Object> azureParams = Map.of();
+    Map<String, Object> azureParams = ImmutableMap.of();
 
     LOGGER.info("✅ GCP-targeted optimization:");
     LOGGER.info("   Only GCP will be queried: {}", providers);

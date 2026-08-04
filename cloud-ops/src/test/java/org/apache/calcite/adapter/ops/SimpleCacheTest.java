@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.ops;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -53,8 +55,8 @@ public class SimpleCacheTest {
 
     String cacheKey = "test:basic:cache";
     List<Map<String, Object>> testData =
-        Arrays.asList(Map.of("id", "1", "name", "test1"),
-        Map.of("id", "2", "name", "test2"));
+        Arrays.asList(ImmutableMap.of("id", "1", "name", "test1"),
+        ImmutableMap.of("id", "2", "name", "test2"));
 
     // First call - should be a cache miss
     List<Map<String, Object>> result1 = cacheManager.getOrCompute(cacheKey, () -> {
@@ -70,7 +72,7 @@ public class SimpleCacheTest {
     List<Map<String, Object>> result2 = cacheManager.getOrCompute(cacheKey, () -> {
       apiCallCount.incrementAndGet();
       logger.debug("This should not execute - count: {}", apiCallCount.get());
-      return Arrays.asList(Map.of("id", "999", "name", "should-not-appear"));
+      return Arrays.asList(ImmutableMap.of("id", "999", "name", "should-not-appear"));
     });
 
     assertEquals(testData, result2);
@@ -102,7 +104,7 @@ public class SimpleCacheTest {
     logger.info("=== Testing Cache Invalidation ===");
 
     String cacheKey = "test:invalidation";
-    List<Map<String, Object>> originalData = Arrays.asList(Map.of("test", "original"));
+    List<Map<String, Object>> originalData = Arrays.asList(ImmutableMap.of("test", "original"));
 
     // Populate cache
     List<Map<String, Object>> result1 = cacheManager.getOrCompute(cacheKey, () -> {
@@ -116,7 +118,7 @@ public class SimpleCacheTest {
     cacheManager.invalidate(cacheKey);
 
     // Should call API again after invalidation
-    List<Map<String, Object>> newData = Arrays.asList(Map.of("test", "new"));
+    List<Map<String, Object>> newData = Arrays.asList(ImmutableMap.of("test", "new"));
     List<Map<String, Object>> result2 = cacheManager.getOrCompute(cacheKey, () -> {
       apiCallCount.incrementAndGet();
       return newData;
@@ -137,7 +139,7 @@ public class SimpleCacheTest {
       final int id = i; // Make variable effectively final for lambda
       cacheManager.getOrCompute(key, () -> {
         apiCallCount.incrementAndGet();
-        return Arrays.asList(Map.of("id", id));
+        return Arrays.asList(ImmutableMap.of("id", id));
       });
     }
 

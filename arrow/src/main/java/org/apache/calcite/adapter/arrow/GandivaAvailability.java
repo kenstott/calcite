@@ -40,8 +40,9 @@ import java.util.Collections;
  *
  * <p>Presence of the classes is not enough to answer the question. The native library loads its own
  * LLVM, and on some Linux/LLVM combinations it fails at JIT-construction time with
- * {@code Could not create LLJIT instance: Symbols not found: [llvm_orc_registerEHFrameSectionWrapper]}
- * — the classes resolve, the linkage does not. So this actually builds a trivial projector once and
+ * {@code Could not create LLJIT instance: Symbols not found:
+ * [llvm_orc_registerEHFrameSectionWrapper]} — the classes resolve, the linkage does not.
+ * So this actually builds a trivial projector once and
  * caches whether that worked. Anything thrown, including {@link UnsatisfiedLinkError} and
  * {@link ExceptionInInitializerError}, means unavailable.
  */

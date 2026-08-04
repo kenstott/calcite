@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.ops;
 
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.calcite.adapter.ops.util.CloudOpsCacheManager;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -82,7 +84,7 @@ public class CachePerformanceTest {
         }
 
         apiCallCount.incrementAndGet();
-        return Arrays.asList(Map.of("key", key, "data", "test-data-" + System.currentTimeMillis()));
+        return Arrays.asList(ImmutableMap.of("key", key, "data", "test-data-" + System.currentTimeMillis()));
       });
 
       assertNotNull(result);
@@ -142,7 +144,7 @@ public class CachePerformanceTest {
             int callCount = apiCallCount.incrementAndGet();
             logger.debug("Thread {} - API call #{} for key: {}", threadId, callCount, key);
 
-            return Arrays.asList(Map.of("key", key, "thread", threadId, "call", callCount));
+            return Arrays.asList(ImmutableMap.of("key", key, "thread", threadId, "call", callCount));
           });
 
           assertNotNull(result);
@@ -278,7 +280,7 @@ public class CachePerformanceTest {
       cacheManager.getOrCompute(key, () -> {
         localCallCount.incrementAndGet();
         apiCallCount.incrementAndGet();
-        return Arrays.asList(Map.of("type", keyType, "iteration", iteration));
+        return Arrays.asList(ImmutableMap.of("type", keyType, "iteration", iteration));
       });
     }
 
@@ -290,7 +292,7 @@ public class CachePerformanceTest {
     List<Map<String, Object>> data = new ArrayList<>();
     for (int i = 0; i < size; i++) {
       data.add(
-          Map.of(
+          ImmutableMap.of(
           "id", id + "-" + i,
           "name", "test-item-" + id + "-" + i,
           "description", "This is test data item " + i + " for cache entry " + id,

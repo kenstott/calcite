@@ -32,6 +32,11 @@
 <module name="Checker">
   <property name="localeLanguage" value="en"/>
 
+  <!-- Sources are UTF-8. Without this Checkstyle decodes with the platform
+       default, so on Windows a multi-byte character counts as several
+       characters and LineLength reports lengths the other platforms do not. -->
+  <property name="charset" value="UTF-8"/>
+
   <!-- config_loc here is to workaround https://github.com/gradle/gradle/issues/13927 -->
   <property name="cacheFile" value="${config_loc}/${cache_file}"/>
 
