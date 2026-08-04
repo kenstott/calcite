@@ -170,28 +170,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
   private final AtomicBoolean committedSuccessfully = new AtomicBoolean(false);
 
-  /**
-   * Per-column distinct-value sketches accumulated over the rows this writer commits, published
-   * as an Iceberg Puffin statistics file. Null when statistics collection is switched off.
-   *
-   * <p>OFF by default, because a sketch built here describes only the rows THIS run wrote, and
-   * most runs write a slice. With {@code overwritePartitions} the commit calls
-   * replacePartitionsDataFiles(), replacing just the partitions touched and leaving the rest of
-   * the table intact — so a daily run over the current year would publish that year's cardinality
-   * as the whole table's. Every run would overwrite the previous, correct value with a smaller
-   * wrong one, and nothing downstream could tell. Statistics that are silently wrong are worse
-   * than absent: the planner trusts them and cannot distinguish them from measured ones.
-   *
-   * <p>Correct partial-write handling needs per-partition sketches unioned at commit — theta
-   * sketches are mergeable, which is why the format was chosen — so that a replaced partition
-   * contributes its new sketch while untouched partitions keep theirs. Until that exists, enable
-   * with -Dcalcite.file.statistics.iceberg.enabled=true only for a run that rewrites a table in
-   * full.
-   */
-  private final org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics columnSketches =
-      "true".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "false"))
-          ? new org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics()
-          : null;
   /** JVM shutdown hook registered in initialize() to emergency-commit staged files on SIGTERM. */
   private Thread shutdownHook;
 
@@ -949,17 +927,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Transform rows: map source field names to target column names
     List<Map<String, Object>> transformedRows = transformRows(rows, partitionVariables);
-
-    // Fold the written values into per-column distinct sketches. Done here, on the transformed
-    // rows, because these are the values that actually land in the table and they are already in
-    // memory — updating a sketch is O(1) per value and adds no I/O. A theta sketch cannot be
-    // reconstructed from a cardinality computed later, so this is the only point where a
-    // spec-compliant Iceberg statistics blob can be produced without re-reading the whole table.
-    if (columnSketches != null) {
-      for (Map<String, Object> row : transformedRows) {
-        columnSketches.addRow(row);
-      }
-    }
 
     // Build canonical partition key from sorted partition variables
     String partitionKey = buildPartitionKey(partitionVariables);
@@ -2322,21 +2289,60 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       tableWriter.runMaintenance(retentionDays);
     }
 
-    // Publish the column sketches against the snapshot that ended up current. Done after
-    // compaction and maintenance so the statistics describe the snapshot a reader will actually
-    // resolve — attaching them earlier would leave them pointing at a snapshot those steps
-    // superseded, and Iceberg statistics are keyed by snapshot id.
-    if (columnSketches != null && !columnSketches.isEmpty() && tableWriter != null) {
-      org.apache.iceberg.Table icebergTable = tableWriter.getTable();
-      if (icebergTable != null && icebergTable.currentSnapshot() != null) {
-        String statsPath = icebergTable.location() + "/metadata/stats-"
-            + icebergTable.currentSnapshot().snapshotId() + ".puffin";
-        columnSketches.commit(icebergTable, statsPath);
-      }
-    }
+    // Measure column cardinality over the committed table and publish it against the snapshot
+    // that ended up current. Measured here rather than accumulated while writing because a run
+    // usually writes a slice — overwritePartitions replaces only the partitions touched — so
+    // accumulated values would report one partition's cardinality as the table's, and would do so
+    // again every run. Run after compaction and maintenance so the numbers describe the snapshot
+    // a reader will actually resolve; Iceberg keys statistics by snapshot id.
+    publishColumnStatistics();
 
     LOGGER.info("Iceberg commit complete: {} rows in {} batches",
         totalRowsWritten, totalFilesWritten);
+  }
+
+  /**
+   * Measures and publishes per-column cardinality for the table just committed.
+   *
+   * <p>Off unless {@code calcite.file.statistics.iceberg.enabled} is set: publishing costs one
+   * extra scan per table, which is negligible beside an ETL run but should not be imposed on every
+   * caller of this writer by default.
+   *
+   * <p>Advisory throughout — a failure leaves the table without a statistics file, which puts the
+   * planner back on the estimates it used before any of this existed. It must never fail a commit.
+   */
+  private void publishColumnStatistics() {
+    if (!"true".equals(System.getProperty("calcite.file.statistics.iceberg.enabled", "false"))
+        || tableWriter == null) {
+      return;
+    }
+    org.apache.iceberg.Table icebergTable = tableWriter.getTable();
+    if (icebergTable == null || icebergTable.currentSnapshot() == null) {
+      return;
+    }
+    Connection conn = null;
+    try {
+      java.util.List<String> columns = new ArrayList<String>();
+      for (org.apache.iceberg.types.Types.NestedField f : icebergTable.schema().columns()) {
+        columns.add(f.name());
+      }
+      conn = createDuckDBConnection();
+      String from = "iceberg_scan('" + icebergTable.location() + "')";
+      String statsPath = icebergTable.location() + "/metadata/stats-"
+          + icebergTable.currentSnapshot().snapshotId() + ".puffin";
+      org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.publishMeasured(
+          icebergTable, statsPath, conn, from, columns);
+    } catch (Exception e) {
+      LOGGER.warn("Column statistics not published (non-fatal): {}", e.toString());
+    } finally {
+      if (conn != null) {
+        try {
+          conn.close();
+        } catch (Exception ignored) {
+          // best effort
+        }
+      }
+    }
   }
 
   private void deregisterShutdownHook() {
