@@ -21,6 +21,23 @@ This plan is design/scoping only. Implementation is a distinct next step requiri
 explicit go-ahead per area, since the fixes touch `file/` (used well beyond govdata) and
 `govdata/` schema YAML that 26 live ETL pools depend on.
 
+### Outcome (added after implementation)
+
+**The "false in specifics" verdict above turned out to describe the `file/` adapter, not
+govdata.** Of the 13 items, exactly one — G9, the unapplied iXBRL scale factor — was a
+genuine govdata data-correctness bug. Every other item was either confined to `file/`
+(B1, B3, G1-G6: govdata does not route CSV, JSON, Excel, PPTX or Markdown through those
+paths at all) or was already correct in govdata because each schema's transformer declares
+its column types explicitly rather than inferring them (B2, G4, G7).
+
+Two of the three govdata-specific items were false positives, and both failed the same way:
+they were derived from reading schema and column *names* rather than the data. G8 proposed
+casting `cftc.cleared` to BOOLEAN because it "looks like" a Y/N flag — it has 10.3M `I`
+("not applicable") rows. G7 proposed enabling CSV type inference for govdata schemas — which
+have no CSV inference path to enable. The lesson for future audits of this kind: a
+column-name pattern is a hypothesis, not a finding; check it against the data before writing
+it down as a defect.
+
 ## Bugs (produce wrong data today, not just missing coverage)
 
 ### B1. CSV date parsing silently ignores the formatter that inference proved correct
@@ -423,12 +440,24 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
       correctness.
     - **Data remediation: none.** No behavior change, so nothing to reprocess.
 
-13. **G10** — scope a general fiscal-period-label parser for schemas beyond SEC, if
-    warranted by actual query needs.
-    - **Data remediation: `/data-fix` reprocess, only if/when built.** Not committing to
-      this yet (see decision below) — if built, the same `--raw false` reprocess pattern
-      applies per affected schema; flagging now only so the remediation shape is decided
-      alongside the "should we build this" decision, not as a separate afterthought.
+13. **G10** ❌ *(declined — not warranted; no change made)* — the item was gated on "if
+    warranted by actual query needs." Analysis says no, for three reasons:
+    - **The conformed dimension already exists.** `ref.calendar` carries
+      `fiscal_year`/`fiscal_quarter`/`fiscal_month`/`fiscal_year_label`/`day_of_fiscal_year`
+      per day, and `ref.fiscal_year` is a full FY dimension (label, start/end date, prior/next
+      year), documented as the "conformed FK target for `fiscal_year` across schemas."
+      Anything needing fiscal alignment joins there today; there is no missing join target.
+    - **The remaining string columns are not one format to parse.** Each is its source's own
+      convention — `econ.period` is BLS period codes (verified against the live table:
+      `M01`..`M12`), plus `fiscal.tax_period`, `energy.rpt_period`, `sec.period_of_report`.
+      Several name-matches aren't periods at all (`cftc.*_freq_period_*` is a payment
+      frequency such as `3M`).
+    - **A shared parser would re-introduce the pattern G7 just rejected.** Every one of those
+      formats is already known exactly by the transformer that ingests it. A general parser
+      would replace per-source certainty with pattern-guessing across heterogeneous labels —
+      the same trade declined in G7, and the same reason G6 makes a declared header type beat
+      a sampled guess.
+    - **Data remediation: none.** No behavior change.
 
 ## Open decisions requiring explicit go-ahead
 
