@@ -1594,7 +1594,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
          Statement stmt = conn.createStatement()) {
       try {
-        stmt.execute("CREATE TEMP TABLE _src AS SELECT * FROM read_json_auto('" + jsonPath + "')");
+        // sample_size=-1 infers from EVERY record, not the default 20480-row prefix. With the
+        // prefix, a column whose first 20480 values all look numeric is typed numeric, and a
+        // later record carrying a legitimate non-numeric form — a thousands separator, CFTC's
+        // trailing '+' censoring marker, a semicolon-delimited multi-value — fails the transform
+        // and takes the whole batch to the Java fallback (which nulls every computed column).
+        // That failure was therefore batch-size dependent: "record/value 34053" is simply past
+        // the sample window. Seeing all values types such a column VARCHAR instead, which is
+        // what the normalization below wants anyway.
+        stmt.execute("CREATE TEMP TABLE _src AS SELECT * FROM read_json_auto('" + jsonPath
+            + "', sample_size=-1)");
       } finally {
         tmpJson.delete();
       }
