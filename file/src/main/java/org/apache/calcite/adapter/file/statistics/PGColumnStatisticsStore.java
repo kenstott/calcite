@@ -90,6 +90,27 @@ public final class PGColumnStatisticsStore {
     return new PGColumnStatisticsStore(jdbcUrl, user, password, cfg.get("namespace"));
   }
 
+  /**
+   * Builds a store from a schema operand, reading the same {@code trackerBackend} /
+   * {@code trackerConfig} keys {@code PipelineTrackerFactory.createFromOperand} reads. Returns
+   * null unless a PG tracker is configured, so a deployment on another backend silently collects
+   * no statistics rather than half-configuring a second one.
+   */
+  @SuppressWarnings("unchecked")
+  public static PGColumnStatisticsStore fromOperand(Map<String, Object> operand) {
+    if (operand == null) {
+      return null;
+    }
+    Object backend = operand.get("trackerBackend");
+    if (!(backend instanceof String) || !"pg".equalsIgnoreCase((String) backend)) {
+      return null;
+    }
+    Object trackerConfig = operand.get("trackerConfig");
+    Map<String, String> cfg = trackerConfig instanceof Map
+        ? (Map<String, String>) trackerConfig : null;
+    return fromTrackerConfig(cfg);
+  }
+
   private Connection open() throws SQLException {
     Connection c = user != null
         ? DriverManager.getConnection(jdbcUrl, user, password)

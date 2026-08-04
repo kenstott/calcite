@@ -162,6 +162,7 @@ public class EtlRunner {
       if (success) {
         succeeded++;
         log("Schema " + schema.getName() + " completed successfully");
+        collectStatistics(schema);
       } else {
         failed++;
         failedSchemas.add(schema.getName());
@@ -397,5 +398,32 @@ public class EtlRunner {
       out.println("  " + message);
     }
     LOGGER.debug(message);
+  }
+
+  /**
+   * Publishes per-column cardinalities for a schema that just finished ingesting.
+   *
+   * <p>Write time is the right moment to measure: the run has already spent minutes to hours
+   * moving the data, so one extra scan per table is negligible beside it, and the numbers
+   * describe exactly what was written rather than whatever a query-time sample happens to catch.
+   *
+   * <p>Advisory — a failure here is logged and leaves the run's status untouched.
+   */
+  private void collectStatistics(EtlRunConfig.SchemaConfig schema) {
+    if ("false".equals(System.getProperty("calcite.file.statistics.collect.enabled", "true"))) {
+      return;
+    }
+    try {
+      Map<String, Object> operand = resolveOperandEnvVars(schema.getOperand());
+      org.apache.calcite.adapter.file.statistics.PGColumnStatisticsStore store =
+          org.apache.calcite.adapter.file.statistics.PGColumnStatisticsStore.fromOperand(operand);
+      if (store == null) {
+        return;   // no PG tracker configured — statistics are optional
+      }
+      int n = StatisticsCollector.collect(schema.getName(), store);
+      log("Published column statistics for " + n + " table(s) in " + schema.getName());
+    } catch (Exception e) {
+      logWarn("Statistics collection skipped for " + schema.getName() + ": " + e.getMessage());
+    }
   }
 }
