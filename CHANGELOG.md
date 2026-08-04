@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.71.0](https://github.com/kenstott/calcite/compare/engine-v0.70.0...engine-v0.71.0) (2026-08-04)
+
+
+### Features
+
+* **file/duckdb:** answer APPROX_COUNT_DISTINCT from published Iceberg statistics ([f3d622e](https://github.com/kenstott/calcite/commit/f3d622eca1eeea347489c8c236097394a9dd50e8))
+* **file/iceberg:** supply per-column cardinality to the planner from published statistics ([b88fce9](https://github.com/kenstott/calcite/commit/b88fce950fec54985d48a9724e26190eff4427d5))
+* **file/statistics:** durable column statistics with lazy background backfill ([c4d1e01](https://github.com/kenstott/calcite/commit/c4d1e01d24d14c67991291430756f56062b87c34))
+* **file/statistics:** per-partition sketches, dependency-free reads, JDK-21 ETL ([3904c47](https://github.com/kenstott/calcite/commit/3904c47d61a12ee7cb66c28e8e4d4838b57f0038))
+* **file/statistics:** publish per-column cardinality as Iceberg Puffin statistics ([3cdbfbb](https://github.com/kenstott/calcite/commit/3cdbfbb812c043071f9570e225fe785124d34688))
+* **govdata:** backfill column statistics for tables the ETL never writes ([ba1d172](https://github.com/kenstott/calcite/commit/ba1d17248085129aae69800db29c902bf6c144ee))
+* **govdata:** collect column statistics after ETL and load them at schema-open ([9b48307](https://github.com/kenstott/calcite/commit/9b483074eff148771c58447bd6e77e605970876c))
+
+
+### Bug Fixes
+
+* **build,cloud-ops,arrow:** clear the next CI wall after autostyle ([1bf004a](https://github.com/kenstott/calcite/commit/1bf004abf3ba981a58e7167366af5f53d9df4dde))
+* **build,core:** restore caseIndent and clear checkstyle + forbiddenApis ([28e7bb1](https://github.com/kenstott/calcite/commit/28e7bb1b17e862125009922516f46b703364bb6e))
+* **build:** make autostyle and rat pass on the fork's module layout ([7c177e9](https://github.com/kenstott/calcite/commit/7c177e9e73f60f6f9a2f387605194189f280ca2c))
+* **core:** make the statement plan cache sound; align the Sybase expectation ([c2d948c](https://github.com/kenstott/calcite/commit/c2d948c05196b76e9bfbe17b2febc8b983212b21))
+* **file/etl:** retry 502/504 and honour the declared retryOn ([0fba62b](https://github.com/kenstott/calcite/commit/0fba62b26efd49c8ec2473345cc5402a13b4e6f8))
+* **file/iceberg:** accept SQL-form timestamps and datetime-valued dates ([ccdc3a9](https://github.com/kenstott/calcite/commit/ccdc3a989a961f81e82587a4f7706dec9f974ec2))
+* **file/statistics:** do not publish Iceberg statistics from a partial write ([f0754bd](https://github.com/kenstott/calcite/commit/f0754bd1dc2291a36d5fe281ab91ab0edfc8810e))
+* **file/statistics:** measure cardinality over the committed table, not the written slice ([354ea0a](https://github.com/kenstott/calcite/commit/354ea0a997654c7ab3d481ca2905817123246e18))
+* **file/statistics:** never fabricate an HLL sketch ([69b3d9a](https://github.com/kenstott/calcite/commit/69b3d9a6c5c32d637dfd534ec0c8ca183867dbd2))
+* **govdata/cftc,file/etl:** infer batch types from every record; model CFTC multi-value fields as lists ([59df172](https://github.com/kenstott/calcite/commit/59df172b00ac9baf2c8c59eaa7ff13faf7c483b9))
+* **govdata/cftc:** null the CFTC all-9s not-available default and flag it ([33f1348](https://github.com/kenstott/calcite/commit/33f1348773b9372e8abc41d1506278f0ec72cec0))
+* **govdata/scripts:** make the R2 catchup reachable and worker liveness trustworthy ([2e396dc](https://github.com/kenstott/calcite/commit/2e396dc3e9200ded4e607a26eb99e8416a469f2d))
+* **govdata/transport:** read NHTSA complaints as unquoted TSV ([bc2b7ed](https://github.com/kenstott/calcite/commit/bc2b7edbb383988d136d4bce73d5a2115b297f05))
+
+
+### Performance Improvements
+
+* **govdata/verify:** fold the dup-check into one query and run schemas concurrently ([d2ab9b8](https://github.com/kenstott/calcite/commit/d2ab9b88895750a61e3d8a2c2b292c67fec0b03a))
+
+
+### Reverts
+
+* **statistics:** drop the Postgres column-statistics layer ([507b3fd](https://github.com/kenstott/calcite/commit/507b3fd6a07814c727e6cda03b5b1806391c9831))
+
 ## [0.70.0](https://github.com/kenstott/calcite/compare/engine-v0.69.0...engine-v0.70.0) (2026-08-04)
 
 
