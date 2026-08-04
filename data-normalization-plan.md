@@ -375,16 +375,32 @@ for the whole area, but the actual diffs still get proposed and confirmed one at
       view over it stay understated for iXBRL filings. **Not yet run — needs sign-off**, since
       it rewrites a live table.
 
-11. **G8** — cast `cftc.cleared` (and audit other schemas for the same pattern) to
-    BOOLEAN.
-    - **Data remediation: fix the base table.** `cleared` being a raw 'Y'/'N' string
-      instead of BOOLEAN is a typing bug, not something to enrich around — a view that
-      does `CASE WHEN cleared = 'Y'` is exactly the "view as remediation shortcut" this
-      guidance rules out; it leaves the base column wrong forever and every new
-      view/query has to remember to re-apply the same `CASE`. Remediate via
-      `/data-fix --schema cftc --table <base_table> --raw false` (full rewrite from
-      cached raw data, no re-fetch) so the base column is genuinely BOOLEAN. Audit other
-      schemas for the same Y/N-as-VARCHAR pattern and remediate each the same way.
+11. **G8** ❌ *(rejected — the premise was wrong; no change made)* — the audit recorded
+    `cftc.cleared` as a "Y/N flag left as VARCHAR" and proposed casting it to BOOLEAN. It
+    isn't a two-state flag. The schema documents three states — `Y=cleared, N=not cleared,
+    I=not applicable` ([cftc-schema.yaml:187](govdata/src/main/resources/cftc/cftc-schema.yaml#L187))
+    — and the live table confirms `I` is not a rounding error:
+
+    | `cleared` | rows | share |
+    |---|---|---|
+    | `N` | 182,466,218 | 94.4% |
+    | `I` | 10,255,811 | **5.3%** |
+    | NULL | 1,903,472 | 1.0% |
+    | `Y` | 50,787 | 0.03% |
+
+    `I` covers 10.3M rows — 200x more common than `Y`. There is no lossless BOOLEAN
+    mapping: `I` would have to become `false` (asserting the trade was *not cleared*, a
+    factual claim the source explicitly declines to make) or `NULL` (conflating "not
+    applicable" with the 1.9M genuinely missing values). Either choice destroys a
+    distinction the source deliberately encodes, and it would silently corrupt the
+    `swap_activity` view, whose `uncleared_count` counts `cleared = 'N'` and would begin
+    absorbing those 10.3M rows.
+
+    The column is not mistyped — it is a genuine three-state enum, and VARCHAR represents
+    it correctly. **Data remediation: none.** The generalization in the original item
+    ("audit other schemas for the same Y/N-as-VARCHAR pattern") is likewise retired as
+    stated: a Y/N-looking column is only a boolean if its domain is actually two-valued,
+    which has to be checked per column against the data rather than assumed from the name.
 
 12. **G7** — evaluate enabling `csvTypeInference` schema-by-schema for govdata tables
     with no explicit `type:`/`TRY_CAST` override.
