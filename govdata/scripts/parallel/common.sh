@@ -32,7 +32,13 @@ PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 #                          to the worker log so true peak heap is extractable
 #                          post-run, to right-size per-schema -Xmx from evidence.
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
-GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=768m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary -Xlog:gc}"
+# Column statistics are ON for ETL runs. The adapter default is off, because publishing costs
+# a full scan the first time a table is seen and no library caller should pay that
+# unasked — but the ETL is exactly the place where it is worth paying: the run already
+# takes hours, the bootstrap happens once per table, and afterwards each run maintains the
+# statistics incrementally (~400ms) instead of rescanning. Requires JDK 21, which
+# GOVDATA_JAVA_BIN below pins.
+GOVDATA_JAVA_OPTS="${GOVDATA_JAVA_OPTS:--XX:MaxDirectMemorySize=768m -XX:MaxMetaspaceSize=256m -Xss512k -XX:NativeMemoryTracking=summary -Xlog:gc -Dcalcite.file.statistics.iceberg.enabled=true}"
 
 # ── Java runtime for ETL workers ──────────────────────────────────────────────
 # Pinned to JDK 21, not whatever `java` resolves to on PATH. The ETL writes Iceberg
