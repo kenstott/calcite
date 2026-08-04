@@ -79,15 +79,18 @@ public class JsonConstraintsTest {
     List<String> columnNames = Arrays.asList("id", "customer_id", "product_id", "quantity");
 
     // Parse constraints with table context
-    Statistic statistic = JsonConstraints.fromConstraintsMap(constraints, columnNames, null, "sales", "orders");
+    Statistic statistic =
+        JsonConstraints.fromConstraintsMap(constraints, columnNames, null, "sales", "orders");
 
     // Verify foreign key was parsed correctly
     List<RelReferentialConstraint> foreignKeys = statistic.getReferentialConstraints();
     assertEquals(1, foreignKeys.size(), "Should have one foreign key");
 
     RelReferentialConstraint fk = foreignKeys.get(0);
-    assertEquals(Arrays.asList("sales", "orders"), fk.getSourceQualifiedName(), "Source table should be sales.orders");
-    assertEquals(Arrays.asList("sales", "customers"), fk.getTargetQualifiedName(), "Target table should be sales.customers");
+    assertEquals(Arrays.asList("sales", "orders"), fk.getSourceQualifiedName(),
+        "Source table should be sales.orders");
+    assertEquals(Arrays.asList("sales", "customers"), fk.getTargetQualifiedName(),
+        "Target table should be sales.customers");
     assertEquals(1, fk.getColumnPairs().size(), "Should have one column pair");
   }
 
@@ -111,7 +114,8 @@ public class JsonConstraintsTest {
         "uniqueKeys", Arrays.asList(Arrays.asList("order_number")),
         "foreignKeys", Arrays.asList(foreignKey1, foreignKey2));
 
-    List<String> columnNames = Arrays.asList("order_id", "order_number", "customer_id", "product_id");
+    List<String> columnNames =
+        Arrays.asList("order_id", "order_number", "customer_id", "product_id");
 
     // Parse constraints
     Statistic statistic = JsonConstraints.fromConstraintsMap(constraints, columnNames, 5000.0);
@@ -180,18 +184,22 @@ public class JsonConstraintsTest {
   /**
    * Test schema factory for constraint functionality testing.
    */
-  private static class TestConstraintSchemaFactory implements org.apache.calcite.schema.ConstraintCapableSchemaFactory {
+  private static class TestConstraintSchemaFactory
+      implements org.apache.calcite.schema.ConstraintCapableSchemaFactory {
     private Map<String, Map<String, Object>> receivedConstraints = new HashMap<>();
 
     @Override public boolean supportsConstraints() {
       return true;
     }
 
-    @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints, List<JsonTable> tableDefinitions) {
+    @Override public void setTableConstraints(
+        Map<String, Map<String, Object>> tableConstraints,
+        List<JsonTable> tableDefinitions) {
       this.receivedConstraints = new HashMap<>(tableConstraints);
     }
 
-    @Override public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
+    @Override public Schema create(SchemaPlus parentSchema, String name,
+        Map<String, Object> operand) {
       return new TestSchema(receivedConstraints);
     }
 
@@ -229,12 +237,15 @@ public class JsonConstraintsTest {
       this.constraints = constraints;
     }
 
-    @Override public org.apache.calcite.rel.type.RelDataType getRowType(org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
+    @Override public org.apache.calcite.rel.type.RelDataType getRowType(
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
       // Create a simple row type for testing
       return typeFactory.builder()
           .add("id", typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER))
-          .add("name", typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255))
-          .add("created", typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.TIMESTAMP))
+          .add("name",
+              typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255))
+          .add("created",
+              typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.TIMESTAMP))
           .build();
     }
 

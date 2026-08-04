@@ -1143,7 +1143,8 @@ public class CalciteMetaImpl extends MetaImpl {
      */
     public @Nullable String getColumnComment(String columnName) {
       if (calciteTable instanceof org.apache.calcite.schema.CommentableTable) {
-        return ((org.apache.calcite.schema.CommentableTable) calciteTable).getColumnComment(columnName);
+        return ((org.apache.calcite.schema.CommentableTable) calciteTable)
+            .getColumnComment(columnName);
       }
       return null;
     }

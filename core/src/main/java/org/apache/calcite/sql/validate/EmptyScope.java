@@ -146,7 +146,8 @@ class EmptyScope implements SqlValidatorScope {
       final CalciteSchema subSchema =
           schema.getSubSchema(schemaName, nameMatcher.isCaseSensitive());
       if (subSchema != null) {
-        LOGGER.info("Found sub-schema: {} (available tables: {})", subSchema.name, subSchema.getTableNames());
+        LOGGER.info("Found sub-schema: {} (available tables: {})",
+            subSchema.name, subSchema.getTableNames());
         path = path.plus(null, -1, subSchema.name, StructKind.NONE);
         remainingNames = Util.skip(remainingNames);
         schema = subSchema;

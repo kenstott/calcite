@@ -79,17 +79,17 @@ class ArrowTranslator {
    */
   private static Object literalValue(RexLiteral literal) {
     switch (literal.getTypeName()) {
-      case TIMESTAMP:
-      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        final SimpleDateFormat dateFormatter =
+    case TIMESTAMP:
+    case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+      final SimpleDateFormat dateFormatter =
             getDateFormatter(ISO_DATETIME_FRACTIONAL_SECOND_FORMAT);
-        Long millis = literal.getValueAs(Long.class);
-        return dateFormatter.format(requireNonNull(millis, "millis"));
-      case DATE:
-        final DateString dateString = literal.getValueAs(DateString.class);
-        return requireNonNull(dateString, "dateString").toString();
-      default:
-        return requireNonNull(literal.getValue3());
+      Long millis = literal.getValueAs(Long.class);
+      return dateFormatter.format(requireNonNull(millis, "millis"));
+    case DATE:
+      final DateString dateString = literal.getValueAs(DateString.class);
+      return requireNonNull(dateString, "dateString").toString();
+    default:
+      return requireNonNull(literal.getValue3());
     }
   }
 
@@ -122,33 +122,33 @@ class ArrowTranslator {
    */
   private String translateMatch2(RexNode node) {
     switch (node.getKind()) {
-      case EQUALS:
-        return translateBinary("equal", "=", (RexCall) node);
-      case NOT_EQUALS:
-        return translateBinary("not_equal", "<>", (RexCall) node);
-      case LESS_THAN:
-        return translateBinary("less_than", "<", (RexCall) node);
-      case LESS_THAN_OR_EQUAL:
-        return translateBinary("less_than_or_equal_to", "<=", (RexCall) node);
-      case GREATER_THAN:
-        return translateBinary("greater_than", ">", (RexCall) node);
-      case GREATER_THAN_OR_EQUAL:
-        return translateBinary("greater_than_or_equal_to", ">=", (RexCall) node);
-      case IS_NULL:
-        return translateUnary("isnull", (RexCall) node);
-      case IS_NOT_NULL:
-        return translateUnary("isnotnull", (RexCall) node);
-      case IS_NOT_TRUE:
-        return translateUnary("isnottrue", (RexCall) node);
-      case IS_NOT_FALSE:
-        return translateUnary("isnotfalse", (RexCall) node);
-      case INPUT_REF:
-        final RexInputRef inputRef = (RexInputRef) node;
-        return fieldNames.get(inputRef.getIndex()) + " istrue";
-      case NOT:
-        return translateUnary("isfalse", (RexCall) node);
-      default:
-        throw new UnsupportedOperationException("Unsupported operator " + node);
+    case EQUALS:
+      return translateBinary("equal", "=", (RexCall) node);
+    case NOT_EQUALS:
+      return translateBinary("not_equal", "<>", (RexCall) node);
+    case LESS_THAN:
+      return translateBinary("less_than", "<", (RexCall) node);
+    case LESS_THAN_OR_EQUAL:
+      return translateBinary("less_than_or_equal_to", "<=", (RexCall) node);
+    case GREATER_THAN:
+      return translateBinary("greater_than", ">", (RexCall) node);
+    case GREATER_THAN_OR_EQUAL:
+      return translateBinary("greater_than_or_equal_to", ">=", (RexCall) node);
+    case IS_NULL:
+      return translateUnary("isnull", (RexCall) node);
+    case IS_NOT_NULL:
+      return translateUnary("isnotnull", (RexCall) node);
+    case IS_NOT_TRUE:
+      return translateUnary("isnottrue", (RexCall) node);
+    case IS_NOT_FALSE:
+      return translateUnary("isnotfalse", (RexCall) node);
+    case INPUT_REF:
+      final RexInputRef inputRef = (RexInputRef) node;
+      return fieldNames.get(inputRef.getIndex()) + " istrue";
+    case NOT:
+      return translateUnary("isfalse", (RexCall) node);
+    default:
+      throw new UnsupportedOperationException("Unsupported operator " + node);
     }
   }
 
@@ -177,15 +177,15 @@ class ArrowTranslator {
     }
     final RexLiteral rightLiteral = (RexLiteral) right;
     switch (left.getKind()) {
-      case INPUT_REF:
-        final RexInputRef left1 = (RexInputRef) left;
-        String name = fieldNames.get(left1.getIndex());
-        return translateOp2(op, name, rightLiteral);
-      case CAST:
+    case INPUT_REF:
+      final RexInputRef left1 = (RexInputRef) left;
+      String name = fieldNames.get(left1.getIndex());
+      return translateOp2(op, name, rightLiteral);
+    case CAST:
         // FIXME This will not work in all cases (for example, we ignore string encoding)
-        return translateBinary2(op, ((RexCall) left).operands.get(0), right);
-      default:
-        return null;
+      return translateBinary2(op, ((RexCall) left).operands.get(0), right);
+    default:
+      return null;
     }
   }
 

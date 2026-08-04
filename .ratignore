@@ -73,6 +73,7 @@ pgwire-govdata/**
 pgwire-sharepoint/**
 pgwire-splunk/**
 trino-calcite/**
+trino-calcite-base/**
 trino-cloudops/**
 trino-file/**
 trino-sharepoint/**

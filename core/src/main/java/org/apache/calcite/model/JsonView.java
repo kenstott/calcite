@@ -105,7 +105,8 @@ public class JsonView extends JsonTable {
   }
 
   /** Backward-compatible constructor without constraints parameter. */
-  public JsonView(String name, JsonStream stream, Object sql, @Nullable List<String> path, @Nullable Boolean modifiable) {
+  public JsonView(String name, JsonStream stream, Object sql,
+      @Nullable List<String> path, @Nullable Boolean modifiable) {
     super(name, stream);
     this.sql = requireNonNull(sql, "sql");
     this.path = path;

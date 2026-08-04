@@ -242,8 +242,30 @@ partitionedTables:
       - name: notional_amount_leg1
         type: double
         nullable: true
-        source: "Notional amount-Leg 1"
-        comment: Notional principal amount for leg 1 (commas removed by DuckDB auto-detect)
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Notional amount-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Notional amount-Leg 1" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Notional amount leg1. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999999999999999999.99999) — see
+          notional_amount_leg1_not_available. Thousands separators and the Part 43 '+' censoring
+          marker are stripped before parsing.
+      - name: notional_amount_leg1_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Notional amount-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999999999999999999.99999). The spec states such a
+          value is accepted when the value is not available, so it is a placeholder rather than
+          an amount, and notional_amount_leg1 is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: notional_amount_leg1_at_or_above_threshold
         type: boolean
         nullable: true
@@ -256,8 +278,30 @@ partitionedTables:
       - name: notional_amount_leg2
         type: double
         nullable: true
-        source: "Notional amount-Leg 2"
-        comment: Notional principal amount for leg 2
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Notional amount-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Notional amount-Leg 2" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Notional amount leg2. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999999999999999999.99999) — see
+          notional_amount_leg2_not_available. Thousands separators and the Part 43 '+' censoring
+          marker are stripped before parsing.
+      - name: notional_amount_leg2_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Notional amount-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999999999999999999.99999). The spec states such a
+          value is accepted when the value is not available, so it is a placeholder rather than
+          an amount, and notional_amount_leg2 is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: notional_amount_leg2_at_or_above_threshold
         type: boolean
         nullable: true
@@ -279,8 +323,30 @@ partitionedTables:
       - name: notional_quantity_leg1
         type: double
         nullable: true
-        source: "Notional quantity-Leg 1"
-        comment: Physical quantity for commodity/equity swaps leg 1
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Notional quantity-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Notional quantity-Leg 1" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Notional quantity leg1. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999999999999999999.99999) — see
+          notional_quantity_leg1_not_available. Thousands separators and the Part 43 '+'
+          censoring marker are stripped before parsing.
+      - name: notional_quantity_leg1_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Notional quantity-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999999999999999999.99999). The spec states such a
+          value is accepted when the value is not available, so it is a placeholder rather than
+          an amount, and notional_quantity_leg1 is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: notional_quantity_leg1_at_or_above_threshold
         type: boolean
         nullable: true
@@ -293,8 +359,30 @@ partitionedTables:
       - name: notional_quantity_leg2
         type: double
         nullable: true
-        source: "Notional quantity-Leg 2"
-        comment: Physical quantity for commodity/equity swaps leg 2
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Notional quantity-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Notional quantity-Leg 2" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Notional quantity leg2. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999999999999999999.99999) — see
+          notional_quantity_leg2_not_available. Thousands separators and the Part 43 '+'
+          censoring marker are stripped before parsing.
+      - name: notional_quantity_leg2_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Notional quantity-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999999999999999999.99999). The spec states such a
+          value is accepted when the value is not available, so it is a placeholder rather than
+          an amount, and notional_quantity_leg2 is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: notional_quantity_leg2_at_or_above_threshold
         type: boolean
         nullable: true
@@ -307,8 +395,30 @@ partitionedTables:
       - name: total_notional_quantity_leg1
         type: double
         nullable: true
-        source: "Total notional quantity-Leg 1"
-        comment: Aggregate quantity over the life of the swap leg 1
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Total notional quantity-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Total notional quantity-Leg 1" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Total notional quantity leg1. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999999999999999999.99999) — see
+          total_notional_quantity_leg1_not_available. Thousands separators and the Part 43 '+'
+          censoring marker are stripped before parsing.
+      - name: total_notional_quantity_leg1_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Total notional quantity-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999999999999999999.99999). The spec states such a
+          value is accepted when the value is not available, so it is a placeholder rather than
+          an amount, and total_notional_quantity_leg1 is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: total_notional_quantity_leg1_at_or_above_threshold
         type: boolean
         nullable: true
@@ -320,8 +430,30 @@ partitionedTables:
       - name: total_notional_quantity_leg2
         type: double
         nullable: true
-        source: "Total notional quantity-Leg 2"
-        comment: Aggregate quantity over the life of the swap leg 2
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Total notional quantity-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Total notional quantity-Leg 2" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Total notional quantity leg2. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999999999999999999.99999) — see
+          total_notional_quantity_leg2_not_available. Thousands separators and the Part 43 '+'
+          censoring marker are stripped before parsing.
+      - name: total_notional_quantity_leg2_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Total notional quantity-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('99999999999999999999.99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999999999999999999.99999). The spec states such a
+          value is accepted when the value is not available, so it is a placeholder rather than
+          an amount, and total_notional_quantity_leg2 is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: total_notional_quantity_leg2_at_or_above_threshold
         type: boolean
         nullable: true
@@ -414,13 +546,55 @@ partitionedTables:
       - name: fixed_rate_leg1
         type: double
         nullable: true
-        source: "Fixed rate-Leg 1"
-        comment: Fixed coupon rate for leg 1 as a decimal (e.g. 0.036515 = 3.6515%)
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Fixed rate-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('9.9999999999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Fixed rate-Leg 1" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Fixed rate leg1. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (9.9999999999) — see fixed_rate_leg1_not_available. Thousands
+          separators and the Part 43 '+' censoring marker are stripped before parsing.
+      - name: fixed_rate_leg1_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Fixed rate-Leg 1" AS VARCHAR), ',', ''), '+', '') IN ('9.9999999999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (9.9999999999). The spec states such a value is
+          accepted when the value is not available, so it is a placeholder rather than an amount,
+          and fixed_rate_leg1 is NULL on these rows instead of carrying a nonsensical figure (the
+          Num(25,5) default parses as 1e20, roughly 1000x world GDP). This is a different
+          condition from an at_or_above_threshold flag, where the amount IS known but publicly
+          censored and the disseminated number is the Part 43 reporting threshold; here no number
+          was reported at all. Only the exact spec-canonical defaults match — a bare 999999 also
+          occurs in this feed and is a genuine amount.
       - name: fixed_rate_leg2
         type: double
         nullable: true
-        source: "Fixed rate-Leg 2"
-        comment: Fixed coupon rate for leg 2 as a decimal
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Fixed rate-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('9.9999999999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Fixed rate-Leg 2" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Fixed rate leg2. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (9.9999999999) — see fixed_rate_leg2_not_available. Thousands
+          separators and the Part 43 '+' censoring marker are stripped before parsing.
+      - name: fixed_rate_leg2_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Fixed rate-Leg 2" AS VARCHAR), ',', ''), '+', '') IN ('9.9999999999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (9.9999999999). The spec states such a value is
+          accepted when the value is not available, so it is a placeholder rather than an amount,
+          and fixed_rate_leg2 is NULL on these rows instead of carrying a nonsensical figure (the
+          Num(25,5) default parses as 1e20, roughly 1000x world GDP). This is a different
+          condition from an at_or_above_threshold flag, where the amount IS known but publicly
+          censored and the disseminated number is the Part 43 reporting threshold; here no number
+          was reported at all. Only the exact spec-canonical defaults match — a bare 999999 also
+          occurs in this feed and is a genuine amount.
       - name: fixed_rate_day_count_leg1
         type: string
         nullable: true
@@ -605,8 +779,29 @@ partitionedTables:
       - name: exchange_rate
         type: double
         nullable: true
-        source: "Exchange rate"
-        comment: Agreed exchange rate for FX swaps/forwards
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Exchange rate" AS VARCHAR), ',', ''), '+', '') IN ('99999.9999999999999', '9.9999999999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Exchange rate" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Exchange rate. NULL when the reporting counterparty used the CFTC all-9s not-available
+          default (99999.9999999999999 or 9.9999999999) — see exchange_rate_not_available.
+          Thousands separators and the Part 43 '+' censoring marker are stripped before parsing.
+      - name: exchange_rate_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Exchange rate" AS VARCHAR), ',', ''), '+', '') IN ('99999.9999999999999', '9.9999999999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999.9999999999999 or 9.9999999999). The spec states
+          such a value is accepted when the value is not available, so it is a placeholder rather
+          than an amount, and exchange_rate is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: exchange_rate_basis
         type: string
         nullable: true
@@ -737,8 +932,30 @@ partitionedTables:
       - name: package_transaction_price
         type: double
         nullable: true
-        source: "Package transaction price"
-        comment: Price of the package as a whole
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Package transaction price" AS VARCHAR), ',', ''), '+', '') IN ('99999.9999999999999', '9.9999999999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Package transaction price" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Package transaction price. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (99999.9999999999999 or 9.9999999999) — see
+          package_transaction_price_not_available. Thousands separators and the Part 43 '+'
+          censoring marker are stripped before parsing.
+      - name: package_transaction_price_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Package transaction price" AS VARCHAR), ',', ''), '+', '') IN ('99999.9999999999999', '9.9999999999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (99999.9999999999999 or 9.9999999999). The spec states
+          such a value is accepted when the value is not available, so it is a placeholder rather
+          than an amount, and package_transaction_price is NULL on these rows instead of carrying
+          a nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: package_transaction_price_currency
         type: string
         nullable: true
@@ -752,8 +969,30 @@ partitionedTables:
       - name: package_transaction_spread
         type: double
         nullable: true
-        source: "Package transaction spread"
-        comment: Spread component of the package transaction
+        expression: >-
+          CASE WHEN replace(replace(CAST(src."Package transaction spread" AS VARCHAR), ',', ''), '+', '') IN ('9.9999999999', '99999') THEN NULL
+          ELSE TRY_CAST(replace(replace(CAST(src."Package transaction spread" AS VARCHAR), ',', ''), '+', '') AS DOUBLE) END
+        comment: >
+          Package transaction spread. NULL when the reporting counterparty used the CFTC all-9s
+          not-available default (9.9999999999 or 99999) — see
+          package_transaction_spread_not_available. Thousands separators and the Part 43 '+'
+          censoring marker are stripped before parsing.
+      - name: package_transaction_spread_not_available
+        type: boolean
+        nullable: true
+        expression: >-
+          replace(replace(CAST(src."Package transaction spread" AS VARCHAR), ',', ''), '+', '') IN ('9.9999999999', '99999')
+        comment: >
+          True when the reporting counterparty signalled that this value was NOT AVAILABLE at the
+          time of reporting, by submitting the CFTC Parts 43/45 Technical Specification's all-9s
+          default for this field's format (9.9999999999 or 99999). The spec states such a value
+          is accepted when the value is not available, so it is a placeholder rather than an
+          amount, and package_transaction_spread is NULL on these rows instead of carrying a
+          nonsensical figure (the Num(25,5) default parses as 1e20, roughly 1000x world GDP).
+          This is a different condition from an at_or_above_threshold flag, where the amount IS
+          known but publicly censored and the disseminated number is the Part 43 reporting
+          threshold; here no number was reported at all. Only the exact spec-canonical defaults
+          match — a bare 999999 also occurs in this feed and is a genuine amount.
       - name: package_transaction_spread_currency
         type: string
         nullable: true

@@ -53,6 +53,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.Files;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -68,6 +69,8 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import static java.util.Objects.requireNonNull;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Reads a model and creates schema objects accordingly.
@@ -107,8 +110,7 @@ public class ModelHandler {
       mapper = uri.endsWith(".yaml") || uri.endsWith(".yml") ? YAML_MAPPER : JSON_MAPPER;
       // Read file as string first to perform environment variable substitution
       File modelFile = new File(uri);
-      String fileContent =
-                                     new String(java.nio.file.Files.readAllBytes(modelFile.toPath()), java.nio.charset.StandardCharsets.UTF_8);
+      String fileContent = Files.asCharSource(modelFile, UTF_8).read();
       // Substitute environment variables before parsing
       String substituted = EnvironmentVariableSubstitutor.substituteInJson(fileContent);
       root = mapper.readValue(substituted, JsonRoot.class);
@@ -292,10 +294,12 @@ public class ModelHandler {
       // Check if the factory supports constraint metadata and prepare operand map
       Map<String, Object> operandMap;
       if (schemaFactory instanceof ConstraintCapableSchemaFactory) {
-        ConstraintCapableSchemaFactory constraintFactory = (ConstraintCapableSchemaFactory) schemaFactory;
+        ConstraintCapableSchemaFactory constraintFactory =
+            (ConstraintCapableSchemaFactory) schemaFactory;
         if (constraintFactory.supportsConstraints()) {
           // Extract constraint metadata from table definitions
-          Map<String, Map<String, Object>> tableConstraints = extractTableConstraints(jsonSchema.tables);
+          Map<String, Map<String, Object>> tableConstraints =
+              extractTableConstraints(jsonSchema.tables);
           // Create mutable operand map with constraints
           operandMap = operandMapWithConstraints(jsonSchema, jsonSchema.operand, tableConstraints);
           // Also pass table definitions for additional context

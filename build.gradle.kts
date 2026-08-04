@@ -481,7 +481,10 @@ allprojects {
             }
         }
     }
-    if (!skipCheckstyle) {
+    // BSL modules follow Google Java Format (4-space), not Apache Calcite's style,
+    // so the Calcite checkstyle rules do not apply — the same exemption
+    // askamerica-engine already declares for itself.
+    if (!skipCheckstyle && project.name !in bslModules) {
         apply<CheckstylePlugin>()
         // This will be config_loc in Checkstyle (checker.xml)
         val configLoc = File(rootDir, "src/main/config/checkstyle")

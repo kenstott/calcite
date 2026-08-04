@@ -71,7 +71,8 @@ public abstract class JsonTable {
     this(name, stream, null);
   }
 
-  protected JsonTable(String name, @Nullable JsonStream stream, @Nullable Map<String, Object> constraints) {
+  protected JsonTable(String name, @Nullable JsonStream stream,
+      @Nullable Map<String, Object> constraints) {
     this.name = requireNonNull(name, "name");
     this.stream = stream;
     this.constraints = constraints;

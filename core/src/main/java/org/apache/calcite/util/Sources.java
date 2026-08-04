@@ -82,7 +82,8 @@ public abstract class Sources {
   }
 
   public static Source of(String uri) {
-    // If string contains newlines or other indicators it's content rather than a path, treat as CharSequence
+    // If string contains newlines or other indicators it's content rather than a path,
+    // treat as CharSequence
     if (uri.contains("\n") || uri.contains("\r") || (uri.length() > 255 && !uri.startsWith("/"))) {
       return of((CharSequence) uri);
     }
@@ -503,10 +504,13 @@ public abstract class Sources {
         return new ByteArrayInputStream(bytes);
       }
       if (file != null) {
-        byte[] bytes = requireNonNull(fileCache.get(file.getPath()), "cache returned null for file path");
+        byte[] bytes =
+            requireNonNull(fileCache.get(file.getPath()), "cache returned null for file path");
         return new ByteArrayInputStream(bytes);
       } else {
-        byte[] bytes = requireNonNull(fileCache.get(requireNonNull(url, "url").toString()), "cache returned null for url");
+        byte[] bytes =
+            requireNonNull(fileCache.get(requireNonNull(url, "url").toString()),
+                "cache returned null for url");
         return new ByteArrayInputStream(bytes);
       }
     }

@@ -42,6 +42,9 @@ import java.util.Map;
  * data model documentation.
  */
 public class JsonConstraints {
+  private JsonConstraints() {
+  }
+
 
   /**
    * Creates a Statistic object from constraint configuration.
@@ -91,7 +94,8 @@ public class JsonConstraints {
     List<ImmutableBitSet> keys = parsePrimaryKeys(constraintsMap, effectiveColumnNames);
 
     // Parse foreign keys
-    List<RelReferentialConstraint> foreignKeys = parseForeignKeys(constraintsMap, effectiveColumnNames, schemaName, tableName);
+    List<RelReferentialConstraint> foreignKeys =
+        parseForeignKeys(constraintsMap, effectiveColumnNames, schemaName, tableName);
 
     // Parse collations (optional)
     List<RelCollation> collations = parseCollations(constraintsMap, columnNames);
@@ -126,7 +130,8 @@ public class JsonConstraints {
     }
 
     // Extract from foreign keys
-    List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) constraints.get("foreignKeys");
+    List<Map<String, Object>> foreignKeys =
+        (List<Map<String, Object>>) constraints.get("foreignKeys");
     if (foreignKeys != null) {
       for (Map<String, Object> fk : foreignKeys) {
         List<String> columns = (List<String>) fk.get("columns");

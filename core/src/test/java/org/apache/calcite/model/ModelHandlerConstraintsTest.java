@@ -50,63 +50,63 @@ public class ModelHandlerConstraintsTest {
   @Test public void testModelHandlerConstraintExtraction() throws Exception {
     // Create a model with constraint definitions
     String modelJson = "{\n"
-  +
+        +
         "  \"version\": \"1.0\",\n"
-  +
+        +
         "  \"defaultSchema\": \"TEST\",\n"
-  +
+        +
         "  \"schemas\": [{\n"
-  +
+        +
         "    \"name\": \"TEST\",\n"
-  +
+        +
         "    \"type\": \"custom\",\n"
-  +
+        +
         "    \"factory\": \"org.apache.calcite.model.ModelHandlerConstraintsTest$TestConstraintSchemaFactory\",\n"
-  +
+        +
         "    \"tables\": [{\n"
-  +
+        +
         "      \"name\": \"customers\",\n"
-  +
+        +
         "      \"type\": \"custom\",\n"
-  +
+        +
         "      \"factory\": \"org.apache.calcite.model.ModelHandlerConstraintsTest$TestTableFactory\",\n"
-  +
+        +
         "      \"constraints\": {\n"
-  +
+        +
         "        \"primaryKey\": [\"customer_id\"],\n"
-  +
+        +
         "        \"uniqueKeys\": [[\"email\"]]\n"
-  +
+        +
         "      }\n"
-  +
+        +
         "    }, {\n"
-  +
+        +
         "      \"name\": \"orders\",\n"
-  +
+        +
         "      \"type\": \"custom\",\n"
-  +
+        +
         "      \"factory\": \"org.apache.calcite.model.ModelHandlerConstraintsTest$TestTableFactory\",\n"
-  +
+        +
         "      \"constraints\": {\n"
-  +
+        +
         "        \"primaryKey\": [\"order_id\"],\n"
-  +
+        +
         "        \"foreignKeys\": [{\n"
-  +
+        +
         "          \"columns\": [\"customer_id\"],\n"
-  +
+        +
         "          \"targetTable\": [\"customers\"],\n"
-  +
+        +
         "          \"targetColumns\": [\"customer_id\"]\n"
-  +
+        +
         "        }]\n"
-  +
+        +
         "      }\n"
-  +
+        +
         "    }]\n"
-  +
+        +
         "  }]\n"
-  +
+        +
         "}";
 
     // Create temporary model file
@@ -135,10 +135,12 @@ public class ModelHandlerConstraintsTest {
                    "Factory should have received table definitions");
 
       // Verify specific constraint content
-      Map<String, Map<String, Object>> constraints = TestConstraintSchemaFactory.lastReceivedConstraints;
+      Map<String, Map<String, Object>> constraints =
+          TestConstraintSchemaFactory.lastReceivedConstraints;
       assertEquals(2, constraints.size(), "Should have constraints for 2 tables");
 
-      assertTrue(constraints.containsKey("customers"), "Should have constraints for customers table");
+      assertTrue(constraints.containsKey("customers"),
+          "Should have constraints for customers table");
       assertTrue(constraints.containsKey("orders"), "Should have constraints for orders table");
 
       Map<String, Object> customerConstraints = constraints.get("customers");
@@ -150,7 +152,8 @@ public class ModelHandlerConstraintsTest {
       Map<String, Object> orderConstraints = constraints.get("orders");
       assertEquals(List.of("order_id"), orderConstraints.get("primaryKey"),
                   "Orders primary key should be order_id");
-      assertNotNull(orderConstraints.get("foreignKeys"), "Orders should have foreign key constraints");
+      assertNotNull(orderConstraints.get("foreignKeys"),
+          "Orders should have foreign key constraints");
 
       connection.close();
     } finally {
@@ -164,21 +167,21 @@ public class ModelHandlerConstraintsTest {
   @Test public void testModelHandlerWithoutConstraints() throws Exception {
     // Create a model WITHOUT constraint definitions
     String modelJson = "{\n"
-  +
+        +
         "  \"version\": \"1.0\",\n"
-  +
+        +
         "  \"defaultSchema\": \"TEST\",\n"
-  +
+        +
         "  \"schemas\": [{\n"
-  +
+        +
         "    \"name\": \"TEST\",\n"
-  +
+        +
         "    \"type\": \"custom\",\n"
-  +
+        +
         "    \"factory\": \"org.apache.calcite.model.ModelHandlerConstraintsTest$TestConstraintSchemaFactory\"\n"
-  +
+        +
         "  }]\n"
-  +
+        +
         "}";
 
     // Create temporary model file
@@ -230,7 +233,8 @@ public class ModelHandlerConstraintsTest {
       lastReceivedTables = List.copyOf(tableDefinitions);
     }
 
-    @Override public Schema create(SchemaPlus parentSchema, String name, Map<String, Object> operand) {
+    @Override public Schema create(SchemaPlus parentSchema, String name,
+        Map<String, Object> operand) {
       // Return a simple schema for testing
       return new TestSchema();
     }
@@ -252,7 +256,8 @@ public class ModelHandlerConstraintsTest {
         org.apache.calcite.schema.SchemaPlus schema,
         String name,
         Map<String, Object> operand,
-        org.apache.calcite.rel.type.@org.checkerframework.checker.nullness.qual.Nullable RelDataType rowType) {
+        org.apache.calcite.rel.type
+            .@org.checkerframework.checker.nullness.qual.Nullable RelDataType rowType) {
       return new TestTable();
     }
   }
@@ -261,10 +266,12 @@ public class ModelHandlerConstraintsTest {
    * Simple test table implementation.
    */
   private static class TestTable extends org.apache.calcite.schema.impl.AbstractTable {
-    @Override public org.apache.calcite.rel.type.RelDataType getRowType(org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
+    @Override public org.apache.calcite.rel.type.RelDataType getRowType(
+        org.apache.calcite.rel.type.RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("id", typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.INTEGER))
-          .add("name", typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255))
+          .add("name",
+              typeFactory.createSqlType(org.apache.calcite.sql.type.SqlTypeName.VARCHAR, 255))
           .build();
     }
   }

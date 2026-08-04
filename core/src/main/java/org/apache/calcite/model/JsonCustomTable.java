@@ -61,7 +61,8 @@ public class JsonCustomTable extends JsonTable {
   }
 
   /** Backward-compatible constructor without constraints parameter. */
-  public JsonCustomTable(String name, JsonStream stream, String factory, @Nullable Map<String, Object> operand) {
+  public JsonCustomTable(String name, JsonStream stream, String factory,
+      @Nullable Map<String, Object> operand) {
     super(name, stream);
     this.factory = requireNonNull(factory, "factory");
     this.operand = operand;

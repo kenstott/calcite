@@ -33,7 +33,8 @@ import static java.util.Objects.requireNonNull;
  * <p>Supports the following syntax patterns:
  * <ul>
  *   <li>{@code ${VAR_NAME}} - Substitutes with environment variable value, fails if not found</li>
- *   <li>{@code ${VAR_NAME:default}} - Substitutes with environment variable value, uses default if not found</li>
+ *   <li>{@code ${VAR_NAME:default}} - Substitutes with environment variable value,
+ *       uses default if not found</li>
  * </ul>
  *
  * <p>Example usage:
@@ -43,7 +44,8 @@ import static java.util.Objects.requireNonNull;
  * }</pre>
  */
 public class EnvironmentVariableSubstitutor {
-  private static final Logger LOGGER = LoggerFactory.getLogger(EnvironmentVariableSubstitutor.class);
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(EnvironmentVariableSubstitutor.class);
 
   // Pattern to match ${VAR} or ${VAR:default}
   // Captures: group(1) = variable name, group(2) = optional default value (without colon)
@@ -58,7 +60,8 @@ public class EnvironmentVariableSubstitutor {
    *
    * @param input the input string containing environment variable placeholders
    * @return the string with environment variables substituted
-   * @throws IllegalArgumentException if an environment variable is not found and no default is provided
+   * @throws IllegalArgumentException if an environment variable is not found and no
+   *     default is provided
    */
   public static String substitute(String input) {
     // Create a combined map that includes both environment variables and system properties
@@ -75,9 +78,11 @@ public class EnvironmentVariableSubstitutor {
    * @param input the input string containing environment variable placeholders
    * @param environment the environment variables map
    * @return the string with environment variables substituted
-   * @throws IllegalArgumentException if an environment variable is not found and no default is provided
+   * @throws IllegalArgumentException if an environment variable is not found and no
+   *     default is provided
    */
-  public static @Nullable String substitute(@Nullable String input, Map<String, String> environment) {
+  public static @Nullable String substitute(@Nullable String input,
+      Map<String, String> environment) {
     if (input == null) {
       return null;
     }
@@ -93,10 +98,12 @@ public class EnvironmentVariableSubstitutor {
       if (value == null) {
         if (defaultValue != null) {
           value = defaultValue;
-          LOGGER.debug("Environment variable '{}' not found, using default: '{}'", varName, defaultValue);
+          LOGGER.debug("Environment variable '{}' not found, using default: '{}'",
+              varName, defaultValue);
         } else {
           throw new IllegalArgumentException(
-              String.format("Environment variable '%s' is not defined and no default value was provided", varName));
+              String.format("Environment variable '%s' is not defined and no default"
+                  + " value was provided", varName));
         }
       } else {
         LOGGER.debug("Substituting environment variable '{}' with value: '{}'", varName, value);
@@ -130,7 +137,8 @@ public class EnvironmentVariableSubstitutor {
    *
    * @param jsonString the JSON string containing environment variable placeholders
    * @return the JSON string with environment variables substituted
-   * @throws IllegalArgumentException if an environment variable is not found and no default is provided
+   * @throws IllegalArgumentException if an environment variable is not found and no
+   *     default is provided
    */
   public static String substituteInJson(String jsonString) {
     // Create a combined map that includes both environment variables and system properties
@@ -146,9 +154,11 @@ public class EnvironmentVariableSubstitutor {
    * @param jsonString the JSON string containing environment variable placeholders
    * @param environment the environment variables map
    * @return the JSON string with environment variables substituted
-   * @throws IllegalArgumentException if an environment variable is not found and no default is provided
+   * @throws IllegalArgumentException if an environment variable is not found and no
+   *     default is provided
    */
-  public static @Nullable String substituteInJson(@Nullable String jsonString, Map<String, String> environment) {
+  public static @Nullable String substituteInJson(@Nullable String jsonString,
+      Map<String, String> environment) {
     if (jsonString == null) {
       return null;
     }
@@ -209,7 +219,8 @@ public class EnvironmentVariableSubstitutor {
                               .replace("\r", "\\r")
                               .replace("\t", "\\t");
       // Use Matcher.quoteReplacement to handle $ and \ in the replacement
-      mixedMatcher.appendReplacement(finalResult, Matcher.quoteReplacement("\"" + substituted + "\""));
+      mixedMatcher.appendReplacement(finalResult,
+          Matcher.quoteReplacement("\"" + substituted + "\""));
     }
     mixedMatcher.appendTail(finalResult);
 
