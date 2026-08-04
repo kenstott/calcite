@@ -71,6 +71,14 @@ class LintTest {
    * space. */
   private static final Pattern CALCITE_PATTERN =
       compile("^(\\[CALCITE-[0-9]{1,4}][ ]).*");
+  /** Conventional Commits subject, e.g. {@code fix(file/etl): retry 502}. This
+   * fork uses that convention rather than {@code [CALCITE-nnnn]}, and
+   * release-please parses it to decide each release's version. Its type and
+   * description are lower-case by definition, so the upper-case and Chore rules
+   * below cannot be applied to such a subject. */
+  private static final Pattern CONVENTIONAL_PATTERN =
+      compile("^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)"
+          + "(\\([^)]+\\))?!?: .+");
   private static final Path ROOT_PATH = Paths.get(System.getProperty("gradle.rootDir"));
 
   private static final String TERMINOLOGY_ERROR_MSG =
@@ -275,12 +283,48 @@ class LintTest {
         is(expectedMessages));
   }
 
+  /** Removes files that the Apache Calcite style rules do not govern.
+   *
+   * <p>The BSL modules follow Google Java Format and their own javadoc
+   * conventions, and are already exempt from autostyle, checkstyle,
+   * forbiddenApis and rat. {@code .ratignore} is the single source of truth for
+   * which those are, so read the exclusions from there rather than repeating
+   * the list. */
+  private static List<File> lintableFiles(List<File> files) {
+    final List<String> excludes = new ArrayList<>();
+    forEachLineIn(ROOT_PATH.resolve(".ratignore").toFile(), line -> {
+      final String trimmed = line.trim();
+      if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+        excludes.add(trimmed);
+      }
+    });
+    final List<File> lintable = new ArrayList<>();
+    for (File file : files) {
+      final String relative =
+          ROOT_PATH.relativize(file.getAbsoluteFile().toPath()).toString()
+              .replace(File.separatorChar, '/');
+      boolean excluded = false;
+      for (String exclude : excludes) {
+        if (exclude.endsWith("/**")
+            ? relative.startsWith(exclude.substring(0, exclude.length() - 2))
+            : relative.equals(exclude)) {
+          excluded = true;
+          break;
+        }
+      }
+      if (!excluded) {
+        lintable.add(file);
+      }
+    }
+    return lintable;
+  }
+
   /** Tests that source code has no flaws. */
   @Test void testLint() {
     assumeTrue(TestUnsafe.haveGit(), "Invalid git environment");
 
     final Puffin.Program<GlobalState> program = makeProgram();
-    final List<File> files = TestUnsafe.getTextFiles();
+    final List<File> files = lintableFiles(TestUnsafe.getTextFiles());
 
     final GlobalState g;
     try (PrintWriter pw = Util.printWriter(System.out)) {
@@ -443,10 +487,11 @@ class LintTest {
     if (subject.endsWith(" ")) {
       consumer.accept("ends with space");
     }
-    if (subject2.matches("[a-z].*")) {
+    final boolean conventional = CONVENTIONAL_PATTERN.matcher(subject2).matches();
+    if (!conventional && subject2.matches("[a-z].*")) {
       consumer.accept("Message must start with upper-case letter");
     }
-    if (subject2.matches("^Chore.*\\b")) {
+    if (!conventional && subject2.matches("^Chore.*\\b")) {
       consumer.accept("Message cannot start with the Chore keyword");
     }
 

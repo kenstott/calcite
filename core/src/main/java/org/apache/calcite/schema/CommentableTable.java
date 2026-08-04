@@ -30,7 +30,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * while column comments appear in the REMARKS column of getColumns() results.
  *
  * <p>Example usage:
- * <pre>
+ *
+ * <blockquote><pre>
  * public class MyTable implements Table, CommentableTable {
  *   public String getTableComment() {
  *     return "Employee data with personal and employment information";
@@ -44,9 +45,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *     }
  *   }
  * }
- * </pre>
+ * </pre></blockquote>
  */
-public interface  CommentableTable extends Table {
+public interface CommentableTable extends Table {
 
   /**
    * Returns a comment describing this table's business purpose and contents.
