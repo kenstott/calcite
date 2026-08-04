@@ -45,7 +45,9 @@ dependencies {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     kotlinOptions {
-        jvmTarget = "1.8"
+        // Must match the Java release the root build sets, or Gradle rejects the
+        // build with "Inconsistent JVM-target compatibility".
+        jvmTarget = "11"
     }
     doFirst {
         // macOS creates AppleDouble (._*) metadata files on external drives that ASM cannot parse,

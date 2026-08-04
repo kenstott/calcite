@@ -865,6 +865,18 @@ allprojects {
                 // JDK 1.8 is deprecated https://bugs.openjdk.org/browse/JDK-8173605
                 // and now it requires -Xlint:-options to mute warnings about its deprecation
                 options.compilerArgs.add("-Xlint:-options")
+                // -source/-target alone does not restrict the API surface, so a newer
+                // JDK silently accepts newer APIs and only a CI job running the older
+                // JDK rejects them. --release enforces the API too. A convention, not
+                // a value, so modules needing more can override it.
+                if (JavaVersion.current() >= JavaVersion.VERSION_1_9) {
+                    options.release.convention(11)
+                    // --release applies lints that cross-compiling with -source 8
+                    // suppressed. dep-ann fires on the javacc-generated
+                    // SimpleCharStream, which carries an @deprecated javadoc with no
+                    // annotation and cannot be edited, and -Werror makes it fatal.
+                    options.compilerArgs.add("-Xlint:-dep-ann")
+                }
                 if (werror) {
                     options.compilerArgs.add("-Werror")
                 }

@@ -29,6 +29,10 @@ if (JavaVersion.current() < JavaVersion.VERSION_21) {
         tasks.withType<JavaCompile>().configureEach { enabled = false }
         tasks.withType<Test>().configureEach { enabled = false }
     }
+} else {
+    // Override the root's --release 11 convention: at 11 javac refuses to read
+    // smile's Java 21 class files.
+    tasks.withType<JavaCompile>().configureEach { options.release.set(21) }
 }
 
 // BSL module uses Google Java Format (4-space) and has legitimate System.exit() in the launcher.

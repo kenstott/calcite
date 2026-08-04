@@ -2955,6 +2955,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * @deprecated Use extractMDAWithChunker instead for semantic chunking.
    * Enhanced to handle inline XBRL documents where Item 7 may be embedded in tags.
    */
+  @Deprecated
   private void extractMDAFromHTML(String htmlPath,
       List<Map<String, Object>> dataList, String cik, String accessionNumber, String filingDate) {
     try {

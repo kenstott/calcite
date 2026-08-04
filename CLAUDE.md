@@ -9,7 +9,7 @@
 **When messaging teammates, only send file paths and line numbers.** Do not include code blocks.
 
 ## Critical Rules (Zero Tolerance)
-1. **Java 8 Compatibility** - No var, text blocks, switch expressions, records, pattern matching, sealed classes
+1. **Java 8 Compatibility** - No var, text blocks, switch expressions, records, pattern matching, sealed classes. Applies to the upstream-derived modules (core main, linq4j, arrow, babel, cassandra, druid, elasticsearch, example/*, geode, innodb, kafka, mongodb, pig, piglet, plus, redis, spark, server, testkit, ubenchmark) and cloud-ops. **Exceptions, already on Java 11+:** file (`--add-modules jdk.incubator.vector`), govdata + sharepoint-list (`java.net.http`), splunk, salesforce, openapi, graphql, csv-nextgen tests, core's fork-added test files; askamerica-engine needs 21 (smile-base 4.x is Java 21 bytecode) and trino-* need 25. CI runs JDK 11/17/21/23 — no JDK 8 job enforces this any more, so honour it by hand in the modules above.
 2. **Implementation Honesty** - Never claim "implemented" for stubs. Use `wip:` prefix for stubs, `feat:` only when working
 3. **Test Execution** - Check @Tag first, use `-PincludeTags=integration` for integration tests
 4. **Task Completion** - No abandonment. Provide verification evidence. No "this should work" claims.

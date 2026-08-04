@@ -146,6 +146,10 @@ dependencies {
     testImplementation("io.trino:trino-spi:$trinoVersion")
     testImplementation("io.trino:trino-testing:$trinoVersion")
     testImplementation("io.trino:trino-main:$trinoVersion")
+    // TestingCalciteSchemaFactory builds a Calcite schema directly. trino-calcite-base
+    // exposes the driver, not the Calcite API, so core is needed to compile against it.
+    testImplementation(project(":core"))
+    testImplementation(project(":linq4j"))
     // trino-testing pulls JUnit Platform 6.x; supply a matching launcher so Gradle 8.7 uses it
     // instead of its older bundled launcher (otherwise TagFilter hits a NoSuchMethodError).
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

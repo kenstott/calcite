@@ -218,7 +218,9 @@ tasks.withType<AutostyleTask>().configureEach {
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     kotlinOptions {
-        jvmTarget = "1.8"
+        // Must match the Java release the root build sets, or Gradle rejects the
+        // build with "Inconsistent JVM-target compatibility".
+        jvmTarget = "11"
     }
 }
 

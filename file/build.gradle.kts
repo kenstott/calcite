@@ -195,6 +195,9 @@ if (JavaVersion.current() < JavaVersion.VERSION_11) {
 if (JavaVersion.current() >= JavaVersion.VERSION_16) {
     afterEvaluate {
         tasks.withType<JavaCompile>().configureEach {
+            // jdk.incubator.vector first ships in 16, so the root's --release 11
+            // convention cannot resolve it. 17 is the oldest CI JDK that has it.
+            options.release.set(17)
             options.compilerArgs.add("--add-modules=jdk.incubator.vector")
             options.compilerArgs.removeIf { it == "-Werror" }
         }
