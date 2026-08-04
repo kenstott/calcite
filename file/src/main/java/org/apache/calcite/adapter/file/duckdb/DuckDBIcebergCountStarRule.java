@@ -311,25 +311,9 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
    * JdbcTableScan -> JdbcTable -> JdbcSchema (which may be DuckDBJdbcSchema)
    */
   private DuckDBJdbcSchema getDuckDBSchema(TableScan tableScan) {
-    if (!(tableScan instanceof JdbcTableScan)) {
-      LOGGER.debug("[ICEBERG COUNT*] Table scan is not JdbcTableScan: {}",
-          tableScan.getClass().getSimpleName());
-      return null;
-    }
-
-    JdbcTableScan jdbcScan = (JdbcTableScan) tableScan;
-    JdbcTable jdbcTable = jdbcScan.jdbcTable;
-    JdbcSchema jdbcSchema = jdbcTable.jdbcSchema;
-
-    LOGGER.debug("[ICEBERG COUNT*] JdbcTable.jdbcSchema type: {}",
-        jdbcSchema.getClass().getSimpleName());
-
-    if (jdbcSchema instanceof DuckDBJdbcSchema) {
-      return (DuckDBJdbcSchema) jdbcSchema;
-    }
-
-    LOGGER.debug("[ICEBERG COUNT*] JdbcSchema is not DuckDBJdbcSchema");
-    return null;
+    // Shared with the statistics rules via IcebergScanResolver so both agree on what counts as an
+    // Iceberg-backed scan; a second copy here would let the two notions drift.
+    return IcebergScanResolver.duckDbSchema(tableScan);
   }
 
   /**
@@ -338,47 +322,9 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
    * there is no WHERE predicate between the aggregate and the scan.
    */
   private TableScan findTableScan(RelNode node) {
-    if (node == null) {
-      return null;
-    }
-
-    // A filter restricts rows — the cached total count is no longer valid.
-    if (node instanceof org.apache.calcite.rel.core.Filter) {
-      return null;
-    }
-
-    // Handle RelSubset nodes from Volcano planner
-    if (node.getClass().getName().contains("RelSubset")) {
-      try {
-        java.lang.reflect.Method getBest = node.getClass().getMethod("getBest");
-        RelNode best = (RelNode) getBest.invoke(node);
-        if (best != null && best != node) {
-          return findTableScan(best);
-        }
-
-        java.lang.reflect.Method getOriginal = node.getClass().getMethod("getOriginal");
-        RelNode original = (RelNode) getOriginal.invoke(node);
-        if (original != null && original != node) {
-          return findTableScan(original);
-        }
-      } catch (Exception e) {
-        // Silently continue
-      }
-    }
-
-    if (node instanceof TableScan) {
-      return (TableScan) node;
-    }
-
-    // Recursively search through all inputs
-    for (RelNode input : node.getInputs()) {
-      TableScan scan = findTableScan(input);
-      if (scan != null) {
-        return scan;
-      }
-    }
-
-    return null;
+    // stopAtFilter=true: a predicate between the aggregate and the scan invalidates a whole-table
+    // row count, so the optimization must decline rather than report the unfiltered total.
+    return IcebergScanResolver.findTableScan(node, true);
   }
 
   /**

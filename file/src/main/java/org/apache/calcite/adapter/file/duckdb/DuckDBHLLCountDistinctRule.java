@@ -247,13 +247,24 @@ public class DuckDBHLLCountDistinctRule extends RelOptRule {
       LOGGER.warn("[DUCKDB-HLL] Looking for HLL sketch: schema='{}', table='{}', column='{}' (original table: '{}')",
                    tableInfo.schemaName, cleanTableName, columnName, tableInfo.tableName);
 
-      // TODO wire to IcebergThetaStatistics.readNdv(): the published Puffin statistics are the
-      // durable source — versioned against the snapshot the query resolves and readable by any
-      // client of the bucket — whereas this cache is per-JVM and empty in a freshly started query
-      // process. Resolving the Iceberg table from the scan is ~150 lines of
-      // scan -> DuckDBJdbcSchema -> FileSchema -> conversion-record walking that currently lives
-      // inside DuckDBIcebergCountStarRule; that needs extracting to a shared helper first rather
-      // than duplicating it here.
+      // Published Iceberg statistics first. They are written with the table, versioned against the
+      // snapshot the query resolves, and reachable by any client that can read the bucket — where
+      // the in-memory cache below is per-JVM and empty in a freshly started query process, which
+      // is precisely the case that matters for a long-lived query server. Only the spec's `ndv`
+      // property is read, out of the Puffin footer, so no sketch payload is fetched or decoded.
+      org.apache.iceberg.Table icebergTable =
+          IcebergScanResolver.resolveIcebergTable(input);
+      if (icebergTable != null) {
+        Long published =
+            org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(icebergTable)
+                .get(columnName.toLowerCase(java.util.Locale.ROOT));
+        if (published != null) {
+          LOGGER.debug("[DUCKDB-HLL] Iceberg statistics for {}.{}.{}: ndv={}",
+              tableInfo.schemaName, cleanTableName, columnName, published);
+          return published;
+        }
+      }
+
       // Try to get HLL sketch from cache (now case-insensitive)
       HLLSketchCache cache = HLLSketchCache.getInstance();
       HyperLogLogSketch sketch =
