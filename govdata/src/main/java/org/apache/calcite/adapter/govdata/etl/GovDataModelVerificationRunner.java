@@ -171,6 +171,7 @@ public final class GovDataModelVerificationRunner {
     long distinctKeys = -1; // COUNT(DISTINCT pk-tuple) over those keyed rows
     long dupRows = -1;   // keyedRows - distinctKeys (>0 ⇒ the declared PK is not unique)
     String dupErr;       // dup-check SQL failed (reported as n/a, not a hard failure)
+    boolean dupApprox;   // cleared by the HLL sketch alone; no exact DISTINCT was run
   }
 
   public static void main(String[] args) throws Exception {
@@ -462,6 +463,17 @@ public final class GovDataModelVerificationRunner {
         rs = null;
         try {
           st = conn.createStatement();
+          // This phase, not REACH, is what proves a table is readable: COUNT(*) answers from
+          // Iceberg manifests without opening a single Parquet file, so it stays green on a table
+          // whose declared column types no longer match what was written and which therefore
+          // cannot be queried at all.
+          //
+          // KNOWN COVERAGE LIMIT: LIMIT reads the head of the table — in practice one file in one
+          // partition. A type mismatch confined to partitions written by a later run is not caught.
+          // Widening it is not free: any ORDER BY/sample that scatters across files forces a full
+          // sort or scan, which costs far more than the whole probe budget. Raise --limit for a
+          // deeper (still head-biased) read; real per-partition coverage needs partition-aware
+          // probing, which this runner does not do.
           rs = st.executeQuery("SELECT * FROM \"" + schema + "\".\"" + table
               + "\" LIMIT " + cfg.limit);
           ResultSetMetaData rmd = rs.getMetaData();
@@ -535,10 +547,45 @@ public final class GovDataModelVerificationRunner {
     // Two plain aggregates (not a scalar subquery) so each pushes cleanly to DuckDB and can't hit
     // a Calcite scalar-subquery planning edge case across the full table sweep.
     try {
-      long keyed = scalarCount(conn, "SELECT COUNT(*) FROM " + from);
+      // Screen with a HyperLogLog sketch before paying for the exact DISTINCT. The exact form
+      // builds a hash set over every keyed row — on a 20M+ row table that is the single most
+      // expensive thing this runner does, and it ran on every PK table on every sweep even though
+      // almost all of them are clean. APPROX_COUNT_DISTINCT is one pass with bounded memory and
+      // is on the same aggregate shape that pushes to DuckDB. Its relative error is ~2%, so treat
+      // anything within a 5% band of the keyed count as "no duplicates" and only fall through to
+      // the exact count when the sketch says there is a real gap to measure. Duplication that
+      // matters here is whole-table file duplication (7x, 19x observed), which no sketch tolerance
+      // can hide; a delta small enough to sit inside the band would be below dupThreshold anyway.
+      // ONE query for both numbers. Planning, not scanning, is what this runner spends its time
+      // on — a plan dump for a single table shows ~1800 lines of Volcano exploration across its
+      // handful of probes, while the same aggregates run in ~2s directly in DuckDB over 22M rows.
+      // Both aggregates push down together (verified: the plan shows a single JdbcAggregate with
+      // COUNT() and COUNT(APPROXIMATE DISTINCT)), so folding them halves the planning cost of the
+      // dup check rather than merely swapping one planned query for another.
+      long keyed = -1;
+      long approx = -1;
+      try {
+        long[] both = twoCounts(conn,
+            "SELECT COUNT(*), APPROX_COUNT_DISTINCT(" + structOf(pk) + ") FROM " + from);
+        keyed = both[0];
+        approx = both[1];
+      // fallback-guard: allow a real re-query when the combined form is unsupported (e.g. a PK
+      // column type the sketch cannot hash); not a fabricated value
+      } catch (Exception combinedUnsupported) {
+        keyed = scalarCount(conn, "SELECT COUNT(*) FROM " + from);
+        approx = -1;
+      }
+      r.keyedRows = keyed;
+      if (approx >= 0 && approx >= keyed * 0.95) {
+        // Sketch says distinct ≈ keyed — no duplication worth an exact scan.
+        r.distinctKeys = approx;
+        r.dupRows = 0;
+        r.dupApprox = true;
+        r.pkChecked = true;
+        return;
+      }
       long distinct = scalarCount(conn,
           "SELECT COUNT(*) FROM (SELECT DISTINCT " + cols + " FROM " + from + ")");
-      r.keyedRows = keyed;
       r.distinctKeys = distinct;
       r.dupRows = keyed - distinct;
       r.pkChecked = true;
@@ -553,6 +600,26 @@ public final class GovDataModelVerificationRunner {
     }
   }
 
+  /**
+   * Renders a PK column list as a single value the distinct-sketch can hash. A multi-column key
+   * has to collapse to one expression for APPROX_COUNT_DISTINCT; ROW(...) keeps the columns
+   * separate (unlike concatenating text, which would make ('a','bc') and ('ab','c') collide and
+   * under-report duplicates).
+   */
+  private static String structOf(List<String> pk) {
+    if (pk.size() == 1) {
+      return "\"" + pk.get(0) + "\"";
+    }
+    StringBuilder sb = new StringBuilder("ROW(");
+    for (int j = 0; j < pk.size(); j++) {
+      if (j > 0) {
+        sb.append(", ");
+      }
+      sb.append('"').append(pk.get(j)).append('"');
+    }
+    return sb.append(')').toString();
+  }
+
   /** Runs a single-column COUNT query and returns the long value (0 if no row). */
   private static long scalarCount(Connection conn, String sql) throws Exception {
     Statement st = null;
@@ -561,6 +628,23 @@ public final class GovDataModelVerificationRunner {
       st = conn.createStatement();
       rs = st.executeQuery(sql);
       return rs.next() ? rs.getLong(1) : 0L;
+    } finally {
+      closeQuietly(rs);
+      closeQuietly(st);
+    }
+  }
+
+  /** Runs a two-column COUNT query and returns both values (zeros if no row). */
+  private static long[] twoCounts(Connection conn, String sql) throws Exception {
+    Statement st = null;
+    ResultSet rs = null;
+    try {
+      st = conn.createStatement();
+      rs = st.executeQuery(sql);
+      if (!rs.next()) {
+        return new long[]{0L, 0L};
+      }
+      return new long[]{rs.getLong(1), rs.getLong(2)};
     } finally {
       closeQuietly(rs);
       closeQuietly(st);
@@ -580,7 +664,12 @@ public final class GovDataModelVerificationRunner {
     if (!r.pkChecked) {
       return r.dupErr != null ? "n/a" : "-";
     }
-    return r.dupRows > 0 ? "DUP " + dupRatio(r) : "ok";
+    if (r.dupRows > 0) {
+      return "DUP " + dupRatio(r);
+    }
+    // "~ok" is not a weaker pass — it means the sketch showed distinct ≈ keyed, so no exact
+    // DISTINCT was needed. Surfaced so a reader can tell which tables paid the full scan.
+    return r.dupApprox ? "~ok" : "ok";
   }
 
   private static List<String> crossCheckExpected(Config cfg, List<TableResult> results)

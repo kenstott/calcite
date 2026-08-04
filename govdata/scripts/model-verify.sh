@@ -201,20 +201,51 @@ if [[ "$SINGLE_CONNECTION" == "true" ]]; then
     exit 1
 fi
 
-# ---- loop: one fast connection per schema ----
-for s in $SELECTED; do
-    echo "========================= $s ========================="
+# ---- run schemas concurrently, one connection each ----
+# Each schema is an independent JDBC connection over its own bucket prefix — nothing is shared,
+# so serialising them only added wall-clock. A full sweep ran for hours at ~0.4s/table of actual
+# probe work, because 26 schemas waited on each other. Fan out instead, capped so the JVMs fit:
+# each is -Xmx2g, so the default 4 needs ~8GB. Output is buffered per schema and printed whole,
+# otherwise interleaved probe lines from concurrent schemas would be unreadable.
+JOBS="${VERIFY_JOBS:-4}"
+_outdir=$(mktemp -d "${TMPDIR:-/tmp}/model-verify-XXXXXX")
+trap 'rm -rf "$_outdir"' EXIT
+
+run_one() {
+    local s=$1 probe args rc
     probe="$(write_probes "$s")"
     args=(--source "$s" --limit "$LIMIT" "${DUP_ARGS[@]}")
     [[ -n "$probe" ]] && args+=(--probes "$probe")
-    if java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}" 2>/dev/null; then
+    {
+        echo "========================= $s ========================="
+        java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}" 2>/dev/null
+        rc=$?
+        echo ""
+        echo "$rc" > "$_outdir/$s.rc"
+    } > "$_outdir/$s.out" 2>&1
+    [[ -n "$probe" ]] && rm -f "$probe"
+}
+
+_running=0
+for s in $SELECTED; do
+    run_one "$s" &
+    _running=$((_running + 1))
+    if [ "$_running" -ge "$JOBS" ]; then
+        wait -n 2>/dev/null || wait
+        _running=$((_running - 1))
+    fi
+done
+wait
+
+# Report in the order the user asked for, not the order they happened to finish.
+for s in $SELECTED; do
+    [ -f "$_outdir/$s.out" ] && cat "$_outdir/$s.out"
+    if [ "$(cat "$_outdir/$s.rc" 2>/dev/null || echo 1)" = "0" ]; then
         passed=$((passed + 1))
     else
         fail=1
         failed_list="$failed_list $s"
     fi
-    [[ -n "$probe" ]] && rm -f "$probe"
-    echo ""
 done
 
 echo "===================== OVERALL ====================="
