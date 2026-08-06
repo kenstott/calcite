@@ -78,6 +78,7 @@ public class McpServerIntegrationTest {
   private Process mcpProcess;
   private BufferedWriter mcpStdin;
   private BufferedReader mcpStdout;
+  private File mcpStderr;
 
   @BeforeAll
   static void locateShadowJar() {
@@ -87,10 +88,21 @@ public class McpServerIntegrationTest {
     File[] jars = libsDir.listFiles(f ->
         f.getName().endsWith(".jar")
             && f.getName().contains("askamerica-engine")
-            && !f.getName().contains("launcher"));
+            && !f.getName().contains("launcher")
+            && !f.getName().contains("sources"));
     assumeTrue(jars != null && jars.length > 0,
         "askamerica-engine shadow JAR not found — run :askamerica-engine:shadowJar first");
-    shadowJar = jars[0];
+    // Both the fat shadow jar and the thin 'calcite-askamerica-engine' jar match; only the shadow
+    // jar bundles McpServer AND its dependencies, so running the thin jar dies with
+    // ClassNotFoundException at startup. The shadow jar is by far the largest — pick it by size,
+    // not by listFiles() order (which is unspecified and made this selection flaky).
+    File fat = jars[0];
+    for (File j : jars) {
+      if (j.length() > fat.length()) {
+        fat = j;
+      }
+    }
+    shadowJar = fat;
     LOGGER.info("Shadow JAR: " + shadowJar.getAbsolutePath());
   }
 
@@ -114,6 +126,12 @@ public class McpServerIntegrationTest {
     testDataDir.delete();
     testDataDir.mkdirs();
     pb.environment().put("MCP_DATA_DIR", testDataDir.getAbsolutePath());
+    // Drain the server's stderr to a file. The server routes all logging to stderr, and a cold
+    // mount is verbose; left as an unread pipe it fills its ~64 KB OS buffer, blocks the server
+    // mid-mount, and the process dies before answering the handshake ("exited unexpectedly").
+    // A file redirect is drained by the OS and doubles as a diagnostic when a test does fail.
+    mcpStderr = new File(testDataDir, "mcp-server.stderr.log");
+    pb.redirectError(mcpStderr);
     mcpProcess = pb.start();
     mcpStdin  = new BufferedWriter(new OutputStreamWriter(mcpProcess.getOutputStream(), StandardCharsets.UTF_8));
     mcpStdout = new BufferedReader(new InputStreamReader(mcpProcess.getInputStream(), StandardCharsets.UTF_8));
@@ -238,6 +256,20 @@ public class McpServerIntegrationTest {
     return readUntilId(id, timeoutMs);
   }
 
+  /** Last ~4 KB of the server's redirected stderr, for diagnosing an unexpected exit. */
+  private String tailStderr() {
+    if (mcpStderr == null || !mcpStderr.isFile()) {
+      return "(no stderr captured)";
+    }
+    try {
+      byte[] all = java.nio.file.Files.readAllBytes(mcpStderr.toPath());
+      int from = Math.max(0, all.length - 4096);
+      return new String(all, from, all.length - from, StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      return "(could not read stderr: " + e.getMessage() + ")";
+    }
+  }
+
   private void send(String line) throws IOException {
     mcpStdin.write(line);
     mcpStdin.newLine();
@@ -249,7 +281,8 @@ public class McpServerIntegrationTest {
     String idToken = "\"id\":" + id;
     while (System.currentTimeMillis() < deadline) {
       if (!mcpProcess.isAlive()) {
-        fail("MCP server process exited unexpectedly");
+        fail("MCP server process exited unexpectedly (exit=" + mcpProcess.exitValue()
+            + ")\n--- server stderr (tail) ---\n" + tailStderr());
       }
       String line = mcpStdout.readLine();
       if (line == null) {
