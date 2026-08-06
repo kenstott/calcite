@@ -1748,7 +1748,10 @@ views:
       Places each usaspending_by_state row (state, fiscal year, obligated_amount)
       beside its same-state, same-year SOI total-income-tax figure summed from
       the soi_income_by_county state-total ('...000') rows — a direct
-      revenue-vs-outlay comparison per state per year.
+      revenue-vs-outlay comparison per state per year. federal_obligations_usd is TOTAL
+      USAspending obligations across ALL agencies and programs combined — it is NOT broken out
+      by awarding agency, CFDA/program, or budget function, so agency-specific federal spending
+      (e.g. Department of Education, defense) cannot be isolated from this table.
     sql: >
       SELECT
         s.year,

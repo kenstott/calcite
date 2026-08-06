@@ -2521,7 +2521,11 @@ views:
       to the state level — total_enrollment (sum), avg_pupil_teacher_ratio (average of
       each district's enrollment/teachers_total_fte), avg_frpl_rate (state free/reduced
       lunch share), and district_count. Enables correlating per-pupil staffing and
-      poverty resources with NAEP outcomes. One row per jurisdiction × year × subject ×
+      poverty resources with NAEP outcomes. DESPITE THE NAME, this view carries NO dollar or
+      per-pupil expenditure figures — "spending" here is proxied only by staffing
+      (avg_pupil_teacher_ratio) and poverty (avg_frpl_rate); NCES CCD in this catalog has no
+      district finance/dollars, so per-pupil spending in dollars is not available anywhere here.
+      One row per jurisdiction × year × subject ×
       grade; jurisdiction=0 (national aggregate) will not match any state's district data.
       d2.enrollment, d2.teachers_total_fte, and ccd_schools.free_or_reduced_price_lunch
       all carry negative NCES CCD sentinel codes on some rows (see those tables'

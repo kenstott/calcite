@@ -1240,8 +1240,15 @@ partitionedTables:
     comment: >
       Annual establishment counts, employment levels, total wages, and average weekly wage for
       all 51 U.S. jurisdictions (50 states + DC), from BLS QCEW (Quarterly Census of Employment
-      and Wages, released with ~1-year lag). For the metro-area version, see metro_wages (27
-      metros, which also carries average annual pay).
+      and Wages, released with ~1-year lag). Broken out by NAICS industry (industry_code) AND
+      ownership sector (own_code), so this is the catalog's source for sector- or
+      industry-specific pay by state (e.g. teacher pay, public-sector pay, healthcare-sector
+      pay). Worked example — public K-12 teacher-sector pay: industry_code='611' (educational
+      services), own_code='3' (local government), agglvl_code='55'; use own_code='2' for state
+      government (public universities), '5' for private. This is industry x ownership average pay,
+      NOT occupation-level (SOC), so an industry figure covers every worker in the sector
+      (teachers plus aides/administrators/support), not the occupation alone. For the metro-area
+      version, see metro_wages (27 metros, which also carries average annual pay).
 
     # Dimension definitions for iteration
     dimensions:
@@ -1265,15 +1272,26 @@ partitionedTables:
       - name: own_code
         type: string
         nullable: true
-        comment: Ownership code (0=all, 5=private)
+        comment: >
+          Ownership sector: 0=total (all ownerships), 1=federal government, 2=state government,
+          3=local government, 5=private. Public K-12 schools are 3 (local government); public
+          universities are mostly 2 (state government).
       - name: industry_code
         type: string
         nullable: true
-        comment: NAICS industry code (10=total)
+        comment: >
+          NAICS industry code; '10'=total, all industries. Select a sector for
+          industry-specific pay — e.g. '611'=educational services (schools), '622'=hospitals,
+          '722'=food services & drinking places. Pair with the matching agglvl_code.
       - name: agglvl_code
         type: string
         nullable: true
-        comment: Aggregation level code
+        comment: >
+          QCEW aggregation level. '55'=statewide, by 3-digit NAICS subsector, by ownership
+          sector — the grain at which industry-specific pay (e.g. educational services, NAICS
+          611) resolves to one row per state per ownership; coarser codes roll up to sector or
+          total-all-industries. Any industry-specific query must pin agglvl_code together with
+          industry_code and own_code.
       - name: annual_avg_estabs
         type: int
         nullable: true
@@ -3465,8 +3483,11 @@ partitionedTables:
         - name: tablename
           type: VARCHAR
     comment: >
-      BEA Regional Price Parities (RPP): a cost-of-living index by state and Metropolitan
-      Statistical Area (MSA) relative to the national average (100.000), annual since 2008.
+      BEA Regional Price Parities (RPP): the standard federal cost-of-living / price-level index
+      by state (search terms: cost of living, COLA, price parity, RPP) — by state and Metropolitan
+      Statistical Area (MSA) relative to the national average (100.000), annual since 2008. This is
+      the table to divide nominal wages/income by (index/100) to get real, cost-of-living-adjusted
+      dollars comparable across states.
       Verified live against apps.bea.gov/api/data (dataset Regional, tables SARPP/MARPP):
       coverage 2008-2024 at verification time. tablename selects the geography: SARPP = state
       (includes a GeoFips=00000 "United States" national baseline row, always rpp_index=100.000,
