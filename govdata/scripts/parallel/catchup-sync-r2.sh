@@ -53,6 +53,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
+# Carry a signal through to the in-flight rclone. Without this the shell exits on TERM
+# while its foreground rclone keeps running as an orphan, so a copy to R2 continues
+# after the scheduler that owns it is gone.
+_term_children() {
+  pkill -TERM -P $$ 2>/dev/null || true
+  exit 143
+}
+trap _term_children TERM INT
+
 # R2 destination is built from the PROD_* creds in .env.prod (no .env.preprod, no rclone.conf).
 configure_r2_remote
 

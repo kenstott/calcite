@@ -84,9 +84,15 @@ ts() { date '+%Y-%m-%d %H:%M:%S'; }
 # embedder/R2-daemon down on shutdown. The pool runs under a `timeout` wrapper in
 # its own process group, so a plain kill of one PID would orphan the rest.
 tree_term() {
-  local pid="$1" child
-  for child in $(pgrep -P "$pid" 2>/dev/null); do tree_term "$child"; done
+  local pid="$1" child kids
+  # Snapshot the children before signalling anything: once $pid dies its children are
+  # reparented to init and `pgrep -P $pid` can no longer reach them.
+  kids=$(pgrep -P "$pid" 2>/dev/null || true)
+  # Signal the parent FIRST so a supervisor loop stops spawning replacements. Signalling
+  # children first leaves a window in which the loop launches a fresh child after the
+  # sweep has passed it, and that child outlives the runner.
   kill -TERM "$pid" 2>/dev/null || true
+  for child in $kids; do tree_term "$child"; done
 }
 
 log_error() {
@@ -102,11 +108,20 @@ fmt_epoch() {
 
 ACTIVE_POOL_PID=""
 _sync_pid=""
+_catchup_pid=""
 _cleanup() {
-  # Tear down the active pool subtree and the R2 sync daemon, then release the
+  # Tear down the active pool subtree and both R2 daemons, then release the
   # pidfile (only if it still points at us — a superseding runner may own it now).
   [ -n "$ACTIVE_POOL_PID" ] && tree_term "$ACTIVE_POOL_PID"
   [ -n "$_sync_pid" ] && tree_term "$_sync_pid"
+  # The catchup daemon must come down too. It drives catchup-sync-r2.sh, which walks the
+  # whole tree rather than a time slice — copy-only, but the broadest R2 writer here.
+  [ -n "$_catchup_pid" ] && tree_term "$_catchup_pid"
+  # Backstop: a pass launched in the gap between the child snapshot and the parent's
+  # death is reparented to init and unreachable by a PPID walk. Sweep our own sync
+  # entry points by path so no R2 writer outlives the runner.
+  pkill -TERM -f "$SCRIPT_DIR/sync-to-r2.sh" 2>/dev/null || true
+  pkill -TERM -f "$SCRIPT_DIR/catchup-sync-r2.sh" 2>/dev/null || true
   [ "$(cat "$PID_FILE" 2>/dev/null || true)" = "$$" ] && rm -f "$PID_FILE"
 }
 _shutdown() {
