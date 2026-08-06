@@ -63,8 +63,10 @@ public class PartitionedParquetTableCoverageTest {
 
   private String createParquetFile(String fileName, String selectSql) {
     File file = tempDir.resolve(fileName).toFile();
+    // Outside the try: the catch below turns anything thrown into null, and a
+    // skip must reach JUnit rather than be reported as a fixture that failed.
+    DuckDbCli.assumeAvailable();
     try {
-      DuckDbCli.assumeAvailable();
       ProcessBuilder pb = new ProcessBuilder("duckdb", "-c",
           "COPY (" + selectSql + ") TO '" + file.getAbsolutePath() + "' (FORMAT PARQUET)");
       pb.redirectErrorStream(true);
