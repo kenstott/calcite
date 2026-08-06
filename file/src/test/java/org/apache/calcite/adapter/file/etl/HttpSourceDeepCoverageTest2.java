@@ -463,10 +463,11 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    assertEquals(42L, method.invoke(source, "42"));
+    assertEquals(42L, method.invoke(source, "col", "42"));
   }
 
   @Test void testParseValueDouble() throws Exception {
@@ -475,10 +476,11 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    assertEquals(3.14, method.invoke(source, "3.14"));
+    assertEquals(3.14, method.invoke(source, "col", "3.14"));
   }
 
   @Test void testParseValueString() throws Exception {
@@ -487,10 +489,11 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    assertEquals("hello", method.invoke(source, "hello"));
+    assertEquals("hello", method.invoke(source, "col", "hello"));
   }
 
   @Test void testParseValueNull() throws Exception {
@@ -499,10 +502,11 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    assertNull(method.invoke(source, (String) null));
+    assertNull(method.invoke(source, "col", (String) null));
   }
 
   @Test void testParseValueEmpty() throws Exception {
@@ -511,10 +515,11 @@ public class HttpSourceDeepCoverageTest2 {
         .build();
     HttpSource source = new HttpSource(config);
 
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    assertNull(method.invoke(source, ""));
+    assertNull(method.invoke(source, "col", ""));
   }
 
   // --- navigateToPath via reflection ---

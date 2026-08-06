@@ -669,21 +669,23 @@ public class HttpSourceCoverageTest {
 
   @Test void testParseValueNull() throws Exception {
     HttpSource source = createBasicSource();
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    assertNull(method.invoke(source, (String) null));
-    assertNull(method.invoke(source, ""));
+    assertNull(method.invoke(source, "col", (String) null));
+    assertNull(method.invoke(source, "col", ""));
 
     source.close();
   }
 
   @Test void testParseValueInteger() throws Exception {
     HttpSource source = createBasicSource();
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    Object result = method.invoke(source, "42");
+    Object result = method.invoke(source, "col", "42");
     assertTrue(result instanceof Long);
     assertEquals(42L, result);
 
@@ -692,10 +694,11 @@ public class HttpSourceCoverageTest {
 
   @Test void testParseValueDouble() throws Exception {
     HttpSource source = createBasicSource();
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    Object result = method.invoke(source, "3.14");
+    Object result = method.invoke(source, "col", "3.14");
     assertTrue(result instanceof Double);
     assertEquals(3.14, result);
 
@@ -704,10 +707,11 @@ public class HttpSourceCoverageTest {
 
   @Test void testParseValueString() throws Exception {
     HttpSource source = createBasicSource();
-    Method method = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
     method.setAccessible(true);
 
-    Object result = method.invoke(source, "hello");
+    Object result = method.invoke(source, "col", "hello");
     assertEquals("hello", result);
 
     source.close();
@@ -850,6 +854,63 @@ public class HttpSourceCoverageTest {
     assertEquals(30L, result.get(0).get("age"));
     assertEquals("NYC", result.get(0).get("city"));
     assertEquals("Bob", result.get(1).get("name"));
+
+    source.close();
+  }
+
+  /**
+   * A column the table declares as a string keeps its text verbatim, so an all-digit
+   * identifier does not lose its leading zeros to type inference. QCEW publishes state
+   * FIPS as {@code 01000}; inferring a number there silently turns Alabama into 1000.
+   */
+  @Test void testParseDelimitedResponseKeepsDeclaredStringVerbatim() throws Exception {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
+            createMap("format", "csv")))
+        .build();
+    List<ColumnConfig> columns =
+        Arrays.asList(
+            ColumnConfig.builder().name("area_fips").type("string").build(),
+            ColumnConfig.builder().name("annual_avg_wkly_wage").type("int").build());
+    HttpSource source = new HttpSource(config, null, null, null, null, columns);
+
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
+    method.setAccessible(true);
+
+    String csv = "area_fips,annual_avg_wkly_wage\n01000,837\n20000,1152";
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, csv, ',');
+    assertEquals(2, result.size());
+    assertEquals("01000", result.get(0).get("area_fips"));
+    assertEquals(837L, result.get(0).get("annual_avg_wkly_wage"));
+    assertEquals("20000", result.get(1).get("area_fips"));
+
+    source.close();
+  }
+
+  /** Without declared columns a delimited value has only inference to go on. */
+  @Test void testParseDelimitedResponseInfersWhenNoColumnsDeclared() throws Exception {
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("https://api.example.com/data")
+        .response(
+            HttpSourceConfig.ResponseConfig.fromMap(
+            createMap("format", "csv")))
+        .build();
+    HttpSource source = new HttpSource(config);
+
+    Method method =
+        HttpSource.class.getDeclaredMethod("parseDelimitedResponse", String.class, char.class);
+    method.setAccessible(true);
+
+    String csv = "area_fips,wage\n01000,837";
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> result =
+        (List<Map<String, Object>>) method.invoke(source, csv, ',');
+    assertEquals(1000L, result.get(0).get("area_fips"));
 
     source.close();
   }

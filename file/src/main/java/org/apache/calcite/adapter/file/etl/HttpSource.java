@@ -42,11 +42,13 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
@@ -104,6 +106,13 @@ public class HttpSource implements DataSource {
   private final String rawCachePath;
   /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
   private final String operatingDirectory;
+  /**
+   * Fetch-time keys of the columns the table declares as textual. Delimited formats carry no
+   * types, so {@link #parseValue} otherwise infers one per value — and an all-digit identifier
+   * (FIPS code, ZIP, CIK) parses as a number, dropping its leading zeros. The declared type is
+   * authoritative over that inference: a key in this set is never coerced.
+   */
+  private final Set<String> textualSourceKeys;
   /** CAS-based slot reservation for lock-free rate limiting across parallel threads. */
   private final AtomicLong nextAllowedNanos = new AtomicLong();
 
@@ -161,6 +170,24 @@ public class HttpSource implements DataSource {
    */
   public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
       StorageProvider storageProvider, String rawCachePath, String operatingDirectory) {
+    this(config, hooksConfig, storageProvider, rawCachePath, operatingDirectory, null);
+  }
+
+  /**
+   * Creates a new HttpSource that resolves delimited-format value types against the columns
+   * the table declares.
+   *
+   * @param config HTTP source configuration
+   * @param hooksConfig Optional hooks configuration for response transformation
+   * @param storageProvider Storage provider for raw response caching (S3, local, etc.)
+   * @param rawCachePath Base path for raw response cache (e.g., s3://bucket/.raw)
+   * @param operatingDirectory Operating directory for local cache (e.g., .aperio/schema); may be null
+   * @param columns Declared columns of the table being fetched; may be null when the table
+   *                declares none, in which case delimited values fall back to inference
+   */
+  public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
+      StorageProvider storageProvider, String rawCachePath, String operatingDirectory,
+      List<ColumnConfig> columns) {
     this.config = config;
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
@@ -179,6 +206,7 @@ public class HttpSource implements DataSource {
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
     this.operatingDirectory = operatingDirectory;
+    this.textualSourceKeys = textualSourceKeys(columns);
   }
 
   /**
@@ -198,6 +226,7 @@ public class HttpSource implements DataSource {
     this.storageProvider = null;
     this.rawCachePath = null;
     this.operatingDirectory = null;
+    this.textualSourceKeys = Collections.emptySet();
   }
 
   /**
@@ -2503,7 +2532,7 @@ public class HttpSource implements DataSource {
                 String value = stripQuotesIfPresent(values[idx].trim(), quoted);
                 // Apply column name mapping: source name -> output name
                 String outputName = wideToNarrow.getOutputColumnName(header);
-                baseRow.put(outputName, parseValue(value));
+                baseRow.put(outputName, parseValue(outputName, value));
               }
             }
 
@@ -2520,7 +2549,8 @@ public class HttpSource implements DataSource {
 
                 Map<String, Object> row = new LinkedHashMap<String, Object>(baseRow);
                 row.put(wideToNarrow.getKeyColumnName(), valueColumnNames.get(i));  // e.g., "2020"
-                row.put(wideToNarrow.getValueColumnName(), parseValue(valueStr));   // e.g., 12345.0
+                String valueColumn = wideToNarrow.getValueColumnName();
+                row.put(valueColumn, parseValue(valueColumn, valueStr));  // e.g., 12345.0
                 expandedRowQueue.add(row);
                 matchedRows++;
 
@@ -2556,7 +2586,7 @@ public class HttpSource implements DataSource {
             for (int j = 0; j < headers.length && j < values.length; j++) {
               String header = headers[j].trim();
               String value = stripQuotesIfPresent(values[j].trim(), quoted);
-              Object parsed = parseValue(value);
+              Object parsed = parseValue(header, value);
               row.put(header, parsed);
             }
 
@@ -2755,7 +2785,7 @@ public class HttpSource implements DataSource {
             if (idx < values.length) {
               String header = headers[idx].trim();
               String value = stripQuotesIfPresent(values[idx].trim(), quoted);
-              baseRow.put(header, parseValue(value));
+              baseRow.put(header, parseValue(header, value));
             }
           }
 
@@ -2772,7 +2802,8 @@ public class HttpSource implements DataSource {
 
               Map<String, Object> row = new LinkedHashMap<String, Object>(baseRow);
               row.put(wideToNarrow.getKeyColumnName(), valueColumnNames.get(i));  // e.g., "2020"
-              row.put(wideToNarrow.getValueColumnName(), parseValue(valueStr));   // e.g., 12345.0
+              String valueColumn = wideToNarrow.getValueColumnName();
+              row.put(valueColumn, parseValue(valueColumn, valueStr));  // e.g., 12345.0
               result.add(row);
               matchedRows++;
 
@@ -2794,7 +2825,7 @@ public class HttpSource implements DataSource {
             String value = stripQuotesIfPresent(values[j].trim(), quoted);
 
             // Try to parse as number
-            Object parsed = parseValue(value);
+            Object parsed = parseValue(header, value);
             row.put(header, parsed);
           }
 
@@ -2904,9 +2935,53 @@ public class HttpSource implements DataSource {
   }
 
   /**
-   * Attempts to parse a string value as a number.
+   * Collects the fetch-time keys of every column the table declares with a textual type.
+   *
+   * <p>Fetched rows are keyed by the raw source field name, so a column is indexed under its
+   * effective source; its logical name is added too, so a {@code source:} rename still matches
+   * whichever spelling the parser puts in the row.
+   *
+   * @param columns Declared columns; may be null
+   * @return the textual keys, empty when the table declares no columns
    */
-  private Object parseValue(String value) {
+  private static Set<String> textualSourceKeys(List<ColumnConfig> columns) {
+    if (columns == null || columns.isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> keys = new HashSet<String>();
+    for (ColumnConfig column : columns) {
+      String type = column.getType();
+      if (type == null) {
+        continue;
+      }
+      String normalized = type.trim().toLowerCase(java.util.Locale.ROOT);
+      if (normalized.equals("string") || normalized.equals("varchar")
+          || normalized.equals("char") || normalized.startsWith("varchar(")
+          || normalized.startsWith("char(")) {
+        if (column.getEffectiveSource() != null) {
+          keys.add(column.getEffectiveSource());
+        }
+        if (column.getName() != null) {
+          keys.add(column.getName());
+        }
+      }
+    }
+    return keys;
+  }
+
+  /**
+   * Converts a delimited-format field to its row value.
+   *
+   * <p>When the table declares {@code key} as a textual column that declaration is
+   * authoritative and the text is kept verbatim — inferring a type here would turn an
+   * all-digit identifier into a number and drop its leading zeros. Otherwise the value's
+   * type is inferred, which is all a delimited format on its own supports.
+   *
+   * @param key Row key the value will be stored under
+   * @param value Raw field text
+   * @return the row value, or null for an empty field or a CSV null marker
+   */
+  private Object parseValue(String key, String value) {
     if (value == null || value.isEmpty()) {
       return null;
     }
@@ -2914,6 +2989,10 @@ public class HttpSource implements DataSource {
     // Treat common CSV null markers as SQL NULL
     if ("NULL".equalsIgnoreCase(value) || "NA".equals(value) || "N/A".equals(value)) {
       return null;
+    }
+
+    if (textualSourceKeys.contains(key)) {
+      return value;
     }
 
     // Try integer first

@@ -2430,7 +2430,7 @@ public class EtlPipeline {
     }
     // Use sourceStorageProvider for raw cache (not the materialized storage provider)
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
-        operatingDirectory);
+        operatingDirectory, config.getColumns());
   }
 
   /**
