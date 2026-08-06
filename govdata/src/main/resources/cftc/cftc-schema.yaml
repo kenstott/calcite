@@ -68,6 +68,15 @@ columnTemplates:
     nullable: false
     comment: Calendar month 1-12 (partition key)
 
+  day_column: &day_column
+    name: day
+    type: integer
+    nullable: false
+    comment: >
+      Calendar day of month 1-31 (partition key). Present so the partition spec can match the
+      fetch unit — DTCC publishes one file per (asset_class, day), so a day-grained partition is
+      owned by exactly one fetch and can be committed on its own as that fetch completes.
+
   asset_class_column: &asset_class_column
     name: asset_class
     type: string
@@ -1026,6 +1035,7 @@ partitionedTables:
       - <<: *trade_date_column
       - <<: *year_column
       - <<: *month_column
+      - <<: *day_column
 
     constraints:
       primaryKey: [dissemination_id]
@@ -1093,18 +1103,28 @@ partitionedTables:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=cftc_trades/asset_class=*/year=*/month=*/"
+        pattern: "type=cftc_trades/asset_class=*/year=*/month=*/day=*/"
+      # Partitioned to the day because the fetch unit is a day: one daily EOD file per
+      # (asset_class, day). Matching the two is what makes commitPerPartition safe — a batch
+      # owns its partition outright, so committing it can never replace rows another batch
+      # wrote. At month grain a partition spans ~20 fetches and a per-batch commit would
+      # discard the earlier ones under overwritePartitions.
       partition:
-        columns: [type, asset_class, year, month]
+        columns: [type, asset_class, year, month, day]
       options:
         compression: snappy
         batchSize: 50000
         stagingMode: local
+        # Publish each day as it finishes. A run that is killed mid-sweep keeps every day it
+        # completed; the next run's skip-if-materialized check sees them and does not re-fetch.
+        # Before this, nothing committed until the run ended, so an interrupted run persisted
+        # nothing and re-did the whole year.
+        commitPerPartition: true
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728
-        batchPartitionColumns: [asset_class, year, month]
-        incrementalKeys: [asset_class, year, month]
+        batchPartitionColumns: [asset_class, year, month, day]
+        incrementalKeys: [asset_class, year, month, day]
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true

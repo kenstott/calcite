@@ -162,6 +162,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private static final int COMMIT_FILE_THRESHOLD = getEnvInt("ETL_COMMIT_THRESHOLD", 1000);
   private int flushThreshold = DEFAULT_FLUSH_THRESHOLD;
   private int maxBufferedRows = DEFAULT_MAX_BUFFERED_ROWS;
+  /** Commit each batch's partition as that batch completes — see MaterializeOptionsConfig. */
+  private boolean commitPerPartition;
+  /** Every data file written per partition this run — a re-commit must carry all of them. */
+  private final Map<String, List<org.apache.iceberg.DataFile>> filesByPartition =
+      new LinkedHashMap<String, List<org.apache.iceberg.DataFile>>();
   private long totalCommittedFiles = 0;
   /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
   private Set<String> icebergPartitionColumns = Collections.emptySet();
@@ -259,12 +264,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (optionsConfig != null) {
       this.batchSize = optionsConfig.getBatchSize();
       this.stagingMode = optionsConfig.getStagingMode();
+      this.commitPerPartition = optionsConfig.isCommitPerPartition();
     } else {
       this.batchSize = DEFAULT_BATCH_SIZE;
       this.stagingMode = MaterializeOptionsConfig.StagingMode.REMOTE;
+      this.commitPerPartition = false;
     }
-    LOGGER.info("Using batchSize={}, stagingMode={}, flushThreshold={}, maxBufferedRows={}",
-        batchSize, stagingMode, flushThreshold, maxBufferedRows);
+    LOGGER.info("Using batchSize={}, stagingMode={}, flushThreshold={}, maxBufferedRows={}, "
+        + "commitPerPartition={}",
+        batchSize, stagingMode, flushThreshold, maxBufferedRows, commitPerPartition);
 
     // Extract Iceberg partition columns for buffer key construction
     MaterializePartitionConfig partConfig = config.getPartition();
@@ -764,7 +772,43 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     totalRowsWritten += rows.size();
     totalFilesWritten++;
 
+    if (commitPerPartition) {
+      commitCompletedPartition(partitionVariables);
+    }
+
     return rows.size();
+  }
+
+  /**
+   * Publishes the partition this write just added rows to.
+   *
+   * <p>Publishing as the run proceeds is what lets an interrupted run keep its finished work:
+   * the next run's skip-if-materialized check sees committed partitions in the table and does
+   * not re-fetch them.
+   *
+   * <p>This is called once per {@code writeBatch}, which is a CHUNK boundary, not a fetch-unit
+   * boundary — a fetch unit larger than the flush threshold arrives as several chunks for the
+   * same partition. So the same partition is committed repeatedly, and each commit must hand
+   * {@code replacePartitions} every file written for that partition so far. Handing it only the
+   * newest chunk would replace the partition with that chunk alone and discard the rest.
+   */
+  private void commitCompletedPartition(Map<String, String> partitionVariables)
+      throws IOException {
+    String partitionKey = buildPartitionKey(partitionVariables);
+    // Flush this partition's buffer so the commit below carries all of its rows.
+    flushPartition(partitionKey);
+    List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(partitionKey);
+    if (forPartition == null || forPartition.isEmpty()) {
+      return;
+    }
+    // Cumulative, so a re-commit is a superset of the previous one rather than a replacement
+    // of it. Committing the same files again is a no-op for the table's contents.
+    commitInChunks(new ArrayList<org.apache.iceberg.DataFile>(forPartition));
+    // These files are now in the table; leaving them in pendingDataFiles would have the
+    // end-of-run commit publish them a second time.
+    pendingDataFiles.removeAll(forPartition);
+    LOGGER.info("Committed partition [{}] with {} file(s) ({} partitions committed this run)",
+        partitionKey, forPartition.size(), filesByPartition.size());
   }
 
   /**
@@ -1028,6 +1072,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(rows, partVars);
     if (dataFile != null) {
       pendingDataFiles.add(dataFile);
+      if (commitPerPartition) {
+        // Remember every file written for this partition, not just the newest. A partition is
+        // committed with replacePartitions, which swaps in exactly the files handed to it — so
+        // a second commit for the same partition must carry the earlier files too or it would
+        // drop them. Keeping the cumulative list makes re-committing a superset, which is
+        // idempotent.
+        List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(partitionKey);
+        if (forPartition == null) {
+          forPartition = new ArrayList<org.apache.iceberg.DataFile>();
+          filesByPartition.put(partitionKey, forPartition);
+        }
+        forPartition.add(dataFile);
+      }
     }
 
     LOGGER.info("Flushed {} buffered rows for partition [{}] to S3", rowCount,

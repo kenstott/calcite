@@ -49,6 +49,8 @@ public class MaterializeOptionsConfig {
   private static final int DEFAULT_BATCH_SIZE = 10000;
   private static final StagingMode DEFAULT_STAGING_MODE = StagingMode.REMOTE;
   private static final boolean DEFAULT_PRESERVE_INSERTION_ORDER = false;
+  /** Off by default: safe only when the partition spec is at least as fine as the fetch unit. */
+  private static final boolean DEFAULT_COMMIT_PER_PARTITION = false;
 
   /**
    * Staging mode for intermediate files during transformation.
@@ -65,6 +67,7 @@ public class MaterializeOptionsConfig {
   private final int batchSize;
   private final StagingMode stagingMode;
   private final boolean preserveInsertionOrder;
+  private final boolean commitPerPartition;
 
   private MaterializeOptionsConfig(Builder builder) {
     this.threads = builder.threads > 0 ? builder.threads : DEFAULT_THREADS;
@@ -73,6 +76,8 @@ public class MaterializeOptionsConfig {
     this.stagingMode = builder.stagingMode != null ? builder.stagingMode : DEFAULT_STAGING_MODE;
     this.preserveInsertionOrder = builder.preserveInsertionOrder != null
         ? builder.preserveInsertionOrder : DEFAULT_PRESERVE_INSERTION_ORDER;
+    this.commitPerPartition = builder.commitPerPartition != null
+        ? builder.commitPerPartition : DEFAULT_COMMIT_PER_PARTITION;
   }
 
   /**
@@ -105,6 +110,24 @@ public class MaterializeOptionsConfig {
    */
   public StagingMode getStagingMode() {
     return stagingMode;
+  }
+
+  /**
+   * Whether each batch's partition is committed as soon as that batch finishes, rather than
+   * all partitions being committed together when the run ends.
+   *
+   * <p>Turns an interrupted run from total loss into loss of only the in-flight partition:
+   * committed partitions are visible to the skip-if-materialized check on the next run and
+   * are not re-fetched.
+   *
+   * <p>Requires a partition spec at least as fine as the fetch unit — one batch must own its
+   * partition outright. Coarser partitioning would have a later batch re-commit a partition an
+   * earlier one already wrote, and under {@code overwritePartitions} that replaces rather than
+   * adds, discarding the earlier rows. The writer detects that case and fails loudly instead
+   * of dropping data silently.
+   */
+  public boolean isCommitPerPartition() {
+    return commitPerPartition;
   }
 
   /**
@@ -173,6 +196,11 @@ public class MaterializeOptionsConfig {
       builder.preserveInsertionOrder((Boolean) preserveOrderObj);
     }
 
+    Object commitPerPartitionObj = map.get("commitPerPartition");
+    if (commitPerPartitionObj instanceof Boolean) {
+      builder.commitPerPartition((Boolean) commitPerPartitionObj);
+    }
+
     return builder.build();
   }
 
@@ -185,6 +213,7 @@ public class MaterializeOptionsConfig {
     private int batchSize;
     private StagingMode stagingMode;
     private Boolean preserveInsertionOrder;
+    private Boolean commitPerPartition;
 
     public Builder threads(int threads) {
       this.threads = threads;
@@ -208,6 +237,11 @@ public class MaterializeOptionsConfig {
 
     public Builder preserveInsertionOrder(boolean preserveInsertionOrder) {
       this.preserveInsertionOrder = preserveInsertionOrder;
+      return this;
+    }
+
+    public Builder commitPerPartition(boolean commitPerPartition) {
+      this.commitPerPartition = commitPerPartition;
       return this;
     }
 
