@@ -18,9 +18,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,10 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * units were already pulling away must. A pre-trend test that quietly passed on the second
  * panel would hand a caller exactly the false confidence diff_in_diff already gives.
  *
- * <p>The panels carry a residual that alternates by unit-period parity with an even number of
- * units per group. It sums to zero within every group-period cell, every unit, and every
- * period, so it leaves the coefficients at their exact construction values while still giving
- * the model non-zero residual variance to compute standard errors from.
+ * <p>Two panel shapes, for two different jobs. The coefficient assertions use a residual that
+ * alternates by unit-period parity across even-sized groups: it sums to zero within every
+ * group-period cell, every unit, and every period, so coefficients land on their exact
+ * construction values while the model still has variance to compute standard errors from.
+ * The standard-error assertions use a seeded AR(1) instead, because an analytic residual has
+ * no genuine between-cluster variation for a clustered estimator to find.
  */
 @Tag("unit")
 class EventStudyTest {
@@ -233,6 +237,202 @@ class EventStudyTest {
         assertFalse(pre.has("p_value"), "no p-value may be reported for a test that not run");
     }
 
+    // ── Cluster-robust standard errors ────────────────────────────────────────
+
+    /**
+     * The same design with a stochastic residual whose within-unit persistence is set by
+     * {@code rho}: an AR(1) drawn from a fixed seed, so the panel is random in structure but
+     * identical run to run.
+     *
+     * <p>Deliberately not a deterministic drift. A drift that is the same shape in every unit
+     * makes the cluster score vectors cancel against each other, and CR1 estimates variance
+     * from exactly that between-cluster variation — so a tidy analytic panel understates the
+     * clustered errors rather than inflating them, which is the opposite of what real serial
+     * correlation does.
+     */
+    private static Panel noisyPanel(int units, double rho, long seed) {
+        List<Double> y = new ArrayList<>();
+        List<String> unitIds = new ArrayList<>();
+        List<String> times = new ArrayList<>();
+        List<Integer> relative = new ArrayList<>();
+        Random rnd = new Random(seed);
+        for (int u = 0; u < units; u++) {
+            boolean treated = u < units / 2;
+            double e = rnd.nextGaussian();
+            for (int t = 0; t < PERIODS; t++) {
+                e = rho * e + Math.sqrt(1 - rho * rho) * rnd.nextGaussian();
+                double v = 10.0 * u + 2.0 * t + 3.0 * e;
+                if (treated && t >= TREAT_AT) {
+                    v += EFFECT;
+                }
+                y.add(Double.valueOf(v));
+                unitIds.add("u" + u);
+                times.add(String.valueOf(2010 + t));
+                relative.add(treated ? Integer.valueOf(t - TREAT_AT) : null);
+            }
+        }
+        return new Panel(y, unitIds, times, relative);
+    }
+
+    private static Panel correlatedPanel(int units) {
+        return noisyPanel(units, 0.95, 42L);
+    }
+
+    /**
+     * The within estimator with clustering must equal least-squares-dummy-variable with
+     * clustering — the same estimator under a different parameterisation. {@code
+     * robustRegression}'s CR1 path is separately implemented and separately tested, so
+     * agreement here validates the panel sandwich against something other than itself.
+     *
+     * <p>The finite-sample corrections line up because both count parameters the same way:
+     * LSDV fits 1 + 1 + (N-1) + (T-1) columns, and the within estimator charges itself
+     * k + N + T - 1 — both N + T.
+     */
+    @Test void clusteredPanelVarianceMatchesTheDummyVariableEstimatorWithTheSameClusters() {
+        int units = 20;
+        int periods = 8;
+        int n = units * periods;
+        Random rnd = new Random(7L);
+        double[] y = new double[n];
+        double[][] xWithin = new double[n][1];
+        String[] unitIds = new String[n];
+        String[] timeIds = new String[n];
+        int i = 0;
+        for (int u = 0; u < units; u++) {
+            double e = rnd.nextGaussian();
+            for (int t = 0; t < periods; t++) {
+                e = 0.8 * e + 0.6 * rnd.nextGaussian();
+                double xv = rnd.nextGaussian() + 0.5 * u;
+                xWithin[i][0] = xv;
+                y[i] = 4.0 + 1.5 * xv + 3.0 * u - 0.7 * t + 2.0 * e;
+                unitIds[i] = "u" + u;
+                timeIds[i] = "t" + t;
+                i++;
+            }
+        }
+
+        StatsEngine.PanelFixedEffectsResult fe = StatsEngine.panelFixedEffects(
+            y, xWithin, new String[]{"x"}, unitIds, timeIds, unitIds);
+
+        // Same model written out longhand: x, then unit and period dummies with the first
+        // of each held out as the reference so the intercept stays estimable.
+        int cols = 1 + (units - 1) + (periods - 1);
+        double[][] lsdv = new double[n][cols];
+        String[] lsdvNames = new String[cols];
+        lsdvNames[0] = "x";
+        for (int u = 1; u < units; u++) {
+            lsdvNames[u] = "unit_" + u;
+        }
+        for (int t = 1; t < periods; t++) {
+            lsdvNames[units - 1 + t] = "time_" + t;
+        }
+        i = 0;
+        for (int u = 0; u < units; u++) {
+            for (int t = 0; t < periods; t++) {
+                lsdv[i][0] = xWithin[i][0];
+                if (u > 0) {
+                    lsdv[i][u] = 1.0;
+                }
+                if (t > 0) {
+                    lsdv[i][units - 1 + t] = 1.0;
+                }
+                i++;
+            }
+        }
+        StatsEngine.RobustRegressionResult lsdvFit =
+            StatsEngine.robustRegression(y, lsdv, lsdvNames, unitIds);
+
+        // index 1 in the LSDV fit: the intercept occupies index 0.
+        assertEquals(lsdvFit.reg.coef[1], fe.coef[0], 1e-8, "same point estimate");
+        assertEquals(lsdvFit.reg.se[1], fe.se[0], 1e-8,
+            "same cluster-robust standard error: LSDV " + lsdvFit.reg.se[1]
+                + " vs within " + fe.se[0]);
+        assertEquals(units - 1, fe.inferenceDof);
+    }
+
+    @Test void clusteringChangesUncertaintyAndNeverTheEstimate() {
+        Panel p = correlatedPanel(40);
+        JsonNode plain = p.run(5, 5, -1);
+        JsonNode clustered = p.run(5, 5, -1, "unit");
+
+        for (JsonNode e : plain.path("effects")) {
+            String term = e.path("term").asText();
+            assertEquals(e.path("coefficient").asDouble(),
+                effect(clustered, term).path("coefficient").asDouble(), 1e-12,
+                term + " coefficient must be untouched by the variance estimator");
+            assertNotEquals(e.path("std_error").asDouble(),
+                effect(clustered, term).path("std_error").asDouble(),
+                term + " standard error must actually change");
+        }
+    }
+
+    @Test void clusteredInferenceUsesClusterCountNotObservationCount() {
+        JsonNode clustered = correlatedPanel(40).run(5, 5, -1, "unit");
+        assertEquals("cluster-robust (CR1)", clustered.path("se_method").asText());
+        assertEquals(40, clustered.path("num_clusters").asInt());
+        assertEquals("unit", clustered.path("clustered_on").asText());
+        assertEquals(39, clustered.path("inference_degrees_of_freedom").asInt(),
+            "clusters - 1, not the residual degrees of freedom");
+        assertTrue(clustered.path("degrees_of_freedom").asInt() > 11,
+            "residual dof stays reported and is much larger");
+        assertTrue(clustered.path("note").asText().contains("cluster-robust"));
+    }
+
+    @Test void conventionalPathIsUnchangedAndSaysSo() {
+        JsonNode plain = correlatedPanel(40).run(5, 5, -1);
+        assertEquals("conventional", plain.path("se_method").asText());
+        assertFalse(plain.has("num_clusters"));
+        assertFalse(plain.has("few_clusters_warning"));
+        assertEquals(plain.path("degrees_of_freedom").asInt(),
+            plain.path("inference_degrees_of_freedom").asInt());
+        assertTrue(plain.path("note").asText().contains("NOT clustered"),
+            "an unclustered result must say so rather than stay silent");
+    }
+
+    @Test void tooFewClustersIsWarnedAboutRatherThanHidden() {
+        JsonNode few = correlatedPanel(20).run(5, 5, -1, "unit");
+        assertEquals(20, few.path("num_clusters").asInt());
+        assertTrue(few.path("few_clusters_warning").asText().contains("Only 20 clusters"),
+            few.path("few_clusters_warning").asText());
+        assertTrue(few.path("note").asText().contains("itself unreliable"));
+
+        JsonNode many = correlatedPanel(60).run(5, 5, -1, "unit");
+        assertEquals(60, many.path("num_clusters").asInt());
+        assertFalse(many.has("few_clusters_warning"),
+            "60 clusters is above the threshold and needs no warning");
+    }
+
+    @Test void thePreTrendTestUsesTheSameCovarianceAsTheCoefficients() {
+        // Were the joint test left on the conventional covariance it would vouch for the
+        // effect using a different standard than the effect was measured by. The direction
+        // is not asserted: clustering can tighten or loosen a given sample, and in an event
+        // study each indicator is identified off roughly one period per unit, so there is
+        // little within-cluster aggregation for the cluster sum to accumulate.
+        Panel p = correlatedPanel(40);
+        double plainP = p.run(5, 5, -1).path("pre_trend_test").path("p_value").asDouble();
+        double clusteredP =
+            p.run(5, 5, -1, "unit").path("pre_trend_test").path("p_value").asDouble();
+        assertNotEquals(plainP, clusteredP,
+            "the joint test must be recomputed from the clustered covariance, not reused");
+    }
+
+    @Test void aSingleClusterIsRefusedRatherThanComputed() {
+        Panel p = correlatedPanel(40);
+        List<String> oneCluster = new ArrayList<>();
+        for (int i = 0; i < p.units.size(); i++) {
+            oneCluster.add("everything");
+        }
+        double[] ys = new double[p.y.size()];
+        for (int i = 0; i < p.y.size(); i++) {
+            ys[i] = p.y.get(i).doubleValue();
+        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> StatsEngine.eventStudy(ys, p.units.toArray(new String[0]),
+                p.times.toArray(new String[0]), p.relative.toArray(new Integer[0]),
+                5, 5, -1, oneCluster.toArray(new String[0])));
+        assertTrue(e.getMessage().contains("at least 2"), e.getMessage());
+    }
+
     private static JsonNode effect(JsonNode out, String term) {
         for (JsonNode e : out.path("effects")) {
             if (term.equals(e.path("term").asText())) {
@@ -257,13 +457,21 @@ class EventStudyTest {
         }
 
         JsonNode run(int maxLead, int maxLag, int reference) {
+            return run(maxLead, maxLag, reference, null);
+        }
+
+        /** {@code clusterOn} null runs conventional errors; "unit" clusters on the unit. */
+        JsonNode run(int maxLead, int maxLag, int reference, String clusterOn) {
             double[] ys = new double[y.size()];
             for (int i = 0; i < y.size(); i++) {
                 ys[i] = y.get(i).doubleValue();
             }
-            return StatsEngine.eventStudy(ys, units.toArray(new String[0]),
-                times.toArray(new String[0]), relative.toArray(new Integer[0]),
-                maxLead, maxLag, reference).toJson(MAPPER);
+            String[] clusters = clusterOn == null ? null : units.toArray(new String[0]);
+            StatsEngine.EventStudyResult r = StatsEngine.eventStudy(ys,
+                units.toArray(new String[0]), times.toArray(new String[0]),
+                relative.toArray(new Integer[0]), maxLead, maxLag, reference, clusters);
+            r.clusterColumn = clusterOn;
+            return r.toJson(MAPPER);
         }
     }
 }

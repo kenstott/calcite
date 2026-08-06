@@ -718,8 +718,35 @@ final class StatsEngine {
      */
     static PanelFixedEffectsResult panelFixedEffects(double[] y, double[][] x, String[] xNames,
             String[] entityIds, String[] timeIds) {
+        return panelFixedEffects(y, x, xNames, entityIds, timeIds, null);
+    }
+
+    /**
+     * As above, with optionally cluster-robust standard errors.
+     *
+     * <p>Conventional panel standard errors assume the residuals are independent across
+     * observations. In a state-year panel they are not: whatever the model misses about a
+     * state in one year it usually also misses the next, so the same information is counted
+     * many times over and the reported precision is too high — often by a large factor
+     * (Bertrand, Duflo & Mullainathan 2004, on exactly this design). Clustering by the unit
+     * lets residuals correlate freely within a unit and only assumes independence between
+     * units.
+     *
+     * <p>Two things change together, and reporting one without the other would understate
+     * the correction: the covariance becomes the CR1 sandwich, and inference moves to
+     * {@code G - 1} degrees of freedom, where G is the number of clusters — not the residual
+     * degrees of freedom, which are far larger.
+     *
+     * <p>{@code clusterIds == null} reproduces the conventional estimator exactly.
+     */
+    static PanelFixedEffectsResult panelFixedEffects(double[] y, double[][] x, String[] xNames,
+            String[] entityIds, String[] timeIds, String[] clusterIds) {
         int n = y.length;
         int k = xNames.length;
+        if (clusterIds != null && n != clusterIds.length) {
+            throw new IllegalArgumentException("cluster column has " + clusterIds.length
+                + " rows, the model has " + n);
+        }
         if (n != entityIds.length || n != timeIds.length) {
             throw new IllegalArgumentException("y/x, entity, and time arrays must be the same length");
         }
@@ -768,28 +795,90 @@ final class StatsEngine {
         double[][] xTildeXTildeInv = reg.estimateRegressionParametersVariance();
 
         double ssr = 0;
+        double[] resid = new double[n];
         for (int i = 0; i < n; i++) {
             double predicted = 0;
             for (int j = 0; j < k; j++) {
                 predicted += beta[j] * xTilde[i][j];
             }
-            double resid = yTilde[i] - predicted;
-            ssr += resid * resid;
+            resid[i] = yTilde[i] - predicted;
+            ssr += resid[i] * resid[i];
         }
         double correctSigma2 = ssr / correctDof;
 
-        TDistribution tDist = new TDistribution(correctDof);
+        // The covariance actually used for inference, fully scaled either way, so callers
+        // (and the joint pre-trend test) read one matrix without knowing which path built it.
+        double[][] covariance;
+        int inferenceDof;
+        String seMethod;
+        int numClusters;
+        if (clusterIds == null) {
+            covariance = new double[k][k];
+            for (int i = 0; i < k; i++) {
+                for (int j = 0; j < k; j++) {
+                    covariance[i][j] = xTildeXTildeInv[i][j] * correctSigma2;
+                }
+            }
+            inferenceDof = correctDof;
+            seMethod = "conventional";
+            numClusters = 0;
+        } else {
+            // CR1 sandwich on the demeaned design: A · (Σ_g s_g s_g') · A, where s_g is the
+            // cluster's score vector Σ_{i∈g} x̃_i û_i. Same estimator robustRegression uses
+            // for OLS, applied to the within-transformed design instead of the raw one.
+            Map<String, double[]> scores = new LinkedHashMap<>();
+            for (int i = 0; i < n; i++) {
+                double[] s = scores.get(clusterIds[i]);
+                if (s == null) {
+                    s = new double[k];
+                    scores.put(clusterIds[i], s);
+                }
+                for (int j = 0; j < k; j++) {
+                    s[j] += xTilde[i][j] * resid[i];
+                }
+            }
+            numClusters = scores.size();
+            if (numClusters < 2) {
+                throw new IllegalArgumentException("cluster column has " + numClusters
+                    + " distinct value(s) — clustered standard errors need at least 2, and "
+                    + "are only meaningful with many more. Cluster on the unit (state, "
+                    + "county) rather than on something constant across the sample.");
+            }
+            RealMatrix meat = new Array2DRowRealMatrix(k, k);
+            for (double[] s : scores.values()) {
+                RealMatrix sm = new Array2DRowRealMatrix(s.length, 1);
+                for (int j = 0; j < k; j++) {
+                    sm.setEntry(j, 0, s[j]);
+                }
+                meat = meat.add(sm.multiply(sm.transpose()));
+            }
+            RealMatrix bread = new Array2DRowRealMatrix(xTildeXTildeInv);
+            // Finite-sample correction, counting the absorbed fixed effects in K the same
+            // way correctDof does — otherwise the correction disagrees with the model's own
+            // notion of how many parameters it fitted.
+            int params = n - correctDof;
+            double c = ((double) numClusters / (numClusters - 1))
+                * ((double) (n - 1) / (n - params));
+            covariance = bread.multiply(meat).multiply(bread).scalarMultiply(c).getData();
+            // Inference on the number of clusters, not the number of observations. With 50
+            // states this is 49 rather than several hundred, and the p-values grow to match.
+            inferenceDof = numClusters - 1;
+            seMethod = "cluster-robust (CR1)";
+        }
+
+        TDistribution tDist = new TDistribution(inferenceDof);
         double[] se = new double[k];
         double[] tStat = new double[k];
         double[] pValue = new double[k];
         for (int i = 0; i < k; i++) {
-            se[i] = Math.sqrt(xTildeXTildeInv[i][i] * correctSigma2);
+            se[i] = Math.sqrt(covariance[i][i]);
             tStat[i] = beta[i] / se[i];
             pValue[i] = 2 * (1 - tDist.cumulativeProbability(Math.abs(tStat[i])));
         }
 
         return new PanelFixedEffectsResult(xNames, beta, se, tStat, pValue, n, correctDof,
-            numEntities, numTimes, xTildeXTildeInv, correctSigma2);
+            numEntities, numTimes, covariance, correctSigma2, inferenceDof, seMethod,
+            numClusters);
     }
 
     static final class PanelFixedEffectsResult {
@@ -802,14 +891,20 @@ final class StatsEngine {
         final int dof;
         final int numEntities;
         final int numTimes;
-        /** {@code (X~'X~)^-1} on the demeaned design, UNSCALED — see {@link OlsResult}. */
-        final double[][] paramVariance;
+        /** Fully-scaled coefficient covariance, conventional or CR1 per {@link #seMethod}. */
+        final double[][] covariance;
         /** Residual variance on the correct two-way-FE degrees of freedom. */
         final double sigma2;
+        /** Degrees of freedom the reported t and p use: residual, or clusters - 1. */
+        final int inferenceDof;
+        final String seMethod;
+        /** Zero when standard errors are conventional. */
+        final int numClusters;
 
         PanelFixedEffectsResult(String[] names, double[] coef, double[] se, double[] tStat,
                 double[] pValue, int n, int dof, int numEntities, int numTimes,
-                double[][] paramVariance, double sigma2) {
+                double[][] covariance, double sigma2, int inferenceDof, String seMethod,
+                int numClusters) {
             this.names = names;
             this.coef = coef;
             this.se = se;
@@ -819,20 +914,40 @@ final class StatsEngine {
             this.dof = dof;
             this.numEntities = numEntities;
             this.numTimes = numTimes;
-            this.paramVariance = paramVariance;
+            this.covariance = covariance;
             this.sigma2 = sigma2;
+            this.inferenceDof = inferenceDof;
+            this.seMethod = seMethod;
+            this.numClusters = numClusters;
         }
 
-        /** Full coefficient covariance matrix — {@code sigma2 * (X~'X~)^-1}. */
-        double[][] covariance() {
-            int k = paramVariance.length;
-            double[][] out = new double[k][k];
-            for (int i = 0; i < k; i++) {
-                for (int j = 0; j < k; j++) {
-                    out[i][j] = paramVariance[i][j] * sigma2;
+        /**
+         * Below this, CR1 is known to understate uncertainty badly — the asymptotics are in
+         * the number of clusters, not observations, and 20 states is not many. Reported
+         * rather than enforced: too few clusters is a caveat on the answer, not a reason to
+         * refuse one.
+         */
+        static final int FEW_CLUSTERS = 40;
+
+        boolean fewClusters() {
+            return numClusters > 0 && numClusters < FEW_CLUSTERS;
+        }
+
+        /** Names the estimator and, when clustered, what it was clustered on. */
+        void describeStandardErrors(ObjectNode out, String clusterColumn) {
+            out.put("se_method", seMethod);
+            out.put("inference_degrees_of_freedom", inferenceDof);
+            if (numClusters > 0) {
+                out.put("num_clusters", numClusters);
+                out.put("clustered_on", clusterColumn);
+                if (fewClusters()) {
+                    out.put("few_clusters_warning", "Only " + numClusters + " clusters. "
+                        + "Cluster-robust standard errors rely on having many clusters, and "
+                        + "below roughly " + FEW_CLUSTERS + " they are themselves biased "
+                        + "downward — so a p-value near a threshold here is weaker than it "
+                        + "looks, not stronger.");
                 }
             }
-            return out;
         }
 
         ObjectNode toJson(ObjectMapper mapper) {
@@ -1011,7 +1126,8 @@ final class StatsEngine {
      * rather than dropped: dropping them would silently change which units are in the sample.
      */
     static EventStudyResult eventStudy(double[] y, String[] entityIds, String[] timeIds,
-            Integer[] relativeTime, int maxLead, int maxLag, int referencePeriod) {
+            Integer[] relativeTime, int maxLead, int maxLag, int referencePeriod,
+            String[] clusterIds) {
         int n = y.length;
         if (n != entityIds.length || n != timeIds.length || n != relativeTime.length) {
             throw new IllegalArgumentException("outcome, entity, time, and relative-time "
@@ -1109,7 +1225,7 @@ final class StatsEngine {
         }
 
         PanelFixedEffectsResult fit = panelFixedEffects(y, x, names.toArray(new String[0]),
-            entityIds, timeIds);
+            entityIds, timeIds, clusterIds);
 
         // Every indicator strictly before the reference period is a pre-trend test: under
         // parallel trends each is zero, so their joint significance is the test.
@@ -1181,7 +1297,11 @@ final class StatsEngine {
         if (q == 0) {
             return new double[]{Double.NaN, Double.NaN};
         }
-        double[][] cov = fit.covariance();
+        // The same covariance the coefficients' own standard errors come from, so a
+        // clustered event study gets a clustered pre-trend test rather than a conventional
+        // one — reporting a clustered effect beside an unclustered credibility check would
+        // hold the headline to a stricter standard than the test that vouches for it.
+        double[][] cov = fit.covariance;
         double[][] sub = new double[q][q];
         double[] b = new double[q];
         for (int i = 0; i < q; i++) {
@@ -1200,7 +1320,9 @@ final class StatsEngine {
                 }
             }
             double f = wald / q;
-            FDistribution dist = new FDistribution(q, fit.dof);
+            // Denominator degrees of freedom follow the same rule as the coefficients':
+            // clusters - 1 when clustered, residual dof otherwise.
+            FDistribution dist = new FDistribution(q, fit.inferenceDof);
             return new double[]{f, 1 - dist.cumulativeProbability(f)};
         } catch (org.apache.commons.math3.linear.SingularMatrixException e) {
             return new double[]{Double.NaN, Double.NaN};
@@ -1219,6 +1341,8 @@ final class StatsEngine {
         final int treatedUnits;
         final int neverTreatedUnits;
         final int distinctAdoptionTimes;
+        /** What the standard errors were clustered on, for the report; null when they were not. */
+        String clusterColumn;
 
         EventStudyResult(PanelFixedEffectsResult fit, List<String> names, int referencePeriod,
                 int maxLead, int maxLag, int leadCount, double pretrendF, double pretrendP,
@@ -1310,9 +1434,26 @@ final class StatsEngine {
                     + "from differences in treatment timing, so the estimates lean harder on "
                     + "the staggered-adoption caveat above. ");
             }
-            note.append("Standard errors are the two-way-FE ones and are not clustered — "
-                + "with repeated observations of the same unit they are likely too small; "
-                + "read a marginal p-value accordingly.");
+            fit.describeStandardErrors(out, clusterColumn);
+            if (fit.numClusters > 0) {
+                note.append("Standard errors and the pre-trend test are cluster-robust on ")
+                    .append(clusterColumn)
+                    .append(" (")
+                    .append(fit.numClusters)
+                    .append(" clusters), so residuals may correlate freely within a unit; "
+                        + "inference uses clusters - 1 degrees of freedom, not the residual "
+                        + "count. ");
+                if (fit.fewClusters()) {
+                    note.append("With this few clusters the correction is itself unreliable "
+                        + "and errs toward overstating precision — see "
+                        + "few_clusters_warning. ");
+                }
+            } else {
+                note.append("Standard errors are conventional and NOT clustered — with "
+                    + "repeated observations of the same unit they are likely too small; "
+                    + "pass cluster_col to correct this, and read a marginal p-value "
+                    + "accordingly until you have. ");
+            }
             out.put("note", note.toString());
             return out;
         }

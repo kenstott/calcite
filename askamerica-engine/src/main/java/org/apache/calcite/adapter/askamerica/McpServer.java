@@ -778,6 +778,11 @@ public class McpServer {
         feProps.set("time_col", prop("string",
             "Column identifying the period (e.g. year) — constant across units within a "
             + "period."));
+        feProps.set("cluster_col", prop("string",
+            "Optional column to cluster standard errors on, usually the same as entity_col. "
+            + "Omitted, standard errors assume observations are independent — with repeated "
+            + "observations of the same entity that is false and overstates precision. "
+            + "Clustering also moves inference to (clusters - 1) degrees of freedom."));
         tools.add(
             tool("panel_fixed_effects",
             "Two-way (entity + time) fixed-effects panel regression via the within/demeaning "
@@ -841,6 +846,12 @@ public class McpServer {
         eventProps.set("reference_period", prop("integer",
             "The pre-treatment period every coefficient is measured against, as a negative "
             + "offset (default -1, the period before treatment). Must be <= 0."));
+        eventProps.set("cluster_col", prop("string",
+            "Column to cluster standard errors on. Defaults to unit_col, which is almost "
+            + "always right: repeated observations of the same unit are not independent, and "
+            + "conventional errors overstate precision badly on this design. Pass a coarser "
+            + "column (region for a state panel) if you believe the correlation is wider. "
+            + "Pass 'none' to disable clustering, which is rarely correct."));
         tools.add(
             tool("event_study",
             "Estimate a separate effect for each period before and after treatment, with unit "
@@ -850,7 +861,9 @@ public class McpServer {
             + "one indicator, so a treated group that was already diverging yields the same "
             + "number as one that was not. Run this before believing any diff_in_diff result, "
             + "and report the pre-trend p-value alongside the effect. Also reports whether "
-            + "adoption is staggered, which makes the two-way-FE estimator itself suspect.",
+            + "adoption is staggered, which makes the two-way-FE estimator itself suspect. "
+            + "Standard errors are cluster-robust on the unit by default, and the pre-trend "
+            + "test uses the same covariance.",
             schema(eventProps, new String[]{"sql", "outcome", "unit_col", "time_col",
                 "treatment_time_col"})));
 
@@ -1337,10 +1350,14 @@ public class McpServer {
                     int reference = args.has("reference_period")
                         && !args.get("reference_period").isNull()
                         ? args.get("reference_period").asInt() : -1;
+                    String eventCluster = args.has("cluster_col")
+                        && !args.get("cluster_col").isNull()
+                        ? args.get("cluster_col").asText() : unitCol;
                     log.println("[askamerica-mcp] tool=event_study outcome=" + outcome
-                        + " unit=" + unitCol + " window=[-" + maxLead + "," + maxLag + "]");
+                        + " unit=" + unitCol + " window=[-" + maxLead + "," + maxLag + "]"
+                        + " cluster=" + eventCluster);
                     text = eventStudyTool(sql, outcome, unitCol, timeCol, treatTimeCol,
-                        maxLead, maxLag, reference);
+                        maxLead, maxLag, reference, eventCluster);
                     break;
                 }
                 case "sensitivity_analysis": {
@@ -1410,8 +1427,13 @@ public class McpServer {
                     List<String> predictors = textArray(args.path("predictors"));
                     String entityCol = args.path("entity_col").asText();
                     String timeCol = args.path("time_col").asText();
-                    log.println("[askamerica-mcp] tool=panel_fixed_effects outcome=" + outcome);
-                    text = panelFixedEffectsTool(sql, outcome, predictors, entityCol, timeCol);
+                    String feCluster = args.has("cluster_col")
+                        && !args.get("cluster_col").isNull()
+                        ? args.get("cluster_col").asText() : null;
+                    log.println("[askamerica-mcp] tool=panel_fixed_effects outcome=" + outcome
+                        + " cluster=" + feCluster);
+                    text = panelFixedEffectsTool(sql, outcome, predictors, entityCol, timeCol,
+                        feCluster);
                     break;
                 }
                 case "robust_regression": {
@@ -3257,20 +3279,30 @@ public class McpServer {
     }
 
     private static String panelFixedEffectsTool(String sql, String outcome,
-            List<String> predictors, String entityCol, String timeCol) throws Exception {
+            List<String> predictors, String entityCol, String timeCol, String clusterCol)
+            throws Exception {
         List<String> numCols = new ArrayList<>();
         numCols.add(outcome);
         numCols.addAll(predictors);
+        // Requesting the cluster column only when asked keeps the no-cluster path — and the
+        // rows it drops for nulls — exactly as it was before clustering existed.
+        String[] labelCols = clusterCol == null
+            ? new String[]{entityCol, timeCol}
+            : new String[]{entityCol, timeCol, clusterCol};
         Connection c = getCatalogConnection();
         StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(c, sql,
-            numCols.toArray(new String[0]), new String[]{entityCol, timeCol});
+            numCols.toArray(new String[0]), labelCols);
         double[] y = ex.column(outcome);
         double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
         String[] entityIds = ex.labelColumn(entityCol);
         String[] timeIds = ex.labelColumn(timeCol);
+        String[] clusterIds = clusterCol == null ? null : ex.labelColumn(clusterCol);
         StatsEngine.PanelFixedEffectsResult result = StatsEngine.panelFixedEffects(y, x,
-            predictors.toArray(new String[0]), entityIds, timeIds);
+            predictors.toArray(new String[0]), entityIds, timeIds, clusterIds);
         ObjectNode out = result.toJson(MAPPER);
+        if (clusterCol != null) {
+            result.describeStandardErrors(out, clusterCol);
+        }
         addExtractionMeta(out, ex);
         return out.toString();
     }
@@ -3313,13 +3345,17 @@ public class McpServer {
      * comparison group the design rests on.
      */
     private static String eventStudyTool(String sql, String outcome, String unitCol,
-            String timeCol, String treatTimeCol, int maxLead, int maxLag, int reference)
-            throws Exception {
+            String timeCol, String treatTimeCol, int maxLead, int maxLag, int reference,
+            String clusterCol) throws Exception {
+        // "none" is the explicit opt-out; anything else names a column that must exist, so a
+        // misspelled cluster_col fails loudly instead of quietly reverting to unclustered.
+        boolean clustered = clusterCol != null && !"none".equalsIgnoreCase(clusterCol);
         Connection c = getCatalogConnection();
         List<Double> ys = new ArrayList<>();
         List<String> units = new ArrayList<>();
         List<String> times = new ArrayList<>();
         List<Integer> relative = new ArrayList<>();
+        List<String> clusters = new ArrayList<>();
         int totalRows = 0;
         int droppedForNull = 0;
         int neverTreatedRows = 0;
@@ -3329,6 +3365,7 @@ public class McpServer {
             int unitIdx = rs.findColumn(unitCol);
             int timeIdx = rs.findColumn(timeCol);
             int treatIdx = rs.findColumn(treatTimeCol);
+            int clusterIdx = clustered ? rs.findColumn(clusterCol) : -1;
             while (rs.next()) {
                 if (++totalRows > StatsEngine.STATS_MAX_ROWS) {
                     throw new IllegalArgumentException("the SQL returned more than "
@@ -3346,6 +3383,16 @@ public class McpServer {
                 if (yNull || unit == null || time == null) {
                     droppedForNull++;
                     continue;
+                }
+                if (clustered) {
+                    String cluster = rs.getString(clusterIdx);
+                    if (cluster == null) {
+                        // A null cluster key would silently pool every such row into one
+                        // pseudo-cluster and shrink the standard errors.
+                        droppedForNull++;
+                        continue;
+                    }
+                    clusters.add(cluster);
                 }
                 ys.add(Double.valueOf(y));
                 units.add(unit);
@@ -3368,7 +3415,9 @@ public class McpServer {
         }
         StatsEngine.EventStudyResult result = StatsEngine.eventStudy(y,
             units.toArray(new String[0]), times.toArray(new String[0]),
-            relative.toArray(new Integer[0]), maxLead, maxLag, reference);
+            relative.toArray(new Integer[0]), maxLead, maxLag, reference,
+            clustered ? clusters.toArray(new String[0]) : null);
+        result.clusterColumn = clustered ? clusterCol : null;
         ObjectNode out = result.toJson(MAPPER);
         out.put("rows_returned_by_sql", totalRows);
         out.put("rows_dropped_for_null", droppedForNull);
