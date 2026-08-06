@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.Year;
@@ -26,7 +27,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * from reading as a zero. These assert the two halves of that: that a lagging source
  * reports a ceiling below the current year, and that every external suggestion arrives
  * with the provenance caveat attached.
+ *
+ * <p>Everything here answers from the bundled catalog and needs no warehouse connection.
+ * The one assertion that did — describe_table's live wiring to the coverage window — lives
+ * in {@link DescribeTableCoverageIntegrationTest}, because a tag applies to every test in
+ * the class and tagging this one {@code integration} would have hidden all the rest from
+ * the unit run.
  */
+@Tag("unit")
 class CoverageAndExternalSourcesTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -122,41 +130,6 @@ class CoverageAndExternalSourcesTest {
     // Absent metadata must yield null, never an invented window.
     assertNull(Catalog.coverage("census", "no_such_table_at_all"));
     assertNull(Catalog.coverage("no_such_schema", "whatever"));
-  }
-
-  @Test void describeTableSurfacesCoverageForAPartitionedTable() throws Exception {
-    // Guards the wiring from describe_table to the coverage window. describeTable also
-    // opens a live schema connection for information_schema, which needs credentials
-    // this environment may not have — so a connection failure skips rather than passes
-    // silently, and only a real response is allowed to satisfy the assertion.
-    java.lang.reflect.Field logField = McpServer.class.getDeclaredField("log");
-    logField.setAccessible(true);
-    boolean logWasUnset = logField.get(null) == null;
-    if (logWasUnset) {
-      logField.set(null, new java.io.PrintStream(new java.io.ByteArrayOutputStream()));
-    }
-    try {
-      java.lang.reflect.Method m =
-          McpServer.class.getDeclaredMethod("describeTable", String.class, String.class);
-      m.setAccessible(true);
-      String json;
-      try {
-        json = (String) m.invoke(null, "census", "acs_population");
-      } catch (java.lang.reflect.InvocationTargetException e) {
-        org.junit.jupiter.api.Assumptions.abort(
-            "no live schema connection here: " + e.getCause());
-        return;
-      }
-      JsonNode out = MAPPER.readTree(json);
-      assertTrue(out.has("coverage"), "describe_table must carry the coverage window");
-      assertEquals("year", out.path("coverage").path("column").asText());
-      assertTrue(out.path("coverage").path("last_year").asInt() > 0,
-          "the window must resolve to real years, not an empty shell");
-    } finally {
-      if (logWasUnset) {
-        logField.set(null, null);
-      }
-    }
   }
 
   @Test void observedWindowIsAbsentUntilMeasuredAndNeverBlocks() {
