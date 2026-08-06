@@ -486,11 +486,16 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    */
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
-    // Retry only genuinely-transient network faults (truncated reads, resets, 5xx) with a 1-min
-    // backoff cap. HTTP 429 is NOT retried here: on this API it is an annual per-(key, URI) cap, so
-    // retrying only spends more of the yearly budget (see the 429 short-circuit in the catch). On
-    // exhaustion this still hard-fails (no silent skip).
-    final int maxAttempts = 10;
+    // USPTO ODP meters requests per (key, URI) under TWO budgets that EVERY attempt spends: a
+    // short-term burst cap (7 requests / rolling 7 days — the 429 body literally says "wait 604800
+    // seconds") layered over a dataset-specific ANNUAL cap. So retries are expensive here, not free.
+    // A large current-year file that USPTO is throttling truncates on every attempt, so a high retry
+    // count can exhaust the 7/week burst in a SINGLE run — the old count of 10 did exactly that,
+    // earning the very 429 the catch below fails-fast on. Keep the total well under 7. A mid-stream
+    // truncation is treated as throttling (see isTruncation) and gets at most one retry, not the
+    // full budget; only pre-completion faults (reset/5xx/timeout) use the whole count. Still hard-
+    // fails on exhaustion (no silent skip).
+    final int maxAttempts = 3;
     IOException lastError = null;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -499,14 +504,19 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       } catch (IOException e) {
         lastError = e;
         if (isRateLimited(e)) {
-          // HTTP 429 here is the ANNUAL per-(key, URI) download cap. Retrying cannot clear it within
-          // a run, and every attempt spends another count against the yearly budget — so fail fast.
-          LOGGER.warn("Patents: HTTP 429 (annual per-URI quota) for {} — not retrying; each attempt "
-              + "would burn more of the yearly budget. Resolve with a new API key or wait for the "
-              + "365-day window to age off.", url);
+          // HTTP 429 is the per-(key, URI) request cap: a 7-request / rolling-7-day burst window
+          // (the body says "wait 604800 seconds") layered over a dataset-specific annual cap.
+          // Retrying cannot clear it within a run and only spends more of both budgets — fail fast.
+          LOGGER.warn("Patents: HTTP 429 (per-URI request cap) for {} — not retrying; the 7-day "
+              + "burst window must age off (or use a fresh API key), and every attempt also spends "
+              + "the dataset's annual budget.", url);
           throw e;
         }
-        if (attempt < maxAttempts && isTransientDownloadError(e)) {
+        // A mid-stream truncation on this per-URI-capped API is USPTO throttling a large file, not a
+        // clearable one-off blip: the same file truncates again on the next request and burns
+        // another of the scarce 7/week (and annual) budget. Cap it at one retry, then fail.
+        int cap = isTruncation(e) ? Math.min(2, maxAttempts) : maxAttempts;
+        if (attempt < cap && isTransientDownloadError(e)) {
           long backoffMs = Math.min(60_000L, 1000L * (1L << (attempt - 1)));
           LOGGER.warn("Patents: transient download failure (attempt {}/{}) for {}: {} — retrying in {}ms",
               attempt, maxAttempts, url, e.getMessage(), backoffMs);
@@ -534,6 +544,23 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     for (Throwable cur = e; cur != null; cur = cur.getCause()) {
       String msg = cur.getMessage();
       if (msg != null && msg.contains("HTTP 429")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** True when {@code e} (or any cause) is a mid-stream truncation of the response body — the
+   * signature of USPTO throttling a large download, which recurs on the next attempt and so must
+   * not be retried against the scarce per-URI budget more than once. */
+  private static boolean isTruncation(Throwable e) {
+    for (Throwable cur = e; cur != null; cur = cur.getCause()) {
+      String msg = cur.getMessage();
+      if (msg != null && (msg.contains("Premature end") || msg.contains("Premature EOF")
+          || msg.contains("Truncated"))) {
+        return true;
+      }
+      if (cur instanceof java.io.EOFException) {
         return true;
       }
     }
