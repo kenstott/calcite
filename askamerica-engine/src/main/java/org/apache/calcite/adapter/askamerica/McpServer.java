@@ -1487,6 +1487,14 @@ public class McpServer {
         return Catalog.search(query.trim(), limit).toString();
     }
 
+    /**
+     * Maps the SQL-standard {@code information_schema} TABLE_TYPE to the vocabulary the MCP
+     * tools expose: "BASE TABLE" becomes "TABLE"; "VIEW" (and anything else) passes through.
+     */
+    private static String mcpTableType(String informationSchemaType) {
+        return "BASE TABLE".equals(informationSchemaType) ? "TABLE" : informationSchemaType;
+    }
+
     private static String listTables(String schema) throws Exception {
         String s = safeIdent(schema);
         Connection c = getCatalogConnection();
@@ -1499,7 +1507,7 @@ public class McpServer {
                 String tname = rs.getString(1);
                 ObjectNode o = MAPPER.createObjectNode();
                 o.put("table", tname);
-                o.put("type", rs.getString(2));
+                o.put("type", mcpTableType(rs.getString(2)));
                 // Prefer authored description; fill from REMARKS (covers runtime-only tables).
                 String desc = Catalog.tableDescription(s, tname);
                 if (desc == null || desc.isEmpty()) {
@@ -1529,7 +1537,7 @@ public class McpServer {
                  "SELECT table_type, remarks FROM information_schema.tables "
                  + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
             if (rs.next()) {
-                out.put("type", rs.getString(1));
+                out.put("type", mcpTableType(rs.getString(1)));
                 String tdesc = Catalog.tableDescription(s, t);
                 if (tdesc == null || tdesc.isEmpty()) {
                     tdesc = rs.getString(2);

@@ -380,11 +380,17 @@ public class InformationSchema extends AbstractSchema {
               tableComment = ((CommentableTable) table).getTableComment();
             }
 
+            // SQL-standard TABLE_TYPE: "VIEW" for views, "BASE TABLE" for everything else.
+            // Previously hardcoded to "BASE TABLE", which mislabelled every view as a table.
+            String tableType =
+                table != null && table.getJdbcTableType() == Schema.TableType.VIEW
+                    ? "VIEW" : "BASE TABLE";
+
             rows.add(new Object[]{
                 catalogName,
                 schemaName,
                 tableName,
-                "BASE TABLE",
+                tableType,
                 tableComment,  // REMARKS
                 null,
                 null,
