@@ -30,6 +30,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,7 +56,7 @@ final class StatsEngine {
      *  for any realistic state/county/year panel, bounded so a runaway query can't exhaust
      *  heap. Distinct from {@code query()}'s client-facing {@code MAX_LIMIT}, which caps what
      *  the LLM sees, not what a regression is allowed to compute over. */
-    private static final int STATS_MAX_ROWS = 200_000;
+    static final int STATS_MAX_ROWS = 200_000;
 
     // ─── Data extraction ───────────────────────────────────────────────────────
 
@@ -788,7 +789,7 @@ final class StatsEngine {
         }
 
         return new PanelFixedEffectsResult(xNames, beta, se, tStat, pValue, n, correctDof,
-            numEntities, numTimes);
+            numEntities, numTimes, xTildeXTildeInv, correctSigma2);
     }
 
     static final class PanelFixedEffectsResult {
@@ -801,9 +802,14 @@ final class StatsEngine {
         final int dof;
         final int numEntities;
         final int numTimes;
+        /** {@code (X~'X~)^-1} on the demeaned design, UNSCALED — see {@link OlsResult}. */
+        final double[][] paramVariance;
+        /** Residual variance on the correct two-way-FE degrees of freedom. */
+        final double sigma2;
 
         PanelFixedEffectsResult(String[] names, double[] coef, double[] se, double[] tStat,
-                double[] pValue, int n, int dof, int numEntities, int numTimes) {
+                double[] pValue, int n, int dof, int numEntities, int numTimes,
+                double[][] paramVariance, double sigma2) {
             this.names = names;
             this.coef = coef;
             this.se = se;
@@ -813,6 +819,20 @@ final class StatsEngine {
             this.dof = dof;
             this.numEntities = numEntities;
             this.numTimes = numTimes;
+            this.paramVariance = paramVariance;
+            this.sigma2 = sigma2;
+        }
+
+        /** Full coefficient covariance matrix — {@code sigma2 * (X~'X~)^-1}. */
+        double[][] covariance() {
+            int k = paramVariance.length;
+            double[][] out = new double[k][k];
+            for (int i = 0; i < k; i++) {
+                for (int j = 0; j < k; j++) {
+                    out[i][j] = paramVariance[i][j] * sigma2;
+                }
+            }
+            return out;
         }
 
         ObjectNode toJson(ObjectMapper mapper) {
@@ -960,6 +980,340 @@ final class StatsEngine {
             out.put("note", "Coefficients are identical to plain OLS — only the standard "
                 + "errors (and therefore t-stats/p-values) differ. r_squared/f_statistic "
                 + "above are still the plain-OLS versions, not robust F-tests.");
+            return out;
+        }
+    }
+
+    // ─── Event study ────────────────────────────────────────────────────────────
+
+    /** Past this the design is dummies all the way down; the caller is told to bin instead. */
+    private static final int MAX_EVENT_DUMMIES = 40;
+
+    /**
+     * Two-way fixed-effects event study: the outcome regressed on one indicator per period
+     * relative to treatment, with unit and time effects absorbed.
+     *
+     * <p>This is the credibility companion to {@link #diffInDiff}. A difference-in-differences
+     * estimate rests on parallel trends, which that tool can assert but not test — it collapses
+     * everything before treatment into a single "pre" indicator, so a treated group already
+     * diverging beforehand produces exactly the same number as one that was not. Estimating a
+     * separate coefficient per pre-period makes that divergence visible, and lets it be tested
+     * jointly rather than eyeballed.
+     *
+     * <p>{@code relativeTime[i]} is the period of observation {@code i} counted from its unit's
+     * treatment (0 = the period treatment begins, -1 = the period before), or null for a unit
+     * never treated. Never-treated units get zeros across every indicator, which is what makes
+     * them the comparison group. The reference period is omitted from the design, so every
+     * coefficient reads as a difference from it — there is no "effect at the reference period"
+     * to report and one is not invented.
+     *
+     * <p>Periods outside {@code [-maxLead, maxLag]} are binned into single endpoint indicators
+     * rather than dropped: dropping them would silently change which units are in the sample.
+     */
+    static EventStudyResult eventStudy(double[] y, String[] entityIds, String[] timeIds,
+            Integer[] relativeTime, int maxLead, int maxLag, int referencePeriod) {
+        int n = y.length;
+        if (n != entityIds.length || n != timeIds.length || n != relativeTime.length) {
+            throw new IllegalArgumentException("outcome, entity, time, and relative-time "
+                + "arrays must be the same length");
+        }
+        if (maxLead < 1 || maxLag < 0) {
+            throw new IllegalArgumentException("maxLead must be at least 1 and maxLag at "
+                + "least 0; got " + maxLead + " and " + maxLag);
+        }
+        if (referencePeriod > 0) {
+            throw new IllegalArgumentException("reference_period must be a pre-treatment "
+                + "period (<= 0); got " + referencePeriod + ". Normalizing against a "
+                + "post-treatment period measures every other period against the treatment "
+                + "effect itself.");
+        }
+
+        // Which indicators the data actually supports — a period no observation falls in
+        // would be a column of zeros, which is not estimable and must not be requested.
+        LinkedHashSet<Integer> occupied = new LinkedHashSet<>();
+        boolean anyBelow = false;
+        boolean anyAbove = false;
+        int treatedUnits = 0;
+        LinkedHashSet<String> treatedSet = new LinkedHashSet<>();
+        LinkedHashSet<String> neverTreatedSet = new LinkedHashSet<>();
+        for (int i = 0; i < n; i++) {
+            if (relativeTime[i] == null) {
+                neverTreatedSet.add(entityIds[i]);
+                continue;
+            }
+            treatedSet.add(entityIds[i]);
+            int r = relativeTime[i].intValue();
+            if (r < -maxLead) {
+                anyBelow = true;
+            } else if (r > maxLag) {
+                anyAbove = true;
+            } else {
+                occupied.add(Integer.valueOf(r));
+            }
+        }
+        neverTreatedSet.removeAll(treatedSet);
+        treatedUnits = treatedSet.size();
+        if (treatedUnits == 0) {
+            throw new IllegalArgumentException("no observation has a treatment time — every "
+                + "row is never-treated, so there is no event to study. Check that the "
+                + "treatment-time column is populated for the treated units.");
+        }
+        if (!occupied.contains(Integer.valueOf(referencePeriod))) {
+            throw new IllegalArgumentException("no observation sits at the reference period "
+                + referencePeriod + ", so there is nothing to normalize against. Observed "
+                + "relative periods inside the window: " + new java.util.TreeSet<>(occupied));
+        }
+
+        List<Integer> periods = new ArrayList<>(occupied);
+        periods.remove(Integer.valueOf(referencePeriod));
+        Collections.sort(periods);
+        int dummies = periods.size() + (anyBelow ? 1 : 0) + (anyAbove ? 1 : 0);
+        if (dummies > MAX_EVENT_DUMMIES) {
+            throw new IllegalArgumentException("the window spans " + dummies + " indicators — "
+                + "narrow max_lead/max_lag so the periods beyond them are binned into the "
+                + "endpoints; the limit is " + MAX_EVENT_DUMMIES + ".");
+        }
+        if (dummies == 0) {
+            throw new IllegalArgumentException("only the reference period is occupied — there "
+                + "is nothing to estimate against it");
+        }
+
+        List<String> names = new ArrayList<>();
+        if (anyBelow) {
+            names.add("pre_beyond_" + maxLead);
+        }
+        for (Integer p : periods) {
+            names.add(eventTermName(p.intValue()));
+        }
+        if (anyAbove) {
+            names.add("post_beyond_" + maxLag);
+        }
+
+        double[][] x = new double[n][names.size()];
+        for (int i = 0; i < n; i++) {
+            if (relativeTime[i] == null) {
+                continue;
+            }
+            int r = relativeTime[i].intValue();
+            String term;
+            if (r < -maxLead) {
+                term = "pre_beyond_" + maxLead;
+            } else if (r > maxLag) {
+                term = "post_beyond_" + maxLag;
+            } else if (r == referencePeriod) {
+                continue;
+            } else {
+                term = eventTermName(r);
+            }
+            x[i][names.indexOf(term)] = 1.0;
+        }
+
+        PanelFixedEffectsResult fit = panelFixedEffects(y, x, names.toArray(new String[0]),
+            entityIds, timeIds);
+
+        // Every indicator strictly before the reference period is a pre-trend test: under
+        // parallel trends each is zero, so their joint significance is the test.
+        List<Integer> leadIdx = new ArrayList<>();
+        for (int i = 0; i < names.size(); i++) {
+            Integer p = eventTermPeriod(names.get(i));
+            if (names.get(i).startsWith("pre_beyond_")
+                    || (p != null && p.intValue() < referencePeriod)) {
+                leadIdx.add(Integer.valueOf(i));
+            }
+        }
+        double[] pretrend = jointFTest(fit, leadIdx);
+        return new EventStudyResult(fit, names, referencePeriod, maxLead, maxLag,
+            leadIdx.size(), pretrend[0], pretrend[1], treatedUnits, neverTreatedSet.size(),
+            countDistinctAdoptionTimes(timeIds, relativeTime));
+    }
+
+    private static String eventTermName(int r) {
+        return r < 0 ? ("lead_" + (-r)) : ("lag_" + r);
+    }
+
+    /** The relative period an indicator name encodes, or null for a binned endpoint. */
+    private static Integer eventTermPeriod(String name) {
+        if (name.startsWith("lead_")) {
+            return Integer.valueOf(-Integer.parseInt(name.substring(5)));
+        }
+        if (name.startsWith("lag_")) {
+            return Integer.valueOf(Integer.parseInt(name.substring(4)));
+        }
+        return null;
+    }
+
+    /**
+     * How many distinct calendar periods units are first treated in. More than one means
+     * adoption is staggered, which is what makes the two-way-FE estimator here potentially
+     * biased — reported so the caller can say so rather than discover it later.
+     *
+     * <p>Derived as period minus relative period on every treated row, not by looking for
+     * rows at relative period 0: a unit treated before the panel starts, or in a year the
+     * panel happens to skip, has no such row, and counting only those would report staggered
+     * adoption as simultaneous.
+     */
+    private static int countDistinctAdoptionTimes(String[] timeIds, Integer[] relativeTime) {
+        LinkedHashSet<Integer> adoptionPeriods = new LinkedHashSet<>();
+        for (int i = 0; i < timeIds.length; i++) {
+            if (relativeTime[i] == null) {
+                continue;
+            }
+            int t;
+            try {
+                t = Integer.parseInt(timeIds[i].trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("the time column must hold ordered numeric "
+                    + "periods for an event study — '" + timeIds[i] + "' is not one");
+            }
+            adoptionPeriods.add(Integer.valueOf(t - relativeTime[i].intValue()));
+        }
+        return adoptionPeriods.size();
+    }
+
+    /**
+     * Joint F-test that every coefficient in {@code idx} is zero, from the fitted covariance
+     * matrix. Returns {F, p}, or {NaN, NaN} when the restricted covariance cannot be inverted
+     * — a singular block means the test is not identified, which is reported as such rather
+     * than as a passing test.
+     */
+    private static double[] jointFTest(PanelFixedEffectsResult fit, List<Integer> idx) {
+        int q = idx.size();
+        if (q == 0) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+        double[][] cov = fit.covariance();
+        double[][] sub = new double[q][q];
+        double[] b = new double[q];
+        for (int i = 0; i < q; i++) {
+            b[i] = fit.coef[idx.get(i).intValue()];
+            for (int j = 0; j < q; j++) {
+                sub[i][j] = cov[idx.get(i).intValue()][idx.get(j).intValue()];
+            }
+        }
+        try {
+            RealMatrix inv = new org.apache.commons.math3.linear.LUDecomposition(
+                new Array2DRowRealMatrix(sub)).getSolver().getInverse();
+            double wald = 0;
+            for (int i = 0; i < q; i++) {
+                for (int j = 0; j < q; j++) {
+                    wald += b[i] * inv.getEntry(i, j) * b[j];
+                }
+            }
+            double f = wald / q;
+            FDistribution dist = new FDistribution(q, fit.dof);
+            return new double[]{f, 1 - dist.cumulativeProbability(f)};
+        } catch (org.apache.commons.math3.linear.SingularMatrixException e) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+    }
+
+    static final class EventStudyResult {
+        final PanelFixedEffectsResult fit;
+        final List<String> names;
+        final int referencePeriod;
+        final int maxLead;
+        final int maxLag;
+        final int leadCount;
+        final double pretrendF;
+        final double pretrendP;
+        final int treatedUnits;
+        final int neverTreatedUnits;
+        final int distinctAdoptionTimes;
+
+        EventStudyResult(PanelFixedEffectsResult fit, List<String> names, int referencePeriod,
+                int maxLead, int maxLag, int leadCount, double pretrendF, double pretrendP,
+                int treatedUnits, int neverTreatedUnits, int distinctAdoptionTimes) {
+            this.fit = fit;
+            this.names = names;
+            this.referencePeriod = referencePeriod;
+            this.maxLead = maxLead;
+            this.maxLag = maxLag;
+            this.leadCount = leadCount;
+            this.pretrendF = pretrendF;
+            this.pretrendP = pretrendP;
+            this.treatedUnits = treatedUnits;
+            this.neverTreatedUnits = neverTreatedUnits;
+            this.distinctAdoptionTimes = distinctAdoptionTimes;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            ArrayNode effects = mapper.createArrayNode();
+            for (int i = 0; i < names.size(); i++) {
+                ObjectNode c = mapper.createObjectNode();
+                c.put("term", names.get(i));
+                Integer p = eventTermPeriod(names.get(i));
+                if (p != null) {
+                    c.put("relative_period", p.intValue());
+                }
+                c.put("is_pre_treatment", names.get(i).startsWith("pre_beyond_")
+                    || (p != null && p.intValue() < referencePeriod));
+                c.put("coefficient", fit.coef[i]);
+                c.put("std_error", fit.se[i]);
+                c.put("t_stat", fit.tStat[i]);
+                c.put("p_value", fit.pValue[i]);
+                effects.add(c);
+            }
+            out.set("effects", effects);
+            out.put("reference_period", referencePeriod);
+            out.put("max_lead", maxLead);
+            out.put("max_lag", maxLag);
+            out.put("n", fit.n);
+            out.put("degrees_of_freedom", fit.dof);
+            out.put("num_entities", fit.numEntities);
+            out.put("num_time_periods", fit.numTimes);
+            out.put("treated_units", treatedUnits);
+            out.put("never_treated_units", neverTreatedUnits);
+
+            ObjectNode pre = mapper.createObjectNode();
+            pre.put("leads_tested", leadCount);
+            if (Double.isNaN(pretrendF)) {
+                pre.put("status", leadCount == 0 ? "no_pre_periods" : "not_identified");
+                pre.put("verdict", "No parallel-trends test could be run, which is NOT the "
+                    + "same as one that passed. Without pre-period estimates the "
+                    + "identifying assumption is untested.");
+            } else {
+                pre.put("f_statistic", pretrendF);
+                pre.put("p_value", pretrendP);
+                pre.put("pre_trends_detected", pretrendP < 0.05);
+                pre.put("verdict", pretrendP < 0.05
+                    ? "Pre-treatment coefficients are jointly different from zero (p < 0.05): "
+                        + "the groups were already diverging before treatment, so the "
+                        + "post-treatment estimates cannot be read as the treatment's effect."
+                    : "Pre-treatment coefficients are not jointly distinguishable from zero. "
+                        + "This is consistent with parallel trends; it does not prove them, "
+                        + "and a test with few pre-periods or wide standard errors will fail "
+                        + "to detect divergence that is really there.");
+            }
+            out.set("pre_trend_test", pre);
+
+            out.put("staggered_adoption", distinctAdoptionTimes > 1);
+            out.put("distinct_adoption_periods", distinctAdoptionTimes);
+            StringBuilder note = new StringBuilder();
+            note.append("Coefficients are differences from the reference period ")
+                .append(referencePeriod)
+                .append(", with unit and time fixed effects absorbed. The reference period "
+                    + "itself has no coefficient by construction. Periods outside the window "
+                    + "are binned into pre_beyond_/post_beyond_ terms rather than dropped. ");
+            if (distinctAdoptionTimes > 1) {
+                note.append("Adoption is STAGGERED (")
+                    .append(distinctAdoptionTimes)
+                    .append(" distinct treatment periods). With staggered timing and effects "
+                        + "that differ across units or over time, this two-way fixed-effects "
+                        + "estimator uses already-treated units as controls and can be biased "
+                        + "— including, in the worst case, carrying the wrong sign "
+                        + "(Goodman-Bacon 2021; Callaway & Sant'Anna 2021). Treat the shape "
+                        + "of the path as indicative and say so. ");
+            }
+            if (neverTreatedUnits == 0) {
+                note.append("There are NO never-treated units: identification comes entirely "
+                    + "from differences in treatment timing, so the estimates lean harder on "
+                    + "the staggered-adoption caveat above. ");
+            }
+            note.append("Standard errors are the two-way-FE ones and are not clustered — "
+                + "with repeated observations of the same unit they are likely too small; "
+                + "read a marginal p-value accordingly.");
+            out.put("note", note.toString());
             return out;
         }
     }

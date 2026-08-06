@@ -124,6 +124,31 @@ class DataCoverageAndInflationTest {
             "an unmeasured table must not report every declared year as missing");
     }
 
+    // ── per_capita ────────────────────────────────────────────────────────────
+
+    @Test void fipsCodesArePaddedToTheWidthTheirGeographyUses() {
+        // Population tables key on zero-padded codes; a caller's SQL routinely produces the
+        // integer form, and joining "6" against "06" would drop California without a word.
+        assertEquals("06", McpServer.normalizeFips("6", "state"));
+        assertEquals("06", McpServer.normalizeFips("06", "state"));
+        assertEquals("06", McpServer.normalizeFips(" 6 ", "state"));
+        assertEquals("06037", McpServer.normalizeFips("6037", "county"));
+        assertEquals("06037", McpServer.normalizeFips("06037", "county"));
+        assertEquals("01001", McpServer.normalizeFips("1001", "county"));
+    }
+
+    @Test void aPlaceNameIsRefusedRatherThanJoinedOnHopefully() {
+        // These must come back null so the row is reported unmatched and the caller is sent
+        // to resolve_geo — anything else silently subtracts the place from the analysis.
+        assertNull(McpServer.normalizeFips("CA", "state"));
+        assertNull(McpServer.normalizeFips("California", "state"));
+        assertNull(McpServer.normalizeFips("", "state"));
+        assertNull(McpServer.normalizeFips(null, "state"));
+        assertNull(McpServer.normalizeFips("06037", "state"),
+            "a county code at state level is a level mismatch, not a state");
+        assertNull(McpServer.normalizeFips("6O37", "county"), "letter O for zero");
+    }
+
     @Test void bothToolsAreAdvertisedWithTheArgumentsTheirHandlersRead() throws Exception {
         // A tool whose advertised name or required arguments drift from what the handler
         // reads is worse than a missing tool: it appears in the client's list and fails only
@@ -152,6 +177,23 @@ class DataCoverageAndInflationTest {
         assertEquals("[\"sql\",\"outcome\",\"predictors\",\"group_col\"]",
             sensitivity.path("inputSchema").path("required").toString());
         assertTrue(sensitivity.path("inputSchema").path("properties").has("term"));
+
+        JsonNode capita = toolNamed(listed, "per_capita");
+        assertEquals("[\"sql\",\"value_col\",\"geo_col\",\"year_col\"]",
+            capita.path("inputSchema").path("required").toString(),
+            "geo_level, per and population_source all have defaults");
+        for (String arg : new String[]{"geo_level", "per", "population_source"}) {
+            assertTrue(capita.path("inputSchema").path("properties").has(arg),
+                "per_capita must advertise " + arg);
+        }
+
+        JsonNode event = toolNamed(listed, "event_study");
+        assertEquals("[\"sql\",\"outcome\",\"unit_col\",\"time_col\",\"treatment_time_col\"]",
+            event.path("inputSchema").path("required").toString());
+        for (String arg : new String[]{"max_lead", "max_lag", "reference_period"}) {
+            assertTrue(event.path("inputSchema").path("properties").has(arg),
+                "event_study must advertise " + arg);
+        }
     }
 
     private static JsonNode toolNamed(JsonNode tools, String name) {

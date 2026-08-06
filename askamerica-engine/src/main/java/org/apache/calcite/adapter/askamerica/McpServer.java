@@ -415,6 +415,17 @@ public class McpServer {
             + "when a genuine instrument is available instead of an unconfoundedness "
             + "argument). These three run on Smile, a separate JVM ML dependency from the "
             + "closed-form Commons Math tools above. "
+            + "diff_in_diff ASSUMES parallel pre-trends and cannot test them — it collapses "
+            + "the pre-period into one indicator, so a treated group already diverging gives "
+            + "the same answer as one that was not. event_study estimates a coefficient per "
+            + "period around treatment and jointly tests whether the pre-treatment ones are "
+            + "zero. Run it alongside any diff_in_diff and report the pre-trend p-value with "
+            + "the effect; it also flags staggered adoption, which biases the two-way "
+            + "fixed-effects estimator itself. "
+            + "NEVER compare raw counts across places or across years — use per_capita, which "
+            + "joins Census population at the matching geography and year and returns the "
+            + "denominator it used. California exceeding Wyoming on any count is a statement "
+            + "about population until it is rated. "
             + "Before reporting ANY regression result as a finding, run "
             + "sensitivity_analysis with the same SQL and a jurisdiction group_col: it "
             + "refits leaving out one jurisdiction at a time and reports whether a single "
@@ -567,6 +578,40 @@ public class McpServer {
             "'cpi_u' (default — CPI-U all items, BLS series CUUR0000SA0) or 'cpi_u_core' "
             + "(all items less food and energy, CUUR0000SA0L1E). Use one consistently across "
             + "an analysis; mixing them makes two figures incomparable."));
+        ObjectNode capitaProps = MAPPER.createObjectNode();
+        capitaProps.set("sql", prop("string",
+            "SQL SELECT returning the count or amount to rate, the geography code, and the "
+            + "year, one row per geography-year."));
+        capitaProps.set("value_col", prop("string",
+            "Column holding the count or amount to express per person."));
+        capitaProps.set("geo_col", prop("string",
+            "Column holding the FIPS code — 2-digit state or 5-digit county. Use resolve_geo "
+            + "first if what you have is a place name or abbreviation; this joins on the "
+            + "code, and will report a name as unmatched rather than guess at it."));
+        capitaProps.set("year_col", prop("string",
+            "Column holding the year the value is measured in. Population is matched to the "
+            + "same year exactly — never a neighbouring year."));
+        capitaProps.set("geo_level", prop("string",
+            "'state' (default) or 'county' — which population geography to join to."));
+        capitaProps.set("per", prop("number",
+            "Rate denominator: 1 for per capita (default), 1000 per thousand, 100000 per "
+            + "hundred thousand. Crime and mortality rates are conventionally per 100000."));
+        capitaProps.set("population_source", prop("string",
+            "'acs' (default — census.acs_population, ACS 5-year, the wider year range) or "
+            + "'pep' (census.pep_population, the Census annual population estimates, which "
+            + "cover fewer years but are the standard rate denominator). Use one "
+            + "consistently across a comparison."));
+        tools.add(
+            tool("per_capita",
+            "Convert counts to population rates by joining to Census population at the right "
+            + "geography and year. Use whenever comparing counts across places or across "
+            + "years: a raw count comparison between California and Wyoming, or between 2015 "
+            + "and 2023, is mostly a statement about population size. Returns the population "
+            + "used for every row so the denominator is checkable, and reports geographies "
+            + "and years with no matching population rather than dropping or approximating "
+            + "them.",
+            schema(capitaProps, new String[]{"sql", "value_col", "geo_col", "year_col"})));
+
         tools.add(
             tool("adjust_inflation",
             "Convert nominal dollars to real (inflation-adjusted) dollars against one "
@@ -770,6 +815,44 @@ public class McpServer {
             + "over years) or error variance plausibly isn't constant — both are common in "
             + "state/county panel data and understate uncertainty if ignored.",
             schema(robustProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode eventProps = MAPPER.createObjectNode();
+        eventProps.set("sql", prop("string",
+            "SQL SELECT returning one row per unit per period, with the outcome, the unit "
+            + "identifier, the period, and the period that unit was treated in."));
+        eventProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        eventProps.set("unit_col", prop("string",
+            "Column identifying the unit observed repeatedly — state_fips, county_fips, "
+            + "agency id. Unit fixed effects are absorbed."));
+        eventProps.set("time_col", prop("string",
+            "Column holding the period of the observation, as an integer year or period "
+            + "number. Time fixed effects are absorbed."));
+        eventProps.set("treatment_time_col", prop("string",
+            "Column holding the period in which THAT ROW'S unit was treated — the same value "
+            + "repeated on every row of a treated unit, and NULL on every row of a "
+            + "never-treated unit. Never-treated units become the comparison group. Build it "
+            + "with a JOIN or a CASE expression in the SQL."));
+        eventProps.set("max_lead", prop("integer",
+            "How many periods before treatment get their own coefficient (default 5). "
+            + "Anything earlier is binned into a single pre_beyond_ term, never dropped."));
+        eventProps.set("max_lag", prop("integer",
+            "How many periods after treatment get their own coefficient (default 5). "
+            + "Anything later is binned into a single post_beyond_ term."));
+        eventProps.set("reference_period", prop("integer",
+            "The pre-treatment period every coefficient is measured against, as a negative "
+            + "offset (default -1, the period before treatment). Must be <= 0."));
+        tools.add(
+            tool("event_study",
+            "Estimate a separate effect for each period before and after treatment, with unit "
+            + "and time fixed effects — and jointly test whether the pre-treatment "
+            + "coefficients are zero. That test is the point: diff_in_diff assumes parallel "
+            + "trends and CANNOT check them, because it collapses the whole pre-period into "
+            + "one indicator, so a treated group that was already diverging yields the same "
+            + "number as one that was not. Run this before believing any diff_in_diff result, "
+            + "and report the pre-trend p-value alongside the effect. Also reports whether "
+            + "adoption is staggered, which makes the two-way-FE estimator itself suspect.",
+            schema(eventProps, new String[]{"sql", "outcome", "unit_col", "time_col",
+                "treatment_time_col"})));
 
         ObjectNode sensProps = MAPPER.createObjectNode();
         sensProps.set("sql", prop("string",
@@ -1221,6 +1304,43 @@ public class McpServer {
                         + " index=" + index + " mode=" + (sql != null ? "sql" : "scalar"));
                     text = adjustInflationTool(baseYear, sql, valueCol, yearCol, amount,
                         fromYear, index);
+                    break;
+                }
+                case "per_capita": {
+                    String sql = args.path("sql").asText();
+                    String valueCol = args.path("value_col").asText();
+                    String geoCol = args.path("geo_col").asText();
+                    String yearCol = args.path("year_col").asText();
+                    String geoLevel = args.has("geo_level") && !args.get("geo_level").isNull()
+                        ? args.get("geo_level").asText() : null;
+                    double per = args.has("per") && !args.get("per").isNull()
+                        ? args.get("per").asDouble() : 1.0;
+                    String popSource = args.has("population_source")
+                        && !args.get("population_source").isNull()
+                        ? args.get("population_source").asText() : null;
+                    log.println("[askamerica-mcp] tool=per_capita level=" + geoLevel
+                        + " per=" + per + " source=" + popSource);
+                    text = perCapitaTool(sql, valueCol, geoCol, yearCol, geoLevel, per,
+                        popSource);
+                    break;
+                }
+                case "event_study": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    String unitCol = args.path("unit_col").asText();
+                    String timeCol = args.path("time_col").asText();
+                    String treatTimeCol = args.path("treatment_time_col").asText();
+                    int maxLead = args.has("max_lead") && !args.get("max_lead").isNull()
+                        ? args.get("max_lead").asInt() : 5;
+                    int maxLag = args.has("max_lag") && !args.get("max_lag").isNull()
+                        ? args.get("max_lag").asInt() : 5;
+                    int reference = args.has("reference_period")
+                        && !args.get("reference_period").isNull()
+                        ? args.get("reference_period").asInt() : -1;
+                    log.println("[askamerica-mcp] tool=event_study outcome=" + outcome
+                        + " unit=" + unitCol + " window=[-" + maxLead + "," + maxLag + "]");
+                    text = eventStudyTool(sql, outcome, unitCol, timeCol, treatTimeCol,
+                        maxLead, maxLag, reference);
                     break;
                 }
                 case "sensitivity_analysis": {
@@ -2196,6 +2316,278 @@ public class McpServer {
         return runSqlOn(buildResolveSql(term, level, withinState, 50), 50);
     }
 
+    // ── per_capita ───────────────────────────────────────────────────────────
+
+    /**
+     * The population tables this server will use as a denominator, keyed by the
+     * {@code population_source} argument: table, value column, and the geography-level column
+     * to join on.
+     *
+     * <p>Fixed server-side for the same reason the CPI series is: two rates built on different
+     * denominators look comparable and are not. ACS 5-year and the Census annual estimates
+     * disagree for any given county-year, so a comparison that mixes them is measuring the
+     * difference between the two programs as much as anything in the data.
+     */
+    private static final java.util.Set<String> POPULATION_SOURCES =
+        new java.util.LinkedHashSet<>(java.util.Arrays.asList("acs", "pep"));
+
+    /** Population by (year, FIPS) for one geography level, from one named source. */
+    private static java.util.Map<String, Long> populationBy(String source, String geoLevel,
+            java.util.Set<Integer> years) throws Exception {
+        String table = "acs".equals(source) ? "acs_population" : "pep_population";
+        String valueCol = "acs".equals(source) ? "total_population" : "population";
+        String keyCol = "county".equals(geoLevel) ? "county_fips" : "state";
+
+        StringBuilder inList = new StringBuilder();
+        for (Integer y : new java.util.TreeSet<>(years)) {
+            if (inList.length() > 0) {
+                inList.append(", ");
+            }
+            // The year column is a hive partition and may be typed either way; comparing
+            // against a string literal is what the partition column actually holds.
+            inList.append('\'').append(y.intValue()).append('\'');
+        }
+        String sql = "SELECT t.\"year\", t." + keyCol + ", t." + valueCol
+            + " FROM census." + table + " t WHERE t.geography = '"
+            + ("county".equals(geoLevel) ? "county" : "state") + "' "
+            + "AND CAST(t.\"year\" AS VARCHAR) IN (" + inList + ")";
+
+        Connection c = getCatalogConnection();
+        java.util.Map<String, Long> out = new java.util.HashMap<>();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                Integer year = parseYear(rs.getString(1));
+                String fips = rs.getString(2);
+                long pop = rs.getLong(3);
+                if (year == null || fips == null || rs.wasNull()) {
+                    continue;
+                }
+                out.put(popKey(year.intValue(), fips), Long.valueOf(pop));
+            }
+        }
+        if (out.isEmpty()) {
+            throw new IllegalStateException("census." + table + " holds no " + geoLevel
+                + "-level population for years " + new java.util.TreeSet<>(years)
+                + " — no rate can be computed. Run data_coverage('census', '" + table
+                + "') to see which years are loaded; do not substitute a remembered "
+                + "population figure.");
+        }
+        return out;
+    }
+
+    private static String popKey(int year, String fips) {
+        return year + ":" + fips;
+    }
+
+    /**
+     * A FIPS code padded to the width its geography uses, or null when the value is not a
+     * code at all.
+     *
+     * <p>Null rather than a best guess: a state named "CA" instead of "06" must surface as
+     * unmatched and be sent through resolve_geo, because silently failing to join would
+     * subtract that state from the analysis without saying so.
+     */
+    static String normalizeFips(String raw, String geoLevel) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.trim();
+        if (t.isEmpty() || !t.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        int width = "county".equals(geoLevel) ? 5 : 2;
+        if (t.length() > width) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = t.length(); i < width; i++) {
+            sb.append('0');
+        }
+        return sb.append(t).toString();
+    }
+
+    /**
+     * Counts to population rates, joined at the geography and year the caller's own rows sit
+     * at.
+     *
+     * <p>A row whose geography or year has no matching population is returned with a null rate
+     * and a status, never with a rate built from a neighbouring year or a national average.
+     * The population used is attached to every row, so the denominator can be checked rather
+     * than trusted.
+     */
+    private static String perCapitaTool(String sql, String valueCol, String geoCol,
+            String yearCol, String geoLevel, double per, String populationSource)
+            throws Exception {
+        String level = (geoLevel == null || geoLevel.isEmpty()) ? "state" : geoLevel;
+        if (!"state".equals(level) && !"county".equals(level)) {
+            throw new IllegalArgumentException(
+                "geo_level must be 'state' or 'county'; got '" + level + "'");
+        }
+        String source = (populationSource == null || populationSource.isEmpty())
+            ? "acs" : populationSource;
+        if (!POPULATION_SOURCES.contains(source)) {
+            throw new IllegalArgumentException("population_source must be one of "
+                + POPULATION_SOURCES + "; got '" + source + "'");
+        }
+        if (per <= 0) {
+            throw new IllegalArgumentException("per must be positive; got " + per);
+        }
+
+        // First pass: the caller's rows, so the population query can be restricted to the
+        // years actually in play rather than pulling every loaded year.
+        Connection c = getCatalogConnection();
+        ArrayNode rows = MAPPER.createArrayNode();
+        List<String> rowFips = new ArrayList<>();
+        List<Integer> rowYear = new ArrayList<>();
+        List<Double> rowValue = new ArrayList<>();
+        java.util.Set<Integer> years = new java.util.TreeSet<>();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(quoteReservedIdentifiers(sql))) {
+            java.sql.ResultSetMetaData md = rs.getMetaData();
+            int cols = md.getColumnCount();
+            int valueIdx = rs.findColumn(valueCol);
+            int geoIdx = rs.findColumn(geoCol);
+            int yearIdx = rs.findColumn(yearCol);
+            while (rs.next()) {
+                if (rows.size() >= MAX_LIMIT) {
+                    throw new IllegalArgumentException("the SQL returned more than " + MAX_LIMIT
+                        + " rows — aggregate it before rating. Every row is returned here, so "
+                        + "this tool does not truncate.");
+                }
+                ObjectNode row = MAPPER.createObjectNode();
+                for (int i = 1; i <= cols; i++) {
+                    putColumn(row, md.getColumnLabel(i), md.getColumnType(i), rs, i);
+                }
+                double v = rs.getDouble(valueIdx);
+                boolean vNull = rs.wasNull();
+                String fips = normalizeFips(rs.getString(geoIdx), level);
+                Integer year = parseYear(rs.getString(yearIdx));
+                rows.add(row);
+                rowFips.add(fips);
+                rowYear.add(year);
+                rowValue.add(vNull ? null : Double.valueOf(v));
+                if (year != null) {
+                    years.add(year);
+                }
+            }
+        }
+        if (rows.size() == 0) {
+            throw new IllegalArgumentException("the SQL returned no rows to rate");
+        }
+        if (years.isEmpty()) {
+            throw new IllegalArgumentException("not one row had a readable year in '" + yearCol
+                + "' — population is matched by year, so no rate can be computed");
+        }
+
+        java.util.Map<String, Long> population = populationBy(source, level, years);
+        String rateCol = per == 1.0 ? valueCol + "_per_capita"
+            : valueCol + "_per_" + (long) per;
+        int rated = 0;
+        java.util.Set<String> unmatchedGeo = new java.util.TreeSet<>();
+        java.util.Set<Integer> unmatchedYear = new java.util.TreeSet<>();
+        int unreadableGeo = 0;
+        for (int i = 0; i < rows.size(); i++) {
+            ObjectNode row = (ObjectNode) rows.get(i);
+            String fips = rowFips.get(i);
+            Integer year = rowYear.get(i);
+            Double value = rowValue.get(i);
+            if (fips == null) {
+                unreadableGeo++;
+                row.putNull(rateCol);
+                row.put("rate_status", "unreadable_geography");
+                continue;
+            }
+            if (year == null) {
+                row.putNull(rateCol);
+                row.put("rate_status", "unreadable_year");
+                continue;
+            }
+            if (value == null) {
+                row.putNull(rateCol);
+                row.put("rate_status", "null_value");
+                continue;
+            }
+            Long pop = population.get(popKey(year.intValue(), fips));
+            if (pop == null) {
+                // Distinguish "this geography is never in the population table" from "this
+                // year is not loaded" — they send the caller to different fixes.
+                boolean geoSeen = false;
+                for (Integer y : years) {
+                    if (population.containsKey(popKey(y.intValue(), fips))) {
+                        geoSeen = true;
+                        break;
+                    }
+                }
+                if (geoSeen) {
+                    unmatchedYear.add(year);
+                } else {
+                    unmatchedGeo.add(fips);
+                }
+                row.putNull(rateCol);
+                row.put("rate_status", geoSeen ? "no_population_for_year"
+                    : "no_population_for_geography");
+                continue;
+            }
+            if (pop.longValue() == 0) {
+                row.putNull(rateCol);
+                row.put("rate_status", "zero_population");
+                continue;
+            }
+            row.put("population", pop.longValue());
+            row.put(rateCol, value.doubleValue() / pop.longValue() * per);
+            rated++;
+        }
+
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("geo_level", level);
+        out.put("population_source", source);
+        out.put("population_table", "census."
+            + ("acs".equals(source) ? "acs_population" : "pep_population"));
+        out.put("per", per);
+        out.put("rate_column", rateCol);
+        out.put("rows_returned", rows.size());
+        out.put("rows_rated", rated);
+        if (unreadableGeo > 0) {
+            out.put("rows_with_unreadable_geography", unreadableGeo);
+            out.put("geography_hint", "Values in '" + geoCol + "' are not FIPS codes. "
+                + "resolve_geo turns a name or abbreviation into the code this joins on.");
+        }
+        if (!unmatchedGeo.isEmpty()) {
+            ArrayNode a = MAPPER.createArrayNode();
+            for (String g : unmatchedGeo) {
+                a.add(g);
+            }
+            out.set("geographies_without_population", a);
+        }
+        if (!unmatchedYear.isEmpty()) {
+            ArrayNode a = MAPPER.createArrayNode();
+            for (Integer y : unmatchedYear) {
+                a.add(y.intValue());
+            }
+            out.set("years_without_population", a);
+        }
+        if (rated == 0) {
+            throw new IllegalStateException("not one of the " + rows.size() + " rows could be "
+                + "rated. Geographies with no population: " + unmatchedGeo + "; years with "
+                + "none: " + unmatchedYear + "; rows whose geography was not a FIPS code: "
+                + unreadableGeo + ". Check geo_col holds a "
+                + ("county".equals(level) ? "5-digit county" : "2-digit state")
+                + " FIPS code and that geo_level matches it.");
+        }
+        out.set("rows", rows);
+        out.put("note", "Rates are value / population * " + per + ", joined on exact year and "
+            + ("acs".equals(source)
+                ? "ACS 5-year population, which is a five-year average labelled by its end "
+                    + "year — appropriate for county-level rates, but it smooths sharp "
+                    + "single-year population changes."
+                : "the Census annual population estimates, the conventional rate denominator, "
+                    + "which cover fewer years than ACS.")
+            + " The population used is on every row. Rows with no matching population are "
+            + "returned unrated with a status, never rated against a nearby year.");
+        return out.toString();
+    }
+
     // ── adjust_inflation ─────────────────────────────────────────────────────
 
     /**
@@ -2909,6 +3301,95 @@ public class McpServer {
         ObjectNode out = result.toJson(MAPPER);
         addExtractionMeta(out, ex);
         return out.toString();
+    }
+
+    /**
+     * Event study over a unit-period panel.
+     *
+     * <p>Extraction is written out here rather than delegated to
+     * {@link StatsEngine#extractColumnsWithLabels}, because that drops any row with a null in
+     * any requested column — and a null treatment time is not missing data here, it is the
+     * definition of a never-treated unit. Delegating would silently discard exactly the
+     * comparison group the design rests on.
+     */
+    private static String eventStudyTool(String sql, String outcome, String unitCol,
+            String timeCol, String treatTimeCol, int maxLead, int maxLag, int reference)
+            throws Exception {
+        Connection c = getCatalogConnection();
+        List<Double> ys = new ArrayList<>();
+        List<String> units = new ArrayList<>();
+        List<String> times = new ArrayList<>();
+        List<Integer> relative = new ArrayList<>();
+        int totalRows = 0;
+        int droppedForNull = 0;
+        int neverTreatedRows = 0;
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(quoteReservedIdentifiers(sql))) {
+            int yIdx = rs.findColumn(outcome);
+            int unitIdx = rs.findColumn(unitCol);
+            int timeIdx = rs.findColumn(timeCol);
+            int treatIdx = rs.findColumn(treatTimeCol);
+            while (rs.next()) {
+                if (++totalRows > StatsEngine.STATS_MAX_ROWS) {
+                    throw new IllegalArgumentException("the SQL returned more than "
+                        + StatsEngine.STATS_MAX_ROWS + " rows — narrow it before running an "
+                        + "event study over it");
+                }
+                double y = rs.getDouble(yIdx);
+                boolean yNull = rs.wasNull();
+                String unit = rs.getString(unitIdx);
+                Integer time = readInt(rs, timeIdx);
+                // A null here means never treated, which is a usable row. Every other null
+                // leaves the observation unplaceable in the panel, so it is dropped and
+                // counted.
+                Integer treat = readInt(rs, treatIdx);
+                if (yNull || unit == null || time == null) {
+                    droppedForNull++;
+                    continue;
+                }
+                ys.add(Double.valueOf(y));
+                units.add(unit);
+                times.add(String.valueOf(time.intValue()));
+                if (treat == null) {
+                    neverTreatedRows++;
+                    relative.add(null);
+                } else {
+                    relative.add(Integer.valueOf(time.intValue() - treat.intValue()));
+                }
+            }
+        }
+        if (ys.isEmpty()) {
+            throw new IllegalArgumentException("the SQL returned no usable rows — every row "
+                + "was missing the outcome, the unit, or the period");
+        }
+        double[] y = new double[ys.size()];
+        for (int i = 0; i < ys.size(); i++) {
+            y[i] = ys.get(i).doubleValue();
+        }
+        StatsEngine.EventStudyResult result = StatsEngine.eventStudy(y,
+            units.toArray(new String[0]), times.toArray(new String[0]),
+            relative.toArray(new Integer[0]), maxLead, maxLag, reference);
+        ObjectNode out = result.toJson(MAPPER);
+        out.put("rows_returned_by_sql", totalRows);
+        out.put("rows_dropped_for_null", droppedForNull);
+        out.put("never_treated_rows", neverTreatedRows);
+        return out.toString();
+    }
+
+    /**
+     * An integer from a column that may be typed as an integer or as a partition string, or
+     * null when it holds neither. Panel period columns are as often VARCHAR as INT here.
+     */
+    private static Integer readInt(ResultSet rs, int idx) throws java.sql.SQLException {
+        String raw = rs.getString(idx);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
