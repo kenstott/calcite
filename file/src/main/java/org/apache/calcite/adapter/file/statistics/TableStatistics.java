@@ -23,15 +23,28 @@ public class TableStatistics {
   private final Map<String, ColumnStatistics> columnStats;
   private final long lastUpdated;
   private final String sourceHash;
+  private final PrimaryKeyStatistics primaryKeyStats;
 
   public TableStatistics(long rowCount, long dataSize,
                         Map<String, ColumnStatistics> columnStats,
                         String sourceHash) {
+    this(rowCount, dataSize, columnStats, sourceHash, null);
+  }
+
+  /**
+   * @param primaryKeyStats key-uniqueness measured for this table, or null when the table
+   *     declares no primary key or the statistic has not been collected yet
+   */
+  public TableStatistics(long rowCount, long dataSize,
+                        Map<String, ColumnStatistics> columnStats,
+                        String sourceHash,
+                        PrimaryKeyStatistics primaryKeyStats) {
     this.rowCount = rowCount;
     this.dataSize = dataSize;
     this.columnStats = new HashMap<>(columnStats);
     this.lastUpdated = System.currentTimeMillis();
     this.sourceHash = sourceHash;
+    this.primaryKeyStats = primaryKeyStats;
   }
 
   /**
@@ -82,6 +95,24 @@ public class TableStatistics {
    */
   public boolean isValidFor(String currentSourceHash) {
     return sourceHash != null && sourceHash.equals(currentSourceHash);
+  }
+
+  /**
+   * Get primary-key uniqueness for this table.
+   *
+   * @return the statistic, or null when the table declares no primary key or the statistic
+   *     has not been collected — callers must measure it rather than assume uniqueness
+   */
+  public PrimaryKeyStatistics getPrimaryKeyStatistics() {
+    return primaryKeyStats;
+  }
+
+  /**
+   * Copy of these statistics carrying the given primary-key statistic. Used to attach a
+   * key measurement to statistics that were collected without one.
+   */
+  public TableStatistics withPrimaryKeyStatistics(PrimaryKeyStatistics pkStats) {
+    return new TableStatistics(rowCount, dataSize, columnStats, sourceHash, pkStats);
   }
 
   /**

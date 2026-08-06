@@ -172,6 +172,8 @@ public final class GovDataModelVerificationRunner {
     long dupRows = -1;   // keyedRows - distinctKeys (>0 ⇒ the declared PK is not unique)
     String dupErr;       // dup-check SQL failed (reported as n/a, not a hard failure)
     boolean dupApprox;   // cleared by the HLL sketch alone; no exact DISTINCT was run
+    boolean dupFromCache; // answered from the recorded statistic; no scan and no data egress
+    String dupPersistErr; // scan succeeded but recording it failed — next run scans again
   }
 
   public static void main(String[] args) throws Exception {
@@ -346,6 +348,28 @@ public final class GovDataModelVerificationRunner {
       System.out.println("  feature-probe failures: " + probeFailures);
       System.out.println("  duplicate-PK tables  : " + dupped.size()
           + (cfg.dupCheck ? "" : "   (dup-check disabled)"));
+      if (cfg.dupCheck) {
+        int dupCached = 0;
+        int dupScanned = 0;
+        int dupUnrecorded = 0;
+        for (TableResult r : results) {
+          if (!r.pkChecked) {
+            continue;
+          }
+          if (r.dupFromCache) {
+            dupCached++;
+          } else {
+            dupScanned++;
+            if (r.dupPersistErr != null) {
+              dupUnrecorded++;
+            }
+          }
+        }
+        System.out.println("  dup-check scans      : " + dupScanned + " scanned / "
+            + dupCached + " from cache"
+            + (dupUnrecorded > 0
+                ? "   (" + dupUnrecorded + " not recorded — will scan again)" : ""));
+      }
       System.out.println("  globbing scans       : " + globbing.size());
       System.out.println("  elapsed ms           : " + (System.currentTimeMillis() - t0));
 
@@ -518,7 +542,7 @@ public final class GovDataModelVerificationRunner {
       String detail = r.error != null ? trunc(r.error, 80)
           : (r.dupRows > 0 ? "DUPLICATE PK: " + r.dupRows + " dup rows over " + r.keyedRows
               + " keyed (" + dupRatio(r) + ")"
-              : (r.dupErr != null ? "dup-check n/a: " + trunc(r.dupErr, 60) : ""));
+              : (r.dupErr != null ? "dup-check n/a: " + trunc(r.dupErr, 60) : dupSource(r)));
       System.out.printf("%-15s %-32s %-6s %10d %-6s %-11s %s%n",
           r.schema, trunc(r.table, 32), r.reach, r.count, r.mat, dupCell(r), detail);
       results.add(r);
@@ -530,8 +554,17 @@ public final class GovDataModelVerificationRunner {
    * Runs the PK duplicate check for one table: counts rows whose PK columns are all non-null,
    * and the number of DISTINCT PK tuples among them. Populates keyedRows / distinctKeys / dupRows
    * on the result, or dupErr if the SQL fails.
+   *
+   * <p>Prefers the statistic recorded against the table's current snapshot, which answers this
+   * without reading a single data file. Key uniqueness is fixed when a snapshot is written, so
+   * rescanning on every sweep re-derives an answer that cannot have changed — and over a remote
+   * object store that scan is the most expensive thing this runner does. On a miss it measures
+   * by scan (below) and records the result, so the next run is metadata-only.
    */
   private static void checkDuplicateKeys(Connection conn, TableResult r, List<String> pk) {
+    if (readCachedDupStats(r, pk)) {
+      return;
+    }
     StringBuilder cols = new StringBuilder();
     StringBuilder notNull = new StringBuilder();
     for (int j = 0; j < pk.size(); j++) {
@@ -582,6 +615,7 @@ public final class GovDataModelVerificationRunner {
         r.dupRows = 0;
         r.dupApprox = true;
         r.pkChecked = true;
+        recordDupStats(r, pk, false);
         return;
       }
       long distinct = scalarCount(conn,
@@ -589,6 +623,7 @@ public final class GovDataModelVerificationRunner {
       r.distinctKeys = distinct;
       r.dupRows = keyed - distinct;
       r.pkChecked = true;
+      recordDupStats(r, pk, true);
     } catch (Exception e) {
       r.dupErr = e.getMessage();
       // This CLI runner's own stack-trace verbosity, set by model-verify.sh — not adapter
@@ -597,6 +632,143 @@ public final class GovDataModelVerificationRunner {
         System.err.println("DUP STACK for " + r.schema + "." + r.table + ":");
         e.printStackTrace();
       }
+    }
+  }
+
+  /**
+   * Measures and records the primary-key statistic for one table, so a later verify answers
+   * from metadata instead of scanning. Reuses the verify path exactly — including its cache
+   * read — so a table already recorded against the current snapshot costs one metadata read.
+   *
+   * @return an outcome word for the caller's progress output: recorded, already-recorded,
+   *     failed (measurement failed) or not-recorded (measured but could not be written)
+   */
+  static String recordPrimaryKeyStatistic(Connection conn, String schema, String table,
+      List<String> pk) {
+    TableResult r = new TableResult();
+    r.schema = schema;
+    r.table = table;
+    checkDuplicateKeys(conn, r, pk);
+    if (!r.pkChecked) {
+      return r.dupErr != null ? "failed: " + trunc(r.dupErr, 60) : "failed";
+    }
+    if (r.dupFromCache) {
+      return "already-recorded";
+    }
+    return r.dupPersistErr != null
+        ? "not-recorded: " + trunc(r.dupPersistErr, 60) : "recorded";
+  }
+
+  /**
+   * Populates the dup fields from the statistic recorded against the table's current snapshot.
+   *
+   * @return true when the result was answered from the recorded statistic and no scan is needed
+   */
+  private static boolean readCachedDupStats(TableResult r, List<String> pk) {
+    org.apache.iceberg.Table table;
+    try {
+      table = icebergTable(r.schema, r.table);
+    } catch (RuntimeException unreachable) {
+      // Not swallowed: the scan that follows calls recordDupStats, which hits the same failure
+      // and reports it as "not recorded" — so the reason reaches the operator exactly once.
+      return false;
+    }
+    if (table == null) {
+      return false;
+    }
+    org.apache.calcite.adapter.file.statistics.PrimaryKeyStatistics stats =
+        org.apache.calcite.adapter.file.statistics.IcebergPrimaryKeyStatistics.read(table);
+    if (stats == null) {
+      return false;
+    }
+    // A statistic measured over different key columns answers a different question than the
+    // one this run is asking, so it cannot stand in for this check.
+    if (!stats.getKeyColumns().equals(pk)) {
+      return false;
+    }
+    r.keyedRows = stats.getKeyedRowCount();
+    r.distinctKeys = stats.getDistinctKeyEstimate();
+    // An estimated distinct count carries the sketch's relative error, so a small apparent gap
+    // is indistinguishable from none. Hold it to the same 5% band the scan path uses before
+    // calling anything a duplicate; whole-table duplication (2x and up) clears it easily.
+    if (!stats.isExact() && r.distinctKeys >= r.keyedRows * 0.95) {
+      r.dupRows = 0;
+      r.dupApprox = true;
+    } else {
+      r.dupRows = r.keyedRows - r.distinctKeys;
+      r.dupApprox = !stats.isExact();
+    }
+    r.pkChecked = true;
+    r.dupFromCache = true;
+    return true;
+  }
+
+  /**
+   * Records the just-measured key statistic against the table's current snapshot, so the next
+   * run answers from metadata. A failure here is reported rather than swallowed: silently
+   * failing to record would make every future run pay the scan with no indication why.
+   */
+  private static void recordDupStats(TableResult r, List<String> pk, boolean exact) {
+    try {
+      org.apache.iceberg.Table table = icebergTable(r.schema, r.table);
+      if (table == null) {
+        return;
+      }
+      org.apache.calcite.adapter.file.statistics.IcebergPrimaryKeyStatistics.write(table,
+          new org.apache.calcite.adapter.file.statistics.PrimaryKeyStatistics(pk,
+              r.keyedRows, r.distinctKeys, exact,
+              Long.toString(table.currentSnapshot().snapshotId()), null));
+    } catch (Exception e) {
+      r.dupPersistErr = e.getMessage();
+    }
+  }
+
+  /**
+   * Loads the Iceberg table backing a govdata base table, or null when it cannot be loaded —
+   * a view, a non-Iceberg prefix, or a warehouse this run cannot address. Null means "measure
+   * it", never "assume it is fine".
+   */
+  private static org.apache.iceberg.Table icebergTable(String schema, String table) {
+    try {
+      String warehouse =
+          org.apache.calcite.adapter.file.etl.ModelOperand.getString(schema + ".directory");
+      if (warehouse == null || warehouse.isEmpty()) {
+        return null;
+      }
+      org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
+      String endpoint =
+          org.apache.calcite.adapter.file.etl.ModelOperand.getString(schema + ".s3Config.endpoint");
+      if (endpoint != null && !endpoint.isEmpty()) {
+        conf.set("fs.s3a.endpoint", endpoint);
+        conf.set("fs.s3a.path.style.access", "true");
+      }
+      String keyId = org.apache.calcite.adapter.file.etl.ModelOperand
+          .getString(schema + ".s3Config.accessKeyId");
+      String secret = org.apache.calcite.adapter.file.etl.ModelOperand
+          .getString(schema + ".s3Config.secretAccessKey");
+      if (keyId != null && secret != null) {
+        conf.set("fs.s3a.access.key", keyId);
+        conf.set("fs.s3a.secret.key", secret);
+      }
+      // R2 credentials are temporary and arrive with a session token. Static access/secret
+      // keys alone authenticate against MinIO but are rejected by R2, so without this the
+      // statistic can be neither read nor recorded on exactly the remote store it exists for.
+      String sessionToken = org.apache.calcite.adapter.file.etl.ModelOperand
+          .getString(schema + ".s3Config.sessionToken");
+      if (sessionToken != null && !sessionToken.isEmpty()) {
+        conf.set("fs.s3a.session.token", sessionToken);
+        conf.set("fs.s3a.aws.credentials.provider",
+            "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider");
+      }
+      String location = warehouse.replaceFirst("^s3://", "s3a://")
+          + "/" + schema + "/" + table;
+      return new org.apache.iceberg.hadoop.HadoopTables(conf).load(location);
+    // Throwable, not Exception: an incompatible dependency raises an Error. Rethrown rather
+    // than nulled so the caller can say why the statistic was unreachable — a silent null
+    // here reads as "no statistic yet" and makes every future run scan with no explanation.
+    } catch (Throwable t) {
+      throw new IllegalStateException(
+          "Could not load Iceberg table " + schema + "." + table + ": " + t, t);
     }
   }
 
@@ -652,6 +824,22 @@ public final class GovDataModelVerificationRunner {
   }
 
   /** Duplication factor keyedRows/distinctKeys as a "N.NNx" string (empty if not computable). */
+  /**
+   * Where the DUP numbers came from. The scanning path is the expensive one, so it names
+   * itself rather than being indistinguishable from a metadata read.
+   */
+  private static String dupSource(TableResult r) {
+    if (!r.pkChecked) {
+      return "";
+    }
+    if (r.dupFromCache) {
+      return "DUP from-cache";
+    }
+    return r.dupPersistErr != null
+        ? "DUP scanned (not recorded: " + trunc(r.dupPersistErr, 40) + ")"
+        : "DUP scanned";
+  }
+
   private static String dupRatio(TableResult r) {
     if (r.distinctKeys <= 0) {
       return "";
@@ -921,7 +1109,7 @@ public final class GovDataModelVerificationRunner {
    * without a primaryKey (and views, which are not in constraints) are simply absent, so the
    * duplicate-row check skips them.
    */
-  private static Map<String, List<String>> loadPrimaryKeys(Set<String> schemas) {
+  static Map<String, List<String>> loadPrimaryKeys(Set<String> schemas) {
     Map<String, List<String>> pks = new LinkedHashMap<String, List<String>>();
     for (String schema : schemas) {
       String resource = SCHEMA_YAML.get(schema);

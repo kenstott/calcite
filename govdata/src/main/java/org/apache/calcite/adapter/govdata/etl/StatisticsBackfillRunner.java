@@ -15,9 +15,15 @@ import org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopTables;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -126,6 +132,67 @@ public final class StatisticsBackfillRunner {
     }
     System.out.printf("%nexamined=%d bootstrapped=%d alreadyCovered=%d notAnIcebergTable=%d%n",
         examined, bootstrapped, alreadyCovered, unreadable);
+
+    if (!dryRun) {
+      backfillPrimaryKeyStatistics(schemas, tables);
+    }
+  }
+
+  /**
+   * Measures and records primary-key uniqueness for every table that declares a key.
+   *
+   * <p>Collecting it here is what keeps it off the verify path: verify falls back to measuring
+   * on a miss, but that scan runs wherever verify runs — potentially across a WAN. Measured
+   * here it runs once, next to the data, and every later verify reads a number.
+   *
+   * <p>Uses SQL rather than the Iceberg scan API above because counting distinct key tuples is
+   * an aggregate the query engine already pushes down; reimplementing it over a table scan
+   * would buffer the key set in this process.
+   */
+  private static void backfillPrimaryKeyStatistics(List<String> schemas, List<String> tables) {
+    Map<String, List<String>> pkByTable =
+        GovDataModelVerificationRunner.loadPrimaryKeys(new LinkedHashSet<>(schemas));
+    if (pkByTable.isEmpty()) {
+      return;
+    }
+    System.out.printf("%nPrimary-key uniqueness%n");
+    int recorded = 0;
+    int skipped = 0;
+    for (String schema : schemas) {
+      try {
+        Class.forName("org.apache.calcite.adapter.govdata.GovDataDriver");
+      } catch (ClassNotFoundException e) {
+        throw new IllegalStateException("GovDataDriver not on the classpath", e);
+      }
+      try (Connection conn =
+               DriverManager.getConnection("jdbc:govdata:source=" + schema)) {
+        for (Map.Entry<String, List<String>> entry : pkByTable.entrySet()) {
+          String key = entry.getKey();
+          if (!key.startsWith(schema.toLowerCase(Locale.ROOT) + ".")) {
+            continue;
+          }
+          String tableName = key.substring(key.indexOf('.') + 1);
+          if (!tables.isEmpty() && !tables.contains(tableName)) {
+            continue;
+          }
+          long started = System.currentTimeMillis();
+          String outcome = GovDataModelVerificationRunner.recordPrimaryKeyStatistic(
+              conn, schema, tableName, entry.getValue());
+          System.out.printf("  %-14s %-34s %s (%dms)%n", schema, tableName, outcome,
+              System.currentTimeMillis() - started);
+          if (outcome.startsWith("recorded") || outcome.startsWith("already")) {
+            recorded++;
+          } else {
+            skipped++;
+          }
+        }
+      } catch (SQLException e) {
+        // Reported, not swallowed: a schema that cannot be opened leaves its tables measuring
+        // on the verify path, and the operator needs to know which ones.
+        System.out.printf("  %-14s %-34s connect failed: %s%n", schema, "*", e.getMessage());
+      }
+    }
+    System.out.printf("pkRecorded=%d pkUnrecorded=%d%n", recorded, skipped);
   }
 
   /** Table names under a schema prefix, or the explicit list when one was given. */

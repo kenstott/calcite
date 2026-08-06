@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.statistics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
@@ -20,7 +21,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -57,6 +60,25 @@ public class StatisticsCache {
     for (Map.Entry<String, ColumnStatistics> entry : statistics.getColumnStatistics().entrySet()) {
       ObjectNode columnNode = columnsNode.putObject(entry.getKey());
       serializeColumnStatistics(entry.getValue(), columnNode);
+    }
+
+    // Primary-key uniqueness, written only when measured. The version stays at 1.0: the node
+    // is additive, so a reader that predates it ignores it and a file that predates it loads
+    // here with the statistic simply absent.
+    PrimaryKeyStatistics pkStats = statistics.getPrimaryKeyStatistics();
+    if (pkStats != null) {
+      ObjectNode pkNode = root.putObject("pkUniqueness");
+      ArrayNode keyColumns = pkNode.putArray("keyColumns");
+      for (String keyColumn : pkStats.getKeyColumns()) {
+        keyColumns.add(keyColumn);
+      }
+      pkNode.put("keyedRowCount", pkStats.getKeyedRowCount());
+      pkNode.put("distinctKeyEstimate", pkStats.getDistinctKeyEstimate());
+      pkNode.put("exact", pkStats.isExact());
+      pkNode.put("snapshotId", pkStats.getSnapshotId());
+      if (pkStats.getSerializedSketch() != null) {
+        pkNode.put("sketch", pkStats.getSerializedSketch());
+      }
     }
 
     // Ensure parent directory exists
@@ -158,7 +180,35 @@ public class StatisticsCache {
     LOGGER.debug("Loaded statistics from {}: {} rows, {} columns",
                  file, rowCount, columnStats.size());
 
-    return new TableStatistics(rowCount, dataSize, columnStats, sourceHash);
+    return new TableStatistics(rowCount, dataSize, columnStats, sourceHash,
+        deserializePrimaryKeyStatistics(root.path("pkUniqueness")));
+  }
+
+  /**
+   * Reads the primary-key statistic from a statistics file, or returns null when the file
+   * predates it or the table has no key. A null here means "not measured", which callers
+   * must resolve by measuring — never by assuming the key is unique.
+   */
+  private static PrimaryKeyStatistics deserializePrimaryKeyStatistics(JsonNode node) {
+    if (node == null || !node.isObject()) {
+      return null;
+    }
+    List<String> keyColumns = new ArrayList<>();
+    JsonNode keyColumnsNode = node.path("keyColumns");
+    if (keyColumnsNode.isArray()) {
+      for (JsonNode keyColumn : keyColumnsNode) {
+        keyColumns.add(keyColumn.asText());
+      }
+    }
+    if (keyColumns.isEmpty()) {
+      return null;
+    }
+    return new PrimaryKeyStatistics(keyColumns,
+        node.path("keyedRowCount").asLong(),
+        node.path("distinctKeyEstimate").asLong(),
+        node.path("exact").asBoolean(false),
+        node.path("snapshotId").asText(null),
+        node.path("sketch").asText(null));
   }
 
   private static void serializeColumnStatistics(ColumnStatistics colStats, ObjectNode node) {
