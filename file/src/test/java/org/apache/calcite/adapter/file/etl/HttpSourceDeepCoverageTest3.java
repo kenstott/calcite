@@ -1183,13 +1183,14 @@ class HttpSourceDeepCoverageTest3 {
   @Test void testParseValue() throws Exception {
     HttpSource source = createMinimalSource();
     try {
-      Method m = HttpSource.class.getDeclaredMethod("parseValue", String.class);
+      Method m =
+          HttpSource.class.getDeclaredMethod("parseValue", String.class, String.class);
       m.setAccessible(true);
-      assertNull(m.invoke(source, (String) null));
-      assertNull(m.invoke(source, ""));
-      assertEquals(42L, m.invoke(source, "42"));
-      assertEquals(3.14, m.invoke(source, "3.14"));
-      assertEquals("hello", m.invoke(source, "hello"));
+      assertNull(m.invoke(source, "col", (String) null));
+      assertNull(m.invoke(source, "col", ""));
+      assertEquals(42L, m.invoke(source, "col", "42"));
+      assertEquals(3.14, m.invoke(source, "col", "3.14"));
+      assertEquals("hello", m.invoke(source, "col", "hello"));
     } finally {
       source.close();
     }

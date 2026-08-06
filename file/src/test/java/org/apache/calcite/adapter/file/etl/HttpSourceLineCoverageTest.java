@@ -813,7 +813,7 @@ class HttpSourceLineCoverageTest {
   @Test void testParseValueNull() throws Exception {
     HttpSource source = createMinimalSource();
     Object result =
-        invokePrivate(source, "parseValue", new Class[]{String.class}, (Object) null);
+        invokePrivate(source, "parseValue", new Class[]{String.class, String.class}, "col", (Object) null);
     assertNull(result);
     source.close();
   }
@@ -821,7 +821,7 @@ class HttpSourceLineCoverageTest {
   @Test void testParseValueEmpty() throws Exception {
     HttpSource source = createMinimalSource();
     Object result =
-        invokePrivate(source, "parseValue", new Class[]{String.class}, "");
+        invokePrivate(source, "parseValue", new Class[]{String.class, String.class}, "col", "");
     assertNull(result);
     source.close();
   }
@@ -829,7 +829,7 @@ class HttpSourceLineCoverageTest {
   @Test void testParseValueLong() throws Exception {
     HttpSource source = createMinimalSource();
     Object result =
-        invokePrivate(source, "parseValue", new Class[]{String.class}, "12345");
+        invokePrivate(source, "parseValue", new Class[]{String.class, String.class}, "col", "12345");
     assertEquals(12345L, result);
     source.close();
   }
@@ -837,7 +837,7 @@ class HttpSourceLineCoverageTest {
   @Test void testParseValueDouble() throws Exception {
     HttpSource source = createMinimalSource();
     Object result =
-        invokePrivate(source, "parseValue", new Class[]{String.class}, "3.14");
+        invokePrivate(source, "parseValue", new Class[]{String.class, String.class}, "col", "3.14");
     assertEquals(3.14, result);
     source.close();
   }
@@ -845,7 +845,7 @@ class HttpSourceLineCoverageTest {
   @Test void testParseValueString() throws Exception {
     HttpSource source = createMinimalSource();
     Object result =
-        invokePrivate(source, "parseValue", new Class[]{String.class}, "hello");
+        invokePrivate(source, "parseValue", new Class[]{String.class, String.class}, "col", "hello");
     assertEquals("hello", result);
     source.close();
   }
