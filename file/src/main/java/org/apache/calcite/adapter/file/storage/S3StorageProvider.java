@@ -398,7 +398,15 @@ public class S3StorageProvider implements StorageProvider {
       return new java.io.ByteArrayInputStream(data);
     }
 
-    return object;
+    // Never hand back the live S3 stream. SDK v2's sync client (Apache HttpClient) aborts a
+    // slow-consumed response mid-body — "Premature end of Content-Length", observed truncating
+    // large reads at ~8 MiB when a downstream CSV parser pauses to flush Iceberg batches (the
+    // read pace and the consumption pace share one connection, and an idle read is reaped). Fully
+    // drain the response here so the two are decoupled: small objects buffer in memory, large ones
+    // stage to a self-deleting temp file (disk, not heap, so a multi-hundred-MB body never sits in
+    // the heap). readRange() below is unaffected — it already reads its bounded slice eagerly.
+    Long contentLength = object.response().contentLength();
+    return StorageProvider.stageToSafeStream(object, contentLength != null ? contentLength : -1L);
   }
 
   @Override public byte[] readRange(String path, long offset, long length) throws IOException {

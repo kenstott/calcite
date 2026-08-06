@@ -52,6 +52,57 @@ public interface StorageProvider {
   InputStream openInputStream(String path) throws IOException;
 
   /**
+   * Fully drains {@code source} into a stream that no longer depends on a live network connection,
+   * so a slow downstream consumer cannot stall the read into an idle-timeout or mid-stream abort.
+   * That failure mode truncated large AWS SDK v2 S3 reads at ~8 MiB (Apache HttpClient "Premature
+   * end of Content-Length") when a CSV parser paused to flush Iceberg batches, and the live
+   * FTP/SFTP/HTTP streams some providers return are exposed to the same shape (idle data-connection
+   * drops). Providers that cannot serve from a buffered cache should wrap their live stream in this
+   * before returning it.
+   *
+   * <p>Small payloads buffer in memory; anything larger — or of unknown length ({@code
+   * contentLength < 0}) — stages to a self-deleting temp file (disk, not heap, so a multi-hundred-MB
+   * body never sits in the heap). {@code source} is always closed.
+   *
+   * @param source        the live stream to drain; closed by this method
+   * @param contentLength  known length in bytes, or negative if unknown (forces temp-file staging)
+   */
+  static InputStream stageToSafeStream(InputStream source, long contentLength) throws IOException {
+    final long maxInMemory = 16L * 1024 * 1024;
+    try (InputStream in = source) {
+      if (contentLength >= 0 && contentLength <= maxInMemory) {
+        java.io.ByteArrayOutputStream buffer =
+            new java.io.ByteArrayOutputStream((int) Math.max(32L, contentLength));
+        byte[] chunk = new byte[1 << 16];
+        int n;
+        while ((n = in.read(chunk)) >= 0) {
+          buffer.write(chunk, 0, n);
+        }
+        return new java.io.ByteArrayInputStream(buffer.toByteArray());
+      }
+      // justification (storage-provider-guard): this stages the response to a genuinely-local temp
+      // file — decoupling the read from slow consumption is the point — and deletes it on close.
+      final java.nio.file.Path temp =
+          java.nio.file.Files.createTempFile("storage-openstream-", ".tmp");
+      try {
+        java.nio.file.Files.copy(in, temp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      } catch (IOException e) {
+        java.nio.file.Files.deleteIfExists(temp);
+        throw e;
+      }
+      return new java.io.FileInputStream(temp.toFile()) {
+        @Override public void close() throws IOException {
+          try {
+            super.close();
+          } finally {
+            java.nio.file.Files.deleteIfExists(temp);
+          }
+        }
+      };
+    }
+  }
+
+  /**
    * Opens a reader for reading text file content.
    *
    * @param path The file path

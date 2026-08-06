@@ -156,8 +156,14 @@ public class FtpStorageProvider implements StorageProvider {
       return new java.io.ByteArrayInputStream(data);
     }
 
-    // Return a wrapper that disconnects on close
-    return new FtpInputStream(stream, ftpClient);
+    // No persistent cache: still must not hand back the live FTP data stream — a slow reader would
+    // hold the data connection open into an idle drop. Drain it to a connection-independent stream
+    // (memory for small, temp file for large), then complete the FTP command and disconnect, just
+    // as the cached branch above does.
+    InputStream staged = StorageProvider.stageToSafeStream(stream, -1L);
+    ftpClient.completePendingCommand();
+    disconnect(ftpClient);
+    return staged;
   }
 
   @Override public Reader openReader(String path) throws IOException {
@@ -338,6 +344,12 @@ public class FtpStorageProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Connection-closing wrapper around a live FTP data stream. No longer used by
+   * {@link #openInputStream} — which now eagerly drains via
+   * {@link StorageProvider#stageToSafeStream} so a slow consumer cannot stall the data connection
+   * into an idle drop — but retained as a tested utility for callers that want lazy streaming.
+   */
   private static class FtpInputStream extends InputStream {
     private final InputStream wrapped;
     private final FTPClient ftpClient;

@@ -333,7 +333,13 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
       return new java.io.ByteArrayInputStream(data);
     }
 
-    return conn.getInputStream();
+    // No persistent cache: drain rather than hand back the live download stream (a slow reader would
+    // otherwise hold the HTTP connection into an idle drop), then disconnect. Small payloads buffer
+    // in memory; large ones stage to a temp file.
+    InputStream staged =
+        StorageProvider.stageToSafeStream(conn.getInputStream(), conn.getContentLengthLong());
+    conn.disconnect();
+    return staged;
   }
 
   @Override public Reader openReader(String path) throws IOException {

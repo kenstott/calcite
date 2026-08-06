@@ -237,8 +237,13 @@ public class SftpStorageProvider implements StorageProvider {
         return new java.io.ByteArrayInputStream(data);
       }
 
-      // Return a wrapper that closes the channel and session on stream close
-      return new SftpInputStream(stream, channelSftp, session);
+      // No persistent cache: drain rather than hand back the live SFTP stream (a slow reader would
+      // otherwise hold the channel/session open into an idle drop), then close them — as the cached
+      // branch above does. Small payloads buffer in memory; large ones stage to a temp file.
+      InputStream staged = StorageProvider.stageToSafeStream(stream, -1L);
+      closeSftpChannel(channelSftp);
+      closeSession(session);
+      return staged;
     } catch (JSchException | SftpException e) {
       closeSftpChannel(channelSftp);
       closeSession(session);
@@ -465,6 +470,12 @@ public class SftpStorageProvider implements StorageProvider {
     }
   }
 
+  /**
+   * Channel/session-closing wrapper around a live SFTP stream. No longer used by
+   * {@link #openInputStream} — which now eagerly drains via
+   * {@link StorageProvider#stageToSafeStream} so a slow consumer cannot stall the channel into an
+   * idle drop — but retained as a tested utility for callers that want lazy streaming.
+   */
   private static class SftpInputStream extends InputStream {
     private final InputStream wrapped;
     private final ChannelSftp channel;
