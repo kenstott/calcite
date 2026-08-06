@@ -415,11 +415,25 @@ public class McpServer {
             + "when a genuine instrument is available instead of an unconfoundedness "
             + "argument). These three run on Smile, a separate JVM ML dependency from the "
             + "closed-form Commons Math tools above. "
+            + "Before reporting ANY regression result as a finding, run "
+            + "sensitivity_analysis with the same SQL and a jurisdiction group_col: it "
+            + "refits leaving out one jurisdiction at a time and reports whether a single "
+            + "unit carries the effect, flips its sign, or moves it across p=0.05. A "
+            + "coefficient that has not been leave-one-out tested is not a finding. "
             + "This is a versioned snapshot, not a live feed: describe_table reports a "
             + "table's declared coverage window, and an empty result outside that window "
             + "means the period is not published yet, not zero. Say so rather than "
             + "substituting an outside figure; suggest_external_sources lists keyless "
-            + "public endpoints for genuine gaps. "
+            + "public endpoints for genuine gaps. The declared window is intent, not fact — "
+            + "data_coverage(schema, table) scans the table and reports the years actually "
+            + "loaded, the row count per year, and any years missing inside that span. Call "
+            + "it before describing a trend or asserting that a period has no data, because "
+            + "an unloaded year and a genuinely empty one are identical in a query result. "
+            + "NEVER compare dollar figures across years without adjust_inflation — it "
+            + "deflates to real dollars against the server's own BLS CPI-U vintage in "
+            + "econ.inflation_metrics, in either single-amount or whole-result-set form, and "
+            + "reports the index used per year. Do not deflate by hand from a remembered CPI "
+            + "figure, and do not present a multi-year nominal comparison as growth. "
             + "render_chart draws a line/bar/scatter/pie image from categories/series data "
             + "you've already fetched — use it instead of hand-building a chart when a "
             + "visualization is requested; pass null for a missing data point to render a "
@@ -470,6 +484,22 @@ public class McpServer {
             + "Always call this before querying a table for the first time to get exact column names.",
             schema(describeProps, new String[]{"schema", "table"})));
 
+        ObjectNode coverageProps = MAPPER.createObjectNode();
+        coverageProps.set("schema", prop("string", "Schema name, e.g. 'econ'."));
+        coverageProps.set("table", prop("string", "Table name, e.g. 'inflation_metrics'."));
+        tools.add(
+            tool("data_coverage",
+            "Scan a table and report which years are ACTUALLY loaded — the year-by-year row "
+            + "counts, any years missing INSIDE the loaded span, and any declared years that "
+            + "hold no rows at all. describe_table reports the window the schema declares; "
+            + "this reports the window the data has. Call it before stating a trend, a "
+            + "year-over-year change, or 'no data exists for X': a zero from a year that was "
+            + "never loaded is indistinguishable in a query result from a real zero, and a "
+            + "regression over a series with a hole in the middle silently interpolates "
+            + "across it. The first call for a table runs the scan and can take a while; "
+            + "later calls are instant.",
+            schema(coverageProps, new String[]{"schema", "table"})));
+
         ObjectNode queryProps = MAPPER.createObjectNode();
         queryProps.set(
             "sql", prop("string",
@@ -516,6 +546,38 @@ public class McpServer {
             + "(state_fips / county_fips / zcta). Call before joining a user-named place to "
             + "census/econ/geo tables so the join keys on the right code, not a guess.",
             schema(resolveProps, new String[]{"term"})));
+
+        ObjectNode inflProps = MAPPER.createObjectNode();
+        inflProps.set("base_year", prop("integer",
+            "The year to express every amount in — 'real 2024 dollars' means base_year 2024. "
+            + "Required."));
+        inflProps.set("sql", prop("string",
+            "Optional SQL SELECT returning a nominal amount column and a year column, one row "
+            + "per observation. Each row comes back with the deflated amount added. Omit to "
+            + "convert a single amount instead, via amount + from_year."));
+        inflProps.set("value_col", prop("string",
+            "With sql: the column holding the nominal amount."));
+        inflProps.set("year_col", prop("string",
+            "With sql: the column holding the year the amount is denominated in."));
+        inflProps.set("amount", prop("number",
+            "Without sql: a single nominal amount to convert."));
+        inflProps.set("from_year", prop("integer",
+            "Without sql: the year that amount is denominated in."));
+        inflProps.set("index", prop("string",
+            "'cpi_u' (default — CPI-U all items, BLS series CUUR0000SA0) or 'cpi_u_core' "
+            + "(all items less food and energy, CUUR0000SA0L1E). Use one consistently across "
+            + "an analysis; mixing them makes two figures incomparable."));
+        tools.add(
+            tool("adjust_inflation",
+            "Convert nominal dollars to real (inflation-adjusted) dollars against one "
+            + "server-side CPI vintage — annual averages of the BLS CPI-U series held in "
+            + "econ.inflation_metrics, not a figure recalled from memory. Use whenever "
+            + "comparing dollar amounts across years: spending, wages, revenue, damages, "
+            + "budgets. An unadjusted multi-year dollar comparison is wrong by however much "
+            + "prices moved, which over a decade is most of the effect people report. "
+            + "Returns the CPI index and deflator used for every year so the arithmetic is "
+            + "checkable, and fails loudly rather than guessing when a year has no loaded CPI.",
+            schema(inflProps, new String[]{"base_year"})));
 
         ObjectNode alignProps = MAPPER.createObjectNode();
         ObjectNode seriesProp = MAPPER.createObjectNode();
@@ -708,6 +770,36 @@ public class McpServer {
             + "over years) or error variance plausibly isn't constant — both are common in "
             + "state/county panel data and understate uncertainty if ignored.",
             schema(robustProps, new String[]{"sql", "outcome", "predictors"})));
+
+        ObjectNode sensProps = MAPPER.createObjectNode();
+        sensProps.set("sql", prop("string",
+            "SQL SELECT returning the outcome, predictor, and group columns needed below, "
+            + "one row per observation. Use the SAME SQL you ran through ols_regression / "
+            + "panel_fixed_effects / robust_regression."));
+        sensProps.set("outcome", prop("string", "Column name of the dependent variable (y)."));
+        ObjectNode sensPredictorsProp = MAPPER.createObjectNode();
+        sensPredictorsProp.put("type", "array");
+        sensPredictorsProp.put("description", "Column names of the predictor variables.");
+        sensProps.set("predictors", sensPredictorsProp);
+        sensProps.set("group_col", prop("string",
+            "Column identifying the unit to leave out one at a time — usually the "
+            + "jurisdiction (state_fips, state_abbr, county_fips), but any grouping whose "
+            + "influence you want tested works. Max 200 distinct values."));
+        sensProps.set("term", prop("string",
+            "Which coefficient to track across the refits. Defaults to the first predictor. "
+            + "Use 'intercept' to track the intercept."));
+        tools.add(
+            tool("sensitivity_analysis",
+            "Refit a regression once per jurisdiction with that jurisdiction's rows removed, "
+            + "and report how far the coefficient moves. Answers the question a single "
+            + "regression cannot: is this result the pattern across units, or is one outlier "
+            + "carrying it? Reports the coefficient range across refits, which group moves it "
+            + "most (standardized DFBETA influence), and whether dropping any single group "
+            + "flips the sign or crosses p=0.05. Run this before reporting any regression "
+            + "result as a finding — DC, Alaska, Wyoming, and single-refinery or "
+            + "single-hospital counties routinely drive national estimates, and a result that "
+            + "survives leave-one-out is a much stronger claim than one that was never tested.",
+            schema(sensProps, new String[]{"sql", "outcome", "predictors", "group_col"})));
 
         ObjectNode flexProps = MAPPER.createObjectNode();
         flexProps.set("sql", prop("string",
@@ -1102,6 +1194,45 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=fetch_aligned_series on=" + on
                         + " stat=" + stat);
                     text = fetchAlignedSeries(seriesNode, on, stat, alignLimit);
+                    break;
+                }
+                case "data_coverage": {
+                    String schema = args.path("schema").asText();
+                    String table = args.path("table").asText();
+                    log.println("[askamerica-mcp] tool=data_coverage " + schema + "." + table);
+                    text = dataCoverage(schema, table);
+                    break;
+                }
+                case "adjust_inflation": {
+                    int baseYear = args.path("base_year").asInt();
+                    String sql = args.has("sql") && !args.get("sql").isNull()
+                        ? args.get("sql").asText() : null;
+                    String valueCol = args.has("value_col") && !args.get("value_col").isNull()
+                        ? args.get("value_col").asText() : null;
+                    String yearCol = args.has("year_col") && !args.get("year_col").isNull()
+                        ? args.get("year_col").asText() : null;
+                    Double amount = args.has("amount") && !args.get("amount").isNull()
+                        ? Double.valueOf(args.get("amount").asDouble()) : null;
+                    Integer fromYear = args.has("from_year") && !args.get("from_year").isNull()
+                        ? Integer.valueOf(args.get("from_year").asInt()) : null;
+                    String index = args.has("index") && !args.get("index").isNull()
+                        ? args.get("index").asText() : null;
+                    log.println("[askamerica-mcp] tool=adjust_inflation base_year=" + baseYear
+                        + " index=" + index + " mode=" + (sql != null ? "sql" : "scalar"));
+                    text = adjustInflationTool(baseYear, sql, valueCol, yearCol, amount,
+                        fromYear, index);
+                    break;
+                }
+                case "sensitivity_analysis": {
+                    String sql = args.path("sql").asText();
+                    String outcome = args.path("outcome").asText();
+                    List<String> predictors = textArray(args.path("predictors"));
+                    String groupCol = args.path("group_col").asText();
+                    String term = args.has("term") && !args.get("term").isNull()
+                        ? args.get("term").asText() : null;
+                    log.println("[askamerica-mcp] tool=sensitivity_analysis outcome=" + outcome
+                        + " group_col=" + groupCol);
+                    text = sensitivityAnalysisTool(sql, outcome, predictors, groupCol, term);
                     break;
                 }
                 case "ols_regression": {
@@ -1631,6 +1762,104 @@ public class McpServer {
         return out.toString();
     }
 
+    // ── data_coverage ────────────────────────────────────────────────────────
+
+    /**
+     * What a table actually holds, year by year, against what its schema declares.
+     *
+     * <p>{@code describe_table} answers with the declared window because it must stay fast.
+     * That window is a statement of intent, and the two diverge for ordinary reasons — a
+     * backfill still running, a source that skipped a year, a partition that failed to
+     * materialize and was never retried. The difference is invisible in query results: a
+     * year that was never loaded returns the same empty set as a year that genuinely holds
+     * no matching rows, and an average over a series with a hole in it is computed over the
+     * years that survived without saying so.
+     *
+     * <p>So this runs the scan the fast path refuses to, and reports both windows plus the
+     * years each one has that the other does not.
+     */
+    private static String dataCoverage(String schema, String table) throws Exception {
+        String s = safeIdent(schema);
+        String t = safeIdent(table);
+
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("schema", s);
+        out.put("table", t);
+
+        ObjectNode declared = Catalog.coverage(s, t);
+        String yearCol = declared != null
+            ? declared.path("column").asText("year") : yearColumnOf(s, t);
+        if (yearCol == null) {
+            out.put("status", "no_year_column");
+            out.put("note", "This table has no year column to scan, so it has no year "
+                + "coverage to report. Either it is a reference table that carries no time "
+                + "dimension, or the name is wrong — check list_tables(" + s + ").");
+            return out.toString();
+        }
+        out.put("year_column", yearCol);
+        if (declared != null) {
+            out.set("declared", declared);
+        }
+
+        IngestedYears.Result r = IngestedYears.measure(s, t, yearCol);
+        if (r == null) {
+            out.put("status", "measuring");
+            out.put("note", "The scan did not finish in time and is still running — it will "
+                + "be cached when it lands, so calling data_coverage again shortly will "
+                + "return it. No coverage is reported here; do not read this as an empty "
+                + "table.");
+            return out.toString();
+        }
+        out.set("observed", IngestedYears.detail(r));
+
+        if (declared != null && r.status == null) {
+            out.set("missing_vs_declared", IngestedYears.missingVersusDeclared(r,
+                intOrNull(declared, "first_year"), intOrNull(declared, "last_year")));
+        }
+        out.put("note", "observed.years_present and observed.rows_by_year come from a row "
+            + "scan of this table, not from the schema. interior_gaps are years between the "
+            + "first and last loaded year that hold no rows at all — a series crossing one "
+            + "is discontinuous, and any trend, year-over-year change, or regression over it "
+            + "silently spans the hole. missing_vs_declared are years the schema declares "
+            + "but the table does not hold. A year that IS present may still be partially "
+            + "loaded: this counts rows, it does not verify that a year is complete.");
+        log.println("[askamerica-mcp] data_coverage " + s + "." + t
+            + " status=" + (r.status == null ? "measured" : r.status));
+        return out.toString();
+    }
+
+    private static Integer intOrNull(ObjectNode n, String field) {
+        return n.hasNonNull(field) ? Integer.valueOf(n.get(field).asInt()) : null;
+    }
+
+    /**
+     * The year column of a table that declares no coverage window — views, mostly. Reads the
+     * resolved row type rather than the catalog, which is why it can answer for a view at
+     * all. Throws when the table itself is unknown, since reporting "no year column" for a
+     * misspelled name would send the caller looking for the wrong problem.
+     */
+    private static String yearColumnOf(String schema, String table) throws Exception {
+        Connection c = getCatalogConnection();
+        ArrayNode cols = MAPPER.createArrayNode();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT column_name, data_type FROM information_schema.columns "
+                 + "WHERE lower(table_schema) = '" + schema + "' "
+                 + "AND lower(table_name) = '" + table + "' ORDER BY ordinal_position")) {
+            while (rs.next()) {
+                ObjectNode col = MAPPER.createObjectNode();
+                col.put("name", rs.getString(1));
+                col.put("type", rs.getString(2));
+                cols.add(col);
+            }
+        }
+        if (cols.size() == 0) {
+            throw new IllegalArgumentException("no table or view named " + schema + "."
+                + table + " — call list_tables('" + schema + "') for the names that exist");
+        }
+        return resolvedYearColumn(cols);
+    }
+
     /**
      * The year-like column in a resolved row type, or null. Restricted to integral types so
      * a probe never runs MIN/MAX over a date or over a string that merely happens to be
@@ -1965,6 +2194,319 @@ public class McpServer {
 
     private static String resolveGeo(String term, String level, String withinState) throws Exception {
         return runSqlOn(buildResolveSql(term, level, withinState, 50), 50);
+    }
+
+    // ── adjust_inflation ─────────────────────────────────────────────────────
+
+    /**
+     * The CPI series this server will deflate against, keyed by the {@code index} argument.
+     *
+     * <p>Fixed here rather than taken from the caller so that every deflation in a session —
+     * and across sessions — runs against the same definition. A caller free to name its own
+     * series can produce two figures that look comparable and are not, and the difference
+     * between CPI-U and CPI-U-core over a decade is large enough to reverse a finding.
+     * econ.inflation_metrics also carries a PPI series, which is not a consumer deflator and
+     * is deliberately unreachable from this tool.
+     */
+    private static final java.util.Map<String, String> CPI_SERIES;
+
+    static {
+        java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+        m.put("cpi_u", "CUUR0000SA0");
+        m.put("cpi_u_core", "CUUR0000SA0L1E");
+        CPI_SERIES = java.util.Collections.unmodifiableMap(m);
+    }
+
+    /** One year's CPI: the annual average, and how many monthly readings it averages. */
+    static final class CpiYear {
+        final double index;
+        final int months;
+
+        CpiYear(double index, int months) {
+            this.index = index;
+            this.months = months;
+        }
+    }
+
+    /** The BLS series id for an {@code index} argument, or a failure naming the choices. */
+    static String cpiSeriesFor(String index) {
+        String key = (index == null || index.isEmpty()) ? "cpi_u" : index;
+        String series = CPI_SERIES.get(key);
+        if (series == null) {
+            throw new IllegalArgumentException("index must be one of " + CPI_SERIES.keySet()
+                + "; got '" + key + "'");
+        }
+        return series;
+    }
+
+    /**
+     * The part of an adjust_inflation answer that describes the deflator itself: which series,
+     * which base year, what its index is, and which loaded years average fewer than twelve
+     * months. Built before any row is touched so a caller can see what the adjustment was made
+     * against even when the adjustment then fails.
+     */
+    static ObjectNode inflationHeader(String indexKey, String series, int baseYear,
+            java.util.Map<Integer, CpiYear> cpi) {
+        CpiYear base = cpi.get(Integer.valueOf(baseYear));
+        if (base == null) {
+            throw new IllegalArgumentException("no CPI loaded for base_year " + baseYear
+                + " — loaded CPI years are " + cpi.keySet() + ". Pick a base year inside "
+                + "that range, or run data_coverage('econ', 'inflation_metrics') to see what "
+                + "is loaded.");
+        }
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("index", indexKey);
+        out.put("series", series);
+        out.put("base_year", baseYear);
+        out.put("base_year_cpi", base.index);
+        out.put("base_year_months_averaged", base.months);
+        ArrayNode available = MAPPER.createArrayNode();
+        ArrayNode partial = MAPPER.createArrayNode();
+        for (java.util.Map.Entry<Integer, CpiYear> e : cpi.entrySet()) {
+            available.add(e.getKey().intValue());
+            if (e.getValue().months < 12) {
+                ObjectNode p = MAPPER.createObjectNode();
+                p.put("year", e.getKey().intValue());
+                p.put("months_averaged", e.getValue().months);
+                partial.add(p);
+            }
+        }
+        out.set("cpi_years_loaded", available);
+        if (partial.size() > 0) {
+            out.set("partial_cpi_years", partial);
+        }
+        if (base.months < 12) {
+            out.put("warning", "base_year " + baseYear + " averages only " + base.months
+                + " monthly CPI readings, not 12 — it is a partial-year mean, not an annual "
+                + "average, and figures expressed in it are not comparable to a full-year "
+                + "base. Prefer the most recent year with 12 months.");
+        }
+        return out;
+    }
+
+    /** Converts one amount and records both indices, so the arithmetic is checkable. */
+    static void scalarAdjustment(ObjectNode out, java.util.Map<Integer, CpiYear> cpi,
+            double amount, int fromYear, int baseYear) {
+        CpiYear from = cpi.get(Integer.valueOf(fromYear));
+        if (from == null) {
+            throw new IllegalArgumentException("no CPI loaded for from_year " + fromYear
+                + " — loaded CPI years are " + cpi.keySet());
+        }
+        double deflator = cpi.get(Integer.valueOf(baseYear)).index / from.index;
+        out.put("from_year", fromYear);
+        out.put("from_year_cpi", from.index);
+        out.put("nominal_amount", amount);
+        out.put("deflator", deflator);
+        out.put("real_amount", amount * deflator);
+    }
+
+    /**
+     * Annual-average CPI by year from econ.inflation_metrics, which holds the BLS monthly
+     * index levels.
+     *
+     * <p>The month count travels with each year because it decides whether the average is an
+     * annual average at all. The current year is always partial, and a schema whose ingest
+     * window is mid-backfill can leave any year short — deflating against a three-month mean
+     * and calling it 2026 dollars is wrong in a way no downstream consumer can detect, so the
+     * count is reported and short years are named.
+     */
+    private static java.util.Map<Integer, CpiYear> cpiByYear(String series) throws Exception {
+        Connection c = getCatalogConnection();
+        java.util.Map<Integer, CpiYear> out = new java.util.TreeMap<>();
+        // "year" and "value" are reserved identifiers in this lex, quoted here rather than
+        // left to quoteReservedIdentifiers — that pass only rewrites dot-adjacent tokens.
+        String sql = "SELECT t.\"year\", AVG(t.\"value\"), COUNT(t.\"value\") "
+            + "FROM econ.inflation_metrics t WHERE t.series = '" + series + "' "
+            + "GROUP BY t.\"year\" ORDER BY t.\"year\"";
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                // Read the year as text, not getInt: year is a hive partition column here and
+                // surfaces as VARCHAR, where the integer accessor throws outright.
+                String rawYear = rs.getString(1);
+                double avg = rs.getDouble(2);
+                if (rs.wasNull() || rawYear == null) {
+                    continue;
+                }
+                Integer y;
+                try {
+                    y = Integer.valueOf(rawYear.trim());
+                } catch (NumberFormatException e) {
+                    throw new IllegalStateException("econ.inflation_metrics has a year column "
+                        + "holding '" + rawYear + "', which is not a year — the CPI table "
+                        + "cannot be read as an annual series", e);
+                }
+                out.put(y, new CpiYear(avg, rs.getInt(3)));
+            }
+        }
+        if (out.isEmpty()) {
+            throw new IllegalStateException("econ.inflation_metrics holds no rows for series "
+                + series + " — the CPI table is not loaded in this deployment, so no "
+                + "inflation adjustment can be made. Do not substitute a remembered CPI "
+                + "figure; report the gap.");
+        }
+        return out;
+    }
+
+    /**
+     * Nominal to real, against one server-side CPI vintage.
+     *
+     * <p>Two modes, because both questions are asked: a whole result set gets each row
+     * deflated in place ({@code sql} + {@code value_col} + {@code year_col}), and a single
+     * figure gets converted on its own ({@code amount} + {@code from_year}).
+     *
+     * <p>A year with no loaded CPI is never deflated against a neighbouring year's index or
+     * an assumed rate — the row comes back with a null real value and a status naming the
+     * problem, and the years involved are listed at the top level.
+     */
+    private static String adjustInflationTool(int baseYear, String sql, String valueCol,
+            String yearCol, Double amount, Integer fromYear, String index) throws Exception {
+        String key = (index == null || index.isEmpty()) ? "cpi_u" : index;
+        String series = cpiSeriesFor(key);
+        java.util.Map<Integer, CpiYear> cpi = cpiByYear(series);
+        ObjectNode out = inflationHeader(key, series, baseYear, cpi);
+        CpiYear base = cpi.get(Integer.valueOf(baseYear));
+
+        if (sql != null && !sql.trim().isEmpty()) {
+            if (valueCol == null || yearCol == null) {
+                throw new IllegalArgumentException(
+                    "value_col and year_col are both required when sql is given");
+            }
+            adjustRows(out, sql, valueCol, yearCol, cpi, base, baseYear);
+        } else {
+            if (amount == null || fromYear == null) {
+                throw new IllegalArgumentException("give either sql + value_col + year_col to "
+                    + "deflate a result set, or amount + from_year to convert one figure");
+            }
+            scalarAdjustment(out, cpi, amount.doubleValue(), fromYear.intValue(), baseYear);
+        }
+
+        out.put("note", "Real amounts are nominal * (base-year CPI / source-year CPI), using "
+            + "annual averages of BLS " + series + " from econ.inflation_metrics. CPI-U "
+            + "measures urban consumer prices; it is the general-purpose deflator, not the "
+            + "right one for construction costs, medical inputs, or government purchases, "
+            + "each of which has its own index. Years with no loaded CPI are reported, never "
+            + "interpolated.");
+        return out.toString();
+    }
+
+    /** Deflates each row of {@code sql} in place, carrying every original column through. */
+    private static void adjustRows(ObjectNode out, String sql, String valueCol, String yearCol,
+            java.util.Map<Integer, CpiYear> cpi, CpiYear base, int baseYear) throws Exception {
+        Connection c = getCatalogConnection();
+        ArrayNode rows = MAPPER.createArrayNode();
+        java.util.Set<Integer> missing = new java.util.TreeSet<>();
+        int converted = 0;
+        String realCol = valueCol + "_real_" + baseYear;
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(quoteReservedIdentifiers(sql))) {
+            java.sql.ResultSetMetaData md = rs.getMetaData();
+            int cols = md.getColumnCount();
+            int valueIdx = rs.findColumn(valueCol);
+            int yearIdx = rs.findColumn(yearCol);
+            while (rs.next()) {
+                if (rows.size() >= MAX_LIMIT) {
+                    throw new IllegalArgumentException("the SQL returned more than " + MAX_LIMIT
+                        + " rows — aggregate it before deflating, or add a WHERE clause. "
+                        + "Every row is returned here, so this tool does not truncate.");
+                }
+                ObjectNode row = MAPPER.createObjectNode();
+                for (int i = 1; i <= cols; i++) {
+                    putColumn(row, md.getColumnLabel(i), md.getColumnType(i), rs, i);
+                }
+                double nominal = rs.getDouble(valueIdx);
+                boolean nominalNull = rs.wasNull();
+                // The year column is usually the table's hive partition column, which
+                // surfaces as VARCHAR — getInt throws on it, so parse the text instead.
+                Integer y = parseYear(rs.getString(yearIdx));
+                boolean yearNull = y == null;
+                CpiYear from = yearNull ? null : cpi.get(y);
+                if (nominalNull || yearNull) {
+                    row.putNull(realCol);
+                    row.put("adjustment_status", nominalNull ? "null_value" : "unreadable_year");
+                } else if (from == null) {
+                    missing.add(y);
+                    row.putNull(realCol);
+                    row.put("adjustment_status", "no_cpi_for_year");
+                } else {
+                    row.put(realCol, nominal * (base.index / from.index));
+                    row.put("cpi_deflator", base.index / from.index);
+                    converted++;
+                }
+                rows.add(row);
+            }
+        }
+        out.put("real_value_column", realCol);
+        out.put("rows_returned", rows.size());
+        out.put("rows_adjusted", converted);
+        if (!missing.isEmpty()) {
+            ArrayNode m = MAPPER.createArrayNode();
+            for (Integer y : missing) {
+                m.add(y.intValue());
+            }
+            out.set("years_without_loaded_cpi", m);
+        }
+        if (converted == 0 && rows.size() > 0) {
+            throw new IllegalStateException("not one of the " + rows.size() + " rows could be "
+                + "deflated: years present in the data " + missing + " have no loaded CPI. "
+                + "Check year_col names the year the amount is denominated in, and run "
+                + "data_coverage('econ', 'inflation_metrics').");
+        }
+        out.set("rows", rows);
+    }
+
+    /**
+     * A 4-digit year from a column that may be typed as either an integer or a hive partition
+     * string, or null when it holds neither. Null rather than a guess: a row whose year cannot
+     * be read is reported unadjusted, never deflated against an assumed year.
+     */
+    static Integer parseYear(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            int y = Integer.parseInt(raw.trim());
+            return (y >= 1800 && y <= 2200) ? Integer.valueOf(y) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Copies one result-set column into {@code row}, typed as JSON rather than stringified. */
+    private static void putColumn(ObjectNode row, String name, int t, ResultSet rs, int i)
+            throws java.sql.SQLException {
+        if (t == java.sql.Types.INTEGER || t == java.sql.Types.BIGINT
+                || t == java.sql.Types.SMALLINT || t == java.sql.Types.TINYINT) {
+            long v = rs.getLong(i);
+            if (rs.wasNull()) {
+                row.putNull(name);
+            } else {
+                row.put(name, v);
+            }
+        } else if (t == java.sql.Types.DOUBLE || t == java.sql.Types.FLOAT
+                || t == java.sql.Types.REAL || t == java.sql.Types.DECIMAL
+                || t == java.sql.Types.NUMERIC) {
+            double v = rs.getDouble(i);
+            if (rs.wasNull()) {
+                row.putNull(name);
+            } else {
+                row.put(name, v);
+            }
+        } else if (t == java.sql.Types.BOOLEAN || t == java.sql.Types.BIT) {
+            boolean v = rs.getBoolean(i);
+            if (rs.wasNull()) {
+                row.putNull(name);
+            } else {
+                row.put(name, v);
+            }
+        } else {
+            Object v = rs.getObject(i);
+            if (rs.wasNull() || v == null) {
+                row.putNull(name);
+            } else {
+                row.put(name, v.toString());
+            }
+        }
     }
 
     // ── fetch_aligned_series ─────────────────────────────────────────────────
@@ -2365,6 +2907,37 @@ public class McpServer {
         StatsEngine.RobustRegressionResult result = StatsEngine.robustRegression(y, x,
             predictors.toArray(new String[0]), null);
         ObjectNode out = result.toJson(MAPPER);
+        addExtractionMeta(out, ex);
+        return out.toString();
+    }
+
+    /**
+     * Leave-one-group-out refits of an OLS the caller has already run.
+     *
+     * <p>Deliberately re-extracts rather than reusing anything from the earlier call: the
+     * caller passes the same SQL, and this runs it again, so the sensitivity result cannot
+     * silently describe a different sample than the one it claims to test.
+     */
+    private static String sensitivityAnalysisTool(String sql, String outcome,
+            List<String> predictors, String groupCol, String term) throws Exception {
+        if (predictors.isEmpty()) {
+            throw new IllegalArgumentException("predictors must name at least one column");
+        }
+        List<String> numCols = new ArrayList<>();
+        numCols.add(outcome);
+        numCols.addAll(predictors);
+        Connection c = getCatalogConnection();
+        StatsEngine.LabeledExtraction ex = StatsEngine.extractColumnsWithLabels(c, sql,
+            numCols.toArray(new String[0]), new String[]{groupCol});
+        double[] y = ex.column(outcome);
+        double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
+        String[] groups = ex.labelColumn(groupCol);
+        String tracked = (term == null || term.isEmpty()) ? predictors.get(0) : term;
+        StatsEngine.SensitivityResult result =
+            StatsEngine.leaveOneGroupOut(y, x, predictors.toArray(new String[0]), groups,
+                tracked);
+        ObjectNode out = result.toJson(MAPPER);
+        out.put("group_column", groupCol);
         addExtractionMeta(out, ex);
         return out.toString();
     }

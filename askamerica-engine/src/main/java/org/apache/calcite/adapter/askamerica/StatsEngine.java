@@ -964,6 +964,239 @@ final class StatsEngine {
         }
     }
 
+    // ─── Leave-one-group-out sensitivity ────────────────────────────────────────
+
+    /** Refits beyond this and a single tool call turns into a multi-minute scan. The caller
+     *  is told to aggregate rather than being silently given a truncated sweep. */
+    private static final int MAX_SENSITIVITY_GROUPS = 200;
+
+    /**
+     * Refit the same OLS once per group with that group's rows removed, and report how far
+     * the tracked coefficient moves.
+     *
+     * <p>A regression over jurisdictions is routinely carried by one of them — DC, a census
+     * region with a single large state, one outlier county. The full-sample estimate cannot
+     * show this: it reports one number whether every unit agrees or a single unit supplies
+     * the whole effect. Dropping each group in turn is the cheapest test that distinguishes
+     * the two, and the only diagnostic here that can invalidate a headline result rather
+     * than decorate it.
+     *
+     * <p>{@code influence} is the standardized change in the tracked coefficient — the
+     * baseline estimate minus the leave-one-out estimate, divided by the leave-one-out
+     * standard error (DFBETA in standard-error units). It answers "would omitting this one
+     * group have moved the published number by more than its own uncertainty".
+     *
+     * <p>Groups whose removal leaves too few observations to estimate are reported as such,
+     * not skipped: a group large enough to break the model is the strongest possible
+     * statement about its influence.
+     */
+    static SensitivityResult leaveOneGroupOut(double[] y, double[][] x, String[] xNames,
+            String[] groupIds, String trackedTerm) {
+        if (y.length != groupIds.length) {
+            throw new IllegalArgumentException(
+                "y has " + y.length + " rows, group column has " + groupIds.length);
+        }
+        OlsResult baseline = ols(y, x, xNames);
+        int termIdx = indexOfName(baseline.names, trackedTerm);
+
+        // First-seen order, so the report reads in the order the SQL returned.
+        LinkedHashSet<String> groupSet = new LinkedHashSet<>(Arrays.asList(groupIds));
+        if (groupSet.size() > MAX_SENSITIVITY_GROUPS) {
+            throw new IllegalArgumentException("group column has " + groupSet.size()
+                + " distinct values — leave-one-out would run that many regressions. "
+                + "Aggregate to a coarser grouping (state rather than county, say) or "
+                + "restrict the SQL to the groups in question; the limit is "
+                + MAX_SENSITIVITY_GROUPS + ".");
+        }
+        if (groupSet.size() < 2) {
+            throw new IllegalArgumentException("group column has " + groupSet.size()
+                + " distinct value(s) — leave-one-out needs at least 2 groups to compare");
+        }
+
+        List<LeaveOneOut> drops = new ArrayList<>();
+        for (String group : groupSet) {
+            int kept = 0;
+            for (int i = 0; i < groupIds.length; i++) {
+                if (!group.equals(groupIds[i])) {
+                    kept++;
+                }
+            }
+            int dropped = y.length - kept;
+            // ols() needs n - k - 1 >= 1 to have any residual degrees of freedom left.
+            if (kept < xNames.length + 2) {
+                drops.add(new LeaveOneOut(group, dropped, kept));
+                continue;
+            }
+            double[] subY = new double[kept];
+            double[][] subX = new double[kept][];
+            int w = 0;
+            for (int i = 0; i < groupIds.length; i++) {
+                if (!group.equals(groupIds[i])) {
+                    subY[w] = y[i];
+                    subX[w] = x[i];
+                    w++;
+                }
+            }
+            OlsResult refit = ols(subY, subX, xNames);
+            double coef = refit.coef[termIdx];
+            double se = refit.se[termIdx];
+            double influence = se == 0 ? Double.NaN
+                : (baseline.coef[termIdx] - coef) / se;
+            drops.add(new LeaveOneOut(group, dropped, kept, coef, se,
+                refit.pValue[termIdx], influence));
+        }
+        return new SensitivityResult(baseline, baseline.names[termIdx], drops);
+    }
+
+    private static int indexOfName(String[] names, String term) {
+        for (int i = 0; i < names.length; i++) {
+            if (names[i].equals(term)) {
+                return i;
+            }
+        }
+        throw new IllegalArgumentException("term '" + term + "' is not one of "
+            + Arrays.toString(names));
+    }
+
+    /** One refit: the group held out, and the tracked coefficient without it. */
+    static final class LeaveOneOut {
+        final String group;
+        final int rowsDropped;
+        final int rowsKept;
+        final boolean estimable;
+        final double coef;
+        final double se;
+        final double pValue;
+        final double influence;
+
+        /** A group whose removal leaves too few rows to estimate. */
+        LeaveOneOut(String group, int rowsDropped, int rowsKept) {
+            this(group, rowsDropped, rowsKept, false, Double.NaN, Double.NaN, Double.NaN,
+                Double.NaN);
+        }
+
+        LeaveOneOut(String group, int rowsDropped, int rowsKept, double coef, double se,
+                double pValue, double influence) {
+            this(group, rowsDropped, rowsKept, true, coef, se, pValue, influence);
+        }
+
+        private LeaveOneOut(String group, int rowsDropped, int rowsKept, boolean estimable,
+                double coef, double se, double pValue, double influence) {
+            this.group = group;
+            this.rowsDropped = rowsDropped;
+            this.rowsKept = rowsKept;
+            this.estimable = estimable;
+            this.coef = coef;
+            this.se = se;
+            this.pValue = pValue;
+            this.influence = influence;
+        }
+    }
+
+    static final class SensitivityResult {
+        final OlsResult baseline;
+        final String term;
+        final List<LeaveOneOut> drops;
+
+        SensitivityResult(OlsResult baseline, String term, List<LeaveOneOut> drops) {
+            this.baseline = baseline;
+            this.term = term;
+            this.drops = drops;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("term", term);
+            int termIdx = indexOfName(baseline.names, term);
+            double baseCoef = baseline.coef[termIdx];
+            double baseP = baseline.pValue[termIdx];
+
+            ObjectNode base = mapper.createObjectNode();
+            base.put("coefficient", baseCoef);
+            base.put("std_error", baseline.se[termIdx]);
+            base.put("p_value", baseP);
+            base.put("n", baseline.n);
+            out.set("full_sample", base);
+
+            ArrayNode arr = mapper.createArrayNode();
+            String maxGroup = null;
+            double maxAbsInfluence = 0;
+            double minCoef = Double.POSITIVE_INFINITY;
+            double maxCoef = Double.NEGATIVE_INFINITY;
+            boolean signFlips = false;
+            boolean significanceFlips = false;
+            boolean anyInestimable = false;
+            int estimated = 0;
+            for (LeaveOneOut d : drops) {
+                ObjectNode n = mapper.createObjectNode();
+                n.put("group_omitted", d.group);
+                n.put("rows_dropped", d.rowsDropped);
+                n.put("rows_kept", d.rowsKept);
+                if (!d.estimable) {
+                    anyInestimable = true;
+                    n.put("status", "not_estimable");
+                    n.put("note", "Omitting this group leaves too few observations to fit "
+                        + "the model — the estimate depends on it entirely.");
+                    arr.add(n);
+                    continue;
+                }
+                estimated++;
+                n.put("coefficient", d.coef);
+                n.put("std_error", d.se);
+                n.put("p_value", d.pValue);
+                n.put("influence", d.influence);
+                boolean flipped = (baseCoef > 0 && d.coef < 0) || (baseCoef < 0 && d.coef > 0);
+                if (flipped) {
+                    signFlips = true;
+                    n.put("sign_flipped", true);
+                }
+                // 0.05 is a convention, not a threshold this tool endorses — it is reported
+                // because a result that crosses it when one group leaves is exactly the case
+                // a reader needs told.
+                boolean sigFlip = (baseP < 0.05) != (d.pValue < 0.05);
+                if (sigFlip) {
+                    significanceFlips = true;
+                    n.put("significance_flipped_at_0_05", true);
+                }
+                minCoef = Math.min(minCoef, d.coef);
+                maxCoef = Math.max(maxCoef, d.coef);
+                if (!Double.isNaN(d.influence) && Math.abs(d.influence) > maxAbsInfluence) {
+                    maxAbsInfluence = Math.abs(d.influence);
+                    maxGroup = d.group;
+                }
+                arr.add(n);
+            }
+            out.set("leave_one_out", arr);
+
+            ObjectNode summary = mapper.createObjectNode();
+            summary.put("groups_tested", drops.size());
+            summary.put("groups_estimated", estimated);
+            if (estimated > 0) {
+                summary.put("coefficient_min", minCoef);
+                summary.put("coefficient_max", maxCoef);
+                summary.put("coefficient_range", maxCoef - minCoef);
+            }
+            if (maxGroup != null) {
+                summary.put("most_influential_group", maxGroup);
+                summary.put("max_abs_influence", maxAbsInfluence);
+            }
+            summary.put("sign_flips", signFlips);
+            summary.put("significance_flips_at_0_05", significanceFlips);
+            summary.put("robust", !signFlips && !significanceFlips && !anyInestimable
+                && maxAbsInfluence < 1.0);
+            out.set("summary", summary);
+
+            out.put("note", "influence is (full-sample coefficient − leave-one-out "
+                + "coefficient) / leave-one-out standard error: how far omitting one group "
+                + "moves the estimate, in that estimate's own standard-error units. "
+                + "|influence| above 1 means a single group moves the answer by more than "
+                + "its uncertainty. 'robust' is a summary of the checks run here (no sign "
+                + "flip, no crossing of p=0.05, every group droppable, all |influence| < 1) "
+                + "— it is not a general claim that the specification is correct.");
+            return out;
+        }
+    }
+
     // ─── Hypothesis tests ───────────────────────────────────────────────────────
 
     /** Two-sample or one-sample t-test, one-way ANOVA, chi-square test of independence, or
