@@ -224,6 +224,13 @@ run_one() {
         echo "$rc" > "$_outdir/$s.rc"
     } > "$_outdir/$s.out" 2>&1
     [[ -n "$probe" ]] && rm -f "$probe"
+    # Always succeed: the dispatch loop below uses `wait -n`'s status purely for flow control,
+    # and a non-zero return there trips its `|| wait` fallback into waiting for EVERY in-flight
+    # schema — collapsing rolling concurrency into barriered batches. Without this, the trailing
+    # `[[ -n "$probe" ]]` short-circuits to false for every schema that has no probe file (all but
+    # geo/lands/census/sec) and the function returns 1. Per-schema pass/fail is read from
+    # "$_outdir/$s.rc", never from this status.
+    return 0
 }
 
 _running=0
