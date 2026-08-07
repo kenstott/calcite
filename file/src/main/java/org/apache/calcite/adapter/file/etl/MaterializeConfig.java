@@ -503,7 +503,6 @@ public class MaterializeConfig {
     private final String appendWhenOperand;
     private final String appendWhenValue;
     private final int incrementalTtlDays;
-    private final ReleaseWindowConfig releaseWindow;
 
     private IcebergConfig(IcebergConfigBuilder builder) {
       this.catalogType = builder.catalogType != null ? builder.catalogType : CatalogType.HADOOP;
@@ -532,71 +531,6 @@ public class MaterializeConfig {
       this.appendWhenOperand = builder.appendWhenOperand;
       this.appendWhenValue = builder.appendWhenValue;
       this.incrementalTtlDays = builder.incrementalTtlDays;
-      this.releaseWindow = builder.releaseWindow;
-    }
-
-    /**
-     * Release-window guard for incremental TTL: restricts which calendar months
-     * (and optionally whether the year is odd or even) trigger re-ingestion.
-     */
-    public static class ReleaseWindowConfig {
-      private final List<Integer> months;
-      private final String yearParity;
-
-      private ReleaseWindowConfig(List<Integer> months, String yearParity) {
-        this.months = months != null
-            ? Collections.unmodifiableList(new ArrayList<Integer>(months))
-            : Collections.<Integer>emptyList();
-        this.yearParity = yearParity;
-      }
-
-      public List<Integer> getMonths() {
-        return months;
-      }
-
-      public String getYearParity() {
-        return yearParity;
-      }
-
-      /** Returns true if today falls within this release window. */
-      public boolean isWithinWindow() {
-        java.util.Calendar now = java.util.Calendar.getInstance();
-        int currentMonth = now.get(java.util.Calendar.MONTH) + 1; // 1-based
-        int currentYear = now.get(java.util.Calendar.YEAR);
-
-        if (!months.isEmpty() && !months.contains(currentMonth)) {
-          return false;
-        }
-        if ("odd".equals(yearParity) && currentYear % 2 == 0) {
-          return false;
-        }
-        if ("even".equals(yearParity) && currentYear % 2 != 0) {
-          return false;
-        }
-        return true;
-      }
-
-      @SuppressWarnings("unchecked")
-      public static ReleaseWindowConfig fromMap(Map<String, Object> map) {
-        if (map == null) {
-          return null;
-        }
-        List<Integer> months = new ArrayList<Integer>();
-        Object monthsObj = map.get("months");
-        if (monthsObj instanceof List) {
-          for (Object m : (List<?>) monthsObj) {
-            if (m instanceof Number) {
-              months.add(((Number) m).intValue());
-            }
-          }
-        }
-        String yearParity = null;
-        Object parityObj = map.get("yearParity");
-        if (parityObj instanceof String) {
-          yearParity = (String) parityObj;
-        }
-        return new ReleaseWindowConfig(months, yearParity);
-      }
     }
 
     public CatalogType getCatalogType() {
@@ -696,10 +630,6 @@ public class MaterializeConfig {
     @Deprecated
     public long getIncrementalTtlMillis() {
       return incrementalTtlDays * 24L * 60 * 60 * 1000;
-    }
-
-    public ReleaseWindowConfig getReleaseWindow() {
-      return releaseWindow;
     }
 
     public static IcebergConfigBuilder builder() {
@@ -815,11 +745,6 @@ public class MaterializeConfig {
         builder.incrementalTtlDays(((Number) ttlObj).intValue());
       }
 
-      Object rwObj = map.get("releaseWindow");
-      if (rwObj instanceof Map) {
-        builder.releaseWindow(ReleaseWindowConfig.fromMap((Map<String, Object>) rwObj));
-      }
-
       return builder.build();
     }
 
@@ -860,7 +785,6 @@ public class MaterializeConfig {
       private String appendWhenOperand;
       private String appendWhenValue;
       private int incrementalTtlDays;
-      private ReleaseWindowConfig releaseWindow;
 
       public IcebergConfigBuilder catalogType(CatalogType catalogType) {
         this.catalogType = catalogType;
@@ -949,11 +873,6 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder incrementalTtlDays(int incrementalTtlDays) {
         this.incrementalTtlDays = incrementalTtlDays;
-        return this;
-      }
-
-      public IcebergConfigBuilder releaseWindow(ReleaseWindowConfig releaseWindow) {
-        this.releaseWindow = releaseWindow;
         return this;
       }
 

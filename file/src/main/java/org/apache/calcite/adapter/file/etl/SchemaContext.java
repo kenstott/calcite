@@ -35,6 +35,7 @@ public class SchemaContext {
   private final String sourceDirectory;
   private final String materializeDirectory;
   private final String operatingDirectory;
+  private final boolean ignoreReleaseWindow;
   private final Map<String, Object> attributes;
 
   private SchemaContext(Builder builder) {
@@ -48,6 +49,7 @@ public class SchemaContext {
     this.sourceDirectory = builder.sourceDirectory;
     this.materializeDirectory = builder.materializeDirectory;
     this.operatingDirectory = builder.operatingDirectory;
+    this.ignoreReleaseWindow = builder.ignoreReleaseWindow;
     this.attributes = new HashMap<String, Object>();
   }
 
@@ -120,6 +122,14 @@ public class SchemaContext {
    */
   public String getOperatingDirectory() {
     return operatingDirectory;
+  }
+
+  /**
+   * Returns whether the {@code releaseWindow:} gate should be bypassed for this run (the
+   * {@code ignoreReleaseWindow} schema operand, threaded through {@code FileSchemaBuilder}).
+   */
+  public boolean isIgnoreReleaseWindow() {
+    return ignoreReleaseWindow;
   }
 
   /**
@@ -214,6 +224,7 @@ public class SchemaContext {
     private String sourceDirectory;
     private String materializeDirectory;
     private String operatingDirectory;
+    private boolean ignoreReleaseWindow;
 
     public Builder config(SchemaConfig config) {
       this.config = config;
@@ -264,6 +275,14 @@ public class SchemaContext {
     @Deprecated
     public Builder baseDirectory(String baseDirectory) {
       this.materializeDirectory = baseDirectory;
+      return this;
+    }
+
+    /**
+     * Sets whether the {@code releaseWindow:} gate should be bypassed for this run.
+     */
+    public Builder ignoreReleaseWindow(boolean ignoreReleaseWindow) {
+      this.ignoreReleaseWindow = ignoreReleaseWindow;
       return this;
     }
 

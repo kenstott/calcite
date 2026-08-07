@@ -94,6 +94,7 @@ public class EtlPipeline {
   private final String operatingDirectory;
   private final DataProvider dataProvider;
   private final DataWriter dataWriter;
+  private final boolean ignoreReleaseWindow;
 
   /** Lock serializing all writer and tracker operations when parallel threads are active. */
   private final Object writeLock = new Object();
@@ -232,6 +233,33 @@ public class EtlPipeline {
       StorageProvider sourceStorageProvider, String baseDirectory,
       ProgressListener progressListener, IncrementalTracker incrementalTracker,
       DataProvider dataProvider, DataWriter dataWriter, String operatingDirectory) {
+    this(config, storageProvider, sourceStorageProvider, baseDirectory, progressListener,
+        incrementalTracker, dataProvider, dataWriter, operatingDirectory, false);
+  }
+
+  /**
+   * Creates a new ETL pipeline with every option, including the release-window force-bypass
+   * flag.
+   *
+   * @param config Pipeline configuration
+   * @param storageProvider Storage provider for materialized output (parquet)
+   * @param sourceStorageProvider Storage provider for raw cache; if null, uses storageProvider
+   * @param baseDirectory Base directory for output (parquet/materialized data)
+   * @param progressListener Listener for progress updates
+   * @param incrementalTracker Tracker for incremental processing
+   * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
+   * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
+   * @param operatingDirectory Operating directory for local caching; may be null
+   * @param ignoreReleaseWindow When true, bypasses the table's {@code releaseWindow:} gate (see
+   *     {@link EtlPipelineConfig#getReleaseWindow()}) for this run — the effect of the
+   *     {@code ignoreReleaseWindow} schema operand, threaded through
+   *     {@code org.apache.calcite.adapter.file.FileSchemaBuilder}
+   */
+  public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
+      StorageProvider sourceStorageProvider, String baseDirectory,
+      ProgressListener progressListener, IncrementalTracker incrementalTracker,
+      DataProvider dataProvider, DataWriter dataWriter, String operatingDirectory,
+      boolean ignoreReleaseWindow) {
     this.config = config;
     this.storageProvider = storageProvider;
     // Default to main storageProvider if sourceStorageProvider not specified
@@ -242,6 +270,7 @@ public class EtlPipeline {
     this.operatingDirectory = operatingDirectory;
     this.dataProvider = dataProvider;
     this.dataWriter = dataWriter;
+    this.ignoreReleaseWindow = ignoreReleaseWindow;
   }
 
   /**
@@ -261,6 +290,34 @@ public class EtlPipeline {
     String pipelineName = config.getName();
     LOGGER.info("Starting ETL pipeline: {}", pipelineName);
     long startTime = System.currentTimeMillis();
+
+    // Release-window gate: a table-root `releaseWindow:` block restricts which calendar
+    // months, days of week, and/or year parity this table's ETL is allowed to run in (e.g.
+    // CMS hospital quality data only publishes July-October). Checked first — before any
+    // dimension expansion, tracker lookup, or data-source work — so an out-of-window run is
+    // one log line with no network I/O and no model file written. `ignoreReleaseWindow` (the
+    // schema operand of the same name, threaded through FileSchemaBuilder) force-bypasses it.
+    ReleaseWindowConfig releaseWindow = config.getReleaseWindow();
+    if (releaseWindow != null) {
+      String failureReason = releaseWindow.checkFailureReason(currentDate());
+      if (failureReason != null) {
+        if (ignoreReleaseWindow) {
+          LOGGER.info("Pipeline '{}': outside release window ({}) but ignoreReleaseWindow=true "
+              + "— proceeding", pipelineName, failureReason);
+        } else {
+          long elapsed = System.currentTimeMillis() - startTime;
+          LOGGER.info("Pipeline '{}': outside release window — {} — skipping ({}ms)",
+              pipelineName, failureReason, elapsed);
+          return EtlResult.builder()
+              .pipelineName(pipelineName)
+              .totalRows(0)
+              .successfulBatches(0)
+              .skippedBatches(1)
+              .elapsedMs(elapsed)
+              .build();
+        }
+      }
+    }
 
     // Memory tracking
     List<MemorySnapshot> memSnapshots = new ArrayList<MemorySnapshot>();
@@ -2381,6 +2438,16 @@ public class EtlPipeline {
     }
 
     return errorHandling.getApiErrorAction();
+  }
+
+  /**
+   * Returns "today" for the {@code releaseWindow:} gate. UTC-based (not the JVM's local
+   * timezone) so month/day-of-week/year-parity checks are deterministic regardless of where
+   * the pipeline runs. Overridable by tests to inject a fixed date instead of depending on
+   * wall-clock {@code now()}.
+   */
+  protected java.time.LocalDate currentDate() {
+    return java.time.LocalDate.now(java.time.ZoneOffset.UTC);
   }
 
   /**

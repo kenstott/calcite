@@ -87,6 +87,7 @@ public class EtlPipelineConfig {
   private final ErrorHandlingConfig errorHandling;
   private final HooksConfig hooks;
   private final FreshnessConfig freshness;
+  private final ReleaseWindowConfig releaseWindow;
   private final String datasetType;
   private final String backfillPeriod;
   private final int dqRowLimit;
@@ -111,6 +112,7 @@ public class EtlPipelineConfig {
         ? builder.hooks
         : HooksConfig.empty();
     this.freshness = builder.freshness;
+    this.releaseWindow = builder.releaseWindow;
     this.datasetType = builder.datasetType != null ? builder.datasetType : "delta";
     this.backfillPeriod = builder.backfillPeriod;
     this.dqRowLimit = builder.dqRowLimit;
@@ -195,6 +197,14 @@ public class EtlPipelineConfig {
   /** Optional freshness check (snapshot/computed_delta); null = off. */
   public FreshnessConfig getFreshness() {
     return freshness;
+  }
+
+  /**
+   * Optional release-window gate: restricts which calendar months, days of week, and/or year
+   * parity this table's ETL is allowed to run in; null = no constraint (always runs).
+   */
+  public ReleaseWindowConfig getReleaseWindow() {
+    return releaseWindow;
   }
 
   /** Dataset type: {@code snapshot | delta | computed_delta}. Defaults to {@code delta}. */
@@ -334,6 +344,11 @@ public class EtlPipelineConfig {
     Map<String, Object> freshnessMap = toMap(map.get("freshness"));
     if (freshnessMap != null) {
       builder.freshness(FreshnessConfig.fromMap(freshnessMap));
+    }
+
+    Map<String, Object> releaseWindowMap = toMap(map.get("releaseWindow"));
+    if (releaseWindowMap != null) {
+      builder.releaseWindow(ReleaseWindowConfig.fromMap(releaseWindowMap));
     }
 
     Object datasetTypeObj = map.get("dataset_type");
@@ -667,6 +682,7 @@ public class EtlPipelineConfig {
     private ErrorHandlingConfig errorHandling;
     private HooksConfig hooks;
     private FreshnessConfig freshness;
+    private ReleaseWindowConfig releaseWindow;
     private String datasetType;
     private String backfillPeriod;
     private int dqRowLimit;
@@ -723,6 +739,11 @@ public class EtlPipelineConfig {
 
     public Builder freshness(FreshnessConfig freshness) {
       this.freshness = freshness;
+      return this;
+    }
+
+    public Builder releaseWindow(ReleaseWindowConfig releaseWindow) {
+      this.releaseWindow = releaseWindow;
       return this;
     }
 

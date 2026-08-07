@@ -240,6 +240,9 @@ public class ModelLifecycleProcessor {
     // Set auto-download based on factory preference
     builder.autoDownload(def.factory.shouldAutoDownload(def.operand));
 
+    // Set release-window force-bypass based on factory preference
+    builder.ignoreReleaseWindow(def.factory.shouldIgnoreReleaseWindow(def.operand));
+
     // Build the schema (triggers ETL if autoDownload is enabled)
     return builder.build(parentSchema, def.name);
   }

@@ -55,6 +55,7 @@ public class FileSchemaBuilder {
   private SchemaLifecycleProcessor.Builder etlBuilder;
   private java.util.Set<String> excludedTables = new java.util.HashSet<>();
   private boolean autoDownload = false;
+  private boolean ignoreReleaseWindow = false;
   private boolean etlExecuted = false;
   private StorageProvider storageProvider;
   private StorageProvider cacheStorageProvider;
@@ -220,6 +221,24 @@ public class FileSchemaBuilder {
    */
   public FileSchemaBuilder autoDownload(boolean enabled) {
     this.autoDownload = enabled;
+    return this;
+  }
+
+  /**
+   * Force-bypass each table's {@code releaseWindow:} gate for this run (the
+   * {@code ignoreReleaseWindow} operand, threaded through to
+   * {@code org.apache.calcite.adapter.file.etl.EtlPipeline} via
+   * {@link SchemaLifecycleProcessor.Builder#ignoreReleaseWindow(boolean)}).
+   *
+   * <p>Defaults to {@code false}: a table with a {@code releaseWindow:} block outside its
+   * configured window skips normally. Set {@code true} to force every table to run
+   * regardless of its release window (e.g. a manually-triggered backfill).
+   *
+   * @param enabled true to bypass release-window gating, false (default) to enforce it
+   */
+  public FileSchemaBuilder ignoreReleaseWindow(boolean enabled) {
+    this.ignoreReleaseWindow = enabled;
+    etlBuilder.ignoreReleaseWindow(enabled);
     return this;
   }
 

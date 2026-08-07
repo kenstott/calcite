@@ -109,6 +109,31 @@ public interface SubSchemaFactory {
   }
 
   /**
+   * Check if each table's {@code releaseWindow:} gate should be bypassed for this run.
+   *
+   * <p>When enabled, every table's ETL pipeline runs regardless of its configured
+   * {@code releaseWindow:} (months/dow/yearParity) — e.g. for a manually-triggered backfill
+   * outside the normal publish cadence.
+   *
+   * <p>Defaults to {@code false}: the gate is enforced unless explicitly bypassed via
+   * {@code "ignoreReleaseWindow": true} in the operand (as the ETL runner's models can set for
+   * a forced run).
+   *
+   * @param operand Configuration map
+   * @return true if the release-window gate should be bypassed (default: false)
+   */
+  default boolean shouldIgnoreReleaseWindow(Map<String, Object> operand) {
+    Object ignoreReleaseWindow = operand.get("ignoreReleaseWindow");
+    if (ignoreReleaseWindow instanceof Boolean) {
+      return (Boolean) ignoreReleaseWindow;
+    }
+    if (ignoreReleaseWindow instanceof String) {
+      return Boolean.parseBoolean((String) ignoreReleaseWindow);
+    }
+    return false;
+  }
+
+  /**
    * Returns the list of data source names this schema depends on.
    *
    * <p>Dependencies are processed before this schema's ETL runs.
