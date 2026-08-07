@@ -307,6 +307,10 @@ public class McpServer {
                 case "initialize":       return handleInitialize(id);
                 case "tools/list":       return handleToolsList(id);
                 case "ping":             return result(id, MAPPER.createObjectNode());
+                // Prompt templates are assembled from constants and touch no schema, so they
+                // stay answerable while a query runs, like tools/list above.
+                case "prompts/list":     return result(id, QuestionGuidance.promptsList());
+                case "prompts/get":      return handlePromptsGet(id, params);
                 case "tools/call": {
                     String tool = params.path("name").asText("");
                     if (LOCK_FREE_TOOLS.contains(tool)) {
@@ -354,6 +358,10 @@ public class McpServer {
 
         ObjectNode capabilities = MAPPER.createObjectNode();
         capabilities.set("tools", MAPPER.createObjectNode());
+        // Prompts are the opt-in surface for the good-question templates. Client support for
+        // them is uneven, which is why the same teaching also lives in the tool descriptions
+        // — those every capable client reads. This is the bonus channel, not the primary one.
+        capabilities.set("prompts", MAPPER.createObjectNode());
 
         ObjectNode body = MAPPER.createObjectNode();
         body.put("protocolVersion", "2024-11-05");
@@ -423,8 +431,29 @@ public class McpServer {
             + "render_chart draws a line/bar/scatter/pie image from categories/series data "
             + "you've already fetched — use it instead of hand-building a chart when a "
             + "visualization is requested; pass null for a missing data point to render a "
-            + "gap rather than a false zero.");
+            + "gap rather than a false zero. "
+            + QuestionGuidance.RUBRIC
+            + " Every analytical result also carries a second content block holding a "
+            + "structured 'diagnostics' envelope: typed warnings (small_n, low_coverage, "
+            + "row_fanout, grain_mismatch, vintage_misalignment, broken_field, "
+            + "uncontrolled_confound, collinear_controls) each with a severity of info, "
+            + "caution, or high, plus the grain, the observation count, and the declared "
+            + "coverage windows of the tables involved. Read it before answering and let it "
+            + "set how hard you hedge — a 'high' warning generally means re-query rather than "
+            + "caveat. Its absence of warnings is not a clean bill of health, only that no "
+            + "listed defect was detected. critique_query runs the same form-level checks on "
+            + "SQL you are about to run, without running it.");
         return result(id, body);
+    }
+
+    private static ObjectNode handlePromptsGet(JsonNode id, JsonNode params) {
+        String name = params.path("name").asText("");
+        QuestionGuidance.Template t = QuestionGuidance.template(name);
+        if (t == null) {
+            return errorResponse(id, -32602, "Unknown prompt: " + name);
+        }
+        log.println("[askamerica-mcp] prompts/get name=" + name);
+        return result(id, QuestionGuidance.promptGet(t, params.path("arguments")));
     }
 
     private static ObjectNode handleToolsList(JsonNode id) {
@@ -499,8 +528,33 @@ public class McpServer {
             "Max rows to return (default 500, max 5000)."));
         tools.add(
             tool("query",
-            "Execute SQL against US government data. Returns a JSON array of row objects.",
+            "Execute SQL against US government data. Returns a JSON array of row objects, "
+            + "plus a second content block holding a structured 'diagnostics' envelope — typed "
+            + "warnings (small_n, low_coverage, row_fanout, grain_mismatch, "
+            + "vintage_misalignment, broken_field, uncontrolled_confound) with a severity of "
+            + "info/caution/high, the grain, the observation count, and the declared coverage "
+            + "windows of the tables involved. Read it before answering: a 'high' warning "
+            + "usually means re-query rather than caveat. No warnings is not a clean bill of "
+            + "health, only that no listed defect was detected."
+            + QuestionGuidance.exemplarBlock(),
             schema(queryProps, new String[]{"sql"})));
+
+        ObjectNode critiqueProps = MAPPER.createObjectNode();
+        critiqueProps.set("sql", prop("string",
+            "The SQL you are about to run. It is not executed."));
+        tools.add(
+            tool("critique_query",
+            "Check a query's form before running it. Returns the same typed diagnostics the "
+            + "query tool returns, for the defects visible without executing: a year outside a "
+            + "table's declared coverage window, a join that names only part of a multi-column "
+            + "declared key (which would silently multiply every SUM and AVG), an association "
+            + "aggregate with no observation count, a <> filter that drops NULL rows, and "
+            + "tables whose coverage windows do not line up. Cheap — no query runs. Use it "
+            + "before an expensive aggregate, or when a result looks surprising and you want "
+            + "to know whether the question or the data is at fault. It reports defects it can "
+            + "see; silence from it is not approval."
+            + QuestionGuidance.exemplarBlock(),
+            schema(critiqueProps, new String[]{"sql"})));
 
         ObjectNode resolveProps = MAPPER.createObjectNode();
         resolveProps.set("term", prop("string",
@@ -543,7 +597,8 @@ public class McpServer {
             "Align two or more US-government series onto a common key (a time grain or a FIPS "
             + "geography), normalizing the differing govdata date conventions, and optionally "
             + "compute corr/regr in the engine. Use this for cross-dataset correlation or "
-            + "regression; for a single-table statistic, just call query with corr()/regr_*().",
+            + "regression; for a single-table statistic, just call query with corr()/regr_*()."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(alignProps, new String[]{"series"})));
 
         ObjectNode olsProps = MAPPER.createObjectNode();
@@ -563,7 +618,8 @@ public class McpServer {
             + "multiple covariates — coefficients, standard errors, t-stats, p-values, "
             + "R²/adjusted R², and the overall F-test. Use this instead of corr()/regr_slope() "
             + "in query() when you have more than one predictor; those SQL aggregates only "
-            + "do simple bivariate relationships.",
+            + "do simple bivariate relationships."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(olsProps, new String[]{"sql", "outcome", "predictors"})));
 
         ObjectNode ivProps = MAPPER.createObjectNode();
@@ -596,7 +652,8 @@ public class McpServer {
             + "plus the first-stage F-statistic with a weak-instrument warning "
             + "(Stock-Yogo rule of thumb: F < 10 is weak). Use when you suspect reverse "
             + "causality or omitted-variable bias between a predictor and the outcome and "
-            + "have a plausible instrument — otherwise use ols_regression.",
+            + "have a plausible instrument — otherwise use ols_regression."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(ivProps, new String[]{"sql", "outcome", "endogenous", "instruments"})));
 
         ObjectNode didProps = MAPPER.createObjectNode();
@@ -621,7 +678,8 @@ public class McpServer {
             + "average treatment effect on the treated, valid under the parallel-trends "
             + "assumption — this tool does not test parallel trends itself; check pre-period "
             + "trends separately (e.g. with ols_regression on pre-period-only data) before "
-            + "trusting the estimate.",
+            + "trusting the estimate."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(didProps, new String[]{"sql", "outcome", "treatment", "post"})));
 
         ObjectNode testProps = MAPPER.createObjectNode();
@@ -651,7 +709,8 @@ public class McpServer {
             + "value, or between two distributions, or between two categorical variables) "
             + "large enough to not plausibly be chance, given the sample size? Complements "
             + "query()'s descriptive stats (corr, regr_*, stddev_samp, ...), which describe a "
-            + "relationship's strength but don't test its statistical significance.",
+            + "relationship's strength but don't test its statistical significance."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(testProps, new String[]{"sql", "test"})));
 
         ObjectNode feProps = MAPPER.createObjectNode();
@@ -680,7 +739,8 @@ public class McpServer {
             + "dummies can't do with more than two periods or a staggered treatment timing. "
             + "Standard errors use the correct panel degrees of freedom "
             + "(n - k - (numEntities + numTimes - 1)), not what a naive dummy-variable OLS "
-            + "would report if it didn't know about the absorbed fixed effects.",
+            + "would report if it didn't know about the absorbed fixed effects."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(feProps, new String[]{"sql", "outcome", "predictors", "entity_col", "time_col"})));
 
         ObjectNode robustProps = MAPPER.createObjectNode();
@@ -706,7 +766,8 @@ public class McpServer {
             + "— same coefficients as ols_regression, corrected SEs. Use when observations "
             + "plausibly aren't independent (e.g. repeated observations of the same state "
             + "over years) or error variance plausibly isn't constant — both are common in "
-            + "state/county panel data and understate uncertainty if ignored.",
+            + "state/county panel data and understate uncertainty if ignored."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(robustProps, new String[]{"sql", "outcome", "predictors"})));
 
         ObjectNode flexProps = MAPPER.createObjectNode();
@@ -727,7 +788,8 @@ public class McpServer {
             + "interpretability (no coefficients, just fit quality and variable importance). "
             + "Use when you suspect the relationship isn't linear/additive, or as an "
             + "exploratory check on whether a linear model is leaving real signal on the "
-            + "table; use ols_regression when you need interpretable, reportable coefficients.",
+            + "table; use ols_regression when you need interpretable, reportable coefficients."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(flexProps, new String[]{"sql", "outcome", "predictors"})));
 
         ObjectNode importanceProps = MAPPER.createObjectNode();
@@ -749,7 +811,8 @@ public class McpServer {
             + "captures nonlinear and interaction effects a bivariate corr() ranking would "
             + "miss entirely. NOT a causal ranking and not necessarily monotonic — a variable "
             + "can rank high because trees split on it a lot, not because increasing it "
-            + "increases the outcome.",
+            + "increases the outcome."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(importanceProps, new String[]{"sql", "outcome", "predictors"})));
 
         ObjectNode dmlProps = MAPPER.createObjectNode();
@@ -784,7 +847,8 @@ public class McpServer {
             + "this corrects for how the nuisance functions are estimated, not for whether the "
             + "controls are the right ones; that's a substantive claim about the data you must "
             + "argue for, this tool cannot verify it. Prefer iv_2sls when you have a genuine "
-            + "instrument instead of an unconfoundedness argument.",
+            + "instrument instead of an unconfoundedness argument."
+            + QuestionGuidance.EXEMPLAR_POINTER,
             schema(dmlProps, new String[]{"sql", "outcome", "treatment", "controls"})));
 
         ObjectNode chartProps = MAPPER.createObjectNode();
@@ -1019,6 +1083,10 @@ public class McpServer {
         String text;
         String telemetrySql = null;
         byte[] chartPng = null;
+        // The diagnostics envelope for this call, when the tool is an analytical one. Kept
+        // separate from `text` so the data payload stays byte-identical to what it was before
+        // diagnostics existed — a host that ignores the extra content block sees no change.
+        ObjectNode diagnostics = null;
         try {
             switch (name) {
                 case "list_schemas":
@@ -1055,7 +1123,15 @@ public class McpServer {
                     String sql = args.path("sql").asText();
                     telemetrySql = sql;
                     log.println("[askamerica-mcp] tool=query sql=" + sql);
-                    text = query(sql, limit);
+                    ArrayNode rows = query(sql, limit);
+                    text = rows.toString();
+                    diagnostics = diagnose(sql, rows, limit);
+                    break;
+                }
+                case "critique_query": {
+                    String sql = args.path("sql").asText();
+                    log.println("[askamerica-mcp] tool=critique_query sql=" + sql);
+                    text = critiqueQuery(sql);
                     break;
                 }
                 case "report_issue": {
@@ -1101,7 +1177,11 @@ public class McpServer {
                         : DEFAULT_LIMIT;
                     log.println("[askamerica-mcp] tool=fetch_aligned_series on=" + on
                         + " stat=" + stat);
-                    text = fetchAlignedSeries(seriesNode, on, stat, alignLimit);
+                    RowsWithSql aligned =
+                        fetchAlignedSeries(seriesNode, on, stat, alignLimit);
+                    text = aligned.rows.toString();
+                    diagnostics = diagnose(aligned.sql, aligned.rows,
+                        stat != null ? 5 : alignLimit);
                     break;
                 }
                 case "ols_regression": {
@@ -1110,7 +1190,9 @@ public class McpServer {
                     List<String> predictors = textArray(args.path("predictors"));
                     log.println("[askamerica-mcp] tool=ols_regression outcome=" + outcome
                         + " predictors=" + predictors);
-                    text = olsRegressionTool(sql, outcome, predictors);
+                    StatsOutput r = olsRegressionTool(sql, outcome, predictors);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "iv_2sls": {
@@ -1121,7 +1203,9 @@ public class McpServer {
                     List<String> controls = textArray(args.path("controls"));
                     log.println("[askamerica-mcp] tool=iv_2sls outcome=" + outcome
                         + " endogenous=" + endogenous + " instruments=" + instruments);
-                    text = iv2slsTool(sql, outcome, endogenous, instruments, controls);
+                    StatsOutput r = iv2slsTool(sql, outcome, endogenous, instruments, controls);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "diff_in_diff": {
@@ -1131,7 +1215,9 @@ public class McpServer {
                     String post = args.path("post").asText();
                     List<String> controls = textArray(args.path("controls"));
                     log.println("[askamerica-mcp] tool=diff_in_diff outcome=" + outcome);
-                    text = diffInDiffTool(sql, outcome, treatment, post, controls);
+                    StatsOutput r = diffInDiffTool(sql, outcome, treatment, post, controls);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "hypothesis_test": {
@@ -1149,8 +1235,10 @@ public class McpServer {
                     String colCol = args.has("col_col") && !args.get("col_col").isNull()
                         ? args.get("col_col").asText() : null;
                     log.println("[askamerica-mcp] tool=hypothesis_test test=" + test);
-                    text = hypothesisTestTool(sql, test, valueCol, groupCol, oneSampleMu,
+                    StatsOutput r = hypothesisTestTool(sql, test, valueCol, groupCol, oneSampleMu,
                         rowCol, colCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "panel_fixed_effects": {
@@ -1160,7 +1248,9 @@ public class McpServer {
                     String entityCol = args.path("entity_col").asText();
                     String timeCol = args.path("time_col").asText();
                     log.println("[askamerica-mcp] tool=panel_fixed_effects outcome=" + outcome);
-                    text = panelFixedEffectsTool(sql, outcome, predictors, entityCol, timeCol);
+                    StatsOutput r = panelFixedEffectsTool(sql, outcome, predictors, entityCol, timeCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "robust_regression": {
@@ -1170,7 +1260,9 @@ public class McpServer {
                     String clusterCol = args.has("cluster_col") && !args.get("cluster_col").isNull()
                         ? args.get("cluster_col").asText() : null;
                     log.println("[askamerica-mcp] tool=robust_regression outcome=" + outcome);
-                    text = robustRegressionTool(sql, outcome, predictors, clusterCol);
+                    StatsOutput r = robustRegressionTool(sql, outcome, predictors, clusterCol);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "flexible_regression": {
@@ -1180,7 +1272,9 @@ public class McpServer {
                     String method = args.has("method") && !args.get("method").isNull()
                         ? args.get("method").asText() : null;
                     log.println("[askamerica-mcp] tool=flexible_regression outcome=" + outcome);
-                    text = flexibleRegressionTool(sql, outcome, predictors, method);
+                    StatsOutput r = flexibleRegressionTool(sql, outcome, predictors, method);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "feature_importance": {
@@ -1190,7 +1284,9 @@ public class McpServer {
                     String method = args.has("method") && !args.get("method").isNull()
                         ? args.get("method").asText() : null;
                     log.println("[askamerica-mcp] tool=feature_importance outcome=" + outcome);
-                    text = featureImportanceTool(sql, outcome, predictors, method);
+                    StatsOutput r = featureImportanceTool(sql, outcome, predictors, method);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "double_ml_ate": {
@@ -1204,7 +1300,9 @@ public class McpServer {
                         ? args.get("method").asText() : null;
                     log.println("[askamerica-mcp] tool=double_ml_ate outcome=" + outcome
                         + " treatment=" + treatment);
-                    text = doubleMlAteTool(sql, outcome, treatment, controls, folds, method);
+                    StatsOutput r = doubleMlAteTool(sql, outcome, treatment, controls, folds, method);
+                    text = r.text;
+                    diagnostics = r.diagnostics;
                     break;
                 }
                 case "render_chart": {
@@ -1273,6 +1371,21 @@ public class McpServer {
             errBlock.put("type", "text");
             errBlock.put("text", compact);
             errContent.add(errBlock);
+            // The one refusal this server makes on analytical grounds rather than on a bad
+            // request: the aggregate has nowhere to execute. It is typed here so a host can
+            // route on it — take the suggested aligned-series path — instead of parsing prose.
+            // Every other imperfection returns its data with warnings attached; refusal is
+            // reserved for the un-runnable.
+            if (QuestionDiagnostics.isPushdownFailure(compact)) {
+                ObjectNode refusal = QuestionDiagnostics.forRefusal("no_pushdown", compact,
+                    "fetch_aligned_series aligns the series on a shared key and computes "
+                    + "corr/regr inside one engine; or rewrite the aggregate so all of its "
+                    + "inputs come from a single schema.");
+                ObjectNode refusalBlock = MAPPER.createObjectNode();
+                refusalBlock.put("type", "text");
+                refusalBlock.put("text", refusal.toString());
+                errContent.add(refusalBlock);
+            }
             ObjectNode errBody = MAPPER.createObjectNode();
             errBody.set("content", errContent);
             errBody.put("isError", true);
@@ -1312,6 +1425,17 @@ public class McpServer {
         textBlock.put("text", text);
         content.add(textBlock);
 
+        // The envelope rides as its own block, after the data. Merging it into the payload
+        // would change the bytes every existing host parses; as a sibling block it is additive
+        // — a host that ignores it reads exactly what it read before, and one that reads it
+        // can re-query with a control, change grain, or hedge.
+        if (diagnostics != null) {
+            ObjectNode diagBlock = MAPPER.createObjectNode();
+            diagBlock.put("type", "text");
+            diagBlock.put("text", diagnostics.toString());
+            content.add(diagBlock);
+        }
+
         ObjectNode body = MAPPER.createObjectNode();
         body.set("content", content);
         body.put("isError", false);
@@ -1344,8 +1468,16 @@ public class McpServer {
     static String compactErrorMessage(Throwable e) {
         for (Throwable t = e; t != null; t = safeCause(t)) {
             String msg = t.getMessage();
-            if (msg != null && msg.contains("No applicable constructor/method found")
-                && msg.contains("DuckDBStatsFunctions$")) {
+            boolean compileShape = msg != null
+                && msg.contains("No applicable constructor/method found")
+                && msg.contains("DuckDBStatsFunctions$");
+            // The stub's own clean throw, which reaches here whenever the aggregate is alone
+            // in its EnumerableAggregate rather than sharing one with a COUNT(*). Same
+            // limitation, so it gets the same directed answer instead of the bare
+            // "no Calcite enumerable implementation" the deepest-message path would return.
+            boolean stubShape = msg != null
+                && msg.contains("is a DuckDB-only aggregate and must be pushed down");
+            if (compileShape || stubShape) {
                 return "A statistical aggregate (corr, regr_*, median, skewness, kurtosis, "
                     + "mad, quantile_cont, or quantile_disc) failed to push down to the "
                     + "DuckDB engine, which is the only place these run — likely because its "
@@ -1785,7 +1917,7 @@ public class McpServer {
         return null;
     }
 
-    private static String query(String sql, int limit) throws Exception {
+    private static ArrayNode query(String sql, int limit) throws Exception {
         // No pre-emptive schema check. extractSchema() plays no part in choosing the
         // connection — runSqlOn always uses the all-schemas catalog connection — so
         // rejecting up front only refused SQL that would have run:
@@ -1797,7 +1929,7 @@ public class McpServer {
         // The advice it carried is still worth giving, so it is attached to the failure
         // instead — where it is a hint about a real error rather than a refusal to try.
         try {
-            return runSqlOn(sql, limit);
+            return runSqlRows(sql, limit);
         } catch (Exception e) {
             String msg = e.getMessage();
             if (extractSchema(sql) == null && msg != null && looksLikeUnresolvedObject(msg)) {
@@ -1852,6 +1984,13 @@ public class McpServer {
      *  set would mount a second connection and re-open all of that schema's Iceberg
      *  metadata, so resolve_geo and fetch_aligned_series share this one too. */
     private static String runSqlOn(String sql, int limit) throws Exception {
+        return runSqlRows(sql, limit).toString();
+    }
+
+    /** As {@link #runSqlOn} but hands back the rows themselves, so a caller that needs to
+     *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
+     *  serialized form is identical either way. */
+    private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
         String effective = quoteReservedIdentifiers(sql);
         String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
@@ -1909,7 +2048,7 @@ public class McpServer {
                 arr.add(row);
             }
             rs.close();
-            return arr.toString();
+            return arr;
         } finally {
             stmt.close();
         }
@@ -2209,14 +2348,26 @@ public class McpServer {
         return String.join(",", set);
     }
 
-    private static String fetchAlignedSeries(JsonNode series, String on, String stat, int limit)
-            throws Exception {
+    /** Rows plus the SQL that produced them, so diagnostics read the query that actually ran
+     *  rather than the series spec that was composed into it. */
+    private static final class RowsWithSql {
+        final ArrayNode rows;
+        final String sql;
+
+        RowsWithSql(ArrayNode rows, String sql) {
+            this.rows = rows;
+            this.sql = sql;
+        }
+    }
+
+    private static RowsWithSql fetchAlignedSeries(JsonNode series, String on, String stat,
+            int limit) throws Exception {
         String sql = buildAlignedSql(series, on, stat);
         // Validates that every series names a schema-qualified table; the result is not used
         // to scope the connection, which is always the all-schemas one.
         schemasOf(series);
         // stat returns a single scalar row; a frame gets the caller's limit.
-        return runSqlOn(sql, stat != null ? 5 : limit);
+        return new RowsWithSql(runSqlRows(sql, stat != null ? 5 : limit), sql);
     }
 
     /** Reads a JSON array-of-strings node into a {@link List}; treats a missing/null node as
@@ -2234,7 +2385,7 @@ public class McpServer {
 
     // ─── Regression / hypothesis-test tools (StatsEngine) ────────────────────────
 
-    private static String olsRegressionTool(String sql, String outcome, List<String> predictors)
+    private static StatsOutput olsRegressionTool(String sql, String outcome, List<String> predictors)
             throws Exception {
         String[] cols = new String[1 + predictors.size()];
         cols[0] = outcome;
@@ -2247,11 +2398,10 @@ public class McpServer {
         double[][] x = ex.columnsFor(predictors.toArray(new String[0]));
         StatsEngine.OlsResult result = StatsEngine.ols(y, x, predictors.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, predictors, ex);
     }
 
-    private static String iv2slsTool(String sql, String outcome, String endogenous,
+    private static StatsOutput iv2slsTool(String sql, String outcome, String endogenous,
             List<String> instruments, List<String> controls) throws Exception {
         List<String> cols = new ArrayList<>();
         cols.add(outcome);
@@ -2267,11 +2417,10 @@ public class McpServer {
         StatsEngine.Iv2slsResult result = StatsEngine.iv2sls(y, endog, instr, ctrl,
             instruments.toArray(new String[0]), controls.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, controls, ex);
     }
 
-    private static String diffInDiffTool(String sql, String outcome, String treatment,
+    private static StatsOutput diffInDiffTool(String sql, String outcome, String treatment,
             String post, List<String> controls) throws Exception {
         List<String> cols = new ArrayList<>();
         cols.add(outcome);
@@ -2287,11 +2436,10 @@ public class McpServer {
         StatsEngine.DiffInDiffResult result = StatsEngine.diffInDiff(y, treat, postCol, ctrl,
             controls.toArray(new String[0]));
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, controls, ex);
     }
 
-    private static String hypothesisTestTool(String sql, String test, String valueCol,
+    private static StatsOutput hypothesisTestTool(String sql, String test, String valueCol,
             String groupCol, Double oneSampleMu, String rowCol, String colCol) throws Exception {
         Connection c = getCatalogConnection();
         if ("chi_square".equals(test)) {
@@ -2309,7 +2457,14 @@ public class McpServer {
             table.colLabels.forEach(colLabels::add);
             out.set("row_labels", rowLabels);
             out.set("col_labels", colLabels);
-            return out.toString();
+            int cells = 0;
+            for (long[] rowCounts : table.counts) {
+                for (long v : rowCounts) {
+                    cells += (int) v;
+                }
+            }
+            return new StatsOutput(out.toString(), diagnoseStats(sql,
+                java.util.Collections.<String>emptyList(), null, cells, 0, 0));
         }
         if (valueCol == null) {
             throw new IllegalArgumentException("value_col is required for test '" + test + "'");
@@ -2327,10 +2482,15 @@ public class McpServer {
             groups.put(valueCol, ex.column(0));
         }
         ObjectNode out = StatsEngine.hypothesisTest(MAPPER, test, groups, oneSampleMu, null);
-        return out.toString();
+        int observations = 0;
+        for (double[] group : groups.values()) {
+            observations += group.length;
+        }
+        return new StatsOutput(out.toString(), diagnoseStats(sql,
+            java.util.Collections.<String>emptyList(), null, observations, 0, 0));
     }
 
-    private static String panelFixedEffectsTool(String sql, String outcome,
+    private static StatsOutput panelFixedEffectsTool(String sql, String outcome,
             List<String> predictors, String entityCol, String timeCol) throws Exception {
         List<String> numCols = new ArrayList<>();
         numCols.add(outcome);
@@ -2345,11 +2505,10 @@ public class McpServer {
         StatsEngine.PanelFixedEffectsResult result = StatsEngine.panelFixedEffects(y, x,
             predictors.toArray(new String[0]), entityIds, timeIds);
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, predictors, ex);
     }
 
-    private static String robustRegressionTool(String sql, String outcome,
+    private static StatsOutput robustRegressionTool(String sql, String outcome,
             List<String> predictors, String clusterCol) throws Exception {
         List<String> numCols = new ArrayList<>();
         numCols.add(outcome);
@@ -2364,8 +2523,7 @@ public class McpServer {
             StatsEngine.RobustRegressionResult result = StatsEngine.robustRegression(y, x,
                 predictors.toArray(new String[0]), clusterIds);
             ObjectNode out = result.toJson(MAPPER);
-            addExtractionMeta(out, ex);
-            return out.toString();
+            return statsResult(out, sql, predictors, ex);
         }
         StatsEngine.Extraction ex = StatsEngine.extractColumns(c, sql, numCols.toArray(new String[0]));
         double[] y = ex.column(0);
@@ -2373,11 +2531,10 @@ public class McpServer {
         StatsEngine.RobustRegressionResult result = StatsEngine.robustRegression(y, x,
             predictors.toArray(new String[0]), null);
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, predictors, ex);
     }
 
-    private static String flexibleRegressionTool(String sql, String outcome,
+    private static StatsOutput flexibleRegressionTool(String sql, String outcome,
             List<String> predictors, String method) throws Exception {
         String resolvedMethod = method != null ? method : "random_forest";
         String[] cols = new String[1 + predictors.size()];
@@ -2392,11 +2549,10 @@ public class McpServer {
         StatsMlEngine.FlexibleRegressionResult result = StatsMlEngine.flexibleRegression(y, x,
             outcome, predictors.toArray(new String[0]), resolvedMethod);
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, predictors, ex);
     }
 
-    private static String featureImportanceTool(String sql, String outcome,
+    private static StatsOutput featureImportanceTool(String sql, String outcome,
             List<String> predictors, String method) throws Exception {
         String resolvedMethod = method != null ? method : "random_forest";
         String[] predictorNames = predictors.toArray(new String[0]);
@@ -2431,11 +2587,10 @@ public class McpServer {
         out.put("note", "Ranked by impurity decrease summed across trees (" + resolvedMethod
             + ") — reflects how much the model relied on each predictor to split, not a "
             + "causal or necessarily monotonic effect size.");
-        addExtractionMeta(out, ex);
-        return out.toString();
+        return statsResult(out, sql, predictors, ex);
     }
 
-    private static String doubleMlAteTool(String sql, String outcome, String treatment,
+    private static StatsOutput doubleMlAteTool(String sql, String outcome, String treatment,
             List<String> controls, Integer folds, String method) throws Exception {
         String resolvedMethod = method != null ? method : "random_forest";
         int resolvedFolds = folds != null ? folds : 5;
@@ -2451,8 +2606,92 @@ public class McpServer {
         StatsMlEngine.DoubleMlResult result = StatsMlEngine.doubleMlAte(y, treat, ctrl,
             controls.toArray(new String[0]), resolvedFolds, resolvedMethod);
         ObjectNode out = result.toJson(MAPPER);
-        addExtractionMeta(out, ex);
+        return statsResult(out, sql, controls, ex);
+    }
+
+    /**
+     * Diagnostics for a row-returning analytical tool.
+     *
+     * <p>A failure inside a check is reported as its own envelope rather than dropped. The
+     * silent alternative is worse than no diagnostics at all: an empty warnings array is
+     * indistinguishable from a clean result, so a broken check would read as a passing one.
+     */
+    private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit) {
+        try {
+            return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit);
+        } catch (Exception e) {
+            String reason = compactErrorMessage(e);
+            log.println("[askamerica-mcp] diagnostics failed: " + reason);
+            return QuestionDiagnostics.incomplete(reason);
+        }
+    }
+
+    /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
+    private static ObjectNode diagnoseStats(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped) {
+        try {
+            return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
+                totalRows, dropped);
+        } catch (Exception e) {
+            String reason = compactErrorMessage(e);
+            log.println("[askamerica-mcp] diagnostics failed: " + reason);
+            return QuestionDiagnostics.incomplete(reason);
+        }
+    }
+
+    /** {@code critique_query}: a form-level read of a proposed query, without running it. */
+    private static String critiqueQuery(String sql) throws Exception {
+        if (sql == null || sql.trim().isEmpty()) {
+            throw new IllegalArgumentException("sql is required");
+        }
+        ObjectNode out;
+        try {
+            out = QuestionDiagnostics.critique(getCatalogConnection(), sql);
+        } catch (Exception e) {
+            String reason = compactErrorMessage(e);
+            log.println("[askamerica-mcp] critique failed: " + reason);
+            out = QuestionDiagnostics.incomplete(reason);
+        }
+        out.put("rubric", QuestionGuidance.RUBRIC);
         return out.toString();
+    }
+
+    /** A stats tool's payload plus its diagnostics envelope. The two travel separately so the
+     *  payload stays byte-identical to what a host received before diagnostics existed. */
+    private static final class StatsOutput {
+        final String text;
+        final ObjectNode diagnostics;
+
+        StatsOutput(String text, ObjectNode diagnostics) {
+            this.text = text;
+            this.diagnostics = diagnostics;
+        }
+    }
+
+    /**
+     * Finishes a stats tool: attaches the sample-size bookkeeping to the payload and builds
+     * the diagnostics envelope from the same extraction the estimator used. The covariate
+     * matrix is read back here rather than recomputed, so collinearity is measured on exactly
+     * the columns that entered the model.
+     */
+    private static StatsOutput statsResult(ObjectNode out, String sql, List<String> covariates,
+            StatsEngine.Extraction ex) {
+        addExtractionMeta(out, ex);
+        double[][] cols = covariates.isEmpty()
+            ? null : ex.columnsFor(covariates.toArray(new String[0]));
+        return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
+            ex.totalRows, ex.droppedForNull));
+    }
+
+    /** {@link #statsResult(ObjectNode, String, List, StatsEngine.Extraction)} for the
+     *  labeled-extraction path (panel_fixed_effects, robust_regression with cluster_col). */
+    private static StatsOutput statsResult(ObjectNode out, String sql, List<String> covariates,
+            StatsEngine.LabeledExtraction ex) {
+        addExtractionMeta(out, ex);
+        double[][] cols = covariates.isEmpty()
+            ? null : ex.columnsFor(covariates.toArray(new String[0]));
+        return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
+            ex.totalRows, ex.droppedForNull));
     }
 
     /** Attaches sample-size bookkeeping every stats tool result shares — how many source

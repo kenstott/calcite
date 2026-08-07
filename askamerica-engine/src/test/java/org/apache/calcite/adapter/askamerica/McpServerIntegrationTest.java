@@ -246,6 +246,123 @@ public class McpServerIntegrationTest {
         "Query result must contain " + TEST_COLUMN + "; got: " + text);
   }
 
+  // ── question quality: ambient teaching, prompts, diagnostics ──────────────
+
+  /**
+   * The no-regression guarantee the diagnostics envelope rests on. It is worth an assertion
+   * at the wire rather than in a unit test because the promise is about what an existing host
+   * receives: the data block must still be the first content block and still be exactly the
+   * JSON array it was, with the envelope arriving as a sibling. Merge the two and every host
+   * that indexes content[0] and parses it as an array breaks at once.
+   */
+  @Test void query_dataBlockIsUnchangedAndDiagnosticsRideAlongsideIt() throws Exception {
+    String resp =
+        callTool("query", "{\"sql\":\"SELECT ticker, title FROM ref.sec_company_tickers "
+            + "FETCH FIRST 3 ROWS ONLY\",\"limit\":10}",
+        SCHEMA_INIT_TIMEOUT_MS);
+    assertFalse(resp.contains("\"isError\":true"), "query returned isError:true — " + resp);
+
+    com.fasterxml.jackson.databind.JsonNode content =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(resp).path("result").path("content");
+    assertEquals(2, content.size(), "expected data + diagnostics blocks; got: " + resp);
+
+    com.fasterxml.jackson.databind.JsonNode data =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(content.get(0).get("text").asText());
+    assertTrue(data.isArray(), "the first block must still be the bare row array");
+    assertTrue(data.size() > 0, "expected rows from ref.sec_company_tickers");
+    assertFalse(data.get(0).has("diagnostics"),
+        "diagnostics must not be mixed into the rows");
+
+    com.fasterxml.jackson.databind.JsonNode diag =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(content.get(1).get("text").asText()).path("diagnostics");
+    assertTrue(diag.has("warnings"), "diagnostics block missing warnings: " + diag);
+    assertTrue(diag.path("basis").asText().contains("not a claim of validity"),
+        "silence must never read as a clean bill of health: " + diag);
+  }
+
+  @Test void criticalDefectsAreVisibleWithoutRunningTheQuery() throws Exception {
+    String resp = callTool("critique_query",
+        "{\"sql\":\"SELECT corr(a, b) FROM econ.employment_statistics\"}",
+        SCHEMA_INIT_TIMEOUT_MS);
+    assertFalse(resp.contains("\"isError\":true"), "critique_query failed — " + resp);
+    com.fasterxml.jackson.databind.JsonNode out =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(resp).path("result").path("content").get(0).get("text").asText());
+    String types = out.path("diagnostics").path("warnings").toString();
+    assertTrue(types.contains("small_n"),
+        "an association with no COUNT(*) cannot be judged for significance: " + types);
+    assertTrue(types.contains("uncontrolled_confound"),
+        "corr() conditions on nothing and the critique must say so: " + types);
+    assertTrue(out.path("rubric").asText().contains("topic, not a question"),
+        "the critique should hand back the rubric it judged against");
+  }
+
+  @Test void initializeAdvertisesPromptsAndTeachesTheRubric() throws Exception {
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":"
+        + "{\"protocolVersion\":\"2024-11-05\","
+        + "\"clientInfo\":{\"name\":\"test\",\"version\":\"0.0.1\"}},"
+        + "\"id\":9001}");
+    String resp = readUntilId(9001, TOOL_TIMEOUT_MS);
+    com.fasterxml.jackson.databind.JsonNode result =
+        new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp).path("result");
+    assertTrue(result.path("capabilities").has("prompts"),
+        "prompts must be advertised or no client will ask for them: " + resp);
+    String instructions = result.path("instructions").asText();
+    assertTrue(instructions.contains("topic, not a question"),
+        "the rubric is the global backstop for hosts that read instructions");
+    assertTrue(instructions.contains("diagnostics"),
+        "a host that is not told the envelope exists will not read it");
+  }
+
+  @Test void promptTemplatesAreListableAndRenderFilledIn() throws Exception {
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"prompts/list\",\"params\":{},\"id\":9002}");
+    String listResp = readUntilId(9002, TOOL_TIMEOUT_MS);
+    assertTrue(listResp.contains("marginal_comparison"),
+        "prompts/list must return the templates: " + listResp);
+
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"prompts/get\",\"params\":"
+        + "{\"name\":\"trend_check\",\"arguments\":{\"measure\":\"violent crime per 100k\","
+        + "\"grain\":\"agency\",\"window\":\"2015-2023\"}},\"id\":9003}");
+    String getResp = readUntilId(9003, TOOL_TIMEOUT_MS);
+    assertTrue(getResp.contains("violent crime per 100k"),
+        "prompts/get must substitute its arguments: " + getResp);
+    assertFalse(getResp.contains("{measure}"), "placeholder left unsubstituted: " + getResp);
+  }
+
+  @Test void toolDescriptionsCarryTheContrastiveExemplars() throws Exception {
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"params\":{},\"id\":9004}");
+    String resp = readUntilId(9004, TOOL_TIMEOUT_MS);
+    com.fasterxml.jackson.databind.JsonNode tools =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(resp).path("result").path("tools");
+    String queryDescription = null;
+    boolean sawCritique = false;
+    for (com.fasterxml.jackson.databind.JsonNode t : tools) {
+      if ("query".equals(t.path("name").asText())) {
+        queryDescription = t.path("description").asText();
+      }
+      if ("critique_query".equals(t.path("name").asText())) {
+        sawCritique = true;
+      }
+    }
+    assertNotNull(queryDescription, "query tool missing from tools/list");
+    assertTrue(sawCritique, "critique_query missing from tools/list");
+    int exemplars = 0;
+    for (QuestionGuidance.Exemplar e : QuestionGuidance.EXEMPLARS) {
+      if (queryDescription.contains(e.vague) && queryDescription.contains(e.sharpened)) {
+        exemplars++;
+      }
+    }
+    assertTrue(exemplars >= 6,
+        "the query description must carry the full contrastive set; found " + exemplars);
+    assertTrue(queryDescription.contains("[honest-refusal]"),
+        "the refusal exemplars are what stop the set teaching that everything is answerable");
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private String callTool(String name, String argsJson, long timeoutMs) throws Exception {
