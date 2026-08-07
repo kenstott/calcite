@@ -155,6 +155,39 @@ variables are never requested and every `_moe` column comes back null. Therefore
   add it as additive metadata **only if that key is actually unique** — if not (pre-existing
   duplicate rows), fall back to 3A for that table rather than forcing a key (§2a).
 
+## 5b. Dedicated (expression-defined) ACS tables
+
+A second set of ACS tables is **not** on the `conceptualColumns` path — they are defined directly
+in `census-schema.yaml` with per-column `expression:` over raw source variables, e.g.
+`TRY_CAST(src."B20004_001E" AS BIGINT)` (tables: `acs_earnings_by_education`,
+`acs_income_distribution`, `acs_income_by_nativity`, `acs_nativity_by_education`, `acs_age`,
+`acs_vehicle_access`, `acs1_income`, and similar). Part 1's config change does **not** reach
+these; they need their own `_moe` columns. They split into two kinds, and the distinction is
+statistical, not cosmetic:
+
+- **1:1 raw-variable columns** (e.g. `median_earnings_total` = `src."B20004_001E"`). Add a sibling
+  `<name>_moe` column whose expression reads the margin twin and nulls the Census sentinels:
+  `CASE WHEN TRY_CAST(src."B20004_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B20004_001M" AS BIGINT) END`.
+  Correct and safe. The margin variable must also reach the **fetch** — verify whether the fetch
+  derives its variable list from the `src."…"` references in the expressions (in which case adding
+  the `_moe` expressions is sufficient) or from a separate list that must also gain the `…M` codes.
+
+- **Derived columns** — a bracket built by **summing** several variables (e.g. `income_10k_to_25k`
+  = `B19001_003E + B19001_004E + B19001_005E`), a **ratio/proportion** (rates), or an index
+  (`B19083` Gini). For these the margin is **NOT** the sum of the component margins. Census's
+  published rules apply:
+  - **Sum/aggregate:** `MOE_agg = SQRT(Σ MOE_i²)` over the summed components.
+  - **Proportion/ratio:** the Census derived-ratio MOE formula (with the under-the-root
+    correction), not a component sum.
+  - **A naive sum-of-margins is statistically wrong and MUST NOT ship** — a wrong margin is worse
+    than a missing one, and misstates confidence in exactly the direction this whole effort exists
+    to prevent. If the correct propagation for a given derived column is not implemented, that
+    column gets **no** `_moe` (documented as omitted), never an approximate one.
+
+Both kinds are additive (§2a): new `_moe` columns only, all prior columns retained, populated on
+re-ingest. Recommended sequencing: land the **1:1** `_moe` columns first (mechanical, correct),
+then the derived-column margins as a second pass once each propagation formula is verified.
+
 ## 6. Rollout
 
 - Code changes above produce **empty** `_moe` tables until census is re-ingested — populating
