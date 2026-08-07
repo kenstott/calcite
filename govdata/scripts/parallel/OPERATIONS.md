@@ -54,6 +54,9 @@ The service starts automatically at login and restarts on failure.
 # Force a specific starting mode
 ./run-scheduled.sh daily
 ./run-scheduled.sh historical
+
+# Bypass release-window checks for every pool run this process launches
+./run-scheduled.sh daily --force
 ```
 
 Run in the foreground to watch output directly. Send `SIGTERM` or press `Ctrl-C` to stop; the runner forwards the signal to any active pool worker before exiting.

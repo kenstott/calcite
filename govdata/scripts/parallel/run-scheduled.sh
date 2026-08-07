@@ -150,15 +150,29 @@ echo $$ > "$PID_FILE"
 
 # ── Mode selection ────────────────────────────────────────────────────────────
 
-if [ -n "${1:-}" ]; then
-  MODE="$1"
+# --force may appear before or after the mode positional; strip it out first so the
+# positional check below isn't affected by its position. Forwarded to every run-pool.sh
+# invocation for the life of this process (below), same as run-pool.sh's own --force.
+FORCE=${FORCE:-false}
+ARGS=()
+for arg in "$@"; do
+  if [ "$arg" = "--force" ]; then
+    FORCE=true
+  else
+    ARGS+=("$arg")
+  fi
+done
+export FORCE
+
+if [ -n "${ARGS[0]:-}" ]; then
+  MODE="${ARGS[0]}"
 else
   HOUR=$(date +%H)
   if [ "$HOUR" -ge 8 ] && [ "$HOUR" -lt 20 ]; then MODE="daily"; else MODE="historical"; fi
 fi
 
 if [ "$MODE" != "daily" ] && [ "$MODE" != "historical" ]; then
-  echo "Usage: $0 [daily|historical]" >&2
+  echo "Usage: $0 [daily|historical] [--force]" >&2
   exit 1
 fi
 
@@ -186,6 +200,7 @@ run_window() {
     [ -n "$fill_mode" ] && echo "[$(ts)] early-finish fill mode: $fill_mode"
     echo "[$(ts)] concurrency cap: -j $POOL_MAX_WORKERS (POOL_MAX_WORKERS)"
     [ -n "${GOVDATA_JAR:-}" ] && echo "[$(ts)] JAR: $GOVDATA_JAR"
+    [ "$FORCE" = "true" ] && echo "[$(ts)] --force: release-window checks bypassed for this window"
   } | tee -a "$window_log"
 
   while true; do
@@ -204,8 +219,12 @@ run_window() {
     attempt=$(( attempt + 1 ))
     echo "[$(ts)] $current attempt $attempt (${remaining}s remaining in window)" >> "$window_log"
 
+    pool_args=(-j "$POOL_MAX_WORKERS")
+    [ "$FORCE" = "true" ] && pool_args+=(--force)
+    pool_args+=("$current")
+
     set +e
-    "$TIMEOUT_CMD" "$remaining" "$SCRIPT_DIR/run-pool.sh" -j "$POOL_MAX_WORKERS" "$current" >> "$window_log" 2>&1 &
+    "$TIMEOUT_CMD" "$remaining" "$SCRIPT_DIR/run-pool.sh" "${pool_args[@]}" >> "$window_log" 2>&1 &
     ACTIVE_POOL_PID=$!
     wait "$ACTIVE_POOL_PID"
     EXIT_CODE=$?
