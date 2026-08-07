@@ -224,21 +224,42 @@ run_one() {
         echo "$rc" > "$_outdir/$s.rc"
     } > "$_outdir/$s.out" 2>&1
     [[ -n "$probe" ]] && rm -f "$probe"
-    # Always succeed: the dispatch loop below uses `wait -n`'s status purely for flow control,
-    # and a non-zero return there trips its `|| wait` fallback into waiting for EVERY in-flight
-    # schema — collapsing rolling concurrency into barriered batches. Without this, the trailing
-    # `[[ -n "$probe" ]]` short-circuits to false for every schema that has no probe file (all but
-    # geo/lands/census/sec) and the function returns 1. Per-schema pass/fail is read from
+    # Always succeed: the dispatch loop's polling below tracks job completion via `kill -0` on
+    # PIDs, not this function's exit status. Without this, the trailing `[[ -n "$probe" ]]`
+    # short-circuits to false for every schema that has no probe file (all but geo/lands/census/
+    # sec) and the function returns 1 for no reason. Per-schema pass/fail is read from
     # "$_outdir/$s.rc", never from this status.
     return 0
 }
 
 _running=0
+_pids=()
 for s in $SELECTED; do
     run_one "$s" &
+    _pids+=("$!")
     _running=$((_running + 1))
     if [ "$_running" -ge "$JOBS" ]; then
-        wait -n 2>/dev/null || wait
+        # Portable "wait for any one job to finish": bash's `wait -n` (4.3+) isn't available on
+        # macOS's stock /bin/bash (3.2, frozen there for licensing reasons) — there it silently
+        # fails and falls through to `|| wait`, which blocks on the WHOLE batch instead of just
+        # one job. That collapses the intended rolling concurrency into barriered batches gated
+        # by each batch's slowest schema (observed: a batch sat at 3/4 done for 25+ minutes,
+        # waiting on the 4th before dispatching schema #5). Poll for any tracked PID to exit
+        # instead — identical behavior on bash 3.2 and on modern bash/Linux.
+        while :; do
+            _next_pids=()
+            _freed=0
+            for p in "${_pids[@]}"; do
+                if kill -0 "$p" 2>/dev/null; then
+                    _next_pids+=("$p")
+                else
+                    _freed=1
+                fi
+            done
+            _pids=("${_next_pids[@]}")
+            [ "$_freed" -eq 1 ] && break
+            sleep 0.2
+        done
         _running=$((_running - 1))
     fi
 done
