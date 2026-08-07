@@ -59,9 +59,38 @@ public class McpServerIntegrationTest {
 
   private static final Logger LOGGER = Logger.getLogger(McpServerIntegrationTest.class.getName());
 
-  /** Timeout covering R2 connection + Iceberg metadata reads on first schema access. */
-  private static final long SCHEMA_INIT_TIMEOUT_MS = 120_000;
-  /** Timeout for responses once schema is warmed up. */
+  /**
+   * Timeout covering a server process's one-time schema mount.
+   *
+   * <p>That mount is a per-process cost, not a per-schema or per-query one, and it is not a
+   * metadata rebuild: the jar ships a seeded DuckDB catalog, and a server started against a
+   * completely empty data dir still reports every Iceberg view reused and none rebuilt (356/0
+   * measured), so no object-store metadata reads happen. What it pays for is mounting all 26
+   * schemas onto one connection and creating the deferred SQL views. Measured at 231s
+   * standalone; 298–377s under this suite, which competes with itself.
+   *
+   * <p>This class pays it once per <em>test method</em>, because {@code startServer} spawns a
+   * fresh process each time. Once a process is up, queries are sub-second — including against
+   * a schema it has not touched before. Nothing here reflects a cost a running server imposes
+   * on a user.
+   *
+   * <p>Sits just above the server's own 600s schema-init bound ({@code McpServer}'s
+   * {@code latch.await}) so that when a mount overruns, the failure reported is the server's
+   * own "still initializing" message rather than a bare client-side timeout that says nothing
+   * about why. The old 120s value was below every mount measured here — it never fired only
+   * because the read loop blocked past its own deadline (see {@link #readUntilId}).
+   */
+  private static final long SCHEMA_INIT_TIMEOUT_MS = 660_000;
+  /**
+   * Timeout for a response that touches no schema at all — the initialize handshake, the
+   * prompt templates, tools/list.
+   *
+   * <p>Not a "warmed up" timeout: {@code startServer} gives every test method its own fresh
+   * process, so no test ever runs against a warm schema. A call that reaches a schema needs
+   * {@link #SCHEMA_INIT_TIMEOUT_MS} even when it is the test's first, and that includes
+   * {@code list_schemas}, which reads {@code information_schema} despite sounding like a
+   * local lookup.
+   */
   private static final long TOOL_TIMEOUT_MS = 30_000;
 
   private static final AtomicInteger ID_SEQ = new AtomicInteger(1);
@@ -158,7 +187,9 @@ public class McpServerIntegrationTest {
   // ── list_schemas ──────────────────────────────────────────────────────────
 
   @Test void listSchemas_includesRefAndFec() throws Exception {
-    String resp = callTool("list_schemas", "{}", TOOL_TIMEOUT_MS);
+    // list_schemas reads information_schema, so on this test's own fresh server it pays the
+    // full cold mount like any other schema-touching call.
+    String resp = callTool("list_schemas", "{}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     assertTrue(text.contains("ref"),
         "list_schemas must include 'ref'; got: " + resp);
@@ -174,6 +205,19 @@ public class McpServerIntegrationTest {
     String resp =
         callTool("list_tables", "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
+    // Two failures reach this point looking alike, and attributing one to the other sends the
+    // reader to the wrong place: an empty list is the classpath regression this test was
+    // written for, while a rebuild that overran the server's 600s init bound returns a "still
+    // initializing" error instead. Observed once, under two integration suites running
+    // concurrently.
+    assertFalse(text.contains("is still initializing"),
+        "list_tables(" + TEST_SCHEMA + ") did not finish this server process's one-time "
+            + "schema mount within the server's own 600s bound, so this is a mount-time "
+            + "failure, NOT the classpath regression below. Every test method here spawns a "
+            + "fresh server and so pays that mount again (298-377s measured under this "
+            + "suite), leaving under 2x headroom that anything competing for R2 bandwidth, "
+            + "CPU, or disk can erase. Check for a second test run or an ETL job. Server "
+            + "said: " + text);
     assertFalse(text.equals("[]"),
         "list_tables(" + TEST_SCHEMA + ") returned []. "
             + "Shadow JAR classpath failure — likely missing fs.s3a.impl registration. "
@@ -400,6 +444,16 @@ public class McpServerIntegrationTest {
       if (!mcpProcess.isAlive()) {
         fail("MCP server process exited unexpectedly (exit=" + mcpProcess.exitValue()
             + ")\n--- server stderr (tail) ---\n" + tailStderr());
+      }
+      // readLine() blocks until a line arrives, and stdout carries nothing but JSON-RPC
+      // responses (stderr is redirected to a file), so during a several-minute schema mount
+      // it blocks straight through the deadline the loop condition is checking. That made
+      // every timeout here decorative: mounts measured at 310s passed a nominal 120s bound,
+      // and a genuinely hung server would have hung the suite rather than failing it.
+      // ready() keeps the deadline real by never entering a blocking read.
+      if (!mcpStdout.ready()) {
+        Thread.sleep(50);
+        continue;
       }
       String line = mcpStdout.readLine();
       if (line == null) {
