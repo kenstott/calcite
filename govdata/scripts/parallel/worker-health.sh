@@ -89,7 +89,10 @@ ENDJSON
 # INCREMENTAL_YEAR-1, `daily` runs the current year onward. Per-table refresh cadence
 # (which monthly/weekly tables actually re-fetch on a given run) is NOT the worker's job:
 # it is handled entirely by each table's `freshness:` / `releaseWindow:` config in
-# health-schema.yaml, enforced by the engine. Both modes therefore run the full table set.
+# health-schema.yaml, enforced by the engine (EtlPipeline's release-window gate). Both modes
+# therefore run the full table set; a table outside its releaseWindow skips there, not here.
+# The engine's `ignoreReleaseWindow` operand force-bypasses that gate for a run, but this
+# worker does not currently set it (--force here only re-triggers the worker itself).
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 

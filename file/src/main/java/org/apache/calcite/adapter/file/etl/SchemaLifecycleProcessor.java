@@ -81,6 +81,7 @@ public class SchemaLifecycleProcessor {
   private final String sourceDirectory;
   private final String materializeDirectory;
   private final String operatingDirectory;
+  private final boolean ignoreReleaseWindow;
   private final IncrementalTracker incrementalTracker;
   private final SchemaLifecycleListener schemaListener;
   private final TableLifecycleListener defaultTableListener;
@@ -97,6 +98,7 @@ public class SchemaLifecycleProcessor {
     this.materializeDirectory = builder.materializeDirectory != null
         ? builder.materializeDirectory : config.getMaterializeDirectory();
     this.operatingDirectory = builder.operatingDirectory;
+    this.ignoreReleaseWindow = builder.ignoreReleaseWindow;
     this.incrementalTracker = builder.incrementalTracker != null
         ? builder.incrementalTracker : IncrementalTracker.NOOP;
     this.schemaListener = builder.schemaListener != null
@@ -128,6 +130,7 @@ public class SchemaLifecycleProcessor {
         .sourceDirectory(sourceDirectory)
         .materializeDirectory(materializeDirectory)
         .operatingDirectory(operatingDirectory)
+        .ignoreReleaseWindow(ignoreReleaseWindow)
         .incrementalTracker(incrementalTracker)
         .build();
 
@@ -357,6 +360,7 @@ public class SchemaLifecycleProcessor {
           .errorHandling(tableConfig.getErrorHandling())
           .hooks(tableConfig.getHooks())
           .freshness(tableConfig.getFreshness())
+          .releaseWindow(tableConfig.getReleaseWindow())
           .datasetType(tableConfig.getDatasetType())
           .backfillPeriod(tableConfig.getBackfillPeriod())
           .dqRowLimit(tableConfig.getDqRowLimit())
@@ -393,7 +397,8 @@ public class SchemaLifecycleProcessor {
         context.getIncrementalTracker(),
         dataProvider,
         dataWriter,
-        context.getSchemaContext().getOperatingDirectory());
+        context.getSchemaContext().getOperatingDirectory(),
+        context.getSchemaContext().isIgnoreReleaseWindow());
 
     return pipeline.execute();
   }
@@ -968,6 +973,7 @@ public class SchemaLifecycleProcessor {
     private String sourceDirectory;
     private String materializeDirectory;
     private String operatingDirectory;
+    private boolean ignoreReleaseWindow;
     private IncrementalTracker incrementalTracker;
     private SchemaLifecycleListener schemaListener;
     private TableLifecycleListener defaultTableListener;
@@ -1081,6 +1087,18 @@ public class SchemaLifecycleProcessor {
      */
     public Builder operatingDirectory(String directory) {
       this.operatingDirectory = directory;
+      return this;
+    }
+
+    /**
+     * Sets whether the {@code releaseWindow:} gate should be bypassed for this run (the
+     * {@code ignoreReleaseWindow} schema operand).
+     *
+     * @param ignoreReleaseWindow true to bypass; false (default) to enforce the gate
+     * @return this builder
+     */
+    public Builder ignoreReleaseWindow(boolean ignoreReleaseWindow) {
+      this.ignoreReleaseWindow = ignoreReleaseWindow;
       return this;
     }
 

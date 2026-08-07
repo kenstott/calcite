@@ -867,10 +867,11 @@ ENDJSON
 #     months       Comma-separated month numbers (1=Jan … 12=Dec)
 #     year_parity  Optional: "odd" or "even" — further constrains to odd/even calendar years
 #
-#   within_release_dow <label> <days>
-#     days         Comma-separated day-of-week numbers (0=Sun, 1=Mon … 6=Sat)
+# Returns 0 (proceed) or 1 (skip with a log message).
 #
-# Both return 0 (proceed) or 1 (skip with a log message).
+# For a day-of-week constraint, declare `releaseWindow.dow:` in the schema YAML and
+# use table_in_window below — check-release-window.py implements dow alongside months
+# and yearParity, so the YAML stays the single place a table's cadence is described.
 
 within_release_window() {
   local label=$1 months=$2 year_parity="${3:-any}"
@@ -899,26 +900,15 @@ within_release_window() {
   return 1
 }
 
-within_release_dow() {
-  local label=$1 days=$2
-
-  local current_dow
-  current_dow=$(date +%w)   # 0=Sunday … 6=Saturday
-
-  IFS=',' read -ra dow_list <<< "$days"
-  for d in "${dow_list[@]}"; do
-    if [ "$current_dow" -eq "$d" ]; then
-      return 0
-    fi
-  done
-
-  log_info "$(basename "$0"): skipping $label — outside run day (days: $days, today: DOW $current_dow)"
-  return 1
-}
-
 # Schema-YAML-driven window check. Reads releaseWindow: from the named table in
-# the schema YAML and delegates to check-release-window.py.
+# the schema YAML and delegates to check-release-window.py, which implements the
+# full set of constraints (months, dow, yearParity).
 # Falls back to proceed (0) if Python or the checker script is unavailable.
+#
+# FORCE=true forwards --force to the checker rather than being short-circuited by
+# the caller. Both forcing paths then agree, and the bypass is logged by the one
+# component that knows which constraint it is bypassing.
+#
 # Usage: table_in_window <schema_yaml_path> <table_name>
 table_in_window() {
   local schema_yaml=$1 table_name=$2
@@ -929,7 +919,12 @@ table_in_window() {
     return 0
   fi
 
-  if python3 "$checker" "$schema_yaml" "$table_name"; then
+  local force_arg=()
+  if [ "${FORCE:-false}" = "true" ]; then
+    force_arg=(--force)
+  fi
+
+  if python3 "$checker" "$schema_yaml" "$table_name" "${force_arg[@]}"; then
     return 0
   else
     return 1
