@@ -1,11 +1,43 @@
 # Requirements Specification: Improving Question Quality at the MCP Server
 
-**Status:** Draft
+**Status:** Implemented
 **Module:** `askamerica-engine` (MCP server)
 **Author:** (kenstott)
 **Date:** 2026-06-13
 
 ---
+
+## 0. Implementation
+
+R1–R10 are implemented across three files:
+
+- `QuestionGuidance.java` — the rubric (§4), the eight contrastive exemplars, and the six
+  parameterized prompt templates. R1–R3, R9.
+- `QuestionDiagnostics.java` — the envelope and the detectable-defect catalog (§6). R4–R8.
+- `McpServer.java` — the wiring: exemplars into tool descriptions, the rubric into
+  `initialize` `instructions`, `prompts/list` + `prompts/get`, the `critique_query` tool
+  (R10), and the envelope as a second content block on every analytical result.
+
+Two implementation decisions worth stating, because AC6 rests on both:
+
+1. **The envelope is a sibling content block, never merged into the payload.** The data block
+   stays `content[0]` and stays exactly the bytes it was, so a host that indexes it and parses
+   it as a JSON array is unaffected. Merging would break every such host at once.
+2. **A failed diagnostic check reports itself** (`diagnostics_incomplete`) rather than
+   returning an empty warnings array. An empty array is indistinguishable from a clean result,
+   so a silently-broken check would read as a passing one.
+
+One gap the work surfaced and closed: the no-push-down refusal (R8/AC4) reached the client
+with its directed explanation only when the aggregate shared an `EnumerableAggregate` with
+another aggregate and failed to *compile*. When it was alone, the stub's own
+`UnsupportedOperationException` reached the client verbatim — "no Calcite enumerable
+implementation" — with no runnable alternative named. Both shapes now resolve to the same
+directed message.
+
+Coverage: `QuestionDiagnosticsTest` (AC1, AC2, the catalog, and the negative cases that keep
+the warnings from becoming noise), `QuestionGuidanceTest` (AC3, the templates), and
+`McpServerIntegrationTest` (AC6 at the wire, plus prompts and the exemplars in the live
+`tools/list`). AC5 is an evaluation, not a test — see §8.
 
 ## 1. Background & Problem
 

@@ -59,9 +59,38 @@ public class McpServerIntegrationTest {
 
   private static final Logger LOGGER = Logger.getLogger(McpServerIntegrationTest.class.getName());
 
-  /** Timeout covering R2 connection + Iceberg metadata reads on first schema access. */
-  private static final long SCHEMA_INIT_TIMEOUT_MS = 120_000;
-  /** Timeout for responses once schema is warmed up. */
+  /**
+   * Timeout covering a server process's one-time schema mount.
+   *
+   * <p>That mount is a per-process cost, not a per-schema or per-query one, and it is not a
+   * metadata rebuild: the jar ships a seeded DuckDB catalog, and a server started against a
+   * completely empty data dir still reports every Iceberg view reused and none rebuilt (356/0
+   * measured), so no object-store metadata reads happen. What it pays for is mounting all 26
+   * schemas onto one connection and creating the deferred SQL views. Measured at 231s
+   * standalone; 298–377s under this suite, which competes with itself.
+   *
+   * <p>This class pays it once per <em>test method</em>, because {@code startServer} spawns a
+   * fresh process each time. Once a process is up, queries are sub-second — including against
+   * a schema it has not touched before. Nothing here reflects a cost a running server imposes
+   * on a user.
+   *
+   * <p>Sits just above the server's own 600s schema-init bound ({@code McpServer}'s
+   * {@code latch.await}) so that when a mount overruns, the failure reported is the server's
+   * own "still initializing" message rather than a bare client-side timeout that says nothing
+   * about why. The old 120s value was below every mount measured here — it never fired only
+   * because the read loop blocked past its own deadline (see {@link #readUntilId}).
+   */
+  private static final long SCHEMA_INIT_TIMEOUT_MS = 660_000;
+  /**
+   * Timeout for a response that touches no schema at all — the initialize handshake, the
+   * prompt templates, tools/list.
+   *
+   * <p>Not a "warmed up" timeout: {@code startServer} gives every test method its own fresh
+   * process, so no test ever runs against a warm schema. A call that reaches a schema needs
+   * {@link #SCHEMA_INIT_TIMEOUT_MS} even when it is the test's first, and that includes
+   * {@code list_schemas}, which reads {@code information_schema} despite sounding like a
+   * local lookup.
+   */
   private static final long TOOL_TIMEOUT_MS = 30_000;
 
   private static final AtomicInteger ID_SEQ = new AtomicInteger(1);
@@ -158,7 +187,9 @@ public class McpServerIntegrationTest {
   // ── list_schemas ──────────────────────────────────────────────────────────
 
   @Test void listSchemas_includesRefAndFec() throws Exception {
-    String resp = callTool("list_schemas", "{}", TOOL_TIMEOUT_MS);
+    // list_schemas reads information_schema, so on this test's own fresh server it pays the
+    // full cold mount like any other schema-touching call.
+    String resp = callTool("list_schemas", "{}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
     assertTrue(text.contains("ref"),
         "list_schemas must include 'ref'; got: " + resp);
@@ -174,6 +205,19 @@ public class McpServerIntegrationTest {
     String resp =
         callTool("list_tables", "{\"schema\":\"" + TEST_SCHEMA + "\"}", SCHEMA_INIT_TIMEOUT_MS);
     String text = extractText(resp);
+    // Two failures reach this point looking alike, and attributing one to the other sends the
+    // reader to the wrong place: an empty list is the classpath regression this test was
+    // written for, while a rebuild that overran the server's 600s init bound returns a "still
+    // initializing" error instead. Observed once, under two integration suites running
+    // concurrently.
+    assertFalse(text.contains("is still initializing"),
+        "list_tables(" + TEST_SCHEMA + ") did not finish this server process's one-time "
+            + "schema mount within the server's own 600s bound, so this is a mount-time "
+            + "failure, NOT the classpath regression below. Every test method here spawns a "
+            + "fresh server and so pays that mount again (298-377s measured under this "
+            + "suite), leaving under 2x headroom that anything competing for R2 bandwidth, "
+            + "CPU, or disk can erase. Check for a second test run or an ETL job. Server "
+            + "said: " + text);
     assertFalse(text.equals("[]"),
         "list_tables(" + TEST_SCHEMA + ") returned []. "
             + "Shadow JAR classpath failure — likely missing fs.s3a.impl registration. "
@@ -246,6 +290,123 @@ public class McpServerIntegrationTest {
         "Query result must contain " + TEST_COLUMN + "; got: " + text);
   }
 
+  // ── question quality: ambient teaching, prompts, diagnostics ──────────────
+
+  /**
+   * The no-regression guarantee the diagnostics envelope rests on. It is worth an assertion
+   * at the wire rather than in a unit test because the promise is about what an existing host
+   * receives: the data block must still be the first content block and still be exactly the
+   * JSON array it was, with the envelope arriving as a sibling. Merge the two and every host
+   * that indexes content[0] and parses it as an array breaks at once.
+   */
+  @Test void query_dataBlockIsUnchangedAndDiagnosticsRideAlongsideIt() throws Exception {
+    String resp =
+        callTool("query", "{\"sql\":\"SELECT ticker, title FROM ref.sec_company_tickers "
+            + "FETCH FIRST 3 ROWS ONLY\",\"limit\":10}",
+        SCHEMA_INIT_TIMEOUT_MS);
+    assertFalse(resp.contains("\"isError\":true"), "query returned isError:true — " + resp);
+
+    com.fasterxml.jackson.databind.JsonNode content =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(resp).path("result").path("content");
+    assertEquals(2, content.size(), "expected data + diagnostics blocks; got: " + resp);
+
+    com.fasterxml.jackson.databind.JsonNode data =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(content.get(0).get("text").asText());
+    assertTrue(data.isArray(), "the first block must still be the bare row array");
+    assertTrue(data.size() > 0, "expected rows from ref.sec_company_tickers");
+    assertFalse(data.get(0).has("diagnostics"),
+        "diagnostics must not be mixed into the rows");
+
+    com.fasterxml.jackson.databind.JsonNode diag =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(content.get(1).get("text").asText()).path("diagnostics");
+    assertTrue(diag.has("warnings"), "diagnostics block missing warnings: " + diag);
+    assertTrue(diag.path("basis").asText().contains("not a claim of validity"),
+        "silence must never read as a clean bill of health: " + diag);
+  }
+
+  @Test void criticalDefectsAreVisibleWithoutRunningTheQuery() throws Exception {
+    String resp = callTool("critique_query",
+        "{\"sql\":\"SELECT corr(a, b) FROM econ.employment_statistics\"}",
+        SCHEMA_INIT_TIMEOUT_MS);
+    assertFalse(resp.contains("\"isError\":true"), "critique_query failed — " + resp);
+    com.fasterxml.jackson.databind.JsonNode out =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(resp).path("result").path("content").get(0).get("text").asText());
+    String types = out.path("diagnostics").path("warnings").toString();
+    assertTrue(types.contains("small_n"),
+        "an association with no COUNT(*) cannot be judged for significance: " + types);
+    assertTrue(types.contains("uncontrolled_confound"),
+        "corr() conditions on nothing and the critique must say so: " + types);
+    assertTrue(out.path("rubric").asText().contains("topic, not a question"),
+        "the critique should hand back the rubric it judged against");
+  }
+
+  @Test void initializeAdvertisesPromptsAndTeachesTheRubric() throws Exception {
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":"
+        + "{\"protocolVersion\":\"2024-11-05\","
+        + "\"clientInfo\":{\"name\":\"test\",\"version\":\"0.0.1\"}},"
+        + "\"id\":9001}");
+    String resp = readUntilId(9001, TOOL_TIMEOUT_MS);
+    com.fasterxml.jackson.databind.JsonNode result =
+        new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp).path("result");
+    assertTrue(result.path("capabilities").has("prompts"),
+        "prompts must be advertised or no client will ask for them: " + resp);
+    String instructions = result.path("instructions").asText();
+    assertTrue(instructions.contains("topic, not a question"),
+        "the rubric is the global backstop for hosts that read instructions");
+    assertTrue(instructions.contains("diagnostics"),
+        "a host that is not told the envelope exists will not read it");
+  }
+
+  @Test void promptTemplatesAreListableAndRenderFilledIn() throws Exception {
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"prompts/list\",\"params\":{},\"id\":9002}");
+    String listResp = readUntilId(9002, TOOL_TIMEOUT_MS);
+    assertTrue(listResp.contains("marginal_comparison"),
+        "prompts/list must return the templates: " + listResp);
+
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"prompts/get\",\"params\":"
+        + "{\"name\":\"trend_check\",\"arguments\":{\"measure\":\"violent crime per 100k\","
+        + "\"grain\":\"agency\",\"window\":\"2015-2023\"}},\"id\":9003}");
+    String getResp = readUntilId(9003, TOOL_TIMEOUT_MS);
+    assertTrue(getResp.contains("violent crime per 100k"),
+        "prompts/get must substitute its arguments: " + getResp);
+    assertFalse(getResp.contains("{measure}"), "placeholder left unsubstituted: " + getResp);
+  }
+
+  @Test void toolDescriptionsCarryTheContrastiveExemplars() throws Exception {
+    send("{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"params\":{},\"id\":9004}");
+    String resp = readUntilId(9004, TOOL_TIMEOUT_MS);
+    com.fasterxml.jackson.databind.JsonNode tools =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(resp).path("result").path("tools");
+    String queryDescription = null;
+    boolean sawCritique = false;
+    for (com.fasterxml.jackson.databind.JsonNode t : tools) {
+      if ("query".equals(t.path("name").asText())) {
+        queryDescription = t.path("description").asText();
+      }
+      if ("critique_query".equals(t.path("name").asText())) {
+        sawCritique = true;
+      }
+    }
+    assertNotNull(queryDescription, "query tool missing from tools/list");
+    assertTrue(sawCritique, "critique_query missing from tools/list");
+    int exemplars = 0;
+    for (QuestionGuidance.Exemplar e : QuestionGuidance.EXEMPLARS) {
+      if (queryDescription.contains(e.vague) && queryDescription.contains(e.sharpened)) {
+        exemplars++;
+      }
+    }
+    assertTrue(exemplars >= 6,
+        "the query description must carry the full contrastive set; found " + exemplars);
+    assertTrue(queryDescription.contains("[honest-refusal]"),
+        "the refusal exemplars are what stop the set teaching that everything is answerable");
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private String callTool(String name, String argsJson, long timeoutMs) throws Exception {
@@ -283,6 +444,16 @@ public class McpServerIntegrationTest {
       if (!mcpProcess.isAlive()) {
         fail("MCP server process exited unexpectedly (exit=" + mcpProcess.exitValue()
             + ")\n--- server stderr (tail) ---\n" + tailStderr());
+      }
+      // readLine() blocks until a line arrives, and stdout carries nothing but JSON-RPC
+      // responses (stderr is redirected to a file), so during a several-minute schema mount
+      // it blocks straight through the deadline the loop condition is checking. That made
+      // every timeout here decorative: mounts measured at 310s passed a nominal 120s bound,
+      // and a genuinely hung server would have hung the suite rather than failing it.
+      // ready() keeps the deadline real by never entering a blocking read.
+      if (!mcpStdout.ready()) {
+        Thread.sleep(50);
+        continue;
       }
       String line = mcpStdout.readLine();
       if (line == null) {
