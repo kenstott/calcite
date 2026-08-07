@@ -196,6 +196,14 @@ intent.
 
 ## 8. Evaluation
 
+**Status: AC5 is not verified.** A first attempt is written up in
+[question-quality-ac5-findings.md](question-quality-ac5-findings.md). Across four paired
+runs spanning two host tiers, both arms reached correct answers every time and no pair
+showed the envelope producing a corrective the other arm lacked — but the defect scenarios
+did not reliably fire, so that is mostly a measurement of the envelope's value when nothing
+has gone wrong. The findings note what a real test would need. Read it before treating
+either the mechanism or its absence as validated.
+
 Tie measurement to the existing eval bank
 (`.claude/skills/askamerica-comparative-eval`):
 
