@@ -413,6 +413,323 @@
       "acs": {
         "allYears": {"variable": "B01001_001E"}
       }
+    },
+    "total_population_moe": {
+      "description": "Margin of error (90% CI) for total_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B01001_001M"}
+      }
+    },
+    "white_alone_moe": {
+      "description": "Margin of error (90% CI) for white_alone",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B02001_002M"}
+      }
+    },
+    "black_african_american_alone_moe": {
+      "description": "Margin of error (90% CI) for black_african_american_alone",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B02001_003M"}
+      }
+    },
+    "asian_alone_moe": {
+      "description": "Margin of error (90% CI) for asian_alone",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B02001_005M"}
+      }
+    },
+    "male_population_moe": {
+      "description": "Margin of error (90% CI) for male_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B01001_002M"}
+      }
+    },
+    "female_population_moe": {
+      "description": "Margin of error (90% CI) for female_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B01001_026M"}
+      }
+    },
+    "total_housing_units_moe": {
+      "description": "Margin of error (90% CI) for total_housing_units",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B25001_001M"}
+      }
+    },
+    "occupied_housing_units_moe": {
+      "description": "Margin of error (90% CI) for occupied_housing_units",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B25002_002M"}
+      }
+    },
+    "vacant_housing_units_moe": {
+      "description": "Margin of error (90% CI) for vacant_housing_units",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B25002_003M"}
+      }
+    },
+    "median_household_income_moe": {
+      "description": "Margin of error (90% CI) for median_household_income",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B19013_001M"}
+      }
+    },
+    "per_capita_income_moe": {
+      "description": "Margin of error (90% CI) for per_capita_income",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B19301_001M"}
+      }
+    },
+    "median_home_value_moe": {
+      "description": "Margin of error (90% CI) for median_home_value",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B25077_001M"}
+      }
+    },
+    "median_gross_rent_moe": {
+      "description": "Margin of error (90% CI) for median_gross_rent",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B25064_001M"}
+      }
+    },
+    "bachelor_degree_moe": {
+      "description": "Margin of error (90% CI) for bachelor_degree",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2011": {"variable": "B15002_015M"},
+        "2012": {"variable": "B15003_022M"},
+        "allYears": {"variable": "B15003_022M"}
+      }
+    },
+    "masters_degree_moe": {
+      "description": "Margin of error (90% CI) for masters_degree",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_023M"}
+      }
+    },
+    "doctorate_degree_moe": {
+      "description": "Margin of error (90% CI) for doctorate_degree",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B15003_025M"}
+      }
+    },
+    "high_school_graduate_moe": {
+      "description": "Margin of error (90% CI) for high_school_graduate",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2011": {"variable": "B15002_011M"},
+        "2012": {"variable": "B15003_017M"},
+        "allYears": {"variable": "B15003_017M"}
+      }
+    },
+    "population_25_and_over_moe": {
+      "description": "Margin of error (90% CI) for population_25_and_over",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2011": {"variable": "B15002_001M"},
+        "2012": {"variable": "B15003_001M"},
+        "allYears": {"variable": "B15003_001M"}
+      }
+    },
+    "unemployed_population_moe": {
+      "description": "Margin of error (90% CI) for unemployed_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_005M"}
+      }
+    },
+    "labor_force_participation_moe": {
+      "description": "Margin of error (90% CI) for labor_force_participation",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_002M"}
+      }
+    },
+    "employed_population_moe": {
+      "description": "Margin of error (90% CI) for employed_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_004M"}
+      }
+    },
+    "not_in_labor_force_moe": {
+      "description": "Margin of error (90% CI) for not_in_labor_force",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B23025_007M"}
+      }
+    },
+    "below_poverty_level_moe": {
+      "description": "Margin of error (90% CI) for below_poverty_level",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B17001_002M"}
+      }
+    },
+    "total_population_poverty_determined_moe": {
+      "description": "Margin of error (90% CI) for total_population_poverty_determined",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B17001_001M"}
+      }
+    },
+    "mean_travel_time_to_work_moe": {
+      "description": "Margin of error (90% CI) for mean_travel_time_to_work",
+      "dataType": "DOUBLE",
+      "acs": {
+        "allYears": {"variable": "B08303_001M"}
+      }
+    },
+    "drove_alone_to_work_moe": {
+      "description": "Margin of error (90% CI) for drove_alone_to_work",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B08301_010M"}
+      }
+    },
+    "public_transportation_to_work_moe": {
+      "description": "Margin of error (90% CI) for public_transportation_to_work",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B08301_021M"}
+      }
+    },
+    "health_insurance_coverage_moe": {
+      "description": "Margin of error (90% CI) for health_insurance_coverage",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2012": {"variable": "B992701_002M"},
+        "2013": {"variable": "B27001_004M"},
+        "allYears": {"variable": "B27001_004M"}
+      }
+    },
+    "no_health_insurance_moe": {
+      "description": "Margin of error (90% CI) for no_health_insurance",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2012": {"variable": "B992701_003M"},
+        "2013": {"variable": "B27001_007M"},
+        "allYears": {"variable": "B27001_007M"}
+      }
+    },
+    "total_population_health_insurance_moe": {
+      "description": "Margin of error (90% CI) for total_population_health_insurance",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2012": {"variable": "B992701_001M"},
+        "2013": {"variable": "B27001_001M"},
+        "allYears": {"variable": "B27001_001M"}
+      }
+    },
+    "speak_english_only_moe": {
+      "description": "Margin of error (90% CI) for speak_english_only",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B16001_002M"}
+      }
+    },
+    "speak_language_other_than_english_moe": {
+      "description": "Margin of error (90% CI) for speak_language_other_than_english",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B16001_003M"}
+      }
+    },
+    "total_population_language_moe": {
+      "description": "Margin of error (90% CI) for total_population_language",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B16001_001M"}
+      }
+    },
+    "with_disability_moe": {
+      "description": "Margin of error (90% CI) for with_disability",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2012": {"variable": "B18101_001M"},
+        "2013": {"variable": "B18101_004M"},
+        "allYears": {"variable": "B18101_004M"}
+      }
+    },
+    "no_disability_moe": {
+      "description": "Margin of error (90% CI) for no_disability",
+      "dataType": "LONG",
+      "acs": {
+        "2007-2012": {"variable": "B18101_020M"},
+        "2013": {"variable": "B18101_007M"},
+        "allYears": {"variable": "B18101_007M"}
+      }
+    },
+    "veteran_status_moe": {
+      "description": "Margin of error (90% CI) for veteran_status",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B21001_002M"}
+      }
+    },
+    "nonveteran_population_moe": {
+      "description": "Margin of error (90% CI) for nonveteran_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B21001_005M"}
+      }
+    },
+    "moved_within_same_county_moe": {
+      "description": "Margin of error (90% CI) for moved_within_same_county",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B07001_017M"}
+      }
+    },
+    "moved_from_different_state_moe": {
+      "description": "Margin of error (90% CI) for moved_from_different_state",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B07001_065M"}
+      }
+    },
+    "management_occupations_moe": {
+      "description": "Margin of error (90% CI) for management_occupations",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "C24010_003M"}
+      }
+    },
+    "service_occupations_moe": {
+      "description": "Margin of error (90% CI) for service_occupations",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "C24010_019M"}
+      }
+    },
+    "total_employed_population_moe": {
+      "description": "Margin of error (90% CI) for total_employed_population",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "C24010_001M"}
+      }
+    },
+    "population_estimate_moe": {
+      "description": "Margin of error (90% CI) for population_estimate",
+      "dataType": "LONG",
+      "acs": {
+        "allYears": {"variable": "B01001_001M"}
+      }
     }
   },
   "tableDefinitions": {
@@ -458,7 +775,13 @@
         "female_population",
         "white_alone",
         "black_african_american_alone",
-        "asian_alone"
+        "asian_alone",
+        "total_population_moe",
+        "male_population_moe",
+        "female_population_moe",
+        "white_alone_moe",
+        "black_african_american_alone_moe",
+        "asian_alone_moe"
       ]
     },
     "acs_demographics": {
@@ -467,14 +790,18 @@
       "conceptualColumns": [
         "total_population",
         "male_population",
-        "female_population"
+        "female_population",
+        "total_population_moe",
+        "male_population_moe",
+        "female_population_moe"
       ]
     },
     "acs_income": {
       "description": "Household and family income statistics from ACS",
       "requiredColumns": ["geoid", "year", "state_fips"],
       "conceptualColumns": [
-        "median_household_income"
+        "median_household_income",
+        "median_household_income_moe"
       ]
     },
     "acs_poverty": {
@@ -483,7 +810,9 @@
       "conceptualColumns": [
         "below_poverty_level",
         "total_population_poverty_determined",
-        "poverty_rate"
+        "poverty_rate",
+        "below_poverty_level_moe",
+        "total_population_poverty_determined_moe"
       ]
     },
     "acs_employment": {
@@ -493,7 +822,10 @@
         "employed_population",
         "unemployed_population",
         "labor_force_participation",
-        "unemployment_rate"
+        "unemployment_rate",
+        "employed_population_moe",
+        "unemployed_population_moe",
+        "labor_force_participation_moe"
       ]
     },
     "acs_education": {
@@ -502,7 +834,10 @@
       "conceptualColumns": [
         "population_25_and_over",
         "high_school_graduate",
-        "bachelor_degree"
+        "bachelor_degree",
+        "population_25_and_over_moe",
+        "high_school_graduate_moe",
+        "bachelor_degree_moe"
       ]
     },
     "acs_housing": {
@@ -512,7 +847,11 @@
         "total_housing_units",
         "occupied_housing_units",
         "vacant_housing_units",
-        "median_home_value"
+        "median_home_value",
+        "total_housing_units_moe",
+        "occupied_housing_units_moe",
+        "vacant_housing_units_moe",
+        "median_home_value_moe"
       ]
     },
     "acs_housing_costs": {
@@ -520,7 +859,9 @@
       "requiredColumns": ["geoid", "year", "state_fips"],
       "conceptualColumns": [
         "median_home_value",
-        "median_gross_rent"
+        "median_gross_rent",
+        "median_home_value_moe",
+        "median_gross_rent_moe"
       ]
     },
     "acs_commuting": {
@@ -529,7 +870,10 @@
       "conceptualColumns": [
         "mean_travel_time_to_work",
         "drove_alone_to_work",
-        "public_transportation_to_work"
+        "public_transportation_to_work",
+        "mean_travel_time_to_work_moe",
+        "drove_alone_to_work_moe",
+        "public_transportation_to_work_moe"
       ]
     },
     "acs_health_insurance": {
@@ -538,7 +882,10 @@
       "conceptualColumns": [
         "total_population_health_insurance",
         "health_insurance_coverage",
-        "no_health_insurance"
+        "no_health_insurance",
+        "total_population_health_insurance_moe",
+        "health_insurance_coverage_moe",
+        "no_health_insurance_moe"
       ]
     },
     "acs_language": {
@@ -547,7 +894,10 @@
       "conceptualColumns": [
         "total_population_language",
         "speak_english_only",
-        "speak_language_other_than_english"
+        "speak_language_other_than_english",
+        "total_population_language_moe",
+        "speak_english_only_moe",
+        "speak_language_other_than_english_moe"
       ]
     },
     "acs_disability": {
@@ -555,7 +905,9 @@
       "requiredColumns": ["geoid", "year", "state_fips"],
       "conceptualColumns": [
         "with_disability",
-        "no_disability"
+        "no_disability",
+        "with_disability_moe",
+        "no_disability_moe"
       ]
     },
     "acs_veterans": {
@@ -563,7 +915,9 @@
       "requiredColumns": ["geoid", "year", "state_fips"],
       "conceptualColumns": [
         "veteran_status",
-        "nonveteran_population"
+        "nonveteran_population",
+        "veteran_status_moe",
+        "nonveteran_population_moe"
       ]
     },
     "acs_migration": {
@@ -571,7 +925,9 @@
       "requiredColumns": ["geoid", "year", "state_fips"],
       "conceptualColumns": [
         "moved_within_same_county",
-        "moved_from_different_state"
+        "moved_from_different_state",
+        "moved_within_same_county_moe",
+        "moved_from_different_state_moe"
       ]
     },
     "acs_occupation": {
@@ -580,7 +936,10 @@
       "conceptualColumns": [
         "total_employed_population",
         "management_occupations",
-        "service_occupations"
+        "service_occupations",
+        "total_employed_population_moe",
+        "management_occupations_moe",
+        "service_occupations_moe"
       ]
     },
     "economic_census": {
