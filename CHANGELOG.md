@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.72.0](https://github.com/kenstott/calcite/compare/engine-v0.71.0...engine-v0.72.0) (2026-08-07)
+
+
+### Features
+
+* **askamerica-engine:** raise question quality at the MCP server ([38c7165](https://github.com/kenstott/calcite/commit/38c7165f6a71454305155181161ee1212e2d094a))
+* **file/etl:** commit each partition as it is written, not only at run end ([c5d30b1](https://github.com/kenstott/calcite/commit/c5d30b15f7596b4f20a7024f38cd2ccfc3b53f88))
+* **file/etl:** enforce table-root releaseWindow: in the engine ([dd073f1](https://github.com/kenstott/calcite/commit/dd073f11720dd5f84fb25fc43a6389cf9f960d56))
+* **file/statistics:** cache primary-key uniqueness so verify stops scanning ([306b70f](https://github.com/kenstott/calcite/commit/306b70fd7a008eedbd7113e1ebc2645e9ae5f7e5))
+* **govdata/census:** add ACS margin-of-error variables to the conceptual mappings ([144e4e3](https://github.com/kenstott/calcite/commit/144e4e356734bf3ab2763519cf49c42f8b28dbfe))
+* **govdata/census:** add MOE columns to expression-defined ACS tables ([6d046f9](https://github.com/kenstott/calcite/commit/6d046f9b3d0d0e528280964c4c8ce8d72e767499))
+* **govdata/census:** normalize ACS margin-of-error sentinels to null ([0727cb8](https://github.com/kenstott/calcite/commit/0727cb8cc3cf41cc35c36a635123717cc293d5fd))
+* **govdata/scripts:** forward --force from run-scheduled.sh to run-pool.sh ([ceab24b](https://github.com/kenstott/calcite/commit/ceab24bc95ea636d196447f3e37e15d77ed20a6d))
+* **govdata/scripts:** publish column statistics on ETL runs by default ([4ba9c82](https://github.com/kenstott/calcite/commit/4ba9c82fce428efa5a5b88834d29a76da6b6a18c))
+
+
+### Bug Fixes
+
+* **askamerica-engine/test:** make the MCP integration timeouts real ([caa2991](https://github.com/kenstott/calcite/commit/caa2991e4c09da129e8452a033041cbbee5fc637))
+* **file/askamerica:** report views as VIEW in information_schema and MCP ([f8392a7](https://github.com/kenstott/calcite/commit/f8392a78a9b0c0087f247b0204607ccf8ceeb2fb))
+* **file/etl:** let a declared string type win over CSV value inference ([d8a5195](https://github.com/kenstott/calcite/commit/d8a5195f0d50f95458724e1d168c363491143bb8))
+* **file/iceberg:** a pass that staged nothing must materialize nothing ([ab00b8a](https://github.com/kenstott/calcite/commit/ab00b8a457aa92a3c3d05cad7d98a63f45da6448))
+* **file/iceberg:** apply the DuckDB query timeout to every fetch path ([9b17b72](https://github.com/kenstott/calcite/commit/9b17b72effade2ee1491114aa52565d03bec16cc))
+* **file/storage:** drain object reads so a slow consumer can't truncate them ([441bf49](https://github.com/kenstott/calcite/commit/441bf497b3edceaff193de646693833a69e8591f))
+* **govdata/patents:** cap USPTO download retries to respect per-URI request budget ([7b1a7a6](https://github.com/kenstott/calcite/commit/7b1a7a6d327bb94a71b162dbe5d99f3f2ca66e88))
+* **govdata/scripts:** keep model-verify fan-out rolling, not barriered ([35c198f](https://github.com/kenstott/calcite/commit/35c198f049c897f053de07b888f17e551eb0ea46))
+* **govdata/scripts:** stop R2 writers outliving the scheduler on shutdown ([869c8bf](https://github.com/kenstott/calcite/commit/869c8bf658b547ab04b9b314d3a526e9d49e895d))
+
 ## [0.71.0](https://github.com/kenstott/calcite/compare/engine-v0.70.0...engine-v0.71.0) (2026-08-04)
 
 
