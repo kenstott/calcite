@@ -264,6 +264,20 @@ public class CensusDataTransformer {
       return null;
     }
 
+    // ACS margin-of-error columns: a real margin is never negative, and the Census "jam"
+    // sentinels (-555555555 etc.) and annotation markers ((X), *, -, N) all mean "no margin
+    // available". Normalize any of them to null so a sentinel is never stored as a real margin.
+    // Guarded to _moe columns, so estimate-column behavior is unchanged.
+    if (columnName != null && columnName.endsWith("_moe")) {
+      try {
+        if (Double.parseDouble(stringValue.trim()) < 0) {
+          return null;
+        }
+      } catch (NumberFormatException nfe) {
+        return null;
+      }
+    }
+
     // Get the data type from the variable mapping
     if (censusType != null) {
       ConceptualVariableMapper.VariableMapping mapping =

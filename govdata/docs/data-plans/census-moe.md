@@ -118,12 +118,27 @@ B19013_001M → median_household_income_moe    (margin,   goes to acs_income_moe
 
 Steps 1–2 are shared. Step 3 differs by shape; do **3A** (recommended) or **3B**.
 
-1. **`ConceptualVariableMapper` / `CensusVariableMapper`** — add a helper that, given a table's
-   estimate variable map, returns the MOE map (`Bxxxxx_yyyE`→`Bxxxxx_yyyM`,
-   `friendly`→`friendly_moe`), for ACS census types only (`acs5`/`acs1`), empty for decennial.
+**Wiring gotcha (verified in source).** Do NOT derive the `_moe` entries in Java inside the
+shared `ConceptualVariableMapper.getVariablesForTable`. The instance overload
+(`getVariablesForTable(tableName, dimensions)`, used by the fetch at `CensusApiClient:411`)
+re-resolves every conceptual name through `getVariableMapping(...)` and **drops any name it can't
+find in the config** (`ConceptualVariableMapper.java:470`). A Java-derived `<name>_moe` has no
+config entry, so it would be dropped from the *fetch* but kept by the *transform* → the `M`
+variables are never requested and every `_moe` column comes back null. Therefore:
 
-2. **Fetch** — include the MOE variables in the same Census API request as the estimates for ACS
-   tables (no extra calls; `M` rides with `E`), with sentinel→null normalization (§4).
+1. **Config, not Java — `census-variable-mappings.json`.** For each ACS `conceptualVariable`
+   whose mapping is `Bxxxxx_yyyE`, add a sibling `conceptualVariable` `<name>_moe` → `Bxxxxx_yyyM`
+   (same dataset, numeric dataType), and add `<name>_moe` to the `conceptualColumns` of every ACS
+   table that lists `<name>`. This reuses the entire existing fetch/transform/instance-mapping
+   pipeline with no mapper logic change, and survives the `:470` filter because the `_moe`
+   conceptual now *is* in the config. Script-generate it (derive from the existing `…E` entries) —
+   do not hand-edit dozens of entries. Max 6 estimates per table → ≤12 vars with margins, so the
+   Census 50-variable request cap is never approached (no batching needed).
+
+2. **Sentinel → null — DONE.** `CensusDataTransformer.convertValueByType` now returns null for any
+   `_moe` column whose value is negative or a non-numeric marker (a real margin is never
+   negative; `-555555555`/`(X)`/`*`/`-`/`N` all mean "no margin"). Guarded to `_moe` columns, so
+   estimate columns are unchanged. This is the only Java change and it is already in place.
 
 - **3A. Inline columns (recommended).** Append the `<measure>_moe` columns to the estimate
   table's write; the existing `CensusDataTransformer` path handles them with no split. In
