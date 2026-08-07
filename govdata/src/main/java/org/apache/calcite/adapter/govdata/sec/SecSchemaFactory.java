@@ -1408,7 +1408,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Determine fileChunkSize: YAML-configured value takes precedence over the derived value.
     // processWithFileChunkingToIceberg() loads all rows from fileChunkSize files into memory at once,
-    // so large chunks risk both OOM and exceeding CHUNK_QUERY_TIMEOUT_SECONDS (1800s) over R2.
+    // so large chunks risk both OOM and exceeding QUERY_TIMEOUT_SECONDS (1800s) over R2.
     // Derivation fallback: rowBatchSize/500 (e.g., 50000/500=100 files × ~332 rows/file ≈ 33k rows).
     int fileChunkSize = 0;
     if (materializeConfig != null) {

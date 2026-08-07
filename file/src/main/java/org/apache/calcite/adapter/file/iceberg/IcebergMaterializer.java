@@ -85,7 +85,7 @@ public class IcebergMaterializer {
    * Observed worst-case chunk time is ~22 min; 30 min gives headroom while
    * catching R2 network stalls that hang indefinitely (4+ hours observed).
    */
-  private static final long CHUNK_QUERY_TIMEOUT_SECONDS = 1800L;
+  private static final long QUERY_TIMEOUT_SECONDS = 1800L;
 
   /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
   private static final String DUCKDB_MEMORY_LIMIT =
@@ -1228,7 +1228,7 @@ public class IcebergMaterializer {
     long startTime = System.currentTimeMillis();
 
     // Fetch all data into memory
-    List<Map<String, Object>> rows = fetchRows(conn, sql);
+    List<Map<String, Object>> rows = fetchRowsWithTimeout(conn, sql, QUERY_TIMEOUT_SECONDS);
 
     long fetchElapsed = System.currentTimeMillis() - startTime;
     LOGGER.info("DuckDB SELECT completed: {} rows in {}ms", rows.size(), fetchElapsed);
@@ -1302,7 +1302,7 @@ public class IcebergMaterializer {
       long batchStart = System.currentTimeMillis();
 
       // Fetch this batch of rows
-      List<Map<String, Object>> rows = fetchRows(conn, sql);
+      List<Map<String, Object>> rows = fetchRowsWithTimeout(conn, sql, QUERY_TIMEOUT_SECONDS);
 
       if (rows.isEmpty()) {
         LOGGER.debug("No more rows at offset {}", processedRows);
@@ -1410,7 +1410,7 @@ public class IcebergMaterializer {
       LOGGER.info("File chunk {}/{}: querying {} files", chunkNum, totalChunks, chunk.size());
 
       long chunkStart = System.currentTimeMillis();
-      List<Map<String, Object>> rows = fetchRowsWithTimeout(conn, sql, CHUNK_QUERY_TIMEOUT_SECONDS);
+      List<Map<String, Object>> rows = fetchRowsWithTimeout(conn, sql, QUERY_TIMEOUT_SECONDS);
       long chunkElapsed = System.currentTimeMillis() - chunkStart;
 
       if (rows.isEmpty()) {
@@ -1694,10 +1694,15 @@ public class IcebergMaterializer {
 
   /**
    * Executes fetchRows on a daemon thread with a hard Java-level timeout.
-   * DuckDB JDBC does not implement Statement.setQueryTimeout(), so R2 network stalls
+   * DuckDB JDBC does not implement Statement.setQueryTimeout(), so a network stall
    * can block indefinitely. On timeout, the connection is closed to unblock the DuckDB
    * thread, and a SQLException is thrown so the caller's retry logic can resume from
    * the last tracker-flushed chunk.
+   *
+   * <p>Every fetch path routes through here. A raw {@link #fetchRows} call has no timeout
+   * of any kind, so a stalled query strands the whole worker: the thread sits in native
+   * DuckDB code reporting RUNNABLE while consuming no CPU, no exception is ever raised,
+   * and the retry above it never fires.
    */
   private List<Map<String, Object>> fetchRowsWithTimeout(
       final Connection conn, final String sql, final long timeoutSeconds) throws SQLException {
@@ -1718,7 +1723,7 @@ public class IcebergMaterializer {
       }
     });
     worker.setDaemon(true);
-    worker.setName("duckdb-chunk-query");
+    worker.setName("duckdb-query");
     worker.start();
 
     boolean completed;
@@ -1729,17 +1734,17 @@ public class IcebergMaterializer {
       try { conn.close(); } catch (Exception closeEx) {
         LOGGER.debug("Failed to close DuckDB connection after interrupt: {}", closeEx.getMessage());
       }
-      throw new SQLException("DuckDB chunk query interrupted");
+      throw new SQLException("DuckDB query interrupted");
     }
 
     if (!completed) {
-      LOGGER.warn("DuckDB chunk query timed out after {}s — closing connection to unblock",
+      LOGGER.warn("DuckDB query timed out after {}s — closing connection to unblock",
           timeoutSeconds);
       try { conn.close(); } catch (Exception closeEx) {
         LOGGER.debug("Failed to close DuckDB connection after timeout: {}", closeEx.getMessage());
       }
       throw new SQLException(
-          "DuckDB chunk query timed out after " + timeoutSeconds + "s (R2 network stall)");
+          "DuckDB query timed out after " + timeoutSeconds + "s (R2 network stall)");
     }
 
     if (error.get() != null) {
