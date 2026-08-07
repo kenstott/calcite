@@ -774,6 +774,11 @@ public class IcebergMaterializer {
 
     // Build batch combinations
     List<Map<String, String>> batches = buildBatchCombinations(config);
+    if (batches == null) {
+      // Batch columns are configured and the ETL pass staged no partitions: nothing to do.
+      long durationMs = System.currentTimeMillis() - startTime;
+      return new MaterializationResult(config.getTargetTableId(), 0, 0, 1, durationMs);
+    }
     if (batches.isEmpty()) {
       // No batching - process all at once
       batches = new ArrayList<Map<String, String>>();
@@ -3317,6 +3322,20 @@ public class IcebergMaterializer {
 
   /**
    * Builds batch combinations from batch_partition_columns.
+   *
+   * <p>Three outcomes, which the caller must keep apart:
+   * <ul>
+   *   <li>a non-empty list — process those batches;</li>
+   *   <li>an empty list — no batch columns are configured, so process everything in one
+   *       unpartitioned batch;</li>
+   *   <li>{@code null} — batch columns are configured and the ETL pass reported writing no
+   *       partitions at all, so there is nothing to materialize.</li>
+   * </ul>
+   *
+   * <p>The last two are opposites and collapsing them is a trap: treating "the pass wrote
+   * nothing" as "no batching configured" turns a no-op into an unpartitioned scan of the whole
+   * source corpus. That scan also carries year=null, which disables the file-list optimization
+   * in {@link #getNewSourceFilePaths} and forces the glob path.
    */
   private List<Map<String, String>> buildBatchCombinations(MaterializationConfig config) {
     List<String> batchColumns = config.getBatchPartitionColumns();
@@ -3345,10 +3364,17 @@ public class IcebergMaterializer {
         // them writes the same orphans again.
         values = yearsFromStagedFiles(config);
         if (values == null) {
+          // The caller said nothing about what it staged — fall back to the configured range.
           values = new ArrayList<String>();
           for (int y = config.getStartYear(); y <= config.getEndYear(); y++) {
             values.add(String.valueOf(y));
           }
+        } else if (values.isEmpty()) {
+          // The caller staged nothing for this table. Materialize nothing — do not fall through
+          // to the no-batching default, which would scan the entire source corpus unpartitioned.
+          LOGGER.info("No staged year partitions for '{}' — nothing to materialize",
+              config.getTargetTableId());
+          return null;
         }
       } else {
         // Query distinct values from source

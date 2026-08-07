@@ -156,6 +156,58 @@ class IcebergMaterializerStagedFilesTest {
         "an empty staged list means there is genuinely nothing to materialize");
   }
 
+  /**
+   * The consumer has to honour the empty list, not just receive it.
+   *
+   * <p>{@code yearsFromStagedFiles} returning empty is only half the contract; buildBatchCombinations
+   * previously dropped the year column when the list was empty, leaving no batch columns at all.
+   * The caller reads that as "no batching configured" and processes one unpartitioned batch — so
+   * "materialize nothing" became a scan of the entire source corpus, carrying year=null, which in
+   * turn disables the file-list optimization. Null keeps the two apart.
+   */
+  @Test void testPassThatStagedNothingBuildsNoBatchesAtAll() throws Exception {
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(FACTS_PATTERN)
+            .targetTableId("financial_line_items")
+            .yearRange(2019, 2026)
+            .batchPartitionColumns(Arrays.asList("year"))
+            .stagedSourceFiles(new ArrayList<String>())
+            .build();
+
+    assertNull(invokeBuildBatchCombinations(config),
+        "a pass that staged nothing must build no batches, not fall through to the "
+            + "unpartitioned (all) default");
+  }
+
+  /** A pass that staged partitions batches exactly those, not the configured range. */
+  @Test void testPassThatStagedPartitionsBatchesOnlyThose() throws Exception {
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern(FACTS_PATTERN)
+            .targetTableId("financial_line_items")
+            .yearRange(2019, 2026)
+            .batchPartitionColumns(Arrays.asList("year"))
+            .stagedSourceFiles(staged())
+            .build();
+
+    List<?> batches = invokeBuildBatchCombinations(config);
+    assertEquals(2, batches.size(), "only the two staged years, not the whole 2019-2026 range");
+  }
+
+  private static List<?> invokeBuildBatchCombinations(
+      IcebergMaterializer.MaterializationConfig config) throws Exception {
+    java.lang.reflect.Method method =
+        IcebergMaterializer.class.getDeclaredMethod("buildBatchCombinations",
+            IcebergMaterializer.MaterializationConfig.class);
+    method.setAccessible(true);
+    // The year branch reads only the config, so a materializer over a throwaway warehouse with no
+    // storage provider is enough — nothing here touches object storage.
+    IcebergMaterializer materializer =
+        new IcebergMaterializer("/tmp/staged-files-test-warehouse", null, null);
+    return (List<?>) method.invoke(materializer, config);
+  }
+
   @Test void testYearMatchIsExact() {
     List<String> result =
         IcebergMaterializer.filterStagedFilesForBatch(staged(), METADATA_PATTERN, "202");
