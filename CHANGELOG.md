@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.72.1](https://github.com/kenstott/calcite/compare/engine-v0.72.0...engine-v0.72.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* **file/duckdb:** retry DuckDB queries once on a live Iceberg commit race ([40a1142](https://github.com/kenstott/calcite/commit/40a1142325ed9a5e5387f705cd0eaeaf49702185))
+* **govdata/census:** remove 20 stray top-level _moe fragments from census-schema.yaml ([4677a8a](https://github.com/kenstott/calcite/commit/4677a8aaf98820de8ae34ac58f60c06d25f27b02))
+
 ## [0.72.0](https://github.com/kenstott/calcite/compare/engine-v0.71.0...engine-v0.72.0) (2026-08-07)
 
 
