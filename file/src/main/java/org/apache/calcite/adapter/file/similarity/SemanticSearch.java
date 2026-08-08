@@ -67,10 +67,13 @@ public final class SemanticSearch {
 
   private static volatile Connection duck;
 
-  // Default codes location (the producer's standard output). Overridable via
+  // Default codes location (the producer's standard output), Hive-partitioned by
+  // source_schema — see vss-local.py's CODES_DATASET. Phase-0 default stays scoped to the
+  // sec partition; cross-schema query scoping (a source_schema parameter or WHERE pushdown
+  // against the partition column) is deferred, not decided here. Overridable via
   // -Dcalcite.vss.codes for non-standard buckets; not required in the normal deployment.
   private static final String DEFAULT_CODES =
-      "s3://govdata-parquet-v1/sec/vectorized_chunk_codes/*.parquet";
+      "s3://govdata-parquet-v1/sec/vectorized_chunk_codes/source_schema=sec/*.parquet";
 
   // S3 access captured from the file adapter's own resolved config (see configure()), so the
   // query reuses the same credentials/endpoint the adapter already set up — no launcher flags.

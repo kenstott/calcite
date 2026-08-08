@@ -1062,6 +1062,11 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # Full static snapshot re-fetched wholesale every run (source.type: constants) --
+        # without this, the Java default (append) duplicates the whole table on every re-run
+        # (retry, --etl-resume, a second invocation), since there's no partition to key an
+        # append off of. Matches countries/figi_instruments/sec_company_tickers above.
+        overwritePartitions: true
 
   # ==========================================================================
   # NAICS_VINTAGE — multi-edition NAICS for period-correct industry lookups
@@ -1131,6 +1136,9 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
+        # on every re-run.
+        overwritePartitions: true
 
   # ==========================================================================
   # NAICS_VINTAGE_MAP — data-year -> applicable NAICS edition
@@ -1178,6 +1186,9 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
+        # on every re-run.
+        overwritePartitions: true
 
   # ==========================================================================
   # SIC — SEC EDGAR Standard Industrial Classification list
@@ -1236,6 +1247,9 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
+        # on every re-run.
+        overwritePartitions: true
 
   # ==========================================================================
   # CURRENCIES — ISO 4217 active currency codes
@@ -1298,6 +1312,9 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
+        # on every re-run.
+        overwritePartitions: true
 
   # ==========================================================================
   # CALENDAR — daily date spine (2010 → current+2yr) with every ISO form + parts

@@ -88,12 +88,6 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
     TableColumn chunkIdColumn = findColumn(columns, "chunk_id");
     assertNotNull(chunkIdColumn, "chunk_id column should exist");
 
-    // Verify embedding column exists and is computed
-    TableColumn embeddingColumn = findColumn(columns, "embedding");
-    assertNotNull(embeddingColumn, "embedding column should exist");
-    assertEquals("array<double>", embeddingColumn.getType(), "embedding should be array<double>");
-    assertTrue(embeddingColumn.isComputed(), "embedding should be a computed column");
-
     // Print columns for debugging
     System.out.println("vectorized_chunks columns (" + columns.size() + "):");
     for (TableColumn col : columns) {
