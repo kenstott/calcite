@@ -2179,6 +2179,142 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 1
 
+  # ==========================================================================
+  # VECTORIZED_CHUNKS — cross-schema semantic-search text index (row-concat mode)
+  # ==========================================================================
+  # See semantic-search-plan.md "Promoting vectorized_chunks" / "Storage shape". This is
+  # a NEW table, not yet the sec.vectorized_chunks promotion described there -- that move
+  # (renaming/relocating SEC's existing 6.4M-row document-chunk table here, and updating
+  # the ~24 files that reference it) is separate, higher-risk work requiring its own
+  # go-ahead. This table currently holds only row-concat-mode content (entity-grain
+  # dimension tables from the v1 registry, e.g. ref.naics); source_type will grow
+  # document-blob values (patent_claim, ntsb_probable_cause, etc.) and cik/accession_number
+  # columns once SEC's content actually migrates in.
+  #
+  # No source: block -- like canonical_org_entity/canonical_person_entity above, this is
+  # populated by an external writer (a row-concat materializer), not standard ETL fetch.
+  - name: vectorized_chunks
+    comment: >
+      Cross-schema semantic-search text index. One row per chunk of an included source
+      row's concatenated string columns (source_type: row_concat) or, for document-blob
+      sources once added, one row per document-chunker chunk. Generalized key
+      (source_schema, source_table, stringified_fk, sequence) works for any source with
+      zero schema change; the wide per-source FK columns below are convenience only.
+      Codes (the actual search vectors) live separately in the Hive-partitioned
+      vectorized_chunk_codes dataset, keyed by the same chunk_id — see
+      file/.../similarity/SemanticSearch.java.
+
+    columns:
+      - name: chunk_id
+        type: string
+        nullable: false
+        comment: >
+          Stored convenience unique string, not a PK component -- '<source_schema>:
+          <source_table>:<stringified_fk>:<sequence>'. The join key back from
+          vectorized_chunk_codes (see SemanticSearch.java); the real PK is the
+          4-tuple below.
+      - name: source_schema
+        type: string
+        nullable: false
+        comment: Owning schema of the source row, e.g. 'ref', 'patents', 'fec'
+      - name: source_table
+        type: string
+        nullable: false
+        comment: Source table name within source_schema
+      - name: stringified_fk
+        type: string
+        nullable: false
+        comment: >
+          The source row's own primary key, stringified (handles composite/non-string
+          PKs uniformly). The generic cross-schema fallback identifier -- works for a
+          28th source added tomorrow with no schema change.
+      - name: sequence
+        type: integer
+        nullable: false
+        comment: Order within this source row's chunks (0 for a row-concat text that fit in one chunk)
+      - name: source_type
+        type: string
+        nullable: false
+        comment: "'row_concat' for the naive per-row chunker; document-blob sources add their own values (patent_claim, ntsb_probable_cause, ...)"
+      - name: chunk_text
+        type: string
+        nullable: false
+        comment: "The chunk's text -- for row_concat, the delimited 'col: value | col: value' concatenation"
+      - name: enriched_text
+        type: string
+        nullable: true
+        comment: Normalized/context-tagged text for embedding; mirrors chunk_text for row_concat (no TextNormalizer pass) unless that's shown to help retrieval
+      - name: section
+        type: string
+        nullable: true
+        comment: Document-structure column, populated only for document-blob sources; null for row_concat
+      - name: subsection
+        type: string
+        nullable: true
+        comment: Document-structure column, populated only for document-blob sources; null for row_concat
+      - name: section_path
+        type: string
+        nullable: true
+        comment: Document-structure column, populated only for document-blob sources; null for row_concat
+      - name: paragraph_continuation
+        type: boolean
+        nullable: true
+        comment: Document-structure column, populated only for document-blob sources; null for row_concat
+      - name: speaker_name
+        type: string
+        nullable: true
+        comment: Document-structure column (earnings-call sources); null for row_concat
+      - name: speaker_role
+        type: string
+        nullable: true
+        comment: Document-structure column (earnings-call sources); null for row_concat
+      - name: exhibit_number
+        type: string
+        nullable: true
+        comment: Document-structure column (SEC exhibit sources); null for row_concat
+      - name: financial_concepts
+        type: string
+        nullable: true
+        comment: Document-structure column (SEC/XBRL sources); null for row_concat
+      - name: paragraph_number
+        type: integer
+        nullable: true
+        comment: Document-structure column, populated only for document-blob sources; null for row_concat
+      # Wide per-source FK columns: one nullable column per included source table,
+      # matching that table's own PK shape, populated only on rows from that table.
+      # Mechanically generated per source at build time, not exhaustively hand-curated --
+      # only the sources actually onboarded so far get a column.
+      - name: ref_naics_code
+        type: string
+        nullable: true
+        comment: Populated when source_schema/source_table = 'ref'/'naics'; FK to ref.naics.naics_code
+
+    hooks:
+      # enabled: true is REQUIRED here, not optional -- see entity_org_bridge above for why
+      # (SchemaConfig.fromMap's source-less-table pre-filter checks this raw map key
+      # directly; omitting it silently drops this table from processing entirely).
+      enabled: true
+      tableLifecycleListener: "org.apache.calcite.adapter.govdata.ref.RowConcatChunker"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      targetTableId: vectorized_chunks
+      output:
+        pattern: "source_schema=*/"
+      partition:
+        columns: [source_schema]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 1
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2333,10 +2469,24 @@ constraints:
         comment: LOUs are themselves LEI-registered; links the record's maintainer to its entity
 
   sec_company_tickers:
-    primaryKey: [type, as_of, cik]   # per-day snapshots: cik is unique within an as_of, not across
+    # A cik is NOT unique within an as_of on its own -- a company with multiple share
+    # classes/ticker symbols (e.g. Alphabet: GOOGL/GOOG/GOOGM/GOOGN, all cik 1652044) gets
+    # one row per ticker. Verified live: (type, as_of, cik) alone collides on 2,409 of
+    # 10,415 rows; (type, as_of, cik, ticker) is fully unique. Found via a real PK
+    # violation surfaced by RowConcatChunker's stringified_fk derivation, which follows
+    # this declaration mechanically.
+    primaryKey: [type, as_of, cik, ticker]
 
   figi_instruments:
     primaryKey: [type, figi]
+
+  vectorized_chunks:
+    primaryKey: [source_schema, source_table, stringified_fk, sequence]
+    foreignKeys:
+      - columns: [ref_naics_code]
+        targetTable: naics
+        targetColumns: [naics_code]
+        comment: Populated when source_schema/source_table = 'ref'/'naics'
 
 # ============================================================================
 # VIEWS
