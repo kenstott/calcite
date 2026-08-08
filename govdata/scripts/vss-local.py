@@ -38,6 +38,12 @@ Commands:
                         successive runs. CPU only — no GPU.
   year --year N         Code a single year's delta (manual/targeted).
   stats                 Per-year counts in the codes dataset.
+  row-concat --source-schema S --source-table T --pk-col C --iceberg-path P
+             --columns col1,col2,... [--max-rows N]
+                        Row-concat mode for one entity-grain dimension table (non-SEC):
+                        concatenate each row's string columns, naive-chunk, embed, and
+                        write codes to that source's own partition (see
+                        semantic-search-plan.md 'Row-level design' / 'Table curation').
 """
 
 import argparse
@@ -59,8 +65,11 @@ GOVDATA_HOME = os.environ.get("GOVDATA_HOME") or os.path.abspath(
 PARQUET_BUCKET = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-v1")
 ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/sec/vectorized_chunks"
 # The delivered semantic-search artifact: an append-only parquet dataset of quantized
-# codes (one file per producer run). Overridable so tests can target a scratch prefix.
-CODES_DATASET = os.environ.get("VSS_CODES_DATASET", f"{PARQUET_BUCKET}/sec/vectorized_chunk_codes")
+# codes (one file per producer run), Hive-partitioned by source_schema so a schema-scoped
+# search prunes to its own partition and future non-SEC sources land alongside SEC without
+# a layout change. Overridable so tests can target a scratch prefix.
+CODES_DATASET = os.environ.get(
+    "VSS_CODES_DATASET", f"{PARQUET_BUCKET}/sec/vectorized_chunk_codes/source_schema=sec")
 RCLONE_REMOTE = os.environ.get("GOVDATA_RCLONE_REMOTE", "minio")
 # Consolidate the codes dataset once it exceeds this many files (incremental flush + daily runs
 # accumulate small files; too many slows the query glob + the delta anti-join).
@@ -71,6 +80,22 @@ COMPACT_MIN_FILES = int(os.environ.get("VSS_COMPACT_MIN_FILES", "16"))
 I8_SCALE = float(os.environ.get("VSS_I8_SCALE", "0.35"))
 MEM_LIMIT = os.environ.get("VSS_MEM_LIMIT", "4GB")
 TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/home/adminwsl/tmp_duck")
+# Row-concat mode (non-SEC entity-grain dimension tables): naive fixed-window chunk size /
+# overlap over the delimited column concatenation. Exact numbers per the plan -- tunable,
+# not tied to the embedding model's token limit here since arctic-embed-xs truncates
+# gracefully at 512 tokens and row-concat sources are short (reference/dimension rows).
+ROW_CONCAT_CHUNK_SIZE = int(os.environ.get("VSS_ROW_CONCAT_CHUNK_SIZE", "1000"))
+ROW_CONCAT_CHUNK_OVERLAP = int(os.environ.get("VSS_ROW_CONCAT_CHUNK_OVERLAP", "200"))
+
+
+def codes_dataset_for(source_schema):
+    """Hive-partitioned codes path for a given source_schema -- the same layout SEC's own
+    producer uses (CODES_DATASET above), generalized so a new source needs a registry entry,
+    not a code change. VSS_CODES_DATASET still overrides everything, same as CODES_DATASET."""
+    override = os.environ.get("VSS_CODES_DATASET")
+    if override:
+        return override
+    return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunk_codes/source_schema={source_schema}"
 
 
 # ── Embedder interface ────────────────────────────────────────────────────────
@@ -164,10 +189,14 @@ def _pack_codes(X):
     return W, I8
 
 
-def _write_codes(con, ids, yrs, W, I8, label):
-    """Append one parquet file of codes for this run to the lake dataset."""
+def _write_codes(con, ids, yrs, W, I8, label, dataset=None):
+    """Append one parquet file of codes for this run to the lake dataset. `dataset` defaults
+    to CODES_DATASET (SEC's own producer path); row-concat mode passes its own
+    codes_dataset_for(source_schema) so a second source lands in its own partition without
+    touching SEC's."""
     import numpy as np
     import pyarrow as pa
+    dataset = dataset or CODES_DATASET
     rerank = pa.FixedSizeListArray.from_arrays(pa.array(I8.reshape(-1), type=pa.int8()), 384)
     tbl = pa.table({
         "chunk_id": pa.array(ids, pa.string()),
@@ -181,7 +210,7 @@ def _write_codes(con, ids, yrs, W, I8, label):
         "rerank_i8": rerank,
     })
     con.register("_codes_out", tbl)
-    out = f"{CODES_DATASET}/codes-{label}.parquet"
+    out = f"{dataset}/codes-{label}.parquet"
     con.execute(f"COPY _codes_out TO '{out}' (FORMAT parquet, COMPRESSION zstd)")
     con.unregister("_codes_out")
     return out
@@ -349,6 +378,81 @@ def cmd_year(year):
     con.close()
 
 
+# ── Row-concat mode ───────────────────────────────────────────────────────────
+def _row_concat_text(values, col_names):
+    """Build 'col: value | col: value | ...' from one row's non-null values, in the given
+    (source-declared) column order. No per-column inclusion/exclusion -- every listed
+    column goes in if non-null, per semantic-search-plan.md's 'no column-level filtering'
+    rule."""
+    parts = []
+    for name, val in zip(col_names, values):
+        if val is None:
+            continue
+        parts.append(f"{name}: {val}")
+    return " | ".join(parts)
+
+
+def _chunk_fixed(text, size=ROW_CONCAT_CHUNK_SIZE, overlap=ROW_CONCAT_CHUNK_OVERLAP):
+    """Naive fixed-window chunker with overlap. A short row-concat text (the common case)
+    fits in one chunk -- see semantic-search-plan.md 'Row-level design'."""
+    if not text:
+        return []
+    if len(text) <= size:
+        return [text]
+    chunks = []
+    start = 0
+    step = size - overlap
+    while start < len(text):
+        chunks.append(text[start:start + size])
+        if start + size >= len(text):
+            break
+        start += step
+    return chunks
+
+
+def cmd_row_concat(source_schema, source_table, pk_col, iceberg_path, columns, max_rows=None):
+    """Row-concat mode for one entity-grain dimension table (see 'Table curation' /
+    'Row-level design'): read real rows, concatenate their string columns, naive-chunk,
+    embed, and write codes. The generalized key (source_schema/source_table/stringified_fk/
+    sequence) is encoded into chunk_id as a composite string -- '<schema>:<table>:<pk>:<seq>'
+    -- so this PoC needs no codes-parquet schema change; a full source_type='row_concat'
+    metadata row in the promoted ref.vectorized_chunks table is separate, later work."""
+    con = connect_lake()
+    col_list = ", ".join(columns)
+    print(f"[row-concat] reading {source_schema}.{source_table} from {iceberg_path} ...",
+          flush=True)
+    sql = (f"SELECT {pk_col}, {col_list} FROM iceberg_scan('{iceberg_path}', "
+           f"allow_moved_paths=true)")
+    if max_rows:
+        sql += f" LIMIT {int(max_rows)}"
+    rows = con.execute(sql).fetchall()
+    print(f"[row-concat] {len(rows)} rows", flush=True)
+    if not rows:
+        print("[row-concat] nothing to do", flush=True)
+        con.close()
+        return
+
+    ids, yrs, texts = [], [], []
+    for r in rows:
+        pk_val, values = r[0], r[1:]
+        text = _row_concat_text(values, columns)
+        for seq, chunk in enumerate(_chunk_fixed(text)):
+            ids.append(f"{source_schema}:{source_table}:{pk_val}:{seq}")
+            yrs.append(0)
+            texts.append(chunk)
+    print(f"[row-concat] {len(texts)} chunks from {len(rows)} rows", flush=True)
+
+    import numpy as np
+    emb = make_embedder()
+    X = np.asarray(emb.embed(texts), dtype=np.float32)
+    W, I8 = _pack_codes(X)
+    dataset = codes_dataset_for(source_schema)
+    out = _write_codes(con, ids, yrs, W, I8,
+                        _run_label(f"rowconcat-{source_table}"), dataset=dataset)
+    print(f"[row-concat] wrote {out}", flush=True)
+    con.close()
+
+
 def cmd_stats():
     con = connect_lake()
     try:
@@ -388,6 +492,14 @@ def main():
     p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
     sub.add_parser("compact")
+    p_rc = sub.add_parser("row-concat")
+    p_rc.add_argument("--source-schema", required=True)
+    p_rc.add_argument("--source-table", required=True)
+    p_rc.add_argument("--pk-col", required=True)
+    p_rc.add_argument("--iceberg-path", required=True)
+    p_rc.add_argument("--columns", required=True,
+                      help="comma-separated string columns, in source declaration order")
+    p_rc.add_argument("--max-rows", type=int, default=None)
     args = ap.parse_args()
 
     if args.cmd == "backlog":
@@ -398,6 +510,9 @@ def main():
         cmd_stats()
     elif args.cmd == "compact":
         cmd_compact()
+    elif args.cmd == "row-concat":
+        cmd_row_concat(args.source_schema, args.source_table, args.pk_col,
+                        args.iceberg_path, args.columns.split(","), args.max_rows)
     else:
         ap.error("unknown command")
 

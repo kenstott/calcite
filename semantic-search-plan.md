@@ -256,11 +256,78 @@ Row counts pulled live (via AskAmerica) confirm size alone is the wrong signal:
 but stays in, because each row is a carrier, not an event. A row-count threshold alone
 would get this backwards in one direction or the other no matter where it's set.
 
-**This needs a full per-table pass during implementation**, not just the five tables
-spot-checked above — every table across all 26 schemas needs the same entity-vs-event grain
-call before it's added to the v1 registry. That pass is a natural follow-up sweep (grep
-each table's declared PK shape for an event/sequence-id component as a first-pass signal,
-spot-check row counts to confirm), not attempted exhaustively in this doc.
+**The full per-table pass, now done.** A PyYAML script parsed all 26 schema YAMLs
+(`partitionedTables`, anchors/aliases resolved same as the original 2675-column static
+pass) and found **354 candidate tables** (≥1 `type: string` column) out of the full catalog.
+Each table's declared `primaryKey` (from the schema's `constraints:` block) was matched
+against an entity-token list (`cik`, `fips`, `patent_id`, `dot_number`, station/facility/
+committee/candidate ids, ...) and an event-token list (`transaction`, `line_number`/
+`line_code`, `accession_number`, `context_id`, per-occurrence ids, ...), plus a third bucket
+for PKs built entirely from dimension/time tokens (`year`, `state`, `type`, `frequency`, ...)
+with no stable per-row subject at all — a **statistical-panel** grain (a data point in a
+time series, e.g. `econ.employment_statistics`), which is neither an entity nor a
+transaction and was previously undercounted by the plan's original binary framing. String
+columns were further checked for prose-shaped names (`description`, `narrative`, `summary`,
+`abstract`, `statement`, `cause`, `title`, ...) versus short categorical labels, since an
+entity-grain table with only code/label string columns has nothing worth embedding either
+way. Breakdown: 33 event-grain, 178 statistical-panel, 118 entity-grain-with-no-prose-content
+(moot), 9 tables missing a declared `primaryKey` (resolved individually below), and 16
+mechanical include candidates — 2 of which were overridden by hand after inspection (see
+below), leaving:
+
+| table | rows | grain | verdict |
+|---|--:|---|---|
+| `disasters.disaster_declarations` | 32,853 | one row per FEMA declaration | **include** — a declaration is itself a searchable document (`declaration_title`), not a transaction |
+| `disasters.public_assistance_projects` | 404,509 | one row per PA grant project | **include** — a project is its own administrative unit (`application_title`), same rationale |
+| `fedregister.fr_documents` | 235,847 | one row per rule/notice | **include** — clearest case: `title`/`action`/`cfr_references` are real document content |
+| `geo.rural_urban_continuum` | 3,235 | one row per RUCC code | **include** — small reference/classification table, `rucc_description` is real content |
+| `geo.ruca_codes` | 85,528 | one row per RUCA code | **include** — same rationale as `rural_urban_continuum` |
+| `officials.federal_judges` | n/a | one row per Article III judge | **include** by content (real appointment/termination narrative) — **not yet live in AskAmerica's catalog**, row count unverified; flag before adding to the build registry |
+| `patents.patent_grants` | 5,689,777 | one row per patent | **include** — `patent_title`; new find, not already covered by the plan's document-blob list |
+| `ref.sec_company_tickers` | 10,415 | one row per ticker | **include** — small reference table, `title` = issuer name |
+| `ref.naics` | 2,122 | one row per NAICS code | **include** — small reference table, `naics_title` |
+| `ref.naics_vintage` | 4,315 | one row per (vintage, NAICS code) | **include** — same rationale |
+
+**Corrections to the mechanical pass** (grain looked entity-shaped by PK-token match, but a
+closer read says otherwise — surfaced by the same "grep the PK, spot-check the content"
+methodology, not skipped):
+- `disasters.nfip_claims` (931,410 rows, one row per flood-insurance claim payment) —
+  mechanically flagged include (opaque single-column `id` PK didn't match any event token),
+  but a claim payment is structurally identical to `health.cms_open_payments`/
+  `fec.individual_contributions`: a transaction against a policy, not a persistent entity.
+  **Exclude**, despite the genuinely interesting `cause_of_damage` text.
+- `ag.fsa_commodity_payments` (873,140 rows, one row per county+farm-program+year) —
+  `county_fips` tripped the entity-token match, but the grain is really a program-level
+  aggregate (same shape as `econ.state_gdp`'s line-item grain), and `program_description` is
+  a controlled vocabulary of a few dozen program names, not narrative. **Exclude**.
+- `fec.electioneering_communications` (394 rows) — tiny, so volume isn't the issue; it's a
+  per-disbursement-event record, same family as the already-excluded `independent_expenditures`/
+  `operating_expenditures` in the same schema. **Exclude**, for grain consistency across the
+  schema (the plan's rule is explicitly grain-based, not size-based, in both directions).
+- `fiscal.sba_loan_approvals` (2,190,504 rows) and `econ.state_quarterly_income` /
+  `econ.state_quarterly_gdp` (15,120 rows, `state_quarterly_gdp`) — all three were in the
+  "missing declared `primaryKey`" bucket (a schema-YAML gap, not a real grain ambiguity): the
+  SBA table is confirmed by its own comment ("loan approvals," FOIA per-loan records, same
+  shape as `cms_open_payments`) and the two `state_quarterly_*` tables are the quarterly
+  siblings of the already-excluded `state_gdp`/`state_personal_income` (identical
+  `geo_fips, table_name, line_code, year` grain). **Exclude**, all three.
+- The remaining 6 no-declared-PK tables (`cftc.cftc_trades`, `crime.bjs_ncvs_*` ×4,
+  `weather.hms_smoke_polygons`) have no prose-shaped string columns at all, so their grain
+  doesn't matter — **exclude**, moot either way.
+
+`patents.patent_abstracts` / `patents.patent_summaries` / `patents.trademark_statement` also
+matched the mechanical include pass but are **not** counted as new row-concat additions here —
+they're already in the document-blob list above and get document-chunk mode, not row-concat
+mode; including them again here would double-count the same content under two `source_type`s.
+
+**v1 registry so far**: `transport.fmcsa_carriers` (confirmed above) + the 10 tables marked
+**include** in this pass = 11 row-concat-mode entity-grain tables, identified out of 354
+scanned (out of the full ~500-table catalog across 26 schemas). This is a first-pass
+grep-plus-spot-check sweep, same methodology as the original 5-table check, now just run
+exhaustively — a second reviewer re-reading the borderline cases (especially
+`disaster_declarations`/`public_assistance_projects`, which stretch "entity" to mean
+"searchable administrative document" rather than strictly "person/company/patent/facility")
+before implementation is still worthwhile.
 
 ## Storage shape
 
@@ -329,22 +396,26 @@ entity-grain dimension table, run the row-concat-then-naive-chunk pass — both 
 
 ## Phasing
 
-**Phase 0: repartition the codes store by `source_schema`, and decide the dead `embedding`
-column's fate — no Iceberg rewrite, no move yet.** The working query path
-(`SEMANTIC_SEARCH`) never touches `vectorized_chunks`'s `embedding` column, so there's
-nothing to backfill there — that was the wrong Phase 0 goal (see "Existing infrastructure").
-The real first step: `SemanticSearch.DEFAULT_CODES` is hardcoded to SEC's single flat glob
-(`s3://govdata-parquet-v1/sec/vectorized_chunk_codes/*.parquet`); moving it to a
+**Phase 0 — done, implemented and tested against the DQ bucket (not production).**
+`vss-local.py`'s `CODES_DATASET` and `SemanticSearch.DEFAULT_CODES` both now point at the
+`source_schema=sec/` partitioned layout; the dead `embedding` column and its `gpu_embeddings`
+postProcess hook were dropped from `vectorized_chunks` in `sec-schema.yaml` (confirmed no
+Java code depends on the column by name outside the generic, already-tested `bulkGenerator`
+mechanism, so no live materialization run was needed to prove that part safe). Verified
+end-to-end with a real write (via `vss-local.py`'s own embed/quantize/write functions) and a
+real read (`SemanticSearch.searchVector`) against the DQ bucket's `govdata-parquet-v1-dq`
+codes path — self-match ranked first at score 0.9998. Production's existing flat-layout codes
+were **not** migrated; that's still open (see below).
+
+*Original rationale, still accurate*: the working query path (`SEMANTIC_SEARCH`) never
+touched `vectorized_chunks`'s `embedding` column, so there was nothing to backfill there —
+that would have been the wrong Phase 0 goal (see "Existing infrastructure"). The real first
+step was `SemanticSearch.DEFAULT_CODES`, hardcoded to SEC's single flat glob; moving it to a
 Hive-partitioned layout keyed on `source_schema` (see "Storage shape" → Index) is required
 infrastructure before any new source's codes are searchable at all, and directly bounds the
 per-query cache footprint as the corpus grows past SEC-only — a schema-scoped query only
 pulls its own partition, so total corpus size across 26 schemas stops being a cache-risk
-question once this lands. Can be done and verified against SEC's existing codes alone
-(re-laid-out into a `source_schema=sec/` partition) before anything new is generated.
-Separately, decide whether to drop the vestigial `embedding` column and the self-disabled
-`gpu_embeddings` `bulkGenerator`/`vss-gpu-runner.sh` hook as cleanup, or leave them as
-harmless dead weight — low-stakes either way now that it's clear the working system doesn't
-depend on them.
+question once this lands.
 
 **Phase 1 onward** is everything already described above, sequenced relative to each other
 at implementation time, not fixed here: the directory move + schema evolution ("Promoting
@@ -354,8 +425,9 @@ the `run-pool.sh` post-drain hook ("Extension mechanism").
 
 ## Explicitly deferred
 
-- The full entity-vs-event grain classification across all ~100+ included-candidate tables
-  (only 5 spot-checked here) — a follow-up sweep before the table registry is final.
+- A second-reviewer re-check of the "Table curation" pass's borderline calls (especially
+  `disasters.disaster_declarations`/`public_assistance_projects`, and `officials.federal_judges`
+  pending live AskAmerica deployment) before the v1 registry is locked in for implementation.
 - Exact chunk size/overlap for `row_concat` mode, and whether every source shares
   arctic-embed-xs 384-d or some need a different model — tuned at implementation time.
 - Whether `mda_sections`/`earnings_transcripts` are already fully covered by
