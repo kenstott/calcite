@@ -1176,11 +1176,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           MAPPER.writeValueAsString(sample).getBytes(java.nio.charset.StandardCharsets.UTF_8));
       String jsonPath = tmpJson.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
       String parquetPath = tmpParquet.getAbsolutePath().replace("\\", "/");
-      // DuckDB infers column types from the sample and writes a parquet whose footer carries them.
+      // DuckDB infers column types from the sample and writes a parquet whose footer carries
+      // them. sample_size=-1 (scan the whole file, not read_json_auto's own default-20480-row
+      // sample): tmpJson already IS the full first batch, written above specifically for
+      // inference -- a heterogeneous batch (e.g. row shapes that vary by source, as
+      // ChunkOrganizer's do) can easily exceed 20480 rows before every distinct key appears,
+      // and read_json_auto's default sampling would silently miss those columns during
+      // inference, then hard-fail (or worse, silently drop the column) once the COPY actually
+      // reaches a row carrying a key outside the inferred schema. Scanning the whole file we
+      // already wrote is not wasteful here, it's exactly what "infer from this batch" means.
       try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
            Statement stmt = conn.createStatement()) {
-        stmt.execute("COPY (SELECT * FROM read_json_auto('" + jsonPath + "')) TO '"
-            + parquetPath.replace("'", "''") + "' (FORMAT PARQUET)");
+        stmt.execute("COPY (SELECT * FROM read_json_auto('" + jsonPath
+            + "', sample_size=-1)) TO '" + parquetPath.replace("'", "''") + "' (FORMAT PARQUET)");
       }
       return IcebergCatalogManager.createTableFromParquet(catalogConfig, targetTableId,
           parquetPath, partitionColumns != null ? partitionColumns

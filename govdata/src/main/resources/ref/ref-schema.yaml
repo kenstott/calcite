@@ -2235,7 +2235,7 @@ partitionedTables:
       - name: source_type
         type: string
         nullable: false
-        comment: "'row_concat' for the naive per-row chunker; document-blob sources add their own values (patent_claim, ntsb_probable_cause, ...)"
+        comment: "'row_concat' for the naive per-row chunker; document-blob sources add their own values, e.g. 'nist_control_description', 'cis_control_description', 'owasp_entry_overview' (see ChunkOrganizer.java)"
       - name: chunk_text
         type: string
         nullable: false
@@ -2301,16 +2301,31 @@ partitionedTables:
       # (SchemaConfig.fromMap's source-less-table pre-filter checks this raw map key
       # directly; omitting it silently drops this table from processing entirely).
       enabled: true
-      tableLifecycleListener: "org.apache.calcite.adapter.govdata.ref.RowConcatChunker"
+      tableLifecycleListener: "org.apache.calcite.adapter.govdata.ref.ChunkOrganizer"
 
+    # Deliberately UNPARTITIONED, not partitioned by source_schema as originally designed.
+    # This table has no source: block, so its Iceberg schema is deferred-inferred from
+    # whichever partition flushes first (IcebergMaterializationWriter.ensureTableCreated,
+    # FILE-186) -- inference does NOT union columns across partitions. With
+    # partition.columns: [source_schema], the first-flushing source_schema's row shape
+    # (e.g. plain row-concat rows with no paragraph_continuation) silently fixed the whole
+    # table's schema forever; every other source_schema's columns not in that first shape
+    # were dropped on write with no error. Verified live: fedregister_document_number and
+    # paragraph_continuation were both silently missing from the materialized table.
+    # canonical_org_entity/canonical_person_entity (also deferred-schema, also carrying
+    # columns that vary by source) hit the same shape-varies-per-row problem and are
+    # unpartitioned for exactly this reason -- matching that precedent here fixes it, since
+    # ChunkOrganizer always writes the complete current picture in one writeBatch call
+    # anyway (overwritePartitions: true on an empty partition list = full-table replace
+    # each run, same semantics those tables already rely on).
     materialize:
       enabled: true
       format: iceberg
       targetTableId: vectorized_chunks
       output:
-        pattern: "source_schema=*/"
+        pattern: ""
       partition:
-        columns: [source_schema]
+        columns: []
       options:
         compression: snappy
         batchSize: 50000
@@ -2480,7 +2495,7 @@ constraints:
     # classes/ticker symbols (e.g. Alphabet: GOOGL/GOOG/GOOGM/GOOGN, all cik 1652044) gets
     # one row per ticker. Verified live: (type, as_of, cik) alone collides on 2,409 of
     # 10,415 rows; (type, as_of, cik, ticker) is fully unique. Found via a real PK
-    # violation surfaced by RowConcatChunker's stringified_fk derivation, which follows
+    # violation surfaced by ChunkOrganizer's stringified_fk derivation, which follows
     # this declaration mechanically.
     primaryKey: [type, as_of, cik, ticker]
 

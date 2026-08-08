@@ -852,7 +852,7 @@ if $RUN_EMBEDDINGS; then
       || log_info "WARNING: vss-local backlog (sec) failed (non-fatal)"
     # Row-concat mode: any other schema's vectorized_chunks (organized by a Java
     # TableLifecycleListener during that schema's own ETL -- e.g.
-    # org.apache.calcite.adapter.govdata.ref.RowConcatChunker for ref) drains the exact
+    # org.apache.calcite.adapter.govdata.ref.ChunkOrganizer for ref) drains the exact
     # same time-boxed, resumable way. This only runs post-drain (here, not per-schema)
     # because it needs every source schema already materialized -- see
     # semantic-search-plan.md "Extension mechanism" for why a per-table hook can't give
