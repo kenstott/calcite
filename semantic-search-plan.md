@@ -380,19 +380,55 @@ results join back to `ref.vectorized_chunks` for text/metadata, exactly as `chun
 already joins back to `vectorized_chunks` today — just widened to every source instead of
 SEC only.
 
-## Extension mechanism
+## Extension mechanism — done, implemented and tested against the DQ bucket
 
-**Reuse the post-drain hook in `run-pool.sh:835-852`, not a `TableLifecycleListener`.** That
-block already runs once, after the full daily pool finishes with zero failed workers, and
-already calls `vss-local.sh backlog` for SEC's document-chunk mode — the natural place to
-add the row-concat mode for every other curated table alongside it, rather than the
-`EntityBridgeListener`-style per-schema hook this plan originally proposed, which can't
-guarantee every source schema is materialized yet (see above). Concretely: `vss-local.sh`
-(or a new sibling script) grows a table registry — for each document-blob source, extend
-the existing `SemanticTextChunker` call with the new `source_type` values; for each
-entity-grain dimension table, run the row-concat-then-naive-chunk pass — both writing into
-`ref.vectorized_chunks` via the same embedder (`EmbeddingService`) and
-`overwritePartitions: true` semantics already used today.
+**Revised from the original proposal below, on two points, both driven by real constraints
+found during implementation.** First: a `TableLifecycleListener` *is* used after all, just
+not the way originally rejected — organizing chunks (row-concat's naive per-row chunker,
+and document-blob mode's chunker once built) is a `TableLifecycleListener` per source
+schema (`RowConcatChunker` for `ref`, wired on `ref.vectorized_chunks` exactly like
+`EntityBridgeListener`), because DuckDB's iceberg extension **cannot write Iceberg
+tables** (read-only) — only Java's Iceberg SDK-backed `MaterializationWriterFactory` can,
+so organizing chunks was never a job an external Python script could do directly. Second,
+and this is the part the original proposal got right: **embedding stays a `run-pool.sh`
+post-drain step**, not a per-table hook, for the reason already given — it needs every
+source schema already materialized, which only the post-drain point actually guarantees.
+
+Concretely, split cleanly in two:
+- **Organizing** (Java, per source schema, during that schema's own ETL): a
+  `TableLifecycleListener` wired via `hooks.tableLifecycleListener` on that schema's
+  `vectorized_chunks` table (no `source:` block, so `afterTable` is the only hook that
+  fires — same wiring as `EntityBridgeListener`). Reads a small in-code registry of
+  included source tables, builds `col: value | col: value` text per row (row-concat mode)
+  or runs the document chunker (document-blob mode, not yet built), and writes chunk rows
+  via `MaterializationWriterFactory`. `RowConcatChunker`
+  (`org.apache.calcite.adapter.govdata.ref`) implements this for `ref`, currently covering
+  `ref.naics`/`ref.naics_vintage`/`ref.sec_company_tickers` — onboarding a new source is a
+  new registry entry, not new code (composite PKs are supported: `stringified_fk` is the
+  ':'-joined PK column values, uniform for single- and multi-column keys).
+- **Embedding** (`vss-local.py`, one shared code path for every source): `cmd_backlog` was
+  generalized (`--source-schema`/`--iceberg-path`, both defaulting to that source's own
+  conventional path) so the exact same time-boxed, resumable "find chunks with no codes
+  yet, embed, write" loop that already drained SEC's backlog now drains any source's.
+  `run-pool.sh`'s existing post-drain block loops this over a source-schema list
+  (currently `[ref]`) after its existing SEC call, each independent — one failing doesn't
+  block the pool or the others.
+
+Verified end-to-end in the DQ bucket: the real `ref` schema ETL fires `RowConcatChunker`
+via the production hook path, the generalized `backlog` command drains the full delta
+across multiple time-boxed runs (correctly resuming each time via the anti-join), and
+cross-source `SEMANTIC_SEARCH`-equivalent queries return correct, defensibly-ranked
+results. One real bug found and fixed along the way: `ref.sec_company_tickers`'s declared
+`primaryKey` was missing `ticker` (a cik can carry multiple tickers/share classes), which
+`RowConcatChunker` — relying on that declaration for `stringified_fk` uniqueness — turned
+into 2,409 real key collisions out of 10,415 rows.
+
+*Original proposal, superseded above but kept for context*: reuse the post-drain hook in
+`run-pool.sh:835-852` rather than a `TableLifecycleListener`, on the grounds that a
+per-schema hook can't guarantee every source schema is materialized yet. That reasoning
+turned out to be right for *embedding* but not for *organizing* — the missing piece was
+that organizing chunks has to happen somewhere with Iceberg write access, and only Java
+has that, not `vss-local.sh`/an external script as originally assumed.
 
 ## Phasing
 
@@ -428,19 +464,34 @@ the `run-pool.sh` post-drain hook ("Extension mechanism").
 - A second-reviewer re-check of the "Table curation" pass's borderline calls (especially
   `disasters.disaster_declarations`/`public_assistance_projects`, and `officials.federal_judges`
   pending live AskAmerica deployment) before the v1 registry is locked in for implementation.
-- Exact chunk size/overlap for `row_concat` mode, and whether every source shares
-  arctic-embed-xs 384-d or some need a different model — tuned at implementation time.
+- Whether every source shares arctic-embed-xs 384-d or some need a different model —
+  tuned at implementation time. (Chunk size/overlap for row-concat mode is decided:
+  1000/200 chars, in `RowConcatChunker.java`.)
+- Document-blob mode (generalizing `SemanticTextChunker` for the 18 identified blob
+  columns) — not yet built; `RowConcatChunker`'s registry currently only handles
+  row-concat sources.
+- The remaining v1-registry sources beyond `ref.naics`/`naics_vintage`/
+  `sec_company_tickers` (`disasters.disaster_declarations`/`public_assistance_projects`,
+  `fedregister.fr_documents`, `geo.rural_urban_continuum`/`ruca_codes`,
+  `officials.federal_judges`, `patents.patent_grants`, `transport.fmcsa_carriers`) — each
+  is a new `RowConcatChunker` registry entry, several cross-schema (untested path so far;
+  `EntityBridgeListener` precedent says it should work identically).
 - Whether `mda_sections`/`earnings_transcripts` are already fully covered by
   `vectorized_chunks`'s existing `mda_paragraph`/`earnings` chunks (built from the same
   source content) — confirm before double-chunking under a new `source_type`.
 - The actual mechanics of the directory move + schema-evolution backfill + updating the
-  ~20 referencing files for promoting `sec.vectorized_chunks` → `ref.vectorized_chunks` —
-  see "Promoting `vectorized_chunks`" above.
+  ~24 referencing files for promoting `sec.vectorized_chunks` → `ref.vectorized_chunks` —
+  see "Promoting `vectorized_chunks`" above. Still not started; `ref.vectorized_chunks`
+  exists today as a genuinely separate new table, not yet the promoted one.
+- Migrating production's existing flat-layout SEC codes into the `source_schema=sec/`
+  partitioned layout (Phase 0 repartitioned the code path, not the already-written data).
 - Fixing `patents-schema.yaml`'s false embedding-column comments — a real, separate bug
   found during research, unrelated to whether this plan proceeds.
 - A live ad-hoc vector-search SQL function through Calcite itself beyond generalizing
   `SEMANTIC_SEARCH(...)` — same deferral rationale as `entity-resolution-plan.md`'s
   `JARO_WINKLER()` deferral.
 
-This plan is design only — implementation requires explicit go-ahead, same as
-`entity-resolution-plan.md`.
+Implementation is underway (explicit go-ahead given, work ongoing) — codes repartitioning,
+the table-curation pass, and row-concat mode (organizing + embedding, 3 sources) are done
+and tested against the DQ bucket; the promotion of `sec.vectorized_chunks` itself and
+document-blob mode remain design-only.
