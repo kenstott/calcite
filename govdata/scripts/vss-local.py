@@ -30,20 +30,22 @@ No HNSW, no DuckDB HNSW cache, no Postgres — vectors live only as quantized co
 the lake, and the "what's un-coded" delta is a self-describing Iceberg-vs-codes
 anti-join (chunk_ids in vectorized_chunks not yet in vectorized_chunk_codes).
 
+This script only ever embeds already-organized chunks -- it never builds chunk_text
+itself. Organizing text into chunk rows (row-concat mode's naive per-row chunker,
+document-blob mode's SemanticTextChunker) is always Java's job, writing into a
+vectorized_chunks-shaped Iceberg table (see
+org.apache.calcite.adapter.govdata.ref.RowConcatChunker for the row-concat producer).
+
 Commands:
-  backlog [--max-rows N --max-seconds S]
-                        PRIMARY daily job. Code the un-coded delta across ALL years
-                        (newest filings first), capped at --max-rows and time-boxed
-                        to --max-seconds (~2h). Run daily; the backlog drains over
-                        successive runs. CPU only — no GPU.
-  year --year N         Code a single year's delta (manual/targeted).
-  stats                 Per-year counts in the codes dataset.
-  row-concat --source-schema S --source-table T --pk-col C --iceberg-path P
-             --columns col1,col2,... [--max-rows N]
-                        Row-concat mode for one entity-grain dimension table (non-SEC):
-                        concatenate each row's string columns, naive-chunk, embed, and
-                        write codes to that source's own partition (see
-                        semantic-search-plan.md 'Row-level design' / 'Table curation').
+  backlog [--max-rows N --max-seconds S] [--source-schema S --iceberg-path P]
+                        PRIMARY job. Code the un-coded delta (newest-first for SEC),
+                        capped at --max-rows and time-boxed to --max-seconds (~2h); the
+                        backlog drains over successive runs. CPU only — no GPU. Defaults
+                        to SEC's own vectorized_chunks/codes; pass --source-schema (plus
+                        --iceberg-path, since each source's chunks live at a different
+                        path) to drain any other source's chunks the same way.
+  year --year N         Code a single SEC year's delta (manual/targeted).
+  stats                 Per-year counts in SEC's codes dataset.
 """
 
 import argparse
@@ -80,12 +82,6 @@ COMPACT_MIN_FILES = int(os.environ.get("VSS_COMPACT_MIN_FILES", "16"))
 I8_SCALE = float(os.environ.get("VSS_I8_SCALE", "0.35"))
 MEM_LIMIT = os.environ.get("VSS_MEM_LIMIT", "4GB")
 TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/home/adminwsl/tmp_duck")
-# Row-concat mode (non-SEC entity-grain dimension tables): naive fixed-window chunk size /
-# overlap over the delimited column concatenation. Exact numbers per the plan -- tunable,
-# not tied to the embedding model's token limit here since arctic-embed-xs truncates
-# gracefully at 512 tokens and row-concat sources are short (reference/dimension rows).
-ROW_CONCAT_CHUNK_SIZE = int(os.environ.get("VSS_ROW_CONCAT_CHUNK_SIZE", "1000"))
-ROW_CONCAT_CHUNK_OVERLAP = int(os.environ.get("VSS_ROW_CONCAT_CHUNK_OVERLAP", "200"))
 
 
 def codes_dataset_for(source_schema):
@@ -163,12 +159,13 @@ def connect_lake():
     return con
 
 
-def _load_done(con):
+def _load_done(con, dataset=None):
     """Temp table `_done` of already-coded chunk_ids; empty if the dataset is new."""
+    dataset = dataset or CODES_DATASET
     try:
         con.execute(
             f"CREATE OR REPLACE TEMP TABLE _done AS "
-            f"SELECT DISTINCT chunk_id FROM read_parquet('{CODES_DATASET}/*.parquet')")
+            f"SELECT DISTINCT chunk_id FROM read_parquet('{dataset}/*.parquet')")
         return con.execute("SELECT count(*) FROM _done").fetchone()[0]
     except Exception as e:
         # First run: the dataset doesn't exist yet. Only swallow "no files"; re-raise
@@ -216,7 +213,7 @@ def _write_codes(con, ids, yrs, W, I8, label, dataset=None):
     return out
 
 
-def _embed_and_write(con, todo, label, max_seconds=None):
+def _embed_and_write(con, todo, label, max_seconds=None, dataset=None):
     """Embed every (chunk_id, yr, chunk_text) in `todo`, quantize, and APPEND codes to the lake
     dataset — flushing a parquet file every FLUSH_ROWS so memory stays flat and each flush is
     durable (a crash/time-box costs only the un-flushed tail, not the whole run). Stops early if
@@ -237,7 +234,7 @@ def _embed_and_write(con, todo, label, max_seconds=None):
         if not ids:
             return
         out = _write_codes(con, ids, yrs, np.concatenate(Ws), np.concatenate(I8s),
-                           f"{label}-{flush_idx:04d}")
+                           f"{label}-{flush_idx:04d}", dataset=dataset)
         print(f"[{label}] flushed {len(ids)} codes -> {out}", flush=True)
         ids, yrs, Ws, I8s = [], [], [], []
         buffered = 0
@@ -277,42 +274,43 @@ def _rclone_path(s3path):
     return f"{RCLONE_REMOTE}:{s3path[len('s3://'):]}"
 
 
-def _list_code_files():
+def _list_code_files(dataset):
     """Basenames of the *.parquet files currently in the codes dataset (via rclone)."""
-    r = subprocess.run(["rclone", "lsf", _rclone_path(CODES_DATASET) + "/"],
+    r = subprocess.run(["rclone", "lsf", _rclone_path(dataset) + "/"],
                        capture_output=True, text=True)
     if r.returncode != 0:
         return []
     return [f.strip() for f in r.stdout.splitlines() if f.strip().endswith(".parquet")]
 
 
-def cmd_compact(con=None):
+def cmd_compact(con=None, dataset=None):
     """Merge the codes dataset's many small files into one, once it exceeds COMPACT_MIN_FILES.
     The consolidated file is written to a .compact/ staging key (outside the flat *.parquet glob),
     moved into place, then the sources are deleted — so the query glob never sees a half-written
     file. The brief overlap duplicates some chunk_ids, which is benign for search (redundant, not
     missing) and for the delta anti-join (still 'coded')."""
+    dataset = dataset or CODES_DATASET
     own = con is None
     con = con or connect_lake()
     try:
-        files = _list_code_files()
+        files = _list_code_files(dataset)
         if len(files) <= COMPACT_MIN_FILES:
             print(f"[compact] {len(files)} files <= threshold {COMPACT_MIN_FILES} — nothing to do",
                   flush=True)
             return
         tag = time.strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}"
-        staged = f"{CODES_DATASET}/.compact/codes-compact-{tag}.parquet"
-        final = f"{CODES_DATASET}/codes-compact-{tag}.parquet"
+        staged = f"{dataset}/.compact/codes-compact-{tag}.parquet"
+        final = f"{dataset}/codes-compact-{tag}.parquet"
         print(f"[compact] merging {len(files)} files ...", flush=True)
         t = time.time()
-        con.execute(f"COPY (SELECT * FROM read_parquet('{CODES_DATASET}/*.parquet')) "
+        con.execute(f"COPY (SELECT * FROM read_parquet('{dataset}/*.parquet')) "
                     f"TO '{staged}' (FORMAT parquet, COMPRESSION zstd)")
         subprocess.run(["rclone", "moveto", _rclone_path(staged), _rclone_path(final)],
                        capture_output=True, text=True, check=True)
-        base = _rclone_path(CODES_DATASET)
+        base = _rclone_path(dataset)
         for f in files:
             subprocess.run(["rclone", "deletefile", f"{base}/{f}"], capture_output=True, text=True)
-        subprocess.run(["rclone", "purge", _rclone_path(f"{CODES_DATASET}/.compact")],
+        subprocess.run(["rclone", "purge", _rclone_path(f"{dataset}/.compact")],
                        capture_output=True, text=True)
         print(f"[compact] done in {time.time()-t:.0f}s — {len(files)} files -> 1", flush=True)
     finally:
@@ -321,36 +319,54 @@ def cmd_compact(con=None):
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
-def cmd_backlog(max_rows, max_seconds):
+def cmd_backlog(max_rows, max_seconds, source_schema="sec", iceberg_path=None,
+                 year_expr=None, order_by=None):
+    """PRIMARY job: find chunks with no codes yet (an Iceberg-vs-codes anti-join) and embed
+    them, time-boxed and resumable -- if time runs out, the rest picks up next run. Defaults
+    to SEC's own vectorized_chunks/codes (backward compatible); any other source with chunks
+    already organized into a vectorized_chunks-shaped Iceberg table (see
+    org.apache.calcite.adapter.govdata.ref.RowConcatChunker, which does the organizing --
+    this command only ever embeds) drains the same way by passing source_schema/iceberg_path.
+    """
+    iceberg_path = iceberg_path or ICEBERG_CHUNKS
+    if source_schema == "sec":
+        # newest-first via (year, accession_number); accession encodes YY-seq, so recently
+        # filed / most-queried chunks lead and the historical backlog drains behind them.
+        year_expr = year_expr or "s.year"
+        order_by = order_by or "s.year DESC, s.accession_number DESC"
+    else:
+        # Other sources' vectorized_chunks has no year/accession_number -- codes' `year`
+        # column is a SEC-only convenience (see cmd_stats), so just carry 0.
+        year_expr = year_expr or "0"
+        order_by = order_by or "s.chunk_id"
+    dataset = codes_dataset_for(source_schema)
     con = connect_lake()
-    coded = _load_done(con)
-    print(f"[backlog] {coded} chunks already coded; scanning Iceberg for the un-coded delta ...",
-          flush=True)
+    coded = _load_done(con, dataset)
+    print(f"[backlog] {coded} {source_schema} chunks already coded; "
+          f"scanning Iceberg for the un-coded delta ...", flush=True)
     t = time.time()
-    # newest-first via (year, accession_number); accession encodes YY-seq, so recently
-    # filed / most-queried chunks lead and the historical backlog drains behind them.
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, s.year AS yr, s.chunk_text
-        FROM iceberg_scan('{ICEBERG_CHUNKS}') s
+        SELECT s.chunk_id, {year_expr} AS yr, s.chunk_text
+        FROM iceberg_scan('{iceberg_path}', allow_moved_paths=true) s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
         WHERE d.chunk_id IS NULL
           AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
-        ORDER BY s.year DESC, s.accession_number DESC
+        ORDER BY {order_by}
         LIMIT {int(max_rows)}
     """)
     todo = con.execute("SELECT chunk_id, yr, chunk_text FROM _todo").fetchall()
     total = len(todo)
     capped = total >= max_rows
     tail = " (cap hit — more remain for next run)" if capped else " (drains the backlog)"
-    print(f"[backlog] taking {total} newest un-coded chunks{tail} — scan {time.time()-t:.1f}s",
+    print(f"[backlog] taking {total} un-coded chunks{tail} — scan {time.time()-t:.1f}s",
           flush=True)
     if total == 0:
         print("[backlog] nothing to do — fully caught up", flush=True)
         con.close()
         return
-    _embed_and_write(con, todo, _run_label("backlog"), max_seconds=max_seconds)
-    cmd_compact(con)   # consolidate small files at end of run (no-op below the threshold)
+    _embed_and_write(con, todo, _run_label("backlog"), max_seconds=max_seconds, dataset=dataset)
+    cmd_compact(con, dataset=dataset)   # consolidate small files (no-op below the threshold)
     con.close()
 
 
@@ -375,81 +391,6 @@ def cmd_year(year):
         con.close()
         return
     _embed_and_write(con, todo, _run_label(f"year{year}"))
-    con.close()
-
-
-# ── Row-concat mode ───────────────────────────────────────────────────────────
-def _row_concat_text(values, col_names):
-    """Build 'col: value | col: value | ...' from one row's non-null values, in the given
-    (source-declared) column order. No per-column inclusion/exclusion -- every listed
-    column goes in if non-null, per semantic-search-plan.md's 'no column-level filtering'
-    rule."""
-    parts = []
-    for name, val in zip(col_names, values):
-        if val is None:
-            continue
-        parts.append(f"{name}: {val}")
-    return " | ".join(parts)
-
-
-def _chunk_fixed(text, size=ROW_CONCAT_CHUNK_SIZE, overlap=ROW_CONCAT_CHUNK_OVERLAP):
-    """Naive fixed-window chunker with overlap. A short row-concat text (the common case)
-    fits in one chunk -- see semantic-search-plan.md 'Row-level design'."""
-    if not text:
-        return []
-    if len(text) <= size:
-        return [text]
-    chunks = []
-    start = 0
-    step = size - overlap
-    while start < len(text):
-        chunks.append(text[start:start + size])
-        if start + size >= len(text):
-            break
-        start += step
-    return chunks
-
-
-def cmd_row_concat(source_schema, source_table, pk_col, iceberg_path, columns, max_rows=None):
-    """Row-concat mode for one entity-grain dimension table (see 'Table curation' /
-    'Row-level design'): read real rows, concatenate their string columns, naive-chunk,
-    embed, and write codes. The generalized key (source_schema/source_table/stringified_fk/
-    sequence) is encoded into chunk_id as a composite string -- '<schema>:<table>:<pk>:<seq>'
-    -- so this PoC needs no codes-parquet schema change; a full source_type='row_concat'
-    metadata row in the promoted ref.vectorized_chunks table is separate, later work."""
-    con = connect_lake()
-    col_list = ", ".join(columns)
-    print(f"[row-concat] reading {source_schema}.{source_table} from {iceberg_path} ...",
-          flush=True)
-    sql = (f"SELECT {pk_col}, {col_list} FROM iceberg_scan('{iceberg_path}', "
-           f"allow_moved_paths=true)")
-    if max_rows:
-        sql += f" LIMIT {int(max_rows)}"
-    rows = con.execute(sql).fetchall()
-    print(f"[row-concat] {len(rows)} rows", flush=True)
-    if not rows:
-        print("[row-concat] nothing to do", flush=True)
-        con.close()
-        return
-
-    ids, yrs, texts = [], [], []
-    for r in rows:
-        pk_val, values = r[0], r[1:]
-        text = _row_concat_text(values, columns)
-        for seq, chunk in enumerate(_chunk_fixed(text)):
-            ids.append(f"{source_schema}:{source_table}:{pk_val}:{seq}")
-            yrs.append(0)
-            texts.append(chunk)
-    print(f"[row-concat] {len(texts)} chunks from {len(rows)} rows", flush=True)
-
-    import numpy as np
-    emb = make_embedder()
-    X = np.asarray(emb.embed(texts), dtype=np.float32)
-    W, I8 = _pack_codes(X)
-    dataset = codes_dataset_for(source_schema)
-    out = _write_codes(con, ids, yrs, W, I8,
-                        _run_label(f"rowconcat-{source_table}"), dataset=dataset)
-    print(f"[row-concat] wrote {out}", flush=True)
     con.close()
 
 
@@ -488,31 +429,27 @@ def main():
     p_bk.add_argument("--max-rows", type=int,
                       default=int(os.environ.get("VSS_MAX_ROWS", "1000000")))
     p_bk.add_argument("--max-seconds", type=int, default=_default_max_seconds())
+    p_bk.add_argument("--source-schema", default="sec",
+                      help="which vectorized_chunks to drain (default: sec)")
+    p_bk.add_argument("--iceberg-path", default=None,
+                      help="defaults to SEC's own path for source-schema=sec, otherwise required")
     p_year = sub.add_parser("year")
     p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
     sub.add_parser("compact")
-    p_rc = sub.add_parser("row-concat")
-    p_rc.add_argument("--source-schema", required=True)
-    p_rc.add_argument("--source-table", required=True)
-    p_rc.add_argument("--pk-col", required=True)
-    p_rc.add_argument("--iceberg-path", required=True)
-    p_rc.add_argument("--columns", required=True,
-                      help="comma-separated string columns, in source declaration order")
-    p_rc.add_argument("--max-rows", type=int, default=None)
     args = ap.parse_args()
 
     if args.cmd == "backlog":
-        cmd_backlog(args.max_rows, args.max_seconds)
+        if args.source_schema != "sec" and not args.iceberg_path:
+            ap.error("--iceberg-path is required when --source-schema is not 'sec'")
+        cmd_backlog(args.max_rows, args.max_seconds, source_schema=args.source_schema,
+                    iceberg_path=args.iceberg_path)
     elif args.cmd == "year":
         cmd_year(args.year)
     elif args.cmd == "stats":
         cmd_stats()
     elif args.cmd == "compact":
         cmd_compact()
-    elif args.cmd == "row-concat":
-        cmd_row_concat(args.source_schema, args.source_table, args.pk_col,
-                        args.iceberg_path, args.columns.split(","), args.max_rows)
     else:
         ap.error("unknown command")
 
