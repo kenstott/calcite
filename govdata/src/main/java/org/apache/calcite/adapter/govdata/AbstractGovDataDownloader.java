@@ -2588,6 +2588,13 @@ public abstract class AbstractGovDataDownloader {
       // Load httpfs extension for S3 support (pre-extracted from bundled resources)
       String httpfsPath = DuckDbExtensionInstaller.getLocalExtensionPath("httpfs");
       conn.createStatement().execute("LOAD '" + httpfsPath + "'");
+      // httpfs's own retry defaults are too thin for a WAN endpoint (e.g. R2 over the public
+      // internet): a transient TCP reset/connect failure otherwise surfaces immediately as
+      // "IO Error: Could not establish connection" with no retry.
+      conn.createStatement().execute("SET http_retries = 6");
+      conn.createStatement().execute("SET http_retry_wait_ms = 500");
+      conn.createStatement().execute("SET http_retry_backoff = 2");
+      conn.createStatement().execute("SET http_timeout = 60000");
 
       // Get S3 config from storage provider
       Map<String, String> s3Config = storageProvider != null ? storageProvider.getS3Config() : null;

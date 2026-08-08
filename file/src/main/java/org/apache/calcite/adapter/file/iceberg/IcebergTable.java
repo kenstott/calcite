@@ -183,6 +183,21 @@ public class IcebergTable extends AbstractTable
   }
 
   /**
+   * Drops this table's in-memory schema (row type, resolved Iceberg {@link Schema}, and cache
+   * lookup result) and the shared {@link IcebergSchemaCache} entry backing it, forcing the next
+   * {@link #getRowType} to re-read the table live. Used when a caller has independent proof the
+   * cached schema is stale — e.g. a DuckDB view over this table reports a column-count mismatch
+   * against live data — see {@code EtagRetryConnection}'s view-type-drift repair.
+   */
+  public void invalidateCachedSchema() {
+    rowType = null;
+    resolvedSchema = null;
+    schemaCacheEntry = null;
+    schemaCacheConsulted = false;
+    IcebergSchemaCache.invalidate(source.path());
+  }
+
+  /**
    * Returns the Iceberg schema — from the cache when one is published and current, otherwise by
    * loading the table from the object store.
    *
@@ -502,7 +517,16 @@ public class IcebergTable extends AbstractTable
       // the ENTRY is what decides, not the presence of the value.
       return entry.tableComment;
     }
-    return icebergTable().properties().get("comment");
+    try {
+      return icebergTable().properties().get("comment");
+    } catch (RuntimeException e) {
+      // Metadata listing (e.g. JDBC getTables()) calls this eagerly for every table in a schema;
+      // one table with missing/corrupt Iceberg metadata must not abort listing the rest. The
+      // actual unreadability is still reported when the table itself is queried.
+      LOGGER.warn("Unable to load Iceberg table {} to read its comment: {}", source.path(),
+          e.getMessage());
+      return "";
+    }
   }
 
   /**
@@ -523,7 +547,16 @@ public class IcebergTable extends AbstractTable
     }
 
     // First try to get from Iceberg schema field doc
-    Schema schema = icebergSchema();
+    Schema schema;
+    try {
+      schema = icebergSchema();
+    } catch (RuntimeException e) {
+      // Same eager-listing hazard as getTableComment(): don't let one table's missing/corrupt
+      // Iceberg metadata abort listing columns for the rest of the schema.
+      LOGGER.warn("Unable to load Iceberg schema for {} to read column comment for {}: {}",
+          source.path(), columnName, e.getMessage());
+      return "";
+    }
     for (Types.NestedField field : schema.columns()) {
       if (field.name().equalsIgnoreCase(columnName)) {
         String doc = field.doc();

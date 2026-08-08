@@ -285,6 +285,20 @@ public final class IcebergSchemaCache {
     ENTRIES.put(tablePath, entry);
   }
 
+  /**
+   * Drops a single table's cached schema, forcing the next {@link #lookup} to miss and the
+   * caller to fall back to a live read. Used when a caller has independent proof the cached
+   * entry is stale — e.g. DuckDB itself reports a bound view's column list no longer matches
+   * live reality — see {@code EtagRetryConnection}'s view-type-drift repair.
+   *
+   * @param tablePath table root, e.g. {@code s3://bucket/schema/table}; ignored when null
+   */
+  public static void invalidate(String tablePath) {
+    if (tablePath != null) {
+      ENTRIES.remove(tablePath);
+    }
+  }
+
   /** Number of entries currently held — used by seed generation to report what it materialized. */
   public static int size() {
     ensureLoaded();

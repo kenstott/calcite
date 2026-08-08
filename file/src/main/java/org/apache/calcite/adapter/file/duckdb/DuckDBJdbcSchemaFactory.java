@@ -479,6 +479,13 @@ public class DuckDBJdbcSchemaFactory {
       try {
         setupConn.createStatement().execute("INSTALL httpfs");
         setupConn.createStatement().execute("LOAD httpfs");
+        // httpfs's own retry defaults are too thin for a WAN endpoint (e.g. R2 over the public
+        // internet, vs. a LAN-local mirror): a transient TCP reset/connect failure otherwise
+        // surfaces immediately as "IO Error: Could not establish connection" with no retry.
+        setupConn.createStatement().execute("SET http_retries = 6");
+        setupConn.createStatement().execute("SET http_retry_wait_ms = 500");
+        setupConn.createStatement().execute("SET http_retry_backoff = 2");
+        setupConn.createStatement().execute("SET http_timeout = 60000");
         LOGGER.info("DuckDB httpfs extension installed and loaded for S3 support");
 
         // Configure S3 credentials - check operands first, then environment variables
@@ -651,10 +658,9 @@ public class DuckDBJdbcSchemaFactory {
             // vss: Vector similarity search for embeddings
             // fts: Full-text search
             // spatial: Geospatial functions
-            boolean isWin = System.getProperty("os.name", "").toLowerCase().contains("win");
             String[] baseExts = {"httpfs", "iceberg", "vss", "fts", "spatial"};
             String[] allExts =
-                isWin ? baseExts
+                isCacheHttpfsDisabled() ? baseExts
                     : new String[]{"httpfs", "iceberg", "vss", "fts", "spatial", "cache_httpfs"};
             for (String ext : allExts) {
               try {
@@ -665,7 +671,7 @@ public class DuckDBJdbcSchemaFactory {
               }
             }
 
-            if (!isWin) {
+            if (!isCacheHttpfsDisabled()) {
               addIcebergCacheExclusions(conn);
             }
           }
@@ -673,7 +679,7 @@ public class DuckDBJdbcSchemaFactory {
           // DataSource. Wrap it so a live Iceberg commit racing a read (version-hint.text
           // advancing mid-session — see EtagRetryConnection) is retried once instead of failing
           // the query outright.
-          return EtagRetryConnection.wrap(conn);
+          return EtagRetryConnection.wrap(conn, fileSchema);
         }
 
         @Override public Connection getConnection(String username, String password) throws SQLException {
@@ -701,10 +707,15 @@ public class DuckDBJdbcSchemaFactory {
       Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
       DuckDBConvention convention = DuckDBConvention.of(dialect, expression, schemaName);
 
-      // DuckDB named databases use the database name as catalog and our created schema
+      // DuckDB named databases use the database name as catalog and our created schema.
+      // Wrap setupConn too: DuckDBJdbcSchema uses it as persistentConnection for both its own
+      // self-heal (recreateIcebergView) and DuckDBPendingViews' deferred CREATE VIEW flush, and
+      // a flushed view can hit the same live-commit/view-drift races a query connection does —
+      // without this wrap, that failure has no retry/repair at all (see EtagRetryConnection).
       DuckDBJdbcSchema schema =
           new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema,
-              directoryPath, recursive, setupConn, fileSchema, catalogPath);
+              directoryPath, recursive, EtagRetryConnection.wrap(setupConn, fileSchema),
+              fileSchema, catalogPath);
 
       // Add to connection pool if this is a persistent database (for future schema sharing)
       if (catalogPath != null) {
@@ -786,10 +797,12 @@ public class DuckDBJdbcSchemaFactory {
       Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
       DuckDBConvention convention = DuckDBConvention.of(dialect, expression, schemaName);
 
-      // Create schema using shared database (dbName is null for shared databases)
+      // Create schema using shared database (dbName is null for shared databases). Wrap
+      // setupConn — see the comment at the other DuckDBJdbcSchema construction site above.
       DuckDBJdbcSchema schema =
           new DuckDBJdbcSchema(sharedInfo.dataSource, dialect, convention, null, duckdbSchema,
-              directoryPath, recursive, setupConn, fileSchema, sharedInfo.catalogPath);
+              directoryPath, recursive, EtagRetryConnection.wrap(setupConn, fileSchema),
+              fileSchema, sharedInfo.catalogPath);
 
       return schema;
 
@@ -1158,14 +1171,13 @@ public class DuckDBJdbcSchemaFactory {
    * @param conn DuckDB connection to load extensions into
    */
   private static void loadQueryExtensions(Connection conn) {
-    boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
-
     List<String[]> extList = new ArrayList<>();
     extList.add(new String[]{"spatial", ""});   // Geospatial: ST_Point, ST_Contains, ST_Intersects
     extList.add(new String[]{"vss", ""});       // Vector Similarity Search: HNSW approximate nearest neighbor
     extList.add(new String[]{"fts", ""});       // Full-Text Search: BM25 ranking and keyword search
-    // cache_httpfs: macOS/Linux only (WSL reports os.name="Linux" so it is included)
-    if (!isWindows) {
+    // cache_httpfs: macOS/Linux only (WSL reports os.name="Linux" so it is included), and only
+    // when not opted out (see isCacheHttpfsDisabled).
+    if (!isCacheHttpfsDisabled()) {
       extList.add(new String[]{"cache_httpfs", "FROM community"});
     }
     String[][] extensions = extList.toArray(new String[0][]);
@@ -1204,8 +1216,21 @@ public class DuckDBJdbcSchemaFactory {
    * 1. System property {@code duckdb.cache_httpfs.directory}
    * 2. {@code {user.home}/.aperio/.duckdb_httpfs_cache}
    */
+  /**
+   * True when {@code cache_httpfs} should not be loaded: on Windows (unsupported there), or when
+   * the caller opted out via {@code -Dduckdb.cache_httpfs.disable=true}. Opt-out exists for
+   * one-shot workloads (e.g. model-verify.sh's per-table probes) that never re-read the same
+   * remote file within a run and so gain nothing from cache_httpfs's persistent cache, while
+   * still paying its per-read exclusion-regex mutex overhead on every Parquet page/chunk read
+   * (calcite issue #290).
+   */
+  private static boolean isCacheHttpfsDisabled() {
+    return System.getProperty("os.name", "").toLowerCase().contains("win")
+        || Boolean.getBoolean("duckdb.cache_httpfs.disable");
+  }
+
   private static void configureCacheHttpfs(Connection conn) {
-    if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+    if (isCacheHttpfsDisabled()) {
       return;
     }
 

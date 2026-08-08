@@ -30,6 +30,7 @@
 #   scripts/model-verify.sh                          # all schemas, one at a time
 #   scripts/model-verify.sh --source sec,geo,econ    # subset
 #   scripts/model-verify.sh --limit 5
+#   scripts/model-verify.sh --mode mirror            # verify against the real R2 bucket
 #
 # Options:
 #   --source LIST   comma/space-separated dataSource list (default: all supported)
@@ -37,6 +38,14 @@
 #   --no-probes     skip the geo/embedding feature probes
 #   --no-dup        skip the primary-key duplicate-row check
 #   --dup-threshold N  min duplicate keyed-row count to flag/fail (default 1)
+#   --mode local|mirror  which object store to read (default local):
+#                     local  — AWS_* creds/endpoint from .env.prod (the LAN mirror, e.g.
+#                              a local MinIO replica). What every prior run used.
+#                     mirror — PROD_AWS_* creds/endpoint from .env.prod (the real
+#                              Cloudflare R2 bucket). Same GOVDATA_PARQUET_DIR path in
+#                              both — only the endpoint/credentials differ. Use this to
+#                              confirm the actual production bucket is readable, not just
+#                              its LAN mirror.
 #
 # Duplicate-row check: for every base table with a declared primaryKey, the runner compares the
 # count of fully-keyed rows (all PK columns non-null) against the count of DISTINCT PK tuples. A
@@ -65,6 +74,7 @@ SINGLE_CONNECTION=false
 PROBES_ENABLED=true
 DUP_ARGS=()
 PUBLISH_ARGS=()
+MODE="local"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -80,7 +90,14 @@ while [[ $# -gt 0 ]]; do
         # per-schema loop would publish 24 partial caches over the top of each other.
         --publish-schema-cache) PUBLISH_ARGS+=(--publish-schema-cache); shift ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
-        -h|--help)        sed -n '17,48p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --mode)
+            MODE="$2"
+            case "$MODE" in
+                local|mirror) ;;
+                *) echo "Error: --mode must be 'local' or 'mirror', got: $MODE" >&2; exit 2 ;;
+            esac
+            shift 2 ;;
+        -h|--help)        sed -n '17,55p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)                echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -112,6 +129,19 @@ set -a; source "$ENV_FILE"; set +a
 # leaked value can't silently retarget reads at the truncated sample bucket.
 unset GOVDATA_DQ
 
+# ---- --mode mirror: swap in the real R2 (PROD_AWS_*) creds/endpoint over the LAN-mirror ----
+# defaults .env.prod already loaded. GOVDATA_PARQUET_DIR (the bucket path) is unchanged — the
+# mirror and R2 hold the same key layout, only the endpoint/credentials differ.
+if [[ "$MODE" == "mirror" ]]; then
+    : "${PROD_AWS_ACCESS_KEY_ID:?PROD_AWS_ACCESS_KEY_ID not set in $ENV_FILE — required for --mode mirror}"
+    : "${PROD_AWS_SECRET_ACCESS_KEY:?PROD_AWS_SECRET_ACCESS_KEY not set in $ENV_FILE — required for --mode mirror}"
+    : "${PROD_AWS_ENDPOINT_OVERRIDE:?PROD_AWS_ENDPOINT_OVERRIDE not set in $ENV_FILE — required for --mode mirror}"
+    export AWS_ACCESS_KEY_ID="$PROD_AWS_ACCESS_KEY_ID"
+    export AWS_SECRET_ACCESS_KEY="$PROD_AWS_SECRET_ACCESS_KEY"
+    export AWS_ENDPOINT_OVERRIDE="$PROD_AWS_ENDPOINT_OVERRIDE"
+    export AWS_REGION="${PROD_AWS_REGION:-auto}"
+fi
+
 # ---- test isolation: run against a DEDICATED operating-dir base, separate from the ETL/pool ----
 # The persistent DuckDB read-catalog (.duckdb/govdata.duckdb) and the FileSchema conversion-record
 # store (.aperio/<schema>/.conversions.json) are keyed to the operating-dir base (GOVDATA_DATA_DIR,
@@ -123,8 +153,13 @@ unset GOVDATA_DQ
 # test. Point this run at its OWN base so it never touches the pool's catalog, then purge that base's
 # caches so each verify starts from the current model. Both are regenerated on first connect. The
 # httpfs data cache (.duckdb_httpfs_cache) under this base is kept between runs (remote parquet
-# bytes, not table definitions). Override the base with GOVDATA_VERIFY_DATA_DIR.
-export GOVDATA_DATA_DIR="${GOVDATA_VERIFY_DATA_DIR:-$HOME/.govdata-verify}"
+# bytes, not table definitions). Override the base with GOVDATA_VERIFY_DATA_DIR. --mode mirror gets
+# its own base (unless overridden) so its httpfs byte cache — read from a different endpoint than
+# the local mirror — never mixes with the local-mode cache, and so a concurrent local + mirror run
+# can't race on the same purge-at-start directory.
+_default_data_dir="$HOME/.govdata-verify"
+[[ "$MODE" == "mirror" ]] && _default_data_dir="$HOME/.govdata-verify-mirror"
+export GOVDATA_DATA_DIR="${GOVDATA_VERIFY_DATA_DIR:-$_default_data_dir}"
 echo "Isolated operating-dir base: $GOVDATA_DATA_DIR (separate from the ETL pool's ~/.govdata)"
 echo "Purging stale verify-local metadata (.aperio conversion records + .duckdb catalog)"
 mkdir -p "$GOVDATA_DATA_DIR"
@@ -133,7 +168,11 @@ rm -rf "$GOVDATA_DATA_DIR/.aperio" "$GOVDATA_DATA_DIR/.duckdb"
 # ---- classpath: pin a single shaded jar (avoid wildcard picking up stale strays) ----
 # MODEL_VERIFY_JAR overrides jar selection so a PRIVATE build (e.g. sih-govdata-fixes.jar) can be
 # verified without touching the unversioned sih-govdata.jar a running ETL pool is executing.
-JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m}"
+# -Dduckdb.cache_httpfs.disable=true: this run's per-table probes are one-shot (never re-read the
+# same remote file), so cache_httpfs's persistent cache buys nothing here while its per-read
+# exclusion-regex mutex serializes every Parquet page/chunk read across scan threads — a severe
+# bottleneck on large schemas over a WAN endpoint (calcite issue #290). Skip loading it entirely.
+JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m -Dduckdb.cache_httpfs.disable=true}"
 LIBS="$GOVDATA_HOME/build/libs"
 if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then
     if [[ ! -f "$MODEL_VERIFY_JAR" ]]; then
@@ -151,6 +190,7 @@ else
     exit 2
 fi
 echo "Using jar:  $CLASSPATH"
+echo "Mode:       $MODE"
 echo "Endpoint:   ${AWS_ENDPOINT_OVERRIDE:-<default>}   dir: ${GOVDATA_PARQUET_DIR:-<driver default>}"
 echo "Schemas:    $SELECTED"
 echo ""
@@ -218,27 +258,48 @@ run_one() {
     [[ -n "$probe" ]] && args+=(--probes "$probe")
     {
         echo "========================= $s ========================="
-        java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}" 2>/dev/null
+        java $JVM_OPTS -cp "$CLASSPATH" "$RUNNER" "${args[@]}"
         rc=$?
         echo ""
         echo "$rc" > "$_outdir/$s.rc"
     } > "$_outdir/$s.out" 2>&1
     [[ -n "$probe" ]] && rm -f "$probe"
-    # Always succeed: the dispatch loop below uses `wait -n`'s status purely for flow control,
-    # and a non-zero return there trips its `|| wait` fallback into waiting for EVERY in-flight
-    # schema — collapsing rolling concurrency into barriered batches. Without this, the trailing
-    # `[[ -n "$probe" ]]` short-circuits to false for every schema that has no probe file (all but
-    # geo/lands/census/sec) and the function returns 1. Per-schema pass/fail is read from
+    # Always succeed: the dispatch loop's polling below tracks job completion via `kill -0` on
+    # PIDs, not this function's exit status. Without this, the trailing `[[ -n "$probe" ]]`
+    # short-circuits to false for every schema that has no probe file (all but geo/lands/census/
+    # sec) and the function returns 1 for no reason. Per-schema pass/fail is read from
     # "$_outdir/$s.rc", never from this status.
     return 0
 }
 
 _running=0
+_pids=()
 for s in $SELECTED; do
     run_one "$s" &
+    _pids+=("$!")
     _running=$((_running + 1))
     if [ "$_running" -ge "$JOBS" ]; then
-        wait -n 2>/dev/null || wait
+        # Portable "wait for any one job to finish": bash's `wait -n` (4.3+) isn't available on
+        # macOS's stock /bin/bash (3.2, frozen there for licensing reasons) — there it silently
+        # fails and falls through to `|| wait`, which blocks on the WHOLE batch instead of just
+        # one job. That collapses the intended rolling concurrency into barriered batches gated
+        # by each batch's slowest schema (observed: a batch sat at 3/4 done for 25+ minutes,
+        # waiting on the 4th before dispatching schema #5). Poll for any tracked PID to exit
+        # instead — identical behavior on bash 3.2 and on modern bash/Linux.
+        while :; do
+            _next_pids=()
+            _freed=0
+            for p in "${_pids[@]}"; do
+                if kill -0 "$p" 2>/dev/null; then
+                    _next_pids+=("$p")
+                else
+                    _freed=1
+                fi
+            done
+            _pids=("${_next_pids[@]}")
+            [ "$_freed" -eq 1 ] && break
+            sleep 0.2
+        done
         _running=$((_running - 1))
     fi
 done
