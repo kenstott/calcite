@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.73.0](https://github.com/kenstott/calcite/compare/engine-v0.72.1...engine-v0.73.0) (2026-08-08)
+
+
+### Features
+
+* **govdata/scripts:** add model-verify.sh --mode local|mirror, fix stderr swallow ([537a6da](https://github.com/kenstott/calcite/commit/537a6da5d634a87548a442ae871f8f90bb8b62db))
+* **semantic-search:** first cross-schema RowConcatChunker source (fedregister) ([0b21cc1](https://github.com/kenstott/calcite/commit/0b21cc15e25fe9d5350c6a30983175b11aa386da))
+* **semantic-search:** Phase 0 codes repartitioning + row-concat mode PoC ([336a969](https://github.com/kenstott/calcite/commit/336a96923b5b2854ee57201e93a0bce2a09a492f))
+* **semantic-search:** row-concat mode via RowConcatChunker + generalized backlog ([63359d7](https://github.com/kenstott/calcite/commit/63359d7f539272dd269c5a591e6c3e86b49dd256))
+* **semantic-search:** scale RowConcatChunker to 3 sources, fix composite PKs ([60501ae](https://github.com/kenstott/calcite/commit/60501aefe588100e1c3e6c23126e7abdbd50cdd2))
+* **semantic-search:** wire row-concat backlog into run-pool.sh's post-drain hook ([03e3adc](https://github.com/kenstott/calcite/commit/03e3adc528838fecb951ebd1023f1f24e6dd5261))
+
+
+### Bug Fixes
+
+* **file/duckdb:** also retry SSL handshake failures as transient network errors ([005b0ed](https://github.com/kenstott/calcite/commit/005b0ed8863502e0dfb02109d7941f63b8701b6f))
+* **file/duckdb:** make Iceberg-over-R2 reads resilient to WAN network drops and view-type drift ([a5d541e](https://github.com/kenstott/calcite/commit/a5d541eeb00b87d7d4c17b3bfe504b5ad989be88))
+* **file/iceberg:** don't crash schema listing on unreadable table metadata ([67147ac](https://github.com/kenstott/calcite/commit/67147ac070d6ca697c6628aa390ca1b6718122d1))
+* **govdata/scripts:** make model-verify.sh dispatch loop portable to bash 3.2 ([6c118c0](https://github.com/kenstott/calcite/commit/6c118c0acc874a90a2c0db0be0431bf14e2b4316))
+* **govdata/scripts:** stop run_window aborting under set -e when --force is unset ([44945ed](https://github.com/kenstott/calcite/commit/44945ed90c058ef682a15c2525650ac5f5bd90b3))
+* **govdata:** add missing overwritePartitions on constants-sourced full-snapshot tables ([ba398d4](https://github.com/kenstott/calcite/commit/ba398d4397b8b5850439008296ea030de3fcbef6))
+
 ## [0.72.1](https://github.com/kenstott/calcite/compare/engine-v0.72.0...engine-v0.72.1) (2026-08-08)
 
 
