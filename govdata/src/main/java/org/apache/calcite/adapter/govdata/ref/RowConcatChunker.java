@@ -67,8 +67,20 @@ public class RowConcatChunker implements TableLifecycleListener {
    *  in semantic-search-plan.md's "Table curation". Add an entry here (and the matching
    *  wide FK column in ref-schema.yaml) to onboard a new source -- no other code change. */
   private static final List<RowConcatSource> SOURCES = Arrays.asList(
-      new RowConcatSource("ref", "naics", "naics_code",
-          Arrays.asList("naics_code", "naics_title"), "ref_naics_code"));
+      new RowConcatSource("ref", "naics", Arrays.asList("naics_code"),
+          Arrays.asList("naics_code", "naics_title"), "ref_naics_code"),
+      // "type" is a real string column on both sources below (an Iceberg dimension marker,
+      // constant per row) -- included per the plan's "no column-level filtering" rule even
+      // though its retrieval value is near-zero; excluding it would be exactly the
+      // judgment-call filtering the plan rejected.
+      new RowConcatSource("ref", "naics_vintage", Arrays.asList("vintage", "naics_code"),
+          Arrays.asList("naics_code", "naics_title", "type"), null),
+      // ticker is part of the PK, not just content: a cik can carry multiple tickers
+      // (multiple share classes) on the same as_of -- see the primaryKey comment in
+      // ref-schema.yaml's constraints block.
+      new RowConcatSource("ref", "sec_company_tickers",
+          Arrays.asList("type", "as_of", "cik", "ticker"),
+          Arrays.asList("cik", "ticker", "title", "type"), null));
 
   @Override public void beforeTable(TableContext context) {
     // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
@@ -109,13 +121,20 @@ public class RowConcatChunker implements TableLifecycleListener {
   private List<Map<String, Object>> chunkSource(Connection conn, String base,
       RowConcatSource src) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
-    String colList = String.join(", ", src.stringColumns);
-    String sql = "SELECT " + src.pkColumn + ", " + colList + " FROM iceberg_scan('"
+    // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
+    // is the PK and also carries real text), so query each column once, not once per role.
+    List<String> selectCols = new ArrayList<String>(src.pkColumns);
+    for (String c : src.stringColumns) {
+      if (!selectCols.contains(c)) {
+        selectCols.add(c);
+      }
+    }
+    String sql = "SELECT " + String.join(", ", selectCols) + " FROM iceberg_scan('"
         + loc + "', allow_moved_paths=true)";
     List<Map<String, Object>> sourceRows = queryRows(conn, sql);
     List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
     for (Map<String, Object> row : sourceRows) {
-      Object pkValue = row.get(src.pkColumn);
+      String pkValue = stringifyPk(row, src.pkColumns);
       String text = buildRowConcatText(row, src.stringColumns);
       List<String> chunks = chunkFixed(text);
       for (int seq = 0; seq < chunks.size(); seq++) {
@@ -124,13 +143,13 @@ public class RowConcatChunker implements TableLifecycleListener {
             src.sourceSchema + ":" + src.sourceTable + ":" + pkValue + ":" + seq);
         chunkRow.put("source_schema", src.sourceSchema);
         chunkRow.put("source_table", src.sourceTable);
-        chunkRow.put("stringified_fk", String.valueOf(pkValue));
+        chunkRow.put("stringified_fk", pkValue);
         chunkRow.put("sequence", seq);
         chunkRow.put("source_type", "row_concat");
         chunkRow.put("chunk_text", chunks.get(seq));
         chunkRow.put("enriched_text", chunks.get(seq));
         if (src.wideFkColumn != null) {
-          chunkRow.put(src.wideFkColumn, String.valueOf(pkValue));
+          chunkRow.put(src.wideFkColumn, pkValue);
         }
         chunkRows.add(chunkRow);
       }
@@ -138,6 +157,20 @@ public class RowConcatChunker implements TableLifecycleListener {
     LOGGER.info("RowConcatChunker: {}.{} -> {} chunks from {} rows",
         src.sourceSchema, src.sourceTable, chunkRows.size(), sourceRows.size());
     return chunkRows;
+  }
+
+  /** Stringifies a (possibly composite) primary key as ':'-joined column values -- uniform
+   *  handling for single-column and composite PKs alike, per semantic-search-plan.md's
+   *  "Storage shape". */
+  static String stringifyPk(Map<String, Object> row, List<String> pkColumns) {
+    StringBuilder sb = new StringBuilder();
+    for (String col : pkColumns) {
+      if (sb.length() > 0) {
+        sb.append(':');
+      }
+      sb.append(row.get(col));
+    }
+    return sb.toString();
   }
 
   /** Builds 'col: value | col: value | ...' from a row's non-null values, in the given
@@ -290,15 +323,20 @@ public class RowConcatChunker implements TableLifecycleListener {
   private static final class RowConcatSource {
     final String sourceSchema;
     final String sourceTable;
-    final String pkColumn;
+    /** One or more columns forming the source table's own primary key -- stringified_fk is
+     *  their ':'-joined values, uniform for single-column and composite PKs alike. */
+    final List<String> pkColumns;
     final List<String> stringColumns;
+    /** Convenience wide FK column, only meaningful for a single-column PK -- a composite PK
+     *  doesn't map to one column simply, so this is null for those sources (the generic
+     *  stringified_fk still works for any PK shape). */
     final String wideFkColumn;
 
-    RowConcatSource(String sourceSchema, String sourceTable, String pkColumn,
+    RowConcatSource(String sourceSchema, String sourceTable, List<String> pkColumns,
         List<String> stringColumns, String wideFkColumn) {
       this.sourceSchema = sourceSchema;
       this.sourceTable = sourceTable;
-      this.pkColumn = pkColumn;
+      this.pkColumns = pkColumns;
       this.stringColumns = stringColumns;
       this.wideFkColumn = wideFkColumn;
     }

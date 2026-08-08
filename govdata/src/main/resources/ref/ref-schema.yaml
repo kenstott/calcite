@@ -2469,7 +2469,13 @@ constraints:
         comment: LOUs are themselves LEI-registered; links the record's maintainer to its entity
 
   sec_company_tickers:
-    primaryKey: [type, as_of, cik]   # per-day snapshots: cik is unique within an as_of, not across
+    # A cik is NOT unique within an as_of on its own -- a company with multiple share
+    # classes/ticker symbols (e.g. Alphabet: GOOGL/GOOG/GOOGM/GOOGN, all cik 1652044) gets
+    # one row per ticker. Verified live: (type, as_of, cik) alone collides on 2,409 of
+    # 10,415 rows; (type, as_of, cik, ticker) is fully unique. Found via a real PK
+    # violation surfaced by RowConcatChunker's stringified_fk derivation, which follows
+    # this declaration mechanically.
+    primaryKey: [type, as_of, cik, ticker]
 
   figi_instruments:
     primaryKey: [type, figi]
