@@ -331,6 +331,10 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # Full static snapshot re-fetched wholesale every run (source.type: constants) --
+        # without this, the Java default (append) duplicates the whole table on every
+        # re-run, since there's no partition to key an append off of.
+        overwritePartitions: true
 
   # --- REFERENCE BLS NAICS SECTORS ---
   - name: naics_sectors
@@ -384,6 +388,10 @@ partitionedTables:
         catalogType: hadoop
         runMaintenance: true
         snapshotRetentionDays: 1
+        # Full static snapshot re-fetched wholesale every run (source.type: constants) --
+        # without this, the Java default (append) duplicates the whole table on every
+        # re-run, since there's no partition to key an append off of.
+        overwritePartitions: true
 
   # --- REFERENCE NIPA TABLES ---
   - name: nipa_tables
