@@ -34,7 +34,7 @@ This script only ever embeds already-organized chunks -- it never builds chunk_t
 itself. Organizing text into chunk rows (row-concat mode's naive per-row chunker,
 document-blob mode's SemanticTextChunker) is always Java's job, writing into a
 vectorized_chunks-shaped Iceberg table (see
-org.apache.calcite.adapter.govdata.ref.RowConcatChunker for the row-concat producer).
+org.apache.calcite.adapter.govdata.ref.ChunkOrganizer for the row-concat producer).
 
 Commands:
   backlog [--max-rows N --max-seconds S] [--source-schema S --iceberg-path P]
@@ -333,7 +333,7 @@ def cmd_backlog(max_rows, max_seconds, source_schema="sec", iceberg_path=None,
     them, time-boxed and resumable -- if time runs out, the rest picks up next run. Defaults
     to SEC's own vectorized_chunks/codes (backward compatible); any other source with chunks
     already organized into a vectorized_chunks-shaped Iceberg table (see
-    org.apache.calcite.adapter.govdata.ref.RowConcatChunker, which does the organizing --
+    org.apache.calcite.adapter.govdata.ref.ChunkOrganizer, which does the organizing --
     this command only ever embeds) drains the same way by passing source_schema (iceberg_path
     defaults to that source's own conventional path, override only for a non-standard one).
     """

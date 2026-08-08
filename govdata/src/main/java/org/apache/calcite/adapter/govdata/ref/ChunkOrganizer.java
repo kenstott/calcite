@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.etl.MaterializationWriterFactory;
 import org.apache.calcite.adapter.file.etl.MaterializeConfig;
 import org.apache.calcite.adapter.file.etl.TableContext;
 import org.apache.calcite.adapter.file.etl.TableLifecycleListener;
+import org.apache.calcite.adapter.govdata.sec.SemanticTextChunker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,10 +37,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Organizes chunks for {@code ref.vectorized_chunks}'s row-concat mode: concatenates each
- * included source row's string columns, naive-chunks the result, and writes the chunk
- * metadata (no vectors) into {@code ref.vectorized_chunks}. See
+ * Organizes chunks for {@code ref.vectorized_chunks}, in both of its two content modes: see
  * semantic-search-plan.md "Row-level design" / "Table curation".
+ * <ul>
+ *   <li><b>Row-concat mode</b> ({@code source_type='row_concat'}): concatenates an included
+ *   entity-grain dimension table's string columns per row ({@code col: value | col: value}),
+ *   naive-chunks the result.</li>
+ *   <li><b>Document-blob mode</b> (one {@code source_type} value per source, e.g.
+ *   {@code nist_control_description}): runs a single prose column through
+ *   {@link SemanticTextChunker#chunkPlainText}, the same sentence-boundary-aware chunker
+ *   SEC's own document-chunk mode uses, reused as-is via its plain-text entry point (no HTML
+ *   structure needed for a flat blob column).</li>
+ * </ul>
  *
  * <p>This class does the organizing only -- the vector writer is always an external script
  * ({@code govdata/scripts/vss-local.py}), which finds chunks with no codes yet (a simple
@@ -51,13 +60,14 @@ import java.util.Map;
  * no {@code source:} block, so {@code afterTable} is the only lifecycle hook that fires for
  * it -- same wiring rationale as {@link EntityBridgeListener}).
  */
-public class RowConcatChunker implements TableLifecycleListener {
+public class ChunkOrganizer implements TableLifecycleListener {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(RowConcatChunker.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(ChunkOrganizer.class);
 
   private static final String TRIGGER_TABLE = "vectorized_chunks";
 
-  // Naive fixed-window chunk size / overlap over the delimited column concatenation.
+  // Naive fixed-window chunk size / overlap over the delimited column concatenation (row-concat
+  // mode only -- document-blob mode uses SemanticTextChunker's own target/min/max sizing).
   // Matches the plan's stated default; tunable, not tied to any model's token limit here
   // since row-concat sources are short (reference/dimension rows).
   private static final int CHUNK_SIZE = 1000;
@@ -66,7 +76,7 @@ public class RowConcatChunker implements TableLifecycleListener {
   /** One row-concat source: an included entity-grain dimension table, per the v1 registry
    *  in semantic-search-plan.md's "Table curation". Add an entry here (and the matching
    *  wide FK column in ref-schema.yaml) to onboard a new source -- no other code change. */
-  private static final List<RowConcatSource> SOURCES = Arrays.asList(
+  private static final List<RowConcatSource> ROW_CONCAT_SOURCES = Arrays.asList(
       new RowConcatSource("ref", "naics", Arrays.asList("naics_code"),
           Arrays.asList("naics_code", "naics_title"), "ref_naics_code"),
       // stringColumns lists only columns declared in the schema's own `columns:` block --
@@ -91,12 +101,24 @@ public class RowConcatChunker implements TableLifecycleListener {
               "effective_on", "action", "agency_names", "cfr_references", "rin",
               "docket_ids", "signing_date"), "fedregister_document_number"));
 
+  /** Document-blob sources per semantic-search-plan.md's "Document-blob sources" table.
+   *  Each gets its own source_type value and reuses SemanticTextChunker's plain-text chunker
+   *  (target/min/max sizing per its DEFAULT_* constants -- these are short-to-medium prose
+   *  fields, not full filings, so the SEC defaults apply without retuning). */
+  private static final List<DocumentBlobSource> DOCUMENT_BLOB_SOURCES = Arrays.asList(
+      new DocumentBlobSource("cyber_threat", "nist_controls", Arrays.asList("control_id"),
+          "description", "nist_control_description", null),
+      new DocumentBlobSource("cyber_threat", "cis_controls", Arrays.asList("safeguard_id"),
+          "description", "cis_control_description", null),
+      new DocumentBlobSource("cyber_threat", "owasp_top10", Arrays.asList("entry_id"),
+          "overview", "owasp_entry_overview", null));
+
   @Override public void beforeTable(TableContext context) {
     // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
   }
 
   @Override public boolean onTableError(TableContext context, Exception error) {
-    LOGGER.error("RowConcatChunker: table '{}' failed upstream of chunk organization",
+    LOGGER.error("ChunkOrganizer: table '{}' failed upstream of chunk organization",
         context.getTableName(), error);
     return true;
   }
@@ -105,29 +127,36 @@ public class RowConcatChunker implements TableLifecycleListener {
     if (!TRIGGER_TABLE.equals(context.getTableName())) {
       return;
     }
-    LOGGER.info("RowConcatChunker: organizing row-concat chunks for {} source(s)",
-        SOURCES.size());
+    LOGGER.info("ChunkOrganizer: organizing chunks for {} row-concat + {} document-blob "
+        + "source(s)", ROW_CONCAT_SOURCES.size(), DOCUMENT_BLOB_SOURCES.size());
     try (Connection conn = openDuckDb(context)) {
       String base = context.getSchemaContext().getMaterializeDirectory();
       List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
-      for (RowConcatSource src : SOURCES) {
-        chunkRows.addAll(chunkSource(conn, base, src));
+      for (RowConcatSource src : ROW_CONCAT_SOURCES) {
+        chunkRows.addAll(chunkRowConcatSource(conn, base, src));
+      }
+      for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
+        chunkRows.addAll(chunkDocumentBlobSource(conn, base, src));
       }
       if (chunkRows.isEmpty()) {
-        LOGGER.info("RowConcatChunker: no chunks produced, nothing to write");
+        LOGGER.info("ChunkOrganizer: no chunks produced, nothing to write");
         return;
       }
       writeTable(context, TRIGGER_TABLE, chunkRows);
-      LOGGER.info("RowConcatChunker: wrote {} chunk rows to ref.vectorized_chunks",
+      LOGGER.info("ChunkOrganizer: wrote {} chunk rows to ref.vectorized_chunks",
           chunkRows.size());
     } catch (Exception e) {
       // afterTable declares no throws clause; this is a best-effort post-processing pass over
       // already-committed data, so a failure here must not fail the ref schema's own ETL run.
-      LOGGER.error("RowConcatChunker: chunk organization failed", e);
+      LOGGER.error("ChunkOrganizer: chunk organization failed", e);
     }
   }
 
-  private List<Map<String, Object>> chunkSource(Connection conn, String base,
+  // ========================================================================
+  // Row-concat mode
+  // ========================================================================
+
+  private List<Map<String, Object>> chunkRowConcatSource(Connection conn, String base,
       RowConcatSource src) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
@@ -163,7 +192,7 @@ public class RowConcatChunker implements TableLifecycleListener {
         chunkRows.add(chunkRow);
       }
     }
-    LOGGER.info("RowConcatChunker: {}.{} -> {} chunks from {} rows",
+    LOGGER.info("ChunkOrganizer: row-concat {}.{} -> {} chunks from {} rows",
         src.sourceSchema, src.sourceTable, chunkRows.size(), sourceRows.size());
     return chunkRows;
   }
@@ -225,6 +254,55 @@ public class RowConcatChunker implements TableLifecycleListener {
   }
 
   // ========================================================================
+  // Document-blob mode
+  // ========================================================================
+
+  private List<Map<String, Object>> chunkDocumentBlobSource(Connection conn, String base,
+      DocumentBlobSource src) throws SQLException {
+    String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
+    List<String> selectCols = new ArrayList<String>(src.pkColumns);
+    if (!selectCols.contains(src.blobColumn)) {
+      selectCols.add(src.blobColumn);
+    }
+    String sql = "SELECT " + String.join(", ", selectCols) + " FROM iceberg_scan('"
+        + loc + "', allow_moved_paths=true)";
+    List<Map<String, Object>> sourceRows = queryRows(conn, sql);
+    List<Map<String, Object>> chunkRows = new ArrayList<Map<String, Object>>();
+    SemanticTextChunker chunker = new SemanticTextChunker();
+    for (Map<String, Object> row : sourceRows) {
+      Object blobValue = row.get(src.blobColumn);
+      if (blobValue == null) {
+        continue;
+      }
+      String pkValue = stringifyPk(row, src.pkColumns);
+      List<SemanticTextChunker.Chunk> chunks = chunker.chunkPlainText(blobValue.toString());
+      for (SemanticTextChunker.Chunk chunk : chunks) {
+        // SemanticTextChunker's own sequence numbers are 1-based; 0-based here matches
+        // row-concat mode's convention (see vectorized_chunks.sequence's column comment).
+        int seq = chunk.getSequenceNumber() - 1;
+        Map<String, Object> chunkRow = new LinkedHashMap<String, Object>();
+        chunkRow.put("chunk_id",
+            src.sourceSchema + ":" + src.sourceTable + ":" + pkValue + ":" + seq);
+        chunkRow.put("source_schema", src.sourceSchema);
+        chunkRow.put("source_table", src.sourceTable);
+        chunkRow.put("stringified_fk", pkValue);
+        chunkRow.put("sequence", seq);
+        chunkRow.put("source_type", src.sourceType);
+        chunkRow.put("chunk_text", chunk.getText());
+        chunkRow.put("enriched_text", chunk.getText());
+        chunkRow.put("paragraph_continuation", chunk.isParagraphContinuation());
+        if (src.wideFkColumn != null) {
+          chunkRow.put(src.wideFkColumn, pkValue);
+        }
+        chunkRows.add(chunkRow);
+      }
+    }
+    LOGGER.info("ChunkOrganizer: document-blob {}.{} -> {} chunks from {} rows",
+        src.sourceSchema, src.sourceTable, chunkRows.size(), sourceRows.size());
+    return chunkRows;
+  }
+
+  // ========================================================================
   // DuckDB / write-out (same pattern as EntityBridgeListener)
   // ========================================================================
 
@@ -233,7 +311,7 @@ public class RowConcatChunker implements TableLifecycleListener {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=2");
       stmt.execute("SET memory_limit='2GB'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/row-concat-chunker-duckdb";
+      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
       stmt.execute("SET temp_directory='" + tempDir + "'");
       try {
         stmt.execute("INSTALL parquet");
@@ -308,7 +386,7 @@ public class RowConcatChunker implements TableLifecycleListener {
       }
     }
     throw new IllegalStateException(
-        "RowConcatChunker: table config not found for " + tableName);
+        "ChunkOrganizer: table config not found for " + tableName);
   }
 
   private static List<Map<String, Object>> queryRows(Connection conn, String sql)
@@ -347,6 +425,26 @@ public class RowConcatChunker implements TableLifecycleListener {
       this.sourceTable = sourceTable;
       this.pkColumns = pkColumns;
       this.stringColumns = stringColumns;
+      this.wideFkColumn = wideFkColumn;
+    }
+  }
+
+  /** One document-blob source registry entry. */
+  private static final class DocumentBlobSource {
+    final String sourceSchema;
+    final String sourceTable;
+    final List<String> pkColumns;
+    final String blobColumn;
+    final String sourceType;
+    final String wideFkColumn;
+
+    DocumentBlobSource(String sourceSchema, String sourceTable, List<String> pkColumns,
+        String blobColumn, String sourceType, String wideFkColumn) {
+      this.sourceSchema = sourceSchema;
+      this.sourceTable = sourceTable;
+      this.pkColumns = pkColumns;
+      this.blobColumn = blobColumn;
+      this.sourceType = sourceType;
       this.wideFkColumn = wideFkColumn;
     }
   }
