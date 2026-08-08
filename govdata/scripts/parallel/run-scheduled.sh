@@ -201,6 +201,7 @@ run_window() {
     echo "[$(ts)] concurrency cap: -j $POOL_MAX_WORKERS (POOL_MAX_WORKERS)"
     [ -n "${GOVDATA_JAR:-}" ] && echo "[$(ts)] JAR: $GOVDATA_JAR"
     [ "$FORCE" = "true" ] && echo "[$(ts)] --force: release-window checks bypassed for this window"
+    true
   } | tee -a "$window_log"
 
   while true; do
