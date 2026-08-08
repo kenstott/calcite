@@ -183,6 +183,21 @@ public class IcebergTable extends AbstractTable
   }
 
   /**
+   * Drops this table's in-memory schema (row type, resolved Iceberg {@link Schema}, and cache
+   * lookup result) and the shared {@link IcebergSchemaCache} entry backing it, forcing the next
+   * {@link #getRowType} to re-read the table live. Used when a caller has independent proof the
+   * cached schema is stale — e.g. a DuckDB view over this table reports a column-count mismatch
+   * against live data — see {@code EtagRetryConnection}'s view-type-drift repair.
+   */
+  public void invalidateCachedSchema() {
+    rowType = null;
+    resolvedSchema = null;
+    schemaCacheEntry = null;
+    schemaCacheConsulted = false;
+    IcebergSchemaCache.invalidate(source.path());
+  }
+
+  /**
    * Returns the Iceberg schema — from the cache when one is published and current, otherwise by
    * loading the table from the object store.
    *
