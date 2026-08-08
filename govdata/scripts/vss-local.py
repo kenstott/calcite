@@ -94,6 +94,14 @@ def codes_dataset_for(source_schema):
     return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunk_codes/source_schema={source_schema}"
 
 
+def iceberg_chunks_for(source_schema):
+    """vectorized_chunks Iceberg path for a given source_schema -- SEC's own path
+    (ICEBERG_CHUNKS above) follows the same convention, so this needs no special case."""
+    if source_schema == "sec":
+        return ICEBERG_CHUNKS
+    return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunks"
+
+
 # ── Embedder interface ────────────────────────────────────────────────────────
 class Embedder:
     def embed(self, texts):
@@ -326,9 +334,10 @@ def cmd_backlog(max_rows, max_seconds, source_schema="sec", iceberg_path=None,
     to SEC's own vectorized_chunks/codes (backward compatible); any other source with chunks
     already organized into a vectorized_chunks-shaped Iceberg table (see
     org.apache.calcite.adapter.govdata.ref.RowConcatChunker, which does the organizing --
-    this command only ever embeds) drains the same way by passing source_schema/iceberg_path.
+    this command only ever embeds) drains the same way by passing source_schema (iceberg_path
+    defaults to that source's own conventional path, override only for a non-standard one).
     """
-    iceberg_path = iceberg_path or ICEBERG_CHUNKS
+    iceberg_path = iceberg_path or iceberg_chunks_for(source_schema)
     if source_schema == "sec":
         # newest-first via (year, accession_number); accession encodes YY-seq, so recently
         # filed / most-queried chunks lead and the historical backlog drains behind them.
@@ -432,7 +441,7 @@ def main():
     p_bk.add_argument("--source-schema", default="sec",
                       help="which vectorized_chunks to drain (default: sec)")
     p_bk.add_argument("--iceberg-path", default=None,
-                      help="defaults to SEC's own path for source-schema=sec, otherwise required")
+                      help="override; defaults to that source's own conventional path")
     p_year = sub.add_parser("year")
     p_year.add_argument("--year", type=int, required=True)
     sub.add_parser("stats")
@@ -440,8 +449,6 @@ def main():
     args = ap.parse_args()
 
     if args.cmd == "backlog":
-        if args.source_schema != "sec" and not args.iceberg_path:
-            ap.error("--iceberg-path is required when --source-schema is not 'sec'")
         cmd_backlog(args.max_rows, args.max_seconds, source_schema=args.source_schema,
                     iceberg_path=args.iceberg_path)
     elif args.cmd == "year":

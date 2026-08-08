@@ -849,7 +849,20 @@ if $RUN_EMBEDDINGS; then
   log_info "Embeddings (local CPU): coding un-coded backlog (newest-first, time-boxed) → lake"
   if [ -f "$VSS_DIR/vss-local.sh" ]; then
     bash "$VSS_DIR/vss-local.sh" backlog \
-      || log_info "WARNING: vss-local backlog failed (non-fatal)"
+      || log_info "WARNING: vss-local backlog (sec) failed (non-fatal)"
+    # Row-concat mode: any other schema's vectorized_chunks (organized by a Java
+    # TableLifecycleListener during that schema's own ETL -- e.g.
+    # org.apache.calcite.adapter.govdata.ref.RowConcatChunker for ref) drains the exact
+    # same time-boxed, resumable way. This only runs post-drain (here, not per-schema)
+    # because it needs every source schema already materialized -- see
+    # semantic-search-plan.md "Extension mechanism" for why a per-table hook can't give
+    # that ordering guarantee. Add a source_schema to this list as row-concat/document-
+    # blob sources are onboarded elsewhere; each is independent, one failing doesn't
+    # block the rest.
+    for src_schema in ref; do
+      bash "$VSS_DIR/vss-local.sh" backlog --source-schema "$src_schema" \
+        || log_info "WARNING: vss-local backlog ($src_schema) failed (non-fatal)"
+    done
   else
     log_info "WARNING: vss-local.sh not found — embeddings skipped"
   fi

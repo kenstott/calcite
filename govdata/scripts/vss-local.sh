@@ -47,19 +47,33 @@ APP="$SCRIPT_DIR/vss-local.py"
 
 usage() {
   cat <<EOF
-Usage: $0 <command>
-  daily                    PRIMARY: code the un-coded backlog (all years, newest first),
+Usage: $0 <command> [args...]
+  daily [--source-schema S --iceberg-path P]
+                           PRIMARY: code the un-coded backlog (all years, newest first),
                            time-boxed (~2h). Appends quantized codes to the lake. Daily.
-  backlog [maxRows]        Same as daily (with an explicit per-run row cap)
-  year <N>                 Code a single year's delta (manual)
-  stats                    Per-year counts in the codes dataset
+                           Defaults to SEC; pass --source-schema (+ --iceberg-path) to
+                           drain a different source's vectorized_chunks the same way.
+  backlog [maxRows] [--source-schema S --iceberg-path P]
+                           Same as daily (with an explicit per-run row cap)
+  year <N>                 Code a single SEC year's delta (manual)
+  stats                    Per-year counts in SEC's codes dataset
 EOF
 }
 
 cmd="${1:-help}"
 case "$cmd" in
-  daily)    "$PY" "$APP" backlog ;;
-  backlog)  "$PY" "$APP" backlog ${2:+--max-rows "$2"} ;;
+  daily)    shift; "$PY" "$APP" backlog "$@" ;;
+  backlog)
+    shift
+    # Back-compat: a bare leading number is the maxRows positional; anything else
+    # (a flag, or nothing) passes straight through.
+    if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+      maxRows="$1"; shift
+      "$PY" "$APP" backlog --max-rows "$maxRows" "$@"
+    else
+      "$PY" "$APP" backlog "$@"
+    fi
+    ;;
   year)     "$PY" "$APP" year --year "${2:?year required}" ;;
   stats)    "$PY" "$APP" stats ;;
   *)        usage; exit 1 ;;
