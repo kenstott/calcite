@@ -669,7 +669,11 @@ public class DuckDBJdbcSchemaFactory {
               addIcebergCacheExclusions(conn);
             }
           }
-          return conn;
+          // Every query Calcite pushes down to DuckDB runs through a connection from this
+          // DataSource. Wrap it so a live Iceberg commit racing a read (version-hint.text
+          // advancing mid-session — see EtagRetryConnection) is retried once instead of failing
+          // the query outright.
+          return EtagRetryConnection.wrap(conn);
         }
 
         @Override public Connection getConnection(String username, String password) throws SQLException {
