@@ -967,11 +967,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_race_ethnicity_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B03003_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B03003_002M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_race_ethnicity (Census variable B03003_002M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS AGE - Age distribution and median age
   # ---------------------------------------------------------------------------
@@ -1055,11 +1050,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_age_moe
-    type: double
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B01002_001M" AS DOUBLE) < 0 THEN NULL ELSE TRY_CAST(src."B01002_001M" AS DOUBLE) END'
-    comment: 90% CI margin of error for acs_age (Census variable B01002_001M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS COMMUTING - Transportation to work patterns
   # ---------------------------------------------------------------------------
@@ -1194,11 +1184,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_commuting_moe
-    type: double
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B08135_001M" AS DOUBLE) < 0 THEN NULL ELSE TRY_CAST(src."B08135_001M" AS DOUBLE) END'
-    comment: 90% CI margin of error for acs_commuting (Census variable B08135_001M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS HEALTH INSURANCE - Health insurance coverage
   # ---------------------------------------------------------------------------
@@ -1295,11 +1280,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_health_insurance_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B27002_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B27002_004M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_health_insurance (Census variable B27002_004M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS LANGUAGE - Language spoken at home
   # ---------------------------------------------------------------------------
@@ -1424,11 +1404,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_language_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B16001_012M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B16001_012M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_language (Census variable B16001_012M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS DISABILITY - Disability status
   # ---------------------------------------------------------------------------
@@ -1539,11 +1514,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_disability_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B18105_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B18105_004M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_disability (Census variable B18105_004M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS VETERANS - Veteran status
   # ---------------------------------------------------------------------------
@@ -1647,11 +1617,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_veterans_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B21001_023M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B21001_023M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_veterans (Census variable B21001_023M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS MIGRATION - Geographic mobility in the past year
   # ---------------------------------------------------------------------------
@@ -1768,11 +1733,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_migration_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B07001_081M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B07001_081M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_migration (Census variable B07001_081M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS OCCUPATION - Employment by occupation
   # ---------------------------------------------------------------------------
@@ -1888,11 +1848,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_occupation_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."C24010_037M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."C24010_037M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_occupation (Census variable C24010_037M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS INDUSTRY - Employment by industry
   # ---------------------------------------------------------------------------
@@ -2088,11 +2043,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_industry_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."C24030_028M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."C24030_028M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_industry (Census variable C24030_028M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS INTERNET - Internet and computer access
   # ---------------------------------------------------------------------------
@@ -2209,11 +2159,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_internet_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B28001_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B28001_011M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_internet (Census variable B28001_011M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS VEHICLE ACCESS - Household vehicle availability (B08201)
   # ---------------------------------------------------------------------------
@@ -2290,11 +2235,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_vehicle_access_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B08201_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B08201_002M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_vehicle_access (Census variable B08201_002M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS NATIVITY - Nativity and citizenship status
   # ---------------------------------------------------------------------------
@@ -2398,11 +2338,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_nativity_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B05001_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_006M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_nativity (Census variable B05001_006M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS MARITAL STATUS - Marital status
   # ---------------------------------------------------------------------------
@@ -2656,11 +2591,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_household_type_moe
-    type: double
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B25010_001M" AS DOUBLE) < 0 THEN NULL ELSE TRY_CAST(src."B25010_001M" AS DOUBLE) END'
-    comment: 90% CI margin of error for acs_household_type (Census variable B25010_001M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS HOUSING TENURE - Homeownership and rental status
   # ---------------------------------------------------------------------------
@@ -2775,11 +2705,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_housing_tenure_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B25035_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25035_001M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_housing_tenure (Census variable B25035_001M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS INCOME DISTRIBUTION - Income brackets and Gini coefficient
   # ---------------------------------------------------------------------------
@@ -2896,11 +2821,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_income_distribution_moe
-    type: double
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B19083_001M" AS DOUBLE) < 0 THEN NULL ELSE TRY_CAST(src."B19083_001M" AS DOUBLE) END'
-    comment: 90% CI margin of error for acs_income_distribution (Census variable B19083_001M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # DECENNIAL HOUSING - Housing from decennial census
   # ---------------------------------------------------------------------------
@@ -3259,11 +3179,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs1_population_moe
-    type: double
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B01002_001M" AS DOUBLE) < 0 THEN NULL ELSE TRY_CAST(src."B01002_001M" AS DOUBLE) END'
-    comment: 90% CI margin of error for acs1_population (Census variable B01002_001M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS 1-YEAR INCOME - Current year income statistics
   # ---------------------------------------------------------------------------
@@ -3339,11 +3254,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs1_income_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B19301_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B19301_001M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs1_income (Census variable B19301_001M; negative sentinels normalized to null)
 # ============================================================================
 # ECONOMIC CENSUS
 # Comprehensive business statistics (every 5 years)
@@ -4516,11 +4426,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_earnings_by_education_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B20004_018M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B20004_018M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_earnings_by_education (Census variable B20004_018M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS NATIVITY BY EDUCATION - Place of birth by educational attainment (B06009)
   # ---------------------------------------------------------------------------
@@ -4663,11 +4568,6 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
-  - name: acs_nativity_by_education_moe
-    type: bigint
-    nullable: true
-    expression: 'CASE WHEN TRY_CAST(src."B06009_030M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B06009_030M" AS BIGINT) END'
-    comment: 90% CI margin of error for acs_nativity_by_education (Census variable B06009_030M; negative sentinels normalized to null)
   # ---------------------------------------------------------------------------
   # ACS INCOME BY NATIVITY - Median household income by nativity of householder (S0501)
   # ---------------------------------------------------------------------------
