@@ -2288,6 +2288,13 @@ partitionedTables:
         type: string
         nullable: true
         comment: Populated when source_schema/source_table = 'ref'/'naics'; FK to ref.naics.naics_code
+      - name: fedregister_document_number
+        type: string
+        nullable: true
+        comment: >
+          Populated when source_schema/source_table = 'fedregister'/'fr_documents'; FK to
+          fedregister.fr_documents.document_number. Cross-schema source, same generalized
+          key mechanism as the ref-local ones above.
 
     hooks:
       # enabled: true is REQUIRED here, not optional -- see entity_org_bridge above for why
@@ -2487,6 +2494,11 @@ constraints:
         targetTable: naics
         targetColumns: [naics_code]
         comment: Populated when source_schema/source_table = 'ref'/'naics'
+      - columns: [fedregister_document_number]
+        targetSchema: "${FEDREGISTER_SCHEMA_NAME:fedregister}"
+        targetTable: fr_documents
+        targetColumns: [document_number]
+        comment: Populated when source_schema/source_table = 'fedregister'/'fr_documents'
 
 # ============================================================================
 # VIEWS

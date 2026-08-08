@@ -69,18 +69,27 @@ public class RowConcatChunker implements TableLifecycleListener {
   private static final List<RowConcatSource> SOURCES = Arrays.asList(
       new RowConcatSource("ref", "naics", Arrays.asList("naics_code"),
           Arrays.asList("naics_code", "naics_title"), "ref_naics_code"),
-      // "type" is a real string column on both sources below (an Iceberg dimension marker,
-      // constant per row) -- included per the plan's "no column-level filtering" rule even
-      // though its retrieval value is near-zero; excluding it would be exactly the
-      // judgment-call filtering the plan rejected.
+      // stringColumns lists only columns declared in the schema's own `columns:` block --
+      // NOT `type`, which is a synthesized Hive-partition dimension marker (declared under
+      // `dimensions:`, not `columns:`) on both sources below. Constant-per-row and carries
+      // no real content, so it's a structural exclusion (same category as excluding a
+      // non-string column like `level`/`as_of`), not the column-level content judgment the
+      // plan rejected.
       new RowConcatSource("ref", "naics_vintage", Arrays.asList("vintage", "naics_code"),
-          Arrays.asList("naics_code", "naics_title", "type"), null),
+          Arrays.asList("naics_code", "naics_title"), null),
       // ticker is part of the PK, not just content: a cik can carry multiple tickers
       // (multiple share classes) on the same as_of -- see the primaryKey comment in
       // ref-schema.yaml's constraints block.
       new RowConcatSource("ref", "sec_company_tickers",
           Arrays.asList("type", "as_of", "cik", "ticker"),
-          Arrays.asList("cik", "ticker", "title", "type"), null));
+          Arrays.asList("cik", "ticker", "title"), null),
+      // Cross-schema source (fedregister, not ref) -- proves the base-path resolution
+      // (context.getSchemaContext().getMaterializeDirectory() is the bucket root, not
+      // ref-scoped) works for any schema, same as EntityBridgeListener already relies on.
+      new RowConcatSource("fedregister", "fr_documents", Arrays.asList("document_number"),
+          Arrays.asList("document_number", "title", "doc_type", "publication_date",
+              "effective_on", "action", "agency_names", "cfr_references", "rin",
+              "docket_ids", "signing_date"), "fedregister_document_number"));
 
   @Override public void beforeTable(TableContext context) {
     // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
