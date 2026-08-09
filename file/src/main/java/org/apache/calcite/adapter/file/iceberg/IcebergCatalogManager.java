@@ -415,7 +415,7 @@ public class IcebergCatalogManager {
    * @param typeName The type name (e.g., "VARCHAR", "INTEGER", "array&lt;double&gt;")
    * @return The corresponding Iceberg type
    */
-  static org.apache.iceberg.types.Type mapToIcebergType(String typeName) {
+  public static org.apache.iceberg.types.Type mapToIcebergType(String typeName) {
     return mapToIcebergType(typeName, new java.util.concurrent.atomic.AtomicInteger(1));
   }
 
@@ -512,8 +512,11 @@ public class IcebergCatalogManager {
   /**
    * Reads the column names and types of a Parquet file via DuckDB {@code DESCRIBE} and maps each
    * DuckDB type to the canonical type string understood by {@link #mapToIcebergType(String)}.
+   * Public (not just {@link #createTableFromParquet}'s internal use): also the type-inference
+   * step {@code IcebergMaterializationWriter} reuses to evolve an already-existing deferred-schema
+   * table's columns, not just create one from scratch.
    */
-  private static List<ColumnDef> describeParquet(String parquetPath) {
+  public static List<ColumnDef> describeParquet(String parquetPath) {
     List<ColumnDef> columns = new ArrayList<ColumnDef>();
     String escaped = parquetPath.replace("'", "''");
     String sql = "DESCRIBE SELECT * FROM read_parquet('" + escaped + "')";

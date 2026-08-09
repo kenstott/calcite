@@ -140,16 +140,141 @@ public class ChunkOrganizer implements TableLifecycleListener {
       }
       if (chunkRows.isEmpty()) {
         LOGGER.info("ChunkOrganizer: no chunks produced, nothing to write");
-        return;
+      } else {
+        writeTable(context, TRIGGER_TABLE, chunkRows);
+        LOGGER.info("ChunkOrganizer: wrote {} chunk rows to ref.vectorized_chunks",
+            chunkRows.size());
       }
-      writeTable(context, TRIGGER_TABLE, chunkRows);
-      LOGGER.info("ChunkOrganizer: wrote {} chunk rows to ref.vectorized_chunks",
-          chunkRows.size());
+      backfillSecChunks(context, conn, base);
     } catch (Exception e) {
       // afterTable declares no throws clause; this is a best-effort post-processing pass over
       // already-committed data, so a failure here must not fail the ref schema's own ETL run.
       LOGGER.error("ChunkOrganizer: chunk organization failed", e);
     }
+  }
+
+  // ========================================================================
+  // sec.vectorized_chunks -> ref.vectorized_chunks backfill (one-time migration)
+  // ========================================================================
+  //
+  // See semantic-search-plan.md "Promoting vectorized_chunks". This is NOT a source in
+  // ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES: SEC's chunks are already organized (chunked +
+  // enriched) by DocumentETLProcessor, this just reshapes and copies them into the shared
+  // table. Off by default (secChunksBackfillEnabled) so routine ref schema runs never pay for
+  // it. Time-boxed and resumable across separate invocations by construction: each year is
+  // migrated via an anti-join against chunk_id values already present under
+  // source_schema='sec', so re-running (whether after a clean stop at the time budget or an
+  // interrupted/crashed run) only ever migrates what's still missing -- no separate progress
+  // marker needed, same anti-join idea vss-local.py's cmd_backlog already uses for embeddings.
+
+  private void backfillSecChunks(TableContext context, Connection conn, String base)
+      throws SQLException, IOException {
+    boolean enabled =
+        org.apache.calcite.adapter.file.etl.ModelOperand.getBoolean(
+            context.getSchemaName() + ".secChunksBackfillEnabled", false);
+    if (!enabled) {
+      return;
+    }
+    boolean dryRun =
+        org.apache.calcite.adapter.file.etl.ModelOperand.getBoolean(
+            context.getSchemaName() + ".secChunksBackfillDryRun", false);
+    long maxSeconds =
+        org.apache.calcite.adapter.file.etl.ModelOperand.getLong(
+            context.getSchemaName() + ".secChunksBackfillMaxSeconds", 1800L);
+
+    String secLoc = base + "/sec/vectorized_chunks";
+    String destLoc = base + "/" + context.getSchemaName() + "/" + TRIGGER_TABLE;
+
+    int minYear;
+    int maxYear;
+    String rangeSql = "SELECT MIN(year) AS min_year, MAX(year) AS max_year FROM iceberg_scan('"
+        + secLoc + "', allow_moved_paths=true)";
+    List<Map<String, Object>> range = queryRows(conn, rangeSql);
+    Object minObj = range.isEmpty() ? null : range.get(0).get("min_year");
+    Object maxObj = range.isEmpty() ? null : range.get(0).get("max_year");
+    if (minObj == null || maxObj == null) {
+      LOGGER.info("ChunkOrganizer: SEC backfill enabled but sec.vectorized_chunks is empty "
+          + "or unreadable, nothing to migrate");
+      return;
+    }
+    minYear = ((Number) minObj).intValue();
+    maxYear = ((Number) maxObj).intValue();
+
+    LOGGER.info("ChunkOrganizer: SEC backfill starting, years {}-{}, dryRun={}, "
+        + "maxSeconds={}", minYear, maxYear, dryRun, maxSeconds);
+    java.time.Instant start = java.time.Instant.now();
+    int yearsDone = 0;
+    int yearsSkipped = 0;
+    long totalRows = 0;
+    for (int year = minYear; year <= maxYear; year++) {
+      String sql = "SELECT s.* FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
+          + "WHERE s.year = " + year + " AND NOT EXISTS ("
+          + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
+          + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)";
+      List<Map<String, Object>> sourceRows = queryRows(conn, sql);
+      if (sourceRows.isEmpty()) {
+        yearsSkipped++;
+      } else {
+        List<Map<String, Object>> destRows = new ArrayList<Map<String, Object>>(sourceRows.size());
+        for (Map<String, Object> row : sourceRows) {
+          destRows.add(transformSecChunkRow(row));
+        }
+        if (dryRun) {
+          LOGGER.info("ChunkOrganizer: SEC backfill dry-run year {}: {} rows would be written",
+              year, destRows.size());
+        } else {
+          writeAppendBatch(context, TRIGGER_TABLE, destRows);
+          LOGGER.info("ChunkOrganizer: SEC backfill year {}: wrote {} rows", year,
+              destRows.size());
+        }
+        totalRows += destRows.size();
+        yearsDone++;
+      }
+      long elapsedSeconds = java.time.Duration.between(start, java.time.Instant.now()).getSeconds();
+      if (elapsedSeconds >= maxSeconds && year < maxYear) {
+        LOGGER.info("ChunkOrganizer: SEC backfill time budget ({}s) reached after year {}; "
+            + "{} year(s) remaining, will resume on next run", maxSeconds, year,
+            maxYear - year);
+        return;
+      }
+    }
+    LOGGER.info("ChunkOrganizer: SEC backfill complete: {} year(s) migrated ({} rows), "
+        + "{} year(s) already up to date", yearsDone, totalRows, yearsSkipped);
+  }
+
+  /** Reshapes one sec.vectorized_chunks row into ref.vectorized_chunks's generalized shape.
+   *  chunk_id is preserved as-is (not regenerated) so vectorized_chunk_codes' existing
+   *  embeddings, keyed by this same chunk_id, keep resolving after the migration. */
+  static Map<String, Object> transformSecChunkRow(Map<String, Object> row) {
+    Object cik = row.get("cik");
+    Object accessionNumber = row.get("accession_number");
+    Object filingDate = row.get("filing_date");
+    Map<String, Object> out = new LinkedHashMap<String, Object>();
+    out.put("chunk_id", row.get("chunk_id"));
+    out.put("source_schema", "sec");
+    out.put("source_table", "vectorized_chunks");
+    out.put("stringified_fk", cik + ":" + accessionNumber);
+    out.put("sequence", row.get("sequence"));
+    out.put("source_type", row.get("source_type"));
+    out.put("chunk_text", row.get("chunk_text"));
+    out.put("enriched_text", row.get("enriched_text"));
+    out.put("section", row.get("section"));
+    out.put("subsection", row.get("subsection"));
+    out.put("section_path", row.get("section_path"));
+    out.put("paragraph_continuation", row.get("paragraph_continuation"));
+    out.put("paragraph_number", row.get("paragraph_number"));
+    out.put("content_type", row.get("content_type"));
+    out.put("financial_concepts", row.get("financial_concepts"));
+    out.put("exhibit_number", row.get("exhibit_number"));
+    out.put("speaker_name", row.get("speaker_name"));
+    out.put("speaker_role", row.get("speaker_role"));
+    out.put("cik", cik);
+    out.put("accession_number", accessionNumber);
+    // ISO 8601 date string, matching the destination column's documented shape -- not the raw
+    // java.sql.Date object, so schema inference lands on VARCHAR rather than guessing from a
+    // JDBC type it has never seen from any other source.
+    out.put("filing_date", filingDate == null ? null : filingDate.toString());
+    return out;
   }
 
   // ========================================================================
@@ -374,6 +499,50 @@ public class ChunkOrganizer implements TableLifecycleListener {
         matConfig, context.getStorageProvider(), schemaMaterializeDir,
         context.getIncrementalTracker());
     writer.initialize(matConfig);
+    writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+  }
+
+  /** Same target table as {@link #writeTable}, but {@code overwritePartitions: false} (plain
+   *  append) instead of the main config's dynamic-overwrite-of-touched-partitions -- needed so
+   *  each backfilled year adds to the {@code source_schema='sec'} partition instead of
+   *  replacing it, since the anti-join in {@link #backfillSecChunks} (not partition-scoped
+   *  overwrite) is what keeps repeated/resumed runs from duplicating rows. */
+  private static void writeAppendBatch(TableContext context, String tableName,
+      List<Map<String, Object>> rows) throws IOException {
+    MaterializeConfig baseConfig = tableConfigOf(context, tableName).getMaterialize();
+    List<String> partitionColumns = baseConfig.getPartition() != null
+        && baseConfig.getPartition().getColumns() != null
+        ? baseConfig.getPartition().getColumns()
+        : Collections.<String>emptyList();
+    String targetTableId =
+        baseConfig.getTargetTableId() != null ? baseConfig.getTargetTableId() : tableName;
+
+    MaterializeConfig.Builder builder = MaterializeConfig.builder()
+        .enabled(true)
+        .format(MaterializeConfig.Format.ICEBERG)
+        .name(tableName)
+        .targetTableId(targetTableId)
+        .output(org.apache.calcite.adapter.file.etl.MaterializeOutputConfig.builder().build())
+        .columns(Collections.<org.apache.calcite.adapter.file.etl.ColumnConfig>emptyList())
+        .iceberg(MaterializeConfig.IcebergConfig.builder()
+            .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
+            .overwritePartitions(false)
+            .build());
+    if (!partitionColumns.isEmpty()) {
+      builder.partition(org.apache.calcite.adapter.file.etl.MaterializePartitionConfig.builder()
+          .columns(partitionColumns)
+          .build());
+    }
+    MaterializeConfig appendConfig = builder.build();
+
+    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
+        + "/" + context.getSchemaName();
+    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
+        appendConfig, context.getStorageProvider(), schemaMaterializeDir,
+        context.getIncrementalTracker());
+    writer.initialize(appendConfig);
     writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
     writer.close();

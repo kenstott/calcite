@@ -19,7 +19,10 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.iceberg.Table;
+import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.exceptions.CommitFailedException;
+import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -1103,54 +1106,71 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   /**
    * Lazily creates the Iceberg table for a deferred-schema materialize (FILE-186) using the first
-   * batch's data to infer the schema. No-op once the table exists (declared-column path, or a prior
-   * flush already created it). On a re-run where the table already exists in the catalog, the existing
-   * table is loaded rather than recreated — its schema is authoritative.
+   * batch's data to infer the schema. On a re-run where the table already exists in the catalog
+   * (or was already set from an earlier flush in this same writeBatch call), the existing table
+   * is loaded/reused rather than recreated -- but every flush still checks this batch against the
+   * table's current schema and evolves it (adds nullable columns) if the batch introduces any not
+   * already present. A deferred-schema table has no declared {@code columns:} list to diff
+   * against like {@link org.apache.calcite.adapter.file.iceberg.IcebergMaterializer} has, so a
+   * partitioned table whose partitions carry different column shapes (e.g. ChunkOrganizer's
+   * per-source_schema rows) would otherwise silently fix its schema from whichever partition
+   * flushed first -- see the sample_size=-1 fix above for the sibling bug this shares a root
+   * cause with (inference only ever running once, not accounting for what arrives later).
    */
   private synchronized void ensureTableCreated(List<Map<String, Object>> sampleRows,
       Map<String, String> partitionValues) throws IOException {
-    if (table != null) {
-      return;
-    }
-    if (!deferSchemaInference) {
-      throw new IllegalStateException(
-          "Iceberg table was not initialized for " + deferredTargetTableId);
+    if (table == null) {
+      if (!deferSchemaInference) {
+        throw new IllegalStateException(
+            "Iceberg table was not initialized for " + deferredTargetTableId);
+      }
+      try {
+        if (IcebergCatalogManager.tableExists(catalogConfig, deferredTargetTableId)) {
+          this.table = IcebergCatalogManager.loadTable(catalogConfig, deferredTargetTableId);
+          LOGGER.info("Loaded existing Iceberg table {} (deferred-schema re-run)",
+              deferredTargetTableId);
+        } else {
+          this.table = inferTableFromRows(sampleRows, partitionValues,
+              deferredTargetTableId, deferredPartitionColumns);
+          LOGGER.info("Created Iceberg table {} with schema inferred from the first batch "
+              + "({} rows)", deferredTargetTableId, sampleRows.size());
+        }
+        // No declared columns on this path (FILE-186 schema-inferred materialize), so
+        // onCoercionFailurePolicies is always empty here — every field behaves as WARN.
+        this.tableWriter = new IcebergTableWriter(table, storageProvider, onCoercionFailurePolicies);
+        this.deferSchemaInference = false;
+      } catch (IOException e) {
+        throw e;
+      } catch (Exception e) {
+        throw new IOException("Failed to infer schema and create Iceberg table "
+            + deferredTargetTableId, e);
+      }
     }
     try {
-      if (IcebergCatalogManager.tableExists(catalogConfig, deferredTargetTableId)) {
-        this.table = IcebergCatalogManager.loadTable(catalogConfig, deferredTargetTableId);
-        LOGGER.info("Loaded existing Iceberg table {} (deferred-schema re-run)",
-            deferredTargetTableId);
-      } else {
-        this.table = inferTableFromRows(sampleRows, partitionValues,
-            deferredTargetTableId, deferredPartitionColumns);
-        LOGGER.info("Created Iceberg table {} with schema inferred from the first batch ({} rows)",
-            deferredTargetTableId, sampleRows.size());
-      }
-      // No declared columns on this path (FILE-186 schema-inferred materialize), so
-      // onCoercionFailurePolicies is always empty here — every field behaves as WARN.
-      this.tableWriter = new IcebergTableWriter(table, storageProvider, onCoercionFailurePolicies);
-      this.deferSchemaInference = false;
+      evolveSchemaForNewColumns(sampleRows, partitionValues);
     } catch (IOException e) {
       throw e;
     } catch (Exception e) {
-      throw new IOException("Failed to infer schema and create Iceberg table "
+      throw new IOException("Failed to evolve schema for Iceberg table "
           + deferredTargetTableId, e);
     }
   }
 
   /**
-   * Infers an Iceberg table schema from a sample of rows and creates the table. The rows (merged with
-   * their partition values so identity partition columns are present) are written to a temporary
-   * Parquet via DuckDB — whose footer then carries authoritative column names and types — and
-   * {@link IcebergCatalogManager#createTableFromParquet} reads that footer.
+   * Infers Iceberg column definitions (name + canonical type string) from a sample of rows. The
+   * rows (merged with their partition values so identity partition columns are present) are
+   * written to a temporary Parquet via DuckDB — whose footer then carries authoritative column
+   * names and types — and {@link IcebergCatalogManager#describeParquet} reads that footer.
+   * Shared by both from-scratch table creation ({@link #inferTableFromRows}) and evolving an
+   * already-existing deferred-schema table ({@link #evolveSchemaForNewColumns}) — same
+   * inference, different destination.
    */
-  private Table inferTableFromRows(List<Map<String, Object>> sampleRows,
-      Map<String, String> partitionValues, String targetTableId, List<String> partitionColumns)
-      throws Exception {
+  private List<IcebergCatalogManager.ColumnDef> inferColumnDefs(
+      List<Map<String, Object>> sampleRows, Map<String, String> partitionValues,
+      String targetTableId) throws Exception {
     if (sampleRows == null || sampleRows.isEmpty()) {
       throw new IllegalStateException(
-          "Cannot infer schema for " + targetTableId + ": first batch is empty");
+          "Cannot infer schema for " + targetTableId + ": batch is empty");
     }
     // Merge partition values into each sample row so inferred columns include the partition columns
     // (writeRecords pulls those from partitionValues, so they must exist in the schema).
@@ -1178,24 +1198,90 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       String parquetPath = tmpParquet.getAbsolutePath().replace("\\", "/");
       // DuckDB infers column types from the sample and writes a parquet whose footer carries
       // them. sample_size=-1 (scan the whole file, not read_json_auto's own default-20480-row
-      // sample): tmpJson already IS the full first batch, written above specifically for
-      // inference -- a heterogeneous batch (e.g. row shapes that vary by source, as
-      // ChunkOrganizer's do) can easily exceed 20480 rows before every distinct key appears,
-      // and read_json_auto's default sampling would silently miss those columns during
-      // inference, then hard-fail (or worse, silently drop the column) once the COPY actually
-      // reaches a row carrying a key outside the inferred schema. Scanning the whole file we
-      // already wrote is not wasteful here, it's exactly what "infer from this batch" means.
+      // sample): tmpJson already IS the full batch, written above specifically for inference --
+      // a heterogeneous batch (e.g. row shapes that vary by source, as ChunkOrganizer's do) can
+      // easily exceed 20480 rows before every distinct key appears, and read_json_auto's default
+      // sampling would silently miss those columns during inference, then hard-fail (or worse,
+      // silently drop the column) once the COPY actually reaches a row carrying a key outside
+      // the inferred schema. Scanning the whole file we already wrote is not wasteful here, it's
+      // exactly what "infer from this batch" means.
       try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
            Statement stmt = conn.createStatement()) {
         stmt.execute("COPY (SELECT * FROM read_json_auto('" + jsonPath
             + "', sample_size=-1)) TO '" + parquetPath.replace("'", "''") + "' (FORMAT PARQUET)");
       }
-      return IcebergCatalogManager.createTableFromParquet(catalogConfig, targetTableId,
-          parquetPath, partitionColumns != null ? partitionColumns
-          : java.util.Collections.<String>emptyList());
+      return IcebergCatalogManager.describeParquet(parquetPath);
     } finally {
       tmpJson.delete();
       tmpParquet.delete();
+    }
+  }
+
+  /**
+   * Infers an Iceberg table schema from a sample of rows and creates the table.
+   */
+  private Table inferTableFromRows(List<Map<String, Object>> sampleRows,
+      Map<String, String> partitionValues, String targetTableId, List<String> partitionColumns)
+      throws Exception {
+    List<IcebergCatalogManager.ColumnDef> columns =
+        inferColumnDefs(sampleRows, partitionValues, targetTableId);
+    return IcebergCatalogManager.createTableFromColumns(catalogConfig, targetTableId, columns,
+        partitionColumns != null ? partitionColumns : java.util.Collections.<String>emptyList());
+  }
+
+  /**
+   * Checks whether this batch's rows carry any column not already in {@code table}'s current
+   * schema and, if so, evolves the table to add them (nullable, matching
+   * {@code IcebergMaterializer.addMissingColumns}'s reasoning: a row written before the column
+   * existed truly has no value for it). A deferred-schema table has no declared column list to
+   * diff against, so "expected" here is the batch's own data-inferred columns via
+   * {@link #inferColumnDefs} -- unlike {@code IcebergMaterializer.pureColumnAdditions}, there is
+   * no renamed/retyped-column ambiguity to guard against here: a column already in the table
+   * that this batch doesn't happen to mention is simply not touched (existing behavior), and any
+   * genuinely new name is a pure addition by construction.
+   */
+  private void evolveSchemaForNewColumns(List<Map<String, Object>> sampleRows,
+      Map<String, String> partitionValues) throws Exception {
+    if (sampleRows == null || sampleRows.isEmpty()) {
+      return;
+    }
+    Set<String> existingNames = new HashSet<String>();
+    for (Types.NestedField f : table.schema().columns()) {
+      existingNames.add(f.name());
+    }
+    Set<String> batchKeys = new LinkedHashSet<String>();
+    for (Map<String, Object> row : sampleRows) {
+      batchKeys.addAll(row.keySet());
+    }
+    if (partitionValues != null) {
+      batchKeys.addAll(partitionValues.keySet());
+    }
+    if (existingNames.containsAll(batchKeys)) {
+      return;
+    }
+
+    List<IcebergCatalogManager.ColumnDef> inferred =
+        inferColumnDefs(sampleRows, partitionValues, deferredTargetTableId);
+    UpdateSchema update = table.updateSchema();
+    boolean any = false;
+    StringBuilder added = new StringBuilder();
+    for (IcebergCatalogManager.ColumnDef col : inferred) {
+      if (table.schema().findField(col.getName()) != null) {
+        continue;
+      }
+      Type type = IcebergCatalogManager.mapToIcebergType(col.getType());
+      update.addColumn(col.getName(), type);
+      any = true;
+      if (added.length() > 0) {
+        added.append(", ");
+      }
+      added.append(col.getName());
+    }
+    if (any) {
+      update.commit();
+      table.refresh();
+      LOGGER.info("Evolved Iceberg table '{}': added column(s) [{}], existing rows preserved "
+          + "(deferred-schema, data-inferred)", deferredTargetTableId, added);
     }
   }
 
