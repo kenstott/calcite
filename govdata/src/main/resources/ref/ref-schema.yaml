@@ -24,16 +24,6 @@
 schemaName: "${SCHEMA_NAME:ref}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
-# One-time migration: sec.vectorized_chunks -> ref.vectorized_chunks (source_schema=sec
-# partition). See semantic-search-plan.md "Promoting vectorized_chunks". Off by default --
-# ChunkOrganizer.afterTable only runs the backfill when explicitly enabled, so routine ref
-# schema runs never pay for it. Time-boxed and resumable (anti-join against already-migrated
-# chunk_id, same pattern as vss-local.py's cmd_backlog): a run that hits the time budget stops
-# after committing whatever years finished; the next run picks up the remaining years.
-secChunksBackfillEnabled: "${SEC_CHUNKS_BACKFILL:false}"
-secChunksBackfillDryRun: "${SEC_CHUNKS_BACKFILL_DRY_RUN:false}"
-secChunksBackfillMaxSeconds: "${SEC_CHUNKS_BACKFILL_MAX_SECONDS:1800}"
-
 comment: >
   Reference and cross-referencing tables for financial entity identification.
   Links SEC CIK identifiers to GLEIF LEI codes and OpenFIGI instrument
