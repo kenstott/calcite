@@ -991,9 +991,21 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Sketch the values as written. They are already materialized here, so an update is O(1) per
     // value and costs no I/O — and scoping to this partition is what lets the commit supersede
     // only what this run rewrote, leaving the rest of the table's statistics intact.
+    //
+    // The stats key deliberately does NOT reuse partitionKey (the write-buffering key) when this
+    // table has no declared Iceberg partition columns: partitionKey can still be non-empty then
+    // (e.g. "type=bls_geographies", a pipeline-internal dimension that is not even a materialized
+    // column of the table), while IcebergThetaStatistics.bootstrapFromScan -- which only ever sees
+    // the table's real, empty partition spec -- always keys its own blobs "". Those two keys would
+    // never match, so the bootstrap blob is never recognized as superseded and gets carried forward
+    // (and re-unioned with a fresh whole-table scan) forever. Confirmed live: exactly this mismatch
+    // drove one table's carried blob count to 1.1M+ entries, doubling on every commit, eventually
+    // OOMing the next load. Matching bootstrap's convention here keeps both paths on the same key
+    // for a table with no real partitioning, so the daily carry-forward correctly supersedes it.
+    String statsPartitionKey = icebergPartitionColumns.isEmpty() ? "" : partitionKey;
     if (columnSketches != null) {
       for (Map<String, Object> row : transformedRows) {
-        columnSketches.addRow(partitionKey, row);
+        columnSketches.addRow(statsPartitionKey, row);
       }
     }
 
