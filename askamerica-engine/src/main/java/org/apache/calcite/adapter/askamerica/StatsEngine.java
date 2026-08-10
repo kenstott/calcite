@@ -30,6 +30,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,7 +56,7 @@ final class StatsEngine {
      *  for any realistic state/county/year panel, bounded so a runaway query can't exhaust
      *  heap. Distinct from {@code query()}'s client-facing {@code MAX_LIMIT}, which caps what
      *  the LLM sees, not what a regression is allowed to compute over. */
-    private static final int STATS_MAX_ROWS = 200_000;
+    static final int STATS_MAX_ROWS = 200_000;
 
     // ─── Data extraction ───────────────────────────────────────────────────────
 
@@ -717,8 +718,35 @@ final class StatsEngine {
      */
     static PanelFixedEffectsResult panelFixedEffects(double[] y, double[][] x, String[] xNames,
             String[] entityIds, String[] timeIds) {
+        return panelFixedEffects(y, x, xNames, entityIds, timeIds, null);
+    }
+
+    /**
+     * As above, with optionally cluster-robust standard errors.
+     *
+     * <p>Conventional panel standard errors assume the residuals are independent across
+     * observations. In a state-year panel they are not: whatever the model misses about a
+     * state in one year it usually also misses the next, so the same information is counted
+     * many times over and the reported precision is too high — often by a large factor
+     * (Bertrand, Duflo & Mullainathan 2004, on exactly this design). Clustering by the unit
+     * lets residuals correlate freely within a unit and only assumes independence between
+     * units.
+     *
+     * <p>Two things change together, and reporting one without the other would understate
+     * the correction: the covariance becomes the CR1 sandwich, and inference moves to
+     * {@code G - 1} degrees of freedom, where G is the number of clusters — not the residual
+     * degrees of freedom, which are far larger.
+     *
+     * <p>{@code clusterIds == null} reproduces the conventional estimator exactly.
+     */
+    static PanelFixedEffectsResult panelFixedEffects(double[] y, double[][] x, String[] xNames,
+            String[] entityIds, String[] timeIds, String[] clusterIds) {
         int n = y.length;
         int k = xNames.length;
+        if (clusterIds != null && n != clusterIds.length) {
+            throw new IllegalArgumentException("cluster column has " + clusterIds.length
+                + " rows, the model has " + n);
+        }
         if (n != entityIds.length || n != timeIds.length) {
             throw new IllegalArgumentException("y/x, entity, and time arrays must be the same length");
         }
@@ -767,28 +795,90 @@ final class StatsEngine {
         double[][] xTildeXTildeInv = reg.estimateRegressionParametersVariance();
 
         double ssr = 0;
+        double[] resid = new double[n];
         for (int i = 0; i < n; i++) {
             double predicted = 0;
             for (int j = 0; j < k; j++) {
                 predicted += beta[j] * xTilde[i][j];
             }
-            double resid = yTilde[i] - predicted;
-            ssr += resid * resid;
+            resid[i] = yTilde[i] - predicted;
+            ssr += resid[i] * resid[i];
         }
         double correctSigma2 = ssr / correctDof;
 
-        TDistribution tDist = new TDistribution(correctDof);
+        // The covariance actually used for inference, fully scaled either way, so callers
+        // (and the joint pre-trend test) read one matrix without knowing which path built it.
+        double[][] covariance;
+        int inferenceDof;
+        String seMethod;
+        int numClusters;
+        if (clusterIds == null) {
+            covariance = new double[k][k];
+            for (int i = 0; i < k; i++) {
+                for (int j = 0; j < k; j++) {
+                    covariance[i][j] = xTildeXTildeInv[i][j] * correctSigma2;
+                }
+            }
+            inferenceDof = correctDof;
+            seMethod = "conventional";
+            numClusters = 0;
+        } else {
+            // CR1 sandwich on the demeaned design: A · (Σ_g s_g s_g') · A, where s_g is the
+            // cluster's score vector Σ_{i∈g} x̃_i û_i. Same estimator robustRegression uses
+            // for OLS, applied to the within-transformed design instead of the raw one.
+            Map<String, double[]> scores = new LinkedHashMap<>();
+            for (int i = 0; i < n; i++) {
+                double[] s = scores.get(clusterIds[i]);
+                if (s == null) {
+                    s = new double[k];
+                    scores.put(clusterIds[i], s);
+                }
+                for (int j = 0; j < k; j++) {
+                    s[j] += xTilde[i][j] * resid[i];
+                }
+            }
+            numClusters = scores.size();
+            if (numClusters < 2) {
+                throw new IllegalArgumentException("cluster column has " + numClusters
+                    + " distinct value(s) — clustered standard errors need at least 2, and "
+                    + "are only meaningful with many more. Cluster on the unit (state, "
+                    + "county) rather than on something constant across the sample.");
+            }
+            RealMatrix meat = new Array2DRowRealMatrix(k, k);
+            for (double[] s : scores.values()) {
+                RealMatrix sm = new Array2DRowRealMatrix(s.length, 1);
+                for (int j = 0; j < k; j++) {
+                    sm.setEntry(j, 0, s[j]);
+                }
+                meat = meat.add(sm.multiply(sm.transpose()));
+            }
+            RealMatrix bread = new Array2DRowRealMatrix(xTildeXTildeInv);
+            // Finite-sample correction, counting the absorbed fixed effects in K the same
+            // way correctDof does — otherwise the correction disagrees with the model's own
+            // notion of how many parameters it fitted.
+            int params = n - correctDof;
+            double c = ((double) numClusters / (numClusters - 1))
+                * ((double) (n - 1) / (n - params));
+            covariance = bread.multiply(meat).multiply(bread).scalarMultiply(c).getData();
+            // Inference on the number of clusters, not the number of observations. With 50
+            // states this is 49 rather than several hundred, and the p-values grow to match.
+            inferenceDof = numClusters - 1;
+            seMethod = "cluster-robust (CR1)";
+        }
+
+        TDistribution tDist = new TDistribution(inferenceDof);
         double[] se = new double[k];
         double[] tStat = new double[k];
         double[] pValue = new double[k];
         for (int i = 0; i < k; i++) {
-            se[i] = Math.sqrt(xTildeXTildeInv[i][i] * correctSigma2);
+            se[i] = Math.sqrt(covariance[i][i]);
             tStat[i] = beta[i] / se[i];
             pValue[i] = 2 * (1 - tDist.cumulativeProbability(Math.abs(tStat[i])));
         }
 
         return new PanelFixedEffectsResult(xNames, beta, se, tStat, pValue, n, correctDof,
-            numEntities, numTimes);
+            numEntities, numTimes, covariance, correctSigma2, inferenceDof, seMethod,
+            numClusters);
     }
 
     static final class PanelFixedEffectsResult {
@@ -801,9 +891,20 @@ final class StatsEngine {
         final int dof;
         final int numEntities;
         final int numTimes;
+        /** Fully-scaled coefficient covariance, conventional or CR1 per {@link #seMethod}. */
+        final double[][] covariance;
+        /** Residual variance on the correct two-way-FE degrees of freedom. */
+        final double sigma2;
+        /** Degrees of freedom the reported t and p use: residual, or clusters - 1. */
+        final int inferenceDof;
+        final String seMethod;
+        /** Zero when standard errors are conventional. */
+        final int numClusters;
 
         PanelFixedEffectsResult(String[] names, double[] coef, double[] se, double[] tStat,
-                double[] pValue, int n, int dof, int numEntities, int numTimes) {
+                double[] pValue, int n, int dof, int numEntities, int numTimes,
+                double[][] covariance, double sigma2, int inferenceDof, String seMethod,
+                int numClusters) {
             this.names = names;
             this.coef = coef;
             this.se = se;
@@ -813,6 +914,40 @@ final class StatsEngine {
             this.dof = dof;
             this.numEntities = numEntities;
             this.numTimes = numTimes;
+            this.covariance = covariance;
+            this.sigma2 = sigma2;
+            this.inferenceDof = inferenceDof;
+            this.seMethod = seMethod;
+            this.numClusters = numClusters;
+        }
+
+        /**
+         * Below this, CR1 is known to understate uncertainty badly — the asymptotics are in
+         * the number of clusters, not observations, and 20 states is not many. Reported
+         * rather than enforced: too few clusters is a caveat on the answer, not a reason to
+         * refuse one.
+         */
+        static final int FEW_CLUSTERS = 40;
+
+        boolean fewClusters() {
+            return numClusters > 0 && numClusters < FEW_CLUSTERS;
+        }
+
+        /** Names the estimator and, when clustered, what it was clustered on. */
+        void describeStandardErrors(ObjectNode out, String clusterColumn) {
+            out.put("se_method", seMethod);
+            out.put("inference_degrees_of_freedom", inferenceDof);
+            if (numClusters > 0) {
+                out.put("num_clusters", numClusters);
+                out.put("clustered_on", clusterColumn);
+                if (fewClusters()) {
+                    out.put("few_clusters_warning", "Only " + numClusters + " clusters. "
+                        + "Cluster-robust standard errors rely on having many clusters, and "
+                        + "below roughly " + FEW_CLUSTERS + " they are themselves biased "
+                        + "downward — so a p-value near a threshold here is weaker than it "
+                        + "looks, not stronger.");
+                }
+            }
         }
 
         ObjectNode toJson(ObjectMapper mapper) {
@@ -960,6 +1095,599 @@ final class StatsEngine {
             out.put("note", "Coefficients are identical to plain OLS — only the standard "
                 + "errors (and therefore t-stats/p-values) differ. r_squared/f_statistic "
                 + "above are still the plain-OLS versions, not robust F-tests.");
+            return out;
+        }
+    }
+
+    // ─── Event study ────────────────────────────────────────────────────────────
+
+    /** Past this the design is dummies all the way down; the caller is told to bin instead. */
+    private static final int MAX_EVENT_DUMMIES = 40;
+
+    /**
+     * Two-way fixed-effects event study: the outcome regressed on one indicator per period
+     * relative to treatment, with unit and time effects absorbed.
+     *
+     * <p>This is the credibility companion to {@link #diffInDiff}. A difference-in-differences
+     * estimate rests on parallel trends, which that tool can assert but not test — it collapses
+     * everything before treatment into a single "pre" indicator, so a treated group already
+     * diverging beforehand produces exactly the same number as one that was not. Estimating a
+     * separate coefficient per pre-period makes that divergence visible, and lets it be tested
+     * jointly rather than eyeballed.
+     *
+     * <p>{@code relativeTime[i]} is the period of observation {@code i} counted from its unit's
+     * treatment (0 = the period treatment begins, -1 = the period before), or null for a unit
+     * never treated. Never-treated units get zeros across every indicator, which is what makes
+     * them the comparison group. The reference period is omitted from the design, so every
+     * coefficient reads as a difference from it — there is no "effect at the reference period"
+     * to report and one is not invented.
+     *
+     * <p>Periods outside {@code [-maxLead, maxLag]} are binned into single endpoint indicators
+     * rather than dropped: dropping them would silently change which units are in the sample.
+     */
+    static EventStudyResult eventStudy(double[] y, String[] entityIds, String[] timeIds,
+            Integer[] relativeTime, int maxLead, int maxLag, int referencePeriod,
+            String[] clusterIds) {
+        int n = y.length;
+        if (n != entityIds.length || n != timeIds.length || n != relativeTime.length) {
+            throw new IllegalArgumentException("outcome, entity, time, and relative-time "
+                + "arrays must be the same length");
+        }
+        if (maxLead < 1 || maxLag < 0) {
+            throw new IllegalArgumentException("maxLead must be at least 1 and maxLag at "
+                + "least 0; got " + maxLead + " and " + maxLag);
+        }
+        if (referencePeriod > 0) {
+            throw new IllegalArgumentException("reference_period must be a pre-treatment "
+                + "period (<= 0); got " + referencePeriod + ". Normalizing against a "
+                + "post-treatment period measures every other period against the treatment "
+                + "effect itself.");
+        }
+
+        // Which indicators the data actually supports — a period no observation falls in
+        // would be a column of zeros, which is not estimable and must not be requested.
+        LinkedHashSet<Integer> occupied = new LinkedHashSet<>();
+        boolean anyBelow = false;
+        boolean anyAbove = false;
+        int treatedUnits = 0;
+        LinkedHashSet<String> treatedSet = new LinkedHashSet<>();
+        LinkedHashSet<String> neverTreatedSet = new LinkedHashSet<>();
+        for (int i = 0; i < n; i++) {
+            if (relativeTime[i] == null) {
+                neverTreatedSet.add(entityIds[i]);
+                continue;
+            }
+            treatedSet.add(entityIds[i]);
+            int r = relativeTime[i].intValue();
+            if (r < -maxLead) {
+                anyBelow = true;
+            } else if (r > maxLag) {
+                anyAbove = true;
+            } else {
+                occupied.add(Integer.valueOf(r));
+            }
+        }
+        neverTreatedSet.removeAll(treatedSet);
+        treatedUnits = treatedSet.size();
+        if (treatedUnits == 0) {
+            throw new IllegalArgumentException("no observation has a treatment time — every "
+                + "row is never-treated, so there is no event to study. Check that the "
+                + "treatment-time column is populated for the treated units.");
+        }
+        if (!occupied.contains(Integer.valueOf(referencePeriod))) {
+            throw new IllegalArgumentException("no observation sits at the reference period "
+                + referencePeriod + ", so there is nothing to normalize against. Observed "
+                + "relative periods inside the window: " + new java.util.TreeSet<>(occupied));
+        }
+
+        List<Integer> periods = new ArrayList<>(occupied);
+        periods.remove(Integer.valueOf(referencePeriod));
+        Collections.sort(periods);
+        int dummies = periods.size() + (anyBelow ? 1 : 0) + (anyAbove ? 1 : 0);
+        if (dummies > MAX_EVENT_DUMMIES) {
+            throw new IllegalArgumentException("the window spans " + dummies + " indicators — "
+                + "narrow max_lead/max_lag so the periods beyond them are binned into the "
+                + "endpoints; the limit is " + MAX_EVENT_DUMMIES + ".");
+        }
+        if (dummies == 0) {
+            throw new IllegalArgumentException("only the reference period is occupied — there "
+                + "is nothing to estimate against it");
+        }
+
+        List<String> names = new ArrayList<>();
+        if (anyBelow) {
+            names.add("pre_beyond_" + maxLead);
+        }
+        for (Integer p : periods) {
+            names.add(eventTermName(p.intValue()));
+        }
+        if (anyAbove) {
+            names.add("post_beyond_" + maxLag);
+        }
+
+        double[][] x = new double[n][names.size()];
+        for (int i = 0; i < n; i++) {
+            if (relativeTime[i] == null) {
+                continue;
+            }
+            int r = relativeTime[i].intValue();
+            String term;
+            if (r < -maxLead) {
+                term = "pre_beyond_" + maxLead;
+            } else if (r > maxLag) {
+                term = "post_beyond_" + maxLag;
+            } else if (r == referencePeriod) {
+                continue;
+            } else {
+                term = eventTermName(r);
+            }
+            x[i][names.indexOf(term)] = 1.0;
+        }
+
+        PanelFixedEffectsResult fit = panelFixedEffects(y, x, names.toArray(new String[0]),
+            entityIds, timeIds, clusterIds);
+
+        // Every indicator strictly before the reference period is a pre-trend test: under
+        // parallel trends each is zero, so their joint significance is the test.
+        List<Integer> leadIdx = new ArrayList<>();
+        for (int i = 0; i < names.size(); i++) {
+            Integer p = eventTermPeriod(names.get(i));
+            if (names.get(i).startsWith("pre_beyond_")
+                    || (p != null && p.intValue() < referencePeriod)) {
+                leadIdx.add(Integer.valueOf(i));
+            }
+        }
+        double[] pretrend = jointFTest(fit, leadIdx);
+        return new EventStudyResult(fit, names, referencePeriod, maxLead, maxLag,
+            leadIdx.size(), pretrend[0], pretrend[1], treatedUnits, neverTreatedSet.size(),
+            countDistinctAdoptionTimes(timeIds, relativeTime));
+    }
+
+    private static String eventTermName(int r) {
+        return r < 0 ? ("lead_" + (-r)) : ("lag_" + r);
+    }
+
+    /** The relative period an indicator name encodes, or null for a binned endpoint. */
+    private static Integer eventTermPeriod(String name) {
+        if (name.startsWith("lead_")) {
+            return Integer.valueOf(-Integer.parseInt(name.substring(5)));
+        }
+        if (name.startsWith("lag_")) {
+            return Integer.valueOf(Integer.parseInt(name.substring(4)));
+        }
+        return null;
+    }
+
+    /**
+     * How many distinct calendar periods units are first treated in. More than one means
+     * adoption is staggered, which is what makes the two-way-FE estimator here potentially
+     * biased — reported so the caller can say so rather than discover it later.
+     *
+     * <p>Derived as period minus relative period on every treated row, not by looking for
+     * rows at relative period 0: a unit treated before the panel starts, or in a year the
+     * panel happens to skip, has no such row, and counting only those would report staggered
+     * adoption as simultaneous.
+     */
+    private static int countDistinctAdoptionTimes(String[] timeIds, Integer[] relativeTime) {
+        LinkedHashSet<Integer> adoptionPeriods = new LinkedHashSet<>();
+        for (int i = 0; i < timeIds.length; i++) {
+            if (relativeTime[i] == null) {
+                continue;
+            }
+            int t;
+            try {
+                t = Integer.parseInt(timeIds[i].trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("the time column must hold ordered numeric "
+                    + "periods for an event study — '" + timeIds[i] + "' is not one");
+            }
+            adoptionPeriods.add(Integer.valueOf(t - relativeTime[i].intValue()));
+        }
+        return adoptionPeriods.size();
+    }
+
+    /**
+     * Joint F-test that every coefficient in {@code idx} is zero, from the fitted covariance
+     * matrix. Returns {F, p}, or {NaN, NaN} when the restricted covariance cannot be inverted
+     * — a singular block means the test is not identified, which is reported as such rather
+     * than as a passing test.
+     */
+    private static double[] jointFTest(PanelFixedEffectsResult fit, List<Integer> idx) {
+        int q = idx.size();
+        if (q == 0) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+        // The same covariance the coefficients' own standard errors come from, so a
+        // clustered event study gets a clustered pre-trend test rather than a conventional
+        // one — reporting a clustered effect beside an unclustered credibility check would
+        // hold the headline to a stricter standard than the test that vouches for it.
+        double[][] cov = fit.covariance;
+        double[][] sub = new double[q][q];
+        double[] b = new double[q];
+        for (int i = 0; i < q; i++) {
+            b[i] = fit.coef[idx.get(i).intValue()];
+            for (int j = 0; j < q; j++) {
+                sub[i][j] = cov[idx.get(i).intValue()][idx.get(j).intValue()];
+            }
+        }
+        try {
+            RealMatrix inv = new org.apache.commons.math3.linear.LUDecomposition(
+                new Array2DRowRealMatrix(sub)).getSolver().getInverse();
+            double wald = 0;
+            for (int i = 0; i < q; i++) {
+                for (int j = 0; j < q; j++) {
+                    wald += b[i] * inv.getEntry(i, j) * b[j];
+                }
+            }
+            double f = wald / q;
+            // Denominator degrees of freedom follow the same rule as the coefficients':
+            // clusters - 1 when clustered, residual dof otherwise.
+            FDistribution dist = new FDistribution(q, fit.inferenceDof);
+            return new double[]{f, 1 - dist.cumulativeProbability(f)};
+        } catch (org.apache.commons.math3.linear.SingularMatrixException e) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+    }
+
+    static final class EventStudyResult {
+        final PanelFixedEffectsResult fit;
+        final List<String> names;
+        final int referencePeriod;
+        final int maxLead;
+        final int maxLag;
+        final int leadCount;
+        final double pretrendF;
+        final double pretrendP;
+        final int treatedUnits;
+        final int neverTreatedUnits;
+        final int distinctAdoptionTimes;
+        /** What the standard errors were clustered on, for the report; null when they were not. */
+        String clusterColumn;
+
+        EventStudyResult(PanelFixedEffectsResult fit, List<String> names, int referencePeriod,
+                int maxLead, int maxLag, int leadCount, double pretrendF, double pretrendP,
+                int treatedUnits, int neverTreatedUnits, int distinctAdoptionTimes) {
+            this.fit = fit;
+            this.names = names;
+            this.referencePeriod = referencePeriod;
+            this.maxLead = maxLead;
+            this.maxLag = maxLag;
+            this.leadCount = leadCount;
+            this.pretrendF = pretrendF;
+            this.pretrendP = pretrendP;
+            this.treatedUnits = treatedUnits;
+            this.neverTreatedUnits = neverTreatedUnits;
+            this.distinctAdoptionTimes = distinctAdoptionTimes;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            ArrayNode effects = mapper.createArrayNode();
+            for (int i = 0; i < names.size(); i++) {
+                ObjectNode c = mapper.createObjectNode();
+                c.put("term", names.get(i));
+                Integer p = eventTermPeriod(names.get(i));
+                if (p != null) {
+                    c.put("relative_period", p.intValue());
+                }
+                c.put("is_pre_treatment", names.get(i).startsWith("pre_beyond_")
+                    || (p != null && p.intValue() < referencePeriod));
+                c.put("coefficient", fit.coef[i]);
+                c.put("std_error", fit.se[i]);
+                c.put("t_stat", fit.tStat[i]);
+                c.put("p_value", fit.pValue[i]);
+                effects.add(c);
+            }
+            out.set("effects", effects);
+            out.put("reference_period", referencePeriod);
+            out.put("max_lead", maxLead);
+            out.put("max_lag", maxLag);
+            out.put("n", fit.n);
+            out.put("degrees_of_freedom", fit.dof);
+            out.put("num_entities", fit.numEntities);
+            out.put("num_time_periods", fit.numTimes);
+            out.put("treated_units", treatedUnits);
+            out.put("never_treated_units", neverTreatedUnits);
+
+            ObjectNode pre = mapper.createObjectNode();
+            pre.put("leads_tested", leadCount);
+            if (Double.isNaN(pretrendF)) {
+                pre.put("status", leadCount == 0 ? "no_pre_periods" : "not_identified");
+                pre.put("verdict", "No parallel-trends test could be run, which is NOT the "
+                    + "same as one that passed. Without pre-period estimates the "
+                    + "identifying assumption is untested.");
+            } else {
+                pre.put("f_statistic", pretrendF);
+                pre.put("p_value", pretrendP);
+                pre.put("pre_trends_detected", pretrendP < 0.05);
+                pre.put("verdict", pretrendP < 0.05
+                    ? "Pre-treatment coefficients are jointly different from zero (p < 0.05): "
+                        + "the groups were already diverging before treatment, so the "
+                        + "post-treatment estimates cannot be read as the treatment's effect."
+                    : "Pre-treatment coefficients are not jointly distinguishable from zero. "
+                        + "This is consistent with parallel trends; it does not prove them, "
+                        + "and a test with few pre-periods or wide standard errors will fail "
+                        + "to detect divergence that is really there.");
+            }
+            out.set("pre_trend_test", pre);
+
+            out.put("staggered_adoption", distinctAdoptionTimes > 1);
+            out.put("distinct_adoption_periods", distinctAdoptionTimes);
+            StringBuilder note = new StringBuilder();
+            note.append("Coefficients are differences from the reference period ")
+                .append(referencePeriod)
+                .append(", with unit and time fixed effects absorbed. The reference period "
+                    + "itself has no coefficient by construction. Periods outside the window "
+                    + "are binned into pre_beyond_/post_beyond_ terms rather than dropped. ");
+            if (distinctAdoptionTimes > 1) {
+                note.append("Adoption is STAGGERED (")
+                    .append(distinctAdoptionTimes)
+                    .append(" distinct treatment periods). With staggered timing and effects "
+                        + "that differ across units or over time, this two-way fixed-effects "
+                        + "estimator uses already-treated units as controls and can be biased "
+                        + "— including, in the worst case, carrying the wrong sign "
+                        + "(Goodman-Bacon 2021; Callaway & Sant'Anna 2021). Treat the shape "
+                        + "of the path as indicative and say so. ");
+            }
+            if (neverTreatedUnits == 0) {
+                note.append("There are NO never-treated units: identification comes entirely "
+                    + "from differences in treatment timing, so the estimates lean harder on "
+                    + "the staggered-adoption caveat above. ");
+            }
+            fit.describeStandardErrors(out, clusterColumn);
+            if (fit.numClusters > 0) {
+                note.append("Standard errors and the pre-trend test are cluster-robust on ")
+                    .append(clusterColumn)
+                    .append(" (")
+                    .append(fit.numClusters)
+                    .append(" clusters), so residuals may correlate freely within a unit; "
+                        + "inference uses clusters - 1 degrees of freedom, not the residual "
+                        + "count. ");
+                if (fit.fewClusters()) {
+                    note.append("With this few clusters the correction is itself unreliable "
+                        + "and errs toward overstating precision — see "
+                        + "few_clusters_warning. ");
+                }
+            } else {
+                note.append("Standard errors are conventional and NOT clustered — with "
+                    + "repeated observations of the same unit they are likely too small; "
+                    + "pass cluster_col to correct this, and read a marginal p-value "
+                    + "accordingly until you have. ");
+            }
+            out.put("note", note.toString());
+            return out;
+        }
+    }
+
+    // ─── Leave-one-group-out sensitivity ────────────────────────────────────────
+
+    /** Refits beyond this and a single tool call turns into a multi-minute scan. The caller
+     *  is told to aggregate rather than being silently given a truncated sweep. */
+    private static final int MAX_SENSITIVITY_GROUPS = 200;
+
+    /**
+     * Refit the same OLS once per group with that group's rows removed, and report how far
+     * the tracked coefficient moves.
+     *
+     * <p>A regression over jurisdictions is routinely carried by one of them — DC, a census
+     * region with a single large state, one outlier county. The full-sample estimate cannot
+     * show this: it reports one number whether every unit agrees or a single unit supplies
+     * the whole effect. Dropping each group in turn is the cheapest test that distinguishes
+     * the two, and the only diagnostic here that can invalidate a headline result rather
+     * than decorate it.
+     *
+     * <p>{@code influence} is the standardized change in the tracked coefficient — the
+     * baseline estimate minus the leave-one-out estimate, divided by the leave-one-out
+     * standard error (DFBETA in standard-error units). It answers "would omitting this one
+     * group have moved the published number by more than its own uncertainty".
+     *
+     * <p>Groups whose removal leaves too few observations to estimate are reported as such,
+     * not skipped: a group large enough to break the model is the strongest possible
+     * statement about its influence.
+     */
+    static SensitivityResult leaveOneGroupOut(double[] y, double[][] x, String[] xNames,
+            String[] groupIds, String trackedTerm) {
+        if (y.length != groupIds.length) {
+            throw new IllegalArgumentException(
+                "y has " + y.length + " rows, group column has " + groupIds.length);
+        }
+        OlsResult baseline = ols(y, x, xNames);
+        int termIdx = indexOfName(baseline.names, trackedTerm);
+
+        // First-seen order, so the report reads in the order the SQL returned.
+        LinkedHashSet<String> groupSet = new LinkedHashSet<>(Arrays.asList(groupIds));
+        if (groupSet.size() > MAX_SENSITIVITY_GROUPS) {
+            throw new IllegalArgumentException("group column has " + groupSet.size()
+                + " distinct values — leave-one-out would run that many regressions. "
+                + "Aggregate to a coarser grouping (state rather than county, say) or "
+                + "restrict the SQL to the groups in question; the limit is "
+                + MAX_SENSITIVITY_GROUPS + ".");
+        }
+        if (groupSet.size() < 2) {
+            throw new IllegalArgumentException("group column has " + groupSet.size()
+                + " distinct value(s) — leave-one-out needs at least 2 groups to compare");
+        }
+
+        List<LeaveOneOut> drops = new ArrayList<>();
+        for (String group : groupSet) {
+            int kept = 0;
+            for (int i = 0; i < groupIds.length; i++) {
+                if (!group.equals(groupIds[i])) {
+                    kept++;
+                }
+            }
+            int dropped = y.length - kept;
+            // ols() needs n - k - 1 >= 1 to have any residual degrees of freedom left.
+            if (kept < xNames.length + 2) {
+                drops.add(new LeaveOneOut(group, dropped, kept));
+                continue;
+            }
+            double[] subY = new double[kept];
+            double[][] subX = new double[kept][];
+            int w = 0;
+            for (int i = 0; i < groupIds.length; i++) {
+                if (!group.equals(groupIds[i])) {
+                    subY[w] = y[i];
+                    subX[w] = x[i];
+                    w++;
+                }
+            }
+            OlsResult refit = ols(subY, subX, xNames);
+            double coef = refit.coef[termIdx];
+            double se = refit.se[termIdx];
+            double influence = se == 0 ? Double.NaN
+                : (baseline.coef[termIdx] - coef) / se;
+            drops.add(new LeaveOneOut(group, dropped, kept, coef, se,
+                refit.pValue[termIdx], influence));
+        }
+        return new SensitivityResult(baseline, baseline.names[termIdx], drops);
+    }
+
+    private static int indexOfName(String[] names, String term) {
+        for (int i = 0; i < names.length; i++) {
+            if (names[i].equals(term)) {
+                return i;
+            }
+        }
+        throw new IllegalArgumentException("term '" + term + "' is not one of "
+            + Arrays.toString(names));
+    }
+
+    /** One refit: the group held out, and the tracked coefficient without it. */
+    static final class LeaveOneOut {
+        final String group;
+        final int rowsDropped;
+        final int rowsKept;
+        final boolean estimable;
+        final double coef;
+        final double se;
+        final double pValue;
+        final double influence;
+
+        /** A group whose removal leaves too few rows to estimate. */
+        LeaveOneOut(String group, int rowsDropped, int rowsKept) {
+            this(group, rowsDropped, rowsKept, false, Double.NaN, Double.NaN, Double.NaN,
+                Double.NaN);
+        }
+
+        LeaveOneOut(String group, int rowsDropped, int rowsKept, double coef, double se,
+                double pValue, double influence) {
+            this(group, rowsDropped, rowsKept, true, coef, se, pValue, influence);
+        }
+
+        private LeaveOneOut(String group, int rowsDropped, int rowsKept, boolean estimable,
+                double coef, double se, double pValue, double influence) {
+            this.group = group;
+            this.rowsDropped = rowsDropped;
+            this.rowsKept = rowsKept;
+            this.estimable = estimable;
+            this.coef = coef;
+            this.se = se;
+            this.pValue = pValue;
+            this.influence = influence;
+        }
+    }
+
+    static final class SensitivityResult {
+        final OlsResult baseline;
+        final String term;
+        final List<LeaveOneOut> drops;
+
+        SensitivityResult(OlsResult baseline, String term, List<LeaveOneOut> drops) {
+            this.baseline = baseline;
+            this.term = term;
+            this.drops = drops;
+        }
+
+        ObjectNode toJson(ObjectMapper mapper) {
+            ObjectNode out = mapper.createObjectNode();
+            out.put("term", term);
+            int termIdx = indexOfName(baseline.names, term);
+            double baseCoef = baseline.coef[termIdx];
+            double baseP = baseline.pValue[termIdx];
+
+            ObjectNode base = mapper.createObjectNode();
+            base.put("coefficient", baseCoef);
+            base.put("std_error", baseline.se[termIdx]);
+            base.put("p_value", baseP);
+            base.put("n", baseline.n);
+            out.set("full_sample", base);
+
+            ArrayNode arr = mapper.createArrayNode();
+            String maxGroup = null;
+            double maxAbsInfluence = 0;
+            double minCoef = Double.POSITIVE_INFINITY;
+            double maxCoef = Double.NEGATIVE_INFINITY;
+            boolean signFlips = false;
+            boolean significanceFlips = false;
+            boolean anyInestimable = false;
+            int estimated = 0;
+            for (LeaveOneOut d : drops) {
+                ObjectNode n = mapper.createObjectNode();
+                n.put("group_omitted", d.group);
+                n.put("rows_dropped", d.rowsDropped);
+                n.put("rows_kept", d.rowsKept);
+                if (!d.estimable) {
+                    anyInestimable = true;
+                    n.put("status", "not_estimable");
+                    n.put("note", "Omitting this group leaves too few observations to fit "
+                        + "the model — the estimate depends on it entirely.");
+                    arr.add(n);
+                    continue;
+                }
+                estimated++;
+                n.put("coefficient", d.coef);
+                n.put("std_error", d.se);
+                n.put("p_value", d.pValue);
+                n.put("influence", d.influence);
+                boolean flipped = (baseCoef > 0 && d.coef < 0) || (baseCoef < 0 && d.coef > 0);
+                if (flipped) {
+                    signFlips = true;
+                    n.put("sign_flipped", true);
+                }
+                // 0.05 is a convention, not a threshold this tool endorses — it is reported
+                // because a result that crosses it when one group leaves is exactly the case
+                // a reader needs told.
+                boolean sigFlip = (baseP < 0.05) != (d.pValue < 0.05);
+                if (sigFlip) {
+                    significanceFlips = true;
+                    n.put("significance_flipped_at_0_05", true);
+                }
+                minCoef = Math.min(minCoef, d.coef);
+                maxCoef = Math.max(maxCoef, d.coef);
+                if (!Double.isNaN(d.influence) && Math.abs(d.influence) > maxAbsInfluence) {
+                    maxAbsInfluence = Math.abs(d.influence);
+                    maxGroup = d.group;
+                }
+                arr.add(n);
+            }
+            out.set("leave_one_out", arr);
+
+            ObjectNode summary = mapper.createObjectNode();
+            summary.put("groups_tested", drops.size());
+            summary.put("groups_estimated", estimated);
+            if (estimated > 0) {
+                summary.put("coefficient_min", minCoef);
+                summary.put("coefficient_max", maxCoef);
+                summary.put("coefficient_range", maxCoef - minCoef);
+            }
+            if (maxGroup != null) {
+                summary.put("most_influential_group", maxGroup);
+                summary.put("max_abs_influence", maxAbsInfluence);
+            }
+            summary.put("sign_flips", signFlips);
+            summary.put("significance_flips_at_0_05", significanceFlips);
+            summary.put("robust", !signFlips && !significanceFlips && !anyInestimable
+                && maxAbsInfluence < 1.0);
+            out.set("summary", summary);
+
+            out.put("note", "influence is (full-sample coefficient − leave-one-out "
+                + "coefficient) / leave-one-out standard error: how far omitting one group "
+                + "moves the estimate, in that estimate's own standard-error units. "
+                + "|influence| above 1 means a single group moves the answer by more than "
+                + "its uncertainty. 'robust' is a summary of the checks run here (no sign "
+                + "flip, no crossing of p=0.05, every group droppable, all |influence| < 1) "
+                + "— it is not a general claim that the specification is correct.");
             return out;
         }
     }
