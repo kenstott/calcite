@@ -207,7 +207,10 @@ write_probes() {
             echo "$file" ;;
         sec)
             file="$(mktemp)"
-            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(embedding, embedding) AS sim FROM sec.vectorized_chunks WHERE embedding IS NOT NULL LIMIT 1" >> "$file"
+            # SEC chunks are promoted into ref.vectorized_chunks (source_schema='sec'); the
+            # embedding column itself predates the quantized vectorized_chunk_codes design and
+            # may not be populated -- this probe checks the function/column exist, not results.
+            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(embedding, embedding) AS sim FROM ref.vectorized_chunks WHERE source_schema = 'sec' AND embedding IS NOT NULL LIMIT 1" >> "$file"
             echo "$file" ;;
         *) return 0 ;;
     esac

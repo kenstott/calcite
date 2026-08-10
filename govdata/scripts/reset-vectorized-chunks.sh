@@ -37,7 +37,8 @@ if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
 fi
 
 S3_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-4}"
-ICEBERG_PATH="$S3_BUCKET/sec/vectorized_chunks"
+# Live target (shared across schemas, never dropped by this script — see Step 2 below).
+ICEBERG_PATH="$S3_BUCKET/ref/vectorized_chunks"
 RCLONE_BUCKET="$(echo "$S3_BUCKET" | sed 's|^s3://|r2:|')"
 OPERATING_DIR="${GOVDATA_HOME}/build/.aperio/sec"
 PARTITION_DB="$OPERATING_DIR/.partition_status.duckdb"
@@ -64,56 +65,18 @@ echo "  Deleted $DELETED staging chunk files"
 echo ""
 
 # -----------------------------------------------
-# Step 2: Drop Iceberg table via PyIceberg
+# Step 2: Drop Iceberg table — DISABLED
 # -----------------------------------------------
-echo "Step 2: Dropping vectorized_chunks Iceberg table..."
-
-python3 - << 'PYEOF'
-import os, sys
-
-try:
-    from pyiceberg.catalog import load_catalog
-
-    s3_endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
-    # Strip https:// for s3 endpoint config
-    s3_endpoint_bare = s3_endpoint.replace("https://", "").replace("http://", "")
-
-    catalog = load_catalog("default", **{
-        "type": "rest",
-        "uri": "http://localhost:8181",  # If REST catalog is available
-    })
-    catalog.drop_table("sec.vectorized_chunks")
-    print("  Dropped Iceberg table sec.vectorized_chunks via REST catalog")
-except Exception as e1:
-    # Fallback: try in-memory catalog with S3 warehouse
-    try:
-        s3_bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
-        warehouse = f"{s3_bucket}/sec".replace("s3://", "s3a://")
-
-        catalog = load_catalog("default", **{
-            "type": "in-memory",
-            "warehouse": warehouse,
-            "s3.access-key-id": os.environ["AWS_ACCESS_KEY_ID"],
-            "s3.secret-access-key": os.environ["AWS_SECRET_ACCESS_KEY"],
-            "s3.endpoint": os.environ.get("AWS_ENDPOINT_OVERRIDE", ""),
-            "s3.path-style-access": "true",
-        })
-        catalog.drop_table("default.vectorized_chunks")
-        print("  Dropped Iceberg table via in-memory catalog")
-    except Exception as e2:
-        print(f"  PyIceberg drop failed: {e2}")
-        print("  Falling back to deleting Iceberg metadata files from S3...")
-        # Manual cleanup: delete the metadata directory
-        import subprocess
-        bucket = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-4")
-        endpoint = os.environ.get("AWS_ENDPOINT_OVERRIDE", "")
-        iceberg_meta = f"{bucket}/sec/vectorized_chunks/metadata/"
-        result = subprocess.run(
-            ["aws", "s3", "rm", iceberg_meta, "--recursive", "--endpoint-url", endpoint],
-            capture_output=True, text=True
-        )
-        print(f"  Deleted Iceberg metadata: {result.stdout.count('delete:')} files")
-PYEOF
+# SEC chunks are promoted into ref.vectorized_chunks (source_schema='sec' partition), a table
+# shared with every other onboarded source (ref.naics, fedregister.fr_documents, ...). This
+# step used to drop sec.vectorized_chunks outright, which is no longer safe to automate here:
+# the shared table must never be dropped by a SEC-scoped reset, and sec.vectorized_chunks's own
+# (now-frozen, pre-migration) Iceberg location is left in place deliberately -- see
+# SecSchemaFactory#materializeSecChunksToRef. Deleting that historical data is a separate,
+# explicit decision this script no longer makes on your behalf.
+echo "Step 2: SKIPPED — dropping vectorized_chunks Iceberg tables is no longer automated"
+echo "  by this script (the live target, ref.vectorized_chunks, is shared across schemas)."
+echo "  sec.vectorized_chunks's pre-migration data is left in place."
 
 echo ""
 

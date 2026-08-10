@@ -248,6 +248,12 @@ public class IcebergMaterializer {
     // moving files + building DataFile metadata — no rows are read into memory. Streams huge,
     // pre-transformed sources (e.g. the full-market stock_prices bulk).
     private final boolean filePassthrough;
+    // Partition column values that are constant for every row this config ever writes (e.g. a
+    // writer dedicated to one logical source appending into a table partitioned by a discriminator
+    // column that source's own raw data does not vary). Merged into the per-batch partition values
+    // computed from batchPartitionColumns, letting a config target a partition its source pattern
+    // has no directory segment for.
+    private final Map<String, String> fixedPartitionValues;
 
     private MaterializationConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -277,6 +283,12 @@ public class IcebergMaterializer {
       this.dedupIgnoreColumns = builder.dedupIgnoreColumns != null
           ? builder.dedupIgnoreColumns : Collections.<String>emptyList();
       this.filePassthrough = builder.filePassthrough;
+      this.fixedPartitionValues = builder.fixedPartitionValues != null
+          ? builder.fixedPartitionValues : Collections.<String, String>emptyMap();
+    }
+
+    public Map<String, String> getFixedPartitionValues() {
+      return fixedPartitionValues;
     }
 
     public boolean isFilePassthrough() {
@@ -454,9 +466,15 @@ public class IcebergMaterializer {
       private String accessionColumn;
       private List<String> dedupIgnoreColumns;
       private boolean filePassthrough;
+      private Map<String, String> fixedPartitionValues;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
+        return this;
+      }
+
+      public Builder fixedPartitionValues(Map<String, String> fixedPartitionValues) {
+        this.fixedPartitionValues = fixedPartitionValues;
         return this;
       }
 
@@ -1134,6 +1152,9 @@ public class IcebergMaterializer {
           partitionValues.put(entry.getKey(), entry.getValue());
         }
       }
+      // Constant partition values this config always writes (e.g. a discriminator column the
+      // source pattern has no directory segment for) — always present, not batch-discovered.
+      partitionValues.putAll(config.getFixedPartitionValues());
 
       // Build typed partition filter for commit
       Map<String, Object> typedPartitionFilter = null;

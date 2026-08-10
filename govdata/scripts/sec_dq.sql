@@ -59,7 +59,10 @@ FROM (
   -- sec_secondary DQ (sec_secondary_dq.sql); not checked here.
   UNION ALL SELECT 'earnings_transcripts',  (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts/metadata/*.json'))
   UNION ALL SELECT 'stock_prices',          (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/stock_prices/metadata/*.json'))
-  UNION ALL SELECT 'vectorized_chunks',     (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/vectorized_chunks/metadata/*.json'))
+  -- SEC chunks are promoted into ref.vectorized_chunks (source_schema='sec' partition); this
+  -- schema no longer materializes its own vectorized_chunks Iceberg table, so existence is
+  -- checked against the shared table's metadata instead.
+  UNION ALL SELECT 'vectorized_chunks',     (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/ref/vectorized_chunks/metadata/*.json'))
 );
 
 -- ============================================================

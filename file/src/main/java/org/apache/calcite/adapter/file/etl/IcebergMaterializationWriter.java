@@ -1187,13 +1187,50 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       sample.add(merged);
     }
 
+    // Columns with no non-null value anywhere in this batch have nothing for DuckDB's own
+    // JSON-based type inference (below) to work from -- it falls back to its own 'JSON'
+    // catch-all type for such a column, which duckdbTypeToCanonical deliberately refuses to
+    // guess-map (fail loud, don't guess: a genuinely JSON-valued column elsewhere must not be
+    // silently flattened to VARCHAR by the same code path). Confirmed live on two independent
+    // tables: a column that's legitimately just empty in one particular batch (not JSON-shaped
+    // at all) hard-crashed schema inference outright. Exclude those columns from what DuckDB
+    // sees and default them to VARCHAR directly instead -- correct and safe since there is no
+    // data in this sample to type any other way, and schema evolution
+    // (evolveSchemaForNewColumns) already re-derives the real type once a later batch does
+    // carry a non-null value for that column.
+    Set<String> allNullKeys = new LinkedHashSet<String>();
+    for (Map<String, Object> row : sample) {
+      allNullKeys.addAll(row.keySet());
+    }
+    for (Map<String, Object> row : sample) {
+      if (allNullKeys.isEmpty()) {
+        break;
+      }
+      Iterator<String> it = allNullKeys.iterator();
+      while (it.hasNext()) {
+        if (row.get(it.next()) != null) {
+          it.remove();
+        }
+      }
+    }
+    List<Map<String, Object>> sampleForInference = sample;
+    if (!allNullKeys.isEmpty()) {
+      sampleForInference = new ArrayList<Map<String, Object>>(sample.size());
+      for (Map<String, Object> row : sample) {
+        Map<String, Object> filtered = new LinkedHashMap<String, Object>(row);
+        filtered.keySet().removeAll(allNullKeys);
+        sampleForInference.add(filtered);
+      }
+    }
+
     java.io.File tmpJson = java.io.File.createTempFile("iceberg-infer-", ".json");
     java.io.File tmpParquet = java.io.File.createTempFile("iceberg-infer-", ".parquet");
     tmpJson.deleteOnExit();
     tmpParquet.deleteOnExit();
     try {
       java.nio.file.Files.write(tmpJson.toPath(),
-          MAPPER.writeValueAsString(sample).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+          MAPPER.writeValueAsString(sampleForInference)
+              .getBytes(java.nio.charset.StandardCharsets.UTF_8));
       String jsonPath = tmpJson.getAbsolutePath().replace("\\", "\\\\").replace("'", "\\'");
       String parquetPath = tmpParquet.getAbsolutePath().replace("\\", "/");
       // DuckDB infers column types from the sample and writes a parquet whose footer carries
@@ -1210,7 +1247,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         stmt.execute("COPY (SELECT * FROM read_json_auto('" + jsonPath
             + "', sample_size=-1)) TO '" + parquetPath.replace("'", "''") + "' (FORMAT PARQUET)");
       }
-      return IcebergCatalogManager.describeParquet(parquetPath);
+      List<IcebergCatalogManager.ColumnDef> inferred =
+          IcebergCatalogManager.describeParquet(parquetPath);
+      if (allNullKeys.isEmpty()) {
+        return inferred;
+      }
+      List<IcebergCatalogManager.ColumnDef> result =
+          new ArrayList<IcebergCatalogManager.ColumnDef>(inferred);
+      for (String key : allNullKeys) {
+        result.add(new IcebergCatalogManager.ColumnDef(key, "VARCHAR"));
+      }
+      return result;
     } finally {
       tmpJson.delete();
       tmpParquet.delete();

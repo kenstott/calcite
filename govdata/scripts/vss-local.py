@@ -65,7 +65,9 @@ FLUSH_ROWS = int(os.environ.get("VSS_FLUSH_ROWS", "100000"))    # write a codes 
 GOVDATA_HOME = os.environ.get("GOVDATA_HOME") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), ".."))
 PARQUET_BUCKET = os.environ.get("GOVDATA_PARQUET_DIR", "s3://govdata-parquet-v1")
-ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/sec/vectorized_chunks"
+# SEC's chunks are promoted into the shared ref.vectorized_chunks table (source_schema='sec'
+# partition) -- this schema no longer materializes its own vectorized_chunks Iceberg table.
+ICEBERG_CHUNKS = f"{PARQUET_BUCKET}/ref/vectorized_chunks"
 # The delivered semantic-search artifact: an append-only parquet dataset of quantized
 # codes (one file per producer run), Hive-partitioned by source_schema so a schema-scoped
 # search prunes to its own partition and future non-SEC sources land alongside SEC without
@@ -95,9 +97,11 @@ def codes_dataset_for(source_schema):
 
 
 def iceberg_chunks_for(source_schema):
-    """vectorized_chunks Iceberg path for a given source_schema -- SEC's own path
-    (ICEBERG_CHUNKS above) follows the same convention, so this needs no special case."""
-    if source_schema == "sec":
+    """vectorized_chunks Iceberg path for a given source_schema. SEC and ref's own sources
+    (e.g. naics) share the one promoted ref.vectorized_chunks table (ICEBERG_CHUNKS above,
+    partitioned by source_schema); other schemas onboarded via ChunkOrganizer's row-concat
+    registry follow the same shared-table convention, not a per-schema directory."""
+    if source_schema in ("sec", "ref"):
         return ICEBERG_CHUNKS
     return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunks"
 
@@ -360,6 +364,7 @@ def cmd_backlog(max_rows, max_seconds, source_schema="sec", iceberg_path=None,
         FROM iceberg_scan('{iceberg_path}', allow_moved_paths=true) s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
         WHERE d.chunk_id IS NULL
+          AND s.source_schema = '{source_schema}'
           AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
         ORDER BY {order_by}
         LIMIT {int(max_rows)}
@@ -389,7 +394,7 @@ def cmd_year(year):
         SELECT s.chunk_id, s.year AS yr, s.chunk_text
         FROM iceberg_scan('{ICEBERG_CHUNKS}') s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
-        WHERE d.chunk_id IS NULL AND s.year = {int(year)}
+        WHERE d.chunk_id IS NULL AND s.source_schema = 'sec' AND s.year = {int(year)}
           AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
         ORDER BY s.accession_number DESC
     """)
