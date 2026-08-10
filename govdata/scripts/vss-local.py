@@ -96,12 +96,21 @@ def codes_dataset_for(source_schema):
     return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunk_codes/source_schema={source_schema}"
 
 
+# Every source_schema value ChunkOrganizer (govdata/.../ref/ChunkOrganizer.java) ever writes
+# into the shared ref.vectorized_chunks table: 'sec' via the backfill + live redirect,
+# everything else via its ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES registries. Keep this in
+# sync with those registries -- a source_schema present there but missing here silently
+# resolves to a nonexistent per-schema table path below instead of the shared one (confirmed
+# live: this happened for 'fedregister'/'cyber_threat' after 'ref' was onboarded).
+SHARED_CHUNKS_SCHEMAS = ("sec", "ref", "fedregister", "cyber_threat")
+
+
 def iceberg_chunks_for(source_schema):
-    """vectorized_chunks Iceberg path for a given source_schema. SEC and ref's own sources
-    (e.g. naics) share the one promoted ref.vectorized_chunks table (ICEBERG_CHUNKS above,
-    partitioned by source_schema); other schemas onboarded via ChunkOrganizer's row-concat
-    registry follow the same shared-table convention, not a per-schema directory."""
-    if source_schema in ("sec", "ref"):
+    """vectorized_chunks Iceberg path for a given source_schema. Sources sharing the one
+    promoted ref.vectorized_chunks table (ICEBERG_CHUNKS above, partitioned by source_schema)
+    are listed in SHARED_CHUNKS_SCHEMAS; anything else falls back to a per-schema directory
+    (no such source exists yet, but the fallback keeps this function total)."""
+    if source_schema in SHARED_CHUNKS_SCHEMAS:
         return ICEBERG_CHUNKS
     return f"{PARQUET_BUCKET}/{source_schema}/vectorized_chunks"
 

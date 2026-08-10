@@ -856,10 +856,13 @@ if $RUN_EMBEDDINGS; then
     # same time-boxed, resumable way. This only runs post-drain (here, not per-schema)
     # because it needs every source schema already materialized -- see
     # semantic-search-plan.md "Extension mechanism" for why a per-table hook can't give
-    # that ordering guarantee. Add a source_schema to this list as row-concat/document-
-    # blob sources are onboarded elsewhere; each is independent, one failing doesn't
-    # block the rest.
-    for src_schema in ref; do
+    # that ordering guarantee. This list must match every source_schema value
+    # ChunkOrganizer's ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES registries write into
+    # ref.vectorized_chunks (currently ref, fedregister, cyber_threat) -- a source
+    # organized there but missing from this list gets chunked but never embedded, so add
+    # its source_schema here in the same commit that onboards it. Each entry is
+    # independent; one failing doesn't block the rest.
+    for src_schema in ref fedregister cyber_threat; do
       bash "$VSS_DIR/vss-local.sh" backlog --source-schema "$src_schema" \
         || log_info "WARNING: vss-local backlog ($src_schema) failed (non-fatal)"
     done

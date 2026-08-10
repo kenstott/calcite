@@ -79,7 +79,7 @@ public final class SemanticSearch {
   // in the prefilter, harmlessly, but there is no point scanning a partition that never has
   // rows).
   private static final List<String> DEFAULT_SOURCE_SCHEMAS =
-      Collections.unmodifiableList(Arrays.asList("sec", "ref"));
+      Collections.unmodifiableList(Arrays.asList("sec", "ref", "fedregister", "cyber_threat"));
 
   // Each source schema's codes live under its OWN bucket-rooted prefix -- e.g.
   // sec/vectorized_chunk_codes/source_schema=sec vs. ref/vectorized_chunk_codes/
