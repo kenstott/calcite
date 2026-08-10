@@ -1485,6 +1485,21 @@ partitionedTables:
         type: int
         nullable: true
         comment: Original paragraph number in earnings_transcripts for traceability
+      # Generalized columns matching ref.vectorized_chunks -- see SecSchemaFactory
+      # #materializeSecChunksToRef, the sole ongoing writer of this table's rows into the
+      # promoted, cross-schema semantic-search index.
+      - name: source_schema
+        type: string
+        nullable: false
+        comment: Always 'sec' for rows from this table
+      - name: source_table
+        type: string
+        nullable: false
+        comment: Always 'vectorized_chunks' for rows from this table
+      - name: stringified_fk
+        type: string
+        nullable: false
+        comment: "'<cik>:<accession_number>', the filing's natural key stringified"
 
 
     # Source is handled by DocumentETLProcessor + IcebergMaterializer, not standard ETL
@@ -1498,6 +1513,10 @@ partitionedTables:
 
     materialize:
       <<: *materialize_defaults
+      # This table's own Iceberg location (sec warehouse) is retired as a live write target --
+      # rows land in ref.vectorized_chunks instead (SecSchemaFactory#materializeSecChunksToRef).
+      # Pre-migration data here is left in place, not deleted.
+      enabled: false
       rowBatchSize: 5000
       output:
         pattern: "year=*/"

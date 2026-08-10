@@ -223,6 +223,92 @@ public class IcebergMaterializationWriterTest {
     assertEquals(org.apache.iceberg.types.Types.BooleanType.get(), byName.get("active"));
   }
 
+  @Test public void testDeferredSchemaEvolutionPreservesExistingRows() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_deferred_evolution");
+    warehouseDir.mkdirs();
+
+    // No declared columns on either write — deferred schema inference both times, mirroring how
+    // ChunkOrganizer's cross-source hook feeds heterogeneous row shapes to the same table.
+    // overwritePartitions(false): isolates schema-evolution correctness from partition-overwrite
+    // scoping (a separate concern — an unpartitioned table with overwritePartitions:true treats
+    // the whole table as a single partition and each write replaces it, by design).
+    MaterializeConfig config = MaterializeConfig.builder()
+        .enabled(true)
+        .format(MaterializeConfig.Format.ICEBERG)
+        .name("deferred_evolution_table")
+        .targetTableId("deferred_evolution_table")
+        .output(MaterializeOutputConfig.builder().build())
+        .columns(Collections.<ColumnConfig>emptyList())
+        .iceberg(MaterializeConfig.IcebergConfig.builder()
+            .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
+            .warehousePath(warehouseDir.getAbsolutePath())
+            .namespace("default")
+            .overwritePartitions(false)
+            .build())
+        .build();
+
+    // First write: 2 columns.
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer.initialize(config);
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("id", 1);
+    row1.put("name", "first");
+    writer.writeBatch(Collections.singletonList(row1).iterator(),
+        Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    // Second write (fresh writer instance, same table): introduces a new "amount" column that
+    // was never declared and never seen by the first batch.
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer.initialize(config);
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("id", 2);
+    row2.put("name", "second");
+    row2.put("amount", 100.0);
+    writer.writeBatch(Collections.singletonList(row2).iterator(),
+        Collections.<String, String>emptyMap());
+    writer.commit();
+
+    String tableLocation = writer.getTableLocation();
+    assertNotNull(tableLocation, "Table location must be set after commit");
+
+    // Schema evolved (added), not dropped-and-recreated: both id/name/amount present.
+    org.apache.iceberg.Table table =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(tableLocation);
+    Set<String> columnNames = new HashSet<String>();
+    for (org.apache.iceberg.types.Types.NestedField f : table.schema().columns()) {
+      columnNames.add(f.name());
+    }
+    assertEquals(3, columnNames.size(), "id, name, and the newly-evolved amount column");
+    assertTrue(columnNames.contains("amount"), "amount column must have been added");
+    assertTrue(table.currentSnapshot().parentId() != null,
+        "second commit must be a new snapshot on the SAME table lineage, not a fresh table");
+
+    // Both rows survive in the CURRENT Iceberg snapshot (append, not partition overwrite): row 1
+    // has amount=NULL (it predates the column), row 2 has amount=100.0.
+    Map<Integer, Map<String, Object>> byId = new HashMap<Integer, Map<String, Object>>();
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(table).build()) {
+      for (org.apache.iceberg.data.Record r : records) {
+        Map<String, Object> row = new HashMap<String, Object>();
+        for (String col : columnNames) {
+          row.put(col, r.getField(col));
+        }
+        byId.put(((Number) r.getField("id")).intValue(), row);
+      }
+    }
+    assertEquals(2, byId.size(), "exactly 2 rows in the current snapshot");
+    assertEquals("first", byId.get(1).get("name"));
+    assertNull(byId.get(1).get("amount"),
+        "row written before 'amount' existed must read back as NULL, not vanish");
+    assertEquals("second", byId.get(2).get("name"));
+    assertEquals(100.0, (Double) byId.get(2).get("amount"), 0.0001);
+  }
+
   @Test public void testDeclaredArrayColumnTypeCreatesListType() throws Exception {
     // Regression: mapToIcebergType previously fell through "array<date>"/"array<double>" to
     // STRING (the default case), silently dropping any declared list-typed column to a plain

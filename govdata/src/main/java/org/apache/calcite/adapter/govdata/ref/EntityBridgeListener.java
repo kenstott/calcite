@@ -36,9 +36,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * Builds the cross-schema entity-resolution bridge described in {@code entity-resolution-plan.md}
@@ -97,6 +99,25 @@ public class EntityBridgeListener implements TableLifecycleListener {
    * orders of magnitude smaller than fmcsa_carriers and rarely hits this cap in practice.
    */
   private static final int MAX_FUZZY_BLOCK_SIZE = 500;
+
+  // Batches runOrgSource's expensive matching over a source's distinct-name set (see
+  // stage_norm_distinct in runOrgSource) so peak DuckDB memory for one batch stays constant
+  // regardless of how many distinct names a source has. 22,803-row fec.committees (already
+  // collapsing to 4,934 distinct names) runs fine unbatched in ~11s, so this is set well above
+  // that as a practical single-batch size for every source but the rare few needing more than
+  // one pass.
+  private static final int MAX_ORG_MATCH_BATCH_SIZE = 20_000;
+
+  // matchPersonPair's fuzzy tier joins two person-type sources on exact last_name alone, then
+  // scores jaro_winkler_similarity on every resulting pair -- same shape as the org track's
+  // blocked fuzzy join, so it needs the same cap for the same reason: an uncapped common surname
+  // (SMITH, JOHNSON, GARCIA, ...) fans out to |block_a| x |block_b| pairs to score. Confirmed
+  // live: with no cap this ran for 20+ minutes with climbing CPU and no forward progress across
+  // the existing (small, <200K-row) person-type registry, before ever reaching a size anywhere
+  // near what the org track's fmcsa_carriers case (4.47M rows, capped) handles cleanly in
+  // minutes. The exact tier (last_name AND first_name equality) doesn't need this: it's a
+  // selective two-column hash join, not a score-every-pair scan.
+  private static final int PERSON_MAX_BLOCK_SIZE = 500;
 
   /** Legal-suffix/entity-marker tokens used by the sec.insider_transactions row classifier. */
   private static final String SEC_ENTITY_MARKER_REGEX =
@@ -194,7 +215,52 @@ public class EntityBridgeListener implements TableLifecycleListener {
       new OrgSource(
           "fiscal", "sba_loan_approvals", null,
           "s.lender_name", null, null,
-          "lender_name", null, null, "sba_lender_name"));
+          "lender_name", null, null, "sba_lender_name"),
+      // Coverage-gap audit (2026-08-09), added the same way as every entry above: describe_table-
+      // confirmed column names, structured key preferred over name-only where the source has one.
+      new OrgSource(
+          "sec", "institutional_holdings", null,
+          "s.manager_name", "s.manager_cik", null,
+          "manager_name", null, "s.report_period", "sec_manager_cik"),
+      // sec.beneficial_ownership.filer_name deliberately NOT added here: confirmed live (2026-
+      // 08-09) that column is badly broken upstream in the SEC 13D/13G extraction pipeline --
+      // average value length 7,217 characters (max 874,326), only 292 of 57,125 non-blank values
+      // even plausible as a real name (< 100 chars). It's capturing whole filing text blocks, not
+      // the filer's name. A live registry test against it scored 0/9,213 matched, as expected
+      // once this was found. Separate bug, different subsystem (SEC filing parsing, not entity
+      // resolution) -- add this source once that extraction is fixed, same wiring as every other
+      // entry here.
+      new OrgSource(
+          "patents", "trademark_owner", null,
+          "s.own_name", "s.own_id", null,
+          "own_name", null, null, "patents_trademark_owner_id"),
+      new OrgSource(
+          "health", "fda_device_recalls", null,
+          "s.recalling_firm", "s.cfres_id", null,
+          "recalling_firm", null, null, "fda_device_recalling_firm"),
+      // product_ndc is per-product, not per-labeler -- many products share one labeler, same
+      // shape as patents.patent_assignees keying by assignee_id. stage_norm_distinct's
+      // name-collapse (see runOrgSource) already handles that shape cheaply.
+      new OrgSource(
+          "health", "fda_ndc_products", null,
+          "s.labeler_name", "s.product_ndc", null,
+          "labeler_name", null, null, "fda_labeler_name"),
+      new OrgSource(
+          "research", "nsf_herd_by_institution", null,
+          "s.institution", "s.inst_id", null,
+          "institution", null, "s.year", "nsf_herd_inst_id"),
+      new OrgSource(
+          "edu", "ipeds_institutions", null,
+          "s.inst_name", "CAST(s.unitid AS VARCHAR)", null,
+          "inst_name", null, "s.year", "ipeds_unitid"),
+      new OrgSource(
+          "health", "clinical_trials", null,
+          "s.lead_sponsor", "s.nct_id", null,
+          "lead_sponsor", null, null, "clinical_trials_nct_id"),
+      new OrgSource(
+          "health", "fda_drug_recalls", null,
+          "s.recalling_firm", "s.recall_number", null,
+          "recalling_firm", null, null, "fda_drug_recalling_firm"));
 
   /** One row per person-type entry in entity-resolution-plan.md's "Person-type sources" table. */
   private static final List<PersonSource> PERSON_SOURCES = Arrays.asList(
@@ -241,7 +307,25 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "patents", "patent_assignees", null,
           "s.assignee_id", "s.assignee_name_first || ' ' || s.assignee_name_last",
           "s.assignee_name_last", "s.assignee_name_first", null,
-          "s.assignee_type IN ('4','5')", null, "patents_individual_assignee_id"));
+          "s.assignee_type IN ('4','5')", null, "patents_individual_assignee_id"),
+      // Coverage-gap audit (2026-08-09). "Last, First Middle" comma format, same as
+      // fec.candidates above -- identical parsing expressions, different source columns. A
+      // member serving N congresses has N rows sharing one bioguide_id; orderByExpr picks the
+      // most recent congress's name spelling, same pattern as fec.committees' s.year.
+      new PersonSource(
+          "officials", "members", null,
+          "s.bioguide_id", "s.name_last_first",
+          "split_part(s.name_last_first, ',', 1)",
+          "list_element(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '), 1)",
+          "array_to_string(list_slice(string_split("
+              + "trim(split_part(s.name_last_first, ',', 2)), ' '), 2, "
+              + "len(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '))), ' ')",
+          null, "s.congress", "officials_member_bioguide_id"),
+      new PersonSource(
+          "officials", "federal_judges", null,
+          "s.jid", "s.first_name || ' ' || s.last_name",
+          "s.last_name", "s.first_name", "s.middle_name",
+          null, null, "officials_judge_jid"));
 
   @Override public void beforeTable(TableContext context) {
     // No-op: this listener does all its work in afterTable, once, on TRIGGER_TABLE.
@@ -275,12 +359,38 @@ public class EntityBridgeListener implements TableLifecycleListener {
         runOrgSource(conn, base, src);
       }
 
-      List<Map<String, Object>> orgBridgeRows = queryRows(conn,
+      // Streamed straight into the writer, not held as a List: all_org_mentions now totals
+      // ~9-10M rows across the full org-type registry (dominated by transport.fmcsa_carriers'
+      // ~4.1M unresolved rows), confirmed live to exceed what one Java List can safely hold in
+      // this worker's heap (a native JVM SIGSEGV, not even a catchable OOM). writeBatch chunks
+      // in fixed batchSize pieces identically for a List.iterator() or a live Iterator, so
+      // streaming here is a pure win with no behavior change versus the old List-based write.
+      //
+      // entity_org_bridge/canonical_org_entity's materialize: block also now declares its own
+      // columns (see ref-schema.yaml) -- required after finding, live, that this table's
+      // IcebergMaterializationWriter previously had no declared columns (MaterializeConfig's
+      // own columns list, distinct from the table-level columns: used for Calcite's row type),
+      // so table creation deferred to inferring the schema from the first written batch's
+      // actual data. That inference hard-crashed here: sec_cik is only ever populated by
+      // match_method='exact_ein' (only fiscal.exempt_org_master ever supplies an EIN), and in
+      // this live dataset exact_ein produced zero matches across the *entire* ~773K-row result
+      // set, not just some unlucky sample window -- confirmed live via a full GROUP BY
+      // match_method scan, so no amount of row reordering could ever have fixed it (there's no
+      // non-null sec_cik value anywhere to surface). DuckDB's JSON-based inference has no
+      // scalar type to guess for a column that's genuinely all-null and falls back to its own
+      // 'JSON' catch-all, which duckdbTypeToCanonical deliberately refuses to map (fail loud,
+      // don't guess, per its own javadoc) rather than silently guessing VARCHAR. Declaring the
+      // columns explicitly is the real fix: it skips data-inference entirely and uses the
+      // already-documented types directly, which is correct regardless of which columns happen
+      // to be all-null in any given run's data.
+      ResultSetIterator orgBridgeIter = new ResultSetIterator(conn,
           "SELECT source_schema, source_table, source_column, source_key, "
           + "name_raw AS source_name_raw, name_norm AS source_name_normalized, lei, sec_cik, "
           + "gleif_legal_name, match_method, match_confidence, match_score, '" + esc(runId)
           + "' AS match_run_id FROM all_org_mentions WHERE match_method IS NOT NULL");
-      List<Map<String, Object>> canonicalOrgRows = pivotOrg(conn);
+      long orgBridgeRowCount = writeTableStreaming(context, "entity_org_bridge", orgBridgeIter);
+      long canonicalOrgRowCount =
+          writeTableStreaming(context, "canonical_org_entity", pivotOrg(conn));
 
       for (int i = 0; i < PERSON_SOURCES.size(); i++) {
         stagePersonSource(conn, base, i, PERSON_SOURCES.get(i));
@@ -292,16 +402,14 @@ public class EntityBridgeListener implements TableLifecycleListener {
               matchPersonPair(conn, i, j, PERSON_SOURCES.get(i), PERSON_SOURCES.get(j), runId));
         }
       }
-      List<Map<String, Object>> canonicalPersonRows = pivotPerson(conn, personBridgeRows);
+      long canonicalPersonRowCount =
+          writeTableStreaming(context, "canonical_person_entity", pivotPerson(conn, personBridgeRows));
 
-      writeTable(context, "entity_org_bridge", orgBridgeRows);
       writeTable(context, "entity_person_bridge", personBridgeRows);
-      writeTable(context, "canonical_org_entity", canonicalOrgRows);
-      writeTable(context, "canonical_person_entity", canonicalPersonRows);
 
       LOGGER.info("EntityBridgeListener: complete — entity_org_bridge={}, entity_person_bridge={}, "
-          + "canonical_org_entity={}, canonical_person_entity={}", orgBridgeRows.size(),
-          personBridgeRows.size(), canonicalOrgRows.size(), canonicalPersonRows.size());
+          + "canonical_org_entity={}, canonical_person_entity={}", orgBridgeRowCount,
+          personBridgeRows.size(), canonicalOrgRowCount, canonicalPersonRowCount);
     } catch (Exception e) {
       // afterTable declares no throws clause; this is a best-effort post-processing pass over
       // already-committed data, so a failure here must not fail the ref schema's own ETL run.
@@ -348,69 +456,122 @@ public class EntityBridgeListener implements TableLifecycleListener {
 
     long total = scalarLong(conn, "SELECT count(*) FROM stage_norm");
 
-    String matchSql =
-        "WITH ein_matched AS ("
-        + "  SELECT n.source_key, n.name_raw, n.name_norm, e.cik AS sec_cik, "
-        + "         CAST(NULL AS VARCHAR) AS lei, CAST(NULL AS VARCHAR) AS gleif_legal_name, "
-        + "         'exact_ein' AS match_method, 'high' AS match_confidence, 1.0 AS match_score "
-        + "  FROM stage_norm n JOIN ein_hub e ON n.ein_val = e.irs_number"
-        + "), exact_matched AS ("
-        + "  SELECT n.source_key, n.name_raw, n.name_norm, CAST(NULL AS VARCHAR) AS sec_cik, "
-        + "         g.lei, g.legal_name AS gleif_legal_name, "
-        + "         'exact_normalized' AS match_method, 'high' AS match_confidence, 1.0 AS match_score "
-        + "  FROM stage_norm n JOIN current_gleif g ON n.name_norm = g.norm_name "
-        + "  WHERE n.source_key NOT IN (SELECT source_key FROM ein_matched)"
-        + "), fuzzy_best_business AS ("
-        + "  SELECT n.source_key, n.name_raw, n.name_norm, g.lei, g.legal_name AS gleif_legal_name, "
-        // Scored on the remainder AFTER the shared block token, not the full name — see
-        // org_remainder's javadoc-style comment in createMacros for why full-name scoring here
-        // double-counts the blocking join's guaranteed shared prefix and inflates every score.
-        + "         jaro_winkler_similarity(n.remainder, g.remainder) AS score "
-        + "  FROM stage_norm n "
-        + "  JOIN gleif_block_sizes bs ON n.block_key = bs.block_key "
-        + "    AND bs.block_size <= " + MAX_FUZZY_BLOCK_SIZE + " "
-        + "  JOIN current_gleif g ON n.block_key = g.block_key "
-        + "  WHERE NOT n.is_person "
-        + "    AND n.source_key NOT IN (SELECT source_key FROM ein_matched) "
-        + "    AND n.source_key NOT IN (SELECT source_key FROM exact_matched) "
-        + "  QUALIFY row_number() OVER (PARTITION BY n.source_key ORDER BY score DESC) = 1"
-        + "), fuzzy_best_person AS ("
-        // Person-shaped rows (see is_person_shaped's javadoc in createMacros) get the person-track's
-        // conservative pattern instead: blocked by an EXACT last-token match (never fuzzy the
-        // surname), scoring only the given-name part — not the first-token/remainder split used
-        // for business names.
-        + "  SELECT n.source_key, n.name_raw, n.name_norm, g.lei, g.legal_name AS gleif_legal_name, "
-        + "         jaro_winkler_similarity(n.given_part, g.given_part) AS score "
-        + "  FROM stage_norm n "
-        + "  JOIN gleif_last_token_sizes ts ON n.last_token = ts.last_token "
-        + "    AND ts.block_size <= " + MAX_FUZZY_BLOCK_SIZE + " "
-        + "  JOIN current_gleif g ON n.last_token = g.last_token "
-        + "  WHERE n.is_person "
-        + "    AND n.source_key NOT IN (SELECT source_key FROM ein_matched) "
-        + "    AND n.source_key NOT IN (SELECT source_key FROM exact_matched) "
-        + "  QUALIFY row_number() OVER (PARTITION BY n.source_key ORDER BY score DESC) = 1"
-        + "), fuzzy_best AS ("
-        + "  SELECT * FROM fuzzy_best_business UNION ALL SELECT * FROM fuzzy_best_person"
-        + "), fuzzy_matched AS ("
-        + "  SELECT source_key, name_raw, name_norm, CAST(NULL AS VARCHAR) AS sec_cik, lei, gleif_legal_name, "
-        + "         'fuzzy' AS match_method, "
-        + "         CASE WHEN score >= " + FUZZY_HIGH_THRESHOLD + " THEN 'high' ELSE 'low' END AS match_confidence, "
-        + "         score AS match_score "
-        + "  FROM fuzzy_best WHERE score >= " + FUZZY_LOW_THRESHOLD
-        + ") "
-        + "INSERT INTO all_org_mentions "
-        + "SELECT '" + esc(src.schema) + "', '" + esc(src.sourceTableLabel()) + "', '"
-        + esc(src.sourceColumnLabel) + "', n.source_key, n.name_raw, n.name_norm, "
-        + "m.lei, m.sec_cik, m.gleif_legal_name, m.match_method, m.match_confidence, "
-        + "m.match_score, "
-        + "COALESCE(m.lei, m.sec_cik, 'h:' || md5('" + esc(src.schema) + "."
-        + esc(src.sourceTableLabel())
-        + "." + esc(src.sourceColumnLabel) + ".' || n.source_key)), '"
-        + esc(src.canonicalColumn) + "' "
-        + "FROM stage_norm n "
-        + "LEFT JOIN (SELECT * FROM ein_matched UNION ALL SELECT * FROM exact_matched "
-        + "           UNION ALL SELECT * FROM fuzzy_matched) m ON n.source_key = m.source_key";
-    execute(conn, matchSql);
+    // block_key/remainder/last_token/given_part are all defined (see createMacros) as functions
+    // of norm_org_name(x) alone, so two stage_norm rows sharing name_norm are guaranteed to agree
+    // on all four -- collapsing to one row per distinct name_norm before the expensive exact/
+    // fuzzy matching is exact, not approximate, for those columns (is_person is the one column
+    // computed from the raw, un-normalized text; any_value's tiny residual imprecision there has
+    // the same acceptable, safety-biased shape as is_person_shaped's own javadoc already
+    // describes for a short unmarked business name). For most sources this is a no-op: keyExpr is
+    // usually null, so source_key already equals norm_org_name(name) and stage_norm is already
+    // ~1 row per name_norm.
+    execute(conn,
+        "CREATE OR REPLACE TEMP TABLE stage_norm_distinct AS "
+        + "SELECT name_norm, any_value(block_key) AS block_key, "
+        + "any_value(remainder) AS remainder, any_value(last_token) AS last_token, "
+        + "any_value(given_part) AS given_part, any_value(is_person) AS is_person "
+        + "FROM stage_norm GROUP BY name_norm");
+
+    // The distinct-name collapse above isn't enough on its own for every source: confirmed live,
+    // patents.patent_assignees collapses only 511,325 stage_norm rows to 510,542 distinct names
+    // (PatentsView's assignee_id is already well-disambiguated per source_key, so there's little
+    // raw duplication left to remove there -- unlike patent_assignees' own doc comment on why it
+    // keys by assignee_id in the first place, see entity-resolution-plan.md). Matching all
+    // 510K+ distinct names against current_gleif's 3.2M rows in one shot still hard-OOM'd the
+    // worker even with MAX_FUZZY_BLOCK_SIZE capping each individual block (confirmed live:
+    // 1.8GiB/1.8GiB used). Batching by name_norm keyset (not OFFSET, which DuckDB would
+    // re-scan-and-discard on every call) bounds peak memory for one batch to a constant,
+    // regardless of how many distinct names a source has -- same pattern as ChunkOrganizer's SEC
+    // backfill batching (see semantic-search-plan.md). Each batch inserts directly into
+    // all_org_mentions, so this is also safely resumable in the sense that a later failure only
+    // loses that batch's source, not prior sources' already-committed work.
+    String cursor = null;
+    while (true) {
+      String cursorClause = cursor == null ? "" : "WHERE name_norm > '" + esc(cursor) + "' ";
+      execute(conn,
+          "CREATE OR REPLACE TEMP TABLE stage_norm_batch AS "
+          + "SELECT * FROM stage_norm_distinct " + cursorClause
+          + "ORDER BY name_norm LIMIT " + MAX_ORG_MATCH_BATCH_SIZE);
+      long batchSize = scalarLong(conn, "SELECT count(*) FROM stage_norm_batch");
+      if (batchSize == 0) {
+        break;
+      }
+
+      String matchSql =
+          "WITH ein_matched AS ("
+          // Row-grain (not name_norm-grain) on purpose: EIN is a per-row fact, not implied by a
+          // shared org name (e.g. same brand name, different franchise-location EIN), and this is
+          // a cheap direct equi-join against ein_hub, not the blocked fuzzy join's cost driver.
+          + "  SELECT n.source_key, e.cik AS sec_cik "
+          + "  FROM stage_norm n JOIN stage_norm_batch b ON n.name_norm = b.name_norm "
+          + "  JOIN ein_hub e ON n.ein_val = e.irs_number"
+          + "), exact_matched AS ("
+          + "  SELECT d.name_norm, CAST(NULL AS VARCHAR) AS sec_cik, "
+          + "         g.lei, g.legal_name AS gleif_legal_name, "
+          + "         'exact_normalized' AS match_method, 'high' AS match_confidence, 1.0 AS match_score "
+          + "  FROM stage_norm_batch d JOIN current_gleif g ON d.name_norm = g.norm_name"
+          + "), fuzzy_best_business AS ("
+          + "  SELECT d.name_norm, g.lei, g.legal_name AS gleif_legal_name, "
+          // Scored on the remainder AFTER the shared block token, not the full name — see
+          // org_remainder's javadoc-style comment in createMacros for why full-name scoring here
+          // double-counts the blocking join's guaranteed shared prefix and inflates every score.
+          + "         jaro_winkler_similarity(d.remainder, g.remainder) AS score "
+          + "  FROM stage_norm_batch d "
+          + "  JOIN gleif_block_sizes bs ON d.block_key = bs.block_key "
+          + "    AND bs.block_size <= " + MAX_FUZZY_BLOCK_SIZE + " "
+          + "  JOIN current_gleif g ON d.block_key = g.block_key "
+          + "  WHERE NOT d.is_person "
+          + "    AND d.name_norm NOT IN (SELECT name_norm FROM exact_matched) "
+          + "  QUALIFY row_number() OVER (PARTITION BY d.name_norm ORDER BY score DESC) = 1"
+          + "), fuzzy_best_person AS ("
+          // Person-shaped rows (see is_person_shaped's javadoc in createMacros) get the person-track's
+          // conservative pattern instead: blocked by an EXACT last-token match (never fuzzy the
+          // surname), scoring only the given-name part — not the first-token/remainder split used
+          // for business names.
+          + "  SELECT d.name_norm, g.lei, g.legal_name AS gleif_legal_name, "
+          + "         jaro_winkler_similarity(d.given_part, g.given_part) AS score "
+          + "  FROM stage_norm_batch d "
+          + "  JOIN gleif_last_token_sizes ts ON d.last_token = ts.last_token "
+          + "    AND ts.block_size <= " + MAX_FUZZY_BLOCK_SIZE + " "
+          + "  JOIN current_gleif g ON d.last_token = g.last_token "
+          + "  WHERE d.is_person "
+          + "    AND d.name_norm NOT IN (SELECT name_norm FROM exact_matched) "
+          + "  QUALIFY row_number() OVER (PARTITION BY d.name_norm ORDER BY score DESC) = 1"
+          + "), fuzzy_best AS ("
+          + "  SELECT * FROM fuzzy_best_business UNION ALL SELECT * FROM fuzzy_best_person"
+          + "), fuzzy_matched AS ("
+          + "  SELECT name_norm, CAST(NULL AS VARCHAR) AS sec_cik, lei, gleif_legal_name, "
+          + "         'fuzzy' AS match_method, "
+          + "         CASE WHEN score >= " + FUZZY_HIGH_THRESHOLD + " THEN 'high' ELSE 'low' END AS match_confidence, "
+          + "         score AS match_score "
+          + "  FROM fuzzy_best WHERE score >= " + FUZZY_LOW_THRESHOLD
+          + "), name_matched AS ("
+          + "  SELECT * FROM exact_matched UNION ALL SELECT * FROM fuzzy_matched"
+          + ") "
+          + "INSERT INTO all_org_mentions "
+          + "SELECT '" + esc(src.schema) + "', '" + esc(src.sourceTableLabel()) + "', '"
+          + esc(src.sourceColumnLabel) + "', n.source_key, n.name_raw, n.name_norm, "
+          // ein_matched (row-grain, more specific) wins over name_matched (name_norm-grain) on any
+          // field it actually supplies, per row.
+          + "nm.lei, COALESCE(e.sec_cik, nm.sec_cik), nm.gleif_legal_name, "
+          + "COALESCE(CASE WHEN e.sec_cik IS NOT NULL THEN 'exact_ein' END, nm.match_method), "
+          + "COALESCE(CASE WHEN e.sec_cik IS NOT NULL THEN 'high' END, nm.match_confidence), "
+          + "COALESCE(CASE WHEN e.sec_cik IS NOT NULL THEN 1.0 END, nm.match_score), "
+          + "COALESCE(nm.lei, e.sec_cik, nm.sec_cik, 'h:' || md5('" + esc(src.schema) + "."
+          + esc(src.sourceTableLabel())
+          + "." + esc(src.sourceColumnLabel) + ".' || n.source_key)), '"
+          + esc(src.canonicalColumn) + "' "
+          + "FROM stage_norm n "
+          + "JOIN stage_norm_batch b ON n.name_norm = b.name_norm "
+          + "LEFT JOIN ein_matched e ON n.source_key = e.source_key "
+          + "LEFT JOIN name_matched nm ON n.name_norm = nm.name_norm";
+      execute(conn, matchSql);
+
+      cursor = scalarString(conn, "SELECT max(name_norm) FROM stage_norm_batch");
+      if (batchSize < MAX_ORG_MATCH_BATCH_SIZE) {
+        break;
+      }
+    }
 
     long matched = scalarLong(conn,
         "SELECT count(*) FROM all_org_mentions WHERE source_schema = '" + esc(src.schema)
@@ -432,21 +593,12 @@ public class EntityBridgeListener implements TableLifecycleListener {
         skippedOversizedBlock, MAX_FUZZY_BLOCK_SIZE);
   }
 
-  private List<Map<String, Object>> pivotOrg(Connection conn) throws SQLException {
-    StringBuilder sql = new StringBuilder();
-    sql.append("SELECT canonical_entity_id, ")
-        .append("COALESCE(MAX(gleif_legal_name), ")
-        .append("arg_max(name_raw, length(name_raw))) AS canonical_name, ")
-        .append("MAX(lei) AS lei, MAX(sec_cik) AS sec_cik");
-    for (OrgSource src : ORG_SOURCES) {
-      sql.append(", MAX(CASE WHEN canonical_column = '").append(esc(src.canonicalColumn))
-          .append("' THEN source_key END) AS ").append(src.canonicalColumn);
-      sql.append(", MAX(CASE WHEN canonical_column = '").append(esc(src.canonicalColumn))
-          .append("' THEN match_confidence END) AS ").append(src.canonicalColumn)
-          .append("_confidence");
-    }
-    sql.append(" FROM all_org_mentions GROUP BY canonical_entity_id");
-    return queryRows(conn, sql.toString());
+  private CloseableRowIterator pivotOrg(Connection conn) throws SQLException {
+    // See PivotOrgIterator's javadoc: a wide SQL GROUP BY (COALESCE/MAX(CASE...) over
+    // 4 + 2*ORG_SOURCES.size() columns) hard-OOM'd DuckDB's own query execution once the
+    // registry grew past ~22 sources. This reduces the same result in Java over a plain
+    // ORDER BY scan instead.
+    return new PivotOrgIterator(conn, ORG_SOURCES);
   }
 
   // ========================================================================
@@ -503,11 +655,20 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "         1.0 AS match_score "
         + "  FROM " + ta + " a JOIN " + tb + " b "
         + "    ON a.last_name = b.last_name AND a.first_name = b.first_name"
+        + "), block_sizes_a AS ("
+        + "  SELECT last_name, count(*) AS n FROM " + ta + " GROUP BY last_name"
+        + "), block_sizes_b AS ("
+        + "  SELECT last_name, count(*) AS n FROM " + tb + " GROUP BY last_name"
         + "), fuzzy_candidates AS ("
         + "  SELECT a.source_key AS a_key, a.name_raw AS a_name, "
         + "         b.source_key AS b_key, b.name_raw AS b_name, "
         + "         jaro_winkler_similarity(a.first_name, b.first_name) AS fscore "
-        + "  FROM " + ta + " a JOIN " + tb + " b ON a.last_name = b.last_name "
+        + "  FROM " + ta + " a "
+        + "  JOIN block_sizes_a ba ON a.last_name = ba.last_name AND ba.n <= "
+        + PERSON_MAX_BLOCK_SIZE + " "
+        + "  JOIN " + tb + " b ON a.last_name = b.last_name "
+        + "  JOIN block_sizes_b bb ON b.last_name = bb.last_name AND bb.n <= "
+        + PERSON_MAX_BLOCK_SIZE + " "
         + "  WHERE a.first_name <> b.first_name"
         + "), fuzzy AS ("
         + "  SELECT a_key, a_name, b_key, b_name, 'fuzzy_first_name' AS match_method, "
@@ -530,10 +691,14 @@ public class EntityBridgeListener implements TableLifecycleListener {
   /**
    * Pivots {@code entity_person_bridge} pairwise matches plus every unmatched person mention into
    * {@code canonical_person_entity} rows via connected components (union-find) over the match
-   * graph — done in Java rather than SQL because DuckDB has no built-in graph-closure primitive
-   * and the person-type registry is small (4 sources, capped fan-out).
+   * graph — done in Java rather than SQL because DuckDB has no built-in graph-closure primitive.
+   * Builds {@code groups} eagerly (connectivity inherently needs every mention seen first), but
+   * streams the row-building step via {@link PivotPersonIterator} instead of also materializing
+   * a full {@code List<Map<String,Object>>} of the output alongside it -- confirmed live, holding
+   * both simultaneously was enough to exhaust this worker's remaining ~1.5GB free heap once the
+   * person-type registry grew to 7 sources.
    */
-  private List<Map<String, Object>> pivotPerson(Connection conn,
+  private CloseableRowIterator pivotPerson(Connection conn,
       List<Map<String, Object>> personBridgeRows) throws SQLException {
     UnionFind uf = new UnionFind();
     Map<String, String> bestConfidence = new HashMap<String, String>();
@@ -577,8 +742,39 @@ public class EntityBridgeListener implements TableLifecycleListener {
       members.add(node);
     }
 
-    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    for (List<String> members : groups.values()) {
+    return new PivotPersonIterator(groups.values().iterator(), mentionNameRaw,
+        mentionCanonicalColumn, mentionSourceKey, bestConfidence);
+  }
+
+  /** Streams {@link #pivotPerson}'s row-building step — see its javadoc for why. */
+  private static final class PivotPersonIterator implements CloseableRowIterator {
+    private final Iterator<List<String>> groupIter;
+    private final Map<String, String> mentionNameRaw;
+    private final Map<String, String> mentionCanonicalColumn;
+    private final Map<String, String> mentionSourceKey;
+    private final Map<String, String> bestConfidence;
+    private long count;
+
+    PivotPersonIterator(Iterator<List<String>> groupIter, Map<String, String> mentionNameRaw,
+        Map<String, String> mentionCanonicalColumn, Map<String, String> mentionSourceKey,
+        Map<String, String> bestConfidence) {
+      this.groupIter = groupIter;
+      this.mentionNameRaw = mentionNameRaw;
+      this.mentionCanonicalColumn = mentionCanonicalColumn;
+      this.mentionSourceKey = mentionSourceKey;
+      this.bestConfidence = bestConfidence;
+    }
+
+    @Override public long count() {
+      return count;
+    }
+
+    @Override public boolean hasNext() {
+      return groupIter.hasNext();
+    }
+
+    @Override public Map<String, Object> next() {
+      List<String> members = groupIter.next();
       Collections.sort(members);
       String representative = members.get(0);
       Map<String, Object> row = new LinkedHashMap<String, Object>();
@@ -593,9 +789,13 @@ public class EntityBridgeListener implements TableLifecycleListener {
         row.put(col, mentionSourceKey.get(node));
         row.put(col + "_confidence", bestConfidence.get(node));
       }
-      rows.add(row);
+      count++;
+      return row;
     }
-    return rows;
+
+    @Override public void close() {
+      // No JDBC resources held directly; nothing to release.
+    }
   }
 
   private static void updateBest(Map<String, String> map, String node, String confidence) {
@@ -612,13 +812,22 @@ public class EntityBridgeListener implements TableLifecycleListener {
   }
 
   /** Simple path-compressing union-find over string node ids. */
+  /** Union by size (below) alongside find()'s path compression: without it, union() always
+   *  attached the first root under the second regardless of subtree size, so a big enough or
+   *  unluckily-ordered set of unions could build an arbitrarily deep chain -- find()'s
+   *  recursion then walks (and this worker's -Xss512k makes) that a real risk before the very
+   *  first compression on that path. Union by size bounds tree depth to O(log n) unconditionally,
+   *  which is what actually guarantees find()'s amortized near-O(1) behavior; path compression
+   *  alone only pays that cost off over repeated calls on the same path, not the first one. */
   private static final class UnionFind {
     private final Map<String, String> parent = new HashMap<String, String>();
+    private final Map<String, Integer> size = new HashMap<String, Integer>();
 
     String find(String x) {
       String p = parent.get(x);
       if (p == null) {
         parent.put(x, x);
+        size.put(x, 1);
         return x;
       }
       if (!p.equals(x)) {
@@ -631,8 +840,17 @@ public class EntityBridgeListener implements TableLifecycleListener {
     void union(String a, String b) {
       String ra = find(a);
       String rb = find(b);
-      if (!ra.equals(rb)) {
+      if (ra.equals(rb)) {
+        return;
+      }
+      int sizeA = size.get(ra);
+      int sizeB = size.get(rb);
+      if (sizeA < sizeB) {
         parent.put(ra, rb);
+        size.put(rb, sizeA + sizeB);
+      } else {
+        parent.put(rb, ra);
+        size.put(ra, sizeA + sizeB);
       }
     }
   }
@@ -839,6 +1057,28 @@ public class EntityBridgeListener implements TableLifecycleListener {
     LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", rows.size(), tableName);
   }
 
+  /** Streaming counterpart of {@link #writeTable} — see {@link CloseableRowIterator}. */
+  private static long writeTableStreaming(TableContext context, String tableName,
+      CloseableRowIterator rows) throws IOException {
+    EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
+    MaterializeConfig matConfig = tableConfig.getMaterialize();
+    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
+        + "/" + context.getSchemaName();
+    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
+        matConfig, context.getStorageProvider(), schemaMaterializeDir,
+        context.getIncrementalTracker());
+    writer.initialize(matConfig);
+    try {
+      writer.writeBatch(rows, Collections.<String, String>emptyMap());
+    } finally {
+      rows.close();
+    }
+    writer.commit();
+    writer.close();
+    LOGGER.info("EntityBridgeListener: wrote {} rows to ref.{}", rows.count(), tableName);
+    return rows.count();
+  }
+
   private static EtlPipelineConfig tableConfigOf(TableContext context, String tableName) {
     for (EtlPipelineConfig cfg : context.getSchemaContext().getTables()) {
       if (tableName.equals(cfg.getName())) {
@@ -874,6 +1114,13 @@ public class EntityBridgeListener implements TableLifecycleListener {
     }
   }
 
+  private static String scalarString(Connection conn, String sql) throws SQLException {
+    try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+      rs.next();
+      return rs.getString(1);
+    }
+  }
+
   private static List<Map<String, Object>> queryRows(Connection conn, String sql)
       throws SQLException {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
@@ -889,6 +1136,188 @@ public class EntityBridgeListener implements TableLifecycleListener {
       }
     }
     return rows;
+  }
+
+  /** Common contract for {@link #writeTableStreaming}'s two row sources — a raw ResultSet
+   *  stream and a Java-side reduce over one (see {@link ResultSetIterator}, {@link
+   *  PivotOrgIterator}). No checked exceptions on close(): neither implementation throws one. */
+  private interface CloseableRowIterator extends Iterator<Map<String, Object>>, AutoCloseable {
+    long count();
+
+    @Override void close();
+  }
+
+  /**
+   * Lazily converts one ResultSet row at a time, unlike {@link #queryRows}. Needed for
+   * {@code entity_org_bridge}/{@code canonical_org_entity}: {@code all_org_mentions} now totals
+   * on the order of 9-10M rows across the full org-type registry (dominated by
+   * transport.fmcsa_carriers' ~4.1M unresolved rows alone) -- confirmed live, materializing that
+   * into one Java List crashed the JVM natively under memory pressure. {@link #writeTable}'s
+   * writer already accepts a plain {@code Iterator}, so streaming straight from the ResultSet
+   * into it, one row at a time, keeps peak heap constant regardless of how large the registry
+   * grows. The queries that use this also carry an ORDER BY -- see their own comments for why.
+   */
+  private static final class ResultSetIterator implements CloseableRowIterator {
+    private final Statement stmt;
+    private final ResultSet rs;
+    private final String[] columnLabels;
+    private Boolean hasNextCache;
+    private long count;
+
+    ResultSetIterator(Connection conn, String sql) throws SQLException {
+      stmt = conn.createStatement();
+      rs = stmt.executeQuery(sql);
+      ResultSetMetaData md = rs.getMetaData();
+      int n = md.getColumnCount();
+      columnLabels = new String[n];
+      for (int i = 0; i < n; i++) {
+        columnLabels[i] = md.getColumnLabel(i + 1);
+      }
+    }
+
+    @Override public long count() {
+      return count;
+    }
+
+    @Override public boolean hasNext() {
+      if (hasNextCache == null) {
+        try {
+          hasNextCache = rs.next();
+        } catch (SQLException e) {
+          throw new RuntimeException(e);
+        }
+        if (!hasNextCache) {
+          close();
+        }
+      }
+      return hasNextCache;
+    }
+
+    @Override public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      hasNextCache = null;
+      try {
+        Map<String, Object> row = new LinkedHashMap<String, Object>();
+        for (int i = 0; i < columnLabels.length; i++) {
+          row.put(columnLabels[i], rs.getObject(i + 1));
+        }
+        count++;
+        return row;
+      } catch (SQLException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override public void close() {
+      try {
+        rs.close();
+      } catch (SQLException ignored) {
+        // best-effort cleanup
+      }
+      try {
+        stmt.close();
+      } catch (SQLException ignored) {
+        // best-effort cleanup
+      }
+    }
+  }
+
+  /**
+   * Computes canonical_org_entity's pivot as a streaming reduce in Java instead of via a wide
+   * SQL GROUP BY. The SQL version (COALESCE/MAX(CASE...) over 4 + 2*ORG_SOURCES.size() columns)
+   * needs DuckDB to hold an open aggregate accumulator per in-progress group across every one
+   * of those columns simultaneously -- confirmed live, this hard-OOM'd DuckDB's own query
+   * execution (not the JVM) once the registry grew past ~22 sources (48 pivoted columns),
+   * despite temp_directory being configured for spilling; a wide hash-aggregate apparently
+   * can't spill as gracefully as a plain sort can. The source query here does only a cheap
+   * ORDER BY canonical_entity_id scan (well-supported, spillable), and since matching rows for
+   * one entity are then always contiguous, this reduces one group at a time with a small,
+   * fixed-size accumulator -- no per-group state proportional to the registry's width, and no
+   * new-column-count sensitivity as more sources get added later.
+   */
+  private static final class PivotOrgIterator implements CloseableRowIterator {
+    private final ResultSetIterator src;
+    private final List<OrgSource> orgSources;
+    private Map<String, Object> lookahead;
+    private long count;
+
+    PivotOrgIterator(Connection conn, List<OrgSource> orgSources) throws SQLException {
+      this.orgSources = orgSources;
+      this.src = new ResultSetIterator(conn,
+          "SELECT canonical_entity_id, canonical_column, source_key, match_confidence, "
+          + "lei, sec_cik, gleif_legal_name, name_raw FROM all_org_mentions "
+          + "ORDER BY canonical_entity_id");
+      advanceLookahead();
+    }
+
+    private void advanceLookahead() {
+      lookahead = src.hasNext() ? src.next() : null;
+    }
+
+    @Override public long count() {
+      return count;
+    }
+
+    @Override public boolean hasNext() {
+      return lookahead != null;
+    }
+
+    @Override public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      Object groupId = lookahead.get("canonical_entity_id");
+      String gleifName = null;
+      String longestRaw = null;
+      String lei = null;
+      String secCik = null;
+      Map<String, String> perSourceKey = new HashMap<String, String>();
+      Map<String, String> perSourceConf = new HashMap<String, String>();
+
+      while (lookahead != null && groupId.equals(lookahead.get("canonical_entity_id"))) {
+        Map<String, Object> row = lookahead;
+        String rowGleif = (String) row.get("gleif_legal_name");
+        if (gleifName == null && rowGleif != null) {
+          gleifName = rowGleif;
+        }
+        String rowRaw = (String) row.get("name_raw");
+        if (rowRaw != null && (longestRaw == null || rowRaw.length() > longestRaw.length())) {
+          longestRaw = rowRaw;
+        }
+        String rowLei = (String) row.get("lei");
+        if (lei == null && rowLei != null) {
+          lei = rowLei;
+        }
+        String rowCik = (String) row.get("sec_cik");
+        if (secCik == null && rowCik != null) {
+          secCik = rowCik;
+        }
+        String canonicalColumn = (String) row.get("canonical_column");
+        if (canonicalColumn != null) {
+          perSourceKey.put(canonicalColumn, (String) row.get("source_key"));
+          perSourceConf.put(canonicalColumn, (String) row.get("match_confidence"));
+        }
+        advanceLookahead();
+      }
+
+      Map<String, Object> result = new LinkedHashMap<String, Object>();
+      result.put("canonical_entity_id", groupId);
+      result.put("canonical_name", gleifName != null ? gleifName : longestRaw);
+      result.put("lei", lei);
+      result.put("sec_cik", secCik);
+      for (OrgSource s : orgSources) {
+        result.put(s.canonicalColumn, perSourceKey.get(s.canonicalColumn));
+        result.put(s.canonicalColumn + "_confidence", perSourceConf.get(s.canonicalColumn));
+      }
+      count++;
+      return result;
+    }
+
+    @Override public void close() {
+      src.close();
+    }
   }
 
   private static String sha256Hex(String input) {

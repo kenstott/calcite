@@ -2676,6 +2676,19 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * Stamps a raw vectorized_chunks row with the generalized columns ref.vectorized_chunks
+   * expects, matching {@code ChunkOrganizer#transformSecChunkRow}'s field mapping. This
+   * table's raw output is committed there, not into this schema's own (retired) Iceberg
+   * location — see {@code SecSchemaFactory#materializeSecChunksToRef}.
+   */
+  private static void addGeneralizedChunkColumns(Map<String, Object> row, String cik,
+      String accession) {
+    row.put("source_schema", "sec");
+    row.put("source_table", "vectorized_chunks");
+    row.put("stringified_fk", cik + ":" + accession);
+  }
+
+  /**
    * Formats footnote references list as comma-separated string.
    */
   private String formatFootnoteRefs(List<String> refs) {
@@ -4873,6 +4886,7 @@ public class XbrlToParquetConverter implements FileConverter {
         chunk.put("enriched_text", para);
         chunk.put("content_type", "paragraph");
         chunk.put("financial_concepts", null);
+        addGeneralizedChunkColumns(chunk, cik, accession);
 
         chunks.add(chunk);
         paraSeq++;
@@ -5006,6 +5020,7 @@ public class XbrlToParquetConverter implements FileConverter {
         // embedding computed by DuckDB at materialization time
         data.put("content_type", "remark");
         data.put("financial_concepts", null);
+        addGeneralizedChunkColumns(data, cik, accession);
 
         dataList.add(data);
       }
@@ -5029,6 +5044,7 @@ public class XbrlToParquetConverter implements FileConverter {
         // embedding computed by DuckDB at materialization time
         data.put("content_type", "footnote");
         data.put("financial_concepts", null);
+        addGeneralizedChunkColumns(data, cik, accession);
 
         dataList.add(data);
       }
@@ -5267,6 +5283,7 @@ public class XbrlToParquetConverter implements FileConverter {
           chunk.put("speaker_name", earnings.get("speaker_name"));
           chunk.put("speaker_role", earnings.get("speaker_role"));
           chunk.put("paragraph_number", earnings.get("paragraph_number"));
+          addGeneralizedChunkColumns(chunk, cik, accession);
           allChunks.add(chunk);
         }
 
@@ -5350,6 +5367,7 @@ public class XbrlToParquetConverter implements FileConverter {
       chunk.put("speaker_name", earnings.get("speaker_name"));
       chunk.put("speaker_role", earnings.get("speaker_role"));
       chunk.put("paragraph_number", earnings.get("paragraph_number"));
+      addGeneralizedChunkColumns(chunk, cik, accession);
 
       chunksList.add(chunk);
     }
@@ -5718,6 +5736,7 @@ public class XbrlToParquetConverter implements FileConverter {
       // that will be populated by DuckDB quackformers at materialization time:
       // expression: "embed_jina(enriched_text)::FLOAT[768]"
 
+      addGeneralizedChunkColumns(data, cik, accessionNumber);
       dataList.add(data);
     }
 
@@ -7212,6 +7231,7 @@ public class XbrlToParquetConverter implements FileConverter {
         chunk.put("enriched_text", para);
         chunk.put("content_type", "paragraph");
         chunk.put("financial_concepts", null);
+        addGeneralizedChunkColumns(chunk, cik, accession);
 
         chunks.add(chunk);
         paraSeq++;

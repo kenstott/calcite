@@ -30,6 +30,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -49,10 +51,13 @@ import java.util.List;
  *
  * <p>No launcher config is required: S3 access is handed in by the file adapter via
  * {@link #configure} (it reuses the same credentials/endpoint the adapter already resolved), and
- * the codes location defaults to {@link #DEFAULT_CODES}. All of the following are optional
- * overrides (system properties — file/ code must not read the environment):
+ * the codes locations default to every schema in {@link #DEFAULT_SOURCE_SCHEMAS} — each source
+ * schema's codes live under its own bucket-rooted prefix (see {@link #defaultCodesArg}), so
+ * search spans all of them, not just {@code sec}. All of the following are optional overrides
+ * (system properties — file/ code must not read the environment):
  * <ul>
- *   <li>{@code calcite.vss.codes} — override the codes parquet glob</li>
+ *   <li>{@code calcite.vss.codes} — override the {@code read_parquet(...)} argument entirely:
+ *       either a single quoted glob (one schema) or a bracketed list of quoted globs (several)</li>
  *   <li>{@code calcite.vss.prefilter} — stage-1 Hamming candidate count (default 1000)</li>
  *   <li>{@code calcite.vss.s3.endpoint|region|accessKey|secretKey|useSsl} — S3 fallback for
  *       standalone use when {@link #configure} was not called</li>
@@ -67,13 +72,33 @@ public final class SemanticSearch {
 
   private static volatile Connection duck;
 
-  // Default codes location (the producer's standard output), Hive-partitioned by
-  // source_schema — see vss-local.py's CODES_DATASET. Phase-0 default stays scoped to the
-  // sec partition; cross-schema query scoping (a source_schema parameter or WHERE pushdown
-  // against the partition column) is deferred, not decided here. Overridable via
-  // -Dcalcite.vss.codes for non-standard buckets; not required in the normal deployment.
-  private static final String DEFAULT_CODES =
-      "s3://govdata-parquet-v1/sec/vectorized_chunk_codes/source_schema=sec/*.parquet";
+  // Source schemas the routine daily embed step (run-pool.sh's vss-local.sh backlog loop)
+  // actually produces codes for -- sec always runs, plus this list. Keep in sync with that
+  // loop: a schema only belongs here once vss-local.sh is actually embedding it, not merely
+  // once ChunkOrganizer starts chunking it (chunks with no codes yet would just find nothing
+  // in the prefilter, harmlessly, but there is no point scanning a partition that never has
+  // rows).
+  private static final List<String> DEFAULT_SOURCE_SCHEMAS =
+      Collections.unmodifiableList(Arrays.asList("sec", "ref", "fedregister", "cyber_threat"));
+
+  // Each source schema's codes live under its OWN bucket-rooted prefix -- e.g.
+  // sec/vectorized_chunk_codes/source_schema=sec vs. ref/vectorized_chunk_codes/
+  // source_schema=ref (see vss-local.py's codes_dataset_for()) -- not a shared parent
+  // directory, so one glob cannot span multiple schemas. read_parquet() takes a bracketed
+  // list of globs instead; this builds that list from DEFAULT_SOURCE_SCHEMAS.
+  private static String defaultCodesArg() {
+    StringBuilder sb = new StringBuilder("[");
+    for (int i = 0; i < DEFAULT_SOURCE_SCHEMAS.size(); i++) {
+      if (i > 0) {
+        sb.append(", ");
+      }
+      String schema = DEFAULT_SOURCE_SCHEMAS.get(i);
+      sb.append('\'').append("s3://govdata-parquet-v1/").append(schema)
+          .append("/vectorized_chunk_codes/source_schema=").append(schema)
+          .append("/*.parquet").append('\'');
+    }
+    return sb.append(']').toString();
+  }
 
   // S3 access captured from the file adapter's own resolved config (see configure()), so the
   // query reuses the same credentials/endpoint the adapter already set up — no launcher flags.
@@ -166,7 +191,10 @@ public final class SemanticSearch {
   static List<Object[]> searchVector(double[] v, int k) {
     try {
       long[] w = packBits(v);
-      String codes = System.getProperty("calcite.vss.codes", DEFAULT_CODES);
+      // calcite.vss.codes, when set, is the FULL read_parquet(...) argument verbatim -- a
+      // single quoted glob or a bracketed list of them -- not just a bare path, since the
+      // default is now itself a list (see defaultCodesArg).
+      String codes = System.getProperty("calcite.vss.codes", defaultCodesArg());
       int prefilter = Integer.getInteger("calcite.vss.prefilter", 1000);
 
       StringBuilder ham = new StringBuilder();

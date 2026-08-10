@@ -1838,13 +1838,49 @@ partitionedTables:
       # tables with a source: block. This table has none — EntityBridgeListener writes it
       # directly via MaterializationWriterFactory, so the fallback path never executes.
       targetTableId: entity_org_bridge
+      # Declared here (distinct from this table's own columns: above, which is Calcite's row
+      # type) so IcebergMaterializationWriter creates the table from these types directly
+      # instead of inferring from the first written batch's actual data. Confirmed live: with
+      # no columns declared here, that inference path hard-crashes whenever a column is
+      # genuinely all-null across the entire result set (not just an unlucky sample) -- e.g.
+      # sec_cik, populated only by match_method='exact_ein', when EIN matching happens to
+      # produce zero matches in a given run. Keep this list in sync with the columns: above.
+      columns:
+        - name: source_schema
+          type: VARCHAR
+        - name: source_table
+          type: VARCHAR
+        - name: source_column
+          type: VARCHAR
+        - name: source_key
+          type: VARCHAR
+        - name: source_name_raw
+          type: VARCHAR
+        - name: source_name_normalized
+          type: VARCHAR
+        - name: lei
+          type: VARCHAR
+        - name: sec_cik
+          type: VARCHAR
+        - name: gleif_legal_name
+          type: VARCHAR
+        - name: match_method
+          type: VARCHAR
+        - name: match_confidence
+          type: VARCHAR
+        - name: match_score
+          type: DOUBLE
+        - name: match_run_id
+          type: VARCHAR
       output:
         pattern: ""
       partition:
         columns: []
       options:
         compression: snappy
-        batchSize: 50000
+        # See canonical_org_entity's batchSize comment -- same worker, same fix, applied
+        # uniformly across all four entity-resolution tables written by this run.
+        batchSize: 5000
         stagingMode: local
       iceberg:
         <<: *compaction_defaults
@@ -1925,13 +1961,42 @@ partitionedTables:
       enabled: true
       format: iceberg
       targetTableId: entity_person_bridge
+      # See entity_org_bridge's materialize.columns comment for why this is declared here.
+      # Keep in sync with the columns: above.
+      columns:
+        - name: source_a_schema
+          type: VARCHAR
+        - name: source_a_table
+          type: VARCHAR
+        - name: source_a_key
+          type: VARCHAR
+        - name: source_a_name_raw
+          type: VARCHAR
+        - name: source_b_schema
+          type: VARCHAR
+        - name: source_b_table
+          type: VARCHAR
+        - name: source_b_key
+          type: VARCHAR
+        - name: source_b_name_raw
+          type: VARCHAR
+        - name: match_method
+          type: VARCHAR
+        - name: match_confidence
+          type: VARCHAR
+        - name: match_score
+          type: DOUBLE
+        - name: match_run_id
+          type: VARCHAR
       output:
         pattern: ""
       partition:
         columns: []
       options:
         compression: snappy
-        batchSize: 50000
+        # See canonical_org_entity's batchSize comment -- same worker, same fix, applied
+        # uniformly across all four entity-resolution tables written by this run.
+        batchSize: 5000
         stagingMode: local
       iceberg:
         <<: *compaction_defaults
@@ -2071,6 +2136,63 @@ partitionedTables:
       - name: sba_lender_name_confidence
         type: string
         nullable: true
+      # Coverage-gap audit (2026-08-09) additions below.
+      - name: sec_manager_cik
+        type: string
+        nullable: true
+        comment: Form 13F institutional investment manager, SEC's own stable per-filer ID
+      - name: sec_manager_cik_confidence
+        type: string
+        nullable: true
+      - name: patents_trademark_owner_id
+        type: string
+        nullable: true
+        comment: USPTO trademark applicant/owner (own_id), org-shaped rows
+      - name: patents_trademark_owner_id_confidence
+        type: string
+        nullable: true
+      - name: fda_device_recalling_firm
+        type: string
+        nullable: true
+        comment: Structural twin of fda_drug_recalling_firm below, for medical device recalls
+      - name: fda_device_recalling_firm_confidence
+        type: string
+        nullable: true
+      - name: fda_labeler_name
+        type: string
+        nullable: true
+        comment: Lossy potential — product_ndc is per-product, many products share one labeler
+      - name: fda_labeler_name_confidence
+        type: string
+        nullable: true
+      - name: nsf_herd_inst_id
+        type: string
+        nullable: true
+        comment: NSF HERD survey institution; ipeds_unitid below is the same real institution via a different registry
+      - name: nsf_herd_inst_id_confidence
+        type: string
+        nullable: true
+      - name: ipeds_unitid
+        type: string
+        nullable: true
+        comment: NCES IPEDS institution directory
+      - name: ipeds_unitid_confidence
+        type: string
+        nullable: true
+      - name: clinical_trials_nct_id
+        type: string
+        nullable: true
+        comment: ClinicalTrials.gov lead sponsor
+      - name: clinical_trials_nct_id_confidence
+        type: string
+        nullable: true
+      - name: fda_drug_recalling_firm
+        type: string
+        nullable: true
+        comment: FDA drug (not device) recall — recall_number is per-recall, not per-firm
+      - name: fda_drug_recalling_firm_confidence
+        type: string
+        nullable: true
 
     hooks:
       enabled: true
@@ -2079,13 +2201,120 @@ partitionedTables:
       enabled: true
       format: iceberg
       targetTableId: canonical_org_entity
+      # See entity_org_bridge's materialize.columns comment for why this is declared here
+      # (distinct from the columns: above, which is Calcite's row type) -- this table's
+      # per-source FK/confidence columns are each non-null only for that one source's rows,
+      # so they're exactly as exposed to the same all-null-column inference crash. Keep in
+      # sync with the columns: above.
+      columns:
+        - name: canonical_entity_id
+          type: VARCHAR
+        - name: canonical_name
+          type: VARCHAR
+        - name: lei
+          type: VARCHAR
+        - name: sec_cik
+          type: VARCHAR
+        - name: fec_committee_id
+          type: VARCHAR
+        - name: fec_committee_id_confidence
+          type: VARCHAR
+        - name: sec_reporting_person_cik
+          type: VARCHAR
+        - name: sec_reporting_person_cik_confidence
+          type: VARCHAR
+        - name: patents_assignee_id
+          type: VARCHAR
+        - name: patents_assignee_id_confidence
+          type: VARCHAR
+        - name: fda_sponsor_name
+          type: VARCHAR
+        - name: fda_sponsor_name_confidence
+          type: VARCHAR
+        - name: ghg_parent_company_name
+          type: VARCHAR
+        - name: ghg_parent_company_name_confidence
+          type: VARCHAR
+        - name: cms_paying_entity_name
+          type: VARCHAR
+        - name: cms_paying_entity_name_confidence
+          type: VARCHAR
+        - name: eia_utility_id
+          type: VARCHAR
+        - name: eia_utility_id_confidence
+          type: VARCHAR
+        - name: eia_coal_controller_name
+          type: VARCHAR
+        - name: eia_coal_controller_name_confidence
+          type: VARCHAR
+        - name: eia_coal_operator_name
+          type: VARCHAR
+        - name: eia_coal_operator_name_confidence
+          type: VARCHAR
+        - name: fmcsa_dot_number
+          type: VARCHAR
+        - name: fmcsa_dot_number_confidence
+          type: VARCHAR
+        - name: faa_registrant_name
+          type: VARCHAR
+        - name: faa_registrant_name_confidence
+          type: VARCHAR
+        - name: exempt_org_ein
+          type: VARCHAR
+        - name: exempt_org_ein_confidence
+          type: VARCHAR
+        - name: sba_borrower_name
+          type: VARCHAR
+        - name: sba_borrower_name_confidence
+          type: VARCHAR
+        - name: sba_lender_name
+          type: VARCHAR
+        - name: sba_lender_name_confidence
+          type: VARCHAR
+        - name: sec_manager_cik
+          type: VARCHAR
+        - name: sec_manager_cik_confidence
+          type: VARCHAR
+        - name: patents_trademark_owner_id
+          type: VARCHAR
+        - name: patents_trademark_owner_id_confidence
+          type: VARCHAR
+        - name: fda_device_recalling_firm
+          type: VARCHAR
+        - name: fda_device_recalling_firm_confidence
+          type: VARCHAR
+        - name: fda_labeler_name
+          type: VARCHAR
+        - name: fda_labeler_name_confidence
+          type: VARCHAR
+        - name: nsf_herd_inst_id
+          type: VARCHAR
+        - name: nsf_herd_inst_id_confidence
+          type: VARCHAR
+        - name: ipeds_unitid
+          type: VARCHAR
+        - name: ipeds_unitid_confidence
+          type: VARCHAR
+        - name: clinical_trials_nct_id
+          type: VARCHAR
+        - name: clinical_trials_nct_id_confidence
+          type: VARCHAR
+        - name: fda_drug_recalling_firm
+          type: VARCHAR
+        - name: fda_drug_recalling_firm_confidence
+          type: VARCHAR
       output:
         pattern: ""
       partition:
         columns: []
       options:
         compression: snappy
-        batchSize: 50000
+        # batchSize reduced from 50000: at 32 wide columns (4 + 2*ORG_SOURCES.size()) and up to
+        # ~9M rows, 50000-row Java chunks (IcebergMaterializationWriter.writeBatch) held enough
+        # heap that the worker's -Xmx3g budget OOM'd in the very next phase (pivotPerson) on a live
+        # 2026-08-09 run, not during this write itself -- smaller chunks reduce the garbage/
+        # fragmentation this write leaves behind for the rest of the same long-lived process.
+        batchSize: 5000
         stagingMode: local
       iceberg:
         <<: *compaction_defaults
@@ -2156,6 +2385,21 @@ partitionedTables:
       - name: patents_individual_assignee_id_confidence
         type: string
         nullable: true
+      # Coverage-gap audit (2026-08-09) additions below.
+      - name: officials_member_bioguide_id
+        type: string
+        nullable: true
+        comment: House/Senate member, Congress.gov's own stable per-member ID
+      - name: officials_member_bioguide_id_confidence
+        type: string
+        nullable: true
+      - name: officials_judge_jid
+        type: string
+        nullable: true
+        comment: Article III federal judge, FJC's own stable per-judge ID
+      - name: officials_judge_jid_confidence
+        type: string
+        nullable: true
 
     hooks:
       enabled: true
@@ -2164,13 +2408,52 @@ partitionedTables:
       enabled: true
       format: iceberg
       targetTableId: canonical_person_entity
+      # See entity_org_bridge's materialize.columns comment for why this is declared here.
+      # Keep in sync with the columns: above.
+      columns:
+        - name: canonical_entity_id
+          type: VARCHAR
+        - name: canonical_name
+          type: VARCHAR
+        - name: fec_candidate_id
+          type: VARCHAR
+        - name: fec_candidate_id_confidence
+          type: VARCHAR
+        - name: sec_reporting_person_cik
+          type: VARCHAR
+        - name: sec_reporting_person_cik_confidence
+          type: VARCHAR
+        - name: cms_physician_profile_id
+          type: VARCHAR
+        - name: cms_physician_profile_id_confidence
+          type: VARCHAR
+        - name: faa_registrant_name
+          type: VARCHAR
+        - name: faa_registrant_name_confidence
+          type: VARCHAR
+        - name: patents_individual_assignee_id
+          type: VARCHAR
+        - name: patents_individual_assignee_id_confidence
+          type: VARCHAR
+        - name: officials_member_bioguide_id
+          type: VARCHAR
+        - name: officials_member_bioguide_id_confidence
+          type: VARCHAR
+        - name: officials_judge_jid
+          type: VARCHAR
+        - name: officials_judge_jid_confidence
+          type: VARCHAR
       output:
         pattern: ""
       partition:
         columns: []
       options:
         compression: snappy
-        batchSize: 50000
+        # batchSize reduced from 50000: this table + entity_org_bridge/canonical_org_entity peaked the
+        # worker's -Xmx3g heap during a 2026-08-09 live run (person-track OOM right after this
+        # table's write) once the org-type registry grew to 22 sources / ~9-10M mention rows --
+        # see canonical_org_entity's own comment for the full rationale; same fix applies here.
+        batchSize: 5000
         stagingMode: local
       iceberg:
         <<: *compaction_defaults
@@ -2280,10 +2563,33 @@ partitionedTables:
         type: integer
         nullable: true
         comment: Document-structure column, populated only for document-blob sources; null for row_concat
+      - name: content_type
+        type: string
+        nullable: true
+        comment: SEC document-chunk content classification (paragraph, table, list, heading, mixed); null for row_concat and other document-blob sources
       # Wide per-source FK columns: one nullable column per included source table,
       # matching that table's own PK shape, populated only on rows from that table.
       # Mechanically generated per source at build time, not exhaustively hand-curated --
       # only the sources actually onboarded so far get a column.
+      #
+      # cik/accession_number/filing_date are SEC's own natural key + metadata, not
+      # renamed to fit the generic pattern -- per semantic-search-plan.md "Promoting
+      # vectorized_chunks": "cik/accession_number stay as first-class columns (SEC's own
+      # natural key, not renamed) and become one instance of the wide per-table-FK
+      # pattern". A pair, since a filing needs both to identify uniquely (matching
+      # stringified_fk = '<cik>:<accession_number>' for source_schema='sec' rows).
+      - name: cik
+        type: string
+        nullable: true
+        comment: Populated when source_schema='sec'; SEC Central Index Key (part of the filing's natural key, paired with accession_number)
+      - name: accession_number
+        type: string
+        nullable: true
+        comment: Populated when source_schema='sec'; SEC accession number (part of the filing's natural key, paired with cik)
+      - name: filing_date
+        type: string
+        nullable: true
+        comment: Populated when source_schema='sec'; date the filing was submitted to SEC (ISO 8601)
       - name: ref_naics_code
         type: string
         nullable: true
@@ -2304,28 +2610,28 @@ partitionedTables:
       tableLifecycleListener: "org.apache.calcite.adapter.govdata.ref.ChunkOrganizer"
 
     # Deliberately UNPARTITIONED, not partitioned by source_schema as originally designed.
-    # This table has no source: block, so its Iceberg schema is deferred-inferred from
-    # whichever partition flushes first (IcebergMaterializationWriter.ensureTableCreated,
-    # FILE-186) -- inference does NOT union columns across partitions. With
-    # partition.columns: [source_schema], the first-flushing source_schema's row shape
-    # (e.g. plain row-concat rows with no paragraph_continuation) silently fixed the whole
-    # table's schema forever; every other source_schema's columns not in that first shape
-    # were dropped on write with no error. Verified live: fedregister_document_number and
-    # paragraph_continuation were both silently missing from the materialized table.
-    # canonical_org_entity/canonical_person_entity (also deferred-schema, also carrying
-    # columns that vary by source) hit the same shape-varies-per-row problem and are
-    # unpartitioned for exactly this reason -- matching that precedent here fixes it, since
-    # ChunkOrganizer always writes the complete current picture in one writeBatch call
-    # anyway (overwritePartitions: true on an empty partition list = full-table replace
-    # each run, same semantics those tables already rely on).
+    # This table has no source: block, so its Iceberg schema is deferred-inferred from the
+    # data (IcebergMaterializationWriter.ensureTableCreated, FILE-186). Every flush now checks
+    # the batch against the table's current schema and evolves it (adds nullable columns) when
+    # the batch introduces columns the table doesn't have yet -- see
+    # IcebergMaterializationWriter.evolveSchemaForNewColumns. That is what makes
+    # partition.columns: [source_schema] safe here: each source_schema's row shape can differ
+    # (e.g. document-blob sources carry paragraph_continuation, row-concat sources don't) without
+    # one partition's shape silently fixing the whole table's schema and dropping columns from
+    # every other partition (the bug this table hit before evolution existed -- verified live:
+    # fedregister_document_number and paragraph_continuation were both silently missing).
+    # Partitioning also scopes overwritePartitions: true to the partition(s) actually present in
+    # a given write, not the whole table -- required so that ChunkOrganizer's runs (which only
+    # ever write source_schema in {ref, fedregister, cyber_threat, ...}) can never touch, let
+    # alone replace, the sec.vectorized_chunks-backfilled source_schema=sec partition.
     materialize:
       enabled: true
       format: iceberg
       targetTableId: vectorized_chunks
       output:
-        pattern: ""
+        pattern: "source_schema=*/"
       partition:
-        columns: []
+        columns: [source_schema]
       options:
         compression: snappy
         batchSize: 50000
@@ -2505,6 +2811,11 @@ constraints:
   vectorized_chunks:
     primaryKey: [source_schema, source_table, stringified_fk, sequence]
     foreignKeys:
+      - columns: [cik, accession_number]
+        targetSchema: "${SEC_SCHEMA_NAME:sec}"
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+        comment: Populated when source_schema='sec'
       - columns: [ref_naics_code]
         targetTable: naics
         targetColumns: [naics_code]

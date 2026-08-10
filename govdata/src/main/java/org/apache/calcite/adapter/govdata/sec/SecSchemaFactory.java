@@ -1294,6 +1294,88 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     LOGGER.info("Iceberg materialization complete: {} tables, {} batches successful",
         tablesProcessed, totalBatchesSuccessful);
+
+    materializeSecChunksToRef(operand, secParquetDir, stagedSourceFiles);
+  }
+
+  /**
+   * Commits SEC's vectorized_chunks raw output into {@code ref.vectorized_chunks} — the
+   * promoted, cross-schema semantic-search index (see semantic-search-plan.md "Promoting
+   * vectorized_chunks"). sec-schema.yaml's own {@code vectorized_chunks} table declares
+   * {@code materialize.enabled: false} so the loop above never builds a second, competing
+   * Iceberg table at the sec warehouse location; this method is the sole ongoing writer of
+   * SEC filing chunks, targeting the ref warehouse's existing table instead.
+   *
+   * <p>Same raw {@code *_chunks.parquet} files {@link XbrlToParquetConverter} already writes
+   * under the sec warehouse (only the Iceberg commit target changes). Never creates or drops
+   * the ref table: {@link IcebergMaterializer#ensureTableExists} only evolves (adds nullable
+   * columns) or loads it as-is, and this config's column count never exceeds ref.vectorized_
+   * chunks's, so the drop-and-recreate branch is unreachable here. Writes are pure Iceberg
+   * appends (see {@code IcebergTableWriter#commitDataFiles}), never a partition overwrite, so
+   * a run here can only add to the {@code source_schema=sec} partition — matching ref-
+   * schema.yaml's comment that no writer may touch another source_schema's partition.
+   */
+  private void materializeSecChunksToRef(Map<String, Object> operand, String secParquetDir,
+      List<String> stagedSourceFiles) {
+    List<Map<String, Object>> partitionedTables = loadPartitionedTablesFromYaml();
+    Map<String, Object> tableConfig = null;
+    for (Map<String, Object> tc : partitionedTables) {
+      if ("vectorized_chunks".equals(tc.get("name"))) {
+        tableConfig = tc;
+        break;
+      }
+    }
+    if (tableConfig == null || !isTableEnabled(tableConfig)) {
+      LOGGER.debug("Skipping SEC->ref chunk materialization: vectorized_chunks not enabled");
+      return;
+    }
+    String pattern = (String) tableConfig.get("pattern");
+    if (pattern == null) {
+      LOGGER.warn("No pattern defined for table 'vectorized_chunks' — skipping SEC->ref chunk "
+          + "materialization");
+      return;
+    }
+
+    String base = GovDataUtils.getParquetDir(operand);
+    if (base == null) {
+      LOGGER.warn("No parquet base directory configured — skipping SEC->ref chunk materialization");
+      return;
+    }
+    String refWarehousePath =
+        StorageProviderFactory.normalizeForHadoop(base.endsWith("/") ? base + "ref" : base + "/ref");
+
+    cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
+
+    IncrementalTracker incrementalTracker =
+        PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(refWarehousePath, storageProvider, incrementalTracker);
+    materializer.setSourceActivityPhase("staging");
+
+    Map<String, String> fixedPartitionValues = Collections.singletonMap("source_schema", "sec");
+    IcebergMaterializer.MaterializationConfig config =
+        buildMaterializationConfig("vectorized_chunks", "vectorized_chunks", secParquetDir,
+            pattern, tableConfig, operand, refWarehousePath, stagedSourceFiles,
+            fixedPartitionValues);
+
+    try {
+      IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
+      if (result.isTableRecreated()) {
+        LOGGER.error("ref.vectorized_chunks was recreated during SEC chunk materialization — "
+            + "this should be unreachable (this config's column count never exceeds the "
+            + "existing table's); investigate before the next run");
+      }
+      if (result.getSuccessCount() > 0) {
+        LOGGER.info("Materialized SEC chunks into ref.vectorized_chunks: {} batches successful, "
+            + "{} failed, {} skipped",
+            result.getSuccessCount(), result.getFailedCount(), result.getSkippedCount());
+      }
+    } catch (Exception e) {
+      LOGGER.error("Failed to materialize SEC chunks into ref.vectorized_chunks: {}", e.getMessage());
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Stack trace:", e);
+      }
+    }
   }
 
   /**
@@ -1306,6 +1388,20 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       String tableName, String icebergTableName, String baseDir, String pattern,
       Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath,
       List<String> stagedSourceFiles) {
+    return buildMaterializationConfig(tableName, icebergTableName, baseDir, pattern, tableConfig,
+        operand, warehousePath, stagedSourceFiles, null);
+  }
+
+  /**
+   * @param fixedPartitionValues Partition column values constant for every row this config
+   *     writes (e.g. a discriminator column the source pattern has no directory segment for),
+   *     merged into the per-batch partition values at write time. {@code null} for the normal
+   *     per-schema materialize path, where every partition column comes from the batch itself.
+   */
+  private IcebergMaterializer.MaterializationConfig buildMaterializationConfig(
+      String tableName, String icebergTableName, String baseDir, String pattern,
+      Map<String, Object> tableConfig, Map<String, Object> operand, String warehousePath,
+      List<String> stagedSourceFiles, Map<String, String> fixedPartitionValues) {
 
     // Build source pattern
     String sourcePattern = storageProvider.resolvePath(baseDir, pattern);
@@ -1469,6 +1565,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .accessionColumn("accession_number")
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
+        .fixedPartitionValues(fixedPartitionValues)
         .description(tableName)
         .build();
   }

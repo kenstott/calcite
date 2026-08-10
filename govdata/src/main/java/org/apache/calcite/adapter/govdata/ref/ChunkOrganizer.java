@@ -66,6 +66,13 @@ public class ChunkOrganizer implements TableLifecycleListener {
 
   private static final String TRIGGER_TABLE = "vectorized_chunks";
 
+  // Per-batch row cap for the SEC backfill's real-write path (see backfillSecChunks): bounds
+  // peak JVM heap for one batch's full row content (chunk_text/enriched_text included) to a
+  // constant regardless of how large a single year's backlog is -- some SEC years run into the
+  // millions of rows / multiple GiB, far past what one unbatched SELECT s.* can safely hold in
+  // a Java List at once.
+  private static final int SEC_BACKFILL_BATCH_SIZE = 5000;
+
   // Naive fixed-window chunk size / overlap over the delimited column concatenation (row-concat
   // mode only -- document-blob mode uses SemanticTextChunker's own target/min/max sizing).
   // Matches the plan's stated default; tunable, not tied to any model's token limit here
@@ -140,16 +147,244 @@ public class ChunkOrganizer implements TableLifecycleListener {
       }
       if (chunkRows.isEmpty()) {
         LOGGER.info("ChunkOrganizer: no chunks produced, nothing to write");
-        return;
+      } else {
+        writeTable(context, TRIGGER_TABLE, chunkRows);
+        LOGGER.info("ChunkOrganizer: wrote {} chunk rows to ref.vectorized_chunks",
+            chunkRows.size());
       }
-      writeTable(context, TRIGGER_TABLE, chunkRows);
-      LOGGER.info("ChunkOrganizer: wrote {} chunk rows to ref.vectorized_chunks",
-          chunkRows.size());
+      backfillSecChunks(context, conn, base);
     } catch (Exception e) {
       // afterTable declares no throws clause; this is a best-effort post-processing pass over
       // already-committed data, so a failure here must not fail the ref schema's own ETL run.
       LOGGER.error("ChunkOrganizer: chunk organization failed", e);
     }
+  }
+
+  // ========================================================================
+  // sec.vectorized_chunks -> ref.vectorized_chunks backfill (one-time migration)
+  // ========================================================================
+  //
+  // See semantic-search-plan.md "Promoting vectorized_chunks". This is NOT a source in
+  // ROW_CONCAT_SOURCES/DOCUMENT_BLOB_SOURCES: SEC's chunks are already organized (chunked +
+  // enriched) by DocumentETLProcessor, this just reshapes and copies them into the shared
+  // table. Off by default (GOVDATA_CHUNKS_BACKFILL) so routine ref schema runs never pay for
+  // it. Time-boxed and resumable across separate invocations by construction: each year is
+  // migrated via an anti-join against chunk_id values already present under
+  // source_schema='sec', so re-running (whether after a clean stop at the time budget or an
+  // interrupted/crashed run) only ever migrates what's still missing -- no separate progress
+  // marker needed, same anti-join idea vss-local.py's cmd_backlog already uses for embeddings.
+  //
+  // Controlled by env vars, not the schema YAML/ModelOperand: this is a one-time operator
+  // switch for a migration run, not per-schema adapter config, and GovDataSchemaFactory's
+  // operand pipeline only carries a narrow, curated set of keys (dataSource/directory/tables/
+  // casing/engine) through to what ModelOperand captures -- a schema-level custom key like this
+  // one is silently unreachable there regardless of YAML declaration. GOVDATA_CHUNKS_BACKFILL /
+  // the ETL_ prefix are exactly the run/infra-flag category model-operand-guard.py's own
+  // EXEMPT_NAMES/EXEMPT_PREFIX carve out for direct System.getenv reads.
+
+  private void backfillSecChunks(TableContext context, Connection conn, String base)
+      throws SQLException, IOException {
+    boolean enabled = "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"));
+    LOGGER.info("ChunkOrganizer: SEC backfill env check: GOVDATA_CHUNKS_BACKFILL={}", enabled);
+    if (!enabled) {
+      return;
+    }
+    boolean dryRun = "true".equalsIgnoreCase(System.getenv("ETL_CHUNKS_BACKFILL_DRY_RUN"));
+    long maxSeconds = 1800L;
+    String maxSecondsEnv = System.getenv("ETL_CHUNKS_BACKFILL_MAX_SECONDS");
+    if (maxSecondsEnv != null && !maxSecondsEnv.trim().isEmpty()) {
+      try {
+        maxSeconds = Long.parseLong(maxSecondsEnv.trim());
+      } catch (NumberFormatException e) {
+        LOGGER.warn("ChunkOrganizer: ETL_CHUNKS_BACKFILL_MAX_SECONDS='{}' not a number, "
+            + "using default {}s", maxSecondsEnv, maxSeconds);
+      }
+    }
+
+    String secLoc = base + "/sec/vectorized_chunks";
+    String destLoc = base + "/" + context.getSchemaName() + "/" + TRIGGER_TABLE;
+
+    int minYear;
+    int maxYear;
+    String rangeSql = "SELECT MIN(year) AS min_year, MAX(year) AS max_year FROM iceberg_scan('"
+        + secLoc + "', allow_moved_paths=true)";
+    List<Map<String, Object>> range = queryRows(conn, rangeSql);
+    Object minObj = range.isEmpty() ? null : range.get(0).get("min_year");
+    Object maxObj = range.isEmpty() ? null : range.get(0).get("max_year");
+    if (minObj == null || maxObj == null) {
+      LOGGER.info("ChunkOrganizer: SEC backfill enabled but sec.vectorized_chunks is empty "
+          + "or unreadable, nothing to migrate");
+      return;
+    }
+    minYear = ((Number) minObj).intValue();
+    maxYear = ((Number) maxObj).intValue();
+
+    LOGGER.info("ChunkOrganizer: SEC backfill starting, years {}-{}, dryRun={}, "
+        + "maxSeconds={}", minYear, maxYear, dryRun, maxSeconds);
+    java.time.Instant start = java.time.Instant.now();
+    int yearsDone = 0;
+    int yearsSkipped = 0;
+    long totalRows = 0;
+    for (int year = minYear; year <= maxYear; year++) {
+      if (dryRun) {
+        // Dry-run only ever reports a count, so let DuckDB compute it server-side and never
+        // materialize row content (chunk_text/enriched_text) into the JVM at all. Recent SEC
+        // years run into the millions of rows / multiple GiB (2003-2022 combined is a few MB;
+        // 2023 alone is 2.7GiB) -- pulling that through as SELECT s.* into a Java List is what
+        // actually exhausted heap, well before the time budget below ever got a chance to bite.
+        String countSql = "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc
+            + "', allow_moved_paths=true) s WHERE s.year = " + year + " AND NOT EXISTS ("
+            + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
+            + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)";
+        long count = ((Number) queryRows(conn, countSql).get(0).get("n")).longValue();
+        if (count == 0) {
+          yearsSkipped++;
+        } else {
+          LOGGER.info("ChunkOrganizer: SEC backfill dry-run year {}: {} rows would be written",
+              year, count);
+          totalRows += count;
+          yearsDone++;
+        }
+        long elapsedSeconds =
+            java.time.Duration.between(start, java.time.Instant.now()).getSeconds();
+        if (elapsedSeconds >= maxSeconds && year < maxYear) {
+          LOGGER.info("ChunkOrganizer: SEC backfill time budget ({}s) reached after year {}; "
+              + "{} year(s) remaining, will resume on next run", maxSeconds, year,
+              maxYear - year);
+          return;
+        }
+        continue;
+      }
+
+      // Real write: page through the year in bounded batches. Peak heap for one batch stays
+      // constant regardless of the year's total backlog. Each batch is written and committed
+      // immediately, so a mid-year time-budget stop is safe to resume from.
+      //
+      // Resume state is NOT a chunk_id high-water mark: chunk_id is unique within a year but
+      // NOT across years -- the same accession/chunk occasionally appears under two different
+      // `year` values upstream (a data-quality property of sec.vectorized_chunks, confirmed
+      // live: e.g. accession 0000103730-24-000034's chunks are filed under both year=2023 and
+      // year=2024). A MAX(chunk_id)-among-already-migrated cursor treats any such collision as
+      // proof everything below it was migrated for THIS year, when it may only mean an EARLIER
+      // year's migration happened to write a chunk_id that collides with one of this year's --
+      // silently skipping the rest of the year. Measured live: this dropped ~4.7M of 9.6M rows
+      // (years 2024-2025) before being caught by a post-migration row-count audit.
+      //
+      // Nor is it a per-batch anti-join against iceberg_scan(secLoc): re-running that same
+      // WHERE-year-AND-NOT-EXISTS query, unindexed, once per 5000-row batch means DuckDB has to
+      // rescan this year's whole remaining backlog on EVERY batch to find the next one -- also
+      // measured live, ~80s/batch once a year reached a few hundred thousand still-unmigrated
+      // rows, which does not finish a multi-million-row year in practical time.
+      //
+      // The rows still needing migration are computed ONCE per year (one full-row anti-join
+      // against destLoc) into a local DuckDB temp table. Every batch after that pages the
+      // already-materialized table -- no further S3/Iceberg scanning, so batch cost stays flat
+      // regardless of how many batches the year takes. A cheap COUNT-only comparison first
+      // skips this entirely for years already fully migrated, so a `starting`-to-first-batch
+      // resume doesn't pay a full scan for every one of the 24 years on every future invocation.
+      // This materialization is what backfill mode's raised memory_limit (see openDuckDb) is
+      // for: a full year runs ~6GB of raw chunk_text/enriched_text through it at once.
+      long yearSourceCount = ((Number) queryRows(conn,
+          "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) "
+          + "WHERE year = " + year).get(0).get("n")).longValue();
+      long yearMigratedCount = ((Number) queryRows(conn,
+          "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
+          + "WHERE s.year = " + year + " AND EXISTS ("
+          + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
+          + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)").get(0).get("n"))
+          .longValue();
+      if (yearMigratedCount >= yearSourceCount) {
+        yearsSkipped++;
+        continue;
+      }
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("DROP TABLE IF EXISTS tmp_sec_backfill_todo");
+        stmt.execute("CREATE TEMP TABLE tmp_sec_backfill_todo AS "
+            + "SELECT s.* FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
+            + "WHERE s.year = " + year + " AND NOT EXISTS ("
+            + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
+            + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)");
+      }
+      boolean yearHasWork = false;
+      while (true) {
+        // No chunk_id > cursor filter: rows are DELETEd from tmp_sec_backfill_todo right after
+        // being written (below), so the table shrinks as the year progresses instead of every
+        // batch re-sorting the same untouched rows it already passed over -- a
+        // "no chunk_id > cursor" version still costs O(remaining size) per batch even off a
+        // local temp table (a plain ORDER BY + LIMIT with no index still scans everything ahead
+        // of it). Deleting keeps each batch's scan bounded to what is actually still left.
+        String sql = "SELECT * FROM tmp_sec_backfill_todo ORDER BY chunk_id LIMIT "
+            + SEC_BACKFILL_BATCH_SIZE;
+        List<Map<String, Object>> sourceRows = queryRows(conn, sql);
+        if (sourceRows.isEmpty()) {
+          break;
+        }
+        yearHasWork = true;
+        List<Map<String, Object>> destRows = new ArrayList<Map<String, Object>>(sourceRows.size());
+        for (Map<String, Object> row : sourceRows) {
+          destRows.add(transformSecChunkRow(row));
+        }
+        writeAppendBatch(context, TRIGGER_TABLE, destRows);
+        totalRows += destRows.size();
+        String cursor = String.valueOf(sourceRows.get(sourceRows.size() - 1).get("chunk_id"));
+        try (Statement stmt = conn.createStatement()) {
+          stmt.execute("DELETE FROM tmp_sec_backfill_todo WHERE chunk_id <= '"
+              + cursor.replace("'", "''") + "'");
+        }
+        LOGGER.info("ChunkOrganizer: SEC backfill year {}: wrote {} rows (batch, cursor={})",
+            year, destRows.size(), cursor);
+
+        long elapsedSeconds =
+            java.time.Duration.between(start, java.time.Instant.now()).getSeconds();
+        if (elapsedSeconds >= maxSeconds) {
+          LOGGER.info("ChunkOrganizer: SEC backfill time budget ({}s) reached mid-year {}; "
+              + "will resume on next run", maxSeconds, year);
+          return;
+        }
+      }
+      if (yearHasWork) {
+        yearsDone++;
+      } else {
+        yearsSkipped++;
+      }
+    }
+    LOGGER.info("ChunkOrganizer: SEC backfill complete: {} year(s) migrated ({} rows), "
+        + "{} year(s) already up to date", yearsDone, totalRows, yearsSkipped);
+  }
+
+  /** Reshapes one sec.vectorized_chunks row into ref.vectorized_chunks's generalized shape.
+   *  chunk_id is preserved as-is (not regenerated) so vectorized_chunk_codes' existing
+   *  embeddings, keyed by this same chunk_id, keep resolving after the migration. */
+  static Map<String, Object> transformSecChunkRow(Map<String, Object> row) {
+    Object cik = row.get("cik");
+    Object accessionNumber = row.get("accession_number");
+    Object filingDate = row.get("filing_date");
+    Map<String, Object> out = new LinkedHashMap<String, Object>();
+    out.put("chunk_id", row.get("chunk_id"));
+    out.put("source_schema", "sec");
+    out.put("source_table", "vectorized_chunks");
+    out.put("stringified_fk", cik + ":" + accessionNumber);
+    out.put("sequence", row.get("sequence"));
+    out.put("source_type", row.get("source_type"));
+    out.put("chunk_text", row.get("chunk_text"));
+    out.put("enriched_text", row.get("enriched_text"));
+    out.put("section", row.get("section"));
+    out.put("subsection", row.get("subsection"));
+    out.put("section_path", row.get("section_path"));
+    out.put("paragraph_continuation", row.get("paragraph_continuation"));
+    out.put("paragraph_number", row.get("paragraph_number"));
+    out.put("content_type", row.get("content_type"));
+    out.put("financial_concepts", row.get("financial_concepts"));
+    out.put("exhibit_number", row.get("exhibit_number"));
+    out.put("speaker_name", row.get("speaker_name"));
+    out.put("speaker_role", row.get("speaker_role"));
+    out.put("cik", cik);
+    out.put("accession_number", accessionNumber);
+    // ISO 8601 date string, matching the destination column's documented shape -- not the raw
+    // java.sql.Date object, so schema inference lands on VARCHAR rather than guessing from a
+    // JDBC type it has never seen from any other source.
+    out.put("filing_date", filingDate == null ? null : filingDate.toString());
+    return out;
   }
 
   // ========================================================================
@@ -309,8 +544,18 @@ public class ChunkOrganizer implements TableLifecycleListener {
   private Connection openDuckDb(TableContext context) throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try (Statement stmt = conn.createStatement()) {
-      stmt.execute("SET threads=2");
-      stmt.execute("SET memory_limit='2GB'");
+      // The one-time SEC chunks migration (GOVDATA_CHUNKS_BACKFILL) materializes a whole year's
+      // still-to-migrate rows at once -- up to ~2.5M rows of chunk_text/enriched_text, ~6GB raw,
+      // which blows well past the 2GB every OTHER ChunkOrganizer run uses for its normal
+      // incremental per-source chunking. 8GB still spilled several GB (raw data + DuckDB's own
+      // processing overhead exceeds 8GB); that spilling was also driving S3 write retries by
+      // contending with MinIO for local disk I/O on the same host. 16GB is comfortably inside
+      // the host's consistently-observed ~19-25GB free. More threads (host has 16 cores)
+      // parallelizes the year-wide sort/materialize. The permanent, ongoing incremental path
+      // (2 threads / 2GB) is unaffected either way.
+      boolean backfillMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"));
+      stmt.execute("SET threads=" + (backfillMode ? "8" : "2"));
+      stmt.execute("SET memory_limit='" + (backfillMode ? "16GB" : "2GB") + "'");
       String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
       stmt.execute("SET temp_directory='" + tempDir + "'");
       try {
@@ -374,6 +619,50 @@ public class ChunkOrganizer implements TableLifecycleListener {
         matConfig, context.getStorageProvider(), schemaMaterializeDir,
         context.getIncrementalTracker());
     writer.initialize(matConfig);
+    writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+  }
+
+  /** Same target table as {@link #writeTable}, but {@code overwritePartitions: false} (plain
+   *  append) instead of the main config's dynamic-overwrite-of-touched-partitions -- needed so
+   *  each backfilled year adds to the {@code source_schema='sec'} partition instead of
+   *  replacing it, since the anti-join in {@link #backfillSecChunks} (not partition-scoped
+   *  overwrite) is what keeps repeated/resumed runs from duplicating rows. */
+  private static void writeAppendBatch(TableContext context, String tableName,
+      List<Map<String, Object>> rows) throws IOException {
+    MaterializeConfig baseConfig = tableConfigOf(context, tableName).getMaterialize();
+    List<String> partitionColumns = baseConfig.getPartition() != null
+        && baseConfig.getPartition().getColumns() != null
+        ? baseConfig.getPartition().getColumns()
+        : Collections.<String>emptyList();
+    String targetTableId =
+        baseConfig.getTargetTableId() != null ? baseConfig.getTargetTableId() : tableName;
+
+    MaterializeConfig.Builder builder = MaterializeConfig.builder()
+        .enabled(true)
+        .format(MaterializeConfig.Format.ICEBERG)
+        .name(tableName)
+        .targetTableId(targetTableId)
+        .output(org.apache.calcite.adapter.file.etl.MaterializeOutputConfig.builder().build())
+        .columns(Collections.<org.apache.calcite.adapter.file.etl.ColumnConfig>emptyList())
+        .iceberg(MaterializeConfig.IcebergConfig.builder()
+            .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
+            .overwritePartitions(false)
+            .build());
+    if (!partitionColumns.isEmpty()) {
+      builder.partition(org.apache.calcite.adapter.file.etl.MaterializePartitionConfig.builder()
+          .columns(partitionColumns)
+          .build());
+    }
+    MaterializeConfig appendConfig = builder.build();
+
+    String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
+        + "/" + context.getSchemaName();
+    MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
+        appendConfig, context.getStorageProvider(), schemaMaterializeDir,
+        context.getIncrementalTracker());
+    writer.initialize(appendConfig);
     writer.writeBatch(rows.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
     writer.close();
