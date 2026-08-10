@@ -1119,6 +1119,18 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   private synchronized void ensureTableCreated(List<Map<String, Object>> sampleRows,
       Map<String, String> partitionValues) throws IOException {
+    if (deferredTargetTableId == null) {
+      // Declared-columns table: initialize() already created/loaded it eagerly via
+      // ensureTableExists, which owns schema drift for that path (schemaDriftReason /
+      // addMissingColumns) against the config's own authoritative column list. This method
+      // exists only for the deferred-schema (FILE-186) materialize path -- falling through to
+      // evolveSchemaForNewColumns here would re-run schema inference (and possibly commit +
+      // table.refresh()) on every flush of every declared-columns table in the system, not just
+      // the deferred ones it was written for. Confirmed live: this was silently mutating and
+      // OOM-crashing declared-columns tables (e.g. econ_reference's bls_geographies) that have
+      // nothing to do with deferred-schema materialization.
+      return;
+    }
     if (table == null) {
       if (!deferSchemaInference) {
         throw new IllegalStateException(
