@@ -230,7 +230,18 @@ public final class IcebergThetaStatistics {
       StatisticsFile statsFile =
           new GenericStatisticsFile(snapshot.snapshotId(), statisticsPath, fileSize, footerSize,
               written);
-      table.updateStatistics().setStatistics(snapshot.snapshotId(), statsFile).commit();
+      // The new file already carries forward every blob worth keeping (see above), so every
+      // older statistics file is now a pure redundant subset. Removing them keeps
+      // table.statisticsFiles() at size 1 - otherwise it grows one entry per commit forever,
+      // and readCarryForward's next run re-reads all of them, compounding without bound.
+      org.apache.iceberg.UpdateStatistics update =
+          table.updateStatistics().setStatistics(snapshot.snapshotId(), statsFile);
+      for (StatisticsFile old : table.statisticsFiles()) {
+        if (old.snapshotId() != snapshot.snapshotId()) {
+          update.removeStatistics(old.snapshotId());
+        }
+      }
+      update.commit();
       LOGGER.info("Published column statistics: {} blobs ({} carried forward, {} partitions "
           + "written) for snapshot {}", written.size(), carried.size(), byPartition.size(),
           snapshot.snapshotId());
@@ -269,40 +280,56 @@ public final class IcebergThetaStatistics {
     if (table.currentSnapshot() == null) {
       return out;
     }
+    // Every statistics file this class writes is already a complete carry-forward of every file
+    // before it (see commit() below), so only the most recent one can hold anything not already
+    // superseded. Reading every historical file here re-reads that same carried-forward data once
+    // per file it was ever copied into - a table with N statistics files re-reads O(N) redundant
+    // copies of the same blobs, which is what exhausted the heap on a table with many commits.
+    StatisticsFile latest = null;
+    long latestSeq = Long.MIN_VALUE;
     for (StatisticsFile sf : table.statisticsFiles()) {
-      try (org.apache.iceberg.puffin.PuffinReader reader =
-               Puffin.read(table.io().newInputFile(sf.path()))
-                   .withFileSize(sf.fileSizeInBytes())
-                   .withFooterSize(sf.fileFooterSizeInBytes())
-                   .build()) {
-        List<org.apache.iceberg.puffin.BlobMetadata> wanted =
-            new ArrayList<org.apache.iceberg.puffin.BlobMetadata>();
-        for (org.apache.iceberg.puffin.BlobMetadata bm : reader.fileMetadata().blobs()) {
-          String pk = bm.properties() == null ? null : bm.properties().get(PARTITION_PROPERTY);
-          // A blob with no partition property describes the whole table (the bootstrap) and cannot
-          // be reconciled with per-partition ones; drop it rather than double-count.
-          if (pk != null && !superseded.contains(pk)) {
-            wanted.add(bm);
-          }
-        }
-        if (wanted.isEmpty()) {
-          continue;
-        }
-        for (org.apache.iceberg.util.Pair<org.apache.iceberg.puffin.BlobMetadata, ByteBuffer> pair
-            : reader.readAll(wanted)) {
-          Carried c = new Carried();
-          c.type = pair.first().type();
-          c.fields = pair.first().inputFields();
-          c.properties = pair.first().properties();
-          ByteBuffer src = pair.second();
-          byte[] copy = new byte[src.remaining()];
-          src.duplicate().get(copy);
-          c.payload = ByteBuffer.wrap(copy);
-          out.add(c);
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Could not carry forward statistics from {}", sf.path(), e);
+      Snapshot sn = table.snapshot(sf.snapshotId());
+      long seq = sn != null ? sn.sequenceNumber() : Long.MIN_VALUE;
+      if (latest == null || seq > latestSeq) {
+        latest = sf;
+        latestSeq = seq;
       }
+    }
+    if (latest == null) {
+      return out;
+    }
+    try (org.apache.iceberg.puffin.PuffinReader reader =
+             Puffin.read(table.io().newInputFile(latest.path()))
+                 .withFileSize(latest.fileSizeInBytes())
+                 .withFooterSize(latest.fileFooterSizeInBytes())
+                 .build()) {
+      List<org.apache.iceberg.puffin.BlobMetadata> wanted =
+          new ArrayList<org.apache.iceberg.puffin.BlobMetadata>();
+      for (org.apache.iceberg.puffin.BlobMetadata bm : reader.fileMetadata().blobs()) {
+        String pk = bm.properties() == null ? null : bm.properties().get(PARTITION_PROPERTY);
+        // A blob with no partition property describes the whole table (the bootstrap) and cannot
+        // be reconciled with per-partition ones; drop it rather than double-count.
+        if (pk != null && !superseded.contains(pk)) {
+          wanted.add(bm);
+        }
+      }
+      if (wanted.isEmpty()) {
+        return out;
+      }
+      for (org.apache.iceberg.util.Pair<org.apache.iceberg.puffin.BlobMetadata, ByteBuffer> pair
+          : reader.readAll(wanted)) {
+        Carried c = new Carried();
+        c.type = pair.first().type();
+        c.fields = pair.first().inputFields();
+        c.properties = pair.first().properties();
+        ByteBuffer src = pair.second();
+        byte[] copy = new byte[src.remaining()];
+        src.duplicate().get(copy);
+        c.payload = ByteBuffer.wrap(copy);
+        out.add(c);
+      }
+    } catch (Exception e) {
+      LOGGER.warn("Could not carry forward statistics from {}", latest.path(), e);
     }
     return out;
   }

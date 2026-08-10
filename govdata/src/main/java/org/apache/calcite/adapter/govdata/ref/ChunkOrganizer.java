@@ -256,22 +256,65 @@ public class ChunkOrganizer implements TableLifecycleListener {
         continue;
       }
 
-      // Real write: page through the year in bounded batches keyed on chunk_id, not OFFSET
-      // (which DuckDB would re-scan-and-discard on every call, quadratic over a multi-GiB
-      // year). Peak heap for one batch stays constant regardless of the year's total backlog.
-      // Each batch is written and committed immediately, so a mid-year time-budget stop is
-      // safe to resume from -- the anti-join above already excludes every chunk_id written so
-      // far, whether from this batch, an earlier batch this run, or a prior run entirely.
-      String cursor = null;
+      // Real write: page through the year in bounded batches. Peak heap for one batch stays
+      // constant regardless of the year's total backlog. Each batch is written and committed
+      // immediately, so a mid-year time-budget stop is safe to resume from.
+      //
+      // Resume state is NOT a chunk_id high-water mark: chunk_id is unique within a year but
+      // NOT across years -- the same accession/chunk occasionally appears under two different
+      // `year` values upstream (a data-quality property of sec.vectorized_chunks, confirmed
+      // live: e.g. accession 0000103730-24-000034's chunks are filed under both year=2023 and
+      // year=2024). A MAX(chunk_id)-among-already-migrated cursor treats any such collision as
+      // proof everything below it was migrated for THIS year, when it may only mean an EARLIER
+      // year's migration happened to write a chunk_id that collides with one of this year's --
+      // silently skipping the rest of the year. Measured live: this dropped ~4.7M of 9.6M rows
+      // (years 2024-2025) before being caught by a post-migration row-count audit.
+      //
+      // Nor is it a per-batch anti-join against iceberg_scan(secLoc): re-running that same
+      // WHERE-year-AND-NOT-EXISTS query, unindexed, once per 5000-row batch means DuckDB has to
+      // rescan this year's whole remaining backlog on EVERY batch to find the next one -- also
+      // measured live, ~80s/batch once a year reached a few hundred thousand still-unmigrated
+      // rows, which does not finish a multi-million-row year in practical time.
+      //
+      // The rows still needing migration are computed ONCE per year (one full-row anti-join
+      // against destLoc) into a local DuckDB temp table. Every batch after that pages the
+      // already-materialized table -- no further S3/Iceberg scanning, so batch cost stays flat
+      // regardless of how many batches the year takes. A cheap COUNT-only comparison first
+      // skips this entirely for years already fully migrated, so a `starting`-to-first-batch
+      // resume doesn't pay a full scan for every one of the 24 years on every future invocation.
+      // This materialization is what backfill mode's raised memory_limit (see openDuckDb) is
+      // for: a full year runs ~6GB of raw chunk_text/enriched_text through it at once.
+      long yearSourceCount = ((Number) queryRows(conn,
+          "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) "
+          + "WHERE year = " + year).get(0).get("n")).longValue();
+      long yearMigratedCount = ((Number) queryRows(conn,
+          "SELECT COUNT(*) AS n FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
+          + "WHERE s.year = " + year + " AND EXISTS ("
+          + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
+          + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)").get(0).get("n"))
+          .longValue();
+      if (yearMigratedCount >= yearSourceCount) {
+        yearsSkipped++;
+        continue;
+      }
+      try (Statement stmt = conn.createStatement()) {
+        stmt.execute("DROP TABLE IF EXISTS tmp_sec_backfill_todo");
+        stmt.execute("CREATE TEMP TABLE tmp_sec_backfill_todo AS "
+            + "SELECT s.* FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
+            + "WHERE s.year = " + year + " AND NOT EXISTS ("
+            + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
+            + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id)");
+      }
       boolean yearHasWork = false;
       while (true) {
-        String cursorClause = cursor == null ? "" : "AND s.chunk_id > '"
-            + cursor.replace("'", "''") + "' ";
-        String sql = "SELECT s.* FROM iceberg_scan('" + secLoc + "', allow_moved_paths=true) s "
-            + "WHERE s.year = " + year + " " + cursorClause + "AND NOT EXISTS ("
-            + "SELECT 1 FROM iceberg_scan('" + destLoc + "', allow_moved_paths=true) d "
-            + "WHERE d.source_schema = 'sec' AND d.chunk_id = s.chunk_id) "
-            + "ORDER BY s.chunk_id LIMIT " + SEC_BACKFILL_BATCH_SIZE;
+        // No chunk_id > cursor filter: rows are DELETEd from tmp_sec_backfill_todo right after
+        // being written (below), so the table shrinks as the year progresses instead of every
+        // batch re-sorting the same untouched rows it already passed over -- a
+        // "no chunk_id > cursor" version still costs O(remaining size) per batch even off a
+        // local temp table (a plain ORDER BY + LIMIT with no index still scans everything ahead
+        // of it). Deleting keeps each batch's scan bounded to what is actually still left.
+        String sql = "SELECT * FROM tmp_sec_backfill_todo ORDER BY chunk_id LIMIT "
+            + SEC_BACKFILL_BATCH_SIZE;
         List<Map<String, Object>> sourceRows = queryRows(conn, sql);
         if (sourceRows.isEmpty()) {
           break;
@@ -283,7 +326,11 @@ public class ChunkOrganizer implements TableLifecycleListener {
         }
         writeAppendBatch(context, TRIGGER_TABLE, destRows);
         totalRows += destRows.size();
-        cursor = String.valueOf(sourceRows.get(sourceRows.size() - 1).get("chunk_id"));
+        String cursor = String.valueOf(sourceRows.get(sourceRows.size() - 1).get("chunk_id"));
+        try (Statement stmt = conn.createStatement()) {
+          stmt.execute("DELETE FROM tmp_sec_backfill_todo WHERE chunk_id <= '"
+              + cursor.replace("'", "''") + "'");
+        }
         LOGGER.info("ChunkOrganizer: SEC backfill year {}: wrote {} rows (batch, cursor={})",
             year, destRows.size(), cursor);
 
@@ -497,8 +544,18 @@ public class ChunkOrganizer implements TableLifecycleListener {
   private Connection openDuckDb(TableContext context) throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try (Statement stmt = conn.createStatement()) {
-      stmt.execute("SET threads=2");
-      stmt.execute("SET memory_limit='2GB'");
+      // The one-time SEC chunks migration (GOVDATA_CHUNKS_BACKFILL) materializes a whole year's
+      // still-to-migrate rows at once -- up to ~2.5M rows of chunk_text/enriched_text, ~6GB raw,
+      // which blows well past the 2GB every OTHER ChunkOrganizer run uses for its normal
+      // incremental per-source chunking. 8GB still spilled several GB (raw data + DuckDB's own
+      // processing overhead exceeds 8GB); that spilling was also driving S3 write retries by
+      // contending with MinIO for local disk I/O on the same host. 16GB is comfortably inside
+      // the host's consistently-observed ~19-25GB free. More threads (host has 16 cores)
+      // parallelizes the year-wide sort/materialize. The permanent, ongoing incremental path
+      // (2 threads / 2GB) is unaffected either way.
+      boolean backfillMode = "true".equalsIgnoreCase(System.getenv("GOVDATA_CHUNKS_BACKFILL"));
+      stmt.execute("SET threads=" + (backfillMode ? "8" : "2"));
+      stmt.execute("SET memory_limit='" + (backfillMode ? "16GB" : "2GB") + "'");
       String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
       stmt.execute("SET temp_directory='" + tempDir + "'");
       try {
