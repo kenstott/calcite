@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.73.0](https://github.com/kenstott/calcite/compare/engine-v0.72.1...engine-v0.73.0) (2026-08-11)
+
+
+### Features
+
+* **govdata/scripts:** add model-verify.sh --mode local|mirror, fix stderr swallow ([537a6da](https://github.com/kenstott/calcite/commit/537a6da5d634a87548a442ae871f8f90bb8b62db))
+* **semantic-search:** document-blob mode, plus two real bugs found and fixed ([c3d08ee](https://github.com/kenstott/calcite/commit/c3d08ee290d1ce3e4106cfad44ea16851272639f))
+* **semantic-search:** first cross-schema RowConcatChunker source (fedregister) ([0b21cc1](https://github.com/kenstott/calcite/commit/0b21cc15e25fe9d5350c6a30983175b11aa386da))
+* **semantic-search:** Phase 0 codes repartitioning + row-concat mode PoC ([336a969](https://github.com/kenstott/calcite/commit/336a96923b5b2854ee57201e93a0bce2a09a492f))
+* **semantic-search:** redirect live SEC chunk writes to ref.vectorized_chunks ([79b79f7](https://github.com/kenstott/calcite/commit/79b79f72aefb18bb9d59b04cd2dafacfc660c5b2))
+* **semantic-search:** row-concat mode via RowConcatChunker + generalized backlog ([63359d7](https://github.com/kenstott/calcite/commit/63359d7f539272dd269c5a591e6c3e86b49dd256))
+* **semantic-search:** scale RowConcatChunker to 3 sources, fix composite PKs ([60501ae](https://github.com/kenstott/calcite/commit/60501aefe588100e1c3e6c23126e7abdbd50cdd2))
+* **semantic-search:** schema evolution for deferred-schema Iceberg tables + SEC chunks backfill ([9b37a37](https://github.com/kenstott/calcite/commit/9b37a37871661946a16e0e5e63594855483dbf4e))
+* **semantic-search:** wire row-concat backlog into run-pool.sh's post-drain hook ([03e3adc](https://github.com/kenstott/calcite/commit/03e3adc528838fecb951ebd1023f1f24e6dd5261))
+
+
+### Bug Fixes
+
+* **file/duckdb:** also retry SSL handshake failures as transient network errors ([005b0ed](https://github.com/kenstott/calcite/commit/005b0ed8863502e0dfb02109d7941f63b8701b6f))
+* **file/duckdb:** make Iceberg-over-R2 reads resilient to WAN network drops and view-type drift ([a5d541e](https://github.com/kenstott/calcite/commit/a5d541eeb00b87d7d4c17b3bfe504b5ad989be88))
+* **file/etl:** scope deferred-schema evolution to deferred-schema tables only ([8f86a77](https://github.com/kenstott/calcite/commit/8f86a777f4f509305cce1f2f6726be15b3877e8c))
+* **file/etl:** theta-stats partition key must match bootstrap's for unpartitioned tables ([2f5f582](https://github.com/kenstott/calcite/commit/2f5f58251b7d0958749638effc36d7fcd0131b57))
+* **file/iceberg:** don't crash schema listing on unreadable table metadata ([67147ac](https://github.com/kenstott/calcite/commit/67147ac070d6ca697c6628aa390ca1b6718122d1))
+* **file/iceberg:** reclaim unbounded metadata.json growth and fix cross-process commit lock ([5c38f36](https://github.com/kenstott/calcite/commit/5c38f366bc56aabdccb14d58b00d0aa8071df944))
+* **govdata/scripts:** make model-verify.sh dispatch loop portable to bash 3.2 ([6c118c0](https://github.com/kenstott/calcite/commit/6c118c0acc874a90a2c0db0be0431bf14e2b4316))
+* **govdata/scripts:** stop run_window aborting under set -e when --force is unset ([44945ed](https://github.com/kenstott/calcite/commit/44945ed90c058ef682a15c2525650ac5f5bd90b3))
+* **govdata:** add missing overwritePartitions on constants-sourced full-snapshot tables ([ba398d4](https://github.com/kenstott/calcite/commit/ba398d4397b8b5850439008296ea030de3fcbef6))
+* **semantic-search:** embed and search fedregister/cyber_threat chunks, not just ref ([d59006d](https://github.com/kenstott/calcite/commit/d59006d11c3b91b8542651a737f5dda8c879c9d5))
+* **semantic-search:** entity-resolution registry scale bugs + 10 new sources ([2cc1069](https://github.com/kenstott/calcite/commit/2cc10692cbb74465e06fc7f34b8398eaa5fe6e91))
+* **semantic-search:** SEC backfill correctness/perf fixes, Puffin stats pruning, multi-schema search ([a788e44](https://github.com/kenstott/calcite/commit/a788e44f5bb8992faa5250a1c5c8b23f0c5a507e))
+* **semantic-search:** SEC chunks backfill OOM on large years + operand-capture fix ([2c399d6](https://github.com/kenstott/calcite/commit/2c399d6ca981082cf0aa3a45eea13045a12f82bc))
+
 ## [0.72.1](https://github.com/kenstott/calcite/compare/engine-v0.72.0...engine-v0.72.1) (2026-08-08)
 
 
