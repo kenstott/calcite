@@ -1056,6 +1056,76 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Prunes superseded {@code v{N}.metadata.json} version files down to the {@code
+   * previousVersionsMax} most recent, keeping the current version.
+   *
+   * <p>This table's {@code TableOperations} ({@link S3FileIOTableOperations}) writes a new
+   * metadata version file on every commit and never reclaims old ones — Iceberg's standard
+   * {@code write.metadata.delete-after-commit.enabled}/{@code previous-versions-max} properties
+   * are honored only by {@code BaseMetastoreTableOperations}, which that class does not extend
+   * (see its class doc). A table committed once per partition (day/asset-class, etc.) otherwise
+   * accumulates one metadata.json per commit forever — this is the equivalent reclamation path
+   * for this table layout. Deleting an old version file is safe here because nothing in this
+   * codebase's read path opens a metadata.json by explicit version; every reader resolves the
+   * current version through {@code version-hint.text}.
+   *
+   * @param previousVersionsMax number of most-recent versions to retain; a non-positive value
+   *     disables pruning
+   * @return the number of metadata files deleted
+   */
+  public int pruneMetadataFiles(int previousVersionsMax) {
+    if (previousVersionsMax <= 0) {
+      return 0;
+    }
+    int keep = Math.max(previousVersionsMax, 1);
+
+    // Trailing slash matters: an S3 delimiter listing with prefix "…/metadata" (no slash) rolls
+    // every key under it into one common-prefix entry instead of returning them individually,
+    // since the delimiter appears immediately after the given prefix.
+    String metadataDir = table.location() + "/metadata/";
+    List<StorageProvider.FileEntry> metadataFiles;
+    try {
+      metadataFiles = storageProvider.listFiles(metadataDir, false);
+    } catch (IOException e) {
+      LOGGER.warn("Cannot list metadata directory {} for pruning: {}", metadataDir, e.getMessage());
+      return 0;
+    }
+
+    java.util.regex.Pattern versionPattern = java.util.regex.Pattern.compile("v(\\d+)\\.metadata\\.json$");
+    // Sorted by version so the oldest entries to delete are simply the head of the map.
+    java.util.TreeMap<Integer, String> versionToPath = new java.util.TreeMap<>();
+    for (StorageProvider.FileEntry entry : metadataFiles) {
+      String path = entry.getPath();
+      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
+      if (matcher.find()) {
+        versionToPath.put(Integer.parseInt(matcher.group(1)), path);
+      }
+    }
+
+    int toDelete = versionToPath.size() - keep;
+    if (toDelete <= 0) {
+      return 0;
+    }
+
+    int deleted = 0;
+    for (String path : versionToPath.values()) {
+      if (deleted >= toDelete) {
+        break;
+      }
+      try {
+        storageProvider.delete(path);
+        deleted++;
+      } catch (IOException e) {
+        LOGGER.warn("Failed to delete superseded metadata file {}: {}", path, e.getMessage());
+      }
+    }
+    LOGGER.info("Pruned {} superseded metadata.json version file(s) for table {}",
+        deleted, table.name());
+    return deleted;
+  }
+
+  /**
    * Reader-drain window (days) for post-compaction snapshot expiry + orphan deletion when the
    * caller does not supply the table's {@code snapshotRetentionDays}. Compaction must retain the
    * pre-compaction snapshots and their (now-superseded) small files until any concurrent scan that
@@ -1407,10 +1477,12 @@ public class IcebergTableWriter {
         LOGGER.debug("version-hint.text not found, will create: {}", e.getMessage());
       }
 
-      // List metadata directory to find latest version
+      // List metadata directory to find latest version. Trailing slash matters: an S3 delimiter
+      // listing with prefix "…/metadata" (no slash) rolls every key under it into one
+      // common-prefix entry instead of returning them individually.
       List<StorageProvider.FileEntry> metadataFiles;
       try {
-        metadataFiles = storageProvider.listFiles(metadataDir, false);
+        metadataFiles = storageProvider.listFiles(metadataDir + "/", false);
       } catch (IOException e) {
         LOGGER.warn("Cannot list metadata directory {}: {}", metadataDir, e.getMessage());
         return;

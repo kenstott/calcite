@@ -90,6 +90,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private static final int DEFAULT_MAX_RETRIES = 3;
   private static final long DEFAULT_RETRY_DELAY_MS = 1000;
   private static final int DEFAULT_BATCH_SIZE = 10000; // Process 10k rows at a time to avoid OOM
+  // commitPerPartition commits once per partition instead of once per run, so a table using it
+  // accumulates one metadata.json version per partition forever unless capped (see
+  // IcebergTableWriter#pruneMetadataFiles) — applied automatically so a schema doesn't have to
+  // remember to pair the two; an explicit iceberg.metadataPreviousVersionsMax still overrides it.
+  private static final int DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX = 20;
 
   /** DuckDB memory limit - from DUCKDB_MEMORY_LIMIT env var, default 4GB. */
   private static final String DUCKDB_MEMORY_LIMIT =
@@ -2528,6 +2533,24 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       int retentionDays = icebergConfig.getSnapshotRetentionDays();
       LOGGER.info("Running Iceberg maintenance with {}d snapshot retention", retentionDays);
       tableWriter.runMaintenance(retentionDays);
+    }
+
+    // Prune superseded metadata.json version files if configured — see
+    // IcebergTableWriter#pruneMetadataFiles for why this is a separate knob from the maintenance
+    // above (this writer's commit path doesn't honor Iceberg's standard properties for it). An
+    // explicit iceberg.metadataPreviousVersionsMax always wins; otherwise commitPerPartition
+    // tables get DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX automatically, since that's the
+    // setting that makes metadata.json accumulate one-per-partition instead of one-per-run.
+    int effectiveMetadataMax = icebergConfig != null ? icebergConfig.getMetadataPreviousVersionsMax() : 0;
+    if (effectiveMetadataMax <= 0 && commitPerPartition) {
+      effectiveMetadataMax = DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX;
+    }
+    if (tableWriter != null && effectiveMetadataMax > 0) {
+      int pruned = tableWriter.pruneMetadataFiles(effectiveMetadataMax);
+      if (pruned > 0) {
+        LOGGER.info("Pruned {} superseded metadata.json file(s) for '{}'",
+            pruned, config.getTargetTableId());
+      }
     }
 
     // Measure column cardinality over the committed table and publish it against the snapshot

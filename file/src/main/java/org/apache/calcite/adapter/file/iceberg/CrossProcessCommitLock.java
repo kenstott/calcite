@@ -36,10 +36,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * so the two layers compose into "one committer per table per host".
  *
  * <p>One lock file per table, keyed by the table location, under a host-local
- * lock directory ({@code <java.io.tmpdir>/calcite-iceberg-commit-locks}). The
- * lock file itself is always local even when the warehouse is on S3/R2 — only
- * its name derives from the (possibly remote) table location. Different tables
- * use different files, so their commits never block one another.
+ * lock directory: {@code calcite.iceberg.commitLockDir} if set, else a FIXED
+ * path ({@code /var/tmp/calcite-iceberg-commit-locks}) — deliberately NOT
+ * {@code java.io.tmpdir}, which differs across processes on the same host
+ * (e.g. an ETL worker started with {@code -Djava.io.tmpdir=/var/tmp/govdata}
+ * vs. a standalone maintenance tool left at the JVM default {@code /tmp}).
+ * Two processes disagreeing on the lock directory each lock a different file
+ * and never actually see each other — silently defeating the exclusion this
+ * class exists to provide. A fixed default closes that gap without requiring
+ * every caller to remember to align its tmpdir; the property remains for
+ * sandboxes where {@code /var/tmp} isn't writable (e.g. some test/CI images).
+ * The lock file itself is always local even when the warehouse is on S3/R2 —
+ * only its name derives from the (possibly remote) table location. Different
+ * tables use different files, so their commits never block one another.
  *
  * <p>The acquisition is reentrant per table within a JVM: a thread that already
  * holds the lock for a table (e.g. a commit path that nests another commit
@@ -197,9 +206,14 @@ public final class CrossProcessCommitLock {
     }
   }
 
+  /** Fixed fallback so every process on the host agrees on the lock directory
+   * regardless of its own {@code java.io.tmpdir} — see the class doc. */
+  private static final String DEFAULT_LOCK_DIR = "/var/tmp/calcite-iceberg-commit-locks";
+
   /** The host-local directory holding one lock file per table. */
   static Path lockDir() {
-    return Paths.get(System.getProperty("java.io.tmpdir"), "calcite-iceberg-commit-locks");
+    String override = System.getProperty("calcite.iceberg.commitLockDir");
+    return Paths.get(override != null && !override.isEmpty() ? override : DEFAULT_LOCK_DIR);
   }
 
   /** The lock file path for a table location (one file per table). */

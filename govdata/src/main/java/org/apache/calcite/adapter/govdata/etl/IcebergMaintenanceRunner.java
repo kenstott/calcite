@@ -134,6 +134,20 @@ public class IcebergMaintenanceRunner {
     Table table = IcebergCatalogManager.loadTable(catalogConfig, config.tableName);
     System.out.println("  Table loaded: " + table.name());
     System.out.println("  Location: " + table.location());
+
+    // Metadata-version pruning only: skips the data-file scan below entirely (irrelevant to
+    // this table layout's unbounded v{N}.metadata.json growth, see IcebergTableWriter#
+    // pruneMetadataFiles) so this stays fast even against a table with a large scan plan.
+    if (config.pruneMetadataVersions > 0) {
+      StorageProvider pruneStorageProvider = buildStorageProvider(config);
+      IcebergTableWriter pruneWriter = new IcebergTableWriter(table, pruneStorageProvider);
+      System.out.println("\nPruning metadata.json versions, keeping "
+          + config.pruneMetadataVersions + " most recent...");
+      int pruned = pruneWriter.pruneMetadataFiles(config.pruneMetadataVersions);
+      System.out.println("Pruned " + pruned + " superseded metadata.json file(s).");
+      return 0;
+    }
+
     System.out.println("  Snapshots: " + countSnapshots(table));
     System.out.println(
         "  Current snapshot: " + (table.currentSnapshot() != null
@@ -183,19 +197,7 @@ public class IcebergMaintenanceRunner {
     }
 
     // Create storage provider for S3/R2 (needed for both maintenance and compaction)
-    Map<String, Object> s3Config = new HashMap<>();
-    if (config.s3AccessKey != null) {
-      s3Config.put("accessKeyId", config.s3AccessKey);
-      s3Config.put("secretAccessKey", config.s3SecretKey);
-      if (config.s3Endpoint != null) {
-        s3Config.put("endpoint", config.s3Endpoint);
-      }
-      s3Config.put("region", "us-east-1");
-    }
-
-    StorageProvider storageProvider = config.s3AccessKey != null
-        ? StorageProviderFactory.createFromType("s3", s3Config)
-        : StorageProviderFactory.createFromType("local", null);
+    StorageProvider storageProvider = buildStorageProvider(config);
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
@@ -260,6 +262,22 @@ public class IcebergMaintenanceRunner {
     return compacted > 0 ? 0 : 1;
   }
 
+  private StorageProvider buildStorageProvider(Config config) {
+    Map<String, Object> s3Config = new HashMap<>();
+    if (config.s3AccessKey != null) {
+      s3Config.put("accessKeyId", config.s3AccessKey);
+      s3Config.put("secretAccessKey", config.s3SecretKey);
+      if (config.s3Endpoint != null) {
+        s3Config.put("endpoint", config.s3Endpoint);
+      }
+      s3Config.put("region", "us-east-1");
+    }
+
+    return config.s3AccessKey != null
+        ? StorageProviderFactory.createFromType("s3", s3Config)
+        : StorageProviderFactory.createFromType("local", null);
+  }
+
   private int countSnapshots(Table table) {
     int count = 0;
     for (org.apache.iceberg.Snapshot s : table.snapshots()) {
@@ -287,6 +305,8 @@ public class IcebergMaintenanceRunner {
     System.err.println("  --expire-days N         Expire snapshots older than N days (default: 7)");
     System.err.println("  --orphan-days N         Remove orphans older than N days (default: 7)");
     System.err.println("  --maintenance-only      Expire snapshots (+orphans if orphan-days<=30) and stop; no compaction");
+    System.err.println("  --prune-metadata-versions N   Keep only the N most-recent v{N}.metadata.json"
+        + " files and stop; no scan, no compaction");
     System.err.println("  --dry-run               Report only, no changes");
   }
 
@@ -301,6 +321,7 @@ public class IcebergMaintenanceRunner {
     long smallFileSize = DEFAULT_SMALL_FILE_SIZE;
     int expireSnapshotsDays = DEFAULT_EXPIRE_SNAPSHOTS_DAYS;
     int orphanFilesDays = DEFAULT_ORPHAN_FILES_DAYS;
+    int pruneMetadataVersions = 0;
     boolean dryRun = false;
     boolean maintenanceOnly = false;
 
@@ -337,6 +358,9 @@ public class IcebergMaintenanceRunner {
           break;
         case "--orphan-days":
           config.orphanFilesDays = Integer.parseInt(args[++i]);
+          break;
+        case "--prune-metadata-versions":
+          config.pruneMetadataVersions = Integer.parseInt(args[++i]);
           break;
         case "--dry-run":
           config.dryRun = true;

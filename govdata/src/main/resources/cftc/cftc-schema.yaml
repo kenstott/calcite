@@ -1127,6 +1127,11 @@ partitionedTables:
         incrementalKeys: [asset_class, year, month, day]
         runMaintenance: true
         snapshotRetentionDays: 7
+        # commitPerPartition (one commit per asset_class/day) writes a new metadata.json every
+        # commit; S3FileIOTableOperations (the writer for this table) never reclaims old ones on
+        # its own (see IcebergTableWriter#pruneMetadataFiles), so the version count grows
+        # unbounded without this cap.
+        metadataPreviousVersionsMax: 20
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5

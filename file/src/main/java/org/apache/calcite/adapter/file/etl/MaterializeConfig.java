@@ -499,6 +499,7 @@ public class MaterializeConfig {
     private final long compactionTargetFileSizeBytes;
     private final int compactionMinFiles;
     private final long compactionSmallFileSizeBytes;
+    private final int metadataPreviousVersionsMax;
     private final boolean overwritePartitions;
     private final String appendWhenOperand;
     private final String appendWhenValue;
@@ -527,6 +528,7 @@ public class MaterializeConfig {
           ? builder.compactionMinFiles : 10;
       this.compactionSmallFileSizeBytes = builder.compactionSmallFileSizeBytes > 0
           ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
+      this.metadataPreviousVersionsMax = builder.metadataPreviousVersionsMax;
       this.overwritePartitions = builder.overwritePartitions;
       this.appendWhenOperand = builder.appendWhenOperand;
       this.appendWhenValue = builder.appendWhenValue;
@@ -593,6 +595,18 @@ public class MaterializeConfig {
 
     public long getCompactionSmallFileSizeBytes() {
       return compactionSmallFileSizeBytes;
+    }
+
+    /**
+     * Number of most-recent {@code v{N}.metadata.json} version files to retain; older ones are
+     * deleted after a successful materialize pass. A non-positive value (the default) disables
+     * pruning, matching this writer's historical unbounded-retention behavior. See {@link
+     * org.apache.calcite.adapter.file.iceberg.IcebergTableWriter#pruneMetadataFiles} for why this
+     * table layout needs an explicit knob instead of Iceberg's standard
+     * {@code write.metadata.previous-versions-max} table property.
+     */
+    public int getMetadataPreviousVersionsMax() {
+      return metadataPreviousVersionsMax;
     }
 
     public boolean isOverwritePartitions() {
@@ -726,6 +740,11 @@ public class MaterializeConfig {
         builder.compactionSmallFileSizeBytes(((Number) smallSizeObj).longValue());
       }
 
+      Object metadataMaxObj = map.get("metadataPreviousVersionsMax");
+      if (metadataMaxObj instanceof Number) {
+        builder.metadataPreviousVersionsMax(((Number) metadataMaxObj).intValue());
+      }
+
       Object overwriteObj = map.get("overwritePartitions");
       if (overwriteObj instanceof Boolean) {
         builder.overwritePartitions((Boolean) overwriteObj);
@@ -781,6 +800,7 @@ public class MaterializeConfig {
       private long compactionTargetFileSizeBytes;
       private int compactionMinFiles;
       private long compactionSmallFileSizeBytes;
+      private int metadataPreviousVersionsMax;
       private boolean overwritePartitions = true;
       private String appendWhenOperand;
       private String appendWhenValue;
@@ -853,6 +873,11 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder compactionSmallFileSizeBytes(long compactionSmallFileSizeBytes) {
         this.compactionSmallFileSizeBytes = compactionSmallFileSizeBytes;
+        return this;
+      }
+
+      public IcebergConfigBuilder metadataPreviousVersionsMax(int metadataPreviousVersionsMax) {
+        this.metadataPreviousVersionsMax = metadataPreviousVersionsMax;
         return this;
       }
 
