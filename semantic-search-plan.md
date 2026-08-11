@@ -384,10 +384,11 @@ SEC only.
 
 **Revised from the original proposal below, on two points, both driven by real constraints
 found during implementation.** First: a `TableLifecycleListener` *is* used after all, just
-not the way originally rejected — organizing chunks (row-concat's naive per-row chunker,
-and document-blob mode's chunker once built) is a `TableLifecycleListener` per source
-schema (`RowConcatChunker` for `ref`, wired on `ref.vectorized_chunks` exactly like
-`EntityBridgeListener`), because DuckDB's iceberg extension **cannot write Iceberg
+not the way originally rejected — organizing chunks (row-concat's naive per-row chunker
+and document-blob mode's `SemanticTextChunker`-based chunker, both now built) is a
+`TableLifecycleListener` per source schema (`ChunkOrganizer` for `ref`, wired on
+`ref.vectorized_chunks` exactly like `EntityBridgeListener`), because DuckDB's iceberg
+extension **cannot write Iceberg
 tables** (read-only) — only Java's Iceberg SDK-backed `MaterializationWriterFactory` can,
 so organizing chunks was never a job an external Python script could do directly. Second,
 and this is the part the original proposal got right: **embedding stays a `run-pool.sh`
@@ -400,12 +401,20 @@ Concretely, split cleanly in two:
   `vectorized_chunks` table (no `source:` block, so `afterTable` is the only hook that
   fires — same wiring as `EntityBridgeListener`). Reads a small in-code registry of
   included source tables, builds `col: value | col: value` text per row (row-concat mode)
-  or runs the document chunker (document-blob mode, not yet built), and writes chunk rows
-  via `MaterializationWriterFactory`. `RowConcatChunker`
-  (`org.apache.calcite.adapter.govdata.ref`) implements this for `ref`, currently covering
-  `ref.naics`/`ref.naics_vintage`/`ref.sec_company_tickers` — onboarding a new source is a
+  or runs `SemanticTextChunker.chunkPlainText` on a single prose column (document-blob
+  mode). `RowConcatChunker` was renamed **`ChunkOrganizer`**
+  (`org.apache.calcite.adapter.govdata.ref.ChunkOrganizer`) once it grew document-blob
+  mode too, since it now organizes both. Live today: 4 row-concat sources
+  (`ref.naics`, `ref.naics_vintage`, `ref.sec_company_tickers`,
+  `fedregister.fr_documents`) and 3 document-blob sources (`cyber_threat.nist_controls`,
+  `cyber_threat.cis_controls`, `cyber_threat.owasp_top10`) — onboarding a new source is a
   new registry entry, not new code (composite PKs are supported: `stringified_fk` is the
-  ':'-joined PK column values, uniform for single- and multi-column keys).
+  ':'-joined PK column values, uniform for single- and multi-column keys). A gated
+  one-time `sec.vectorized_chunks` → `ref.vectorized_chunks` backfill also lives in
+  `ChunkOrganizer` (`GOVDATA_CHUNKS_BACKFILL`, off by default, time-boxed and resumable
+  per year via anti-join against already-migrated `chunk_id`s) — it copies/reshapes SEC's
+  existing chunks into the shared table rather than the directory-move approach
+  originally proposed below.
 - **Embedding** (`vss-local.py`, one shared code path for every source): `cmd_backlog` was
   generalized (`--source-schema`/`--iceberg-path`, both defaulting to that source's own
   conventional path) so the exact same time-boxed, resumable "find chunks with no codes
@@ -414,13 +423,13 @@ Concretely, split cleanly in two:
   (currently `[ref]`) after its existing SEC call, each independent — one failing doesn't
   block the pool or the others.
 
-Verified end-to-end in the DQ bucket: the real `ref` schema ETL fires `RowConcatChunker`
+Verified end-to-end in the DQ bucket: the real `ref` schema ETL fires `ChunkOrganizer`
 via the production hook path, the generalized `backlog` command drains the full delta
 across multiple time-boxed runs (correctly resuming each time via the anti-join), and
 cross-source `SEMANTIC_SEARCH`-equivalent queries return correct, defensibly-ranked
 results. One real bug found and fixed along the way: `ref.sec_company_tickers`'s declared
 `primaryKey` was missing `ticker` (a cik can carry multiple tickers/share classes), which
-`RowConcatChunker` — relying on that declaration for `stringified_fk` uniqueness — turned
+`ChunkOrganizer` — relying on that declaration for `stringified_fk` uniqueness — turned
 into 2,409 real key collisions out of 10,415 rows.
 
 *Original proposal, superseded above but kept for context*: reuse the post-drain hook in
@@ -466,16 +475,19 @@ the `run-pool.sh` post-drain hook ("Extension mechanism").
   pending live AskAmerica deployment) before the v1 registry is locked in for implementation.
 - Whether every source shares arctic-embed-xs 384-d or some need a different model —
   tuned at implementation time. (Chunk size/overlap for row-concat mode is decided:
-  1000/200 chars, in `RowConcatChunker.java`.)
-- Document-blob mode (generalizing `SemanticTextChunker` for the 18 identified blob
-  columns) — not yet built; `RowConcatChunker`'s registry currently only handles
-  row-concat sources.
-- The remaining v1-registry sources beyond `ref.naics`/`naics_vintage`/
-  `sec_company_tickers` (`disasters.disaster_declarations`/`public_assistance_projects`,
-  `fedregister.fr_documents`, `geo.rural_urban_continuum`/`ruca_codes`,
-  `officials.federal_judges`, `patents.patent_grants`, `transport.fmcsa_carriers`) — each
-  is a new `RowConcatChunker` registry entry, several cross-schema (untested path so far;
-  `EntityBridgeListener` precedent says it should work identically).
+  1000/200 chars, in `ChunkOrganizer.java`.)
+- The remaining 15 of 18 identified document-blob columns beyond the 3 already wired
+  (`cyber_threat.nist_controls`/`cis_controls`/`owasp_top10`) — `patents.patent_abstracts`/
+  `patent_claims`/`patent_summaries`/`trademark_statement`, `health.clinical_trials`/
+  `clinical_trial_interventions`, `transport.ntsb_aviation_accidents`, plus confirming
+  whether `sec.mda_sections`/`earnings_transcripts` are already covered by
+  `vectorized_chunks`'s existing chunks before adding them as new sources.
+- The remaining row-concat v1-registry sources beyond the 4 already wired
+  (`ref.naics`/`naics_vintage`/`sec_company_tickers`, `fedregister.fr_documents`):
+  `disasters.disaster_declarations`/`public_assistance_projects`,
+  `geo.rural_urban_continuum`/`ruca_codes`, `officials.federal_judges`,
+  `patents.patent_grants`, `transport.fmcsa_carriers` — each is a new `ChunkOrganizer`
+  registry entry.
 - Whether `mda_sections`/`earnings_transcripts` are already fully covered by
   `vectorized_chunks`'s existing `mda_paragraph`/`earnings` chunks (built from the same
   source content) — confirm before double-chunking under a new `source_type`.
