@@ -39,6 +39,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -80,12 +81,13 @@ public class AlphaVantageDownloader {
   }
 
   /**
-   * Tops up {@code stagingDir} with rows dated strictly after {@code afterDate} for the given
-   * filers, writing year-partitioned Parquet that matches the bulk schema.
+   * Tops up {@code stagingDir} with new rows for the given filers, writing year-partitioned
+   * Parquet that matches the bulk schema.
    *
    * @param stagingDir object-storage staging directory the bulk pass wrote to (no trailing slash)
    * @param filers     SEC filers to top up (ticker + cik); one Alpha Vantage call each
-   * @param afterDate  bulk snapshot's max date (YYYY-MM-DD); only later rows are written
+   * @param afterDate  bulk snapshot's max date (YYYY-MM-DD); floor for tickers with no prior
+   *                   top-up of their own, and the disjointness cutoff against the bulk pass
    * @return number of top-up rows written across all tickers
    */
   public int topUpStockPrices(String topupDir, List<StooqDownloader.TickerCikPair> filers,
@@ -93,6 +95,14 @@ public class AlphaVantageDownloader {
     if (filers == null || filers.isEmpty() || afterDate == null || afterDate.isEmpty()) {
       return 0;
     }
+    // A ticker that already caught up further than the bulk (via a prior successful top-up) must
+    // be fetched from ITS OWN last date, not the shared bulk date — Alpha Vantage's "compact"
+    // series is always the last ~100 trading days from today regardless of what date is passed,
+    // so re-using the older bulk date for an already-caught-up ticker only means re-fetching and
+    // discarding rows it already has. Worse, a ticker that has fallen behind (repeated
+    // rate-limit/API failures) needs its OWN gap tracked — the bulk date can't tell it apart from
+    // a ticker that is fully current, which is exactly the "never completely tops up" symptom.
+    Map<String, String> perTickerLastDate = queryPerTickerMaxDates(topupDir);
     Path tmpCsv = Files.createTempFile("av_topup_", ".csv");
     int fetched = 0;
     boolean dailyLimitReached = false;
@@ -103,9 +113,11 @@ public class AlphaVantageDownloader {
           if (dailyLimitReached) {
             break;
           }
+          String tickerAfterDate =
+              perTickerLastDate.getOrDefault(pair.ticker.toUpperCase(), afterDate);
           try {
             rateLimit();
-            List<String[]> rows = fetchCompact(pair.ticker, afterDate);
+            List<String[]> rows = fetchCompact(pair.ticker, tickerAfterDate);
             for (String[] r : rows) {
               // r = {date, open, high, low, close, volume}
               w.write(csv(pair.cik) + "," + csv(pair.ticker.toUpperCase()) + "," + csv(r[0]) + ","
@@ -114,7 +126,7 @@ public class AlphaVantageDownloader {
               fetched++;
             }
             LOGGER.debug("Alpha Vantage top-up: {} rows for {} after {}", rows.size(), pair.ticker,
-                afterDate);
+                tickerAfterDate);
           } catch (RateLimitException e) {
             LOGGER.warn("Alpha Vantage daily limit reached after {} fetched rows; topping up no "
                 + "further (prior top-up retained): {}", fetched, e.getMessage());
@@ -141,6 +153,34 @@ public class AlphaVantageDownloader {
     } finally {
       Files.deleteIfExists(tmpCsv);
     }
+  }
+
+  /**
+   * Reads the persisted {@code __topup} parquet (if any) and returns each ticker's own max date,
+   * so a ticker that is already ahead of the bulk snapshot is fetched from where it actually left
+   * off rather than from the shared bulk date. Empty when the top-up dir doesn't exist yet.
+   */
+  private Map<String, String> queryPerTickerMaxDates(String topupDir) {
+    Map<String, String> maxDates = new HashMap<>();
+    try {
+      Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
+      try (Statement stmt = conn.createStatement()) {
+        try (ResultSet rs = stmt.executeQuery(
+            "SELECT ticker, max(date) FROM read_parquet('" + topupDir
+                + "/**/*.parquet', union_by_name=true) GROUP BY ticker")) {
+          while (rs.next()) {
+            maxDates.put(rs.getString(1), rs.getString(2));
+          }
+        }
+      } finally {
+        conn.close();
+      }
+    } catch (Exception e) {
+      // No existing top-up dir (first run) or nothing readable yet — every ticker falls back to
+      // the bulk date, which is the previous behavior and still correct in that case.
+      LOGGER.debug("No existing top-up data at {} ({})", topupDir, e.getMessage());
+    }
+    return maxDates;
   }
 
   /**
