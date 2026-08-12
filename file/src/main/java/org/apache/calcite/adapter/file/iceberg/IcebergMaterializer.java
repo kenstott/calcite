@@ -2923,8 +2923,6 @@ public class IcebergMaterializer {
     // target's actual schema instead of assuming the batch dimension applies to it.
     boolean targetHasYearColumn = table != null && table.schema().findField("year") != null;
 
-    // Iceberg is the source of truth. Scan it directly whenever the table is reachable.
-    // The tracker is a fallback for when Iceberg is unavailable — never an authority.
     if (table != null) {
       try {
         // The scan below reads every accession in the partition to learn what is already
@@ -2932,20 +2930,41 @@ public class IcebergMaterializer {
         // run does it for each of them — which is where the minutes between batches go. Measured
         // on a 2022 repair: filing_metadata/year=2022 took 68s to return 342,226 accessions and
         // marked none of them, because nothing had changed since the previous run.
-        //
-        // An Iceberg snapshot id changes on every commit, so a table whose snapshot still matches
-        // the one recorded when this partition was last synced cannot have gained an accession.
-        // The tracker was brought into step with Iceberg at that point, so it can answer instead —
-        // a second rather than a minute — and it stays exact: any commit, by this process or
-        // another, moves the snapshot and forces the scan again.
         String snapshotId = table.currentSnapshot() == null
             ? null : String.valueOf(table.currentSnapshot().snapshotId());
         String syncKey = config.getTargetTableId() + "#iceberg-accession-sync#year="
             + (yearValue == null ? "all" : yearValue);
-        if (snapshotId != null && incrementalTracker.isTableComplete(syncKey, snapshotId)) {
+
+        // Freshness must be judged by this year's RAW SOURCE DATA, not by the Iceberg table's
+        // snapshot id: that id is table-global and advances on every commit to ANY year, so a
+        // write to (say) year=2026 was invalidating the cached "already synced" marker for every
+        // other year too, forcing a full re-scan of years whose source data never changed. The
+        // tracker's per-(table,year) source-write watermark only advances when this year's raw
+        // files are actually rewritten — use it as the sync signature when it is resolvable, so a
+        // year is reprocessed exactly when its own source changed and never because a different
+        // year committed. Falls back to the snapshot id (previous behavior) when the source
+        // pattern or activity phase can't resolve a scoped watermark (e.g. the "all years" batch).
+        String trackerSourceTable = trackerTableFromPattern(config.getSourcePattern());
+        Long yearSourceWatermark = null;
+        if (yearValue != null && sourceActivityPhase != null && trackerSourceTable != null) {
+          try {
+            int year = Integer.parseInt(yearValue);
+            long watermark = incrementalTracker.getMaxActivityAt(
+                sourceActivityPhase, trackerSourceTable, year, year);
+            if (watermark >= 0) {
+              yearSourceWatermark = watermark;
+            }
+          } catch (NumberFormatException ignored) {
+            // Non-numeric year batch value — fall through to the snapshot-based signature.
+          }
+        }
+        String syncSignature = yearSourceWatermark != null
+            ? "source-watermark=" + yearSourceWatermark : snapshotId;
+
+        if (syncSignature != null && incrementalTracker.isTableComplete(syncKey, syncSignature)) {
           Set<String> tracked = getTrackedAccessions(config.getTargetTableId(), yearValue);
-          LOGGER.info("Iceberg unchanged for {}/year={} (snapshot {}) — {} accessions from tracker",
-              config.getTargetTableId(), yearValue, snapshotId, tracked.size());
+          LOGGER.info("Source data unchanged for {}/year={} ({}) — {} accessions from tracker",
+              config.getTargetTableId(), yearValue, syncSignature, tracked.size());
           return tracked;
         }
 
@@ -2971,12 +2990,12 @@ public class IcebergMaterializer {
               config.getSourceTableName(), accessionKey, config.getTargetTableId());
           newlyMarked++;
         }
-        // Recorded only after the tracker has been brought into step with this snapshot, so the
+        // Recorded only after the tracker has been brought into step with this signature, so the
         // skip above can never claim agreement that was not actually reached. A failure before
-        // this point leaves the old snapshot recorded and the next run rescans, which is the safe
-        // direction to fail in.
-        if (snapshotId != null) {
-          incrementalTracker.markTableComplete(syncKey, snapshotId);
+        // this point leaves the old signature recorded and the next run rescans, which is the
+        // safe direction to fail in.
+        if (syncSignature != null) {
+          incrementalTracker.markTableComplete(syncKey, syncSignature);
         }
         LOGGER.info("Iceberg scan: {} committed accessions for {}/year={} ({} newly tracked)",
             icebergAccessions.size(), config.getTargetTableId(), yearValue, newlyMarked);
