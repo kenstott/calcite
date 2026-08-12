@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.74.0](https://github.com/kenstott/calcite/compare/engine-v0.73.1...engine-v0.74.0) (2026-08-12)
+
+
+### Features
+
+* **govdata/sec:** add straight-through price-only ETL path ([ce5222b](https://github.com/kenstott/calcite/commit/ce5222ba6dae42e1ac23fc48a6a0bd87d43e4b77))
+* **govdata:** add freshness checks across ag/environment/fiscal/health/housing/patents/transport ([593bf5f](https://github.com/kenstott/calcite/commit/593bf5ff1b521f80272115ac697680c1a529144b))
+
+
+### Bug Fixes
+
+* **file/iceberg:** key accession freshness to per-year source watermark, not global snapshot id ([b787547](https://github.com/kenstott/calcite/commit/b787547a404381ed0504fc2e7e394643511e4c71))
+* **file/partition:** scope PG tracker's per-year lookup to SQL instead of Java-side filtering ([a8c0d00](https://github.com/kenstott/calcite/commit/a8c0d00fdf3335db10315274def4a9efb58848b1))
+* **govdata/sec:** scope Alpha Vantage top-up to each ticker's own last date ([0de4c08](https://github.com/kenstott/calcite/commit/0de4c08b9fbd489aed4abc9bba73665dd83afe2c))
+
 ## [0.73.1](https://github.com/kenstott/calcite/compare/engine-v0.73.0...engine-v0.73.1) (2026-08-12)
 
 
