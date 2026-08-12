@@ -179,6 +179,10 @@ partitionedTables:
   # EPA AQS ANNUAL — annual_conc_by_monitor zip (delta by year, row transformer)
   # ---------------------------------------------------------------------------
   - name: air_quality_annual
+    # Freshness gate: EPA AQS bulk zip per year on a fixed static path. A Last-Modified
+    # probe skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=air_quality_annual/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -276,6 +280,11 @@ partitionedTables:
   # EPA AQS DAILY — daily_<param>_<year> zip (delta by year × pollutant)
   # ---------------------------------------------------------------------------
   - name: air_quality_daily
+    # Freshness gate: EPA AQS bulk zip per year/parameter on a fixed static path. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=air_quality_daily/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -393,6 +402,10 @@ partitionedTables:
   # EPA AQS MONITORS — aqs_monitors.zip reference file (snapshot)
   # ---------------------------------------------------------------------------
   - name: aqs_monitors
+    # Freshness gate: EPA AQS bulk zip on a fixed static path. A Last-Modified probe skips
+    # the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=aqs_monitors/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -507,6 +520,11 @@ partitionedTables:
   # EPA TRI — per-year Basic Data File CSV (delta by year)
   # ---------------------------------------------------------------------------
   - name: tri_releases
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=tri_releases/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -658,6 +676,11 @@ partitionedTables:
   # EPA GHGRP FACILITIES — Envirofacts pub_dim_facility (delta by year)
   # ---------------------------------------------------------------------------
   - name: ghg_facilities
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=ghg_facilities/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -780,6 +803,11 @@ partitionedTables:
   # EPA GHGRP EMISSIONS — Envirofacts pub_facts_sector_ghg_emission (delta/year)
   # ---------------------------------------------------------------------------
   - name: ghg_emissions
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=ghg_emissions/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -858,6 +886,11 @@ partitionedTables:
   # EPA eGRID SUBREGION EMISSION RATES — eGRID XLSX workbook, SRL<yy> tab (delta/year)
   # ---------------------------------------------------------------------------
   - name: egrid_emission_rates
+    # Freshness gate: landing-page scrape, same shape as ag.ers_farm_income. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=egrid_emission_rates/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1057,6 +1090,11 @@ partitionedTables:
   # USGS WATER SITES — NWIS site RDB (per-state snapshot, transformer)
   # ---------------------------------------------------------------------------
   - name: water_sites
+    # Freshness gate: USGS NWIS site service is a live query with no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=water_sites/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -1145,6 +1183,11 @@ partitionedTables:
   # USGS STREAMFLOW — NWIS daily values RDB (delta by state × year, transformer)
   # ---------------------------------------------------------------------------
   - name: streamflow
+    # Freshness gate: USGS NWIS daily-values service is a live query with no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=streamflow/state=*/year=*/*.parquet"
     partitions: *state_year_partitions
     comment: >
@@ -1228,6 +1271,11 @@ partitionedTables:
   # EPA SDWIS — public water systems, Envirofacts water_system (per-state snap)
   # ---------------------------------------------------------------------------
   - name: drinking_water
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=drinking_water/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -1345,6 +1393,12 @@ partitionedTables:
   # EPA ECHO — facility registry + compliance, ECHO Exporter (snapshot)
   # ---------------------------------------------------------------------------
   - name: epa_facilities
+    # Freshness gate: weekly full snapshot; the zip carries a real Last-Modified/ETag. This
+    # must be at the table level, not nested under source: — EtlPipelineConfig.fromMap only
+    # reads freshness: from the table's own map, and HttpSourceConfig never reads it either,
+    # so a copy nested under source: is silently never parsed and does nothing.
+    freshness:
+      type: last_modified
     pattern: "type=epa_facilities/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1470,9 +1524,6 @@ partitionedTables:
       url: "https://echo.epa.gov/files/echodownloads/echo_exporter.zip"
       method: GET
       extractPattern: "*.csv"
-      # Weekly full snapshot; the zip carries a real Last-Modified/ETag.
-      freshness:
-        type: last_modified
       response:
         format: csv
       rateLimit:
@@ -1504,6 +1555,11 @@ partitionedTables:
   # EPA SDWIS VIOLATIONS — Envirofacts violation (per-state snapshot)
   # ---------------------------------------------------------------------------
   - name: drinking_water_violations
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=drinking_water_violations/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -1627,6 +1683,11 @@ partitionedTables:
   # EPA SUPERFUND — Envirofacts envirofacts_site / SEMS (national snapshot)
   # ---------------------------------------------------------------------------
   - name: superfund_sites
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=superfund_sites/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1738,6 +1799,11 @@ partitionedTables:
   # EPA RCRA HANDLERS — Envirofacts rcr_hd_handler (per-state snapshot)
   # ---------------------------------------------------------------------------
   - name: rcra_facilities
+    # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=rcra_facilities/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -1851,6 +1917,11 @@ partitionedTables:
   # WATER QUALITY PORTAL — measured sample results (delta by state × year)
   # ---------------------------------------------------------------------------
   - name: water_quality_samples
+    # Freshness gate: waterqualitydata.us is a live query with no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=water_quality_samples/state=*/year=*/*.parquet"
     partitions: *state_year_partitions
     comment: >

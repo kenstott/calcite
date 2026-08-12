@@ -265,6 +265,11 @@ partitionedTables:
   # PATENT_ASSIGNEES — Patent ownership at grant time
   # ---------------------------------------------------------------------------
   - name: patent_assignees
+    # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
+    # top of file). A Last-Modified probe of the bulk file skips the multi-GB re-download and
+    # re-materialize on unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_assignees"
     partitions: *snapshot_partitions
     comment: >
@@ -341,6 +346,11 @@ partitionedTables:
   # PATENT_INVENTORS — Inventor listing per patent
   # ---------------------------------------------------------------------------
   - name: patent_inventors
+    # Freshness gate: PatentsView republishes this full dump (~8 GB uncompressed) ~quarterly
+    # (see Run Cadence at top of file). A Last-Modified probe skips the re-download and
+    # re-materialize on unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_inventors"
     partitions: *snapshot_partitions
     comment: >
@@ -413,6 +423,11 @@ partitionedTables:
   # PATENT_CPC_CLASSES — CPC technology classification per patent
   # ---------------------------------------------------------------------------
   - name: patent_cpc_classes
+    # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
+    # top of file). A Last-Modified probe skips the re-download and re-materialize on
+    # unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_cpc"
     partitions: *snapshot_partitions
     comment: >
@@ -484,6 +499,11 @@ partitionedTables:
   # PATENT_ABSTRACTS — Faithful g_patent_abstract.tsv snapshot
   # ---------------------------------------------------------------------------
   - name: patent_abstracts
+    # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
+    # top of file). A Last-Modified probe skips the re-download and re-materialize on
+    # unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_abstracts"
     partitions: *snapshot_partitions
     comment: >
@@ -534,6 +554,11 @@ partitionedTables:
   # PATENT_APPLICATIONS — Faithful g_application.tsv snapshot
   # ---------------------------------------------------------------------------
   - name: patent_applications
+    # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
+    # top of file). A Last-Modified probe skips the re-download and re-materialize on
+    # unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_applications"
     partitions: *snapshot_partitions
     comment: >
@@ -588,6 +613,11 @@ partitionedTables:
   # PATENT_FIGURES — Faithful g_figures.tsv snapshot
   # ---------------------------------------------------------------------------
   - name: patent_figures
+    # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
+    # top of file). A Last-Modified probe skips the re-download and re-materialize on
+    # unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_figures"
     partitions: *snapshot_partitions
     comment: >
@@ -642,6 +672,11 @@ partitionedTables:
   # PATENT_LOCATIONS — Faithful g_location_disambiguated.tsv snapshot
   # ---------------------------------------------------------------------------
   - name: patent_locations
+    # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
+    # top of file). A Last-Modified probe skips the re-download and re-materialize on
+    # unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=patent_locations"
     partitions: *snapshot_partitions
     comment: >

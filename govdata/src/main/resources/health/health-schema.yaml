@@ -706,6 +706,11 @@ partitionedTables:
   # CLINICAL TRIALS (clinicaltrials.gov) — ~500k studies, token-based pagination
   # ==========================================================================
   - name: clinical_trials
+    # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=clinical_trials"
     # DQ sample cap (GOVDATA_DQ mode): ClinicalTrials.gov returns ~500k studies via CURSOR
     # pagination; cap the DQ sample. Cache-safe — the paginated cache commits only on full drain,
@@ -845,6 +850,11 @@ partitionedTables:
   # CLINICAL TRIAL CONDITIONS — derived from clinical_trials, one row per condition
   # ==========================================================================
   - name: clinical_trial_conditions
+    # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=clinical_trial_conditions"
     dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     partitions:
@@ -931,6 +941,11 @@ partitionedTables:
   # CLINICAL TRIAL INTERVENTIONS — derived from clinical_trials, one row per intervention
   # ==========================================================================
   - name: clinical_trial_interventions
+    # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=clinical_trial_interventions"
     dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
     partitions:
@@ -1134,6 +1149,11 @@ partitionedTables:
   # CMS HOSPITAL QUALITY METRICS — Socrata SODA API, ~5,426 facilities
   # ==========================================================================
   - name: cms_hospital_quality
+    # Freshness gate: CMS datastore query API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     releaseWindow:
       months: [7, 8, 9, 10] # CMS hospital quality annual release July–October
     pattern: "type=cms_hospital_quality"
@@ -1283,6 +1303,11 @@ partitionedTables:
   # CMS PROVIDER OF SERVICES FILE — data.cms.gov data.json discovery (snapshot, current quarter)
   # ==========================================================================
   - name: cms_pos_facilities
+    # Freshness gate: CMS data.json catalog is a dynamic index response with no
+    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     releaseWindow:
       months: [1, 4, 7, 10] # CMS POS republishes quarterly
     pattern: "type=cms_pos_facilities"
@@ -1444,6 +1469,11 @@ partitionedTables:
   # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
   # ==========================================================================
   - name: ahrf_physician_supply
+    # Freshness gate: HRSA landing/download page. A Last-Modified probe skips the
+    # re-download and re-materialize on unchanged runs (fails open — a null token just
+    # re-fetches).
+    freshness:
+      type: last_modified
     releaseWindow:
       months: [8, 9, 10, 11, 12] # HRSA AHRF annual release; tech doc dated Aug, files last-modified Dec
     pattern: "type=ahrf_physician_supply"
@@ -1587,6 +1617,11 @@ partitionedTables:
   # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
   # ==========================================================================
   - name: medicaid_drug_utilization
+    # Freshness gate: Medicaid datastore query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     releaseWindow:
       months: [3, 6, 9, 12] # Quarterly data published ~3 months after quarter end
     # DQ sample cap: the DKAN datastore returns the whole ~5.3M-row annual dataset; in DQ mode
@@ -1729,6 +1764,11 @@ partitionedTables:
 # ============================================================================
 
   - name: cdc_mortality
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     releaseWindow:
       dow: [1]              # CDC publishes weekly updates Fridays; Monday catches them
     comment: >
@@ -1822,6 +1862,11 @@ partitionedTables:
         runCompaction: true
 
   - name: cdc_brfss
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     releaseWindow:
       months: [5, 6, 7, 8]  # CDC publishes annual BRFSS survey data May–August
     dqRowLimit: 25000   # DQ sample cap (GOVDATA_DQ mode); cache-safe (capped sample cached under cap=N, isolated from the full prod cache)
@@ -1930,6 +1975,11 @@ partitionedTables:
         runCompaction: true
 
   - name: cms_open_payments
+    # Freshness gate: CMS bulk zip on a date-stamped but stable-per-cycle static path.
+    # A Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open).
+    freshness:
+      type: last_modified
     releaseWindow:
       months: [6, 7]        # CMS Open Payments (Sunshine Act) annual release June–July
     # DQ sample cap (per program year): in DQ mode (GOVDATA_DQ=true) materialize at most this
@@ -2151,6 +2201,11 @@ partitionedTables:
   # Streamed by org.apache.calcite.adapter.govdata.health.WhoGhoTransformer.
   # Indicator ids PENDING LIVE VERIFICATION against the GHO indicator catalog.
   - name: who_gho_indicators
+    # Freshness gate: WHO GHO OData API has no meaningful Last-Modified, so this hashes
+    # the response body post-fetch to skip the materialize/commit when unchanged (fails
+    # open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=who_gho/indicator=*/*.parquet"
     partitions:
       style: hive

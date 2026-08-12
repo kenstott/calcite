@@ -208,6 +208,10 @@ partitionedTables:
   # IRS SOI INDIVIDUAL INCOME BY ZIP — {YY}zpallagi.csv (delta by year)
   # ---------------------------------------------------------------------------
   - name: soi_income_by_zip
+    # Freshness gate: IRS SOI bulk CSV on a fixed static path. A Last-Modified probe
+    # skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=soi_income_by_zip/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -367,6 +371,10 @@ partitionedTables:
   # IRS SOI INDIVIDUAL INCOME BY COUNTY — {YY}incyallagi.csv (delta by year)
   # ---------------------------------------------------------------------------
   - name: soi_income_by_county
+    # Freshness gate: IRS SOI bulk CSV on a fixed static path. A Last-Modified probe
+    # skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=soi_income_by_county/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -477,6 +485,10 @@ partitionedTables:
   # IRS SOI COUNTY-TO-COUNTY MIGRATION — countyoutflow{YYZZ}.csv (delta by year)
   # ---------------------------------------------------------------------------
   - name: county_migration_flows
+    # Freshness gate: IRS SOI bulk CSV on a fixed static path. A Last-Modified probe
+    # skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=county_migration_flows/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -569,6 +581,11 @@ partitionedTables:
   # IRS EXEMPT ORG MASTER FILE — eo1..eo4.csv (snapshot, 4 regional shards)
   # ---------------------------------------------------------------------------
   - name: exempt_org_master
+    # Freshness gate: IRS Business Master File bulk CSV on a fixed static path. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=exempt_org_master/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -698,6 +715,10 @@ partitionedTables:
   # IRS FORM 990 E-FILE — index_{YEAR}.csv + TEOS zips (delta by receipt year)
   # ---------------------------------------------------------------------------
   - name: exempt_org_990
+    # Freshness gate: IRS e-Postcard XML index page. A Last-Modified probe skips the
+    # re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=exempt_org_990/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -793,6 +814,11 @@ partitionedTables:
   # USASPENDING BY AGENCY — /api/v2/spending/ (delta by fiscal year)
   # ---------------------------------------------------------------------------
   - name: usaspending_by_agency
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=usaspending_by_agency/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -861,6 +887,11 @@ partitionedTables:
   # USASPENDING BY STATE — /api/v2/search/spending_by_geography/ (delta by FY)
   # ---------------------------------------------------------------------------
   - name: usaspending_by_state
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=usaspending_by_state/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -940,6 +971,11 @@ partitionedTables:
   # USASPENDING BY COUNTY — /api/v2/search/spending_by_geography/ (delta by FY)
   # ---------------------------------------------------------------------------
   - name: usaspending_by_county
+    # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=usaspending_by_county/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1012,6 +1048,11 @@ partitionedTables:
   # SBA 7(a) & 504 LOAN APPROVALS — data.sba.gov DKAN CSV (snapshot per program)
   # ---------------------------------------------------------------------------
   - name: sba_loan_approvals
+    # Freshness gate: landing-page scrape, same shape as ag.ers_farm_income. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=sba_loan_approvals/program=*/*.parquet"
     partitions: *program_partitions
     comment: >
@@ -1139,6 +1180,10 @@ partitionedTables:
   # SSA OASDI/SSI BENEFITS BY COUNTY — statcomps XLSX via Wayback (delta by year)
   # ---------------------------------------------------------------------------
   - name: ssa_benefits_by_geography
+    # Freshness gate: landing/index page. A Last-Modified probe skips the re-download
+    # and re-materialize on unchanged runs (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=ssa_benefits_by_geography/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1240,6 +1285,11 @@ partitionedTables:
   # SSA BENEFITS (ACS-DERIVED) — Census ACS county estimates (delta by year)
   # ---------------------------------------------------------------------------
   - name: ssa_benefits_by_geography_acs
+    # Freshness gate: Census ACS5 REST API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=ssa_benefits_by_geography_acs/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1342,6 +1392,11 @@ partitionedTables:
   # CENSUS GOVS-FINANCE INDIVIDUAL UNIT FILE — Individual_Unit_File.zip (snapshot per year)
   # ---------------------------------------------------------------------------
   - name: govt_finance_by_unit
+    # Freshness gate: Census landing/index page. A Last-Modified probe skips the
+    # re-download and re-materialize on unchanged runs (fails open — a null token just
+    # re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=govt_finance_by_unit/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1447,6 +1502,11 @@ partitionedTables:
   # DOL WHD STATE MINIMUM WAGE HISTORY — single-page snapshot, multi-year output
   # ---------------------------------------------------------------------------
   - name: state_minimum_wage_history
+    # Freshness gate: DOL landing/index page. A Last-Modified probe skips the
+    # re-download and re-materialize on unchanged runs (fails open — a null token just
+    # re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=state_minimum_wage_history/year=*/*.parquet"
     partitions: *standard_partitions
     dataset_type: snapshot

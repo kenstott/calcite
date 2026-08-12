@@ -242,6 +242,11 @@ partitionedTables:
   # row per commodity x data-item x geography x year (PRODUCTION, AREA HARVESTED,
   # AREA PLANTED, YIELD all present as distinct statisticcat_desc rows).
   - name: nass_crop_production
+    # Freshness gate: a REST query API has no meaningful Last-Modified for the underlying
+    # data, so this hashes the response body post-fetch to skip the materialize/commit when
+    # nothing changed since the last successful run (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=nass_crop_production/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
@@ -315,6 +320,11 @@ partitionedTables:
   # NASS_LIVESTOCK_INVENTORY — animal & poultry inventory by county/state
   # ---------------------------------------------------------------------------
   - name: nass_livestock_inventory
+    # Freshness gate: a REST query API has no meaningful Last-Modified for the underlying
+    # data, so this hashes the response body post-fetch to skip the materialize/commit when
+    # nothing changed since the last successful run (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=nass_livestock_inventory/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
@@ -380,6 +390,11 @@ partitionedTables:
   # One bulk pipe-delimited zip per year (sobcov_{year}.zip, stable URL, 1989+).
   # Streamed by RmaSummaryOfBusinessTransformer (no per-request cap; ~150k rows/yr).
   - name: rma_crop_insurance
+    # Freshness gate: USDA RMA republishes this summary-of-business file periodically. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=rma_crop_insurance/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
@@ -686,6 +701,11 @@ partitionedTables:
   # vintage, resolves node pages to xlsx, reads via POI, and aggregates per
   # county x program x program-year. One fetch per disbursement year.
   - name: fsa_commodity_payments
+    # Freshness gate: same landing-page-scrape shape as ers_farm_income above. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=fsa_commodity_payments/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
@@ -784,6 +804,11 @@ partitionedTables:
   # dimension: one fetch per run, partitioned by each row's own year column (same
   # reason as ers_farm_income — a multi-vintage source with no single per-year URL).
   - name: pesticide_use_by_county
+    # Freshness gate: USGS republishes this county-level map/data page periodically. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open — a null token just re-fetches).
+    freshness:
+      type: last_modified
     pattern: "type=pesticide_use_by_county/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
@@ -878,6 +903,12 @@ partitionedTables:
   # the geo FIPS spine. See docs/data-plans/ag.md. Streamed by FaostatTransformer.
   # Domain codes + bulk column names PENDING LIVE VERIFICATION.
   - name: faostat_production
+    # Freshness gate: FAO republishes each domain's bulk zip on its own schedule (not
+    # daily). A Last-Modified probe is per-domain (EtlPipeline's per-unit freshness gate
+    # applies automatically to this templated {domain} fetch) — skips the re-download and
+    # re-materialize for domains unchanged since the last successful run (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=faostat/domain=*/*.parquet"
     partitions:
       style: hive

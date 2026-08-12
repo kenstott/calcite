@@ -157,6 +157,15 @@ partitionedTables:
   # FHFA HOUSE PRICE INDEX — monthly hpi_master.csv (snapshot, streamed)
   # ---------------------------------------------------------------------------
   - name: house_price_index
+    # Freshness gate: FHFA serves no ETag/Last-Modified — only Content-Length (18.9 MB,
+    # verified). 'size' HEADs the file and skips the whole re-fetch when the byte length is
+    # unchanged; appending a new period changes the length, forcing a refresh. Weak (a
+    # same-length revision would be missed) but the only cheap signal FHFA exposes, and HPI
+    # revisions add periods rather than rewrite in place. Must be at the table level, not
+    # nested under source: — EtlPipelineConfig.fromMap only reads freshness: from the
+    # table's own map, so a copy nested under source: is silently never parsed.
+    freshness:
+      type: size
     pattern: "type=house_price_index/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -221,13 +230,6 @@ partitionedTables:
       type: http
       url: "https://www.fhfa.gov/hpi/download/monthly/hpi_master.csv"
       method: GET
-      # FHFA serves no ETag/Last-Modified — only Content-Length (18.9 MB, verified).
-      # 'size' HEADs the file and skips the whole re-fetch when the byte length is
-      # unchanged; appending a new period changes the length, forcing a refresh.
-      # Weak (a same-length revision would be missed) but the only cheap signal FHFA
-      # exposes, and HPI revisions add periods rather than rewrite in place.
-      freshness:
-        type: size
       response:
         format: text
       rateLimit:
@@ -261,6 +263,11 @@ partitionedTables:
   # CENSUS BUILDING PERMITS — county annual co{year}a.txt (delta, streamed)
   # ---------------------------------------------------------------------------
   - name: building_permits
+    # Freshness gate: Census bulk txt file per year on a fixed static path. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=building_permits/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -381,6 +388,11 @@ partitionedTables:
   # HUD FAIR MARKET RENTS — fmr/statedata (delta year × state list, JSON)
   # ---------------------------------------------------------------------------
   - name: fair_market_rents
+    # Freshness gate: HUD REST API has no meaningful Last-Modified, so this hashes the
+    # response body post-fetch to skip the materialize/commit when unchanged (fails open
+    # on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=fair_market_rents/year=*/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -486,6 +498,11 @@ partitionedTables:
   # HUD INCOME LIMITS — il/statedata (delta year × state list, JSON)
   # ---------------------------------------------------------------------------
   - name: income_limits
+    # Freshness gate: HUD REST API has no meaningful Last-Modified, so this hashes the
+    # response body post-fetch to skip the materialize/commit when unchanged (fails open
+    # on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=income_limits/year=*/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -567,6 +584,11 @@ partitionedTables:
   # HUD INCOME LIMITS (COUNTY/METRO) — il/data per HUD area (streamed)
   # ---------------------------------------------------------------------------
   - name: income_limits_county
+    # Freshness gate: HUD REST API has no meaningful Last-Modified, so this hashes the
+    # response body post-fetch to skip the materialize/commit when unchanged (fails open
+    # on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=income_limits_county/year=*/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -666,6 +688,11 @@ partitionedTables:
   # CFPB HMDA — Data Browser aggregations (delta year × state list, JSON)
   # ---------------------------------------------------------------------------
   - name: hmda_loans
+    # Freshness gate: FFIEC CFPB data-browser API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=hmda_loans/year=*/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -761,6 +788,11 @@ partitionedTables:
   # CFPB HMDA — applicant demographics (delta year × state, 3 fetches/unit)
   # ---------------------------------------------------------------------------
   - name: hmda_applicant_demographics
+    # Freshness gate: FFIEC CFPB data-browser API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=hmda_applicant_demographics/year=*/state=*/*.parquet"
     partitions: *state_partitions
     comment: >
@@ -855,6 +887,11 @@ partitionedTables:
   # HUD OPPORTUNITY ZONES — ArcGIS FeatureServer (static snapshot, paginated)
   # ---------------------------------------------------------------------------
   - name: opportunity_zones
+    # Freshness gate: ArcGIS FeatureServer is a live query with no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=opportunity_zones/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -932,6 +969,11 @@ partitionedTables:
   # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — ArcGIS FeatureServer (snapshot)
   # ---------------------------------------------------------------------------
   - name: hud_subsidized_housing
+    # Freshness gate: ArcGIS FeatureServer is a live query with no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=hud_subsidized_housing/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1028,6 +1070,10 @@ partitionedTables:
   # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — county workbook (delta year, xlsx)
   # ---------------------------------------------------------------------------
   - name: hud_subsidized_county
+    # Freshness gate: HUD bulk xlsx per year on a fixed static path. A Last-Modified
+    # probe skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=hud_subsidized_county/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >

@@ -155,6 +155,11 @@ partitionedTables:
   # NHTSA VEHICLE RECALLS — DOT Socrata 6axg-epim (snapshot, JSON)
   # ---------------------------------------------------------------------------
   - name: vehicle_recalls
+    # Freshness gate: Socrata SODA JSON query API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=vehicle_recalls/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -269,6 +274,13 @@ partitionedTables:
   # NHTSA CONSUMER COMPLAINTS — FLAT_CMPL.zip (snapshot, TAB flat file)
   # ---------------------------------------------------------------------------
   - name: safety_complaints
+    # Freshness gate: no ETag on HEAD (chunked); the file changes daily. freshness type
+    # etag still works off the GET response ETag the server does send. Must be at the
+    # table level, not nested under source: — EtlPipelineConfig.fromMap only reads
+    # freshness: from the table's own map, so a copy nested under source: is silently
+    # never parsed.
+    freshness:
+      type: etag
     pattern: "type=safety_complaints/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -403,10 +415,6 @@ partitionedTables:
       url: "https://static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip"
       method: GET
       extractPattern: "*.txt"
-      # No ETag on HEAD (chunked); the file changes daily. freshness type etag
-      # still works off the GET response ETag the server does send.
-      freshness:
-        type: etag
       response:
         format: csv
         delimiter: "\t"
@@ -449,6 +457,11 @@ partitionedTables:
   # NHTSA FARS FATAL CRASHES — per-year National zip / accident.csv (delta)
   # ---------------------------------------------------------------------------
   - name: fatal_crashes
+    # Freshness gate: NHTSA FARS bulk zip per year on a fixed static path. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=fatal_crashes/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -605,6 +618,11 @@ partitionedTables:
   # BTS AIRLINE ON-TIME PERFORMANCE — PREZIP monthly zip (delta year×month)
   # ---------------------------------------------------------------------------
   - name: airline_ontime
+    # Freshness gate: BTS TranStats bulk zip per year/month on a fixed static path. A
+    # Last-Modified probe skips the re-download and re-materialize on unchanged runs
+    # (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=airline_ontime/year=*/month=*/*.parquet"
     partitions: *month_partitions
     comment: >
@@ -800,6 +818,11 @@ partitionedTables:
   # FAA AIRPORTS — NTAD ArcGIS FeatureServer (snapshot, self-paginated JSON)
   # ---------------------------------------------------------------------------
   - name: airports
+    # Freshness gate: ArcGIS FeatureServer is a live query with no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=airports/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -927,6 +950,11 @@ partitionedTables:
   # FTA TRANSIT RIDERSHIP — DOT Socrata 8bui-9xvu (delta by month, JSON)
   # ---------------------------------------------------------------------------
   - name: transit_ridership
+    # Freshness gate: Socrata SODA JSON query API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged
+    # (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=transit_ridership/year=*/month=*/*.parquet"
     partitions: *month_partitions
     comment: >
@@ -1060,6 +1088,11 @@ partitionedTables:
   # BTS T-100 DOMESTIC SEGMENT — TranStats DownLoad postback (delta by year)
   # ---------------------------------------------------------------------------
   - name: t100_segments
+    # Freshness gate: BTS TranStats form-generated export has no meaningful
+    # Last-Modified, so this hashes the response body post-fetch to skip the
+    # materialize/commit when unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
     pattern: "type=t100_segments/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1194,6 +1227,10 @@ partitionedTables:
   # FHWA VEHICLE REGISTRATIONS — Highway Statistics MV-1 XLSX (delta by year)
   # ---------------------------------------------------------------------------
   - name: vehicle_registrations
+    # Freshness gate: FHWA bulk xlsx per year on a fixed static path. A Last-Modified
+    # probe skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=vehicle_registrations/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1282,6 +1319,11 @@ partitionedTables:
   # FMCSA MOTOR CARRIER CENSUS — DOT Socrata az4n-8mr2 bulk CSV (snapshot)
   # ---------------------------------------------------------------------------
   - name: fmcsa_carriers
+    # Freshness gate: Socrata dataset ETag. Must be at the table level, not nested under
+    # source: — EtlPipelineConfig.fromMap only reads freshness: from the table's own map,
+    # so a copy nested under source: is silently never parsed.
+    freshness:
+      type: etag
     pattern: "type=fmcsa_carriers/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1426,8 +1468,6 @@ partitionedTables:
       response:
         format: csv
         hasHeader: true
-      freshness:
-        type: etag
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
@@ -1466,6 +1506,11 @@ partitionedTables:
   # table dropped engine detail, Mode-S/ICAO hex, addresses, and dates.
   # ---------------------------------------------------------------------------
   - name: faa_aircraft_master
+    # Freshness gate: FAA registry bulk zip, periodic full snapshot on a fixed static
+    # path. A Last-Modified probe skips the re-download and re-materialize on unchanged
+    # runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=faa_aircraft_master/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1686,6 +1731,11 @@ partitionedTables:
         overwritePartitions: true
 
   - name: faa_aircraft_reference
+    # Freshness gate: same FAA registry bulk zip as faa_aircraft_master, periodic full
+    # snapshot on a fixed static path. A Last-Modified probe skips the re-download and
+    # re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=faa_aircraft_reference/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1800,6 +1850,11 @@ partitionedTables:
         overwritePartitions: true
 
   - name: faa_engine_reference
+    # Freshness gate: same FAA registry bulk zip as faa_aircraft_master, periodic full
+    # snapshot on a fixed static path. A Last-Modified probe skips the re-download and
+    # re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=faa_engine_reference/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1881,6 +1936,10 @@ partitionedTables:
   # NTSB AVIATION ACCIDENTS — avall.zip / avall.mdb (snapshot, Jackcess MDB read)
   # ---------------------------------------------------------------------------
   - name: ntsb_aviation_accidents
+    # Freshness gate: NTSB bulk zip on a fixed static path. A Last-Modified probe skips
+    # the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
     pattern: "type=ntsb_aviation_accidents/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -2048,6 +2107,11 @@ partitionedTables:
   # CFS SHIPMENTS — Commodity Flow Survey Public Use File (snapshot, bulk CSV)
   # ---------------------------------------------------------------------------
   - name: cfs_shipments
+    # Freshness gate: Socrata dataset ETag. Must be at the table level, not nested under
+    # source: — EtlPipelineConfig.fromMap only reads freshness: from the table's own map,
+    # so a copy nested under source: is silently never parsed.
+    freshness:
+      type: etag
     pattern: "type=cfs_shipments/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -2174,8 +2238,6 @@ partitionedTables:
       response:
         format: csv
         hasHeader: true
-      freshness:
-        type: etag
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
