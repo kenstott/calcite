@@ -674,6 +674,35 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     return result;
   }
 
+  // The IncrementalTracker default for this overload fetches every row via the 1-arg method
+  // above and filters by year in Java afterward — for a table with years of accumulated history
+  // (e.g. vectorized_chunks across all SEC filers since 2010) that materializes millions of rows,
+  // running unflattenKeyValues' String.split on each, before discarding all but one year's worth.
+  // Push the filter into SQL instead, reusing the same "%__year=YYYY" suffix convention as
+  // bindYearSuffixes above.
+  @Override public Set<Map<String, String>> getProcessedKeyValues(String alternateName, String year) {
+    if (year == null) {
+      return getProcessedKeyValues(alternateName);
+    }
+    Set<Map<String, String>> result = new HashSet<>();
+    String sql = "SELECT source_key FROM pipeline_tracker "
+        + "WHERE table_name = ? AND phase = 'incremental' AND state = 'complete' "
+        + "AND source_key LIKE ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, alternateName);
+      stmt.setString(2, "%__year=" + year);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          result.add(unflattenKeyValues(rs.getString("source_key")));
+        }
+      }
+    } catch (SQLException e) {
+      LOGGER.debug("Error getting processed keys for {}/year={}: {}", alternateName, year,
+          e.getMessage());
+    }
+    return result;
+  }
+
   @Override public void invalidate(String alternateName, Map<String, String> keyValues) {
     markCleared(flattenKeyValues(keyValues), alternateName, "incremental");
   }
