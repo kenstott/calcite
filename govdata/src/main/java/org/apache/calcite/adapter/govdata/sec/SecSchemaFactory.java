@@ -216,8 +216,17 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           this.secCacheDirectory = cacheDir;
         }
 
-        // Download SEC data using DocumentETLProcessor
-        downloadSecDataUsingDocumentEtl(operand);
+        // Straight-through price path: skip the full document-ETL orchestration entirely (filing
+        // index, accession tracking, and — critically — the unconditional chunk materialization
+        // downloadSecDataUsingDocumentEtl always runs at the end regardless of what it was asked
+        // to do) when this worker's only job is prices. fetchStockPrices keeps its existing
+        // meaning; this is a separate opt-in so no existing worker's behavior changes silently.
+        if (getBooleanValue(operand, "pricesOnly", false)) {
+          downloadSecPricesOnly(operand);
+        } else {
+          // Download SEC data using DocumentETLProcessor
+          downloadSecDataUsingDocumentEtl(operand);
+        }
 
         // Pass recreated tables to operand so DuckDB can refresh views
         if (!recreatedIcebergTables.isEmpty()) {
@@ -1296,6 +1305,100 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         tablesProcessed, totalBatchesSuccessful);
 
     materializeSecChunksToRef(operand, secParquetDir, stagedSourceFiles);
+  }
+
+  /**
+   * Straight-through price path: downloads stock prices and materializes just the
+   * {@code stock_prices} table. Bypasses {@link #downloadSecDataUsingDocumentEtl}'s filing
+   * index, accession tracking, and unconditional per-table materialization loop (which always
+   * also runs chunk materialization for every other SEC table, regardless of this worker's job).
+   * Opt in via the {@code pricesOnly} operand flag.
+   */
+  private void downloadSecPricesOnly(Map<String, Object> operand) {
+    List<String> ciks = getCiksFromConfig(operand);
+    int startYear = getIntValue(operand, "startYear", 2020);
+    int endYear = getIntValue(operand, "endYear", Year.now().getValue());
+    String secParquetDir = scopedParquetDir(operand);
+
+    LOGGER.info("Price-only path: downloading and materializing stock_prices, years {}-{}",
+        startYear, endYear);
+    downloadStockPrices(secParquetDir, ciks, startYear, endYear);
+    materializeStockPricesOnly(operand, secParquetDir);
+  }
+
+  /**
+   * Materializes just the {@code stock_prices} table into Iceberg, for {@link
+   * #downloadSecPricesOnly}. Mirrors the single-table shape of {@link
+   * #materializeSecChunksToRef} rather than {@link #materializeStagingFilesToIceberg}'s
+   * all-tables loop, since a prices-only run has exactly one table to materialize.
+   */
+  private void materializeStockPricesOnly(Map<String, Object> operand, String secParquetDir) {
+    List<Map<String, Object>> partitionedTables = loadPartitionedTablesFromYaml();
+    Map<String, Object> tableConfig = null;
+    for (Map<String, Object> tc : partitionedTables) {
+      if ("stock_prices".equals(tc.get("name"))) {
+        tableConfig = tc;
+        break;
+      }
+    }
+    if (tableConfig == null || !isTableEnabled(tableConfig)) {
+      LOGGER.debug("Skipping stock_prices materialization: table not enabled");
+      return;
+    }
+    Map<String, Object> materializeConfig = (Map<String, Object>) tableConfig.get("materialize");
+    if (materializeConfig == null || !Boolean.TRUE.equals(materializeConfig.get("enabled"))) {
+      LOGGER.debug("Skipping stock_prices materialization: materialization not enabled");
+      return;
+    }
+    String pattern = (String) tableConfig.get("pattern");
+    if (pattern == null) {
+      LOGGER.warn("No pattern defined for table 'stock_prices' — skipping materialization");
+      return;
+    }
+
+    String warehousePath = (String) operand.get("warehousePath");
+    if (warehousePath == null) {
+      warehousePath = secParquetDir;
+    }
+    warehousePath = StorageProviderFactory.normalizeForHadoop(warehousePath);
+
+    IncrementalTracker incrementalTracker =
+        PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory);
+    IcebergMaterializer materializer =
+        new IcebergMaterializer(warehousePath, storageProvider, incrementalTracker);
+    materializer.setSourceActivityPhase("staging");
+
+    Map<String, Object> icebergConfig = (Map<String, Object>) materializeConfig.get("iceberg");
+    String icebergTableName =
+        icebergConfig != null ? (String) icebergConfig.get("tableName") : "stock_prices";
+    if (icebergTableName == null) {
+      icebergTableName = "stock_prices";
+    }
+
+    IcebergMaterializer.MaterializationConfig config =
+        buildMaterializationConfig("stock_prices", icebergTableName, secParquetDir, pattern,
+            tableConfig, operand, warehousePath, null);
+
+    cleanupEmptyParquetFiles(secParquetDir, pattern, 1024);
+
+    try {
+      IcebergMaterializer.MaterializationResult result = materializer.materialize(config);
+      if (result.getSuccessCount() > 0) {
+        LOGGER.info("Materialized stock_prices: {} batches successful, {} failed, {} skipped",
+            result.getSuccessCount(), result.getFailedCount(), result.getSkippedCount());
+      }
+      if (result.isTableRecreated()) {
+        synchronized (recreatedIcebergTables) {
+          recreatedIcebergTables.add("stock_prices");
+        }
+        LOGGER.info("Table 'stock_prices' was recreated - DuckDB view needs refresh");
+      }
+    } catch (Exception e) {
+      LOGGER.error("Failed to materialize stock_prices to Iceberg: {}", e.getMessage());
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Stack trace:", e);
+      }
+    }
   }
 
   /**

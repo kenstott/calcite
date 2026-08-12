@@ -254,7 +254,12 @@ case "$SCHEMA" in
     # The BULK pass ingests EVERY ticker in the Stooq bulk zip for all dates (NOT cik-scoped).
     # ciks scopes only the current-price TOP-UP (gap from bulk max date to today is fetched via
     # the Alpha Vantage JSON API for the configured SEC filers; DQ harness sets DQ_SAMPLE).
-    PRICE_OPS='"fetchStockPrices":true,"stockPriceSource":"stooq","filingTypes":[]'
+    # pricesOnly routes this worker through SecSchemaFactory's straight-through price path —
+    # download + materialize just stock_prices — instead of the general document-ETL
+    # orchestration, which always also runs chunk materialization for every other SEC table
+    # regardless of fetchStockPrices/filingTypes (the root cause of this worker's past OOM/slow
+    # runs on unrelated vectorized_chunks work). fetchStockPrices is unchanged/still required.
+    PRICE_OPS='"fetchStockPrices":true,"pricesOnly":true,"stockPriceSource":"stooq","filingTypes":[]'
     if [ -n "${GOVDATA_CIKS:-}" ]; then
       PRICE_OPS="$PRICE_OPS,\"ciks\":\"${GOVDATA_CIKS}\""
     fi
