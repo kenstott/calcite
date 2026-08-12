@@ -207,10 +207,13 @@ write_probes() {
             echo "$file" ;;
         sec)
             file="$(mktemp)"
-            # SEC chunks are promoted into ref.vectorized_chunks (source_schema='sec'); the
-            # embedding column itself predates the quantized vectorized_chunk_codes design and
-            # may not be populated -- this probe checks the function/column exist, not results.
-            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(embedding, embedding) AS sim FROM ref.vectorized_chunks WHERE source_schema = 'sec' AND embedding IS NOT NULL LIMIT 1" >> "$file"
+            # ref.vectorized_chunks has no embedding column -- vectors live separately in the
+            # Hive-partitioned vectorized_chunk_codes parquet dataset (see SemanticSearch.java),
+            # which isn't a SQL-queryable govdata table, so there's no live column to probe
+            # against. Test the function itself against known values instead (same pattern as
+            # the geo probes above): the DuckDB pushdown (COSINE_SIMILARITY -> array_cosine_
+            # similarity, see DuckDBFunctionMapping) is what could actually regress.
+            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(ARRAY[1.0, 0.0, 0.0], ARRAY[1.0, 0.0, 0.0]) AS sim" >> "$file"
             echo "$file" ;;
         *) return 0 ;;
     esac
