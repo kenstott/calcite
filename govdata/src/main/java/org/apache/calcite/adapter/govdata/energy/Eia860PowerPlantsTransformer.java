@@ -17,6 +17,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
@@ -66,6 +68,19 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
     }
   }
 
+  // EIA's archive naming has changed almost every year across 2008-2012 before settling on the
+  // modern "2___Plant_Y2015.xlsx" / "3_1_Generator_Y2015.xlsx" scheme, observed live: PlantY08.xls
+  // + GenY08.xls (2008, generator ABBREVIATED), PlantY09.xls + GeneratorY09.xls (2009),
+  // PlantY2010.xls + GeneratorsY2010.xls (2010, PLURAL "Generators"), Plant.xlsx (2011, no year
+  // suffix at all) + GeneratorY2011.xlsx, PlantY2012.xlsx + GeneratorY2012.xlsx. Matching by
+  // unanchored substring is unsafe: 2008 also ships "PRGenY08.xls" (an unrelated file) which
+  // contains "gen" mid-word. These patterns anchor to the START of the basename (after an
+  // optional numeric prefix like "3_1_") so "PRGen..." can never match "gen"/"generator".
+  private static final java.util.regex.Pattern PLANT_FILE_PATTERN =
+      java.util.regex.Pattern.compile("(\\d+_+)?plant(_?y?\\d*)?\\.xlsx?");
+  private static final java.util.regex.Pattern GENERATOR_FILE_PATTERN =
+      java.util.regex.Pattern.compile("(\\d+_\\d+_+)?(gen|generators?)(_?y?\\d*)?\\.xlsx?");
+
   private String parseEia860Zip(byte[] zipBytes, String year) throws Exception {
     byte[] plantBytes = null;
     byte[] generatorBytes = null;
@@ -75,10 +90,10 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
         String name = entry.getName();
-        String lower = name.toLowerCase();
-        if (lower.matches(".*2___plant_y\\d+\\.xlsx")) {
+        String basename = name.substring(name.lastIndexOf('/') + 1).toLowerCase();
+        if (PLANT_FILE_PATTERN.matcher(basename).matches()) {
           plantBytes = readZipEntry(zis);
-        } else if (lower.matches(".*3_1_generator_y\\d+\\.xlsx")) {
+        } else if (GENERATOR_FILE_PATTERN.matcher(basename).matches()) {
           generatorBytes = readZipEntry(zis);
         }
         zis.closeEntry();
@@ -112,7 +127,9 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
 
   private Map<String, Map<String, String>> parsePlantFile(byte[] xlsxBytes) throws Exception {
     Map<String, Map<String, String>> result = new HashMap<>();
-    XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsxBytes));
+    // WorkbookFactory auto-detects legacy .xls (BIFF, pre-2013 archives) vs modern .xlsx (OOXML)
+    // — a hardcoded XSSFWorkbook (OOXML-only) throws on the older format.
+    Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(xlsxBytes));
     try {
       Sheet sheet = wb.getSheetAt(0);
       if (sheet == null) {
@@ -155,7 +172,7 @@ public class Eia860PowerPlantsTransformer extends EiaBulkXlsxTransformer {
 
   private String parseGeneratorFile(byte[] xlsxBytes, Map<String, Map<String, String>> plantData,
       String year) throws Exception {
-    XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsxBytes));
+    Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(xlsxBytes));
     try {
       Sheet sheet = wb.getSheetAt(0);
       if (sheet == null) {
