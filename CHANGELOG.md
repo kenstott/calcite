@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.73.1](https://github.com/kenstott/calcite/compare/engine-v0.73.0...engine-v0.73.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **file/iceberg:** repair torn commits and eliminate unsafe snapshot retention ([113c34d](https://github.com/kenstott/calcite/commit/113c34dd162d12f8d8794f0b0cc0d7fa1aa5fef8))
+* **file/iceberg:** stop assuming every accession-tracked table has a year column ([691c079](https://github.com/kenstott/calcite/commit/691c079cf7893ea9804bc369aa993f68f63b7f37))
+* **govdata/energy:** parse EIA-860 archives across historical naming/format variants ([b2c0027](https://github.com/kenstott/calcite/commit/b2c0027b0fb5a3ce89bdc7a4a36d41477bc873b9))
+* **govdata/scripts:** replace stale cosine_similarity probe testing a removed column ([0b6bc01](https://github.com/kenstott/calcite/commit/0b6bc016bdbb82f5b7f8906a68f66e1863cedbad))
+
 ## [0.73.0](https://github.com/kenstott/calcite/compare/engine-v0.72.1...engine-v0.73.0) (2026-08-11)
 
 
