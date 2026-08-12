@@ -213,7 +213,12 @@ write_probes() {
             # against. Test the function itself against known values instead (same pattern as
             # the geo probes above): the DuckDB pushdown (COSINE_SIMILARITY -> array_cosine_
             # similarity, see DuckDBFunctionMapping) is what could actually regress.
-            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(ARRAY[1.0, 0.0, 0.0], ARRAY[1.0, 0.0, 0.0]) AS sim" >> "$file"
+            # Cast to DOUBLE ARRAY explicitly: an undecorated decimal literal array (ARRAY[1.0,
+            # 0.0, 0.0]) infers as DECIMAL(2,1) ARRAY, and Calcite's registered COSINE_SIMILARITY
+            # signature doesn't match that operand type -- "No match found for function signature
+            # cosine_similarity(<DECIMAL(2, 1) ARRAY>, <DECIMAL(2, 1) ARRAY>)" at validation time,
+            # before the query ever reaches the DuckDB pushdown this probe exists to test.
+            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(CAST(ARRAY[1.0, 0.0, 0.0] AS DOUBLE ARRAY), CAST(ARRAY[1.0, 0.0, 0.0] AS DOUBLE ARRAY)) AS sim" >> "$file"
             echo "$file" ;;
         *) return 0 ;;
     esac
