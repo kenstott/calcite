@@ -2913,6 +2913,15 @@ public class IcebergMaterializer {
 
     String accessionCol = config.getAccessionColumn();
     String yearValue = batch.get("year");
+    // batch's "year" is the SOURCE file-batching dimension (e.g. sec/year=2024/...), not
+    // necessarily a column on the TARGET table — vectorized_chunks (cross-schema, no year
+    // column) is batched by source year but has no year to filter by. Blindly appending
+    // WHERE year=<batchYear> against a table without that column throws a DuckDB Binder Error
+    // on every call, which means the snapshot-id fast-path below is never reached either
+    // (markTableComplete only runs after a successful scan) — permanently forcing the
+    // expensive raw-S3-listing fallback for that table on every future run. Check the
+    // target's actual schema instead of assuming the batch dimension applies to it.
+    boolean targetHasYearColumn = table != null && table.schema().findField("year") != null;
 
     // Iceberg is the source of truth. Scan it directly whenever the table is reachable.
     // The tracker is a fallback for when Iceberg is unavailable — never an authority.
@@ -2940,8 +2949,8 @@ public class IcebergMaterializer {
           return tracked;
         }
 
-        Set<String> icebergAccessions =
-            getAccessionsFromIceberg(icebergLocation, accessionCol, yearValue);
+        Set<String> icebergAccessions = getAccessionsFromIceberg(icebergLocation, accessionCol,
+            targetHasYearColumn ? yearValue : null);
         // Sync tracker from Iceberg so retries use the cheap path without a second S3 scan.
         // Only mark accessions the tracker does not already have: re-marking entries that are
         // already complete rewrites one tracker file per accession on every --etl-resume run
