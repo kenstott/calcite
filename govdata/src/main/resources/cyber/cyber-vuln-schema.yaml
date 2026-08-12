@@ -120,7 +120,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -279,7 +279,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -389,7 +389,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -501,7 +501,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -567,7 +567,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -702,7 +702,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -822,7 +822,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -924,7 +924,7 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5

@@ -165,7 +165,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -289,7 +289,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -431,7 +431,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -561,7 +561,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -699,7 +699,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -838,7 +838,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -924,7 +924,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -1018,7 +1018,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -1127,7 +1127,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -1276,7 +1276,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -1437,7 +1437,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -1579,7 +1579,7 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================
@@ -1721,7 +1721,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
 # ============================================================================
@@ -1818,7 +1818,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   - name: cdc_brfss
@@ -1926,7 +1926,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   - name: cms_open_payments
@@ -2076,7 +2076,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   - name: rxnorm_drugs
@@ -2140,7 +2140,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
 
   # ==========================================================================

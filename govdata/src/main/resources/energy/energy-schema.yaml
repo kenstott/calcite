@@ -324,7 +324,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_electricity_generation
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year, month]
         incrementalKeys: [year, month]
 
@@ -416,7 +416,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_electricity_prices
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -578,7 +578,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_utility_annual
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -769,7 +769,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_power_plants
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -899,7 +899,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_capacity_changes
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1009,7 +1009,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_fossil_fuel_production
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year, month]
         incrementalKeys: [year, month]
 
@@ -1116,7 +1116,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_state_energy_consumption
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1220,7 +1220,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_natural_gas_storage
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1330,7 +1330,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_petroleum_stocks
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1447,7 +1447,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_crude_oil_imports
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
@@ -1552,7 +1552,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_refinery_operations
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year, month]
         incrementalKeys: [year, month]
 
@@ -1675,7 +1675,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: eia_coal_mines
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 

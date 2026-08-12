@@ -162,7 +162,7 @@ partitionedTables:
         # anchor's year-batching (would replace-partition per year on the lone partition).
         batchPartitionColumns: []
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # --- FEDERAL FUNDS FOR R&D (Federal obligations by agency × performer) ------
   - name: nsf_federal_rd_obligations
@@ -234,7 +234,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: nsf_federal_rd_obligations
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # --- HIGHER EDUCATION R&D (HERD) — institution microdata -------------------
   - name: nsf_herd_by_institution
@@ -343,7 +343,7 @@ partitionedTables:
         <<: *iceberg_common
         tableName: nsf_herd_by_institution
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         incrementalKeys: [year]
 
 # ============================================================================

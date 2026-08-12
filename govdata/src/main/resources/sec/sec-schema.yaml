@@ -457,7 +457,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: filing_metadata
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number]
         batchPartitionColumns: [year]
         incrementalKeys: [year]
@@ -559,7 +559,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: financial_line_items
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, concept]
         batchPartitionColumns: [year]
 
@@ -645,7 +645,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: filing_contexts
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, context_id]
         batchPartitionColumns: [year]
 
@@ -737,7 +737,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: mda_sections
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, section, paragraph_number]
         batchPartitionColumns: [year]
 
@@ -859,7 +859,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: xbrl_relationships
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, linkbase_type, from_concept]
         batchPartitionColumns: [year]
 
@@ -977,7 +977,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: insider_transactions
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, transaction_date, reporting_person_cik]
         batchPartitionColumns: [year]
 
@@ -1100,7 +1100,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: institutional_holdings
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, report_period, cusip]
         batchPartitionColumns: [year]
 
@@ -1223,7 +1223,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: beneficial_ownership
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [subject_cik, filing_date, filer_cik]
         batchPartitionColumns: [year]
 
@@ -1306,7 +1306,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: earnings_transcripts
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, section_type, paragraph_number]
         batchPartitionColumns: [year]
 
@@ -1390,7 +1390,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: stock_prices
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # ==========================================================================
   # VECTORIZED CHUNKS (Optional)
@@ -1526,7 +1526,7 @@ partitionedTables:
         <<: *iceberg_defaults
         tableName: vectorized_chunks
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         sortOrder: [cik, accession_number, chunk_id]
         batchPartitionColumns: [year]
 

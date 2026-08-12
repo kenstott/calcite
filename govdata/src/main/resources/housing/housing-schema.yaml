@@ -250,7 +250,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: house_price_index
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -368,7 +368,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: building_permits
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -473,7 +473,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: fair_market_rents
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -554,7 +554,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: income_limits
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -653,7 +653,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: income_limits_county
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -748,7 +748,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: hmda_loans
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -842,7 +842,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: hmda_applicant_demographics
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -921,7 +921,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: opportunity_zones
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1017,7 +1017,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: hud_subsidized_housing
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1146,7 +1146,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
         tableName: hud_subsidized_county
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864

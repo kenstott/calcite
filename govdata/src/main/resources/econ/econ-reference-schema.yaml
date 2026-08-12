@@ -191,7 +191,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # --- REFERENCE JOLTS DATAELEMENTS ---
   - name: jolts_dataelements
@@ -254,7 +254,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # --- REFERENCE BLS GEOGRAPHIES ---
   - name: bls_geographies
@@ -330,7 +330,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # Full static snapshot re-fetched wholesale every run (source.type: constants) --
         # without this, the Java default (append) duplicates the whole table on every
         # re-run, since there's no partition to key an append off of.
@@ -387,7 +387,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # Full static snapshot re-fetched wholesale every run (source.type: constants) --
         # without this, the Java default (append) duplicates the whole table on every
         # re-run, since there's no partition to key an append off of.
@@ -499,7 +499,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # --- REFERENCE REGIONAL LINECODES ---
   - name: regional_linecodes
@@ -736,7 +736,7 @@ partitionedTables:
         batchPartitionColumns: [tablename]
         incrementalKeys: [tablename]
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # --- REFERENCE FRED SERIES ---
   - name: fred_series
@@ -876,7 +876,7 @@ partitionedTables:
         batchPartitionColumns: [category]
         incrementalKeys: [category]
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
 
 # ============================================================================

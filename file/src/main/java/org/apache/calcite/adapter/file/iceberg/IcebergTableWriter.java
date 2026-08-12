@@ -1523,6 +1523,142 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Repairs a torn commit: if {@code version-hint.text} points at a version whose
+   * {@code v{N}.metadata.json} is missing or fails to parse, walks backward to the highest
+   * version that DOES parse successfully — validated via Iceberg's own {@link
+   * org.apache.iceberg.TableMetadataParser}, not just filename-pattern trust — and repoints the
+   * hint there.
+   *
+   * <p>Static, and takes the table location directly rather than an {@link
+   * IcebergTableWriter} instance: a table in this broken state cannot be loaded at all — {@code
+   * S3FileIOTables.loadWritable} calls {@code TableOperations.refresh()} eagerly, which throws
+   * immediately when the hint's target metadata.json is missing — so there is no {@code Table}
+   * object to construct a writer from until AFTER this repair runs. This method only ever reads
+   * the version-hint and lists/reads candidate metadata files directly through {@code
+   * StorageProvider}, never through the table-loading path.
+   *
+   * <p>Unlike {@link #ensureVersionHint}, which only handles a MISSING hint file, this handles a
+   * PRESENT hint pointing at a version that was never durably committed. This custom table's
+   * {@code TableOperations} ({@link S3FileIOTableOperations#commit}) has no atomicity between the
+   * metadata.json write and the version-hint.text write, so a process interrupted between the two
+   * — or racing with another uncoordinated writer — can leave the hint pointing past the last
+   * version that actually landed. Any rows that commit was meant to add are NOT recovered here;
+   * re-triggering ETL for the affected period is the caller's responsibility.
+   *
+   * <p>This writes version-hint.text directly rather than through Iceberg's transactional commit
+   * path — there is no higher-level Iceberg API for "reset the current-version pointer" when that
+   * pointer itself is what's broken. Treat this as an emergency-repair operation, not a routine
+   * one: it should only run when a table is confirmed unloadable because of exactly this symptom.
+   *
+   * @param tableLocation the Iceberg table root, e.g. {@code s3a://bucket/schema/table}
+   * @param storageProvider provider used to read/list/write the metadata directory directly
+   * @return the version repaired to, or -1 if the hint was already valid (nothing to repair) or
+   *     no valid earlier version could be found
+   */
+  public static int repairVersionHint(String tableLocation, StorageProvider storageProvider) {
+    String metadataDir = tableLocation + "/metadata";
+    String versionHintPath = metadataDir + "/version-hint.text";
+
+    String hintContent;
+    try (InputStream is = storageProvider.openInputStream(versionHintPath)) {
+      hintContent = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+    } catch (IOException e) {
+      LOGGER.warn("Cannot read version-hint.text at {}: {}", versionHintPath, e.getMessage());
+      return -1;
+    }
+
+    int currentHint;
+    try {
+      currentHint = Integer.parseInt(hintContent);
+    } catch (NumberFormatException e) {
+      LOGGER.warn("version-hint.text at {} is not a valid integer: '{}'", versionHintPath, hintContent);
+      return -1;
+    }
+
+    if (isValidMetadataVersion(tableLocation, storageProvider, currentHint)) {
+      LOGGER.debug("version-hint.text ({}) already points at a valid metadata file for {}",
+          currentHint, tableLocation);
+      return -1;
+    }
+
+    List<StorageProvider.FileEntry> metadataFiles;
+    try {
+      metadataFiles = storageProvider.listFiles(metadataDir + "/", false);
+    } catch (IOException e) {
+      LOGGER.warn("Cannot list metadata directory {} for repair: {}", metadataDir, e.getMessage());
+      return -1;
+    }
+
+    java.util.regex.Pattern versionPattern = java.util.regex.Pattern.compile("v(\\d+)\\.metadata\\.json$");
+    java.util.TreeSet<Integer> candidates = new java.util.TreeSet<>(java.util.Collections.reverseOrder());
+    for (StorageProvider.FileEntry entry : metadataFiles) {
+      String path = entry.getPath();
+      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
+      if (matcher.find()) {
+        candidates.add(Integer.parseInt(matcher.group(1)));
+      }
+    }
+
+    for (int candidate : candidates) {
+      if (candidate >= currentHint) {
+        continue;
+      }
+      if (isValidMetadataVersion(tableLocation, storageProvider, candidate)) {
+        try {
+          storageProvider.writeFile(versionHintPath,
+              String.valueOf(candidate).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException e) {
+          LOGGER.warn("Failed to write repaired version-hint.text for {}: {}",
+              tableLocation, e.getMessage());
+          return -1;
+        }
+        LOGGER.warn("Repaired torn commit for {}: version-hint.text {} -> {} "
+            + "(v{} through v{} were never durably committed)",
+            tableLocation, currentHint, candidate, candidate + 1, currentHint);
+        return candidate;
+      }
+    }
+
+    LOGGER.warn("Could not repair version-hint.text for {}: no valid metadata version found below {}",
+        tableLocation, currentHint);
+    return -1;
+  }
+
+  // A metadata.json that parses cleanly can still be unusable: the same torn-commit pattern that
+  // leaves version-hint.text pointing past the last real write can equally leave an EARLIER,
+  // parseable metadata.json's current snapshot pointing at a manifest-list that was deleted by a
+  // since-run snapshot expiry (observed live: v893 parsed fine, but its current snapshot's
+  // manifest-list had already been reclaimed). So validity here means "loadable AND its current
+  // snapshot's manifest-list is actually present" — not just "valid JSON".
+  private static boolean isValidMetadataVersion(String tableLocation, StorageProvider storageProvider,
+      int version) {
+    String metadataLocation = tableLocation + "/metadata/v" + version + ".metadata.json";
+    org.apache.iceberg.TableMetadata metadata;
+    try (InputStream is = storageProvider.openInputStream(metadataLocation)) {
+      String json = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+      metadata = org.apache.iceberg.TableMetadataParser.fromJson(metadataLocation, json);
+    } catch (Exception e) {
+      return false;
+    }
+
+    org.apache.iceberg.Snapshot currentSnapshot = metadata.currentSnapshot();
+    if (currentSnapshot == null) {
+      return true; // empty table — nothing to dereference, trivially valid
+    }
+    String manifestListLocation = currentSnapshot.manifestListLocation();
+    if (manifestListLocation == null) {
+      return true;
+    }
+    try {
+      storageProvider.getMetadata(manifestListLocation);
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
+  /**
    * Normalizes S3 paths to fix Hadoop's malformed URIs.
    * Hadoop's Path.toString() can return "s3a:/bucket" instead of "s3a://bucket".
    */

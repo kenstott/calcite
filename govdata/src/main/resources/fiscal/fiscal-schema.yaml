@@ -354,7 +354,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: soi_income_by_zip
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -464,7 +464,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: soi_income_by_county
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -556,7 +556,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: county_migration_flows
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -686,7 +686,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: exempt_org_master
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -780,7 +780,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: exempt_org_990
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -848,7 +848,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: usaspending_by_agency
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -927,7 +927,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: usaspending_by_state
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -999,7 +999,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: usaspending_by_county
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1126,7 +1126,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: sba_loan_approvals
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1227,7 +1227,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: ssa_benefits_by_geography
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1329,7 +1329,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: ssa_benefits_by_geography_acs
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1434,7 +1434,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: govt_finance_by_unit
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1568,7 +1568,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: state_minimum_wage_history
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864

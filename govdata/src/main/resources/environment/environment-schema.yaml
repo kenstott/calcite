@@ -263,7 +263,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: air_quality_annual
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -380,7 +380,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: air_quality_daily
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -495,7 +495,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: aqs_monitors
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -645,7 +645,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: tri_releases
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -767,7 +767,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: ghg_facilities
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -845,7 +845,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: ghg_emissions
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1044,7 +1044,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: egrid_emission_rates
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1133,7 +1133,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: water_sites
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1215,7 +1215,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: streamflow
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1333,7 +1333,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: drinking_water
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1492,7 +1492,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: epa_facilities
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1615,7 +1615,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: drinking_water_violations
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1726,7 +1726,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: superfund_sites
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1839,7 +1839,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
         tableName: rcra_facilities
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
@@ -1949,7 +1949,7 @@ partitionedTables:
         tableName: water_quality_samples
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 3

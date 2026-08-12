@@ -156,7 +156,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -271,7 +271,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -401,7 +401,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -507,7 +507,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -644,7 +644,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # replace each first_seen partition present in the current feed
 
@@ -737,7 +737,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -826,7 +826,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -924,7 +924,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -1009,7 +1009,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -1109,7 +1109,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # snapshot: replace the type=<table> partition each run (idempotent)
 
@@ -1246,7 +1246,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         overwritePartitions: true   # default + historical/DQ: replace each first_seen partition
         # Production daily appends instead — accumulating pulse version history in each first_seen

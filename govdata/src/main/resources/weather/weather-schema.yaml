@@ -341,7 +341,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: nws_stations
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -444,7 +444,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: nws_alerts
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -544,7 +544,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_stations
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         overwritePartitions: true
         runCompaction: true
@@ -643,7 +643,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_monthly_summaries
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -734,7 +734,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: cdo_annual_summaries
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -833,7 +833,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: ghcnd_stations_with_county
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true
@@ -948,7 +948,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: ghcnd_daily
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1062,7 +1062,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: drought_monitor_weekly
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1152,7 +1152,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: hms_smoke_daily
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1223,7 +1223,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: hms_smoke_polygons
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
@@ -1337,7 +1337,7 @@ partitionedTables:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: climate_normals_monthly
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
         overwritePartitions: true

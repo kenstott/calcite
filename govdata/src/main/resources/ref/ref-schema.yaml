@@ -262,7 +262,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows; replace-partition would drop all prior LEI history
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -338,7 +338,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -664,7 +664,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows; ownership history is the point
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -755,7 +755,7 @@ partitionedTables:
         # preserved — the table accumulates a per-day history keyed by as_of.
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -866,7 +866,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -997,7 +997,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -1061,7 +1061,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # Full static snapshot re-fetched wholesale every run (source.type: constants) --
         # without this, the Java default (append) duplicates the whole table on every re-run
         # (retry, --etl-resume, a second invocation), since there's no partition to key an
@@ -1135,7 +1135,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
         # on every re-run.
         overwritePartitions: true
@@ -1185,7 +1185,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
         # on every re-run.
         overwritePartitions: true
@@ -1246,7 +1246,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
         # on every re-run.
         overwritePartitions: true
@@ -1311,7 +1311,7 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         # See ref.naics above: constants-sourced full snapshot, needs overwrite (not append)
         # on every re-run.
         overwritePartitions: true
@@ -1529,7 +1529,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: false   # APPEND the computed_delta rows (new days); never rewrite history
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -1640,7 +1640,7 @@ partitionedTables:
         batchPartitionColumns: [type]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # ==========================================================================
   # HOLIDAYS — multi-country public holidays (Nager.Date, ~110 countries)
@@ -1742,7 +1742,7 @@ partitionedTables:
         batchPartitionColumns: [type, year]
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
@@ -1887,7 +1887,7 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # ==========================================================================
   # ENTITY_PERSON_BRIDGE — cross-schema individual name resolution, tall pairwise log
@@ -2003,7 +2003,7 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # ==========================================================================
   # CANONICAL_ORG_ENTITY — wide hub, one row per real-world org, nullable FKs
@@ -2321,7 +2321,7 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # ==========================================================================
   # CANONICAL_PERSON_ENTITY — wide hub, one row per real-world individual
@@ -2460,7 +2460,7 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
   # ==========================================================================
   # VECTORIZED_CHUNKS — cross-schema semantic-search text index (row-concat mode)
@@ -2641,7 +2641,7 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
         runMaintenance: true
-        snapshotRetentionDays: 1
+        snapshotRetentionDays: 7
 
 # ============================================================================
 # CONSTRAINTS

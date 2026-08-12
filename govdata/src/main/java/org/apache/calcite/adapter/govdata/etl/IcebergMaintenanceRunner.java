@@ -124,6 +124,28 @@ public class IcebergMaintenanceRunner {
       }
     }
 
+    // Version-hint repair: MUST run before loadTable below, and cannot use it — a table with a
+    // torn commit (hint pointing at a metadata.json that was never durably written) cannot be
+    // loaded at all, since S3FileIOTables.loadWritable() calls TableOperations.refresh() eagerly,
+    // which throws for exactly this case. See IcebergTableWriter#repairVersionHint for why this
+    // works directly against storage instead.
+    if (config.repairVersionHint) {
+      StorageProvider repairStorageProvider = buildStorageProvider(config);
+      String base = config.warehouse.endsWith("/")
+          ? config.warehouse.substring(0, config.warehouse.length() - 1) : config.warehouse;
+      String tableLocation = base + "/" + config.tableName.replace('.', '/');
+      System.out.println("\nChecking version-hint.text for " + tableLocation + "...");
+      int repaired = IcebergTableWriter.repairVersionHint(tableLocation, repairStorageProvider);
+      if (repaired < 0) {
+        System.out.println("Nothing to repair (hint already valid, or no earlier valid "
+            + "version found).");
+      } else {
+        System.out.println("Repaired: version-hint.text now points to v" + repaired
+            + ".metadata.json");
+      }
+      return 0;
+    }
+
     // Load the Iceberg table
     System.out.println("Loading table...");
     Map<String, Object> catalogConfig = new HashMap<>();
@@ -307,6 +329,9 @@ public class IcebergMaintenanceRunner {
     System.err.println("  --maintenance-only      Expire snapshots (+orphans if orphan-days<=30) and stop; no compaction");
     System.err.println("  --prune-metadata-versions N   Keep only the N most-recent v{N}.metadata.json"
         + " files and stop; no scan, no compaction");
+    System.err.println("  --repair-version-hint   EMERGENCY REPAIR: if version-hint.text points at a"
+        + " metadata.json that was never durably committed (table won't load), repoint it at the"
+        + " highest earlier version that parses via Iceberg's own TableMetadataParser, and stop.");
     System.err.println("  --dry-run               Report only, no changes");
   }
 
@@ -322,6 +347,7 @@ public class IcebergMaintenanceRunner {
     int expireSnapshotsDays = DEFAULT_EXPIRE_SNAPSHOTS_DAYS;
     int orphanFilesDays = DEFAULT_ORPHAN_FILES_DAYS;
     int pruneMetadataVersions = 0;
+    boolean repairVersionHint = false;
     boolean dryRun = false;
     boolean maintenanceOnly = false;
 
@@ -361,6 +387,9 @@ public class IcebergMaintenanceRunner {
           break;
         case "--prune-metadata-versions":
           config.pruneMetadataVersions = Integer.parseInt(args[++i]);
+          break;
+        case "--repair-version-hint":
+          config.repairVersionHint = true;
           break;
         case "--dry-run":
           config.dryRun = true;
