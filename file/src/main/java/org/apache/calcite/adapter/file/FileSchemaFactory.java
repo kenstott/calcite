@@ -46,9 +46,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -486,6 +488,28 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Get partitioned tables configuration
     @SuppressWarnings("unchecked") List<Map<String, Object>> partitionedTables =
         (List<Map<String, Object>>) operand.get("partitionedTables");
+
+    // Honor enabledTables (typically set from the operand by a worker that scopes each
+    // invocation to a subset — e.g. a year-sliced pool worker that must skip the
+    // snapshot/full-archive tables reserved for a single :once slot). SchemaConfig.fromMap
+    // (file/etl/SchemaConfig.java) applies this same filter on the ETL/fetch side; without
+    // applying it here too, a year-scoped worker still walks every table via
+    // processPartitionedTables (Iceberg discovery + materialize) and can commit a redundant
+    // full-table replace to a snapshot table alongside the dedicated :once worker for it.
+    @SuppressWarnings("unchecked") List<String> enabledTablesForFilter =
+        (List<String>) operand.get("enabledTables");
+    if (enabledTablesForFilter != null && !enabledTablesForFilter.isEmpty()
+        && partitionedTables != null) {
+      Set<String> enabledTableNames = new HashSet<>(enabledTablesForFilter);
+      List<Map<String, Object>> filteredPartitionedTables = new ArrayList<>();
+      for (Map<String, Object> tableConfig : partitionedTables) {
+        Object nameObj = tableConfig.get("name");
+        if (nameObj instanceof String && enabledTableNames.contains(nameObj)) {
+          filteredPartitionedTables.add(tableConfig);
+        }
+      }
+      partitionedTables = filteredPartitionedTables;
+    }
 
     // Schema-level materialize default (FILE-186): materialize=iceberg builds an Iceberg lake from
     // every discovered table. Writability comes from the tracker backend — rw=off sets trackerBackend
