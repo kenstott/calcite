@@ -939,6 +939,12 @@ public final class GovDataModelVerificationRunner {
         } catch (Exception e) {
           failures++;
           System.out.println("  [FAIL]  " + label + " -> " + trunc(e.getMessage(), 600));
+          // This CLI runner's own stack-trace verbosity, set by model-verify.sh — not adapter
+          // model-operand-guard: allow configuration; there is no schema operand to read it from.
+          if (System.getenv("VERIFY_STACK") != null) {
+            System.err.println("STACK for probe " + label + ":");
+            e.printStackTrace();
+          }
         } finally {
           if (rs != null) {
             try {

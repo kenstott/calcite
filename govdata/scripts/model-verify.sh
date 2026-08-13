@@ -213,12 +213,18 @@ write_probes() {
             # against. Test the function itself against known values instead (same pattern as
             # the geo probes above): the DuckDB pushdown (COSINE_SIMILARITY -> array_cosine_
             # similarity, see DuckDBFunctionMapping) is what could actually regress.
-            # Cast to DOUBLE ARRAY explicitly: an undecorated decimal literal array (ARRAY[1.0,
-            # 0.0, 0.0]) infers as DECIMAL(2,1) ARRAY, and Calcite's registered COSINE_SIMILARITY
-            # signature doesn't match that operand type -- "No match found for function signature
-            # cosine_similarity(<DECIMAL(2, 1) ARRAY>, <DECIMAL(2, 1) ARRAY>)" at validation time,
-            # before the query ever reaches the DuckDB pushdown this probe exists to test.
-            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY(CAST(ARRAY[1.0, 0.0, 0.0] AS DOUBLE ARRAY), CAST(ARRAY[1.0, 0.0, 0.0] AS DOUBLE ARRAY)) AS sim" >> "$file"
+            # Pass VARCHAR, never an ARRAY literal: SimilarityFunctions.java documents that
+            # Calcite's reflective UDFs don't reliably accept ARRAY operands at all (see its
+            # cosineSimilarity/embedText javadoc) -- confirmed live: an ARRAY-typed probe here
+            # (even after CAST to DOUBLE ARRAY) intermittently failed validation with "No match
+            # found for function signature", non-deterministically pass/fail per JVM launch
+            # (java.lang.Class#getMethods() order, which ReflectiveFunctionBase#findMethod uses
+            # to disambiguate the two cosineSimilarity(Object,Object)/(String,String) overloads,
+            # is JVM-implementation-defined -- not a live/query-time race, so retries never
+            # helped). The (String, String) overload is deliberately VARCHAR so it "validates
+            # cleanly" (see the embedText javadoc) -- comma-separated text is exactly what
+            # extractFloatArray() parses back out.
+            echo "sec_cosine_similarity|||SELECT COSINE_SIMILARITY('1.0,0.0,0.0', '1.0,0.0,0.0') AS sim" >> "$file"
             echo "$file" ;;
         *) return 0 ;;
     esac
