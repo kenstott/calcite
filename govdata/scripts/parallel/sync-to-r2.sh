@@ -155,21 +155,31 @@ for s in "${_schemas[@]}"; do
     # Two-pass, pointer-last copy, scoped to this schema's subtree. rclone orders a pass's
     # transfers itself and doesn't know the Hadoop-catalog pointer (version-hint.text)
     # depends on the data/metadata a snapshot references; copying it first would expose a
-    # torn snapshot to live R2 readers. Pass 1 copies everything EXCEPT the pointer, pass 2
-    # advances the pointer once its tree is present. PIPESTATUS[0] captures rclone's real
-    # exit (the `| while read` + set -e would otherwise mask/abort it), so a failed slice
-    # holds THIS schema's sentinel and retries next pass instead of skipping its data.
+    # torn snapshot to live R2 readers. Pass 1 copies everything EXCEPT the pointer; pass 2,
+    # which advances the pointer, runs ONLY if pass 1 exited clean — otherwise the pointer
+    # could be advanced to reference files pass 1 never finished copying (e.g. a live
+    # writer's compaction deleting a superseded manifest mid-copy, 404ing that one transfer
+    # while leaving the rest of pass 1 — and the unrelated pointer file in pass 2 — free to
+    # succeed), exposing exactly the torn snapshot this two-pass split exists to prevent.
+    # PIPESTATUS[0] captures rclone's real exit (the `| while read` + set -e would otherwise
+    # mask/abort it), so a failed slice holds THIS schema's sentinel and retries next pass
+    # instead of skipping its data.
     set +e
     rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
       --exclude "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
       log_info "sync-to-r2: [$s] $line"
     done
     _rc_data=${PIPESTATUS[0]}
-    rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
-      --include "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
-      log_info "sync-to-r2: [$s] pointer: $line"
-    done
-    _rc_ptr=${PIPESTATUS[0]}
+    if [ "$_rc_data" -eq 0 ]; then
+      rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
+        --include "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
+        log_info "sync-to-r2: [$s] pointer: $line"
+      done
+      _rc_ptr=${PIPESTATUS[0]}
+    else
+      log_error "sync-to-r2: [$s] data pass failed (rc=$_rc_data) — skipping pointer pass, R2 pointer left untouched"
+      _rc_ptr=1
+    fi
     set -e
 
     if [ "$_rc_data" -ne 0 ] || [ "$_rc_ptr" -ne 0 ]; then
