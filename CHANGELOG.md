@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.74.1](https://github.com/kenstott/calcite/compare/engine-v0.74.0...engine-v0.74.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **file/iceberg:** read version-hint.text in IcebergDirectLoader instead of trusting the highest filename ([3ae0482](https://github.com/kenstott/calcite/commit/3ae04827638866251f07dcd281db8f02236ccfee))
+* **file:** honor enabledTables when materializing, not just when fetching ([2d1ed32](https://github.com/kenstott/calcite/commit/2d1ed3258b49e1f7da370a13a955cb924377a359))
+* **govdata/scripts:** cast the sec cosine_similarity probe's array literals to DOUBLE ([d234de4](https://github.com/kenstott/calcite/commit/d234de4b7fcdc84b6249bc12dd1a79ff0f00cdb1))
+* **govdata/scripts:** stop passing an ARRAY literal to the sec cosine_similarity probe ([82818c7](https://github.com/kenstott/calcite/commit/82818c73c33d5874d94534c9c3bd475ad7f8cf7e))
+
 ## [0.74.0](https://github.com/kenstott/calcite/compare/engine-v0.73.1...engine-v0.74.0) (2026-08-12)
 
 
