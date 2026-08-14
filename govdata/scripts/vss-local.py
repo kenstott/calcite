@@ -83,7 +83,7 @@ COMPACT_MIN_FILES = int(os.environ.get("VSS_COMPACT_MIN_FILES", "16"))
 # products comparable across rows for rerank.
 I8_SCALE = float(os.environ.get("VSS_I8_SCALE", "0.35"))
 MEM_LIMIT = os.environ.get("VSS_MEM_LIMIT", "4GB")
-TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/home/adminwsl/tmp_duck")
+TEMP_DIR = os.environ.get("VSS_TEMP_DIR", "/var/tmp/govdata/vss_tmp_duck")
 
 
 def codes_dataset_for(source_schema):
@@ -352,10 +352,15 @@ def cmd_backlog(max_rows, max_seconds, source_schema="sec", iceberg_path=None,
     """
     iceberg_path = iceberg_path or iceberg_chunks_for(source_schema)
     if source_schema == "sec":
-        # newest-first via (year, accession_number); accession encodes YY-seq, so recently
-        # filed / most-queried chunks lead and the historical backlog drains behind them.
-        year_expr = year_expr or "s.year"
-        order_by = order_by or "s.year DESC, s.accession_number DESC"
+        # sec's chunks live in the shared ref.vectorized_chunks table (promoted via
+        # SecSchemaFactory#materializeSecChunksToRef), whose generalized schema has no
+        # `year` column -- only the per-schema wide columns (cik, accession_number,
+        # filing_date) populated when source_schema='sec'. Derive year from filing_date
+        # (ISO 8601, 'YYYY-...') instead. Newest-first via (filing_date, accession_number);
+        # accession encodes YY-seq, so recently filed / most-queried chunks lead and the
+        # historical backlog drains behind them.
+        year_expr = year_expr or "EXTRACT(year FROM s.filing_date)"
+        order_by = order_by or "s.filing_date DESC, s.accession_number DESC"
     else:
         # Other sources' vectorized_chunks has no year/accession_number -- codes' `year`
         # column is a SEC-only convenience (see cmd_stats), so just carry 0.
@@ -400,10 +405,11 @@ def cmd_year(year):
     t = time.time()
     con.execute(f"""
         CREATE OR REPLACE TEMP TABLE _todo AS
-        SELECT s.chunk_id, s.year AS yr, s.chunk_text
+        SELECT s.chunk_id, EXTRACT(year FROM s.filing_date) AS yr, s.chunk_text
         FROM iceberg_scan('{ICEBERG_CHUNKS}') s
         LEFT JOIN _done d ON d.chunk_id = s.chunk_id
-        WHERE d.chunk_id IS NULL AND s.source_schema = 'sec' AND s.year = {int(year)}
+        WHERE d.chunk_id IS NULL AND s.source_schema = 'sec'
+          AND EXTRACT(year FROM s.filing_date) = {int(year)}
           AND s.chunk_text IS NOT NULL AND length(s.chunk_text) > 10
         ORDER BY s.accession_number DESC
     """)
