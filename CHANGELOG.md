@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.74.3](https://github.com/kenstott/calcite/compare/engine-v0.74.2...engine-v0.74.3) (2026-08-14)
+
+
+### Bug Fixes
+
+* **govdata/scripts:** fix vss-local.py TEMP_DIR path and sec backlog year lookup ([47f67aa](https://github.com/kenstott/calcite/commit/47f67aa11e2ba8858ac0b337038d591add293ca0))
+
 ## [0.74.2](https://github.com/kenstott/calcite/compare/engine-v0.74.1...engine-v0.74.2) (2026-08-14)
 
 
