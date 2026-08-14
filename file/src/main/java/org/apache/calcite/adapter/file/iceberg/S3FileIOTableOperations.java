@@ -34,10 +34,15 @@ import java.util.Collections;
  *
  * <p>This mirrors the {@code HadoopTables}/{@code HadoopCatalog} on-disk layout —
  * {@code metadata/version-hint.text} holds the current version number {@code N}, and the table
- * metadata lives at {@code metadata/v{N}.metadata.json}. On commit we read version {@code N}, write
- * {@code v{N+1}.metadata.json}, then overwrite the version hint. This is a plain read-then-write
- * (no atomic rename / compare-and-swap): {@link CrossProcessCommitLock} already serializes commits
- * to one committer per table per host, so no optimistic-concurrency check is required.
+ * metadata lives at {@code metadata/v{N}.metadata.json}. On commit we read version {@code N},
+ * write {@code v{N+1}.metadata.json}, read it back to confirm it is durably present and
+ * parseable, then overwrite the version hint. This is a plain read-write-verify-write (no
+ * atomic rename / compare-and-swap): {@link CrossProcessCommitLock} already serializes commits
+ * to one committer per table per host, so no optimistic-concurrency check is required. The
+ * read-back is what a compare-and-swap store would get for free — without it, a client-side
+ * write that returns successfully but isn't yet durably readable (or a crash between the PUT
+ * request and its response) leaves version-hint.text free to advance onto a file that doesn't
+ * exist, only surfacing later as a table that silently "won't load".
  */
 public class S3FileIOTableOperations implements TableOperations {
   private final String location;
@@ -80,9 +85,23 @@ public class S3FileIOTableOperations implements TableOperations {
 
   @Override public void commit(TableMetadata base, TableMetadata metadata) {
     int next = (base == null) ? 0 : version + 1;
+    String metadataLocation = location + "/metadata/v" + next + ".metadata.json";
     try {
-      String metadataLocation = location + "/metadata/v" + next + ".metadata.json";
       TableMetadataParser.write(metadata, io.newOutputFile(metadataLocation));
+
+      // Verification gate: a write returning without an exception is not proof the object
+      // is durably present and readable (S3-compatible stores can surface a write that
+      // "succeeded" client-side but isn't yet consistently readable, and a crash between the
+      // PUT request and its response leaves the same ambiguity). Read the metadata.json back
+      // BEFORE the pointer can be advanced to reference it -- this is the one gate standing
+      // between a partial/undurable write and version-hint.text pointing at a file that
+      // doesn't (yet, or ever) exist, which otherwise surfaces later as a table that "won't
+      // load" (see IcebergMaintenanceRunner#repairVersionHint, the emergency repair for
+      // exactly this state). Failing here throws before version-hint.text is ever touched,
+      // so the pointer still references the last known-good version -- no dangling reference,
+      // and the next commit attempt retries this same version number since `version` was
+      // never advanced.
+      TableMetadataParser.read(io, io.newInputFile(metadataLocation));
 
       String hintPath = location + "/metadata/version-hint.text";
       PositionOutputStream out = io.newOutputFile(hintPath).createOrOverwrite();
