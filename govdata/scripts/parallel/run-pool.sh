@@ -222,15 +222,18 @@ for arg in "$@"; do
       # archives on every year slot, so ingest them ONCE here; the per-year lands:${_y} slots below
       # cover only its year-partitioned tables (timber_sales, nps_visitation, onrr_revenues).
       queue+=(lands:once)
-      # ag/disasters/housing/transport/environment are SPLIT (lands-style): each mixes
+      # ag/disasters/housing/transport/environment/census are SPLIT (lands-style): each mixes
       # year-addressable tables (sliced per-year in the loop below for parallelism) with
       # snapshot/full-archive tables that ignore the year range and would re-download on
       # every year slot — those ingest exactly once via a :once slot here. worker.sh fences
       # each slot to its table subset via enabledTables (_split_year_tables/_split_once_tables).
       # The :once tables are: ag=ers_farm_income; disasters=wildfire_perimeters;
       # housing=house_price_index; transport=vehicle_recalls/safety_complaints/airports;
-      # environment=aqs_monitors/water_sites/drinking_water/epa_facilities/violations/superfund/rcra.
-      queue+=(ag:once disasters:once housing:once transport:once environment:once fiscal:once)
+      # environment=aqs_monitors/water_sites/drinking_water/epa_facilities/violations/superfund/rcra;
+      # census=qwi_employment (fixed literal 2022-2024 quarter list, no year dimension --
+      # without this slot it fell through to every census:${_y} worker at once, all racing
+      # to commit the same Iceberg partitions concurrently; confirmed live 2026-08-14).
+      queue+=(ag:once disasters:once housing:once transport:once environment:once fiscal:once census:once)
       # Year loop (current year is daily's slot, so start at cy-1).
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do

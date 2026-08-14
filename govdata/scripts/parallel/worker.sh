@@ -24,7 +24,7 @@
 #   sec_secondary <year|current>   — SEC 8-K, proxy, insider, 13F, 13D/G
 #   sec_prices    <daily|historical> — Stock prices via Stooq (year-range fixed)
 #   econ          <historical|daily>
-#   census        <historical|daily>
+#   census        <historical|daily|once|year|range> — once = qwi_employment (no year dim)
 #   geo           <historical|daily>
 #   crime         <historical|daily>
 #   weather       <historical|daily>
@@ -303,12 +303,13 @@ case "$SCHEMA" in
     ;;
 
   # ── Simple year-range schemas ──────────────────────────────────────────────
-  # econ, census, crime, weather, energy share historical/daily logic.
-  # census adds enabledSources; all daily runs pass currentMonth. Per-table
-  # cadence (energy's weekly/monthly/annual mix) lives in the schema YAML
-  # dimensions (month cache-buster), not in worker flags.
+  # econ, crime, weather, energy share historical/daily logic. All daily runs
+  # pass currentMonth. Per-table cadence (energy's weekly/monthly/annual mix)
+  # lives in the schema YAML dimensions (month cache-buster), not in worker
+  # flags. census moved to the split-aware group below (qwi_employment has no
+  # year dimension).
 
-  econ|census|crime|weather|energy|research)
+  econ|crime|weather|energy|research)
     case "$MODE" in
       historical)
         export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
@@ -331,7 +332,6 @@ case "$SCHEMA" in
       *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     case "$SCHEMA" in
-      census) EXTRA="${EXTRA:+${EXTRA},}\"enabledSources\":[\"acs\"]" ;;
       crime)
         # Optional source fence for crime (e.g. GOVDATA_ENABLED_SOURCES=bjs to re-ingest
         # only BJS tables and skip the slow CDE agency sweep). When unset, no operand is
@@ -482,7 +482,7 @@ case "$SCHEMA" in
   #                    it emits :once + per-year)
   #   daily          — ALL tables (snapshots refresh + current-year data; currentMonth passed
   #                    so month-partitioned tables like transport's airline_ontime bust cache)
-  housing|transport|environment|ag|disasters|fiscal)
+  housing|transport|environment|ag|disasters|fiscal|census)
     ENABLED=""
     EXTRA=""
     case "$MODE" in
@@ -507,6 +507,8 @@ case "$SCHEMA" in
         ;;
       *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, once, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
+    # census's ACS tables need enabledSources regardless of mode/enabledTables.
+    [ "$SCHEMA" = "census" ] && EXTRA="${EXTRA:+${EXTRA},}\"enabledSources\":[\"acs\"]"
     # Comma-join the optional operands (enabledTables, currentMonth) into one fragment.
     OPS="$ENABLED"
     [ -n "$EXTRA" ] && OPS="${OPS:+${OPS},}${EXTRA}"
