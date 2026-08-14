@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.74.4](https://github.com/kenstott/calcite/compare/engine-v0.74.3...engine-v0.74.4) (2026-08-14)
+
+
+### Bug Fixes
+
+* **govdata/scripts:** give census a :once slot for its non-year-addressable table ([9d0b69d](https://github.com/kenstott/calcite/commit/9d0b69d116603b0d009561af4aab1d9fcf0dbdfe))
+
 ## [0.74.3](https://github.com/kenstott/calcite/compare/engine-v0.74.2...engine-v0.74.3) (2026-08-14)
 
 
