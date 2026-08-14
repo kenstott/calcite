@@ -20,6 +20,9 @@ import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.LocationProvider;
 import org.apache.iceberg.io.PositionOutputStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +48,8 @@ import java.util.Collections;
  * exist, only surfacing later as a table that silently "won't load".
  */
 public class S3FileIOTableOperations implements TableOperations {
+  private static final Logger LOGGER = LoggerFactory.getLogger(S3FileIOTableOperations.class);
+
   private final String location;
   private final S3FileIO io;
   private TableMetadata current;
@@ -72,22 +77,44 @@ public class S3FileIOTableOperations implements TableOperations {
     String hintPath = location + "/metadata/version-hint.text";
     String hint = readVersionHint(hintPath);
     if (hint == null) {
+      LOGGER.debug("refresh: no version-hint.text at {} — table does not exist yet", location);
       current = null;
       version = -1;
       return null;
     }
     int n = Integer.parseInt(hint);
     String metadataLocation = location + "/metadata/v" + n + ".metadata.json";
+    LOGGER.debug("refresh: {} -> hint={}, reading {}", location, n, metadataLocation);
     current = TableMetadataParser.read(io, io.newInputFile(metadataLocation));
     version = n;
+    LOGGER.debug("refresh: {} -> loaded v{}, snapshot={}", location, n,
+        current.currentSnapshot() != null ? current.currentSnapshot().snapshotId() : "none");
     return current;
   }
 
+  /** Threshold above which a single commit sub-step logs a WARN even on success — an unusually
+   * slow write/read is the most plausible precursor to a client-observed "succeeded" that
+   * wasn't actually durable yet (see the verification-gate comment below). */
+  private static final long SLOW_STEP_MS = 3000;
+
   @Override public void commit(TableMetadata base, TableMetadata metadata) {
+    int previous = version;
     int next = (base == null) ? 0 : version + 1;
     String metadataLocation = location + "/metadata/v" + next + ".metadata.json";
+    long commitStartNanos = System.nanoTime();
+    // Named so the catch block's diagnostic log line can say exactly which of the three
+    // sub-steps failed, without three separate try/catch blocks changing the thrown-exception
+    // behavior below (still one CommitFailedException either way).
+    String step = "write metadata.json";
+    long stepStartNanos = commitStartNanos;
     try {
+      LOGGER.debug("commit: {} starting v{} -> v{} (base snapshot={}, new snapshot={})",
+          location, previous, next,
+          base != null && base.currentSnapshot() != null ? base.currentSnapshot().snapshotId() : "none",
+          metadata.currentSnapshot() != null ? metadata.currentSnapshot().snapshotId() : "none");
+
       TableMetadataParser.write(metadata, io.newOutputFile(metadataLocation));
+      logStep(location, step, stepStartNanos, "wrote " + metadataLocation);
 
       // Verification gate: a write returning without an exception is not proof the object
       // is durably present and readable (S3-compatible stores can surface a write that
@@ -101,8 +128,14 @@ public class S3FileIOTableOperations implements TableOperations {
       // so the pointer still references the last known-good version -- no dangling reference,
       // and the next commit attempt retries this same version number since `version` was
       // never advanced.
-      TableMetadataParser.read(io, io.newInputFile(metadataLocation));
+      step = "verify metadata.json read-back";
+      stepStartNanos = System.nanoTime();
+      TableMetadata verified = TableMetadataParser.read(io, io.newInputFile(metadataLocation));
+      logStep(location, step, stepStartNanos, "verified readable (snapshot="
+          + (verified.currentSnapshot() != null ? verified.currentSnapshot().snapshotId() : "none") + ")");
 
+      step = "write version-hint.text";
+      stepStartNanos = System.nanoTime();
       String hintPath = location + "/metadata/version-hint.text";
       PositionOutputStream out = io.newOutputFile(hintPath).createOrOverwrite();
       try {
@@ -110,15 +143,39 @@ public class S3FileIOTableOperations implements TableOperations {
       } finally {
         out.close();
       }
+      logStep(location, step, stepStartNanos, hintPath + " -> v" + next);
 
       current = metadata;
       version = next;
       refreshed = true;
+      LOGGER.debug("commit: {} complete v{} -> v{} in {}ms", location, previous, next,
+          (System.nanoTime() - commitStartNanos) / 1_000_000);
     } catch (CommitFailedException e) {
+      LOGGER.error("commit: {} FAILED at step '{}' ({}ms into that step) for v{} -> v{} "
+          + "(metadataLocation={}): {}", location, step,
+          (System.nanoTime() - stepStartNanos) / 1_000_000, previous, next, metadataLocation,
+          e.getMessage());
       throw e;
     } catch (Exception e) {
+      LOGGER.error("commit: {} FAILED at step '{}' ({}ms into that step) for v{} -> v{} "
+          + "(metadataLocation={}): {}", location, step,
+          (System.nanoTime() - stepStartNanos) / 1_000_000, previous, next, metadataLocation,
+          e.toString());
       throw new CommitFailedException(e,
-          "Failed to commit Iceberg metadata v%d for table at %s", next, location);
+          "Failed to commit Iceberg metadata v%d for table at %s (step: %s)", next, location, step);
+    }
+  }
+
+  /** Logs a completed commit sub-step at DEBUG, or WARN if it took longer than
+   * {@link #SLOW_STEP_MS} — an unusually slow step is the most plausible precursor to a
+   * client-observed "succeeded" that wasn't actually durable yet. */
+  private static void logStep(String location, String step, long stepStartNanos, String detail) {
+    long ms = (System.nanoTime() - stepStartNanos) / 1_000_000;
+    if (ms >= SLOW_STEP_MS) {
+      LOGGER.warn("commit: {} step '{}' took {}ms (>= {}ms threshold) — {}",
+          location, step, ms, SLOW_STEP_MS, detail);
+    } else {
+      LOGGER.debug("commit: {} step '{}' took {}ms — {}", location, step, ms, detail);
     }
   }
 
@@ -153,8 +210,12 @@ public class S3FileIOTableOperations implements TableOperations {
     // silently treated as absence, which would make commit() think it's creating a brand
     // new table (version 0) and overwrite an existing one's metadata history.
     } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException notFound) {
+      LOGGER.debug("readVersionHint: {} absent (NoSuchKeyException) — treating as no table yet",
+          hintPath);
       return null;
     } catch (IOException e) {
+      LOGGER.error("readVersionHint: {} unreadable (not a not-found — surfacing, not treating "
+          + "as absent): {}", hintPath, e.toString());
       throw new java.io.UncheckedIOException(
           "Failed to read version hint at " + hintPath, e);
     }
