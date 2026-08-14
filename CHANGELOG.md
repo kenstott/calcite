@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.75.0](https://github.com/kenstott/calcite/compare/engine-v0.74.4...engine-v0.75.0) (2026-08-14)
+
+
+### Features
+
+* **file/iceberg:** add granular commit diagnostics to S3FileIOTableOperations ([0e4d0e9](https://github.com/kenstott/calcite/commit/0e4d0e9809aeaacf33a6b97dcfb1771dc766e0e7))
+
+
+### Bug Fixes
+
+* **file/iceberg:** verify metadata.json durability before advancing version-hint.text ([c7ef20a](https://github.com/kenstott/calcite/commit/c7ef20a31de065e3728ff252a7266b701d40670a))
+
 ## [0.74.4](https://github.com/kenstott/calcite/compare/engine-v0.74.3...engine-v0.74.4) (2026-08-14)
 
 
