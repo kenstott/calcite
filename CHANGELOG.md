@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.74.2](https://github.com/kenstott/calcite/compare/engine-v0.74.1...engine-v0.74.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* **govdata/census:** fix CPS voting supplement weight parsing and registration skip pattern ([ebb4c9e](https://github.com/kenstott/calcite/commit/ebb4c9e137b1d8f1f870214ce7b0b3356ba4c7d7))
+* **govdata/scripts:** gate R2 pointer copy on data copy success in sync-to-r2.sh ([b343cbd](https://github.com/kenstott/calcite/commit/b343cbdbf09a5016698dd80d10eecd6553614a6b))
+
 ## [0.74.1](https://github.com/kenstott/calcite/compare/engine-v0.74.0...engine-v0.74.1) (2026-08-13)
 
 
