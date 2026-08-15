@@ -234,10 +234,22 @@ public class TableContext {
   }
 
   /**
-   * Returns the storage provider.
+   * Returns the storage provider used for materialized output.
    */
   public StorageProvider getStorageProvider() {
     return schemaContext.getStorageProvider();
+  }
+
+  /**
+   * Returns the storage provider used for raw source/cache data (e.g. {@code rawCache}),
+   * which may differ from {@link #getStorageProvider()} — see
+   * {@link SchemaContext#getSourceStorageProvider()}. A listener that needs to read or
+   * pre-populate a table's raw cache (as opposed to its materialized output) must use this
+   * provider, not {@link #getStorageProvider()}, or it may compute cache paths against the
+   * wrong storage root.
+   */
+  public StorageProvider getSourceStorageProvider() {
+    return schemaContext.getSourceStorageProvider();
   }
 
   /**

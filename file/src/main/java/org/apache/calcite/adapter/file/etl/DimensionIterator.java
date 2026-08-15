@@ -218,7 +218,42 @@ public class DimensionIterator {
       }
     }
 
+    // For every combination carrying both a year (effective_year if present, else year) and a
+    // month, inject month_end = that (year, month)'s last calendar day. Plain {var} substitution
+    // has no date arithmetic, so an API whose date-range parameter is inclusive of a real
+    // calendar date (e.g. FRED's observation_end) has no other way to express "end of month"
+    // without risking an invalid date (2026-11-31) or leaking a day into the next month's fetch.
+    injectMonthEnd(combinations);
+
     return combinations;
+  }
+
+  /**
+   * Injects {@code month_end = lastDayOfMonth(year, month)} (zero-padded, e.g. {@code "29"} for
+   * February in a leap year) into every combination that has both a {@code month} value and a
+   * {@code year} or {@code effective_year} value. A derived companion like
+   * {@link #injectEffectiveYear}, not a cartesian axis.
+   */
+  private static void injectMonthEnd(List<Map<String, String>> combinations) {
+    for (Map<String, String> combo : combinations) {
+      String monthVal = combo.get("month");
+      if (monthVal == null) {
+        continue;
+      }
+      String yearVal = combo.containsKey("effective_year")
+          ? combo.get("effective_year") : combo.get("year");
+      if (yearVal == null) {
+        continue;
+      }
+      try {
+        int year = Integer.parseInt(yearVal);
+        int month = Integer.parseInt(monthVal);
+        int lastDay = java.time.YearMonth.of(year, month).lengthOfMonth();
+        combo.put("month_end", lastDay < 10 ? "0" + lastDay : String.valueOf(lastDay));
+      } catch (NumberFormatException | java.time.DateTimeException e) {
+        // Non-numeric or out-of-range year/month; skip companion injection for this combo.
+      }
+    }
   }
 
   /**

@@ -3518,6 +3518,26 @@ public class HttpSource implements DataSource {
    * Example: s3://bucket/.raw/type=regional_income/year=2020/tablename=CAGDP2/response.json
    */
   private String buildRawCachePath(Map<String, String> variables) {
+    return buildRawCachePath(rawCachePath, variables, config.getRawCache().getKeyVars(),
+        rawCacheRowCap, "gzip".equalsIgnoreCase(config.getResponse().getCompressed()));
+  }
+
+  /**
+   * Builds the raw cache path for a given set of dimension variables. Static/parameterized form
+   * of {@link #buildRawCachePath(Map)} so other components (e.g. a {@code TableLifecycleListener}
+   * that pre-populates the cache from a differently-shaped bulk fetch) can compute the exact same
+   * path {@link HttpSource} will look for, without duplicating this key-building logic.
+   *
+   * @param rawCachePath base raw-cache directory
+   * @param variables dimension variables for this request
+   * @param keyVars when non-null, restricts the key to only these variable names (see
+   *                {@link HttpSourceConfig.RawCacheConfig#getKeyVars()}); when null the full
+   *                variable set is used
+   * @param rowCap DQ sample row cap (0 = uncapped); &gt; 0 isolates the cache under {@code cap=<N>}
+   * @param gzip whether the source response is gzip-compressed (distinct cache filename)
+   */
+  public static String buildRawCachePath(String rawCachePath, Map<String, String> variables,
+      List<String> keyVars, int rowCap, boolean gzip) {
     String basePath = rawCachePath;
     StringBuilder path = new StringBuilder(basePath);
     if (!basePath.endsWith("/")) {
@@ -3530,7 +3550,6 @@ public class HttpSource implements DataSource {
     // partition `type` discriminator) resolve to the SAME cached file — enabling cross-table
     // sharing with sharedKey. When keyVars is null the full variable set is used (original
     // behavior), leaving non-configured tables unaffected.
-    List<String> keyVars = config.getRawCache().getKeyVars();
     List<String> sortedKeys = new ArrayList<String>(
         keyVars != null ? keyVars : variables.keySet());
     Collections.sort(sortedKeys);
@@ -3543,12 +3562,12 @@ public class HttpSource implements DataSource {
 
     // Capped (DQ sample) caches are keyed separately under cap=<N> so an uncapped prod run never
     // reads a partial sample, and repeat DQ runs reuse the capped sample instead of re-downloading.
-    if (rawCacheRowCap > 0) {
-      path.append("cap=").append(rawCacheRowCap).append("/");
+    if (rowCap > 0) {
+      path.append("cap=").append(rowCap).append("/");
     }
 
     // Use a distinct filename for gzip sources so old undecompressed caches are never reused
-    if ("gzip".equalsIgnoreCase(config.getResponse().getCompressed())) {
+    if (gzip) {
       path.append("response_gzip.json");
     } else {
       path.append("response.json");
@@ -3561,7 +3580,7 @@ public class HttpSource implements DataSource {
    * Components exceeding 200 chars are replaced with an MD5 hash to stay
    * under the OS 255-char filename limit (e.g. NWS pagination cursors).
    */
-  private String sanitizePathComponent(String value) {
+  static String sanitizePathComponent(String value) {
     String sanitized = value.replaceAll("[/\\\\:*?\"<>|]", "_");
     if (sanitized.length() <= 200) {
       return sanitized;

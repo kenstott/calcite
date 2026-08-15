@@ -345,6 +345,74 @@ dimension_values:
     - A   # Annual
     - Q   # Quarterly
 
+  # --- FRED Series ---
+  # Curated FRED series — covers all SQL view dependencies. Shared by the fred_indicators
+  # table (monthly cadence) and the fred_indicators_yearly_bulk bulk download (historical
+  # whole-year fetch) so the two never drift out of sync.
+  fred_series_list: &fred_series_list
+    # Rates & monetary policy
+    - "DFF"
+    - "FEDFUNDS"
+    - "DGS2"
+    - "DGS5"
+    - "DGS10"
+    - "DGS30"
+    - "DGS3MO"
+    - "T10Y2Y"
+    - "T10YIE"
+    - "BAMLC0A0CM"
+    # Monetary aggregates & Fed balance sheet
+    - "M1SL"
+    - "M2SL"
+    - "BOGMBASE"
+    - "WALCL"
+    # GDP & national accounts
+    - "GDP"
+    - "GDPC1"
+    # Employment & labor
+    - "UNRATE"
+    - "U6RATE"
+    - "PAYEMS"
+    - "CIVPART"       # Labor force participation (FRED id; replaced invalid BLS LNS11300000).
+                      # BLS CES0000000001/LNS14000000 dropped — PAYEMS/UNRATE are the FRED equivalents.
+    - "ICSA"
+    - "CCSA"
+    - "AWHMAN"
+    # Inflation
+    - "CPIAUCSL"
+    - "CPIAUCNS"      # CPI all items, not seasonally adjusted (FRED id; replaced invalid BLS CUUR0000SA0)
+    - "CPILFESL"      # Core CPI ex food & energy, SA (FRED id; replaced invalid BLS CUUR0000SA0L1E)
+    - "WPUFD49207"
+    - "PCEPI"
+    - "PCEPILFE"
+    # Consumer spending & income
+    - "PCE"
+    - "PI"
+    - "PSAVERT"
+    # Production & activity
+    - "INDPRO"
+    - "TCU"
+    - "RSXFS"
+    - "TOTBKCR"
+    - "DRTSCILM"
+    # Housing
+    - "HOUST"
+    - "HOUST1F"
+    - "PERMIT"
+    - "EXHOSLUSM495S"
+    - "CSUSHPISA"
+    - "MSPUS"
+    - "RRVRUSQ156N"
+    - "MORTGAGE30US"
+    # Sentiment
+    - "UMCSENT"
+    # Energy & commodities
+    - "DCOILWTICO"
+    # International & FX
+    - "DTWEXBGS"
+    # Business cycle
+    - "USREC"
+
 # ============================================================================
 # BULK DOWNLOADS
 # ============================================================================
@@ -2994,7 +3062,7 @@ partitionedTables:
 
   # --- FRED INDICATORS ---
   - name: fred_indicators
-    pattern: "type=fred_indicators/series=*/year=*/fred_indicators.parquet"
+    pattern: "type=fred_indicators/series=*/year=*/month=*/fred_indicators.parquet"
     partitions:
       style: hive
       columnDefinitions:
@@ -3004,6 +3072,8 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+        - name: month
+          type: VARCHAR
     comment: >
       Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with reference_fred_series or use fred_indicators_enriched view.
     columns:
@@ -3160,8 +3230,12 @@ partitionedTables:
         api_key: "{env:FRED_API_KEY}"
         file_type: "json"
         series_id: "{series}"
-        observation_start: "{year}-01-01"
-        observation_end: "{year}-12-31"
+        # FRED rejects an invalid calendar date outright (e.g. 2026-11-31 -> HTTP 400 "not a
+        # valid calendar date"), it does not just clamp an overshooting upper bound — confirmed
+        # live 2026-08-15. month_end is DimensionIterator's injected last-real-day-of-month
+        # companion (leap/30/31-aware), not a literal dimension value.
+        observation_start: "{effective_year}-{month}-01"
+        observation_end: "{effective_year}-{month}-{month_end}"
         limit: "100000"
       response:
         format: json
@@ -3176,89 +3250,47 @@ partitionedTables:
     # Custom hooks for FRED response handling
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+      # Ensures every historical (closed) year has a whole-year raw-cache file (downloading it
+      # if missing, one request per (series, year) instead of 12) and splits it into the 12
+      # per-month raw-cache files the fetch loop below expects — so a historical year costs
+      # exactly one API call, ever, while the still-open current year keeps refetching monthly.
+      # See FredYearlyRawCacheSplitter's javadoc for the full mechanism.
+      tableLifecycleListener: "org.apache.calcite.adapter.govdata.econ.FredYearlyRawCacheSplitter"
 
     # Dimension definitions for ETL iteration
     dimensions:
       type:
         - fred_indicators
-      series:
-        # Rates & monetary policy
-        - "DFF"
-        - "FEDFUNDS"
-        - "DGS2"
-        - "DGS5"
-        - "DGS10"
-        - "DGS30"
-        - "DGS3MO"
-        - "T10Y2Y"
-        - "T10YIE"
-        - "BAMLC0A0CM"
-        # Monetary aggregates & Fed balance sheet
-        - "M1SL"
-        - "M2SL"
-        - "BOGMBASE"
-        - "WALCL"
-        # GDP & national accounts
-        - "GDP"
-        - "GDPC1"
-        # Employment & labor
-        - "UNRATE"
-        - "U6RATE"
-        - "PAYEMS"
-        - "CIVPART"       # Labor force participation (FRED id; replaced invalid BLS LNS11300000).
-                          # BLS CES0000000001/LNS14000000 dropped — PAYEMS/UNRATE are the FRED equivalents.
-        - "ICSA"
-        - "CCSA"
-        - "AWHMAN"
-        # Inflation
-        - "CPIAUCSL"
-        - "CPIAUCNS"      # CPI all items, not seasonally adjusted (FRED id; replaced invalid BLS CUUR0000SA0)
-        - "CPILFESL"      # Core CPI ex food & energy, SA (FRED id; replaced invalid BLS CUUR0000SA0L1E)
-        - "WPUFD49207"
-        - "PCEPI"
-        - "PCEPILFE"
-        # Consumer spending & income
-        - "PCE"
-        - "PI"
-        - "PSAVERT"
-        # Production & activity
-        - "INDPRO"
-        - "TCU"
-        - "RSXFS"
-        - "TOTBKCR"
-        - "DRTSCILM"
-        # Housing
-        - "HOUST"
-        - "HOUST1F"
-        - "PERMIT"
-        - "EXHOSLUSM495S"
-        - "CSUSHPISA"
-        - "MSPUS"
-        - "RRVRUSQ156N"
-        - "MORTGAGE30US"
-        # Sentiment
-        - "UMCSENT"
-        # Energy & commodities
-        - "DCOILWTICO"
-        # International & FX
-        - "DTWEXBGS"
-        # Business cycle
-        - "USREC"
+      series: *fred_series_list
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
         end: current
         dataLag: 0
         releaseMonth: 2  # FRED data typically available within days
+      # Full monthly cadence: one fetch per (year, month) = one overwrite partition, so the
+      # fetch unit equals the partition granularity (required for correct replace-partition
+      # refresh). Without this, a year-wide fetch always returns some rows for the current,
+      # still-updating year, so IncrementalTracker marks the whole year complete after the
+      # first run and never revisits it — freezing the current year at whatever FRED had
+      # published the day it was first fetched. month-level partitions let past (closed)
+      # months lock in as complete while the open month keeps re-fetching (FRED returns an
+      # empty observations array for a month with no data yet, which the tracker's
+      # empty-above-frontier logic retries every run) until the source publishes it.
+      month:
+        type: list
+        values: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
     # Materialization configuration
     materialize:
       enabled: true
       format: iceberg
       output:
-        pattern: "type=fred_indicators/series=*/year=*/"
+        pattern: "type=fred_indicators/series=*/year=*/month=*/"
       partition:
-        columns: [type, year]
+        columns: [type, year, month]
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
@@ -3266,11 +3298,12 @@ partitionedTables:
       iceberg:
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
-        batchPartitionColumns: [year]
-        incrementalKeys: [year]
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
