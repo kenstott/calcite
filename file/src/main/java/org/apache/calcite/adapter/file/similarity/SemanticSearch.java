@@ -218,7 +218,11 @@ public final class SemanticSearch {
 
       String sql = "WITH prefilter AS ("
           + "SELECT chunk_id, rerank_i8, (" + ham + ") AS hd "
-          + "FROM read_parquet('" + codes + "') ORDER BY hd LIMIT " + prefilter + ") "
+          // No surrounding quotes: `codes` is already the complete read_parquet argument,
+          // either a single quoted glob or a bracketed list of quoted globs. Adding quotes
+          // here produced read_parquet('['s3://...']'), a parse error at the first inner
+          // quote — which no one hit while the query-side embedder failed first.
+          + "FROM read_parquet(" + codes + ") ORDER BY hd LIMIT " + prefilter + ") "
           + "SELECT chunk_id, "
           + "list_cosine_similarity(" + qv + "::DOUBLE[], rerank_i8::DOUBLE[]) AS score "
           + "FROM prefilter ORDER BY score DESC LIMIT " + Math.max(1, k);
