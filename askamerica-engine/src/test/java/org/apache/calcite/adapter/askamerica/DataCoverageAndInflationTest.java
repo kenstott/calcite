@@ -42,6 +42,9 @@ class DataCoverageAndInflationTest {
 
     private static final double EPS = 1e-9;
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
+        new com.fasterxml.jackson.databind.ObjectMapper();
+
     // ── data_coverage ─────────────────────────────────────────────────────────
 
     /** 2015-2017 and 2021-2023 loaded; 2018-2020 absent — the case bounds alone cannot show. */
@@ -300,5 +303,56 @@ class DataCoverageAndInflationTest {
         assertTrue(warning.contains("not an annual") || warning.contains("partial-year"),
             warning);
         assertEquals(4, out.path("base_year_months_averaged").asInt());
+    }
+
+    // ── argument reading ──────────────────────────────────────────────────────
+    //
+    // A missing base_year used to arrive as asInt()==0 and fail three layers later as
+    // "no CPI loaded for base_year 0", which names the symptom instead of the omission.
+    // Observed live 2026-08-14: an agent spent four calls guessing the parameter name.
+
+    @Test void anAbsentArgumentIsNullRatherThanZero() {
+        assertNull(McpServer.optInt(MAPPER.createObjectNode(), "base_year"),
+            "a missing year must not read as the year 0");
+    }
+
+    @Test void anExplicitNullIsAlsoAbsentRatherThanZero() {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.putNull("base_year");
+        assertNull(McpServer.optInt(args, "base_year"));
+    }
+
+    @Test void theSpellingsCallersReachForAreAccepted() {
+        ObjectNode target = MAPPER.createObjectNode();
+        target.put("target_year", 2024);
+        assertEquals(Integer.valueOf(2024), McpServer.optInt(target,
+            "base_year", "to_year", "target_year"));
+
+        ObjectNode to = MAPPER.createObjectNode();
+        to.put("to_year", 2024);
+        assertEquals(Integer.valueOf(2024), McpServer.optInt(to,
+            "base_year", "to_year", "target_year"));
+    }
+
+    @Test void theCanonicalNameWinsOverAnAlias() {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("base_year", 2024);
+        args.put("to_year", 1999);
+        assertEquals(Integer.valueOf(2024), McpServer.optInt(args,
+            "base_year", "to_year", "target_year"),
+            "listed order decides, so the canonical spelling is not shadowed by an alias");
+    }
+
+    @Test void aYearSentAsTextIsReadRatherThanRefused() {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("base_year", "2024");
+        assertEquals(Integer.valueOf(2024), McpServer.optInt(args, "base_year"));
+    }
+
+    @Test void aNonNumericValueIsAbsentRatherThanZero() {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("base_year", "latest");
+        assertNull(McpServer.optInt(args, "base_year"),
+            "unparseable text must not collapse to 0 — that is the bug this guards");
     }
 }

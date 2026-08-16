@@ -1396,7 +1396,20 @@ public class McpServer {
                     break;
                 }
                 case "adjust_inflation": {
-                    int baseYear = args.path("base_year").asInt();
+                    // base_year is declared required, but MCP clients do not necessarily
+                    // enforce the input schema. Without this check a missing value became
+                    // asInt()==0 and surfaced downstream as "no CPI loaded for base_year 0",
+                    // which names the symptom rather than the missing parameter. Callers also
+                    // reach for to_year/target_year by analogy with other tools, so accept
+                    // those spellings instead of failing on a guessable name.
+                    Integer baseYearArg = optInt(args, "base_year", "to_year", "target_year");
+                    if (baseYearArg == null) {
+                        throw new IllegalArgumentException("base_year is required — the year "
+                            + "whose dollars you want the result expressed in. Example: "
+                            + "{\"amount\": 61933, \"from_year\": 2014, \"base_year\": 2024}. "
+                            + "(to_year and target_year are accepted as aliases.)");
+                    }
+                    int baseYear = baseYearArg.intValue();
                     String sql = args.has("sql") && !args.get("sql").isNull()
                         ? args.get("sql").asText() : null;
                     String valueCol = args.has("value_col") && !args.get("value_col").isNull()
@@ -2829,6 +2842,29 @@ public class McpServer {
         m.put("cpi_u", "CUUR0000SA0");
         m.put("cpi_u_core", "CUUR0000SA0L1E");
         CPI_SERIES = java.util.Collections.unmodifiableMap(m);
+    }
+
+    /**
+     * First present integer argument among {@code names}, or null if none is supplied.
+     *
+     * <p>Jackson's {@code path(...).asInt()} yields 0 for a missing field, which turns a
+     * forgotten required argument into a plausible-looking year and pushes the failure
+     * downstream where the message no longer names the real problem. Returning null lets
+     * the caller reject it with a message that does.
+     */
+    static Integer optInt(JsonNode args, String... names) {
+        for (String name : names) {
+            JsonNode node = args.get(name);
+            if (node != null && !node.isNull() && node.isNumber()) {
+                return Integer.valueOf(node.asInt());
+            }
+            // A year arriving as "2024" is a caller convenience, not an error.
+            if (node != null && !node.isNull() && node.isTextual()
+                && node.asText().trim().matches("-?\\d+")) {
+                return Integer.valueOf(Integer.parseInt(node.asText().trim()));
+            }
+        }
+        return null;
     }
 
     /** One year's CPI: the annual average, and how many monthly readings it averages. */
