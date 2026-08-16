@@ -3394,8 +3394,11 @@ public class McpServer {
 
     // ─── Regression / hypothesis-test tools (StatsEngine) ────────────────────────
 
-    private static StatsOutput olsRegressionTool(String sql, String outcome, List<String> predictors)
+    static StatsOutput olsRegressionTool(String sql, String outcome, List<String> predictors)
             throws Exception {
+        if (sql == null || sql.trim().isEmpty() || outcome == null || outcome.trim().isEmpty()) {
+            throw new IllegalArgumentException("sql and outcome are required for ols_regression");
+        }
         String[] cols = new String[1 + predictors.size()];
         cols[0] = outcome;
         for (int i = 0; i < predictors.size(); i++) {
