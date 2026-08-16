@@ -95,6 +95,17 @@ public final class FileAdapterFunctions {
         LOGGER.warn("Failed to register duckdb stats functions: {}", e.getMessage());
       }
     }
+    // DuckDB-native JSON_EXTRACT, which Calcite core does not define under that name
+    // (the ANSI equivalent is JSON_VALUE). DuckDB engine ONLY, for the same reason as
+    // the stats aggregates above: it has no implementation on the other engines.
+    if (duckDbEngine && root.getFunctions("JSON_EXTRACT").isEmpty()) {
+      try {
+        root.add("JSON_EXTRACT", org.apache.calcite.schema.impl.ScalarFunctionImpl.create(
+            org.apache.calcite.adapter.file.duckdb.DuckDBJsonFunctions.class, "jsonExtract"));
+      } catch (Exception e) {
+        LOGGER.warn("Failed to register duckdb json functions: {}", e.getMessage());
+      }
+    }
     // Spatial ST_* are provided by Calcite's built-in SPATIAL library — connect
     // with fun=...,spatial. No schema registration is needed (and reflective
     // registration would duplicate the library operators).

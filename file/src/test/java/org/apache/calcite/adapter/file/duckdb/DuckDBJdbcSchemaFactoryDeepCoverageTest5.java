@@ -376,8 +376,12 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     Connection conn = mock(Connection.class);
     String url = "jdbc:duckdb:/path/to/db";
     String catalogPath = "/path/to/db";
+    DuckDBConvention convention =
+        DuckDBConvention.of(mock(org.apache.calcite.sql.SqlDialect.class),
+            org.apache.calcite.linq4j.tree.Expressions.constant(null), "testSchema");
+    org.apache.calcite.sql.SqlDialect dialect = mock(org.apache.calcite.sql.SqlDialect.class);
 
-    Object instance = ctor.newInstance(ds, conn, url, catalogPath);
+    Object instance = ctor.newInstance(ds, conn, url, catalogPath, convention, dialect);
     assertNotNull(instance);
 
     // Access fields
@@ -396,6 +400,17 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     java.lang.reflect.Field cpField = sdiClass.getDeclaredField("catalogPath");
     cpField.setAccessible(true);
     assertEquals(catalogPath, cpField.get(instance));
+
+    // The convention/dialect are shared across every schema mounted on this catalog path
+    // (that sharing is what lets cross-schema joins+aggregates push down to DuckDB as one
+    // statement), so this instance must return the exact objects it was built with.
+    java.lang.reflect.Field conventionField = sdiClass.getDeclaredField("convention");
+    conventionField.setAccessible(true);
+    assertSame(convention, conventionField.get(instance));
+
+    java.lang.reflect.Field dialectField = sdiClass.getDeclaredField("dialect");
+    dialectField.setAccessible(true);
+    assertSame(dialect, dialectField.get(instance));
   }
 
   /**

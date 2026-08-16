@@ -230,13 +230,23 @@ public class DuckDBJdbcSchemaFactory {
     final Connection setupConnection;
     final String jdbcUrl;
     final String catalogPath;
+    // One convention (and the dialect it was built with) per shared catalog, not per schema —
+    // sharing this instance across every schema mounted on the same DuckDB catalog file is what
+    // lets Calcite's JdbcJoinRule/JdbcAggregateRule merge a cross-schema join+aggregate into a
+    // single pushed-down DuckDB statement instead of falling back to Enumerable execution (where
+    // the DuckDB-only stats UDAFs like corr/regr_*/median have no Java implementation to fall
+    // back to). See DuckDBConvention and core's JdbcCatalogSchema, which uses the same pattern.
+    final DuckDBConvention convention;
+    final SqlDialect dialect;
 
     SharedDatabaseInfo(DataSource dataSource, Connection setupConnection, String jdbcUrl,
-        String catalogPath) {
+        String catalogPath, DuckDBConvention convention, SqlDialect dialect) {
       this.dataSource = dataSource;
       this.setupConnection = setupConnection;
       this.jdbcUrl = jdbcUrl;
       this.catalogPath = catalogPath;
+      this.convention = convention;
+      this.dialect = dialect;
     }
   }
 
@@ -372,7 +382,7 @@ public class DuckDBJdbcSchemaFactory {
         if (sharedInfo != null) {
           // Reuse existing database connection
           LOGGER.info("Reusing existing DuckDB database: {} for schema: {}", catalogPath, schemaName);
-          return createSchemaInSharedDatabase(sharedInfo, parentSchema, schemaName, directoryPath,
+          return createSchemaInSharedDatabase(sharedInfo, schemaName, directoryPath,
                                              recursive, fileSchema, operand);
         }
 
@@ -720,7 +730,8 @@ public class DuckDBJdbcSchemaFactory {
       // Add to connection pool if this is a persistent database (for future schema sharing)
       if (catalogPath != null) {
         SharedDatabaseInfo sharedInfo =
-            new SharedDatabaseInfo(dataSource, setupConn, jdbcUrl, catalogPath);
+            new SharedDatabaseInfo(dataSource, setupConn, jdbcUrl, catalogPath, convention,
+                dialect);
         // Key by the canonical path so all in-process schemas share this connection even if a
         // lock-conflict fallback opened a numbered file (catalogPath/jdbcUrl hold the actual file).
         DATABASE_POOL.put(baseCatalogPath, sharedInfo);
@@ -740,7 +751,6 @@ public class DuckDBJdbcSchemaFactory {
    * This method is called when a database is being reused across multiple schemas.
    */
   private static JdbcSchema createSchemaInSharedDatabase(SharedDatabaseInfo sharedInfo,
-                                                         SchemaPlus parentSchema,
                                                          String schemaName,
                                                          String directoryPath,
                                                          boolean recursive,
@@ -791,11 +801,12 @@ public class DuckDBJdbcSchemaFactory {
         }
       }
 
-      // Reuse existing DataSource and dialect
-      SqlDialect dialect = createDuckDBDialectWithCustomLex();
-
-      Expression expression = Schemas.subSchemaExpression(parentSchema, schemaName, JdbcSchema.class);
-      DuckDBConvention convention = DuckDBConvention.of(dialect, expression, schemaName);
+      // Reuse the DataSource, dialect, AND convention from the first schema opened against this
+      // catalog path — NOT a fresh DuckDBConvention.of(..., schemaName). A distinct convention
+      // per schema is what stops Calcite from pushing a cross-schema join+aggregate down to
+      // DuckDB as one statement (see SharedDatabaseInfo's convention field javadoc above).
+      SqlDialect dialect = sharedInfo.dialect;
+      DuckDBConvention convention = sharedInfo.convention;
 
       // Create schema using shared database (dbName is null for shared databases). Wrap
       // setupConn — see the comment at the other DuckDBJdbcSchema construction site above.

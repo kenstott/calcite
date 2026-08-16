@@ -84,6 +84,16 @@ public class DuckDBFunctionMapping {
     FUNCTION_MAP.put("READ_PARQUET", "read_parquet");
     FUNCTION_MAP.put("READ_JSON", "read_json_auto");
 
+    // JSON functions: DuckDB has no ANSI JSON_VALUE syntax, but does support
+    // json_extract(json, path) for simple two-argument extraction. JSON_EXTRACT is the
+    // file adapter's own declaration (see DuckDBJsonFunctions) registered under DuckDB's
+    // native spelling; JSON_VALUE is Calcite's real ANSI operator, remapped here only for
+    // the plain two-operand form (see the JSON_VALUE case in unparseCall below) — a
+    // RETURNING/ON ERROR/ON EMPTY clause has no json_extract equivalent and is left to
+    // unparse in ANSI form, so pushdown fails loudly at DuckDB instead of mistranslating.
+    FUNCTION_MAP.put("JSON_EXTRACT", "json_extract");
+    FUNCTION_MAP.put("JSON_VALUE", "json_extract");
+
     // Vector similarity functions - map to DuckDB's native array functions
     FUNCTION_MAP.put("COSINE_SIMILARITY", "array_cosine_similarity");
     FUNCTION_MAP.put("COSINE_DISTANCE", "array_cosine_distance");
@@ -143,6 +153,22 @@ public class DuckDBFunctionMapping {
 
       case "SUBSTRING":
         // DuckDB's SUBSTR has same syntax as SUBSTRING
+        writer.keyword(duckdbFunc);
+        writer.print("(");
+        for (int i = 0; i < call.operandCount(); i++) {
+          if (i > 0) writer.print(", ");
+          call.operand(i).unparse(writer, 0, 0);
+        }
+        writer.print(")");
+        break;
+
+      case "JSON_VALUE":
+        if (call.operandCount() != 2) {
+          // RETURNING / ON ERROR / ON EMPTY clauses have no json_extract equivalent;
+          // let the ANSI form through so pushdown fails loudly instead of mistranslating.
+          call.getOperator().unparse(writer, call, leftPrec, rightPrec);
+          break;
+        }
         writer.keyword(duckdbFunc);
         writer.print("(");
         for (int i = 0; i < call.operandCount(); i++) {

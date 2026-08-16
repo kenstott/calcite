@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -139,6 +140,58 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
       // DuckDB driver may not be available
       assertTrue(e.getMessage() != null);
     }
+  }
+
+  // --- two schemas sharing one database_filename must share one DuckDBConvention ---
+
+  /**
+   * Two govdata-style schemas mounted against the same {@code database_filename} already share
+   * one DuckDB connection/DataSource ({@link #DATABASE_POOL}); they must also share one
+   * {@link DuckDBConvention} instance, or Calcite's JdbcJoinRule/JdbcAggregateRule can never
+   * merge a join across them into a single pushed-down DuckDB statement (see
+   * DuckDBJdbcSchemaFactory$SharedDatabaseInfo's convention field javadoc). Without that
+   * sharing, a cross-schema {@code corr()}/{@code regr_*()} call falls back to Enumerable
+   * execution and fails outright, since those stats UDAFs have no Java implementation.
+   */
+  @Test void testSharedDatabaseSchemasShareOneConvention() throws Exception {
+    File sourceDirA = tempDir.resolve("duckdb-shared-a").toFile();
+    sourceDirA.mkdirs();
+    File sourceDirB = tempDir.resolve("duckdb-shared-b").toFile();
+    sourceDirB.mkdirs();
+
+    String schemaNameA = uniqueSchemaName();
+    String schemaNameB = uniqueSchemaName();
+    FileSchema fileSchemaA =
+        new FileSchema(parentSchema, schemaNameA, sourceDirA, null, new ExecutionEngineConfig());
+    FileSchema fileSchemaB =
+        new FileSchema(parentSchema, schemaNameB, sourceDirB, null, new ExecutionEngineConfig());
+
+    // Schemas.subSchemaExpression(parentSchema, ...) needs a real Expression back from the mock
+    // parent, or building the (unevaluated) sub-schema-lookup AST throws before create() ever
+    // reaches the shared-database logic under test.
+    when(parentSchema.getExpression(any(), anyString()))
+        .thenReturn(org.apache.calcite.linq4j.tree.Expressions.constant(null, SchemaPlus.class));
+
+    String sharedCatalogPath = tempDir.resolve("shared-convention.duckdb").toString();
+    Map<String, Object> operandA = new HashMap<>();
+    operandA.put("database_filename", sharedCatalogPath);
+    Map<String, Object> operandB = new HashMap<>();
+    operandB.put("database_filename", sharedCatalogPath);
+
+    JdbcSchema schemaA = DuckDBJdbcSchemaFactory.create(
+        parentSchema, schemaNameA, sourceDirA.getAbsolutePath(), false, fileSchemaA, operandA);
+    JdbcSchema schemaB = DuckDBJdbcSchemaFactory.create(
+        parentSchema, schemaNameB, sourceDirB.getAbsolutePath(), false, fileSchemaB, operandB);
+
+    Field conventionField = JdbcSchema.class.getDeclaredField("convention");
+    conventionField.setAccessible(true);
+    Object conventionA = conventionField.get(schemaA);
+    Object conventionB = conventionField.get(schemaB);
+
+    assertNotNull(conventionA);
+    assertSame(conventionA, conventionB,
+        "schemas sharing a database_filename must share one DuckDBConvention instance so "
+        + "cross-schema joins/aggregates can push down to DuckDB as one statement");
   }
 
   // --- create with relative database_filename ---

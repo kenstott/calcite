@@ -10,7 +10,15 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
+import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlLiteral;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.dialect.DuckDBSqlDialect;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.pretty.SqlPrettyWriter;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -164,6 +172,44 @@ class DuckDBFunctionMappingTest {
   @Test void testCosineDistanceMapsToArrayCosineDistance() {
     assertEquals("array_cosine_distance",
         DuckDBFunctionMapping.getDuckDBFunction("COSINE_DISTANCE"));
+  }
+
+  // --- JSON function mappings ---
+
+  @Test void testJsonExtractMapsToJsonExtract() {
+    assertEquals("json_extract", DuckDBFunctionMapping.getDuckDBFunction("JSON_EXTRACT"));
+  }
+
+  @Test void testJsonValueMapsToJsonExtract() {
+    assertEquals("json_extract", DuckDBFunctionMapping.getDuckDBFunction("JSON_VALUE"));
+  }
+
+  @Test void testJsonValueTwoOperandsUnparsesAsJsonExtract() {
+    SqlNode doc = new SqlIdentifier("DOC", SqlParserPos.ZERO);
+    SqlNode path = SqlLiteral.createCharString("$.path", SqlParserPos.ZERO);
+    SqlCall call = SqlStdOperatorTable.JSON_VALUE.createCall(SqlParserPos.ZERO, doc, path);
+
+    SqlPrettyWriter writer = new SqlPrettyWriter(DuckDBSqlDialect.DEFAULT);
+    DuckDBFunctionMapping.unparseCall(writer, call, 0, 0);
+
+    // DuckDB is case-insensitive for unquoted function names (same as the pre-existing
+    // SUBSTR/READ_CSV mappings); the writer's default keyword casing is uppercase.
+    assertEquals("JSON_EXTRACT (\"DOC\" , '$.path')", writer.toString());
+  }
+
+  @Test void testJsonValueWithExtraOperandsFallsBackToAnsiForm() {
+    SqlNode doc = new SqlIdentifier("DOC", SqlParserPos.ZERO);
+    SqlNode path = SqlLiteral.createCharString("$.path", SqlParserPos.ZERO);
+    SqlNode onError = SqlLiteral.createCharString("null", SqlParserPos.ZERO);
+    SqlCall call =
+        SqlStdOperatorTable.JSON_VALUE.createCall(SqlParserPos.ZERO, doc, path, onError);
+
+    SqlPrettyWriter writer = new SqlPrettyWriter(DuckDBSqlDialect.DEFAULT);
+    DuckDBFunctionMapping.unparseCall(writer, call, 0, 0);
+
+    // RETURNING/ON ERROR/ON EMPTY have no json_extract equivalent: the ANSI form is left
+    // as-is so an unsupported pushdown fails loudly at DuckDB instead of mistranslating.
+    assertTrue(writer.toString().startsWith("JSON_VALUE("));
   }
 
   // --- Unknown function passthrough ---
