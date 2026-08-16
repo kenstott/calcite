@@ -18,16 +18,47 @@ Model and dimensions are fixed so ETL-time and query-time embeddings always matc
 """
 import argparse
 import json
+import os
 import sys
 
-MODEL_NAME = "snowflake/snowflake-arctic-embed-xs"
+# Must match vss-local.py's MODEL default exactly (same string, same case) — that script
+# produces the stored codes, and a differently-cased or overridden model here would embed
+# queries into a different space than the corpus.
+MODEL_NAME = os.environ.get("VSS_EMBED_MODEL", "Snowflake/snowflake-arctic-embed-xs")
 EMBEDDING_DIM = 384
 
 
+class _SentenceTransformerEmbedder:
+    """Adapter exposing fastembed's ``embed(texts) -> iterable of vectors`` shape.
+
+    Kept so cmd_query / cmd_serve / cmd_embed_parquet are unchanged, while the vectors
+    themselves come from the same library, model and normalization the PRODUCER uses.
+    """
+
+    def __init__(self):
+        from sentence_transformers import SentenceTransformer
+        self._model = SentenceTransformer(MODEL_NAME, device="cpu")
+
+    def embed(self, texts, batch_size=32):
+        # normalize_embeddings=True mirrors vss-local.py exactly. The stored codes are
+        # quantized from unit vectors, so an unnormalized query vector would be compared
+        # against them on a different scale — the cosine rerank would still return rows,
+        # just subtly mis-ranked, which is the worst kind of wrong here.
+        return self._model.encode(
+            list(texts), batch_size=batch_size, normalize_embeddings=True,
+            convert_to_numpy=True, show_progress_bar=False)
+
+
 def _model():
+    # sentence-transformers, NOT fastembed: the corpus codes in
+    # s3://govdata-parquet-v1/*/vectorized_chunk_codes/ are produced by vss-local.py via
+    # SentenceTransformer, and query vectors must come from the same pipeline to live in
+    # the same space. fastembed nominally serves the same model through its own ONNX
+    # export with its own pooling defaults, so it is not guaranteed to agree — and it is
+    # not installed in the embed venv that vss-embed-setup.sh provisions (torch +
+    # sentence-transformers + duckdb + pyarrow), so importing it here failed outright.
     # Imported lazily so `--help` works without the dependency installed.
-    from fastembed import TextEmbedding
-    return TextEmbedding(model_name=MODEL_NAME)
+    return _SentenceTransformerEmbedder()
 
 
 def cmd_query(args):

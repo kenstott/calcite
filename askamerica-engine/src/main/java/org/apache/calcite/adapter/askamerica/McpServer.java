@@ -174,6 +174,8 @@ public class McpServer {
         log.println("[askamerica-mcp] logging binding="
             + org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName());
 
+        configureQueryEmbedder();
+
         // Mount every allowed schema on one connection up front, off the request thread.
         // Every tool runs against this connection, so warming it here means the first
         // query pays no mount cost and can join across schemas from the outset.
@@ -613,6 +615,46 @@ public class McpServer {
             + "(state_fips / county_fips / zcta). Call before joining a user-named place to "
             + "census/econ/geo tables so the join keys on the right code, not a guess.",
             schema(resolveProps, new String[]{"term"})));
+
+        ObjectNode entityProps = MAPPER.createObjectNode();
+        entityProps.set("term", prop("string",
+            "Name or identifier: an org/person name or fragment ('Alphabet', 'berkshire'), an "
+            + "LEI, a SEC CIK ('0000320193' or '320193'), an FEC committee id, or an EIN."));
+        entityProps.set("type", prop("string",
+            "'org' (default, ref.canonical_org_entity) or 'person' (ref.canonical_person_entity)."));
+        entityProps.set("limit", prop("integer",
+            "Maximum candidates to return. Default 20, capped at 200. A name fragment can match "
+            + "many entities; every candidate is returned rather than assuming the first is right."));
+        tools.add(
+            tool("resolve_entity",
+            "Resolve one name or identifier to a canonical entity that spans EVERY source it "
+            + "appears in — one row per real-world org/person, carrying its LEI, SEC CIK, FEC "
+            + "committee, patent assignee, EIN, EIA utility, FMCSA DOT, FAA registrant, SBA "
+            + "borrower/lender and more, each with a match confidence. Call before joining a "
+            + "user-named company or person to any schema, exactly as resolve_geo is called "
+            + "before a place join: the colloquial name is rarely the registered one, and the "
+            + "key each schema carries differs per source. Backed by ref.canonical_org_entity / "
+            + "ref.canonical_person_entity (the resolved layer) — not a name LIKE over one "
+            + "registry. Use entity_relationships for corporate parents and siblings.",
+            schema(entityProps, new String[]{"term"})));
+
+        ObjectNode relProps = MAPPER.createObjectNode();
+        relProps.set("lei", prop("string",
+            "The entity's 20-character LEI. Get it from resolve_entity when you have a name."));
+        relProps.set("direction", prop("string",
+            "'parents' (default) — this entity's direct and ultimate parents; 'children' — "
+            + "entities this one consolidates; 'siblings' — entities sharing its direct parent."));
+        relProps.set("limit", prop("integer", "Maximum rows. Default 50, capped at 500."));
+        tools.add(
+            tool("entity_relationships",
+            "Walk the legal-entity family tree: direct parent, ultimate parent, children, or "
+            + "siblings, from GLEIF's accounting-consolidation relationships. Answers 'who "
+            + "ultimately owns this filer', 'what else does this group own', and 'which entities "
+            + "are under the same parent' — questions no single filing answers, because the "
+            + "group structure lives in GLEIF, not in the filing. Restricted to ACTIVE, "
+            + "PUBLISHED ownership edges (fund/branch/feeder edges excluded). Join the returned "
+            + "LEIs back through resolve_entity to reach SEC/FEC/patent keys.",
+            schema(relProps, new String[]{"lei"})));
 
         ObjectNode inflProps = MAPPER.createObjectNode();
         inflProps.set("base_year", prop("integer",
@@ -1370,6 +1412,28 @@ public class McpServer {
                     text = resolveGeo(term, level, withinState);
                     break;
                 }
+                case "resolve_entity": {
+                    String term = args.path("term").asText();
+                    String entType = args.has("type") && !args.get("type").isNull()
+                        ? args.get("type").asText() : "org";
+                    int entLimit = args.has("limit") && !args.get("limit").isNull()
+                        ? args.get("limit").asInt() : 20;
+                    log.println("[askamerica-mcp] tool=resolve_entity term=" + term
+                        + " type=" + entType);
+                    text = resolveEntity(term, entType, entLimit);
+                    break;
+                }
+                case "entity_relationships": {
+                    String relLei = args.path("lei").asText();
+                    String relDir = args.has("direction") && !args.get("direction").isNull()
+                        ? args.get("direction").asText() : "parents";
+                    int relLimit = args.has("limit") && !args.get("limit").isNull()
+                        ? args.get("limit").asInt() : 50;
+                    log.println("[askamerica-mcp] tool=entity_relationships lei=" + relLei
+                        + " direction=" + relDir);
+                    text = entityRelationships(relLei, relDir, relLimit);
+                    break;
+                }
                 case "fetch_aligned_series": {
                     JsonNode seriesNode = args.path("series");
                     String on = args.has("on") && !args.get("on").isNull()
@@ -1870,6 +1934,69 @@ public class McpServer {
     // ── Tool implementations ──────────────────────────────────────────────────
 
     /** The effective set of schema names (env override, else the built-in default set). */
+    /**
+     * Points {@code EmbeddingService} at a query-time embedder, so {@code SEMANTIC_SEARCH} can
+     * embed the query rather than failing with "no embedder configured".
+     *
+     * <p>Nothing else in the product sets {@code calcite.embed.*}, so without this the consumer
+     * half of semantic search could never start: {@code vss-local.py} writes the corpus codes
+     * and the query side had no way to reach the same vector space.
+     *
+     * <p>Order matters and is not arbitrary:
+     * <ol>
+     *   <li>an explicit {@code calcite.embed.command|home|script} always wins — never override a
+     *       deliberate choice;</li>
+     *   <li>a bundle home ({@code bin/hugot-embed}, {@code lib/}, {@code model/}) under the
+     *       operating dir — the self-contained option, the only one viable on a client device;</li>
+     *   <li>the CPU embed venv + {@code embed.py} that {@code vss-embed-setup.sh} provisions —
+     *       the dev/ETL-box path, which needs torch and is not client-shippable.</li>
+     * </ol>
+     *
+     * <p>Resolution only; it never installs anything. If neither exists the properties stay unset
+     * and {@code SEMANTIC_SEARCH} reports the same explicit error as before — a wrong embedder
+     * would be far worse than none, because query vectors from a different pipeline than the
+     * corpus still return rows, just silently mis-ranked.
+     */
+    private static void configureQueryEmbedder() {
+        if (!System.getProperty("calcite.embed.command", "").isEmpty()
+            || !System.getProperty("calcite.embed.home", "").isEmpty()
+            || !System.getProperty("calcite.embed.script", "").isEmpty()) {
+            log.println("[askamerica-mcp] embedder: explicitly configured, leaving as-is");
+            return;
+        }
+
+        String dataDir = System.getProperty("ASKAMERICA_DATA_DIR", "");
+        if (!dataDir.isEmpty()) {
+            java.io.File home = new java.io.File(dataDir, "embedder");
+            if (new java.io.File(home, "bin/hugot-embed").isFile()) {
+                System.setProperty("calcite.embed.home", home.getAbsolutePath());
+                log.println("[askamerica-mcp] embedder: bundle home " + home.getAbsolutePath());
+                return;
+            }
+        }
+
+        String venv = System.getenv("VSS_EMBED_VENV");
+        String govdataHome = System.getenv("GOVDATA_HOME");
+        java.io.File py = (venv != null && !venv.isEmpty())
+            ? new java.io.File(venv, "bin/python")
+            : (govdataHome != null && !govdataHome.isEmpty()
+                ? new java.io.File(govdataHome, "build/.venv-embed/bin/python") : null);
+        java.io.File script = (govdataHome != null && !govdataHome.isEmpty())
+            ? new java.io.File(govdataHome, "scripts/embed.py") : null;
+        if (py != null && py.canExecute() && script != null && script.isFile()) {
+            System.setProperty("calcite.embed.python", py.getAbsolutePath());
+            System.setProperty("calcite.embed.script", script.getAbsolutePath());
+            log.println("[askamerica-mcp] embedder: venv " + py.getAbsolutePath()
+                + " + " + script.getAbsolutePath());
+            return;
+        }
+
+        log.println("[askamerica-mcp] embedder: none found — semantic_search/SEMANTIC_SEARCH will "
+            + "report 'no embedder configured'. Provide a bundle at <data-dir>/embedder "
+            + "(bin/hugot-embed, lib/, model/), or set GOVDATA_HOME with the venv from "
+            + "govdata/scripts/vss-embed-setup.sh.");
+    }
+
     private static java.util.Set<String> allowedSchemas() {
         String env = System.getenv("ASKAMERICA_SCHEMAS");
         String src = (env == null || env.trim().isEmpty()) ? DEFAULT_SCHEMAS : env;
@@ -2549,6 +2676,170 @@ public class McpServer {
 
     private static String resolveGeo(String term, String level, String withinState) throws Exception {
         return runSqlOn(buildResolveSql(term, level, withinState, 50), 50);
+    }
+
+    // ── resolve_entity ───────────────────────────────────────────────────────
+
+    /**
+     * Resolves a name or identifier against the canonical entity layer — the company/person
+     * counterpart to {@link #resolveGeo}.
+     *
+     * <p>Reads {@code ref.canonical_org_entity} / {@code ref.canonical_person_entity}, which hold
+     * ONE row per real-world entity across every source that mentions it, with each source's
+     * natural key and a {@code _confidence} sibling. That is the whole point: a caller asking
+     * about a company does not know whether the schema they need keys on CIK, an FEC committee
+     * id, a patent assignee id, an EIN, an EIA utility id or a raw name — this returns all of
+     * them at once. Matching a name LIKE against one registry (as an earlier draft of this tool
+     * did) would answer for that registry only and silently miss every other context.
+     *
+     * <p>{@code known_in} summarises which source systems the entity was actually matched in, so
+     * a caller can see at a glance whether the entity reaches the schema they intend to join,
+     * without reading twenty mostly-null identifier columns.
+     */
+    private static String buildResolveEntitySql(String term, String type, int limit) {
+        String t = term == null ? "" : term.trim();
+        if (t.isEmpty()) {
+            throw new IllegalArgumentException("term must be non-empty");
+        }
+        String kind = (type == null || type.isEmpty()) ? "org" : type.toLowerCase(
+            java.util.Locale.ROOT);
+        if (!"org".equals(kind) && !"person".equals(kind)) {
+            throw new IllegalArgumentException("type must be 'org' or 'person'; got " + type);
+        }
+        int cap = Math.min(Math.max(1, limit), 200);
+        String upper = sqlStr(t.toUpperCase(java.util.Locale.ROOT));
+        String like = sqlStr("%" + t.toLowerCase(java.util.Locale.ROOT) + "%");
+        // SEC CIK is stored zero-padded to 10. A caller typing the unpadded number must still
+        // match, so pad here rather than making them know the convention.
+        String padded = sqlStr(t);
+        if (t.matches("\\d{1,10}")) {
+            StringBuilder sb = new StringBuilder(t);
+            while (sb.length() < 10) {
+                sb.insert(0, '0');
+            }
+            padded = sqlStr(sb.toString());
+        }
+
+        if ("person".equals(kind)) {
+            return "SELECT canonical_entity_id, canonical_name "
+                + "FROM ref.canonical_person_entity "
+                + "WHERE lower(canonical_name) LIKE " + like + " "
+                + "OR canonical_entity_id = " + sqlStr(t) + " "
+                + "ORDER BY canonical_name "
+                + "FETCH FIRST " + cap + " ROWS ONLY";
+        }
+
+        // Which source systems this entity actually resolved into. Built as a string rather
+        // than returning ~20 identifier columns, most of them null on any given row.
+        String knownIn =
+            "TRIM(" + notNull("lei", "gleif") + " || " + notNull("sec_cik", "sec")
+            + " || " + notNull("fec_committee_id", "fec")
+            + " || " + notNull("sec_reporting_person_cik", "sec_insider")
+            + " || " + notNull("patents_assignee_id", "patents")
+            + " || " + notNull("exempt_org_ein", "exempt_org")
+            + " || " + notNull("fda_sponsor_name", "fda")
+            + " || " + notNull("ghg_parent_company_name", "ghg")
+            + " || " + notNull("cms_paying_entity_name", "cms")
+            + " || " + notNull("eia_utility_id", "eia_utility")
+            + " || " + notNull("eia_coal_controller_name", "eia_coal_controller")
+            + " || " + notNull("eia_coal_operator_name", "eia_coal_operator")
+            + " || " + notNull("fmcsa_dot_number", "fmcsa")
+            + " || " + notNull("faa_registrant_name", "faa")
+            + " || " + notNull("sba_borrower_name", "sba_borrower")
+            + " || " + notNull("sba_lender_name", "sba_lender")
+            + ") AS known_in";
+
+        return "SELECT canonical_entity_id, canonical_name, lei, sec_cik, fec_committee_id, "
+            + "patents_assignee_id, exempt_org_ein, eia_utility_id, fmcsa_dot_number, "
+            + knownIn + ", "
+            + "CASE WHEN upper(lei) = " + upper + " THEN 'lei' "
+            + "WHEN sec_cik = " + padded + " THEN 'sec_cik' "
+            + "WHEN upper(fec_committee_id) = " + upper + " THEN 'fec_committee_id' "
+            + "WHEN exempt_org_ein = " + sqlStr(t) + " THEN 'ein' "
+            + "WHEN lower(canonical_name) = lower(" + sqlStr(t) + ") THEN 'exact_name' "
+            + "ELSE 'name_fragment' END AS match_type "
+            + "FROM ref.canonical_org_entity "
+            + "WHERE upper(lei) = " + upper + " "
+            + "OR sec_cik = " + padded + " "
+            + "OR upper(fec_committee_id) = " + upper + " "
+            + "OR exempt_org_ein = " + sqlStr(t) + " "
+            + "OR lower(canonical_name) LIKE " + like + " "
+            // Exact identifier matches first, then exact name, then fragments: a caller
+            // scanning the list hits the unambiguous answer before the noise.
+            + "ORDER BY CASE WHEN upper(lei) = " + upper + " THEN 0 "
+            + "WHEN sec_cik = " + padded + " THEN 1 "
+            + "WHEN upper(fec_committee_id) = " + upper + " THEN 2 "
+            + "WHEN exempt_org_ein = " + sqlStr(t) + " THEN 3 "
+            + "WHEN lower(canonical_name) = lower(" + sqlStr(t) + ") THEN 4 "
+            + "ELSE 5 END, canonical_name "
+            + "FETCH FIRST " + cap + " ROWS ONLY";
+    }
+
+    /** {@code known_in} fragment: the label plus a space when the column is populated. */
+    private static String notNull(String column, String label) {
+        return "CASE WHEN " + column + " IS NOT NULL THEN " + sqlStr(label + " ") + " ELSE '' END";
+    }
+
+    private static String resolveEntity(String term, String type, int limit) throws Exception {
+        return runSqlOn(buildResolveEntitySql(term, type, limit),
+            Math.min(Math.max(1, limit), 200));
+    }
+
+    // ── entity_relationships ─────────────────────────────────────────────────
+
+    /**
+     * Walks the GLEIF consolidation tree from {@code ref.current_gleif_parents}, which already
+     * collapses GLEIF's repeating period/qualifier slots and restricts to ACTIVE, PUBLISHED
+     * ownership edges. One row per (child, IS_DIRECTLY_CONSOLIDATED_BY |
+     * IS_ULTIMATELY_CONSOLIDATED_BY), so an entity appears twice when its immediate parent and
+     * the top of its group differ — which is exactly the distinction a caller asking "who really
+     * owns this" needs to see, so both are returned rather than collapsed.
+     *
+     * <p>Siblings are derived rather than stored: entities sharing this one's DIRECT parent.
+     */
+    private static String buildEntityRelationshipsSql(String lei, String direction, int limit) {
+        String l = lei == null ? "" : lei.trim();
+        if (l.isEmpty()) {
+            throw new IllegalArgumentException("lei must be non-empty");
+        }
+        String dir = (direction == null || direction.isEmpty()) ? "parents"
+            : direction.toLowerCase(java.util.Locale.ROOT);
+        int cap = Math.min(Math.max(1, limit), 500);
+        String up = sqlStr(l.toUpperCase(java.util.Locale.ROOT));
+        String cols = "child_lei, child_legal_name, child_jurisdiction, relationship_type, "
+            + "parent_lei, parent_legal_name, parent_jurisdiction, relationship_start_date";
+        switch (dir) {
+            case "parents":
+                return "SELECT " + cols + " FROM ref.current_gleif_parents "
+                    + "WHERE upper(child_lei) = " + up + " "
+                    + "ORDER BY relationship_type FETCH FIRST " + cap + " ROWS ONLY";
+            case "children":
+                return "SELECT " + cols + " FROM ref.current_gleif_parents "
+                    + "WHERE upper(parent_lei) = " + up + " "
+                    + "ORDER BY relationship_type, child_legal_name "
+                    + "FETCH FIRST " + cap + " ROWS ONLY";
+            case "siblings":
+                // Same DIRECT parent — an ultimate-parent match would sweep in the entire
+                // group, which is 'children of the ultimate parent', a different question.
+                return "SELECT s." + cols.replace(", ", ", s.") + " "
+                    + "FROM ref.current_gleif_parents s "
+                    + "JOIN ref.current_gleif_parents me "
+                    + "ON s.parent_lei = me.parent_lei "
+                    + "AND s.relationship_type = me.relationship_type "
+                    + "WHERE upper(me.child_lei) = " + up + " "
+                    + "AND me.relationship_type = 'IS_DIRECTLY_CONSOLIDATED_BY' "
+                    + "AND upper(s.child_lei) <> " + up + " "
+                    + "ORDER BY s.child_legal_name FETCH FIRST " + cap + " ROWS ONLY";
+            default:
+                throw new IllegalArgumentException(
+                    "direction must be 'parents', 'children', or 'siblings'; got " + direction);
+        }
+    }
+
+    private static String entityRelationships(String lei, String direction, int limit)
+            throws Exception {
+        return runSqlOn(buildEntityRelationshipsSql(lei, direction, limit),
+            Math.min(Math.max(1, limit), 500));
     }
 
     // ── per_capita ───────────────────────────────────────────────────────────
