@@ -51,4 +51,52 @@ class ChartRendererTest {
         ChartRenderer.renderPng("line", "test", "Year", "Income",
             categories, Collections.singletonList(series), 400, 300));
   }
+
+  @Test void scatterRendersTrueXyPoints() {
+    List<Double> x = Arrays.asList(1.0, 2.0, 3.0, 4.0);
+    List<Double> y = Arrays.asList(10.0, 12.0, 9.0, 15.0);
+    ChartRenderer.PointSeriesSpec points = new ChartRenderer.PointSeriesSpec("states", x, y, null);
+
+    byte[] png = assertDoesNotThrow(() ->
+        ChartRenderer.renderPointsPng("scatter", "test", "X", "Y",
+            Collections.singletonList(points), 400, 300));
+
+    assertTrue(png.length > 8);
+    assertTrue((png[0] & 0xFF) == 0x89 && png[1] == 'P' && png[2] == 'N' && png[3] == 'G');
+  }
+
+  @Test void bubbleRendersXyzPoints() {
+    List<Double> x = Arrays.asList(1.0, 2.0, 3.0);
+    List<Double> y = Arrays.asList(10.0, 12.0, 9.0);
+    List<Double> size = Arrays.asList(5.0, 20.0, 8.0);
+    ChartRenderer.PointSeriesSpec points =
+        new ChartRenderer.PointSeriesSpec("counties", x, y, size);
+
+    byte[] png = assertDoesNotThrow(() ->
+        ChartRenderer.renderPointsPng("bubble", "test", "X", "Y",
+            Collections.singletonList(points), 400, 300));
+
+    assertTrue(png.length > 8);
+    assertTrue((png[0] & 0xFF) == 0x89 && png[1] == 'P' && png[2] == 'N' && png[3] == 'G');
+  }
+
+  @Test void bubbleWithoutSizeRejected() {
+    List<Double> x = Arrays.asList(1.0, 2.0);
+    List<Double> y = Arrays.asList(10.0, 12.0);
+    ChartRenderer.PointSeriesSpec points = new ChartRenderer.PointSeriesSpec("counties", x, y, null);
+
+    assertThrows(IllegalArgumentException.class, () ->
+        ChartRenderer.renderPointsPng("bubble", "test", "X", "Y",
+            Collections.singletonList(points), 400, 300));
+  }
+
+  @Test void nullXInPointsRejectedNotSilentlyDropped() {
+    List<Double> x = Arrays.asList(1.0, null, 3.0);
+    List<Double> y = Arrays.asList(10.0, 12.0, 9.0);
+    ChartRenderer.PointSeriesSpec points = new ChartRenderer.PointSeriesSpec("states", x, y, null);
+
+    assertThrows(IllegalArgumentException.class, () ->
+        ChartRenderer.renderPointsPng("scatter", "test", "X", "Y",
+            Collections.singletonList(points), 400, 300));
+  }
 }

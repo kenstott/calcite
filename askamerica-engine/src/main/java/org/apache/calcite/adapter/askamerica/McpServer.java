@@ -453,10 +453,12 @@ public class McpServer {
             + "econ.inflation_metrics, in either single-amount or whole-result-set form, and "
             + "reports the index used per year. Do not deflate by hand from a remembered CPI "
             + "figure, and do not present a multi-year nominal comparison as growth. "
-            + "render_chart draws a line/bar/scatter/pie image from categories/series data "
-            + "you've already fetched — use it instead of hand-building a chart when a "
-            + "visualization is requested; pass null for a missing data point to render a "
-            + "gap rather than a false zero. "
+            + "render_chart draws a line/bar/pie/scatter/bubble image from data you've "
+            + "already fetched — use it instead of hand-building a chart when a "
+            + "visualization is requested. line/bar/pie take categories/series and treat a "
+            + "null value as a gap rather than a false zero; scatter/bubble take points with "
+            + "true numeric x/y (and size, for bubble) axes and have no category axis to "
+            + "anchor a gap to, so omit a point instead of passing null. "
             + QuestionGuidance.RUBRIC
             + " Every analytical result also carries a second content block holding a "
             + "structured 'diagnostics' envelope: typed warnings (small_n, low_coverage, "
@@ -1042,7 +1044,9 @@ public class McpServer {
         ObjectNode chartProps = MAPPER.createObjectNode();
         chartProps.set(
             "chart_type", prop("string",
-            "'line', 'bar', 'scatter', or 'pie'. Default 'line'."));
+            "'line', 'bar', 'pie', 'scatter', or 'bubble'. Default 'line'. line/bar/pie use "
+            + "categories+series (a shared category axis); scatter/bubble use points (true "
+            + "numeric x/y axes — there is no category axis to plot against)."));
         chartProps.set("title", prop("string", "Chart title."));
         chartProps.set(
             "x_label", prop("string", "X-axis label. Ignored for 'pie'."));
@@ -1052,28 +1056,40 @@ public class McpServer {
         categoriesProp.put("type", "array");
         categoriesProp.put(
             "description",
-            "X-axis categories shared by every series, e.g. years, dates, or names. "
-            + "For 'pie', these are the slice labels.");
+            "For 'line'/'bar'/'pie' only. X-axis categories shared by every series, e.g. "
+            + "years, dates, or names. For 'pie', these are the slice labels.");
         chartProps.set("categories", categoriesProp);
         ObjectNode chartSeriesProp = MAPPER.createObjectNode();
         chartSeriesProp.put("type", "array");
         chartSeriesProp.put(
             "description",
-            "List of series to plot. Each object: name (string) and values (array of numbers, "
-            + "same length and order as categories). 'pie' takes exactly one series, whose "
-            + "values become the slice sizes.");
+            "For 'line'/'bar'/'pie' only. List of series to plot. Each object: name (string) "
+            + "and values (array of numbers, same length and order as categories). 'pie' "
+            + "takes exactly one series, whose values become the slice sizes.");
         chartProps.set("series", chartSeriesProp);
+        ObjectNode pointsProp = MAPPER.createObjectNode();
+        pointsProp.put("type", "array");
+        pointsProp.put(
+            "description",
+            "For 'scatter'/'bubble' only. List of point series to plot. Each object: name "
+            + "(string), x (array of numbers), y (array of numbers, same length as x), and "
+            + "for 'bubble' only, size (array of numbers, same length as x — the bubble "
+            + "radius at each point). Points have no category axis, so every coordinate must "
+            + "be a real number — omit a point instead of passing null for a missing value.");
+        chartProps.set("points", pointsProp);
         chartProps.set(
             "width", prop("integer", "Image width in pixels (default 800, max 2000)."));
         chartProps.set(
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
             tool("render_chart",
-            "Render categories and one or more numeric series as a chart image (line, bar, "
-            + "scatter, or pie), returned inline as a PNG. Build the categories/series arrays "
-            + "from a prior query or fetch_aligned_series result — this tool only draws, it "
-            + "does not fetch data.",
-            schema(chartProps, new String[]{"categories", "series"})));
+            "Render a chart image (line, bar, pie, scatter, or bubble), returned inline as a "
+            + "PNG. line/bar/pie plot categories+series against a shared category axis; "
+            + "scatter/bubble plot points against true numeric x/y axes (bubble adds a third "
+            + "size dimension) — use scatter/bubble for a genuine x-vs-y relationship rather "
+            + "than a trend over categories. Build the arrays from a prior query or "
+            + "fetch_aligned_series result — this tool only draws, it does not fetch data.",
+            schema(chartProps, new String[]{})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
@@ -1595,6 +1611,39 @@ public class McpServer {
                         ? Math.min(Math.max(100, args.get("width").asInt()), 2000) : 800;
                     int height = args.has("height")
                         ? Math.min(Math.max(100, args.get("height").asInt()), 2000) : 500;
+
+                    if ("scatter".equals(chartType) || "bubble".equals(chartType)) {
+                        java.util.List<ChartRenderer.PointSeriesSpec> points =
+                            new java.util.ArrayList<>();
+                        for (JsonNode s : args.path("points")) {
+                            java.util.List<Double> x = new java.util.ArrayList<>();
+                            for (JsonNode v : s.path("x")) {
+                                x.add(v.isNull() ? null : v.asDouble());
+                            }
+                            java.util.List<Double> y = new java.util.ArrayList<>();
+                            for (JsonNode v : s.path("y")) {
+                                y.add(v.isNull() ? null : v.asDouble());
+                            }
+                            java.util.List<Double> size = null;
+                            if (s.has("size") && !s.get("size").isNull()) {
+                                size = new java.util.ArrayList<>();
+                                for (JsonNode v : s.path("size")) {
+                                    size.add(v.isNull() ? null : v.asDouble());
+                                }
+                            }
+                            points.add(new ChartRenderer.PointSeriesSpec(
+                                s.path("name").asText(), x, y, size));
+                        }
+
+                        log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
+                            + " points=" + points.size());
+                        chartPng = ChartRenderer.renderPointsPng(
+                            chartType, title, xLabel, yLabel, points, width, height);
+                        text = "Rendered " + chartType + " chart"
+                            + (title == null ? "" : " '" + title + "'")
+                            + " (" + points.size() + " point series).";
+                        break;
+                    }
 
                     java.util.List<String> categories = new java.util.ArrayList<>();
                     for (JsonNode c : args.path("categories")) {
