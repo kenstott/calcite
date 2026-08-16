@@ -115,6 +115,18 @@ dimension_values:
              "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
              "AS","GU","MP","PR","VI"]
 
+  # hud_states minus DC/AS/GU/MP/PR/VI. il/statedata has no state-level aggregate for
+  # these six (each is a single HUD area, not a roll-up of areas) and returns HTTP 400
+  # "State Level data is not available for this input" for every year, permanently —
+  # confirmed against fair_market_rents and income_limits_county, which query per-area
+  # and succeed for the same six. Used only by income_limits below.
+  hud_states_with_statedata: &hud_states_with_statedata
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"]
+
   # CFPB HMDA Data Browser aggregations exist from data year 2018 (the post-2018
   # HMDA-reform schema) through the prior year; the current year's file is not
   # published until ~June following, so dataLag 1 targets the newest complete
@@ -510,15 +522,18 @@ partitionedTables:
       very-low (50%), and low (80%) income thresholds that gate eligibility
       for HUD-assisted housing and LIHTC. State-grain (the HUD il/statedata
       endpoint returns one state summary; county/metro-level limits require
-      per-county calls and are a documented follow-up). Values shown for a
-      4-person household (HUD's reference size). Requires HUD_TOKEN. Source:
+      per-county calls and are a documented follow-up). Covers the 50 states
+      only — DC and the territories (AS, GU, MP, PR, VI) have no state-level
+      aggregate in il/statedata; their income limits are still available at
+      HUD-area grain via income_limits_county. Values shown for a 4-person
+      household (HUD's reference size). Requires HUD_TOKEN. Source:
       huduser.gov/hudapi/public/il/statedata/{state}.
 
     dimensions:
       type:
         - income_limits
       year: *hud_year_range
-      state: *hud_states
+      state: *hud_states_with_statedata
 
     columns:
       - <<: *state_fips_column
