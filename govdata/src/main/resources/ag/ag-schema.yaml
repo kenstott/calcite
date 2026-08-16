@@ -286,6 +286,14 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
+        # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
+        # state/year with no COUNTY-grain FIELD CROPS records — confirmed live for AK, CT, HI,
+        # MA, ME among others; not a fixed list, varies by year. skipOn:[400] is the same idiom
+        # already used for edu NAEP non-assessment years and census not-yet-published editions.
+        # The "exceeds limit=50000" real error NassQuickStatsTransformer guards against is not
+        # at risk here — county-grain FIELD CROPS is verified bounded (worst case: census-year
+        # TX county = 25,154 rows, see comment above).
+        skipOn: [400]
       rawCache:
         enabled: true
 
@@ -363,6 +371,12 @@ partitionedTables:
         requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
+        # NASS returns HTTP 400 "bad request - invalid query" (not an empty array) for a
+        # state/year with no COUNTY-grain INVENTORY records — same NASS behavior confirmed
+        # live for nass_crop_production above; not a fixed list, varies by year/state.
+        # skipOn:[400] is the same idiom already used for edu NAEP non-assessment years and
+        # census not-yet-published editions.
+        skipOn: [400]
       rawCache:
         enabled: true
 

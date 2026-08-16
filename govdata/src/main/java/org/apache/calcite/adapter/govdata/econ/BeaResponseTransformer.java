@@ -81,11 +81,29 @@ public class BeaResponseTransformer implements ResponseTransformer {
 
       JsonNode results = beaApi.path("Results");
 
-      // Check for API error
+      // Check for API error. Some BEA datasets (observed on MNE/FDI) wrap Error in a
+      // single-element array rather than a bare object — unwrap it the same way Results
+      // itself is unwrapped below for GDPbyIndustry-style array responses.
       JsonNode error = results.path("Error");
+      if (error.isArray() && error.size() > 0) {
+        error = error.get(0);
+      }
       if (!error.isMissingNode()) {
-        String errorCode = error.path("APIErrorCode").asText("UNKNOWN");
-        String errorDesc = error.path("APIErrorDescription").asText("No description");
+        // Some BEA error payloads use XML-attribute-style keys ("@APIErrorCode") instead of
+        // plain ones; try both rather than silently falling back to a placeholder.
+        JsonNode codeNode = error.path("APIErrorCode");
+        if (codeNode.isMissingNode()) {
+          codeNode = error.path("@APIErrorCode");
+        }
+        JsonNode descNode = error.path("APIErrorDescription");
+        if (descNode.isMissingNode()) {
+          descNode = error.path("@APIErrorDescription");
+        }
+        // Neither known key shape matched: surface the raw node rather than a useless
+        // "UNKNOWN: No description" placeholder, so the actual cause is diagnosable.
+        String errorCode = codeNode.isMissingNode() ? "UNKNOWN(raw=" + error + ")"
+            : codeNode.asText("UNKNOWN");
+        String errorDesc = descNode.isMissingNode() ? "" : descNode.asText("No description");
 
         // Some error codes are expected (e.g., no data for requested parameters)
         // Error code 101 with "Unknown error" typically means invalid parameter combination
