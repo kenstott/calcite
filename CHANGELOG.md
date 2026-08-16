@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.76.0](https://github.com/kenstott/calcite/compare/engine-v0.75.0...engine-v0.76.0) (2026-08-16)
+
+
+### Features
+
+* **askamerica/mcp:** add true scatter and bubble chart types to render_chart ([d7c2328](https://github.com/kenstott/calcite/commit/d7c23287fe15a87bd251d83d3b43ce09d235f81d))
+* **govdata/pool:** track per-slot completion for the historical pool alias ([7010830](https://github.com/kenstott/calcite/commit/70108303eaa84dc8d1d72386da8f953d3d2d61f0))
+
+
+### Bug Fixes
+
+* **askamerica/mcp:** reject empty sql/outcome in ols_regression before parsing ([f174341](https://github.com/kenstott/calcite/commit/f174341099132909e8d8acd3dc48f0f6190604e9))
+* **file/duckdb:** share one DuckDBConvention per catalog, add JSON_EXTRACT pushdown ([f55c303](https://github.com/kenstott/calcite/commit/f55c3033a2a90d1853ba63c6ea5063ea6e3a97aa))
+* **govdata/ag,econ:** stop hard-failing on permanent per-combo API gaps ([353ee83](https://github.com/kenstott/calcite/commit/353ee8356870c3e83df58b537a587dcef02b3cdc))
+* **govdata/econ:** stop fred_indicators freezing at its first fetch each year ([ae6fab8](https://github.com/kenstott/calcite/commit/ae6fab84828ddf1c5b9af87f5c81b7a3d820534d))
+* **govdata/housing:** stop refetching income_limits for jurisdictions HUD can't state-aggregate ([916440f](https://github.com/kenstott/calcite/commit/916440f08ad8a4ba7552858b1aa45dd6d09be675))
+* **govdata/officials:** populate members.current_member via detail-endpoint enrichment ([86beff4](https://github.com/kenstott/calcite/commit/86beff437bc81782a472190ac0bea42ffcb41aef))
+
 ## [0.75.0](https://github.com/kenstott/calcite/compare/engine-v0.74.4...engine-v0.75.0) (2026-08-14)
 
 
