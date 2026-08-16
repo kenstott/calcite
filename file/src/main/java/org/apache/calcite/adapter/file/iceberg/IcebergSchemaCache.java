@@ -521,9 +521,16 @@ public final class IcebergSchemaCache {
   /**
    * Installs a cache shipped inside the JAR, so a first-ever connection can skip the download.
    *
-   * <p>Only installs when there is no local file: an existing one was either downloaded from the
-   * warehouse or built here, and in both cases it is newer than whatever the JAR was built with.
-   * The bundled copy is a cold-start optimization, never an override.
+   * <p>Installs once per bundled artifact, gated on a marker holding the digest of the copy last
+   * installed here. An absent marker means no JAR has seeded this cache yet; a differing one means
+   * the JAR was upgraded and ships a cache the local file has never seen. Between upgrades the
+   * marker matches and the local file is left alone, so a copy the warehouse sync has since
+   * refreshed is never overwritten by the older bundled one.
+   *
+   * <p>A plain "skip whenever a local file exists" test cannot express that. It reads an existing
+   * file as necessarily newer than the JAR's, which holds right up until the JAR is upgraded —
+   * and then the freshly shipped cache is locked out permanently, leaving every connection to
+   * resolve schemas the slow way against a cache that predates the release.
    *
    * <p>Installing does not make the cache trusted. The normal sync still HEADs the published
    * object and compares digests — a bundled copy that no longer matches the warehouse is
@@ -538,22 +545,59 @@ public final class IcebergSchemaCache {
       return false;
     }
     File target = cacheFile();
-    if (target.isFile()) {
-      return false;
-    }
     try {
+      byte[] bytes = readFully(bundled);
+      String bundledDigest = md5Hex(bytes);
+      File marker = bundledMarkerFile();
+      if (target.isFile() && bundledDigest.equals(readMarker(marker))) {
+        LOGGER.debug("Bundled Iceberg schema cache {} already installed; keeping local copy",
+            bundledDigest);
+        return false;
+      }
       File tmp = File.createTempFile("schemacache", ".tmp", cacheDir());
-      java.nio.file.Files.copy(bundled, tmp.toPath(),
-          java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      java.nio.file.Files.write(tmp.toPath(), bytes);
       replace(tmp, target);
-      LOGGER.info("Installed bundled Iceberg schema cache -> {} ({} bytes)",
-          target.getAbsolutePath(), target.length());
+      java.nio.file.Files.write(marker.toPath(),
+          bundledDigest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      LOGGER.info("Installed bundled Iceberg schema cache -> {} ({} bytes, digest {})",
+          target.getAbsolutePath(), target.length(), bundledDigest);
       return true;
     // fallback-guard: allow installBundled() returns false on failure; javadoc clarifies this is a cold-start optimization, never an override
     } catch (IOException e) {
       LOGGER.warn("Could not install bundled Iceberg schema cache: {}", e.getMessage());
       return false;
     }
+  }
+
+  /** Records the digest of the bundled cache last installed here; see {@link #installBundled}. */
+  private static File bundledMarkerFile() {
+    return new File(cacheDir(), FILE_NAME + ".bundled");
+  }
+
+  /** Reads the bundled-install marker, or null when it is absent or unreadable. */
+  private static String readMarker(File marker) {
+    if (!marker.isFile()) {
+      return null;
+    }
+    try {
+      return new String(java.nio.file.Files.readAllBytes(marker.toPath()),
+          java.nio.charset.StandardCharsets.UTF_8).trim();
+    // fallback-guard: allow an unreadable marker reads as absent, which reinstalls the bundled cache — the same safe outcome as a first-ever install
+    } catch (IOException e) {
+      LOGGER.warn("Could not read bundled-cache marker {}: {}", marker, e.getMessage());
+      return null;
+    }
+  }
+
+  /** Reads a stream fully into memory; the bundled cache is a bounded JAR resource. */
+  private static byte[] readFully(InputStream in) throws IOException {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = in.read(buf)) != -1) {
+      out.write(buf, 0, n);
+    }
+    return out.toByteArray();
   }
 
   /** Drops all state — the maintenance flush, and the hook used by tests. */
@@ -567,6 +611,12 @@ public final class IcebergSchemaCache {
     File f = cacheFile();
     if (f.isFile() && !f.delete()) {
       LOGGER.warn("Could not delete Iceberg schema cache {}", f);
+    }
+    // The marker must go with it: left behind, it would report the bundled cache as already
+    // installed and stop the next connection from re-seeding the file just deleted.
+    File marker = bundledMarkerFile();
+    if (marker.isFile() && !marker.delete()) {
+      LOGGER.warn("Could not delete bundled-cache marker {}", marker);
     }
   }
 
