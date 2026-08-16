@@ -40,6 +40,9 @@
 #   scripts/build-seed.sh --version 2026.07.24    # override marker version (default: project version)
 #   scripts/build-seed.sh --operating-dir /path   # override staging operating dir
 #   scripts/build-seed.sh --keep                   # keep the staging dir after packaging
+#   scripts/build-seed.sh --mode mirror            # read the real R2 (PROD_AWS_*) instead of the
+#                                                  # LAN mirror — required when off that network,
+#                                                  # where 'local' dies with "No route to host"
 #
 set -e
 
@@ -51,6 +54,13 @@ SOURCE=""
 SEED_VERSION=""
 STAGING="$GOVDATA_HOME/build/seed-staging"
 KEEP=false
+# Which object store to read while generating. Passed straight through to
+# model-verify.sh: 'local' uses the AWS_* creds/endpoint in .env.prod (the LAN
+# mirror), 'mirror' uses PROD_AWS_* (the real R2). The seed is identical either
+# way — same bucket layout, same schemas — so this only decides which endpoint is
+# reachable from the machine doing the build. Off the LAN, 'local' fails with
+# "No route to host" after nine SDK retries.
+MODE="local"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -58,6 +68,11 @@ while [[ $# -gt 0 ]]; do
         --version)       SEED_VERSION="$2"; shift 2 ;;
         --operating-dir) STAGING="$2"; shift 2 ;;
         --keep)          KEEP=true; shift ;;
+        --mode)          MODE="$2"; shift 2
+                         case "$MODE" in
+                             local|mirror) ;;
+                             *) echo "Error: --mode must be 'local' or 'mirror', got: $MODE" >&2; exit 2 ;;
+                         esac ;;
         -h|--help)       sed -n '17,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)               echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -111,7 +126,7 @@ fi
 # run enumerated, which is what gets published and bundled.
 SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
 export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR"
-GOVDATA_VERIFY_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" --single-connection "${VERIFY_ARGS[@]}"
+GOVDATA_VERIFY_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" --mode "$MODE" --single-connection "${VERIFY_ARGS[@]}"
 
 SCHEMA_CACHE="$SCHEMA_CACHE_DIR/iceberg-schema-cache.json"
 if [[ ! -f "$SCHEMA_CACHE" ]]; then
