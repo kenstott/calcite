@@ -19,6 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/historical-year-complete.sh"
 load_env
 
 # Tee all output to a timestamped log file while preserving terminal output
@@ -210,18 +211,23 @@ for arg in "$@"; do
       # axis (daily-only). cyber_vuln:historical backfills only its NVD publish-dated tables in a
       # single windowed pass (NVD resolver spans the full pub-year range), so it isn't sliced
       # per-year here; per-year cyber would need worker-cyber.sh to accept a year (follow-up).
-      queue+=(cyber_vuln:historical)
+      # Every queue+= below is routed through hcy_enqueue (historical-year-complete.sh):
+      # it skips a slot that's already marked done from a prior `historical` pool run and
+      # logs the skip loudly. This is a TEMPORARY, isolated backfill-progress marker — not
+      # the ETL tracker, and not the old ~/.run-pool-completed.state checkpoint (removed in
+      # c6f46f523). To force a slot to redo, delete its line/file under runs/historical-complete/.
+      hcy_enqueue cyber_vuln historical
       # research (NSF NCSES) is a single historical slot, not year-sliced: its two XLSX
       # tables (nsf_national_rd, nsf_federal_rd_obligations) are single-fetch full-refresh
       # (no year dim — per-year slots would re-download the same publication file each year),
       # and nsf_herd_by_institution backfills all years within one worker via its year
       # dimension (dataLag=2). Small tables; sequential year iteration is cheap.
-      queue+=(research:historical)
+      hcy_enqueue research historical
       # lands has NO year axis for its FIA/static tables — the download is the full {state}_CSV.zip
       # archive (inventory_year is a column). Slicing those per-year re-downloads all ~51 state
       # archives on every year slot, so ingest them ONCE here; the per-year lands:${_y} slots below
       # cover only its year-partitioned tables (timber_sales, nps_visitation, onrr_revenues).
-      queue+=(lands:once)
+      hcy_enqueue lands once
       # ag/disasters/housing/transport/environment/census are SPLIT (lands-style): each mixes
       # year-addressable tables (sliced per-year in the loop below for parallelism) with
       # snapshot/full-archive tables that ignore the year range and would re-download on
@@ -233,16 +239,23 @@ for arg in "$@"; do
       # census=qwi_employment (fixed literal 2022-2024 quarter list, no year dimension --
       # without this slot it fell through to every census:${_y} worker at once, all racing
       # to commit the same Iceberg partitions concurrently; confirmed live 2026-08-14).
-      queue+=(ag:once disasters:once housing:once transport:once environment:once fiscal:once census:once)
+      for _s in ag disasters housing transport environment fiscal census; do
+        hcy_enqueue "$_s" once
+      done
       # Year loop (current year is daily's slot, so start at cy-1).
+      _year_schemas=(
+        sec_primary sec_secondary sec_13f
+        econ census geo crime weather energy
+        fec fedregister cftc
+        health edu patents lands
+        # Split-schema year-addressable tables (snapshots handled by the :once slots above).
+        housing transport environment ag disasters fiscal
+      )
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
-        queue+=("sec_primary:${_y}" "sec_secondary:${_y}" "sec_13f:${_y}")
-        queue+=("econ:${_y}" "census:${_y}" "geo:${_y}" "crime:${_y}" "weather:${_y}" "energy:${_y}")
-        queue+=("fec:${_y}" "fedregister:${_y}" "cftc:${_y}")
-        queue+=("health:${_y}" "edu:${_y}" "patents:${_y}" "lands:${_y}")
-        # Split-schema year-addressable tables (snapshots handled by the :once slots above).
-        queue+=("housing:${_y}" "transport:${_y}" "environment:${_y}" "ag:${_y}" "disasters:${_y}" "fiscal:${_y}")
+        for _s in "${_year_schemas[@]}"; do
+          hcy_enqueue "$_s" "$_y"
+        done
         _y=$((_y - 1))
       done
       ;;
@@ -725,6 +738,12 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       if [ "$exit_code" -eq 0 ]; then
         ((done_count++)) || true
         log_info "$id finished OK (${mins}m)"
+        # historical-year-complete.sh: only marks slots this same invocation enqueued via
+        # hcy_enqueue (i.e. the `historical` alias's year/:once slots) — daily, dq, and
+        # explicit schema:mode runs never touch this marker.
+        if hcy_is_tracked "${active_slots[$i]}"; then
+          hcy_mark_complete "${active_slots[$i]%%:*}" "${active_slots[$i]#*:}"
+        fi
       else
         ((failed_count++)) || true
         failed_list+=("$id")
