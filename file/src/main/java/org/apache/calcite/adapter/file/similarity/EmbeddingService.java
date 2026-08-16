@@ -65,6 +65,10 @@ public final class EmbeddingService {
   private BufferedWriter toProc;
   private BufferedReader fromProc;
 
+  /** In-JVM embedder, resolved once. Null after resolution means no bundled model is present. */
+  private OnnxClsEmbedder inJvm;
+  private boolean inJvmResolved;
+
   private EmbeddingService() {
   }
 
@@ -209,6 +213,23 @@ public final class EmbeddingService {
    * @return the embedding vector
    */
   public synchronized double[] embed(String text) {
+    // In-JVM ONNX + CLS pooling is preferred over any subprocess: it is the only path that ships
+    // self-contained in the jar, and it is the one verified to reproduce the corpus vector space.
+    // The subprocess paths below remain for an explicitly-configured external embedder.
+    if (inJvm == null && !inJvmResolved) {
+      inJvmResolved = true;
+      boolean subprocessConfigured = !command.isEmpty() || !home.isEmpty() || !script.isEmpty();
+      if (!subprocessConfigured) {
+        inJvm = OnnxClsEmbedder.openOrNull();
+      }
+    }
+    if (inJvm != null) {
+      try {
+        return inJvm.embed(text == null ? "" : text);
+      } catch (Exception e) {
+        throw new RuntimeException("embedding failed: " + e.getMessage(), e);
+      }
+    }
     try {
       ensureStarted();
       toProc.write("{\"text\":" + jsonString(text == null ? "" : text) + "}\n");

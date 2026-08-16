@@ -173,15 +173,20 @@ tasks.shadowJar {
     // HTML scraping
     exclude("org/jsoup/**")
 
-    // Vector embeddings / ML (not used at query time)
-    exclude("com/microsoft/onnxruntime/**")
+    // DJL stays out: the query-time tokenizer is BertWordPieceTokenizer, in-tree and pure Java,
+    // specifically so no per-platform tokenizer binary is needed.
     exclude("ai/djl/**")
-    exclude("ai/onnxruntime/**")
 
-    // Orphaned ML resources — the DJL/ONNX code that loads these is excluded above,
-    // so they are dead weight in the read-only engine (Tier-1 slimming).
-    exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB ONNX embedding model
-    exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives
+    // ONNX Runtime is REQUIRED at query time and must NOT be excluded. SEMANTIC_SEARCH and
+    // EMBED embed the query through OnnxClsEmbedder; without these classes both fail with
+    // "no embedder configured", which is exactly the state this jar shipped in until now.
+    // The earlier "not used at query time" assumption held only while embeddings were an
+    // ETL-only concern.
+
+    // Orphaned ML resources — nothing loads these any more (the arctic-embed-xs int8 model
+    // under models/snowflake-arctic-embed-xs/ is the live one and is deliberately kept).
+    exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB, superseded, mean-pooled
+    exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives (DJL)
 
     // Arrow Gandiva (~118 MB, almost all native libs) — the LLVM expression compiler
     // is reached only through FileSchema.createArrowTable(), which (a) fires only for
@@ -270,7 +275,9 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
     // excluded from the fat jar too). Keeps AWS SDK v1: the Iceberg s3a read path
     // still needs com.amazonaws until IcebergTable moves to S3FileIO (v2).
     val dropPrefixes = listOf(
-        "onnxruntime", "pdfbox", "fontbox", "xmpbox", "poi", "jsoup",
+        // "onnxruntime" removed: it backs OnnxClsEmbedder, the query-time embedder for
+        // SEMANTIC_SEARCH/EMBED. Dropping the jar left those functions permanently broken.
+        "pdfbox", "fontbox", "xmpbox", "poi", "jsoup",
         "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
         "arrow-gandiva", // LLVM expr compiler — reached only via reflective .arrow path (govdata has none)
         // hadoop-aws (S3AFileSystem) + its 297 MB aws-java-sdk-bundle. The whole read path

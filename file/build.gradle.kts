@@ -45,6 +45,12 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.3.0")
     implementation("com.fasterxml.jackson.core:jackson-core:2.17.2")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17")
+
+    // Query-time embedding for SEMANTIC_SEARCH / EMBED: ONNX Runtime only. The tokenizer is
+    // implemented in-tree (BertWordPieceTokenizer) rather than pulled from DJL, so this stays
+    // the single native dependency in the embedding path instead of adding a per-platform
+    // tokenizer binary on top of it.
+    implementation("com.microsoft.onnxruntime:onnxruntime:1.16.3")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.2")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2")
 
