@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.76.1](https://github.com/kenstott/calcite/compare/engine-v0.76.0...engine-v0.76.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* **askamerica/mcp:** require base_year in adjust_inflation instead of defaulting to 0 ([55509ce](https://github.com/kenstott/calcite/commit/55509cedaea9fe60afc25b324676ab58eb54824a))
+* **file/iceberg:** install a newer bundled schema cache over an older jar's ([b730502](https://github.com/kenstott/calcite/commit/b7305024e435ba8987937416ef822eb6c6b91bdf))
+* **govdata/seed:** discard the orphaned WAL when the seed replaces the catalog ([3a7b64a](https://github.com/kenstott/calcite/commit/3a7b64a9440b541d47b7e86b138fac5b0e4881da))
+
 ## [0.76.0](https://github.com/kenstott/calcite/compare/engine-v0.75.0...engine-v0.76.0) (2026-08-16)
 
 
