@@ -168,6 +168,12 @@ public final class GovDataSeedInstaller {
    * existing file. Guards against zip-slip: an entry that resolves outside {@code base} is
    * rejected.
    *
+   * <p>Replacing a {@code .duckdb} catalog also discards the write-ahead log sitting beside it.
+   * The seed ships a catalog but never a WAL, so without this the new catalog inherits the old
+   * one's {@code .wal} — a log written against a database that no longer exists. DuckDB then
+   * reconciles the two on open, which is both semantically wrong (the log describes different
+   * content) and pathologically slow.
+   *
    * @return number of file entries written
    */
   private static int extractInto(InputStream zipIn, File base) throws IOException {
@@ -192,10 +198,38 @@ public final class GovDataSeedInstaller {
         Files.createDirectories(parent.toPath());
       }
       Files.copy(zis, target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      discardOrphanedWal(target);
       written++;
       zis.closeEntry();
     }
     return written;
+  }
+
+  /**
+   * Deletes the write-ahead log beside a freshly-extracted DuckDB catalog.
+   *
+   * <p>Called for every extracted entry; a no-op unless the entry is a {@code .duckdb} file that
+   * actually had a {@code .wal} next to it. The WAL belongs to the catalog just overwritten, so
+   * once that file is gone the log describes nothing and only costs time on open — measured at
+   * 377s versus 13s for the same seed installed without it.
+   *
+   * <p>Discarding it loses no durable state: the seed is a pre-built accelerator that the runtime
+   * reconciles against live Iceberg data anyway, so anything the WAL held is rebuilt on demand.
+   */
+  private static void discardOrphanedWal(File extracted) {
+    if (!extracted.getName().endsWith(".duckdb")) {
+      return;
+    }
+    File wal = new File(extracted.getParentFile(), extracted.getName() + ".wal");
+    if (!wal.isFile()) {
+      return;
+    }
+    if (wal.delete()) {
+      LOGGER.info("Discarded orphaned WAL {} left by the replaced catalog", wal.getAbsolutePath());
+    } else {
+      // Not fatal, but the slow-open cost above is now unavoidable, so say so plainly.
+      LOGGER.warn("Could not delete orphaned WAL {}; the next catalog open will be slow", wal);
+    }
   }
 
   /** Reads a classpath resource as a trimmed UTF-8 string, or null if the resource is absent. */

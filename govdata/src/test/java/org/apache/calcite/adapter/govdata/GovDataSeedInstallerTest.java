@@ -92,4 +92,31 @@ class GovDataSeedInstallerTest {
     assertTrue(afterBytes.length != 3 || afterBytes[0] != 1,
         "a stale marker must force re-extraction, replacing the placeholder catalog file");
   }
+
+  /**
+   * A WAL belongs to the catalog it was written against. Re-extraction replaces the catalog but
+   * the seed ships no WAL, so an upgrade used to leave the old log beside the new database and
+   * DuckDB spent minutes reconciling the two on open — 377s versus 13s for the same seed measured
+   * without it.
+   */
+  @Test void discardsTheWalLeftBesideAReplacedCatalog(@TempDir Path tmpDir) throws Exception {
+    if (!seedResourcePresent()) {
+      return;
+    }
+    File duckdbDir = new File(tmpDir.toFile(), ".duckdb");
+    Files.createDirectories(duckdbDir.toPath());
+    File catalog = new File(duckdbDir, "govdata.duckdb");
+    File wal = new File(duckdbDir, "govdata.duckdb.wal");
+    File marker = new File(duckdbDir, "govdata.duckdb.version");
+    Files.write(catalog.toPath(), new byte[] {1, 2, 3});
+    Files.write(wal.toPath(), new byte[] {4, 5, 6});
+    Files.write(marker.toPath(),
+        "not-a-real-fingerprint".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    GovDataSeedInstaller.ensureSeeded(tmpDir.toString());
+
+    assertTrue(catalog.isFile(), "precondition: the stale marker must force re-extraction");
+    assertTrue(!wal.exists(),
+        "the WAL of the replaced catalog must be discarded, not inherited by the new one");
+  }
 }
