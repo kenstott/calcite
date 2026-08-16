@@ -182,11 +182,13 @@ partitionedTables:
         type: boolean
         nullable: true
         comment: >
-          Always null in this table. currentMember is an item/detail-level field
-          (/v3/member/{bioguideId}), not present on the list endpoint this table
-          fetches; deriving it would require an N+1 detail call per member. Reserved
-          column for a future enrichment pass rather than dropped, since downstream
-          queries may already reference it.
+          Whether the member currently holds office, per Congress.gov's
+          /v3/member/{bioguideId} detail endpoint (currentMember is not present on
+          the list endpoint this table otherwise fetches from — see
+          CongressMemberCurrentEnricher). Populated by an N+1 detail call per row;
+          null means the enrichment call failed for that row (network/parse error),
+          not that the member's status is unknown by design — see
+          CongressMemberTransformer/CongressMemberCurrentEnricher javadoc.
       - name: terms_json
         type: string
         nullable: true
@@ -233,6 +235,11 @@ partitionedTables:
       # wrapper in both, confirming CongressMemberTransformer needs no changes for the
       # per-congress URL — only this table's dimensions/source/partitioning changed.
       responseTransformer: "org.apache.calcite.adapter.govdata.officials.CongressMemberTransformer"
+      # N+1 enrichment: one detail call per member row to populate current_member (see its
+      # column comment). Paced separately from the list-endpoint fetch (200ms/call, fixed).
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.officials.CongressMemberCurrentEnricher"
 
     materialize:
       format: iceberg
@@ -948,6 +955,39 @@ constraints:
 # ============================================================================
 
 views:
+
+  - name: current_members
+    comment: >
+      Members Congress.gov's per-member detail endpoint reports as currently
+      holding office (members.current_member = true, populated by
+      CongressMemberCurrentEnricher's N+1 detail call — see that column's
+      comment). Restricted to the latest congress present in `members`
+      (bounded by GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS — not
+      necessarily the literal current Congress if those knobs haven't been
+      bumped for a new session) so a member's row from an older congress they
+      also served doesn't duplicate their current one.
+
+      `voting_member` is a structural derivation, not a Congress.gov field:
+      the House's 6 territorial/DC seats (American Samoa, DC, Guam, N.
+      Mariana Islands, Puerto Rico's Resident Commissioner, Virgin Islands)
+      are non-voting delegate seats, and no territory or DC has Senate
+      representation at all — so `state_name` being one of the 50 states is
+      both necessary and sufficient for floor voting rights, for House and
+      Senate rows alike. The 6-name exclusion list is fixed by the
+      Constitution/statute, not annually vintaged data, so it is inlined here
+      rather than sourced from geo (whose state_ref is a 50-states+DC list
+      that would still need this same non-DC-state test, and members'
+      territorial state_names don't resolve against it at all — see the
+      members table comment).
+    sql: >
+      SELECT *,
+        state_name NOT IN (
+          'American Samoa', 'District of Columbia', 'Guam',
+          'Northern Mariana Islands', 'Puerto Rico', 'Virgin Islands'
+        ) AS voting_member
+      FROM members
+      WHERE current_member = TRUE
+        AND congress = (SELECT MAX(congress) FROM members)
 
   - name: state_political_index
     comment: >

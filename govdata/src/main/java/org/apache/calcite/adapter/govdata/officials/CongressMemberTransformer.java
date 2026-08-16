@@ -32,9 +32,10 @@ import org.slf4j.LoggerFactory;
  * the actual shape against a real response before relying on this in production.
  *
  * <p>Output: one row per member with {@code terms_json} holding the member's chamber service
- * history as a serialized JSON array. {@code current_member} is always null — that field is
- * only available at the item/detail level ({@code /v3/member/{bioguideId}}), not on this list
- * endpoint.
+ * history as a serialized JSON array. {@code current_member} is initialized null here since
+ * that field is only available at the item/detail level ({@code /v3/member/{bioguideId}}), not
+ * on this list endpoint — {@link CongressMemberCurrentEnricher} fills it in via a per-row
+ * detail call, configured as this table's {@code rowTransformers} hook.
  */
 public class CongressMemberTransformer implements ResponseTransformer {
 

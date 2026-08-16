@@ -77,9 +77,7 @@ FROM (
     SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/members', allow_moved_paths := true))
     WHERE null_percentage = 100.0
-      -- current_member is EXPECTED always-null (list-endpoint limitation, documented in
-      -- the schema YAML) — exclude it so this check doesn't perpetually warn on a known gap.
-      AND column_name NOT IN ('type', 'congress', 'current_member')
+      AND column_name NOT IN ('type', 'congress')
   )
 );
 
