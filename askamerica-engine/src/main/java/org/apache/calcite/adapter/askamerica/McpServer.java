@@ -2696,7 +2696,7 @@ public class McpServer {
      * a caller can see at a glance whether the entity reaches the schema they intend to join,
      * without reading twenty mostly-null identifier columns.
      */
-    private static String buildResolveEntitySql(String term, String type, int limit) {
+    private static String buildResolveEntitySql(String term, String type, int limit, int tier) {
         String t = term == null ? "" : term.trim();
         if (t.isEmpty()) {
             throw new IllegalArgumentException("term must be non-empty");
@@ -2729,60 +2729,139 @@ public class McpServer {
                 + "FETCH FIRST " + cap + " ROWS ONLY";
         }
 
-        // Which source systems this entity actually resolved into. Built as a string rather
-        // than returning ~20 identifier columns, most of them null on any given row.
-        String knownIn =
-            "TRIM(" + notNull("lei", "gleif") + " || " + notNull("sec_cik", "sec")
-            + " || " + notNull("fec_committee_id", "fec")
-            + " || " + notNull("sec_reporting_person_cik", "sec_insider")
-            + " || " + notNull("patents_assignee_id", "patents")
-            + " || " + notNull("exempt_org_ein", "exempt_org")
-            + " || " + notNull("fda_sponsor_name", "fda")
-            + " || " + notNull("ghg_parent_company_name", "ghg")
-            + " || " + notNull("cms_paying_entity_name", "cms")
-            + " || " + notNull("eia_utility_id", "eia_utility")
-            + " || " + notNull("eia_coal_controller_name", "eia_coal_controller")
-            + " || " + notNull("eia_coal_operator_name", "eia_coal_operator")
-            + " || " + notNull("fmcsa_dot_number", "fmcsa")
-            + " || " + notNull("faa_registrant_name", "faa")
-            + " || " + notNull("sba_borrower_name", "sba_borrower")
-            + " || " + notNull("sba_lender_name", "sba_lender")
-            + ") AS known_in";
+        // ref.entity_org_bridge is the search surface, not canonical_org_entity. The bridge
+        // holds ONE ROW PER NAME MENTION across every org-type source, already normalized
+        // (lowercased, punctuation and legal suffixes stripped) and already scored, so every
+        // variant a caller might type is indexed there. canonical_org_entity carries a single
+        // canonical_name per entity, so searching it means matching one spelling and then
+        // bolting on a join per identifier type to cover the rest — which is what the first
+        // version of this method did, and why "alphabet" returned SBA borrowers.
+        //
+        // Ranking comes from the data too: match_score is 1.0 for exact matches and the raw
+        // jaro_winkler similarity for fuzzy ones, so ordering by it reproduces what the
+        // previous version hand-built out of a CASE ladder, and does it better.
+        String norm = normalizeOrgName(t);
+        String entityKey = "COALESCE(lei, sec_cik, source_name_normalized)";
+        // A ticker is not in the bridge at all, so resolve it to a CIK and match that. Without
+        // this a ticker can only ever behave as a name fragment — "AAPL" matched MAAPLE CORP.
+        String tickerCik = "(SELECT MAX(cik) FROM ref.sec_company_tickers WHERE upper(ticker) = "
+            + upper + ")";
 
-        return "SELECT canonical_entity_id, canonical_name, lei, sec_cik, fec_committee_id, "
-            + "patents_assignee_id, exempt_org_ein, eia_utility_id, fmcsa_dot_number, "
-            + knownIn + ", "
-            + "CASE WHEN upper(lei) = " + upper + " THEN 'lei' "
-            + "WHEN sec_cik = " + padded + " THEN 'sec_cik' "
-            + "WHEN upper(fec_committee_id) = " + upper + " THEN 'fec_committee_id' "
-            + "WHEN exempt_org_ein = " + sqlStr(t) + " THEN 'ein' "
-            + "WHEN lower(canonical_name) = lower(" + sqlStr(t) + ") THEN 'exact_name' "
-            + "ELSE 'name_fragment' END AS match_type "
-            + "FROM ref.canonical_org_entity "
-            + "WHERE upper(lei) = " + upper + " "
-            + "OR sec_cik = " + padded + " "
-            + "OR upper(fec_committee_id) = " + upper + " "
-            + "OR exempt_org_ein = " + sqlStr(t) + " "
-            + "OR lower(canonical_name) LIKE " + like + " "
-            // Exact identifier matches first, then exact name, then fragments: a caller
-            // scanning the list hits the unambiguous answer before the noise.
-            + "ORDER BY CASE WHEN upper(lei) = " + upper + " THEN 0 "
-            + "WHEN sec_cik = " + padded + " THEN 1 "
-            + "WHEN upper(fec_committee_id) = " + upper + " THEN 2 "
-            + "WHEN exempt_org_ein = " + sqlStr(t) + " THEN 3 "
-            + "WHEN lower(canonical_name) = lower(" + sqlStr(t) + ") THEN 4 "
-            + "ELSE 5 END, canonical_name "
+        // Tiered matching, cheapest and most precise first. The bridge holds 1.07M rows with no
+        // index on the name, so an unanchored LIKE is a full scan — one measured at 141s. Tier 1
+        // is an equality probe against the SAME normalization the column was built with, which
+        // is what a real lookup almost always is; the scan tiers only run when it finds nothing.
+        String where;
+        switch (tier) {
+            case 1:
+                // Exact: identifiers, and the normalized name as stored.
+                where = "source_name_normalized = " + sqlStr(norm) + " "
+                    + "OR upper(lei) = " + upper + " "
+                    + "OR sec_cik = " + padded + " "
+                    + "OR sec_cik = " + tickerCik;
+                break;
+            case 2:
+                // Prefix — "alphabet" finding "alphabet holdings". Anchored, so zone maps can
+                // still prune, unlike a leading wildcard.
+                where = "source_name_normalized LIKE " + sqlStr(norm + "%") + " "
+                    + "OR lower(gleif_legal_name) LIKE " + sqlStr(norm + "%");
+                break;
+            default:
+                // Word-start anywhere in the name. Deliberately NOT '%term%': matching inside a
+                // word is what turned the ticker AAPL into MAAPLE CORP.
+                where = "source_name_normalized LIKE " + sqlStr("% " + norm + "%") + " "
+                    + "OR lower(gleif_legal_name) LIKE " + sqlStr("% " + norm + "%");
+                break;
+        }
+
+        return "WITH raw AS ("
+            + "SELECT " + entityKey + " AS entity_key, lei, sec_cik, gleif_legal_name, "
+            + "match_score, match_method, match_confidence, source_schema, source_name_raw "
+            + "FROM ref.entity_org_bridge WHERE " + where + "), "
+            // Pre-deduplicate before aggregating. string_agg(DISTINCT ...) did not dedupe
+            // through this stack — matched_in came back as "patents sec sec sec" — so the
+            // DISTINCT is applied here, where it is a plain relational operation.
+            //
+            // Single-argument string_agg (default ',' separator) because the two-argument
+            // form fails with "Separator argument to StringAgg must be a constant": the
+            // literal does not survive Calcite's translation as a constant.
+            + "sch AS (SELECT DISTINCT entity_key, source_schema FROM raw), "
+            + "nm AS (SELECT DISTINCT entity_key, source_name_raw FROM raw), "
+            + "agg_sch AS (SELECT entity_key, string_agg(source_schema) AS matched_in "
+            + "FROM sch GROUP BY entity_key), "
+            + "agg_nm AS (SELECT entity_key, string_agg(source_name_raw) AS variants, "
+            + "COUNT(*) AS name_variants FROM nm GROUP BY entity_key), "
+            + "m AS ("
+            + "SELECT r.entity_key, "
+            + "MAX(r.lei) AS lei, MAX(r.sec_cik) AS sec_cik, "
+            + "MAX(r.gleif_legal_name) AS gleif_legal_name, "
+            + "MAX(r.match_score) AS best_match_score, "
+            + "MAX(r.match_method) AS match_method, "
+            + "MAX(r.match_confidence) AS match_confidence, "
+            + "COUNT(*) AS mentions "
+            + "FROM raw r GROUP BY r.entity_key) "
+            // Join the canonical row on whichever key the bridge resolved, so a caller gets
+            // the canonical identity AND the variants that led to it in one result.
+            + "SELECT c.canonical_entity_id, "
+            + "COALESCE(c.canonical_name, m.gleif_legal_name, m.entity_key) AS canonical_name, "
+            + "m.lei, m.sec_cik, c.fec_committee_id, c.patents_assignee_id, c.exempt_org_ein, "
+            + "c.eia_utility_id, c.fmcsa_dot_number, "
+            + "m.best_match_score, m.match_method, m.match_confidence, "
+            + "m.mentions, agg_nm.name_variants, agg_sch.matched_in, agg_nm.variants "
+            + "FROM m "
+            + "LEFT JOIN agg_sch ON agg_sch.entity_key = m.entity_key "
+            + "LEFT JOIN agg_nm ON agg_nm.entity_key = m.entity_key "
+            + "LEFT JOIN ref.canonical_org_entity c "
+            + "ON (m.lei IS NOT NULL AND c.lei = m.lei) "
+            + "OR (m.lei IS NULL AND m.sec_cik IS NOT NULL AND c.sec_cik = m.sec_cik) "
+            // Best-scoring entity first, then the one seen in the most places — a company
+            // mentioned across many registries is the one a caller naming it usually means.
+            + "ORDER BY m.best_match_score DESC, m.mentions DESC "
             + "FETCH FIRST " + cap + " ROWS ONLY";
     }
 
-    /** {@code known_in} fragment: the label plus a space when the column is populated. */
-    private static String notNull(String column, String label) {
-        return "CASE WHEN " + column + " IS NOT NULL THEN " + sqlStr(label + " ") + " ELSE '' END";
+    /**
+     * Mirrors the normalization {@code entity_org_bridge.source_name_normalized} was built with —
+     * lowercase, punctuation dropped, common legal suffixes removed, whitespace collapsed — so a
+     * caller typing "Alphabet Inc." matches rows stored as "alphabet".
+     *
+     * <p>A term normalized differently from the column simply fails to match, silently, so this
+     * deliberately stays conservative: it strips only what the bridge's own comment names.
+     */
+    private static String normalizeOrgName(String term) {
+        String s = term.toLowerCase(java.util.Locale.ROOT)
+            .replaceAll("[^a-z0-9 ]", " ")
+            .replaceAll("\\b(inc|incorporated|corp|corporation|co|company|llc|llp|lp|ltd|"
+                + "limited|plc|sa|nv|ag|gmbh|holdings|holding|group|the)\\b", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        // An all-suffix term ("The Company") would normalize to nothing and match everything.
+        return s.isEmpty() ? term.toLowerCase(java.util.Locale.ROOT).trim() : s;
     }
 
+    /**
+     * Runs the tiers in order and returns the first that matches anything.
+     *
+     * <p>Falling through only on an empty result is the point: an exact hit — the overwhelmingly
+     * common case for a caller who typed a real company name — never pays for the scan tiers,
+     * and the scan tiers still exist for the cases exact cannot reach. Merging all tiers into
+     * one OR'd predicate would make every lookup cost the worst tier, which is what the 141s
+     * measurement was.
+     */
     private static String resolveEntity(String term, String type, int limit) throws Exception {
-        return runSqlOn(buildResolveEntitySql(term, type, limit),
-            Math.min(Math.max(1, limit), 200));
+        int cap = Math.min(Math.max(1, limit), 200);
+        String last = "[]";
+        for (int tier = 1; tier <= 3; tier++) {
+            last = runSqlOn(buildResolveEntitySql(term, type, cap, tier), cap);
+            if (last != null && !last.trim().equals("[]")) {
+                return last;
+            }
+            if ("person".equals(type == null || type.isEmpty() ? "org" : type)) {
+                // The person path ignores the tier and would just repeat itself.
+                break;
+            }
+        }
+        return last;
     }
 
     // ── entity_relationships ─────────────────────────────────────────────────
