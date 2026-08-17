@@ -1,5 +1,5 @@
 #!/bin/bash
-# Postgres tracker helpers shared by data_purge.sh and data_fix.sh.
+# Postgres tracker helpers shared by data_purge.sh, data_fix.sh, and parallel/data-fix.sh.
 #
 # The S3 tracker keeps its state as marker parquet under
 # <tracker bucket>/<schema>/year=*/source_key=*/, so the scripts reach it with path globs and

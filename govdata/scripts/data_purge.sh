@@ -29,6 +29,10 @@
 #      them; without clearing them SecFilingCache.filterUnprocessed treats accessions as
 #      complete and skips re-ingest, leaving the purged tables empty. Schema-level; forces
 #      a full document re-ingest on the next run.
+#   2c. The ConversionMetadata row-count cache for the table (<operating-base>/.aperio/
+#      <schema>/.conversions.json). DuckDBIcebergCountStarRule answers COUNT(*) from this
+#      cached value and only self-heals when it is null/0 — left alone after Step 1 purges
+#      the Iceberg data, it keeps reporting the OLD nonzero count for a now-empty table.
 #   3. With --raw: the raw HTTP cache for the table — the object store at
 #      <raw bucket>/<schema>/<table> (govdata-raw-v1, what prod/DQ runs actually
 #      read/write) plus the local mirror at $ETL_RAW_CACHE_DIR/<table> if present.
@@ -263,6 +267,49 @@ for TABLE in "${TABLES[@]}"; do
   # what actually forces that re-ingest.)
   echo "  [2/2] Tracker: marker rows where table_name=${TABLE}"
   pg_tracker_purge_table "$PG_NS" "$TABLE" "$($DRY_RUN && echo true || echo false)" || exit 2
+
+  # Step 2b: Clear the ConversionMetadata row-count cache for this table.
+  # DuckDBIcebergCountStarRule answers COUNT(*) from the cached rowCount in
+  # <operating-base>/.aperio/<schema>/.conversions.json and only self-heals when that cache is
+  # null/0. Purging the Iceberg data (Step 1) leaves the old NONZERO count behind, so COUNT(*)
+  # keeps reporting phantom rows for the now-empty table until it is re-populated. Null the cached
+  # count so the rule self-heals to the real (0) count on the next query. Operating base is
+  # GOVDATA_DATA_DIR or ~/.govdata (same resolution GovDataDriver uses).
+  CONV_FILE="${GOVDATA_DATA_DIR:-$HOME/.govdata}/.aperio/${SCHEMA}/.conversions.json"
+  echo "  [2c/2] Count cache: ${CONV_FILE}"
+  if $DRY_RUN; then
+    echo "        [DRY RUN] Would null cached rowCount for '${TABLE}'"
+  elif [[ -f "$CONV_FILE" ]] && command -v python3 >/dev/null 2>&1; then
+    _cc=$(python3 - "$CONV_FILE" "$TABLE" <<'PY' || echo 0
+import json, sys
+f, table = sys.argv[1], sys.argv[2]
+try:
+    with open(f) as fh: data = json.load(fh)
+except Exception:
+    print(0); sys.exit(0)
+def clr(o):
+    n = 0
+    if isinstance(o, dict):
+        if isinstance(o.get(table), dict) and "rowCount" in o[table]:
+            o[table]["rowCount"] = None; n += 1
+        for k, v in o.items():
+            if k != table and isinstance(v, dict) and isinstance(v.get(table), dict) and "rowCount" in v[table]:
+                v[table]["rowCount"] = None; n += 1
+    return n
+n = clr(data)
+if n:
+    with open(f, "w") as fh: json.dump(data, fh, indent=2)
+print(n)
+PY
+)
+    if [[ "${_cc:-0}" -gt 0 ]]; then
+      echo "        Nulled cached rowCount for '${TABLE}'"
+    else
+      echo "        No cached rowCount entry for '${TABLE}'"
+    fi
+  else
+    echo "        No local .conversions.json (or python3 missing) — nothing to clear"
+  fi
 
   # Step 3 (optional): Delete the raw HTTP cache — the object store (what prod/DQ
   # runs actually read/write) and the local mirror if one is in use.

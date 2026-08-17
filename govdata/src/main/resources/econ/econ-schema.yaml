@@ -1304,6 +1304,12 @@ partitionedTables:
   # --- STATE WAGES ---
   - name: state_wages
     pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"
+    # BLS serves both ETag and Last-Modified on this static per-year zip (confirmed via HEAD);
+    # ETag is the more precise signal. Lets a historical/daily re-run skip a year whose upstream
+    # file hasn't changed instead of unconditionally re-downloading and re-writing every year in
+    # the configured range on every invocation — see EtlPipeline's per-unit freshness gate.
+    freshness:
+      type: etag
     partitions: *standard_partitions
     comment: >
       Annual establishment counts, employment levels, total wages, and average weekly wage for
@@ -1677,6 +1683,10 @@ partitionedTables:
   # --- COUNTY QCEW ---
   - name: county_qcew
     pattern: "type=county_qcew/frequency=*/year=*/county_qcew.parquet"
+    # Same BLS per-year zip as state_wages (filtered differently by rowFilter below), so the
+    # same ETag freshness signal applies — see the comment on state_wages' freshness: block.
+    freshness:
+      type: etag
     # DQ sample cap (GOVDATA_DQ mode): the QCEW annual bulk ZIP is one fetch per year whose
     # county-filtered CSV stream is all ~3,142 counties x NAICS industries x ownership types
     # (millions of rows/year). Cap each year's stream so DQ stops early; prod loads everything.

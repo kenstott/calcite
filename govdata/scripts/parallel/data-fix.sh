@@ -17,7 +17,8 @@
 #
 # Re-ingest a specific table (or all tables in a schema) by:
 #   1. Deleting Iceberg data in R2 for the target path(s)
-#   2. Invalidating tracker completions via forceReprocessTables / freshStart
+#   2. Invalidating tracker completions via tracker_pg.sh (same mechanism data_fix.sh and
+#      data_purge.sh use — a real Postgres DELETE/UPSERT, not a shell-to-Java env var)
 #   3. Running run-pool.sh for the schema so only the cleared table re-downloads
 #
 # Usage:
@@ -107,6 +108,14 @@ delete_path() {
 }
 
 if $ALL_TABLES; then
+  # Capture the table list BEFORE purging, so Step 2 clears tracker completions for exactly the
+  # tables that existed under this schema. table_completion has no schema column — every
+  # non-sub-schema worker (all but lands/health) shares one flat govdata_parquet_v1 namespace —
+  # so a query for "every completed table" would reach into OTHER schemas' tables too.
+  ALL_TABLE_NAMES=()
+  while IFS= read -r _d; do
+    [ -n "$_d" ] && ALL_TABLE_NAMES+=("${_d%/}")
+  done < <(rclone lsf --dirs-only "$SCHEMA_DATA_R2" 2>/dev/null)
   delete_path "$SCHEMA_DATA_R2"
 else
   for tbl in "${TABLES[@]}"; do
@@ -114,22 +123,30 @@ else
   done
 fi
 
-# ── Step 2: Re-run ETL with tracker bypass ────────────────────────────────────
-# For specific tables: GOVDATA_FORCE_REPROCESS_TABLES causes GovDataSchemaFactory
-# to call tracker.invalidateTableCompletion() for each listed table before ETL.
-# For all tables: export FORCE_FRESH=true which run-pool passes as freshStart=true
-# via the model operand, causing tracker.clearAllCompletions() for the schema.
+# ── Step 2: Invalidate tracker completions so the freshness gate doesn't skip re-ingest ──
+# Purging Iceberg data (Step 1) is enough to force reprocessing for a table with NO freshness:
+# gate configured — but a table that DOES declare one (see EtlPipeline's freshness skip-gate)
+# would see the now-empty Iceberg table yet still skip the fetch, because its tracker
+# completion is untouched by Step 1 and still reads as fresh. Clearing it here is what makes
+# this work regardless of whether the table has a freshness gate.
+# shellcheck source=/dev/null
+source "$(dirname "$SCRIPT_DIR")/tracker_pg.sh"
+PG_NS="$(pg_ns_from_bucket "$GOVDATA_PARQUET_DIR")" || exit 2
+log_info "data-fix: tracker schema ${PG_NS}"
 
-if ! $ALL_TABLES; then
-  TABLES_CSV=$(IFS=','; echo "${TABLES[*]}")
-  export GOVDATA_FORCE_REPROCESS_TABLES="$TABLES_CSV"
-  log_info "data-fix: set GOVDATA_FORCE_REPROCESS_TABLES=$TABLES_CSV"
+DRY_RUN_STR=$($DRY_RUN && echo true || echo false)
+if $ALL_TABLES; then
+  if [ ${#ALL_TABLE_NAMES[@]} -eq 0 ]; then
+    log_info "data-fix: no existing tables found under ${SCHEMA_DATA_PATH} — nothing to clear in tracker"
+  else
+    for tbl in "${ALL_TABLE_NAMES[@]}"; do
+      pg_tracker_clear_completion "$PG_NS" "$tbl" "$DRY_RUN_STR" || exit 2
+    done
+  fi
 else
-  # freshStart=true causes GovDataSchemaFactory to call tracker.clearAllCompletions(), which writes
-  # a schema-scoped "_all/cleared" sentinel. The tracker's cached-completion lookup checks
-  # clearedTables.contains("_all") so every table lookup returns null (not complete) for this run.
-  export FORCE_FRESH=true
-  log_info "data-fix: set FORCE_FRESH=true (freshStart — clears all completions for schema)"
+  for tbl in "${TABLES[@]}"; do
+    pg_tracker_clear_completion "$PG_NS" "$tbl" "$DRY_RUN_STR" || exit 2
+  done
 fi
 
 if $FORCE_FLAG; then
