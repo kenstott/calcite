@@ -17,10 +17,20 @@
 #      must not change the row count; anything else means data was lost or duplicated.
 #   2. Sort order recorded — the aperio.sorted-by property. Absent means the heal did not
 #      finish, and it is also what makes a re-run a no-op.
-#   3. Bound overlap — the payoff. Every data file carries a lower/upper bound for the leading
-#      sort column in the manifest. Sorted, those ranges tile the key space and a point lookup
-#      opens one or two files; unsorted, every range spans everything and a lookup opens them
-#      all. Reported as worst-case and mean files touched, and FAILED above 80%.
+#   3. Bound overlap, WITHIN EACH PARTITION — the payoff. Every data file carries a lower/upper
+#      bound for the leading sort column in the manifest. Sorted, those ranges tile the key space
+#      and a point lookup opens one or two files; unsorted, every range spans everything and a
+#      lookup opens them all. Reported as worst-case and mean files touched in the worst
+#      partition, and FAILED above 80%.
+#
+#      Per partition, not per table: a heal sorts within a partition and cannot move a row across
+#      one. These SEC tables are partitioned by year and every year holds filings from nearly
+#      every company, so pooling all files together shows near-total overlap on cik no matter how
+#      well the data is sorted. That pooling failed filing_metadata, insider_transactions and
+#      earnings_transcripts on 2026-08-17 for correctly-healed data, while financial_line_items
+#      passed — the only difference being that it is large enough for one year to span several
+#      files. A partition holding a single file has nothing to prune within it and is reported
+#      as such rather than failed.
 #
 # ── USAGE ────────────────────────────────────────────────────────────────────────────────────
 #   govdata/scripts/parallel/verify-healed-tables.sh                      # all 13

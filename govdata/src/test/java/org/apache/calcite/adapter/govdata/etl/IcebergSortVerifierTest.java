@@ -122,6 +122,48 @@ public class IcebergSortVerifierTest {
         "after heal the table must verify: rows preserved, order recorded, bounds narrowed");
   }
 
+  /**
+   * Writes one file per year partition, each spanning the whole key range.
+   *
+   * <p>This is the shape the SEC tables actually have: partitioned by year, and every year holds
+   * rows for nearly every key, so each partition's single file covers the entire domain.
+   */
+  private void writeOneFilePerYear(int years, int rowsPerFile) throws Exception {
+    int width = String.valueOf(rowsPerFile).length();
+    for (int y = 0; y < years; y++) {
+      int year = 2020 + y;
+      List<Map<String, Object>> rows = new ArrayList<>();
+      for (int r = 0; r < rowsPerFile; r++) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("name", "name-" + String.format("%0" + width + "d", r));
+        row.put("id", r);
+        row.put("year", year);
+        rows.add(row);
+      }
+      Map<String, String> partition = new HashMap<>();
+      partition.put("year", String.valueOf(year));
+      DataFile df = writer.writeRecords(rows, partition);
+      assertNotNull(df);
+      table.newAppend().appendFile(df).commit();
+    }
+  }
+
+  @Test void passesWhenEveryPartitionHoldsOneFileSpanningTheKeyRange() throws Exception {
+    writeOneFilePerYear(8, 100);
+    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0);
+    table.refresh();
+
+    // Pooling every file's bounds across partitions reports 8 of 8 files (100%) here and fails
+    // the table — which is what happened to filing_metadata, insider_transactions and
+    // earnings_transcripts on 2026-08-17. Nothing is wrong with them: a heal sorts within a
+    // partition and cannot move a row across one, so a year-partitioned table whose every year
+    // spans the key range CANNOT have narrow cross-partition bounds however well it is sorted.
+    // Overlap has to be measured inside a partition, and a one-file partition has none.
+    assertTrue(IcebergSortVerifier.verify(table, "name"),
+        "one file per partition means there is nothing to prune within a partition; measuring"
+            + " overlap across partitions fails correctly-healed data purely for being small");
+  }
+
   @Test void failsWhenTheSortPropertyIsMissing() throws Exception {
     writeInterleaved(4, 50);
     writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0);
