@@ -1689,6 +1689,19 @@ public class McpServer {
                     break;
                 }
                 case "render_chart": {
+                    // Reject unrecognised argument names instead of ignoring them.
+                    //
+                    // chart_type used to fall back to "line" whenever it was absent, which meant a
+                    // caller that named it anything else got a line chart and a success response.
+                    // Observed 2026-08-17: an agent passed "type" seven times; the first six
+                    // failed with errors about categories/series that had nothing to do with the
+                    // real mistake (its points payload was routed down the categories path because
+                    // the type had silently become "line"), and the seventh "succeeded" into a
+                    // line chart of two series on incompatible scales — unreadable, and reported
+                    // as a bar chart because that is what the caller thought it had asked for.
+                    // One unknown key cost six round trips and produced a wrong artifact.
+                    checkKnownArgs(args, "render_chart", "chart_type", "title", "x_label",
+                        "y_label", "categories", "series", "points", "width", "height");
                     String chartType = args.has("chart_type") && !args.get("chart_type").isNull()
                         ? args.get("chart_type").asText() : "line";
                     String title = args.has("title") && !args.get("title").isNull()
@@ -4683,6 +4696,65 @@ public class McpServer {
         t.put("description", description);
         t.set("inputSchema", inputSchema);
         return t;
+    }
+
+    /**
+     * Fails on an argument name the tool does not define, naming the closest one it does.
+     *
+     * <p>A misspelled optional argument is otherwise invisible: the reader asks for the name it
+     * knows, does not find it, and uses a default. The caller sees either a success carrying the
+     * wrong thing, or an error about some downstream field that has nothing to do with the
+     * mistake. {@code render_chart} lost six round trips to exactly this in one run — the caller
+     * sent {@code type} instead of {@code chart_type}, silently got {@code line}, and then chased
+     * errors about categories and series while its actual payload was fine.
+     *
+     * <p>Suggesting a near-miss matters more than the rejection: {@code type} vs
+     * {@code chart_type} is the whole diagnosis, and without it the caller has only the tool
+     * schema to re-read.
+     */
+    static void checkKnownArgs(JsonNode args, String tool, String... known) {
+        if (args == null || !args.isObject()) {
+            return;
+        }
+        java.util.Set<String> allowed =
+            new java.util.LinkedHashSet<>(java.util.Arrays.asList(known));
+        java.util.List<String> unknown = new java.util.ArrayList<>();
+        java.util.Iterator<String> names = args.fieldNames();
+        while (names.hasNext()) {
+            String name = names.next();
+            if (!allowed.contains(name)) {
+                unknown.add(name);
+            }
+        }
+        if (unknown.isEmpty()) {
+            return;
+        }
+        StringBuilder msg = new StringBuilder();
+        for (String bad : unknown) {
+            if (msg.length() > 0) {
+                msg.append("; ");
+            }
+            msg.append(tool).append(" has no argument '").append(bad).append("'");
+            String near = closestArg(bad, allowed);
+            if (near != null) {
+                msg.append(" — did you mean '").append(near).append("'?");
+            }
+        }
+        msg.append(". Known arguments: ").append(String.join(", ", allowed));
+        throw new IllegalArgumentException(msg.toString());
+    }
+
+    /** The known argument a bad one most plausibly meant, or null when nothing is close. */
+    private static String closestArg(String bad, java.util.Set<String> known) {
+        String lower = bad.toLowerCase(java.util.Locale.ROOT);
+        // A containment match catches the common shape: an abbreviation of the real name.
+        for (String k : known) {
+            String kl = k.toLowerCase(java.util.Locale.ROOT);
+            if (kl.contains(lower) || lower.contains(kl)) {
+                return k;
+            }
+        }
+        return null;
     }
 
     private static ObjectNode prop(String type, String description) {
