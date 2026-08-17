@@ -109,8 +109,13 @@ esac
 JAR="$(resolve_classpath)"
 
 # Fail early on a stale jar rather than after the first table dies confusingly.
-if ! java -cp "$JAR" org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner 2>&1 \
-     | grep -q -- "--heal-sort"; then
+#
+# The output is captured BEFORE grepping, deliberately. Piping java straight into grep looks
+# equivalent and is not: the runner exits non-zero when it prints usage, and under `set -o
+# pipefail` the pipeline reports THAT status rather than grep's, so the guard fired
+# unconditionally and reported every jar as stale — including correct ones.
+_usage_out="$(java -cp "$JAR" org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner 2>&1 || true)"
+if ! printf '%s' "$_usage_out" | grep -q -- "--heal-sort"; then
   echo "ERROR: staged jar has no --heal-sort: $JAR" >&2
   echo "       ./gradlew :govdata:shadowJar && \\" >&2
   echo "       cp govdata/build/libs/sih-govdata-*.jar govdata/build/libs/sih-govdata.jar" >&2
