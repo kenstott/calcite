@@ -153,10 +153,18 @@ if $FORCE_FLAG; then
   export FORCE=true
 fi
 
+# When $MODE is the "historical" alias, run-pool.sh's queue-building consults
+# historical-year-complete.sh's per-schema/year markers and silently SKIPS any year already
+# marked done by an unrelated prior `historical` run — defeating the entire purpose of this
+# script: we just purged this table's data and cleared its own tracker completion specifically
+# to force a reprocess, and a schema-level "already did this year" marker (which knows nothing
+# about which table triggered this run) has no business overriding that. Always force it off.
+export GOVDATA_HISTORICAL_IGNORE_MARKERS=true
+
 if $DRY_RUN; then
-  log_info "[dry-run] Would run: run-pool.sh --schema $SCHEMA $MODE"
+  log_info "[dry-run] Would run: run-pool.sh --schema $SCHEMA $MODE (GOVDATA_HISTORICAL_IGNORE_MARKERS=true)"
   exit 0
 fi
 
-log_info "data-fix: launching run-pool.sh --schema $SCHEMA $MODE"
+log_info "data-fix: launching run-pool.sh --schema $SCHEMA $MODE (GOVDATA_HISTORICAL_IGNORE_MARKERS=true)"
 exec "$SCRIPT_DIR/run-pool.sh" --schema "$SCHEMA" "$MODE"
