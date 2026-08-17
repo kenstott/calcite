@@ -491,6 +491,7 @@ public class MaterializeConfig {
     private final String restUri;
     private final List<String> batchPartitionColumns;
     private final List<String> incrementalKeys;
+    private final List<String> sortOrder;
     private final int maxRetries;
     private final long retryDelayMs;
     private final boolean runMaintenance;
@@ -515,6 +516,9 @@ public class MaterializeConfig {
           : Collections.<String>emptyList();
       this.incrementalKeys = builder.incrementalKeys != null
           ? Collections.unmodifiableList(new ArrayList<String>(builder.incrementalKeys))
+          : Collections.<String>emptyList();
+      this.sortOrder = builder.sortOrder != null
+          ? Collections.unmodifiableList(new ArrayList<String>(builder.sortOrder))
           : Collections.<String>emptyList();
       this.maxRetries = builder.maxRetries > 0 ? builder.maxRetries : 3;
       this.retryDelayMs = builder.retryDelayMs > 0 ? builder.retryDelayMs : 1000;
@@ -587,6 +591,18 @@ public class MaterializeConfig {
 
     public long getCompactionTargetFileSizeBytes() {
       return compactionTargetFileSizeBytes;
+    }
+
+    /**
+     * Columns to sort rows by, in order, when compaction rewrites a partition.
+     *
+     * <p>Declared in schema YAML as {@code sortOrder: [col, col]}. Sorting is what makes a
+     * column's per-file min/max narrow enough for the Parquet reader to prune on it; without
+     * it compaction only bin-packs by size, so every file's range spans the whole domain and
+     * an equality lookup degenerates into a full scan. Empty means preserve read order.
+     */
+    public List<String> getSortOrder() {
+      return sortOrder;
     }
 
     public int getCompactionMinFiles() {
@@ -720,6 +736,17 @@ public class MaterializeConfig {
         builder.snapshotRetentionDays(((Number) retentionObj).intValue());
       }
 
+      Object sortOrderObj = map.get("sortOrder");
+      if (sortOrderObj instanceof List) {
+        List<String> cols = new ArrayList<String>();
+        for (Object o : (List<?>) sortOrderObj) {
+          if (o != null) {
+            cols.add(String.valueOf(o));
+          }
+        }
+        builder.sortOrder(cols);
+      }
+
       Object compactionObj = map.get("runCompaction");
       if (compactionObj instanceof Boolean) {
         builder.runCompaction((Boolean) compactionObj);
@@ -792,6 +819,7 @@ public class MaterializeConfig {
       private String restUri;
       private List<String> batchPartitionColumns;
       private List<String> incrementalKeys;
+      private List<String> sortOrder;
       private int maxRetries;
       private long retryDelayMs;
       private boolean runMaintenance;
@@ -833,6 +861,11 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder incrementalKeys(List<String> incrementalKeys) {
         this.incrementalKeys = incrementalKeys;
+        return this;
+      }
+
+      public IcebergConfigBuilder sortOrder(List<String> sortOrder) {
+        this.sortOrder = sortOrder;
         return this;
       }
 

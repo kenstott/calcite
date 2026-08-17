@@ -2516,10 +2516,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       long targetSize = icebergConfig.getCompactionTargetFileSizeBytes();
       int minFiles = icebergConfig.getCompactionMinFiles();
       long smallSize = icebergConfig.getCompactionSmallFileSizeBytes();
-      LOGGER.info("Running automatic compaction: targetSize={}MB, minFiles={}, smallSize={}MB",
-          targetSize / (1024 * 1024), minFiles, smallSize / (1024 * 1024));
+      java.util.List<String> sortOrder = icebergConfig.getSortOrder();
+      LOGGER.info("Running automatic compaction: targetSize={}MB, minFiles={}, smallSize={}MB, "
+          + "sortOrder={}",
+          targetSize / (1024 * 1024), minFiles, smallSize / (1024 * 1024),
+          sortOrder.isEmpty() ? "(none — bin-pack only)" : sortOrder);
       try {
-        int compacted = tableWriter.compactSmallFiles(targetSize, minFiles, smallSize);
+        int compacted = tableWriter.compactSmallFiles(targetSize, minFiles, smallSize,
+            icebergConfig.getSnapshotRetentionDays(), sortOrder);
         if (compacted > 0) {
           LOGGER.info("Compaction complete: {} partitions consolidated", compacted);
         }

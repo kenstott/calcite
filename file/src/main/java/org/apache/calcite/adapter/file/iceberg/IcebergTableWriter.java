@@ -1168,6 +1168,28 @@ public class IcebergTableWriter {
    */
   public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
       long smallFileSizeBytes, int retentionDays) throws IOException {
+    return compactSmallFiles(targetFileSizeBytes, minFilesToCompact, smallFileSizeBytes,
+        retentionDays, java.util.Collections.<String>emptyList());
+  }
+
+  /**
+   * Compacts small files, sorting the rewritten rows by {@code sortOrder} when one is given.
+   *
+   * <p>Sorting is the point of doing this at all for lookup-heavy tables: bin-packing alone
+   * produces files whose min/max for any given column spans the whole domain, so the Parquet
+   * reader can prune nothing and an equality predicate scans every row group. Sorting narrows
+   * those ranges so the same predicate touches a handful of files.
+   *
+   * <p>Safe to do in memory here, and only here: this path operates exclusively on files below
+   * {@code smallFileSizeBytes} (10MB by default), so a partition's candidate set is bounded by
+   * that times the file count rather than by table size. {@link #SORT_MEMORY_BUDGET_BYTES} caps
+   * it regardless, and exceeding the cap falls back to the previous streaming rewrite — still a
+   * correct compaction, just unsorted. Rewriting already-compacted large files needs a merge
+   * that spills, and is deliberately NOT attempted here.
+   */
+  public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
+      long smallFileSizeBytes, int retentionDays, java.util.List<String> sortOrder)
+      throws IOException {
     LOGGER.info("Starting compaction for table {} (target={}MB, minFiles={}, smallSize={}MB)",
         table.name(), targetFileSizeBytes / (1024 * 1024), minFilesToCompact,
         smallFileSizeBytes / (1024 * 1024));
@@ -1202,7 +1224,7 @@ public class IcebergTableWriter {
       if (smallFiles.size() >= minFilesToCompact) {
         LOGGER.info("Compacting partition {} with {} small files", partitionKey, smallFiles.size());
         try {
-          compactPartition(smallFiles, targetFileSizeBytes);
+          compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
           compactedPartitions++;
         } catch (Throwable e) {
           LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
@@ -1278,8 +1300,69 @@ public class IcebergTableWriter {
     return (int) Math.max(1000L, Math.min((long) MAX_RECORDS_PER_COMPACTION_FILE, estimate));
   }
 
-  private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes)
-      throws IOException {
+  /**
+   * Comparator over the named columns, nulls last, or null when no named column exists in the
+   * schema.
+   *
+   * <p>An unknown column name returns null rather than sorting on a subset: a caller who
+   * declared {@code sortOrder: [cik, accession_number]} and silently got ordering by {@code cik}
+   * alone would see pruning behave differently than the config says, with nothing in the log to
+   * explain it.
+   */
+  private static java.util.Comparator<Record> recordComparator(Schema schema,
+      java.util.List<String> sortOrder) {
+    List<Integer> positions = new ArrayList<>();
+    for (String col : sortOrder) {
+      org.apache.iceberg.types.Types.NestedField field = schema.findField(col);
+      if (field == null) {
+        LOGGER.warn("sortOrder names column '{}', which is not in the table schema {} — "
+            + "compacting UNSORTED", col, schema.columns());
+        return null;
+      }
+      positions.add(schema.columns().indexOf(field));
+    }
+    final List<Integer> cols = positions;
+    return (a, b) -> {
+      for (Integer pos : cols) {
+        Object va = a.get(pos);
+        Object vb = b.get(pos);
+        if (va == null && vb == null) {
+          continue;
+        }
+        // Nulls last, so a null key never displaces a real value at the head of a file and
+        // narrows its min/max for nothing.
+        if (va == null) {
+          return 1;
+        }
+        if (vb == null) {
+          return -1;
+        }
+        int c;
+        if (va instanceof Comparable && va.getClass().isInstance(vb)) {
+          @SuppressWarnings("unchecked")
+          Comparable<Object> ca = (Comparable<Object>) va;
+          c = ca.compareTo(vb);
+        } else {
+          c = String.valueOf(va).compareTo(String.valueOf(vb));
+        }
+        if (c != 0) {
+          return c;
+        }
+      }
+      return 0;
+    };
+  }
+
+  /** Defensive copy: the Parquet reader reuses its Record instance between iterations. */
+  private static Record copyRecord(Record record) {
+    return ((org.apache.iceberg.data.GenericRecord) record).copy();
+  }
+
+  /** Above this, sorting is skipped and the rewrite streams unsorted rather than risking heap. */
+  private static final long SORT_MEMORY_BUDGET_BYTES = 512L * 1024 * 1024;
+
+  private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
+      java.util.List<String> sortOrder) throws IOException {
     if (smallFiles.isEmpty()) {
       return;
     }
@@ -1320,6 +1403,24 @@ public class IcebergTableWriter {
     int currentRecordCount = 0;
     int totalWritten = 0;
 
+    // Sorting requires seeing every row before writing the first, so the rows are buffered.
+    // Bounded by the small-file threshold (these are all <10MB files) and hard-capped by
+    // SORT_MEMORY_BUDGET_BYTES; over the cap, sorting is skipped rather than risking the heap.
+    List<Record> sortBuffer = null;
+    java.util.Comparator<Record> sortComparator = null;
+    if (sortOrder != null && !sortOrder.isEmpty()) {
+      if (totalBytes > SORT_MEMORY_BUDGET_BYTES) {
+        LOGGER.warn("Partition holds {} bytes of small files, above the {} byte sort budget — "
+            + "compacting UNSORTED. Files are still merged; min/max pruning on {} will not "
+            + "improve.", totalBytes, SORT_MEMORY_BUDGET_BYTES, sortOrder);
+      } else {
+        sortComparator = recordComparator(schema, sortOrder);
+        if (sortComparator != null) {
+          sortBuffer = new ArrayList<>((int) Math.min(totalRecords, Integer.MAX_VALUE));
+        }
+      }
+    }
+
     try {
       for (FileScanTask task : smallFiles) {
         DataFile dataFile = task.file();
@@ -1333,6 +1434,12 @@ public class IcebergTableWriter {
             .build()) {
 
           for (Record record : records) {
+            if (sortBuffer != null) {
+              // GenericParquetReaders may reuse the record instance across iterations, so the
+              // row must be copied before it is retained past this loop turn.
+              sortBuffer.add(copyRecord(record));
+              continue;
+            }
             if (currentWriter == null) {
               // Same empty-partition-path guard as writeRecords: an unpartitioned spec yields ""
               // here, and "data//compacted_x.parquet" is rejected by S3/MinIO with HTTP 400.
@@ -1365,6 +1472,40 @@ public class IcebergTableWriter {
         } catch (Exception e) {
           LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
         }
+      }
+
+      if (sortBuffer != null) {
+        sortBuffer.sort(sortComparator);
+        LOGGER.info("Sorted {} records by {} before writing", sortBuffer.size(), sortOrder);
+        for (Record record : sortBuffer) {
+          if (currentWriter == null) {
+            String outputPath = dataLocation + "/"
+                + (partitionPath.isEmpty() ? "" : partitionPath + "/")
+                + "compacted_" + java.util.UUID.randomUUID().toString().substring(0, 8)
+                + ".parquet";
+            if (outputPath.startsWith("s3://")) {
+              outputPath = "s3a://" + outputPath.substring(5);
+            }
+            OutputFile outputFile = table.io().newOutputFile(outputPath);
+            currentWriter = Parquet.writeData(outputFile)
+                .schema(schema)
+                .withSpec(spec)
+                .withPartition(partitionKey)
+                .createWriterFunc(GenericParquetWriter::buildWriter)
+                .overwrite()
+                .build();
+            currentRecordCount = 0;
+          }
+          currentWriter.write(record);
+          currentRecordCount++;
+          totalWritten++;
+          if (currentRecordCount >= recordsPerFile) {
+            currentWriter.close();
+            newFiles.add(currentWriter.toDataFile());
+            currentWriter = null;
+          }
+        }
+        sortBuffer = null;
       }
 
       if (currentWriter != null) {

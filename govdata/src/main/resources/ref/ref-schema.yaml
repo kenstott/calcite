@@ -1888,6 +1888,16 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        # This table is unpartitioned (partition.columns is empty) and holds ~1.07M rows, so
+        # partition pruning does nothing for it and the file min/max statistics are the only
+        # way a lookup avoids reading everything. Unsorted, every file's range for
+        # source_name_normalized spans the whole alphabet, nothing prunes, and an equality
+        # probe from resolve_entity scanned the table -- measured at 177s.
+        #
+        # source_name_normalized leads because it is the column resolve_entity matches on;
+        # lei follows for the identifier path. Neither is a partition column, which would
+        # waste the leading position by being constant within the partition.
+        sortOrder: [source_name_normalized, lei]
 
   # ==========================================================================
   # ENTITY_PERSON_BRIDGE — cross-schema individual name resolution, tall pairwise log
