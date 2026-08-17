@@ -127,6 +127,35 @@ public final class DuckDBPendingViews {
    *
    * <p>Safe to call from multiple threads — idempotent after first flush.
    */
+  /**
+   * Every view already in the catalog, as {@code schema.name}. One local metadata query, versus
+   * one object-store-binding CREATE per view — see the rationale in {@link #flush}.
+   */
+  private static Set<String> existingViews(Connection conn) {
+    Set<String> out = ConcurrentHashMap.newKeySet();
+    try (java.sql.Statement stmt = conn.createStatement();
+         java.sql.ResultSet rs = stmt.executeQuery(
+             "SELECT table_schema, table_name FROM information_schema.tables "
+             + "WHERE table_type = 'VIEW'")) {
+      while (rs.next()) {
+        out.add(qualified(rs.getString(1), rs.getString(2)));
+      }
+    } catch (SQLException e) {
+      // An empty set means "create everything", i.e. exactly the previous behaviour — correct,
+      // just slower. Never skip a view on the strength of a failed lookup.
+      LOGGER.warn("Could not list existing views; will attempt every deferred CREATE: {}",
+          e.getMessage());
+      return ConcurrentHashMap.newKeySet();
+    }
+    return out;
+  }
+
+  /** Case-insensitive {@code schema.name} key; DuckDB identifiers here are lower-cased. */
+  private static String qualified(String schema, String name) {
+    return (schema == null ? "" : schema.toLowerCase(java.util.Locale.ROOT))
+        + "." + (name == null ? "" : name.toLowerCase(java.util.Locale.ROOT));
+  }
+
   static void flush(String dbPath, Connection conn) {
     if (FLUSHED.contains(dbPath)) {
       return;
@@ -139,7 +168,35 @@ public final class DuckDBPendingViews {
         List<PendingView> pending =
             new ArrayList<>(PENDING.getOrDefault(dbPath, new CopyOnWriteArrayList<>()));
 
-        LOGGER.info("Creating {} deferred SQL views for database '{}'", pending.size(), dbPath);
+        // Skip views the catalog already holds — normally every one of them, because the
+        // JAR-bundled seed ships this same view DDL.
+        //
+        // This is not a micro-optimization. CREATE VIEW IF NOT EXISTS does NOT short-circuit
+        // on existence in DuckDB: it binds the view body FIRST and only then honours IF NOT
+        // EXISTS (verified — creating an existing view whose body names a missing table
+        // raises "Table with name ... does not exist" rather than succeeding). These bodies
+        // call iceberg_scan(), so every redundant CREATE is an object-store round trip, and
+        // the whole batch runs on the first query that touches any view. Measured against a
+        // seeded catalog that already had all 490 views, the flush blocked the first query
+        // for minutes doing nothing but re-binding what was already there.
+        //
+        // That also invalidates this class's original premise that CREATE VIEW is "pure
+        // local DDL that never contacts the object store" — it is not, so the only way to
+        // keep the flush cheap is to not issue the statement at all.
+        Set<String> existing = existingViews(conn);
+        int skipped = 0;
+        List<PendingView> toCreate = new ArrayList<>(pending.size());
+        for (PendingView pv : pending) {
+          if (existing.contains(qualified(pv.duckdbSchema, pv.viewName))) {
+            skipped++;
+          } else {
+            toCreate.add(pv);
+          }
+        }
+        pending = toCreate;
+
+        LOGGER.info("Creating {} deferred SQL views for database '{}' ({} already in catalog)",
+            pending.size(), dbPath, skipped);
 
         for (PendingView pv : pending) {
           SQLException err = createView(conn, pv);
