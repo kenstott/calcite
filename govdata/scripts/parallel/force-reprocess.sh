@@ -41,6 +41,18 @@
 #   most-recent period, which only daily's window reaches, still wrong. Skip with --skip-daily
 #   for a schema where that doesn't apply (or that has no daily mode configured at all).
 #
+# SEC is special: run-pool.sh splits it into performance-partitioning pool slots (sec_primary:
+# 10-K/10-Q, sec_secondary: 8-K/proxy/insider/13D-G, sec_13f: 13F-HR, sec_prices: Stooq prices)
+# so historical backfills parallelize — but those are NOT what this script should target for a
+# table fix. worker.sh's bare `sec` case applies no filingTypes filter by default, so a single
+# `sec:<range>` run repopulates every document-derived table (filing_metadata,
+# financial_line_items, filing_contexts, mda_sections, xbrl_relationships, insider_transactions,
+# institutional_holdings, beneficial_ownership, earnings_transcripts, vectorized_chunks) across
+# every form type in one pass — targeting one of the split slots instead would silently
+# under-cover tables fed by multiple form types. Use --schema sec (bare) for all of the above;
+# the one exception is stock_prices, which worker.sh's `sec` case hardcodes fetchStockPrices:false
+# for — that table needs --schema sec_prices instead.
+#
 # Usage:
 #   force-reprocess.sh --schema <schema> --tables <t1,t2,...> \
 #       [--start YYYY] [--end YYYY] [--skip-historical] [--skip-daily] [--dry-run]
@@ -94,6 +106,18 @@ for i in "${!TABLE_ARR[@]}"; do
   TABLE_ARR[$i]="$(echo -n "${TABLE_ARR[$i]}" | xargs)"
 done
 
+case "$SCHEMA" in
+  sec_primary|sec_secondary|sec_13f)
+    echo "ERROR: '$SCHEMA' is a run-pool.sh performance-partitioning slot (one SEC form-type" >&2
+    echo "       subset), not the right target for a table fix — most SEC tables are fed by" >&2
+    echo "       accessions across multiple form types, so reprocessing only this slot would" >&2
+    echo "       silently under-cover them. Use --schema sec (bare) instead; it applies no" >&2
+    echo "       filingTypes filter and covers every SEC table except stock_prices, which" >&2
+    echo "       needs --schema sec_prices. See this script's header comment for details." >&2
+    exit 1
+    ;;
+esac
+
 PG_NS="$(pg_ns_from_bucket "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}")" || exit 2
 
 echo "=================================================="
@@ -104,6 +128,14 @@ echo "  Tables: ${TABLE_ARR[*]}"
 echo "  Tracker: $PG_NS (postgres)"
 $DRY_RUN && echo "  *** DRY RUN — no ETL will actually run ***"
 echo ""
+
+if [[ "$SCHEMA" == "officials" ]]; then
+  echo "  NOTE: officials has no MODE-based range (see officials-schema.yaml's congress_range" >&2
+  echo "        comment) — every invocation covers [GOVDATA_START_CONGRESS, GOVDATA_END_CONGRESS]" >&2
+  echo "        as currently declared there (117-119 by default). Override GOVDATA_START_CONGRESS" >&2
+  echo "        before running this script if you need deeper history than that default." >&2
+  echo "" >&2
+fi
 
 # ── Baseline: capture each table's current max as_of, to prove afterward that a reprocess
 #    actually touched it (not just that the pool exited 0 — see the marker bugs this replaces).
@@ -125,11 +157,17 @@ echo ""
 # ── Determine the historical range: [oldest existing year marker for this schema, end year] ──
 if ! $SKIP_HISTORICAL; then
   if [[ -z "$START_YEAR" ]]; then
-    HCY_DONE_FILE="$(hcy_state_dir)/${SCHEMA}.done"
-    START_YEAR=""
-    if [[ -f "$HCY_DONE_FILE" ]]; then
-      START_YEAR=$(grep -E '^[0-9]{4}$' "$HCY_DONE_FILE" 2>/dev/null | sort -n | head -1 || true)
+    # sec's historical alias enqueues sec_primary/sec_secondary/sec_13f (each with its own
+    # marker file), never bare "sec" — so a plain ${SCHEMA}.done never exists for it. Union the
+    # three split marker files instead; see the header comment on why bare `sec` is still the
+    # right run-pool target for the reprocess itself.
+    if [[ "$SCHEMA" == "sec" ]]; then
+      HCY_DONE_FILES=("$(hcy_state_dir)/sec_primary.done" "$(hcy_state_dir)/sec_secondary.done" "$(hcy_state_dir)/sec_13f.done")
+    else
+      HCY_DONE_FILES=("$(hcy_state_dir)/${SCHEMA}.done")
     fi
+    START_YEAR=""
+    START_YEAR=$(cat "${HCY_DONE_FILES[@]}" 2>/dev/null | grep -E '^[0-9]{4}$' | sort -n | head -1 || true)
     if [[ -z "$START_YEAR" ]]; then
       echo "  WARNING: no historical-year-complete markers found for '${SCHEMA}' — cannot infer" >&2
       echo "           a safe start year. Pass --start explicitly (or --skip-historical)." >&2
