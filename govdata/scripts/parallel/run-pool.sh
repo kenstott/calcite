@@ -742,7 +742,13 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
         # hcy_enqueue (i.e. the `historical` alias's year/:once slots) — daily, dq, and
         # explicit schema:mode runs never touch this marker.
         if hcy_is_tracked "${active_slots[$i]}"; then
-          hcy_mark_complete "${active_slots[$i]%%:*}" "${active_slots[$i]#*:}"
+          _hcy_schema="${active_slots[$i]%%:*}"
+          _hcy_token="${active_slots[$i]#*:}"
+          if hcy_sec_all_failed "$_hcy_schema" "$SCRIPT_DIR/runs/${id}/launch.log"; then
+            log_info "$id: exited 0 but EVERY accession failed this run (sustained transient outage?) — NOT marking $_hcy_schema:$_hcy_token complete, will retry next historical run. See runs/${id}/launch.log."
+          else
+            hcy_mark_complete "$_hcy_schema" "$_hcy_token"
+          fi
         fi
       else
         ((failed_count++)) || true

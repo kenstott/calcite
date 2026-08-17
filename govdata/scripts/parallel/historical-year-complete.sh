@@ -67,4 +67,34 @@ hcy_is_tracked() {   # <slot> — was this slot enqueued via hcy_enqueue this ru
   printf '%s' "$HCY_TRACKED_SLOTS" | grep -qxF "$1"
 }
 
+# Guards sec_primary/sec_secondary/sec_13f only. DocumentETLProcessor.processAccession catches
+# every per-accession failure (including retry-exhausted transient network errors) internally and
+# always returns a normal result — it never throws — so worker.sh exits 0 even when a sustained
+# outage caused EVERY accession in the year to fail. Without this check that year would still get
+# marked complete below and silently never be retried by a later `historical` run. This does NOT
+# catch a PARTIAL failure (some accessions failed, others succeeded) — that is a real gap but a
+# different, harder problem (see DocumentETLProcessor's unconditional markProcessed-on-empty-result);
+# this only refuses the total-wipeout case, which a transient/sustained outage for the whole run
+# produces.
+hcy_sec_all_failed() {   # <schema> <log_file>
+  local schema="$1" log_file="$2"
+  case "$schema" in
+    sec_primary|sec_secondary|sec_13f) ;;
+    *) return 1 ;;
+  esac
+  [ -f "$log_file" ] || return 1
+  # Sum across every "Document ETL completed: N processed, N skipped, N failed" line in the log —
+  # not just the last one — in case a single worker run makes more than one such pass.
+  local processed=0 skipped=0 failed=0 found=0 p s f
+  while read -r p s f; do
+    found=1
+    processed=$((processed + p))
+    skipped=$((skipped + s))
+    failed=$((failed + f))
+  done < <(grep -oE "Document ETL completed: [0-9]+ processed, [0-9]+ skipped, [0-9]+ failed" "$log_file" \
+            | sed -E 's/.*completed: ([0-9]+) processed, ([0-9]+) skipped, ([0-9]+) failed/\1 \2 \3/')
+  [ "$found" -eq 1 ] || return 1
+  [ "$processed" -eq 0 ] && [ "$skipped" -eq 0 ] && [ "$failed" -gt 0 ]
+}
+
 HCY_TRACKED_SLOTS=""
