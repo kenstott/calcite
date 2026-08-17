@@ -145,6 +145,56 @@ public class IcebergHealSortOrderTest {
     assertEquals(expected, namesIn(2024), "heal must leave the partition sorted on disk");
   }
 
+  @Test void compactionInheritsTheDeclaredSortOrderWhenTheCallerPassesNone() throws Exception {
+    // The bug: the short compactSmallFiles overloads defaulted sortOrder to emptyList, so a table
+    // that declares one got bin-packed anyway. IcebergMaterializer and CompactionRunner both call
+    // the short form and neither has the materialize config in scope, so neither could pass it —
+    // the declared order was reachable only by a manual heal.
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writer.recordDeclaredSortOrder(Arrays.asList("name"));
+
+    writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
+    writeFile(writer, 2024, Arrays.asList(row("mango", 3, 2024), row("beta", 4, 2024)));
+    writeFile(writer, 2024, Arrays.asList(row("yak", 5, 2024), row("cherry", 6, 2024)));
+
+    List<String> expected = new ArrayList<>(namesIn(2024));
+    Collections.sort(expected);
+
+    // Short overload — no sortOrder argument at all, exactly what the two callers use.
+    writer.compactSmallFiles(128L * 1024 * 1024, 2, 128L * 1024 * 1024);
+
+    assertEquals(expected, namesIn(2024),
+        "compaction must honour the order the table declares, without being handed it");
+  }
+
+  @Test void compactionStillBinPacksWhenNoOrderIsDeclared() throws Exception {
+    // A table that declares nothing has nothing to sort. Bin-packing is correct here and must
+    // stay cheap — inheriting must not turn into sorting-by-default.
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    assertTrue(writer.declaredSortOrder().isEmpty(), "precondition: no order declared");
+
+    writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
+    writeFile(writer, 2024, Arrays.asList(row("mango", 3, 2024), row("beta", 4, 2024)));
+
+    List<String> before = namesIn(2024);
+    writer.compactSmallFiles(128L * 1024 * 1024, 2, 128L * 1024 * 1024);
+
+    assertEquals(before, namesIn(2024),
+        "with no declared order, compaction must not reorder rows");
+  }
+
+  @Test void recordingTheDeclaredOrderRoundTripsAndIgnoresEmpty() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    writer.recordDeclaredSortOrder(Arrays.asList("name", "id"));
+    assertEquals(Arrays.asList("name", "id"), writer.declaredSortOrder());
+
+    // An empty declaration must not erase a real one — callers without config pass empty.
+    writer.recordDeclaredSortOrder(Collections.<String>emptyList());
+    assertEquals(Arrays.asList("name", "id"), writer.declaredSortOrder(),
+        "an empty sortOrder means 'I don't know', not 'clear it'");
+  }
+
   @Test void healIsIdempotentViaTheRecordedProperty() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));

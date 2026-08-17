@@ -2512,6 +2512,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // tableWriter stays null for a deferred-schema materialize that received zero rows (nothing to
     // create the table from, nothing to compact).
     MaterializeConfig.IcebergConfig icebergConfig = config.getIceberg();
+
+    // Stamp the declared sort order onto the table before compacting. Compaction entry points
+    // that lack this config (IcebergMaterializer, CompactionRunner) read it back off the table,
+    // so a table declaring sortOrder is no longer bin-packed just because the caller did not
+    // know to pass it.
+    if (tableWriter != null && icebergConfig != null) {
+      tableWriter.recordDeclaredSortOrder(icebergConfig.getSortOrder());
+    }
+
     if (tableWriter != null && icebergConfig != null && icebergConfig.isRunCompaction()) {
       long targetSize = icebergConfig.getCompactionTargetFileSizeBytes();
       int minFiles = icebergConfig.getCompactionMinFiles();

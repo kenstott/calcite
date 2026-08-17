@@ -1169,7 +1169,63 @@ public class IcebergTableWriter {
   public int compactSmallFiles(long targetFileSizeBytes, int minFilesToCompact,
       long smallFileSizeBytes, int retentionDays) throws IOException {
     return compactSmallFiles(targetFileSizeBytes, minFilesToCompact, smallFileSizeBytes,
-        retentionDays, java.util.Collections.<String>emptyList());
+        retentionDays, declaredSortOrder());
+  }
+
+  /**
+   * Records the sort order a table declares, so compaction can honour it without the caller
+   * having to know about it.
+   *
+   * <p>Distinct from {@link #SORTED_BY_PROPERTY}, which asserts the data IS in that order.
+   * This one is intent: what the schema asked for. A table that declares nothing has nothing
+   * to sort, and compaction bin-packs as before.
+   */
+  public static final String SORT_ORDER_PROPERTY = "aperio.sort-order";
+
+  /**
+   * The sort order this table declares, or empty when it declares none.
+   *
+   * <p>This exists because the convenience overloads used to default to
+   * {@code Collections.emptyList()}, which silently discarded a declared order for any caller
+   * that did not know to pass one — {@code IcebergMaterializer} and {@code CompactionRunner}
+   * both call the short form and neither has the materialize config in scope. The result was a
+   * table declaring {@code sortOrder:} in its schema and getting bin-packed anyway, with nothing
+   * in the log to say so, leaving the order achievable only by a manual heal.
+   *
+   * <p>Reading it from the table's own properties fixes every caller at once, including future
+   * ones, and keeps the declaration as the single switch: declared means sort, absent means
+   * bin-pack.
+   */
+  public java.util.List<String> declaredSortOrder() {
+    String declared = table.properties().get(SORT_ORDER_PROPERTY);
+    if (declared == null || declared.trim().isEmpty()) {
+      return java.util.Collections.emptyList();
+    }
+    java.util.List<String> columns = new java.util.ArrayList<>();
+    for (String col : declared.split(",")) {
+      String trimmed = col.trim();
+      if (!trimmed.isEmpty()) {
+        columns.add(trimmed);
+      }
+    }
+    return columns;
+  }
+
+  /**
+   * Persists the declared sort order onto the table, so later maintenance can find it.
+   *
+   * <p>No-op when the order is unchanged, to avoid a metadata commit on every materialize.
+   */
+  public void recordDeclaredSortOrder(java.util.List<String> sortOrder) {
+    if (sortOrder == null || sortOrder.isEmpty()) {
+      return;
+    }
+    String desired = String.join(",", sortOrder);
+    if (desired.equals(table.properties().get(SORT_ORDER_PROPERTY))) {
+      return;
+    }
+    table.updateProperties().set(SORT_ORDER_PROPERTY, desired).commit();
+    LOGGER.info("Recorded declared sort order [{}] on {}", desired, table.name());
   }
 
   /**
