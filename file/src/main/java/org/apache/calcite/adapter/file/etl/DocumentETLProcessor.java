@@ -103,6 +103,10 @@ public class DocumentETLProcessor {
      *  synchronizing on this instance — merging is per-CIK and rare (only on a genuine miss),
      *  so contention is not a concern. */
     boolean overflowMerged;
+    /** True if at least one overflow page failed to fetch during the merge. A subsequent "not
+     *  found" result for an accession on THIS cik is then inconclusive, not confirmed absent —
+     *  see {@link #fetchPrimaryDocumentFromSubmissions}. Guarded the same way as overflowMerged. */
+    boolean overflowFetchFailed;
 
     CikSubmissions(Map<String, String> byAccession, List<PaginationFileRef> overflowFiles) {
       this.byAccession = byAccession;
@@ -491,13 +495,15 @@ public class DocumentETLProcessor {
     String primaryDocument;
     try {
       primaryDocument = fetchPrimaryDocumentFromSubmissions(documentSource, cik, accession);
-    // fallback-guard: allow The IOException is not swallowed silently — it's captured into the returned DocumentETLResult's errors list and failedCount, a proper error-as-value result the caller can inspect.
     } catch (IOException e) {
+      // Do NOT mark processed: an exception here means we could not confirm the primary
+      // document one way or the other (a transient fetch failure, or an inconclusive overflow
+      // miss — see fetchPrimaryDocumentFromSubmissions). Leaving no tracker row is deliberate —
+      // it is what makes this accession reappear as a normal unprocessed candidate on the next
+      // run, for every form type, with no special-cased retry list to maintain. The error is
+      // still captured into the returned DocumentETLResult's errors list and failedCount, a
+      // proper error-as-value result the caller can inspect.
       LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession, e.getMessage());
-      if (documentTracker != null) {
-        documentTracker.markProcessed(cik, accession, formType,
-            Collections.<String>emptyList());
-      }
       return new DocumentETLResult(0, 0, 1,
           Collections.<String>emptyList(),
           Collections.singletonList(
@@ -508,6 +514,9 @@ public class DocumentETLProcessor {
     primaryDocument = stripViewerFolderPrefix(primaryDocument);
 
     if (primaryDocument == null || primaryDocument.isEmpty()) {
+      // Reached only for a CONFIRMED absence — fetchPrimaryDocumentFromSubmissions throws
+      // instead of returning null when an overflow page failure made the miss inconclusive, so
+      // marking processed here is safe: this accession genuinely has no primary document listed.
       LOGGER.debug("No primary document found for {}/{} form {}", cik, accession, formType);
       if (documentTracker != null) {
         documentTracker.markProcessed(cik, accession, formType,
@@ -542,8 +551,11 @@ public class DocumentETLProcessor {
       LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, e.getMessage());
     }
 
-    // Always mark processed — zero-output and errors are valid terminal states
-    if (documentTracker != null) {
+    // Zero-output is a valid terminal state (mark processed), but a failure is not — retries
+    // were already exhausted inside processDocumentWithRetry, so this is a genuine, possibly
+    // transient error, not a confirmed empty result. Leave no tracker row so it is retried on
+    // a later run instead of permanently recorded as "no XBRL".
+    if (documentTracker != null && failed == 0) {
       documentTracker.markProcessed(cik, accession, formType, converted);
     }
 
@@ -661,6 +673,9 @@ public class DocumentETLProcessor {
    * miss, and then only once per CIK regardless of how many of its accessions miss.
    *
    * @return primary document filename, or null if genuinely not found after checking overflow
+   * @throws IOException if the submissions.json fetch fails, or an accession misses locally AND
+   *     at least one overflow page failed to fetch — that miss is inconclusive (the accession may
+   *     be on the page that failed), not a confirmed absence, and must not be treated as one
    */
   private String fetchPrimaryDocumentFromSubmissions(
       DocumentSource documentSource, String cik, String accession) throws IOException {
@@ -690,6 +705,13 @@ public class DocumentETLProcessor {
         }
       }
       result = submissions.byAccession.get(accession);
+    }
+
+    if (result == null && submissions.overflowFetchFailed) {
+      throw new IOException(
+          "accession " + accession + " not found for CIK " + cik + " in submissions.json, but "
+          + "at least one overflow page failed to fetch — the miss is inconclusive, not a "
+          + "confirmed absence");
     }
 
     if (result == null && submissionsMissDiagCount.get() < 5) {
@@ -732,7 +754,9 @@ public class DocumentETLProcessor {
    * <p>An overflow page is a flat array document — not wrapped in {@code filings.recent} — so the
    * same array extraction applies directly. A page that fails to fetch is skipped rather than
    * aborting the merge: the accession being looked up may be on a different page, and one bad page
-   * must not hide every other one from a filer with many.
+   * must not hide every other one from a filer with many. The failure is recorded on
+   * {@link CikSubmissions#overflowFetchFailed} so a subsequent miss for this CIK is treated as
+   * inconclusive rather than a confirmed absence.
    */
   private void mergeOverflowSubmissions(DocumentSource documentSource, String cik,
       CikSubmissions submissions) {
@@ -744,6 +768,10 @@ public class DocumentETLProcessor {
       } catch (IOException e) {
         LOGGER.warn("Could not fetch overflow submissions page {} for CIK {}: {}",
             ref.name, cik, e.getMessage());
+        // Keep merging the other pages — the accession being looked up may be on one of
+        // them — but remember the miss on THIS page is inconclusive, not a confirmed
+        // absence, for whichever accession triggered this merge.
+        submissions.overflowFetchFailed = true;
       }
     }
   }

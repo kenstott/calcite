@@ -21,6 +21,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -546,6 +549,209 @@ class DocumentETLProcessorDeepCoverageTest2 {
     String json = "{\"key\":\"val\\\"ue\"}";
     int result = DocumentETLProcessor.findMatchingBracket(json, 0);
     assertEquals(json.length() - 1, result, "Should handle escaped quotes");
+  }
+
+  // ========== mergeOverflowSubmissions / fetchPrimaryDocumentFromSubmissions ==========
+  // Regression coverage for the accession-level silent-data-loss fix: a transient failure
+  // fetching an overflow submissions page must not be indistinguishable from "accession
+  // genuinely absent" — see CikSubmissions#overflowFetchFailed.
+
+  @Test void testMergeOverflowSubmissionsSetsFailureFlagButKeepsMergingOtherPages()
+      throws Exception {
+    DocumentETLProcessor processor = createProcessor(null, null, null);
+
+    Object submissions = newCikSubmissions(
+        new HashMap<String, String>(),
+        Arrays.asList(
+            new DocumentETLProcessor.PaginationFileRef(
+                "CIK0001234567-submissions-001.json", null, null, 0),
+            new DocumentETLProcessor.PaginationFileRef(
+                "CIK0001234567-submissions-002.json", null, null, 0)));
+
+    DocumentSource ds = mock(DocumentSource.class);
+    when(ds.fetchUrlContent(
+        "https://data.sec.gov/submissions/CIK0001234567-submissions-001.json"))
+        .thenThrow(new IOException("Connection reset"));
+    when(ds.fetchUrlContent(
+        "https://data.sec.gov/submissions/CIK0001234567-submissions-002.json"))
+        .thenReturn("{\"accessionNumber\":[\"0001234567-24-000002\"],"
+            + "\"primaryDocument\":[\"filing2.htm\"]}");
+
+    Method m = DocumentETLProcessor.class.getDeclaredMethod(
+        "mergeOverflowSubmissions", DocumentSource.class, String.class, cikSubmissionsClass());
+    m.setAccessible(true);
+    m.invoke(processor, ds, "0001234567", submissions);
+
+    assertEquals(Boolean.TRUE, getField(submissions, "overflowFetchFailed"),
+        "one page failed to fetch — flag must be set");
+    @SuppressWarnings("unchecked")
+    Map<String, String> byAccession = (Map<String, String>) getField(submissions, "byAccession");
+    assertEquals("filing2.htm", byAccession.get("0001234567-24-000002"),
+        "the OTHER page's accession must still be merged despite the first page failing");
+  }
+
+  @Test void testFetchPrimaryDocumentThrowsOnInconclusiveOverflowMiss() throws Exception {
+    DocumentETLProcessor processor = createProcessor(null, null, null);
+
+    DocumentSource ds = mock(DocumentSource.class);
+    when(ds.fetchUrlContent("https://data.sec.gov/submissions/CIK0001234567.json"))
+        .thenReturn("{\"accessionNumber\":[\"0001234567-24-000001\"],"
+            + "\"primaryDocument\":[\"filing1.htm\"],"
+            + "\"filings\":{\"files\":[{\"name\":\"CIK0001234567-submissions-001.json\","
+            + "\"filingCount\":900,\"filingFrom\":\"2000-01-01\",\"filingTo\":\"2010-12-31\"}]}}");
+    when(ds.fetchUrlContent(
+        "https://data.sec.gov/submissions/CIK0001234567-submissions-001.json"))
+        .thenThrow(new IOException("Read timed out"));
+
+    Method m = DocumentETLProcessor.class.getDeclaredMethod(
+        "fetchPrimaryDocumentFromSubmissions", DocumentSource.class, String.class, String.class);
+    m.setAccessible(true);
+
+    InvocationTargetException ex = assertThrows(InvocationTargetException.class,
+        () -> m.invoke(processor, ds, "0001234567", "0001234567-19-000099"));
+    assertTrue(ex.getCause() instanceof IOException,
+        "must throw, not return null, on an inconclusive miss: " + ex.getCause());
+    assertTrue(ex.getCause().getMessage().contains("inconclusive"),
+        "message should explain why: " + ex.getCause().getMessage());
+  }
+
+  @Test void testFetchPrimaryDocumentReturnsNullOnConfirmedAbsentNoOverflow() throws Exception {
+    DocumentETLProcessor processor = createProcessor(null, null, null);
+
+    DocumentSource ds = mock(DocumentSource.class);
+    when(ds.fetchUrlContent("https://data.sec.gov/submissions/CIK0001234567.json"))
+        .thenReturn("{\"accessionNumber\":[\"0001234567-24-000001\"],"
+            + "\"primaryDocument\":[\"filing1.htm\"]}");
+
+    Method m = DocumentETLProcessor.class.getDeclaredMethod(
+        "fetchPrimaryDocumentFromSubmissions", DocumentSource.class, String.class, String.class);
+    m.setAccessible(true);
+
+    String result = (String) m.invoke(processor, ds, "0001234567", "0001234567-19-000099");
+    assertNull(result, "genuinely absent, no overflow pages — must return null, not throw");
+  }
+
+  @Test void testFetchPrimaryDocumentReturnsNullWhenOverflowSucceedsButStillAbsent()
+      throws Exception {
+    DocumentETLProcessor processor = createProcessor(null, null, null);
+
+    DocumentSource ds = mock(DocumentSource.class);
+    when(ds.fetchUrlContent("https://data.sec.gov/submissions/CIK0001234567.json"))
+        .thenReturn("{\"accessionNumber\":[\"0001234567-24-000001\"],"
+            + "\"primaryDocument\":[\"filing1.htm\"],"
+            + "\"filings\":{\"files\":[{\"name\":\"CIK0001234567-submissions-001.json\","
+            + "\"filingCount\":900,\"filingFrom\":\"2000-01-01\",\"filingTo\":\"2010-12-31\"}]}}");
+    when(ds.fetchUrlContent(
+        "https://data.sec.gov/submissions/CIK0001234567-submissions-001.json"))
+        .thenReturn("{\"accessionNumber\":[\"0001234567-05-000003\"],"
+            + "\"primaryDocument\":[\"filing3.htm\"]}");
+
+    Method m = DocumentETLProcessor.class.getDeclaredMethod(
+        "fetchPrimaryDocumentFromSubmissions", DocumentSource.class, String.class, String.class);
+    m.setAccessible(true);
+
+    // Overflow page fetched fine, but the accession we want isn't on it either — a confirmed
+    // absence, not an inconclusive one, despite there having been overflow pages to check.
+    String result = (String) m.invoke(processor, ds, "0001234567", "0001234567-19-000099");
+    assertNull(result,
+        "overflow fetch succeeded but accession truly isn't there — must return null, not throw");
+  }
+
+  // ========== processAccession — markProcessed gating on failure ==========
+  // Regression coverage for the fix itself: a failure after retries are exhausted must NOT be
+  // recorded as a confirmed empty result, or the accession is silently and permanently lost
+  // (the DocumentETLProcessor.processAccession bug the historical-year-marker conversation
+  // uncovered). The submissions.json lookup is seeded directly into cikSubmissionsCache since
+  // fetchPrimaryDocumentFromSubmissions calls a hardcoded (not config-driven) EDGAR URL that
+  // cannot be redirected to a test double — see fetchPrimaryDocumentFromSubmissions's javadoc.
+
+  @Test void testProcessAccessionDoesNotMarkProcessedWhenDocumentDownloadFails() throws Exception {
+    Map<String, Object> docSourceMap = new HashMap<String, Object>();
+    docSourceMap.put("metadataUrl", "https://data.sec.gov/submissions/CIK{cik}.json");
+    // Syntactically valid URI, unknown scheme: fails at URL construction on the FIRST attempt
+    // with no retry/backoff at either DocumentSource's or DocumentETLProcessor's retry layer
+    // (neither isRetryableException nor isTransientError match "unknown protocol"), so this
+    // test needs no real network access and no sleep.
+    docSourceMap.put("documentUrl", "bogus-scheme://data.sec.gov/{accession_url}/{document}");
+    HttpSourceConfig.DocumentSourceConfig docConfig =
+        HttpSourceConfig.DocumentSourceConfig.fromMap(docSourceMap);
+    HttpSourceConfig config = HttpSourceConfig.builder().documentSource(docConfig).build();
+
+    StorageProvider sp = mock(StorageProvider.class);
+    when(sp.resolvePath(anyString(), anyString()))
+        .thenAnswer(inv -> inv.getArgument(0) + "/" + inv.getArgument(1));
+    when(sp.exists(anyString())).thenReturn(false);
+
+    ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
+
+    DocumentETLProcessor processor = new DocumentETLProcessor(
+        config, sp, "/output", "/cache", mock(FileConverter.class), null, tracker);
+    seedCikSubmissions(processor, "0001234567",
+        Collections.singletonMap("0001234567-24-000001", "filing.htm"));
+
+    DocumentETLProcessor.DocumentETLResult result =
+        processor.processAccession("0001234567", "0001234567-24-000001", "10-K", "2024-03-01");
+
+    assertEquals(0, result.getDocumentsProcessed());
+    assertEquals(1, result.getDocumentsFailed());
+    verify(tracker, never()).markProcessed(anyString(), anyString(), anyString(), anyList());
+  }
+
+  @Test void testProcessAccessionStillMarksProcessedOnConfirmedAbsentDocument() throws Exception {
+    Map<String, Object> docSourceMap = new HashMap<String, Object>();
+    docSourceMap.put("metadataUrl", "https://data.sec.gov/submissions/CIK{cik}.json");
+    docSourceMap.put("documentUrl", "https://data.sec.gov/{accession_url}/{document}");
+    HttpSourceConfig.DocumentSourceConfig docConfig =
+        HttpSourceConfig.DocumentSourceConfig.fromMap(docSourceMap);
+    HttpSourceConfig config = HttpSourceConfig.builder().documentSource(docConfig).build();
+
+    StorageProvider sp = mock(StorageProvider.class);
+    ProcessedDocumentTracker tracker = mock(ProcessedDocumentTracker.class);
+
+    DocumentETLProcessor processor = new DocumentETLProcessor(
+        config, sp, "/output", "/cache", mock(FileConverter.class), null, tracker);
+    // No matching accession in the seeded map, and no overflow pages — a confirmed absence.
+    seedCikSubmissions(processor, "0001234567", Collections.<String, String>emptyMap());
+
+    DocumentETLProcessor.DocumentETLResult result =
+        processor.processAccession("0001234567", "0001234567-24-000099", "10-K", "2024-03-01");
+
+    assertEquals(1, result.getDocumentsSkipped());
+    verify(tracker, times(1)).markProcessed(
+        "0001234567", "0001234567-24-000099", "10-K", Collections.<String>emptyList());
+  }
+
+  // ========== Reflection helpers for the package-private CikSubmissions type ==========
+
+  private Class<?> cikSubmissionsClass() throws ClassNotFoundException {
+    return Class.forName(
+        "org.apache.calcite.adapter.file.etl.DocumentETLProcessor$CikSubmissions");
+  }
+
+  private Object newCikSubmissions(Map<String, String> byAccession,
+      List<DocumentETLProcessor.PaginationFileRef> overflowFiles) throws Exception {
+    Constructor<?> ctor = cikSubmissionsClass().getDeclaredConstructor(Map.class, List.class);
+    ctor.setAccessible(true);
+    return ctor.newInstance(byAccession, overflowFiles);
+  }
+
+  private Object getField(Object target, String name) throws Exception {
+    Field f = target.getClass().getDeclaredField(name);
+    f.setAccessible(true);
+    return f.get(target);
+  }
+
+  /** Bypasses the hardcoded, non-config-driven submissions.json fetch by seeding the cache it
+   *  would otherwise populate — see the processAccession tests' class-level comment above. */
+  private void seedCikSubmissions(DocumentETLProcessor processor, String cik,
+      Map<String, String> byAccession) throws Exception {
+    Object submissions = newCikSubmissions(byAccession,
+        Collections.<DocumentETLProcessor.PaginationFileRef>emptyList());
+    Field cacheField = DocumentETLProcessor.class.getDeclaredField("cikSubmissionsCache");
+    cacheField.setAccessible(true);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> cache = (Map<String, Object>) cacheField.get(processor);
+    cache.put(cik, submissions);
   }
 
   // ========== Helper ==========

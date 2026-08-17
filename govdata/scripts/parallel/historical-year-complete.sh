@@ -49,12 +49,26 @@ hcy_mark_complete() {   # <schema> <token> — flock-guarded so concurrent worke
   ) 9>>"$dir/.lock"
 }
 
+# Manual escape hatch: GOVDATA_HISTORICAL_IGNORE_MARKERS=true forces hcy_enqueue to re-queue
+# every slot regardless of its marker, for a deliberate cleanup pass after a suspected silent
+# gap (e.g. a partial-failure accession loss the automated hcy_sec_all_failed check below can't
+# detect on its own). Markers are still written normally afterward on genuine success — this
+# only affects whether hcy_is_complete is consulted before enqueuing, not whether it's updated.
+hcy_ignore_markers() {
+  case "${GOVDATA_HISTORICAL_IGNORE_MARKERS:-}" in
+    true|1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Append "<schema>:<token>" to the caller's $queue array unless already marked
 # complete, and remember it in $HCY_TRACKED_SLOTS so the pool's completion
 # handler knows to write a marker for it (and only it) on a clean exit.
 hcy_enqueue() {   # <schema> <token>
   local schema="$1" token="$2" slot="$1:$2"
-  if hcy_is_complete "$schema" "$token"; then
+  if hcy_ignore_markers; then
+    log_info "[historical-complete] FORCE ${slot} — GOVDATA_HISTORICAL_IGNORE_MARKERS=true, ignoring any existing marker"
+  elif hcy_is_complete "$schema" "$token"; then
     log_info "[historical-complete] SKIP ${slot} — already marked complete in $(hcy_state_dir)/${schema}.done (delete that file, or the '${token}' line in it, to redo this slot)"
     return
   fi
@@ -71,11 +85,15 @@ hcy_is_tracked() {   # <slot> — was this slot enqueued via hcy_enqueue this ru
 # every per-accession failure (including retry-exhausted transient network errors) internally and
 # always returns a normal result — it never throws — so worker.sh exits 0 even when a sustained
 # outage caused EVERY accession in the year to fail. Without this check that year would still get
-# marked complete below and silently never be retried by a later `historical` run. This does NOT
-# catch a PARTIAL failure (some accessions failed, others succeeded) — that is a real gap but a
-# different, harder problem (see DocumentETLProcessor's unconditional markProcessed-on-empty-result);
-# this only refuses the total-wipeout case, which a transient/sustained outage for the whole run
-# produces.
+# marked complete below and silently never be retried by a later `historical` run.
+#
+# This only catches the TOTAL-wipeout case (every accession failed). DocumentETLProcessor no
+# longer marks a retry-exhausted accession as a confirmed empty result (it leaves no tracker row,
+# so the accession reappears as a normal candidate on the next run), which closes the PARTIAL-
+# failure gap this comment used to describe as unfixed — a year that's mostly fine but lost a
+# few accessions to a blip now self-heals on the next run without needing hcy_ignore_markers.
+# The ignore-markers escape hatch above still exists for a manual sweep after a suspected gap
+# from before that fix shipped, or any other reason to force a full re-check regardless of state.
 hcy_sec_all_failed() {   # <schema> <log_file>
   local schema="$1" log_file="$2"
   case "$schema" in
