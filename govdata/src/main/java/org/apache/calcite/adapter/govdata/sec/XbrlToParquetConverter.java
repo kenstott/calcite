@@ -7016,18 +7016,17 @@ public class XbrlToParquetConverter implements FileConverter {
     return outputFiles;
   }
 
-  /** Matches a {@code CENTRAL INDEX KEY:} line in an EDGAR SGML submission header. */
-  private static final Pattern HEADER_CENTRAL_INDEX_KEY =
-      Pattern.compile("CENTRAL INDEX KEY:\\s*(\\d+)");
+  /** Matches a {@code <CIK>} SGML tag in an EDGAR submission header, e.g. {@code <CIK>0001067983}. */
+  private static final Pattern HEADER_CENTRAL_INDEX_KEY = Pattern.compile("<CIK>(\\d+)");
 
   /**
    * Both CIKs of a Schedule 13D/G, read from the filing's SGML submission header.
    *
    * <p>A 13D/G is one entity reporting ownership in another, so a row that identifies only one
    * of them does not describe the relationship it exists to record. EDGAR puts both in the
-   * submission header — {@code SUBJECT COMPANY:} (the issuer whose shares are held) and
-   * {@code FILED BY:} (the reporting owner) — each with its own {@code CENTRAL INDEX KEY}, and
-   * indexes the filing under both.
+   * submission header — the {@code <SUBJECT-COMPANY>} block (the issuer whose shares are held)
+   * and the {@code <FILED-BY>} block (the reporting owner) — each with its own {@code <CIK>}
+   * tag, and indexes the filing under both.
    *
    * <p>Neither appears in the primary document, which is the file this converter downloads, so
    * the header is fetched separately. It is the {@code .hdr.sgml} sidecar in the same filing
@@ -7082,8 +7081,8 @@ public class XbrlToParquetConverter implements FileConverter {
    * @return two-element array, {@code [subjectCik, filerCik]}, either element possibly null
    */
   static String[] parseHeaderPartyCiks(String header) {
-    int subjectAt = header.indexOf("SUBJECT COMPANY:");
-    int filerAt = header.indexOf("FILED BY:");
+    int subjectAt = header.indexOf("<SUBJECT-COMPANY>");
+    int filerAt = header.indexOf("<FILED-BY>");
     return new String[] {
         cikInHeaderSection(header, subjectAt, filerAt),
         cikInHeaderSection(header, filerAt, subjectAt)};

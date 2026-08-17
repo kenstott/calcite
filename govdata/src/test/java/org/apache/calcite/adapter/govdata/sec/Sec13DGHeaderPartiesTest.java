@@ -39,29 +39,43 @@ public class Sec13DGHeaderPartiesTest {
    * both fields wrong from one filing.
    */
   private static final String REAL_HEADER =
-      "ACCESSION NUMBER:\t\t0001193125-19-159860\n"
-      + "CONFORMED SUBMISSION TYPE:\tSC 13D/A\n"
-      + "FILED AS OF DATE:\t\t20190530\n"
-      + "\n"
-      + "SUBJECT COMPANY:\t\n"
-      + "\n"
-      + "\tCOMPANY DATA:\t\n"
-      + "\t\tCOMPANY CONFORMED NAME:\t\t\tEidos Therapeutics, Inc.\n"
-      + "\t\tCENTRAL INDEX KEY:\t\t\t0001731831\n"
-      + "\t\tSTANDARD INDUSTRIAL CLASSIFICATION:\tPHARMACEUTICAL PREPARATIONS [2834]\n"
-      + "\t\tIRS NUMBER:\t\t\t\t463733671\n"
-      + "\n"
-      + "\tFILING VALUES:\n"
-      + "\t\tFORM TYPE:\t\tSC 13D/A\n"
-      + "\t\tSEC FILE NUMBER:\t005-90540\n"
-      + "\n"
-      + "FILED BY:\t\t\n"
-      + "\n"
-      + "\tCOMPANY DATA:\t\n"
-      + "\t\tCOMPANY CONFORMED NAME:\t\t\tBridgeBio Pharma, Inc.\n"
-      + "\t\tCENTRAL INDEX KEY:\t\t\t0001743881\n"
-      + "\t\tSTANDARD INDUSTRIAL CLASSIFICATION:\tPHARMACEUTICAL PREPARATIONS [2834]\n"
-      + "\t\tIRS NUMBER:\t\t\t\t000000000\n";
+      "<SEC-HEADER>0001193125-19-159860.hdr.sgml : 20190530\n"
+      + "<ACCEPTANCE-DATETIME>20190529191602\n"
+      + "<ACCESSION-NUMBER>0001193125-19-159860\n"
+      + "<TYPE>SC 13D/A\n"
+      + "<PUBLIC-DOCUMENT-COUNT>1\n"
+      + "<FILING-DATE>20190530\n"
+      + "<DATE-OF-FILING-DATE-CHANGE>20190529\n"
+      + "<SUBJECT-COMPANY>\n"
+      + "<COMPANY-DATA>\n"
+      + "<CONFORMED-NAME>Eidos Therapeutics, Inc.\n"
+      + "<CIK>0001731831\n"
+      + "<ASSIGNED-SIC>2834\n"
+      + "<IRS-NUMBER>463733671\n"
+      + "<STATE-OF-INCORPORATION>DE\n"
+      + "<FISCAL-YEAR-END>1231\n"
+      + "</COMPANY-DATA>\n"
+      + "<FILING-VALUES>\n"
+      + "<FORM-TYPE>SC 13D/A\n"
+      + "<ACT>34\n"
+      + "<FILE-NUMBER>005-90540\n"
+      + "<FILM-NUMBER>19863843\n"
+      + "</FILING-VALUES>\n"
+      + "</SUBJECT-COMPANY>\n"
+      + "<FILED-BY>\n"
+      + "<COMPANY-DATA>\n"
+      + "<CONFORMED-NAME>BridgeBio Pharma, Inc.\n"
+      + "<CIK>0001743881\n"
+      + "<ASSIGNED-SIC>2834\n"
+      + "<IRS-NUMBER>000000000\n"
+      + "<STATE-OF-INCORPORATION>DE\n"
+      + "<FISCAL-YEAR-END>1231\n"
+      + "</COMPANY-DATA>\n"
+      + "<FILING-VALUES>\n"
+      + "<FORM-TYPE>SC 13D/A\n"
+      + "</FILING-VALUES>\n"
+      + "</FILED-BY>\n"
+      + "</SEC-HEADER>\n";
 
   @Test void readsBothPartiesFromARealHeader() {
     assertArrayEquals(new String[] {"0001731831", "0001743881"},
@@ -83,8 +97,8 @@ public class Sec13DGHeaderPartiesTest {
   @Test void handlesFiledByAppearingBeforeSubjectCompany() {
     // Block order is not guaranteed by EDGAR, and a parser that assumes SUBJECT-then-FILED-BY
     // would read the wrong block's key rather than fail visibly.
-    int subjectAt = REAL_HEADER.indexOf("SUBJECT COMPANY:");
-    int filerAt = REAL_HEADER.indexOf("FILED BY:");
+    int subjectAt = REAL_HEADER.indexOf("<SUBJECT-COMPANY>");
+    int filerAt = REAL_HEADER.indexOf("<FILED-BY>");
     String swapped = REAL_HEADER.substring(filerAt) + "\n" + REAL_HEADER.substring(subjectAt, filerAt);
 
     assertArrayEquals(new String[] {"0001731831", "0001743881"},
@@ -95,7 +109,7 @@ public class Sec13DGHeaderPartiesTest {
   @Test void returnsNullForAMissingPartyRatherThanTheOthersCik() {
     // Rule: an unknown counterparty is recoverable on a later run; a plausible-looking wrong CIK
     // is not, because nothing downstream can tell it from a real one.
-    String subjectOnly = REAL_HEADER.substring(0, REAL_HEADER.indexOf("FILED BY:"));
+    String subjectOnly = REAL_HEADER.substring(0, REAL_HEADER.indexOf("<FILED-BY>"));
     String[] parties = XbrlToParquetConverter.parseHeaderPartyCiks(subjectOnly);
 
     assertArrayEquals(new String[] {"0001731831", null}, parties,
@@ -112,8 +126,8 @@ public class Sec13DGHeaderPartiesTest {
   @Test void zeroPadsAShortCikToTenDigits() {
     // EDGAR writes some keys unpadded; the cik column is 10-digit zero-padded throughout, and an
     // unpadded value would silently fail every join against it.
-    String header = "SUBJECT COMPANY:\n\t\tCENTRAL INDEX KEY:\t\t\t320193\n"
-        + "FILED BY:\n\t\tCENTRAL INDEX KEY:\t\t\t1067983\n";
+    String header = "<SUBJECT-COMPANY>\n<CIK>320193\n"
+        + "<FILED-BY>\n<CIK>1067983\n";
     assertArrayEquals(new String[] {"0000320193", "0001067983"},
         XbrlToParquetConverter.parseHeaderPartyCiks(header));
   }
