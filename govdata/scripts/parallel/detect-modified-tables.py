@@ -204,12 +204,14 @@ def iso_to_millis(iso_ts):
 # ever populated by the dedicated `sec_prices` slot.
 SEC_PRICE_ONLY_TABLES = {"stock_prices"}
 
-# Schemas with no point-in-time history to backfill at all (current-snapshot reference data,
-# congress-period/etag-gated, or daily-only feeds with no year axis) — run-pool.sh's `historical`
-# and `all` aliases deliberately never queue a :historical slot for these (see run-pool.sh's
-# historical) alias comment), so force-reprocess.sh's default historical-range lookup would only
-# ever find a missing marker file and error. Skip straight to --skip-historical for them.
-DAILY_ONLY_SCHEMAS = {"ref", "econ_reference", "officials", "cyber_threat"}
+# Schemas with no point-in-time history to backfill at all (current-snapshot reference data with
+# no year axis) — run-pool.sh's `historical` and `all` aliases deliberately never queue a
+# :historical slot for these (see run-pool.sh's historical) alias comment), so
+# force-reprocess.sh's default historical-range lookup would only ever find a missing marker file
+# and error. Skip straight to --skip-historical for them. officials is NOT here: worker.sh's
+# officials case now converts GOVDATA_START_YEAR to the covering Congress internally and gets a
+# normal (single-pass :once) historical slot, same as every other year-addressed schema.
+DAILY_ONLY_SCHEMAS = {"ref", "econ_reference", "cyber_threat"}
 
 
 def sec_pool_schema_splits(schema, tables):

@@ -32,7 +32,7 @@
 #   fec           <historical|daily>
 #   fedregister   <historical|daily>
 #   econ_reference <daily>          — BLS area/industry codes (year-agnostic)
-#   officials     <daily>           — Congress.gov members/nominations, FJC judges (congress-agnostic)
+#   officials     <historical|daily|year|range> — Congress.gov members/nominations, FJC judges
 #
 # Complex schemas (delegate to specialty worker scripts):
 #   cyber_threat  <historical|daily>
@@ -419,10 +419,41 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model econ_reference)" "$WORKER_ID"
     ;;
 
-  # ── Federal officials — congress-addressed, not year-addressed ────────────
-
+  # ── Federal officials — universal historical|daily entry point ────────────
+  # Congress.gov's endpoints are themselves Congress-scoped (a 2-year window per call), so the
+  # fetch needs a Congress number — but the operator-facing knob is GOVDATA_START_YEAR/
+  # GOVDATA_END_YEAR, same as every other schema, translated to the covering Congress range here.
+  # Congress N spans [1789+2(N-1), 1791+2(N-1)); year Y -> N = (Y-1789)/2 + 1 (integer division;
+  # verified against officials-schema.yaml's own documented anchor: Y=2021 -> N=117, matching its
+  # "117th Congress (2021-2023)" comment). GOVDATA_START_CONGRESS/END_CONGRESS — the operand
+  # officials-schema.yaml's congress_range actually reads — remain directly overridable for
+  # anyone bypassing worker.sh.
   officials)
-    run_etl_inline "$(build_inline_model officials)" "$WORKER_ID"
+    case "$MODE" in
+      historical|once)
+        # 'once' is run-pool.sh's historical) alias slot (hcy_enqueue officials once) — a single
+        # non-year-sliced pass, same full range as 'historical'; see worker.sh's officials header
+        # comment for why officials doesn't get per-year slicing like econ/crime/weather.
+        _officials_start_year="${GOVDATA_START_YEAR:-2010}"
+        _officials_end_year=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        _officials_start_year="$INCREMENTAL_YEAR"
+        _officials_end_year="$INCREMENTAL_YEAR"
+        ;;
+      [0-9][0-9][0-9][0-9])
+        _officials_start_year="$MODE"
+        _officials_end_year="$MODE"
+        ;;
+      [0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        _officials_start_year="${MODE%-*}"
+        _officials_end_year="${MODE#*-}"
+        ;;
+      *) echo "officials: unknown mode '$MODE'. Valid modes: historical, once, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    export GOVDATA_START_CONGRESS="${GOVDATA_START_CONGRESS:-$(( (_officials_start_year - 1789) / 2 + 1 ))}"
+    export GOVDATA_END_CONGRESS="${GOVDATA_END_CONGRESS:-$(( (_officials_end_year - 1789) / 2 + 1 ))}"
+    run_etl_inline "$(build_inline_model officials)" "worker-officials-${MODE}"
     ;;
 
   # ── Complex multi-sub-run schemas — delegated to specialty scripts ─────────

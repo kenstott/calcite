@@ -166,10 +166,7 @@ for arg in "$@"; do
       _add_sec_secondary_years
       _add_sec_13f_years
       queue+=(sec_prices:historical fec:historical fedregister:historical)
-      # officials, like ref/econ_reference below: no point-in-time history to backfill
-      # separately — congress-period completion markers + etag freshness make a single
-      # recurring daily invocation self-backfilling (see historical) alias comment).
-      queue+=(officials:daily)
+      queue+=(officials:historical officials:daily)
       # cyber_threat:historical is intentionally omitted — see the historical) alias comment
       # below: worker-cyber.sh's historical case has no cyber_threat branch (daily-only feed),
       # so queuing it here would just spin up a worker slot that does nothing.
@@ -201,12 +198,15 @@ for arg in "$@"; do
       # Daily-only schemas are intentionally NOT here — they run only in the daily window:
       #   • ref, econ_reference — current-snapshot reference; no point-in-time history to backfill,
       #     freshness-gated in their YAML so daily re-ingests only when the source changed.
-      #   • officials — congress-addressed (not year-addressed); GOVDATA_START_CONGRESS/
-      #     GOVDATA_END_CONGRESS live as YAML-default env knobs, not worker-set year vars.
-      #     Congress-period completion markers + federal_judges' etag freshness make one
-      #     recurring daily invocation self-backfilling, so it never needs a :historical slot.
       #   • sec_prices — single bulk feed + top-up; its worker ignores mode and always loads the
       #     full range, so a historical slot would just duplicate the daily run.
+      # officials is congress-addressed rather than year-addressed (Congress.gov's endpoints are
+      # themselves Congress-scoped), but worker.sh's officials case now converts GOVDATA_START_YEAR
+      # to the covering Congress internally, same as every year-addressed schema below — so it
+      # gets a normal historical pass. It's a single :once slot, not year-sliced, like lands/
+      # research above: total volume (members/nominations/judges) is small enough that per-year
+      # slicing would just double-run each 2-year Congress term without a real parallelism payoff.
+      hcy_enqueue officials once
       # cyber_threat is NOT here — all its tables are current-snapshot/delta feeds with no year
       # axis (daily-only). cyber_vuln:historical backfills only its NVD publish-dated tables in a
       # single windowed pass (NVD resolver spans the full pub-year range), so it isn't sliced

@@ -96,7 +96,7 @@ Usage: $0 --schema <schema> --tables <t1,t2,...> [--start YYYY] [--end YYYY] [--
 Examples:
   force-reprocess.sh --schema econ --tables industry_gdp
   force-reprocess.sh --schema census --tables cps_voting_supplement --start 1996
-  force-reprocess.sh --schema officials --tables members --skip-historical
+  force-reprocess.sh --schema officials --tables members
 EOF
   exit 1
 fi
@@ -129,14 +129,6 @@ echo "  Tracker: $PG_NS (postgres)"
 $DRY_RUN && echo "  *** DRY RUN — no ETL will actually run ***"
 echo ""
 
-if [[ "$SCHEMA" == "officials" ]]; then
-  echo "  NOTE: officials has no MODE-based range (see officials-schema.yaml's congress_range" >&2
-  echo "        comment) — every invocation covers [GOVDATA_START_CONGRESS, GOVDATA_END_CONGRESS]" >&2
-  echo "        as currently declared there (117-119 by default). Override GOVDATA_START_CONGRESS" >&2
-  echo "        before running this script if you need deeper history than that default." >&2
-  echo "" >&2
-fi
-
 # ── Baseline: capture each table's current max as_of, to prove afterward that a reprocess
 #    actually touched it (not just that the pool exited 0 — see the marker bugs this replaces).
 declare -A BEFORE_AS_OF
@@ -168,12 +160,20 @@ if ! $SKIP_HISTORICAL; then
     fi
     START_YEAR=""
     START_YEAR=$(cat "${HCY_DONE_FILES[@]}" 2>/dev/null | grep -E '^[0-9]{4}$' | sort -n | head -1 || true)
-    if [[ -z "$START_YEAR" ]]; then
+    if [[ -n "$START_YEAR" ]]; then
+      echo "  Historical start year (oldest existing marker for ${SCHEMA}): ${START_YEAR}"
+    elif [[ "$SCHEMA" == "lands" || "$SCHEMA" == "research" || "$SCHEMA" == "officials" ]]; then
+      # Single-pass (:once) schemas never write a year-shaped marker line — hcy_enqueue's marker
+      # is literally the token "once", and on a first-ever run the marker file may not exist at
+      # all yet. Fall back to the same default floor worker.sh itself uses when GOVDATA_START_YEAR
+      # is unset, rather than erroring on a schema that genuinely does support historical reprocessing.
+      START_YEAR=2010
+      echo "  Historical start year: 2010 (default floor — '${SCHEMA}' is a single-pass :once schema with no per-year marker)"
+    else
       echo "  WARNING: no historical-year-complete markers found for '${SCHEMA}' — cannot infer" >&2
       echo "           a safe start year. Pass --start explicitly (or --skip-historical)." >&2
       exit 1
     fi
-    echo "  Historical start year (oldest existing marker for ${SCHEMA}): ${START_YEAR}"
   fi
   if [[ -z "$END_YEAR" ]]; then
     END_YEAR=$(date +%Y)

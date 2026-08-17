@@ -82,12 +82,14 @@ column_templates:
 
 dimension_values:
 
-  # Congress.gov's nomination endpoint is filtered per-Congress (2-year window each).
-  # No "current" auto-detection exists for RANGE the way YEAR_RANGE has for calendar
-  # years, so both ends are explicit env-var knobs — bump GOVDATA_END_CONGRESS when a
-  # new Congress convenes (odd years, e.g. 2027 -> 120th).
-  # 117th Congress (2021-2023) is the backfill floor; deeper history is available on
-  # request via a lower GOVDATA_START_CONGRESS.
+  # Congress.gov's nomination endpoint is filtered per-Congress (2-year window each), so this
+  # operand needs a Congress number — but the operator-facing knob is GOVDATA_START_YEAR/
+  # GOVDATA_END_YEAR like every other schema: worker.sh's officials case converts year to the
+  # covering Congress (N = (year-1789)/2 + 1) before invoking this schema, and only exports
+  # GOVDATA_START_CONGRESS/END_CONGRESS itself if the caller hasn't already set them. The
+  # 117-119 default below is the fallback for direct invocation outside worker.sh; deeper
+  # history is available via a lower GOVDATA_START_YEAR (worker.sh) or GOVDATA_START_CONGRESS
+  # (direct).
   congress_range: &congress_range
     type: range
     start: "${GOVDATA_START_CONGRESS:117}"
