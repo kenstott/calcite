@@ -279,6 +279,75 @@ public class SimilarityFunctions {
    * @param text2 Second text
    * @return Cosine similarity between text embeddings
    */
+  /**
+   * Jaro-Winkler similarity, 0.0 to 1.0, matching the semantics of DuckDB's
+   * {@code jaro_winkler_similarity} so a query returns the same ranking whichever path
+   * evaluates it.
+   *
+   * <p>Jaro-Winkler rather than plain Jaro because the prefix bonus is what makes it useful on
+   * names: two company names that agree from the first character are far more likely the same
+   * firm than two that merely share characters.
+   */
+  public static double jaroWinkler(String s1, String s2) {
+    if (s1 == null || s2 == null) {
+      return 0.0;
+    }
+    if (s1.equals(s2)) {
+      return 1.0;
+    }
+    int len1 = s1.length();
+    int len2 = s2.length();
+    if (len1 == 0 || len2 == 0) {
+      return 0.0;
+    }
+    int window = Math.max(len1, len2) / 2 - 1;
+    if (window < 0) {
+      window = 0;
+    }
+    boolean[] m1 = new boolean[len1];
+    boolean[] m2 = new boolean[len2];
+    int matches = 0;
+    for (int i = 0; i < len1; i++) {
+      int start = Math.max(0, i - window);
+      int end = Math.min(i + window + 1, len2);
+      for (int j = start; j < end; j++) {
+        if (!m2[j] && s1.charAt(i) == s2.charAt(j)) {
+          m1[i] = true;
+          m2[j] = true;
+          matches++;
+          break;
+        }
+      }
+    }
+    if (matches == 0) {
+      return 0.0;
+    }
+    // Transpositions: matched characters that appear in a different order.
+    int transpositions = 0;
+    int k = 0;
+    for (int i = 0; i < len1; i++) {
+      if (!m1[i]) {
+        continue;
+      }
+      while (!m2[k]) {
+        k++;
+      }
+      if (s1.charAt(i) != s2.charAt(k)) {
+        transpositions++;
+      }
+      k++;
+    }
+    double m = matches;
+    double jaro = (m / len1 + m / len2 + (m - transpositions / 2.0) / m) / 3.0;
+    // Winkler prefix bonus, capped at 4 characters with the standard 0.1 scaling factor.
+    int prefix = 0;
+    int maxPrefix = Math.min(4, Math.min(len1, len2));
+    while (prefix < maxPrefix && s1.charAt(prefix) == s2.charAt(prefix)) {
+      prefix++;
+    }
+    return jaro + prefix * 0.1 * (1.0 - jaro);
+  }
+
   public static double textSimilarity(String text1, String text2) {
     if (text1 == null || text2 == null) {
       return 0.0;
@@ -449,6 +518,18 @@ public class SimilarityFunctions {
     // Text operations
     schema.add("TEXT_SIMILARITY",
         ScalarFunctionImpl.create(SimilarityFunctions.class, "textSimilarity"));
+
+    // Registered so Calcite can VALIDATE the name; the DuckDB read path resolves it to a
+    // macro over the engine's own jaro_winkler_similarity and evaluates it there, which is
+    // what keeps it usable over a million-row scan. This Java body is the fallback for
+    // non-DuckDB paths. See DuckDBJdbcSchemaFactory.registerSimilarityFunctions.
+    schema.add("JARO_WINKLER",
+        ScalarFunctionImpl.create(SimilarityFunctions.class, "jaroWinkler"));
+    // Same function under DuckDB's own spelling, so SQL written against DuckDB directly
+    // validates unchanged here instead of failing with "No match found for function
+    // signature jaro_winkler_similarity(<CHARACTER>, <CHARACTER>)".
+    schema.add("JARO_WINKLER_SIMILARITY",
+        ScalarFunctionImpl.create(SimilarityFunctions.class, "jaroWinkler"));
 
     // Path B semantic search over the quantized-code dataset (binary Hamming prefilter +
     // int8 rerank). Table function: SELECT * FROM TABLE(SEMANTIC_SEARCH('query text', 10)).

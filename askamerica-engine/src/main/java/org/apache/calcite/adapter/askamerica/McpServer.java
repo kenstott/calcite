@@ -622,6 +622,14 @@ public class McpServer {
             + "LEI, a SEC CIK ('0000320193' or '320193'), an FEC committee id, or an EIN."));
         entityProps.set("type", prop("string",
             "'org' (default, ref.canonical_org_entity) or 'person' (ref.canonical_person_entity)."));
+        entityProps.set("source_schema", prop("string",
+            "Optional narrowing filter: only entities seen in this schema ('sec', 'fec', "
+            + "'patents', 'transport', ...). 'the Alphabet that appears in patents' is often "
+            + "exactly what a caller means, and no amount of string matching can infer it."));
+        entityProps.set("jurisdiction", prop("string",
+            "Optional narrowing filter: GLEIF jurisdiction code ('US', 'GB', 'US-DE'). This is "
+            + "what separates entities that are genuinely identically named — ALPHABET LTD (GB) "
+            + "from ALPHABET INC. (US) — which no name score can do."));
         entityProps.set("limit", prop("integer",
             "Maximum candidates to return. Default 20, capped at 200. A name fragment can match "
             + "many entities; every candidate is returned rather than assuming the first is right."));
@@ -1418,9 +1426,14 @@ public class McpServer {
                         ? args.get("type").asText() : "org";
                     int entLimit = args.has("limit") && !args.get("limit").isNull()
                         ? args.get("limit").asInt() : 20;
+                    String entSchema = args.has("source_schema")
+                        && !args.get("source_schema").isNull()
+                        ? args.get("source_schema").asText() : null;
+                    String entJur = args.has("jurisdiction") && !args.get("jurisdiction").isNull()
+                        ? args.get("jurisdiction").asText() : null;
                     log.println("[askamerica-mcp] tool=resolve_entity term=" + term
-                        + " type=" + entType);
-                    text = resolveEntity(term, entType, entLimit);
+                        + " type=" + entType + " schema=" + entSchema + " jur=" + entJur);
+                    text = resolveEntity(term, entType, entLimit, entSchema, entJur);
                     break;
                 }
                 case "entity_relationships": {
@@ -2696,7 +2709,8 @@ public class McpServer {
      * a caller can see at a glance whether the entity reaches the schema they intend to join,
      * without reading twenty mostly-null identifier columns.
      */
-    private static String buildResolveEntitySql(String term, String type, int limit, int tier) {
+    private static String buildResolveEntitySql(String term, String type, int limit,
+            String sourceSchema, String jurisdiction, boolean exactOnly) {
         String t = term == null ? "" : term.trim();
         if (t.isEmpty()) {
             throw new IllegalArgumentException("term must be non-empty");
@@ -2742,42 +2756,56 @@ public class McpServer {
         // previous version hand-built out of a CASE ladder, and does it better.
         String norm = normalizeOrgName(t);
         String entityKey = "COALESCE(lei, sec_cik, source_name_normalized)";
-        // A ticker is not in the bridge at all, so resolve it to a CIK and match that. Without
-        // this a ticker can only ever behave as a name fragment — "AAPL" matched MAAPLE CORP.
+        // Scoring, not tiering: one pass, with the name score defined as
+        //   exact normalized match            -> 1.0
+        //   fails the word-boundary test      -> 0   (dropped)
+        //   otherwise                         -> jaro_winkler similarity
+        //
+        // The word-boundary test is a recall filter and jaro-winkler is the precision
+        // filter, ANDed: a candidate must both contain the term as a whole word AND be
+        // string-similar to it. Unanchored substring alone matched INSIDE words (the ticker
+        // AAPL returned MAAPLE CORP); jaro-winkler alone would rank every short name against
+        // every other. Together they keep "Alphabet Inc" while dropping "MAAPLE".
+        //
+        // jaro_winkler_similarity is deliberate rather than an embedding: it is the SAME
+        // function the bridge itself scored its fuzzy matches with (match_score is documented
+        // as 1.0 for exact, raw jaro_winkler for fuzzy), it needs no vector index, and it
+        // keeps "Alphabet Inc" distinct from "Alphabet Energy Inc" — a distinction embedding
+        // similarity blurs precisely where this data is already ambiguous.
+        String normLit = sqlStr(norm);
+        // Scoring uses both anchors, but only the PREFIX form goes in the WHERE clause below.
+        // A leading wildcard ('% alphabet%') defeats every min/max and zone-map prune the
+        // Parquet reader has, forcing a full scan of 1.07M rows — measured at 168s, and a
+        // 183s timeout for a term with more matches. The prefix form prunes.
+        String wordBoundary = "(source_name_normalized LIKE " + sqlStr(norm + "%")
+            + " OR source_name_normalized LIKE " + sqlStr("% " + norm + "%") + ")";
+        String prunablePredicate = "source_name_normalized LIKE " + sqlStr(norm + "%");
+        String nameScore =
+            "CASE WHEN source_name_normalized = " + normLit + " THEN 1.0 "
+            + "WHEN " + wordBoundary + " THEN JARO_WINKLER("
+            + "source_name_normalized, " + normLit + ") "
+            + "ELSE 0 END";
+        // Identifier hits are exact by construction and bypass name scoring entirely. The
+        // ticker path reaches canonical_org_entity, NOT the bridge: bridge.sec_cik is
+        // populated only for EIN-path matches, so a ticker resolved through it found nothing.
         String tickerCik = "(SELECT MAX(cik) FROM ref.sec_company_tickers WHERE upper(ticker) = "
             + upper + ")";
-
-        // Tiered matching, cheapest and most precise first. The bridge holds 1.07M rows with no
-        // index on the name, so an unanchored LIKE is a full scan — one measured at 141s. Tier 1
-        // is an equality probe against the SAME normalization the column was built with, which
-        // is what a real lookup almost always is; the scan tiers only run when it finds nothing.
-        String where;
-        switch (tier) {
-            case 1:
-                // Exact: identifiers, and the normalized name as stored.
-                where = "source_name_normalized = " + sqlStr(norm) + " "
-                    + "OR upper(lei) = " + upper + " "
-                    + "OR sec_cik = " + padded + " "
-                    + "OR sec_cik = " + tickerCik;
-                break;
-            case 2:
-                // Prefix — "alphabet" finding "alphabet holdings". Anchored, so zone maps can
-                // still prune, unlike a leading wildcard.
-                where = "source_name_normalized LIKE " + sqlStr(norm + "%") + " "
-                    + "OR lower(gleif_legal_name) LIKE " + sqlStr(norm + "%");
-                break;
-            default:
-                // Word-start anywhere in the name. Deliberately NOT '%term%': matching inside a
-                // word is what turned the ticker AAPL into MAAPLE CORP.
-                where = "source_name_normalized LIKE " + sqlStr("% " + norm + "%") + " "
-                    + "OR lower(gleif_legal_name) LIKE " + sqlStr("% " + norm + "%");
-                break;
-        }
+        String identifierHit = "upper(lei) = " + upper + " OR sec_cik = " + padded
+            + " OR lei IN (SELECT lei FROM ref.canonical_org_entity WHERE sec_cik = "
+            + tickerCik + ") "
+            + "OR sec_cik IN (SELECT sec_cik FROM ref.canonical_org_entity WHERE sec_cik = "
+            + tickerCik + ")";
 
         return "WITH raw AS ("
             + "SELECT " + entityKey + " AS entity_key, lei, sec_cik, gleif_legal_name, "
-            + "match_score, match_method, match_confidence, source_schema, source_name_raw "
-            + "FROM ref.entity_org_bridge WHERE " + where + "), "
+            + "match_score, match_method, match_confidence, source_schema, source_name_raw, "
+            + "CASE WHEN " + identifierHit + " THEN 1.0 ELSE " + nameScore + " END AS name_score "
+            + "FROM ref.entity_org_bridge "
+            + "WHERE (" + identifierHit
+            + (exactOnly ? " OR source_name_normalized = " + normLit
+                         : " OR " + prunablePredicate) + ")"
+            + (sourceSchema == null || sourceSchema.isEmpty() ? ""
+                : " AND source_schema = " + sqlStr(sourceSchema)) + "), "
             // Pre-deduplicate before aggregating. string_agg(DISTINCT ...) did not dedupe
             // through this stack — matched_in came back as "patents sec sec sec" — so the
             // DISTINCT is applied here, where it is a plain relational operation.
@@ -2798,17 +2826,21 @@ public class McpServer {
             + "MAX(r.match_score) AS best_match_score, "
             + "MAX(r.match_method) AS match_method, "
             + "MAX(r.match_confidence) AS match_confidence, "
+            + "MAX(r.name_score) AS name_score, "
             + "COUNT(*) AS mentions "
-            + "FROM raw r GROUP BY r.entity_key) "
+            + "FROM raw r WHERE r.name_score > 0 GROUP BY r.entity_key) "
             // Join the canonical row on whichever key the bridge resolved, so a caller gets
             // the canonical identity AND the variants that led to it in one result.
             + "SELECT c.canonical_entity_id, "
             + "COALESCE(c.canonical_name, m.gleif_legal_name, m.entity_key) AS canonical_name, "
             + "m.lei, m.sec_cik, c.fec_committee_id, c.patents_assignee_id, c.exempt_org_ein, "
             + "c.eia_utility_id, c.fmcsa_dot_number, "
-            + "m.best_match_score, m.match_method, m.match_confidence, "
+            + "m.name_score, m.best_match_score, m.match_method, m.match_confidence, "
             + "m.mentions, agg_nm.name_variants, agg_sch.matched_in, agg_nm.variants "
             + "FROM m "
+            + (jurisdiction == null || jurisdiction.isEmpty() ? ""
+                : " JOIN ref.gleif_entities ge ON ge.lei = m.lei AND upper(ge.jurisdiction) = "
+                  + sqlStr(jurisdiction.toUpperCase(java.util.Locale.ROOT)) + " ")
             + "LEFT JOIN agg_sch ON agg_sch.entity_key = m.entity_key "
             + "LEFT JOIN agg_nm ON agg_nm.entity_key = m.entity_key "
             + "LEFT JOIN ref.canonical_org_entity c "
@@ -2816,7 +2848,13 @@ public class McpServer {
             + "OR (m.lei IS NULL AND m.sec_cik IS NOT NULL AND c.sec_cik = m.sec_cik) "
             // Best-scoring entity first, then the one seen in the most places — a company
             // mentioned across many registries is the one a caller naming it usually means.
-            + "ORDER BY m.best_match_score DESC, m.mentions DESC "
+            // Name score first. Ties among identically-scored names — three distinct LEIs all
+            // score 1.0 for "Alphabet, Inc." — are broken by corroboration: an entity
+            // carrying a registry identifier, and seen in more places, is far more likely
+            // the one a caller naming a company means than a name-only loan record.
+            + "ORDER BY m.name_score DESC, "
+            + "CASE WHEN m.lei IS NOT NULL OR m.sec_cik IS NOT NULL THEN 0 ELSE 1 END, "
+            + "m.mentions DESC "
             + "FETCH FIRST " + cap + " ROWS ONLY";
     }
 
@@ -2848,20 +2886,27 @@ public class McpServer {
      * one OR'd predicate would make every lookup cost the worst tier, which is what the 141s
      * measurement was.
      */
-    private static String resolveEntity(String term, String type, int limit) throws Exception {
+    /**
+     * Exact first, then the scored scan — and the split is about cost, not scoring.
+     *
+     * <p>Both passes score identically (exact 1.0, word-boundary failure dropped, otherwise
+     * jaro-winkler). The difference is the WHERE clause: pass one is an equality probe on the
+     * normalized name plus the identifier hits, pass two opens it to prefix matching. The bridge
+     * has 1.07M rows and no index on the name, so pass two is a full scan — measured at 176s for
+     * a common term and a 180s timeout for "apple". A single merged predicate made EVERY lookup
+     * pay that, including the exact hits that are the common case; running exact alone first
+     * returns those in seconds and leaves the scan for terms that genuinely need it.
+     */
+    private static String resolveEntity(String term, String type, int limit,
+            String sourceSchema, String jurisdiction) throws Exception {
         int cap = Math.min(Math.max(1, limit), 200);
-        String last = "[]";
-        for (int tier = 1; tier <= 3; tier++) {
-            last = runSqlOn(buildResolveEntitySql(term, type, cap, tier), cap);
-            if (last != null && !last.trim().equals("[]")) {
-                return last;
-            }
-            if ("person".equals(type == null || type.isEmpty() ? "org" : type)) {
-                // The person path ignores the tier and would just repeat itself.
-                break;
-            }
+        String exact = runSqlOn(
+            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, true), cap);
+        if (exact != null && !exact.trim().equals("[]")) {
+            return exact;
         }
-        return last;
+        return runSqlOn(
+            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, false), cap);
     }
 
     // ── entity_relationships ─────────────────────────────────────────────────

@@ -1141,6 +1141,16 @@ public class DuckDBJdbcSchemaFactory {
         "  list_transform(string_split(vector2, ','), x -> CAST(x AS DOUBLE))" +
         ")";
 
+      // JARO_WINKLER over DuckDB's own implementation. Registered as a macro so entity-name
+      // scoring evaluates inside DuckDB during the scan; the Calcite-side Java UDF of the same
+      // name exists to satisfy validation and to serve non-DuckDB paths, and would otherwise
+      // pull every candidate row into the JVM one at a time.
+      conn.createStatement().execute(
+          "CREATE OR REPLACE MACRO JARO_WINKLER(s1, s2) AS jaro_winkler_similarity(s1, s2)");
+      conn.createStatement().execute(
+          "CREATE OR REPLACE MACRO JARO_WINKLER_SIMILARITY(s1, s2) AS "
+          + "jaro_winkler_similarity(s1, s2)");
+
       conn.createStatement().execute(cosineSimilarityMacro);
       LOGGER.info("Successfully registered COSINE_SIMILARITY macro using DuckDB's " +
                  "list_cosine_similarity");
