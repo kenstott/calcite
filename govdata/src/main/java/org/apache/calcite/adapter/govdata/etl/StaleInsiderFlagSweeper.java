@@ -31,23 +31,34 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Lightweight one-shot sweeper that clears stale {@code _no_xbrl} tracker flags
- * for insider forms (3/4/5) without running the full ETL pipeline.
+ * Lightweight one-shot sweeper that clears stale {@code _no_xbrl} tracker flags for a form-type
+ * allowlist, without running the full ETL pipeline. Defaults to insider forms (3/4/5); pass
+ * {@code --form-types} for any other set of near-universally-XBRL-bearing forms — e.g. 10-K/10-Q,
+ * where {@link org.apache.calcite.adapter.govdata.sec.FormType#expectsFacts()} is too broad a
+ * signal to sweep on directly (it is also {@code true} for DEF 14A, where XBRL presence is
+ * genuinely mixed rather than near-universal, so DEF 14A needs its own case-by-case review, not
+ * a blanket sweep).
  *
  * <p>The bug: {@link org.apache.calcite.adapter.file.etl.DocumentETLProcessor} previously
- * set {@code _no_xbrl} on insider forms that don't use XBRL. This prevented the next ETL
- * run from reprocessing them.
+ * set {@code _no_xbrl} on filings whose fetch/download failed transiently, indistinguishable
+ * from a filing that genuinely has no XBRL. For form types that structurally can never lack
+ * XBRL, any {@code _no_xbrl} marker is therefore provably stale and safe to clear in bulk;
+ * for form types where lacking XBRL is sometimes legitimate, a blanket sweep would just as
+ * happily destroy correct markers, so those need per-accession judgment instead.
  *
  * <p>This sweeper reads the EDGAR full-index cache (quarterly static files, no per-filing HTTP)
- * and calls {@link SecFilingCache#clearStaleInsiderNoXbrl} for each year. Completes in minutes
- * rather than the days required by the full ETL approach.
+ * and calls {@link SecFilingCache#clearStaleNoXbrlForFormTypes} for each year. Completes in
+ * minutes rather than the days required by the full ETL approach.
  *
- * <p>Usage: {@code java ... StaleInsiderFlagSweeper --model <path> [--start-year N] [--end-year N]}
+ * <p>Usage: {@code java ... StaleInsiderFlagSweeper --model <path> [--start-year N]
+ * [--end-year N] [--form-types 10-K,10-K/A,10-Q,10-Q/A]}
  */
 public class StaleInsiderFlagSweeper {
   private static final Logger LOGGER = LoggerFactory.getLogger(StaleInsiderFlagSweeper.class);
@@ -69,6 +80,7 @@ public class StaleInsiderFlagSweeper {
     String modelPath = null;
     int startYear = 2010;
     int endYear = 2019;
+    List<String> formTypes = INSIDER_FILING_TYPES;
 
     for (int i = 0; i < args.length; i++) {
       if ("--model".equals(args[i]) && i + 1 < args.length) {
@@ -77,11 +89,14 @@ public class StaleInsiderFlagSweeper {
         startYear = Integer.parseInt(args[++i]);
       } else if ("--end-year".equals(args[i]) && i + 1 < args.length) {
         endYear = Integer.parseInt(args[++i]);
+      } else if ("--form-types".equals(args[i]) && i + 1 < args.length) {
+        formTypes = Arrays.asList(args[++i].split(","));
       }
     }
 
     if (modelPath == null) {
-      LOGGER.error("Usage: StaleInsiderFlagSweeper --model <path> [--start-year N] [--end-year N]");
+      LOGGER.error("Usage: StaleInsiderFlagSweeper --model <path> [--start-year N] "
+          + "[--end-year N] [--form-types 10-K,10-K/A,10-Q,10-Q/A]");
       return 2;
     }
 
@@ -95,6 +110,7 @@ public class StaleInsiderFlagSweeper {
     PipelineTracker tracker = PipelineTrackerFactory.createFromOperand(resolved, cacheDirectory);
     SecFilingCache filingCache = new SecFilingCache(tracker);
 
+    Set<String> formTypeSet = new HashSet<>(formTypes);
     int totalCleared = 0;
     int totalCandidates = 0;
 
@@ -106,8 +122,9 @@ public class StaleInsiderFlagSweeper {
             new EdgarFullIndexCache(storageProvider, secCacheDirectory, year, year);
 
         List<EdgarFullIndexCache.IndexEntry> candidates =
-            indexCache.getActiveAccessions(year, INSIDER_FILING_TYPES, null);
-        LOGGER.info("Year {}: {} insider candidates in index", year, candidates.size());
+            indexCache.getActiveAccessions(year, formTypes, null);
+        LOGGER.info("Year {}: {} candidates in index for form types {}",
+            year, candidates.size(), formTypes);
         totalCandidates += candidates.size();
 
         // Bulk-load tracker state into memory so isComplete calls are O(1) not per-S3-file
@@ -117,7 +134,7 @@ public class StaleInsiderFlagSweeper {
         }
         filingCache.preload(accessions);
 
-        int cleared = filingCache.clearStaleInsiderNoXbrl(candidates);
+        int cleared = filingCache.clearStaleNoXbrlForFormTypes(candidates, formTypeSet);
         LOGGER.info("Year {}: cleared {} stale no_xbrl flags", year, cleared);
         totalCleared += cleared;
       }

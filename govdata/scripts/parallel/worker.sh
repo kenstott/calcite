@@ -266,10 +266,11 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model sec "$PRICE_OPS")" "$WORKER_ID"
     ;;
 
-  # ── SEC (filings) — universal historical|daily entry point ────────────────
-  # Translates the pool/DQ-harness historical|daily vocabulary into SEC's per-year filing
-  # fetches, so `worker.sh sec historical|daily` (and run-all-dq --schema sec) works like every
-  # other schema. SCOPE — which CIKs, which form types — is NOT hardcoded here: it flows through
+  # ── SEC (filings) — universal historical|daily|year|range entry point ─────
+  # Translates the pool/DQ-harness historical|daily vocabulary (plus a plain year or range, same
+  # contract as econ/crime/weather below) into SEC's per-year filing fetches, so `worker.sh sec
+  # historical|daily|2025|2020-2023` (and run-all-dq --schema sec) works like every other schema.
+  # SCOPE — which CIKs, which form types — is NOT hardcoded here: it flows through
   # the general GOVDATA_CIKS / GOVDATA_FILING_TYPES env->operand knobs (GovDataSchemaFactory) and
   # the sec-schema.yaml defaults. Examples:
   #   GOVDATA_CIKS=DQ_SAMPLE GOVDATA_FILING_TYPES=10-K,10-K/A,10-Q,10-Q/A  → DQ-sample, 10-K/10-Q only
@@ -279,7 +280,15 @@ case "$SCHEMA" in
     case "$MODE" in
       historical) _start="${GOVDATA_START_YEAR:-2010}"; _end=$((INCREMENTAL_YEAR - 1)) ;;
       daily)      _start="$INCREMENTAL_YEAR";           _end="$INCREMENTAL_YEAR" ;;
-      *) echo "sec: unknown mode '$MODE'. Valid modes: historical, daily" >&2; exit 1 ;;
+      [0-9][0-9][0-9][0-9])
+        _start="$MODE"
+        _end="$MODE"
+        ;;
+      [0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        _start="${MODE%-*}"
+        _end="${MODE#*-}"
+        ;;
+      *) echo "sec: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     # ciks + filingTypes are the SEC schema's scope operands (what SecSchemaFactory's
     # getCiksFromConfig / getFilingTypes read). The factory's GOVDATA_CIKS/GOVDATA_FILING_TYPES

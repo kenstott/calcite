@@ -494,6 +494,45 @@ public class SecFilingCache implements AutoCloseable {
   }
 
   /**
+   * Clear stale no_xbrl markers for an explicit set of form types in the given candidates.
+   *
+   * <p>Unlike {@link #clearStaleInsiderNoXbrl}, this checks form-type membership directly
+   * against {@code targetFormTypes} rather than a {@link FormType} boolean predicate — some
+   * predicates (e.g. {@link FormType#expectsFacts()}) are broader than "structurally can never
+   * be no_xbrl" (DEF 14A carries {@code expectsFacts=true} in the model, but most historical DEF
+   * 14A filings genuinely lack XBRL — only Pay-vs-Performance tagging since 2023 changed that),
+   * so an explicit allowlist is what a sweep target actually needs: forms verified externally
+   * (e.g. against EDGAR's full-index) to be near-universally XBRL-bearing in the swept date
+   * range, not just forms this table's constructor happens to declare as facts-producing.
+   *
+   * <p>Same non-queueing, pure-cleanup contract as {@link #clearStaleInsiderNoXbrl}.
+   *
+   * @param candidates index entries to inspect
+   * @param targetFormTypes form-type strings (as EDGAR's full-index reports them, e.g. "10-K")
+   *     to treat a no_xbrl marker on as stale
+   * @return number of entries cleared
+   */
+  public int clearStaleNoXbrlForFormTypes(
+      List<EdgarFullIndexCache.IndexEntry> candidates, Set<String> targetFormTypes) {
+    int cleared = 0;
+    for (EdgarFullIndexCache.IndexEntry ie : candidates) {
+      if (!targetFormTypes.contains(ie.formType)) {
+        continue;
+      }
+      if (tracker.isComplete(filingKey(ie.accession), TABLE_NO_XBRL, PHASE_STAGING)) {
+        LOGGER.info("Clearing stale no_xbrl for form {} accession {}", ie.formType, ie.accession);
+        clearNoXbrl(ie.accession);
+        cleared++;
+      }
+    }
+    if (cleared > 0) {
+      LOGGER.info("Cleared {} stale no_xbrl entries for form types {} (historical sweep)",
+          cleared, targetFormTypes);
+    }
+    return cleared;
+  }
+
+  /**
    * Mark filing as failed.
    */
   public void markFailed(String cik, String accession, String formType, String filingDate,
