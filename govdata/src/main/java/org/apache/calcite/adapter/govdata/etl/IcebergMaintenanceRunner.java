@@ -99,6 +99,11 @@ public class IcebergMaintenanceRunner {
     System.out.println("  Target file size: " + (config.targetFileSize / (1024 * 1024)) + " MB");
     System.out.println("  Min files to compact: " + config.minFilesToCompact);
     System.out.println("  Small file threshold: " + (config.smallFileSize / (1024 * 1024)) + " MB");
+    System.out.println("  Sort order: "
+        + (config.sortOrder.isEmpty() ? "(none - bin-pack only)" : config.sortOrder));
+    if (config.healSort) {
+      System.out.println("  HEAL: rewriting whole partitions into sort order");
+    }
     System.out.println("  Dry run: " + config.dryRun);
     System.out.println();
 
@@ -246,6 +251,31 @@ public class IcebergMaintenanceRunner {
       return 0;
     }
 
+    // Heal runs BEFORE the no-compaction early exit, because "no partitions need compaction"
+    // is exactly the state it exists for: a table already packed into large files has no small
+    // files to trigger a size-based pass and would otherwise never be sorted at all.
+    if (config.healSort) {
+      if (config.sortOrder.isEmpty()) {
+        System.err.println("--heal-sort requires --sort-order; nothing to sort into.");
+        return 1;
+      }
+      if (config.dryRun) {
+        System.out.println("\n[dry-run] would heal whole partitions into " + config.sortOrder);
+        return 0;
+      }
+      // Same reason compaction expires first: RewriteFiles needs valid snapshot lineage.
+      System.out.println("\nExpiring old snapshots first (required for rewrite)...");
+      writer.runMaintenance(config.expireSnapshotsDays);
+      table.refresh();
+
+      System.out.println("\nHealing sort order " + config.sortOrder + " ...");
+      int healed = writer.healSortOrder(config.sortOrder, config.targetFileSize,
+          config.expireSnapshotsDays);
+      System.out.println("Healed " + healed + " partition(s)"
+          + (healed == 0 ? " (already recorded at this sort order, or nothing to do)" : ""));
+      table.refresh();
+    }
+
     if (partitionsNeedingCompaction == 0) {
       System.out.println("No partitions need compaction.");
       return 0;
@@ -261,7 +291,8 @@ public class IcebergMaintenanceRunner {
     // Run compaction
     System.out.println("\nRunning compaction...");
     int compacted =
-        writer.compactSmallFiles(config.targetFileSize, config.minFilesToCompact, config.smallFileSize);
+        writer.compactSmallFiles(config.targetFileSize, config.minFilesToCompact,
+            config.smallFileSize, config.expireSnapshotsDays, config.sortOrder);
 
     System.out.println("\nCompacted " + compacted + " partitions");
 
@@ -314,6 +345,16 @@ public class IcebergMaintenanceRunner {
     System.err.println("Required:");
     System.err.println("  --warehouse PATH        Iceberg warehouse path (e.g., s3a://bucket/warehouse)");
     System.err.println("  --table NAME            Table name");
+    System.err.println("  --sort-order COLS       Comma-separated columns to sort rewritten rows");
+    System.err.println("                          by, e.g. source_name_normalized,lei. Without");
+    System.err.println("                          this, compaction bin-packs by size only and");
+    System.err.println("                          every file's min/max spans the whole column,");
+    System.err.println("                          so the reader can prune nothing.");
+    System.err.println("  --heal-sort             Rewrite WHOLE partitions into --sort-order,");
+    System.err.println("                          not just the small files. Needed for tables");
+    System.err.println("                          already packed into large files, which normal");
+    System.err.println("                          compaction never revisits. One-off and costly:");
+    System.err.println("                          skipped once the table records that order.");
     System.err.println();
     System.err.println("S3/R2 options:");
     System.err.println("  --s3-access-key KEY     S3 access key ID");
@@ -350,6 +391,17 @@ public class IcebergMaintenanceRunner {
     boolean repairVersionHint = false;
     boolean dryRun = false;
     boolean maintenanceOnly = false;
+    /** Columns to sort rewritten rows by; empty means bin-pack only, the previous behaviour. */
+    java.util.List<String> sortOrder = new java.util.ArrayList<>();
+    /**
+     * Rewrite WHOLE partitions into sortOrder, not just the small files.
+     *
+     * <p>Opt-in and never implied by --sort-order: ordinary compaction touches only files below
+     * the small-file threshold, so it is cheap and safe to run every cycle, whereas this rewrites
+     * every file in every partition. On a large table that is a substantial one-off cost, so it
+     * has to be asked for.
+     */
+    boolean healSort = false;
 
     static Config fromArgs(String[] args) {
       Config config = new Config();
@@ -393,6 +445,16 @@ public class IcebergMaintenanceRunner {
           break;
         case "--dry-run":
           config.dryRun = true;
+          break;
+        case "--sort-order":
+          for (String col : args[++i].split(",")) {
+            if (!col.trim().isEmpty()) {
+              config.sortOrder.add(col.trim());
+            }
+          }
+          break;
+        case "--heal-sort":
+          config.healSort = true;
           break;
         case "--maintenance-only":
           config.maintenanceOnly = true;

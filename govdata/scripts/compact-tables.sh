@@ -27,7 +27,11 @@ elif [ -f "$GOVDATA_DIR/.env.sh" ]; then
   source "$GOVDATA_DIR/.env.sh"
 fi
 
-JAR=$(ls -t "$GOVDATA_DIR/build/libs/"*-all.jar 2>/dev/null | head -1)
+# The shadow jar is sih-govdata*.jar; the previous *-all.jar glob matched nothing the build
+# produces, so this script could never find a jar and always exited at the check below.
+# Unversioned sih-govdata.jar first (what build-jar stages), then the newest versioned one.
+JAR=$(ls -t "$GOVDATA_DIR/build/libs/"sih-govdata.jar \
+             "$GOVDATA_DIR/build/libs/"sih-govdata-*.jar 2>/dev/null | head -1)
 if [ -z "$JAR" ]; then
   echo "ERROR: Shadow JAR not found. Run: ./gradlew :govdata:shadowJar"
   exit 1
@@ -68,12 +72,32 @@ TABLES=(
 # Parse args
 DRY_RUN=""
 FILTER=""
-for arg in "$@"; do
-  case "$arg" in
+SORT_ORDER=""
+HEAL=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --dry-run) DRY_RUN="--dry-run" ;;
-    *) FILTER="$arg" ;;
+    # Columns to sort rewritten rows by. Without this, compaction bin-packs by size only and
+    # every file's min/max spans the whole column, so the reader prunes nothing.
+    --sort-order) SORT_ORDER="$2"; shift ;;
+    # Rewrite WHOLE partitions into --sort-order, not just the small files. Required for tables
+    # already packed into large files, which a size-based pass never revisits. One-off per sort
+    # order: the runner skips a table that already records it.
+    --heal-sort) HEAL="--heal-sort" ;;
+    *) FILTER="$1" ;;
   esac
+  shift
 done
+
+if [ -n "$HEAL" ] && [ -z "$SORT_ORDER" ]; then
+  echo "ERROR: --heal-sort requires --sort-order COLS" >&2
+  exit 1
+fi
+
+SORT_ARGS=""
+if [ -n "$SORT_ORDER" ]; then
+  SORT_ARGS="--sort-order $SORT_ORDER"
+fi
 
 ENDPOINT="${AWS_ENDPOINT_OVERRIDE:-}"
 S3_ARGS=""
@@ -109,6 +133,8 @@ for entry in "${TABLES[@]}"; do
     --expire-days 7 \
     --orphan-days 7 \
     $S3_ARGS \
+    $SORT_ARGS \
+    $HEAL \
     $DRY_RUN \
     2>&1 | grep -v "^log4j:\|WARN.*hadoop\|WARN.*Metrics\|^$"
 
