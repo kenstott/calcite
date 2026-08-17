@@ -23,7 +23,7 @@
 #      all. Reported as worst-case and mean files touched, and FAILED above 80%.
 #
 # ── USAGE ────────────────────────────────────────────────────────────────────────────────────
-#   govdata/scripts/parallel/verify-healed-tables.sh                      # all 14
+#   govdata/scripts/parallel/verify-healed-tables.sh                      # all 13
 #   govdata/scripts/parallel/verify-healed-tables.sh entity_org_bridge    # one table
 #   govdata/scripts/parallel/verify-healed-tables.sh ref                  # one schema
 #   govdata/scripts/parallel/verify-healed-tables.sh --list
@@ -68,7 +68,8 @@ TABLES=(
   "sec|institutional_holdings|cik"
   "sec|beneficial_ownership|subject_cik"
   "sec|earnings_transcripts|cik"
-  "sec|vectorized_chunks|cik"
+  # sec.vectorized_chunks removed 2026-08-17 — retired write target, never healed.
+  # See the note in heal-sort-order.sh.
   "sec|financial_line_items|cik"
 )
 

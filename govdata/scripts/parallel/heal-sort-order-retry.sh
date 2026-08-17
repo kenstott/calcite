@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# heal-sort-order-retry.sh — retry the 6 large SEC tables that OOM'd on the first heal pass.
+# heal-sort-order-retry.sh — retry the large SEC tables that OOM'd on the first heal pass.
 #
 # ── WHAT HAPPENED ────────────────────────────────────────────────────────────────────────────
-# The first run healed 8 of 14 tables and failed on 6, all large and string-heavy, dying inside
+# The first run healed 8 of 13 tables and failed on 5, all large and string-heavy, dying inside
 # the Parquet string decoder while buffering rows to sort.
 #
 # The cause was a sizing bug, now fixed: the decision between an in-memory sort and the external
@@ -19,7 +19,7 @@
 # ── SAFE TO RE-RUN ───────────────────────────────────────────────────────────────────────────
 # The failed tables were left consistent. A rewrite commits atomically per partition, so a
 # partition that failed was never committed, and `aperio.sorted-by` is written only after EVERY
-# partition of a table succeeds — so none of these 6 recorded a sort order and all are eligible
+# partition of a table succeeds — so none of these recorded a sort order and all are eligible
 # again.
 #
 # One honest caveat: partitions that DID complete before the failure were committed. Those
@@ -65,14 +65,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 
-# The 6 that failed, smallest first so a sizing problem surfaces on a cheap table rather than
+# The tables that failed, smallest first so a sizing problem surfaces on a cheap table rather than
 # after hours on financial_line_items.
 TABLES=(
   "sec|filing_contexts|cik,accession_number,context_id"
   "sec|institutional_holdings|cik,report_period,cusip"
   "sec|xbrl_relationships|cik,accession_number,linkbase_type,from_concept"
   "sec|mda_sections|cik,accession_number,section,paragraph_number"
-  "sec|vectorized_chunks|cik,accession_number,chunk_id"
+  # sec.vectorized_chunks removed 2026-08-17. It was in this list and failed in 3s on every
+  # attempt — not an OOM like the others, but a retired write target
+  # (materialize.enabled: false). See the note in heal-sort-order.sh.
   "sec|financial_line_items|cik,accession_number,concept"
 )
 
@@ -147,7 +149,7 @@ if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
 fi
 
 echo "============================================================"
-echo "Heal retry — the 6 tables that OOM'd"
+echo "Heal retry — the tables that OOM'd on pass 1"
 echo "============================================================"
 echo "  Warehouse: $WAREHOUSE_BASE"
 echo "  Jar:       $JAR"

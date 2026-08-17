@@ -29,8 +29,8 @@
 #     Class A/B operations. Bounded by table, not by lake size.
 #
 # ── USAGE ────────────────────────────────────────────────────────────────────────────────────
-#   govdata/scripts/parallel/sync-healed-tables-to-r2.sh                    # DRY RUN, all 14
-#   govdata/scripts/parallel/sync-healed-tables-to-r2.sh --confirm          # publish all 14
+#   govdata/scripts/parallel/sync-healed-tables-to-r2.sh                    # DRY RUN, all 13
+#   govdata/scripts/parallel/sync-healed-tables-to-r2.sh --confirm          # publish all 13
 #   govdata/scripts/parallel/sync-healed-tables-to-r2.sh --confirm ref      # one schema
 #   govdata/scripts/parallel/sync-healed-tables-to-r2.sh --confirm entity_org_bridge
 #   govdata/scripts/parallel/sync-healed-tables-to-r2.sh --list
@@ -75,7 +75,11 @@ TABLES=(
   "sec|institutional_holdings"
   "sec|beneficial_ownership"
   "sec|earnings_transcripts"
-  "sec|vectorized_chunks"
+  # sec.vectorized_chunks removed 2026-08-17 — retired write target, never healed, so there is
+  # nothing published-worthy to mirror. See the note in heal-sort-order.sh. Its absence changes
+  # nothing on R2: whatever pre-migration objects exist there are simply left alone, which is
+  # the intent. (The skip guards below would have spared it anyway if the source were missing or
+  # empty — but listing an unhealed table here implied it had been healed, which it had not.)
   "sec|financial_line_items"
 )
 

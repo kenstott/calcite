@@ -110,7 +110,12 @@ TABLES=(
   "sec|institutional_holdings|cik,report_period,cusip"
   "sec|beneficial_ownership|subject_cik,filing_date,filer_cik"
   "sec|earnings_transcripts|cik,accession_number,section_type,paragraph_number"
-  "sec|vectorized_chunks|cik,accession_number,chunk_id"
+  # sec.vectorized_chunks is deliberately NOT here. It still declares a sortOrder in
+  # sec-schema.yaml, but that block also carries `materialize.enabled: false`: the sec-side
+  # Iceberg location is retired as a live write target and rows now land in
+  # ref.vectorized_chunks (SecSchemaFactory#materializeSecChunksToRef). Healing it would sort
+  # frozen pre-migration data that nothing writes to and queries no longer read through this
+  # path. It failed in 3s on every pass for exactly that reason. Removed 2026-08-17.
   # Biggest table in the warehouse (~40M rows). Deliberately last.
   "sec|financial_line_items|cik,accession_number,concept"
 )
