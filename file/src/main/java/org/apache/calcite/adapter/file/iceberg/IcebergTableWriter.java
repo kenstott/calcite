@@ -1368,8 +1368,30 @@ public class IcebergTableWriter {
    */
   public static final String SORTED_BY_PROPERTY = "aperio.sorted-by";
 
-  /** Spill runs are written this many records at a time when a partition exceeds the budget. */
-  private static final int SPILL_RUN_RECORDS = 200_000;
+  /**
+   * Records buffered before a sorted run is spilled during the external merge.
+   *
+   * <p>Bounds pass-one memory. The right value depends on row width, which this class cannot
+   * know: 50k narrow rows is nothing, while 50k rows of MD&A paragraph text is substantial. The
+   * default is deliberately well below the previous 200k, since the cost of a smaller run is
+   * more spill files to merge, whereas the cost of too large a run is an OutOfMemoryError
+   * partway through a rewrite. Tunable via {@code calcite.iceberg.sort.spill.records}.
+   */
+  private static int spillRunRecords() {
+    String configured = System.getProperty("calcite.iceberg.sort.spill.records");
+    if (configured != null && !configured.isEmpty()) {
+      try {
+        int n = Integer.parseInt(configured.trim());
+        if (n > 0) {
+          return n;
+        }
+        LOGGER.warn("Ignoring non-positive calcite.iceberg.sort.spill.records '{}'", configured);
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Ignoring non-numeric calcite.iceberg.sort.spill.records '{}'", configured);
+      }
+    }
+    return 50_000;
+  }
 
   /**
    * Rewrites entire partitions in {@code sortOrder}, healing tables whose data predates the
@@ -1438,7 +1460,7 @@ public class IcebergTableWriter {
       }
       LOGGER.info("Healing partition {} of {}: {} files, {} bytes, sortOrder {}",
           entry.getKey(), table.name(), files.size(), bytes, sortOrder);
-      if (bytes <= sortMemoryBudgetBytes()) {
+      if (fitsInSortMemory(bytes)) {
         compactPartition(files, targetFileSizeBytes, sortOrder);
       } else {
         rewritePartitionExternallySorted(files, targetFileSizeBytes, sortOrder);
@@ -1508,7 +1530,7 @@ public class IcebergTableWriter {
             .build()) {
           for (Record record : records) {
             buffer.add(copyRecord(record));
-            if (buffer.size() >= SPILL_RUN_RECORDS) {
+            if (buffer.size() >= spillRunRecords()) {
               runs.add(writeRun(buffer, comparator, schema, spillDir, runs.size()));
               buffer = new ArrayList<>();
             }
@@ -1658,6 +1680,50 @@ public class IcebergTableWriter {
    * heap the ETL worker was given, which this class cannot know — and because a test needs to
    * force the external path without materialising half a gigabyte.
    */
+  /**
+   * Heap-to-disk expansion factor for deciding whether a partition can be sorted in memory.
+   *
+   * <p>Parquet on disk is compressed, dictionary-encoded and columnar; the buffer holds decoded
+   * Java {@code Record} objects with real String instances and per-object overhead. For
+   * string-heavy tables the second is an order of magnitude larger than the first, so comparing
+   * {@code fileSizeInBytes()} against a heap budget compares two things that are not alike —
+   * which is exactly how a ~400MB partition passed a 512MB check and then exhausted a 4GB heap
+   * decoding it.
+   *
+   * <p>Deliberately conservative: over-estimating costs a spill that was not strictly needed,
+   * while under-estimating costs an OutOfMemoryError partway through a rewrite. Tunable via
+   * {@code calcite.iceberg.sort.expansion.factor}.
+   */
+  private static long expansionFactor() {
+    String configured = System.getProperty("calcite.iceberg.sort.expansion.factor");
+    if (configured != null && !configured.isEmpty()) {
+      try {
+        long f = Long.parseLong(configured.trim());
+        if (f > 0) {
+          return f;
+        }
+        LOGGER.warn("Ignoring non-positive calcite.iceberg.sort.expansion.factor '{}'", configured);
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Ignoring non-numeric calcite.iceberg.sort.expansion.factor '{}'", configured);
+      }
+    }
+    return 12L;
+  }
+
+  /**
+   * Whether {@code fileBytes} of Parquet can be decoded and sorted within the heap budget.
+   *
+   * <p>Compares ESTIMATED HEAP, not file size — see {@link #expansionFactor()}.
+   */
+  private static boolean fitsInSortMemory(long fileBytes) {
+    long estimatedHeap = fileBytes * expansionFactor();
+    boolean fits = estimatedHeap <= sortMemoryBudgetBytes();
+    LOGGER.info("Sort sizing: {} bytes on disk ~= {} bytes decoded (x{}), budget {} -> {}",
+        fileBytes, estimatedHeap, expansionFactor(), sortMemoryBudgetBytes(),
+        fits ? "in-memory" : "external merge");
+    return fits;
+  }
+
   private static long sortMemoryBudgetBytes() {
     String configured = System.getProperty("calcite.iceberg.sort.memory.budget.bytes");
     if (configured != null && !configured.isEmpty()) {
@@ -1719,7 +1785,7 @@ public class IcebergTableWriter {
     List<Record> sortBuffer = null;
     java.util.Comparator<Record> sortComparator = null;
     if (sortOrder != null && !sortOrder.isEmpty()) {
-      if (totalBytes > sortMemoryBudgetBytes()) {
+      if (!fitsInSortMemory(totalBytes)) {
         LOGGER.warn("Partition holds {} bytes of small files, above the {} byte sort budget — "
             + "compacting UNSORTED. Files are still merged; min/max pruning on {} will not "
             + "improve.", totalBytes, sortMemoryBudgetBytes(), sortOrder);
