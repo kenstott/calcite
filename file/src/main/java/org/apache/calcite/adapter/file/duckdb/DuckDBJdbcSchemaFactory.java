@@ -492,10 +492,25 @@ public class DuckDBJdbcSchemaFactory {
         // httpfs's own retry defaults are too thin for a WAN endpoint (e.g. R2 over the public
         // internet, vs. a LAN-local mirror): a transient TCP reset/connect failure otherwise
         // surfaces immediately as "IO Error: Could not establish connection" with no retry.
+        //
+        // The budget has to be read as a PRODUCT, not as these four numbers separately.
+        // EtagRetryConnection retries a failed statement once, and each of its attempts
+        // re-enters this whole stack with a fresh retry budget, so the user-visible worst case
+        // is 2 x (backoff sum + attempts x http_timeout). At the previous http_timeout of 60s
+        // that was 2 x (31.5s + 7 x 60s) — roughly twelve minutes for one statement, and
+        // measured in practice as a 124s resolve_entity call that spent 76s and then 64s inside
+        // two such stalls while the query itself ran in about two seconds.
+        //
+        // http_timeout is the term that matters. No legitimate GET of Iceberg metadata or a
+        // data file takes anywhere near a minute, so a 60s timeout mostly served to make a dead
+        // connection indistinguishable from a slow one for a full minute, serialising the
+        // retries instead of letting them do their job. 12s is comfortably above a healthy
+        // WAN read and low enough that the six retries absorb a burst quickly.
         setupConn.createStatement().execute("SET http_retries = 6");
         setupConn.createStatement().execute("SET http_retry_wait_ms = 500");
         setupConn.createStatement().execute("SET http_retry_backoff = 2");
-        setupConn.createStatement().execute("SET http_timeout = 60000");
+        setupConn.createStatement().execute("SET http_timeout = "
+            + Integer.getInteger("calcite.duckdb.http.timeout.ms", 12000));
         LOGGER.info("DuckDB httpfs extension installed and loaded for S3 support");
 
         // Configure S3 credentials - check operands first, then environment variables
