@@ -146,6 +146,28 @@ for tbl in "${TABLE_ARR[@]}"; do
 done
 echo ""
 
+# ── SEC document tables have a SEPARATE per-accession tracker layer (phase='staging',
+#    table_name=<suffix>) that SecFilingCache/DocumentETLProcessor consult independently of the
+#    table-level phase='incremental' row GOVDATA_FORCE_REPROCESS_TABLES bypasses. Forcing the
+#    table-level check alone does NOT make SEC accessions re-fetch — SecFilingCache still sees
+#    them as staging-complete and skips them regardless of the force flag, so the table-level
+#    as_of can advance (looking like a successful reprocess) while zero accessions actually
+#    change. Purge the matching per-accession suffix(es) first so this force is real, not cosmetic.
+if [[ "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" ]]; then
+  ACCESSION_SUFFIXES=()
+  while IFS= read -r _s; do
+    [[ -n "$_s" ]] && ACCESSION_SUFFIXES+=("$_s")
+  done < <(sec_accession_suffixes_for_tables "${TABLE_ARR[@]}")
+  if [[ ${#ACCESSION_SUFFIXES[@]} -gt 0 ]]; then
+    IN_LIST=""
+    for _s in "${ACCESSION_SUFFIXES[@]}"; do IN_LIST="${IN_LIST:+$IN_LIST,}'$_s'"; done
+    echo "── Purging per-accession completions (table_name IN (${IN_LIST})) — required for these" >&2
+    echo "   tables to actually re-fetch, not just advance their table-level marker ──" >&2
+    pg_tracker_purge_accessions "$PG_NS" "$IN_LIST" "$($DRY_RUN && echo true || echo false)" || exit 2
+    echo ""
+  fi
+fi
+
 # ── Determine the historical range: [oldest existing year marker for this schema, end year] ──
 if ! $SKIP_HISTORICAL; then
   if [[ -z "$START_YEAR" ]]; then

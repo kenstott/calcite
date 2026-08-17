@@ -364,16 +364,15 @@ done
 # hasBeneficialOwnership and the _13f.parquet/_13dg.parquet output filenames that set them).
 case "$SCHEMA" in
   sec|sec_secondary)
-    declare -A _suffix_of=(
-      [mda_sections]=mda [xbrl_relationships]=relationships [financial_line_items]=facts
-      [filing_contexts]=contexts [filing_metadata]=metadata [vectorized_chunks]=chunks
-      [insider_transactions]=insider [earnings_transcripts]=earnings
-      [institutional_holdings]=13f [beneficial_ownership]=13dg )
+    # Suffix map lives in tracker_pg.sh (sec_accession_suffixes_for_tables) — shared with
+    # force-reprocess.sh, which needs the identical mapping to purge accessions before a forced
+    # reprocess actually re-fetches anything.
     _suffixes=()
     for _t in "${TABLES[@]}"; do
       _t="$(echo -n "$_t" | xargs)"
-      _s="${_suffix_of[$_t]:-}"
-      [[ -n "$_s" ]] && _suffixes+=("$_s")
+      while IFS= read -r _s; do
+        [[ -n "$_s" ]] && _suffixes+=("$_s")
+      done < <(sec_accession_suffixes_for_tables "$_t")
     done
     if [[ ${#_suffixes[@]} -eq 0 ]]; then
       echo "── ${SCHEMA}: no document-completion suffix maps to the purged tables — skipping ──"

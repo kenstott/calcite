@@ -90,6 +90,34 @@ pg_tracker_purge_accessions() {
   echo "        Deleted ${n} accession completion row(s) from ${ns}"
 }
 
+# Maps a govdata table name to the per-accession completion suffix DocumentETLProcessor/
+# SecFilingCache record it under (phase='staging', table_name=<suffix>) — a SEPARATE, lower-level
+# tracker layer from the table's own phase='incremental' row that pg_tracker_clear_completion /
+# EtlPipeline's forceReprocessAll operate on. A table-level clear alone does NOT make SEC
+# accessions re-fetch: SecFilingCache's own filterUnprocessed/checkFiling still sees them as
+# staging-complete regardless, so any SEC document-derived table fix needs BOTH layers purged —
+# this map is what tells a caller which per-accession suffix(es) a table needs purged too.
+# Source of truth: FormType.getExpectedOutputs() (which output types the ETL actually produces
+# per form) — kept in sync by hand here since bash can't introspect the Java enum.
+declare -gA SEC_TABLE_ACCESSION_SUFFIX=(
+  [mda_sections]=mda [xbrl_relationships]=relationships [financial_line_items]=facts
+  [filing_contexts]=contexts [filing_metadata]=metadata [vectorized_chunks]=chunks
+  [insider_transactions]=insider [earnings_transcripts]=earnings
+  [institutional_holdings]=13f [beneficial_ownership]=13dg
+)
+
+# Given a list of table names, echoes the matching per-accession suffixes (space-separated,
+# deduplicated implicitly by the caller's usage — duplicates are harmless in a SQL IN-list).
+# Tables with no entry (e.g. stock_prices, or a non-SEC schema's table) are silently skipped —
+# not every table has document-level tracking, so an empty result is a normal, valid answer.
+sec_accession_suffixes_for_tables() {
+  local suffix
+  for _t in "$@"; do
+    suffix="${SEC_TABLE_ACCESSION_SUFFIX[$_t]:-}"
+    [[ -n "$suffix" ]] && echo "$suffix"
+  done
+}
+
 # Invalidates one table's completion the way data_fix.sh does on S3: there the script appends a
 # marker row with state='cleared'; here the same two facts are the pipeline_tracker row and the
 # separate table_completion record PGPipelineTracker keeps, so both are written.
