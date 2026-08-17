@@ -2710,7 +2710,8 @@ public class McpServer {
      * without reading twenty mostly-null identifier columns.
      */
     private static String buildResolveEntitySql(String term, String type, int limit,
-            String sourceSchema, String jurisdiction, boolean exactOnly) {
+            String sourceSchema, String jurisdiction, boolean exactOnly,
+            String aliasNorm) {
         String t = term == null ? "" : term.trim();
         if (t.isEmpty()) {
             throw new IllegalArgumentException("term must be non-empty");
@@ -2782,19 +2783,21 @@ public class McpServer {
         String prunablePredicate = "source_name_normalized LIKE " + sqlStr(norm + "%");
         String nameScore =
             "CASE WHEN source_name_normalized = " + normLit + " THEN 1.0 "
+            + (aliasNorm == null || aliasNorm.isEmpty() ? ""
+                : "WHEN source_name_normalized = " + sqlStr(aliasNorm) + " THEN 1.0 ")
             + "WHEN " + wordBoundary + " THEN JARO_WINKLER("
             + "source_name_normalized, " + normLit + ") "
             + "ELSE 0 END";
         // Identifier hits are exact by construction and bypass name scoring entirely. The
         // ticker path reaches canonical_org_entity, NOT the bridge: bridge.sec_cik is
         // populated only for EIN-path matches, so a ticker resolved through it found nothing.
-        String tickerCik = "(SELECT MAX(cik) FROM ref.sec_company_tickers WHERE upper(ticker) = "
-            + upper + ")";
-        String identifierHit = "upper(lei) = " + upper + " OR sec_cik = " + padded
-            + " OR lei IN (SELECT lei FROM ref.canonical_org_entity WHERE sec_cik = "
-            + tickerCik + ") "
-            + "OR sec_cik IN (SELECT sec_cik FROM ref.canonical_org_entity WHERE sec_cik = "
-            + tickerCik + ")";
+        // A ticker is NOT matched as an identifier here. entity_org_bridge.sec_cik is populated
+        // only for EIN-path matches, so a filer matched through GLEIF carries a lei and a null
+        // sec_cik — AAPL resolved to CIK 0000320193 and then matched no bridge row at all.
+        // canonical_org_entity.sec_cik is populated the same way and is equally sparse. The
+        // ticker is instead resolved to its registered name by the caller and passed in as
+        // aliasNorm, turning it into a name match, which the bridge does index.
+        String identifierHit = "upper(lei) = " + upper + " OR sec_cik = " + padded;
 
         return "WITH raw AS ("
             + "SELECT " + entityKey + " AS entity_key, lei, sec_cik, gleif_legal_name, "
@@ -2803,7 +2806,11 @@ public class McpServer {
             + "FROM ref.entity_org_bridge "
             + "WHERE (" + identifierHit
             + (exactOnly ? " OR source_name_normalized = " + normLit
-                         : " OR " + prunablePredicate) + ")"
+                         : " OR " + prunablePredicate)
+            + (aliasNorm == null || aliasNorm.isEmpty() ? ""
+                : (exactOnly ? " OR source_name_normalized = " + sqlStr(aliasNorm)
+                             : " OR source_name_normalized LIKE " + sqlStr(aliasNorm + "%")))
+            + ")"
             + (sourceSchema == null || sourceSchema.isEmpty() ? ""
                 : " AND source_schema = " + sqlStr(sourceSchema)) + "), "
             // Pre-deduplicate before aggregating. string_agg(DISTINCT ...) did not dedupe
@@ -2897,16 +2904,60 @@ public class McpServer {
      * pay that, including the exact hits that are the common case; running exact alone first
      * returns those in seconds and leaves the scan for terms that genuinely need it.
      */
+    /**
+     * Resolves a ticker to the normalized form of its registered company name, or null.
+     *
+     * <p>Tickers are absent from the entity bridge entirely, and the CIK they resolve to is
+     * a dead end there: bridge.sec_cik is filled only for EIN-path matches, so a filer matched
+     * through GLEIF has a null one. Translating the ticker into the name it trades under turns
+     * the lookup into a name match, which the bridge does index — "AAPL" becomes "apple inc",
+     * normalized here through the same function every other name goes through so the two sides
+     * cannot drift apart.
+     *
+     * <p>ref.sec_company_tickers is ~10k rows, so this costs a small scan and only runs when
+     * the term could plausibly be a ticker.
+     */
+    private static String tickerAlias(String term) {
+        String t = term == null ? "" : term.trim();
+        // Tickers are 1-5 characters, letters with an optional class suffix. Anything else is
+        // not worth a query, and a long phrase certainly is not.
+        if (!t.matches("[A-Za-z]{1,5}([.\\-][A-Za-z])?")) {
+            return null;
+        }
+        try {
+            ArrayNode rows = runSqlRows(
+                "SELECT title FROM ref.sec_company_tickers WHERE upper(ticker) = "
+                + sqlStr(t.toUpperCase(java.util.Locale.ROOT)), 1);
+            if (rows.size() == 0) {
+                return null;
+            }
+            String title = rows.get(0).path("title").asText("");
+            if (title.isEmpty()) {
+                return null;
+            }
+            String norm = normalizeOrgName(title);
+            log.println("[askamerica-mcp] ticker " + t + " -> \"" + title + "\" -> " + norm);
+            return norm;
+        // fallback-guard: allow a failed ticker lookup degrades to a plain name search, which is the correct behaviour for a term that is not a ticker
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] ticker lookup for " + t + " failed: " + e.getMessage());
+            return null;
+        }
+    }
+
     private static String resolveEntity(String term, String type, int limit,
             String sourceSchema, String jurisdiction) throws Exception {
         int cap = Math.min(Math.max(1, limit), 200);
+        String aliasNorm = tickerAlias(term);
         String exact = runSqlOn(
-            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, true), cap);
+            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, true, aliasNorm),
+            cap);
         if (exact != null && !exact.trim().equals("[]")) {
             return exact;
         }
         return runSqlOn(
-            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, false), cap);
+            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, false, aliasNorm),
+            cap);
     }
 
     // ── entity_relationships ─────────────────────────────────────────────────
