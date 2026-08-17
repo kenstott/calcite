@@ -2014,6 +2014,11 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        # Unpartitioned pairwise match log, same shape and same problem as
+        # entity_org_bridge: with no partition to prune and no sort, a name lookup reads
+        # every file. Leads with the A-side name because that is the side a caller searches;
+        # this table has no pre-normalized name column, unlike the org bridge.
+        sortOrder: [source_a_name_raw, source_b_name_raw]
 
   # ==========================================================================
   # CANONICAL_ORG_ENTITY — wide hub, one row per real-world org, nullable FKs
@@ -2332,6 +2337,11 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        # Unpartitioned. Leads with lei because that is the column resolve_entity JOINs on
+        # after matching the bridge, which is the hot path; canonical_name follows for direct
+        # name searches. Rows with no lei collect in one null block at the end (nulls sort
+        # last), which is harmless here -- a lei probe skips that block wholesale.
+        sortOrder: [lei, canonical_name]
 
   # ==========================================================================
   # CANONICAL_PERSON_ENTITY — wide hub, one row per real-world individual
@@ -2471,6 +2481,9 @@ partitionedTables:
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
+        # Unpartitioned. canonical_name is the only column the person path searches on, so it
+        # leads; canonical_entity_id follows as the exact-identifier lookup.
+        sortOrder: [canonical_name, canonical_entity_id]
 
   # ==========================================================================
   # VECTORIZED_CHUNKS — cross-schema semantic-search text index (row-concat mode)
