@@ -1182,7 +1182,7 @@ public class IcebergTableWriter {
    *
    * <p>Safe to do in memory here, and only here: this path operates exclusively on files below
    * {@code smallFileSizeBytes} (10MB by default), so a partition's candidate set is bounded by
-   * that times the file count rather than by table size. {@link #SORT_MEMORY_BUDGET_BYTES} caps
+   * that times the file count rather than by table size. the sort memory budget caps
    * it regardless, and exceeding the cap falls back to the previous streaming rewrite — still a
    * correct compaction, just unsorted. Rewriting already-compacted large files needs a merge
    * that spills, and is deliberately NOT attempted here.
@@ -1358,8 +1358,318 @@ public class IcebergTableWriter {
     return ((org.apache.iceberg.data.GenericRecord) record).copy();
   }
 
-  /** Above this, sorting is skipped and the rewrite streams unsorted rather than risking heap. */
-  private static final long SORT_MEMORY_BUDGET_BYTES = 512L * 1024 * 1024;
+  /**
+   * Table property recording the sort order the table's data was last rewritten in.
+   *
+   * <p>A deliberate custom property rather than Iceberg's own {@code SortOrder}: setting that
+   * declares to every engine that writers maintain the order, which is not true here — ordinary
+   * appends land unsorted and only compaction restores it. This records the weaker, accurate
+   * claim: "the data was fully rewritten in this order at some point".
+   */
+  public static final String SORTED_BY_PROPERTY = "aperio.sorted-by";
+
+  /** Spill runs are written this many records at a time when a partition exceeds the budget. */
+  private static final int SPILL_RUN_RECORDS = 200_000;
+
+  /**
+   * Rewrites entire partitions in {@code sortOrder}, healing tables whose data predates the
+   * order they now declare.
+   *
+   * <p>Needed because ordinary compaction only ever looks at files below
+   * {@code compactionSmallFileSizeBytes}. A partition already packed into large files has no
+   * small files, so a sorting compaction never touches it — and a table rebuilt in full each
+   * run (like the entity bridges) is written large from the start and would never be sorted at
+   * all. Sorting only the newly-appended files does not help either: their ranges still overlap
+   * the untouched large files, so the reader still cannot prune. Ordering within a partition
+   * requires rewriting the whole partition, which is what this does.
+   *
+   * <p>Gated on {@link #SORTED_BY_PROPERTY}: when the table already records this exact order the
+   * call is a no-op, so it is safe to run every cycle and costs a property read. It is NOT
+   * automatically re-run as new data arrives — appends degrade clustering over time and a
+   * periodic re-heal is a scheduling decision, not something inferred here.
+   *
+   * <p>Memory: partitions within the sort memory budget sort in memory; larger ones
+   * use an external merge that spills sorted runs to local temp files and merges them with one
+   * record per run resident. Peak heap is therefore bounded by the larger of one input file and
+   * the merge frontier, not by partition size.
+   *
+   * @return number of partitions rewritten
+   */
+  public int healSortOrder(java.util.List<String> sortOrder, long targetFileSizeBytes,
+      int retentionDays) throws IOException {
+    if (sortOrder == null || sortOrder.isEmpty()) {
+      return 0;
+    }
+    String desired = String.join(",", sortOrder);
+    String current = table.properties().get(SORTED_BY_PROPERTY);
+    if (desired.equals(current)) {
+      LOGGER.info("Table {} already sorted by [{}]; heal is a no-op", table.name(), desired);
+      return 0;
+    }
+    if (table.currentSnapshot() == null) {
+      LOGGER.info("Table {} has no data to heal", table.name());
+      return 0;
+    }
+    if (recordComparator(table.schema(), sortOrder) == null) {
+      // recordComparator already logged which column is missing. Refuse rather than rewrite the
+      // whole table unsorted, which would burn the cost and then record a false claim.
+      LOGGER.error("Refusing to heal {}: sortOrder {} does not resolve against the schema",
+          table.name(), sortOrder);
+      return 0;
+    }
+
+    Map<String, List<FileScanTask>> byPartition = new java.util.LinkedHashMap<>();
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        String key = task.file().partition().toString();
+        byPartition.computeIfAbsent(key, k -> new ArrayList<>()).add(task);
+      }
+    }
+
+    int healed = 0;
+    for (Map.Entry<String, List<FileScanTask>> entry : byPartition.entrySet()) {
+      List<FileScanTask> files = entry.getValue();
+      if (files.isEmpty()) {
+        continue;
+      }
+      long bytes = 0;
+      for (FileScanTask t : files) {
+        bytes += t.file().fileSizeInBytes();
+      }
+      LOGGER.info("Healing partition {} of {}: {} files, {} bytes, sortOrder {}",
+          entry.getKey(), table.name(), files.size(), bytes, sortOrder);
+      if (bytes <= sortMemoryBudgetBytes()) {
+        compactPartition(files, targetFileSizeBytes, sortOrder);
+      } else {
+        rewritePartitionExternallySorted(files, targetFileSizeBytes, sortOrder);
+      }
+      healed++;
+    }
+
+    // Recorded only after every partition succeeded — a partial heal must not claim the table
+    // is sorted, or the next run would skip the partitions that never got rewritten.
+    underCommitLock(() -> {
+      table.updateProperties().set(SORTED_BY_PROPERTY, desired).commit();
+    });
+    LOGGER.info("Healed {} partition(s) of {} into sortOrder [{}]",
+        healed, table.name(), desired);
+    return healed;
+  }
+
+  /**
+   * Rewrites one oversized partition in sort order using an external merge.
+   *
+   * <p>Two passes. The first reads each input file, sorts it in memory, and writes it back out
+   * as a sorted "run" in a local temp file — bounded by one input file, not the partition. The
+   * second opens every run at once and merges them with a priority queue, holding one record
+   * per run, and streams the merged output into rolling data files of the target size.
+   *
+   * <p>The runs are local Parquet with the table's own schema, so the same reader and writer
+   * serve both passes and there is no bespoke spill format to keep in sync with schema changes.
+   */
+  private void rewritePartitionExternallySorted(List<FileScanTask> files,
+      long targetFileSizeBytes, java.util.List<String> sortOrder) throws IOException {
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+    java.util.Comparator<Record> comparator = recordComparator(schema, sortOrder);
+    if (comparator == null) {
+      throw new IOException("sortOrder " + sortOrder + " does not resolve against the schema");
+    }
+
+    long totalRecords = 0;
+    long totalBytes = 0;
+    Set<DataFile> filesToDelete = new HashSet<>();
+    for (FileScanTask task : files) {
+      filesToDelete.add(task.file());
+      totalRecords += task.file().recordCount();
+      totalBytes += task.file().fileSizeInBytes();
+    }
+    if (totalRecords == 0) {
+      return;
+    }
+
+    StructLike partitionData = files.get(0).file().partition();
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    copyPartitionValues(partitionKey, partitionData, spec);
+    int recordsPerFile = computeRecordsPerFile(totalBytes, totalRecords, targetFileSizeBytes);
+
+    java.io.File spillDir = java.nio.file.Files.createTempDirectory("iceberg-sort-").toFile();
+    List<java.io.File> runs = new ArrayList<>();
+    try {
+      // Pass 1 — sorted runs.
+      for (FileScanTask task : files) {
+        InputFile in = table.io().newInputFile(task.file().path().toString());
+        List<Record> buffer = new ArrayList<>();
+        try (CloseableIterable<Record> records = Parquet.read(in)
+            .project(schema)
+            .createReaderFunc(fileSchema ->
+                org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                    schema, fileSchema))
+            .build()) {
+          for (Record record : records) {
+            buffer.add(copyRecord(record));
+            if (buffer.size() >= SPILL_RUN_RECORDS) {
+              runs.add(writeRun(buffer, comparator, schema, spillDir, runs.size()));
+              buffer = new ArrayList<>();
+            }
+          }
+        }
+        if (!buffer.isEmpty()) {
+          runs.add(writeRun(buffer, comparator, schema, spillDir, runs.size()));
+        }
+      }
+      if (runs.isEmpty()) {
+        return;
+      }
+      LOGGER.info("External sort: {} runs spilled to {}", runs.size(), spillDir);
+
+      // Pass 2 — k-way merge into rolling output files.
+      List<DataFile> newFiles = new ArrayList<>();
+      List<CloseableIterable<Record>> open = new ArrayList<>();
+      java.util.PriorityQueue<RunCursor> queue =
+          new java.util.PriorityQueue<>((a, b) -> comparator.compare(a.head, b.head));
+      DataWriter<Record> currentWriter = null;
+      int currentRecordCount = 0;
+      long written = 0;
+      String dataLocation = table.location() + "/data";
+      String partitionPath = buildPartitionPathFromKey(partitionKey, spec);
+      try {
+        for (java.io.File run : runs) {
+          CloseableIterable<Record> it = Parquet.read(org.apache.iceberg.Files.localInput(run))
+              .project(schema)
+              .createReaderFunc(fileSchema ->
+                  org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                      schema, fileSchema))
+              .build();
+          open.add(it);
+          java.util.Iterator<Record> cursor = it.iterator();
+          if (cursor.hasNext()) {
+            queue.add(new RunCursor(cursor, copyRecord(cursor.next())));
+          }
+        }
+        while (!queue.isEmpty()) {
+          RunCursor c = queue.poll();
+          Record record = c.head;
+          if (currentWriter == null) {
+            String outputPath = dataLocation + "/"
+                + (partitionPath.isEmpty() ? "" : partitionPath + "/")
+                + "sorted_" + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+            if (outputPath.startsWith("s3://")) {
+              outputPath = "s3a://" + outputPath.substring(5);
+            }
+            currentWriter = Parquet.writeData(table.io().newOutputFile(outputPath))
+                .schema(schema).withSpec(spec).withPartition(partitionKey)
+                .createWriterFunc(GenericParquetWriter::buildWriter).overwrite().build();
+            currentRecordCount = 0;
+          }
+          currentWriter.write(record);
+          currentRecordCount++;
+          written++;
+          if (currentRecordCount >= recordsPerFile) {
+            currentWriter.close();
+            newFiles.add(currentWriter.toDataFile());
+            currentWriter = null;
+          }
+          if (c.cursor.hasNext()) {
+            c.head = copyRecord(c.cursor.next());
+            queue.add(c);
+          }
+        }
+        if (currentWriter != null) {
+          currentWriter.close();
+          newFiles.add(currentWriter.toDataFile());
+          currentWriter = null;
+        }
+      } finally {
+        for (CloseableIterable<Record> it : open) {
+          try {
+            it.close();
+          } catch (Exception e) {
+            LOGGER.warn("Failed closing spill run: {}", e.getMessage());
+          }
+        }
+      }
+
+      if (newFiles.isEmpty()) {
+        LOGGER.warn("External sort produced no files for partition; leaving it untouched");
+        return;
+      }
+      LOGGER.info("External sort wrote {} records to {} files", written, newFiles.size());
+
+      RewriteFiles rewrite = table.newRewrite();
+      if (table.currentSnapshot() != null) {
+        rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+      }
+      for (DataFile oldFile : filesToDelete) {
+        rewrite.deleteFile(oldFile);
+      }
+      for (DataFile newFile : newFiles) {
+        rewrite.addFile(newFile);
+      }
+      underCommitLock(() -> {
+        rewrite.commit();
+      });
+    } finally {
+      for (java.io.File run : runs) {
+        if (!run.delete()) {
+          LOGGER.warn("Could not delete spill run {}", run);
+        }
+      }
+      if (!spillDir.delete()) {
+        LOGGER.debug("Spill dir {} not removed (may hold files from a failed run)", spillDir);
+      }
+    }
+  }
+
+  /** One open sorted run plus its current head record, for the merge queue. */
+  private static final class RunCursor {
+    private final java.util.Iterator<Record> cursor;
+    private Record head;
+
+    RunCursor(java.util.Iterator<Record> cursor, Record head) {
+      this.cursor = cursor;
+      this.head = head;
+    }
+  }
+
+  /** Sorts a buffer and writes it as one local Parquet run. */
+  private static java.io.File writeRun(List<Record> buffer, java.util.Comparator<Record> cmp,
+      Schema schema, java.io.File dir, int index) throws IOException {
+    buffer.sort(cmp);
+    java.io.File out = new java.io.File(dir, "run-" + index + ".parquet");
+    try (org.apache.iceberg.io.FileAppender<Record> appender =
+             Parquet.write(org.apache.iceberg.Files.localOutput(out))
+                 .schema(schema)
+                 .createWriterFunc(GenericParquetWriter::buildWriter)
+                 .overwrite()
+                 .build()) {
+      for (Record r : buffer) {
+        appender.add(r);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Above this, a partition is not sorted in memory.
+   *
+   * <p>Compaction falls back to an unsorted rewrite; heal switches to the external merge. Tunable
+   * via {@code calcite.iceberg.sort.memory.budget.bytes} because the right value depends on the
+   * heap the ETL worker was given, which this class cannot know — and because a test needs to
+   * force the external path without materialising half a gigabyte.
+   */
+  private static long sortMemoryBudgetBytes() {
+    String configured = System.getProperty("calcite.iceberg.sort.memory.budget.bytes");
+    if (configured != null && !configured.isEmpty()) {
+      try {
+        return Long.parseLong(configured.trim());
+      } catch (NumberFormatException e) {
+        LOGGER.warn("Ignoring non-numeric calcite.iceberg.sort.memory.budget.bytes '{}'",
+            configured);
+      }
+    }
+    return 512L * 1024 * 1024;
+  }
 
   private void compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
       java.util.List<String> sortOrder) throws IOException {
@@ -1405,14 +1715,14 @@ public class IcebergTableWriter {
 
     // Sorting requires seeing every row before writing the first, so the rows are buffered.
     // Bounded by the small-file threshold (these are all <10MB files) and hard-capped by
-    // SORT_MEMORY_BUDGET_BYTES; over the cap, sorting is skipped rather than risking the heap.
+    // the sort memory budget; over the cap, sorting is skipped rather than risking the heap.
     List<Record> sortBuffer = null;
     java.util.Comparator<Record> sortComparator = null;
     if (sortOrder != null && !sortOrder.isEmpty()) {
-      if (totalBytes > SORT_MEMORY_BUDGET_BYTES) {
+      if (totalBytes > sortMemoryBudgetBytes()) {
         LOGGER.warn("Partition holds {} bytes of small files, above the {} byte sort budget — "
             + "compacting UNSORTED. Files are still merged; min/max pruning on {} will not "
-            + "improve.", totalBytes, SORT_MEMORY_BUDGET_BYTES, sortOrder);
+            + "improve.", totalBytes, sortMemoryBudgetBytes(), sortOrder);
       } else {
         sortComparator = recordComparator(schema, sortOrder);
         if (sortComparator != null) {
