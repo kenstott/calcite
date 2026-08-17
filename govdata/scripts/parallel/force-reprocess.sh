@@ -118,6 +118,23 @@ case "$SCHEMA" in
     ;;
 esac
 
+# SecSchemaFactory#getCiksFromConfig returns an EMPTY list — not "all CIKs" — when the operand
+# has no "ciks" entry, and worker.sh's bare `sec`/`sec_prices` cases only add one when
+# GOVDATA_CIKS is set. Left unset, the ETL run enumerates zero companies and exits clean in
+# seconds: no error, no warning, table-level as_of can even still advance — a silent no-op that
+# looks exactly like a successful reprocess (confirmed live: an unset-CIKS run against
+# beneficial_ownership finished in 30s with no fetch activity at all). Refuse rather than risk
+# repeating that silently.
+if [[ ( "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" ) && -z "${GOVDATA_CIKS:-}" ]]; then
+  echo "ERROR: GOVDATA_CIKS is not set. For SEC, an unset ciks operand resolves to an EMPTY" >&2
+  echo "       company list — not 'all companies' — so the ETL run would silently process" >&2
+  echo "       nothing and still look successful. Export GOVDATA_CIKS explicitly:" >&2
+  echo "         GOVDATA_CIKS=_ALL_EDGAR_FILERS   for a real full-universe reprocess" >&2
+  echo "         GOVDATA_CIKS=DQ_SAMPLE           for a small, fast correctness check" >&2
+  echo "         GOVDATA_CIKS=<CIK,CIK,...>       for specific companies" >&2
+  exit 1
+fi
+
 PG_NS="$(pg_ns_from_bucket "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}")" || exit 2
 
 echo "=================================================="
