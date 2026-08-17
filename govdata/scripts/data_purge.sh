@@ -24,8 +24,8 @@
 #      incremental markers and the _table_complete completion marker for that table)
 #   2b. For document-based schemas (sec / sec_secondary): the per-ACCESSION document
 #      completions (source_key=<accession>, table_name in metadata/facts/contexts/
-#      relationships/mda/chunks/_no_xbrl/_filing_meta/_error_count). These are keyed by
-#      accession + output-type suffix, not the schema table name, so step 2 never matches
+#      relationships/mda/chunks/13f/13dg/_no_xbrl/_filing_meta/_error_count). These are keyed
+#      by accession + output-type suffix, not the schema table name, so step 2 never matches
 #      them; without clearing them SecFilingCache.filterUnprocessed treats accessions as
 #      complete and skips re-ingest, leaving the purged tables empty. Schema-level; forces
 #      a full document re-ingest on the next run.
@@ -358,14 +358,17 @@ done
 # parquets to DROP only those rows — surgical, so completions for tables you did NOT purge
 # (e.g. stock_prices, filing_metadata) survive and don't needlessly re-ingest. Dropping any of an
 # accession's output rows makes filterUnprocessed re-process that whole accession next run.
-# (institutional_holdings / beneficial_ownership have no per-accession suffix — 13F/SC-13 forms;
-#  their re-ingest is governed by filing-type scope, not a completion clear.)
+# institutional_holdings (13F-HR) and beneficial_ownership (SC 13D/G) ARE tracked here too —
+# SecFilingCache.recordInventory writes their completion the same way as every other output,
+# just under the shorter suffixes "13f"/"13dg" (see FileInventory.hasInstitutionalHoldings/
+# hasBeneficialOwnership and the _13f.parquet/_13dg.parquet output filenames that set them).
 case "$SCHEMA" in
   sec|sec_secondary)
     declare -A _suffix_of=(
       [mda_sections]=mda [xbrl_relationships]=relationships [financial_line_items]=facts
       [filing_contexts]=contexts [filing_metadata]=metadata [vectorized_chunks]=chunks
-      [insider_transactions]=insider [earnings_transcripts]=earnings )
+      [insider_transactions]=insider [earnings_transcripts]=earnings
+      [institutional_holdings]=13f [beneficial_ownership]=13dg )
     _suffixes=()
     for _t in "${TABLES[@]}"; do
       _t="$(echo -n "$_t" | xargs)"
