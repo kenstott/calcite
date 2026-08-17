@@ -345,7 +345,14 @@ public class EtlPipeline {
     String probedFreshnessToken = null;
 
     try {
-      boolean forceReprocessAll = false;
+      // External, per-table force-reprocess trigger: reuses forceReprocessAll's existing
+      // self-healing behavior (below) instead of requiring the caller to know which tracker
+      // rows to surgically clear — there's no other supported way to say "reprocess this table
+      // regardless of what the tracker says". No tracker/Iceberg data is deleted by this alone;
+      // it only changes what THIS run does, so it is safe to set and re-run: overwritePartitions
+      // simply replaces the affected periods with fresh output, or leaves them unchanged if the
+      // output is identical.
+      boolean forceReprocessAll = isTableForceReprocessed(pipelineName);
 
       // Fast-path: Check cached completion from DuckDB to skip dimension expansion entirely
       // This works for both Parquet and Iceberg formats
@@ -2654,6 +2661,25 @@ public class EtlPipeline {
   public static EtlPipeline create(EtlPipelineConfig config, StorageProvider storageProvider,
       String baseDirectory) {
     return new EtlPipeline(config, storageProvider, baseDirectory);
+  }
+
+  /**
+   * True if {@code pipelineName} is listed in {@code GOVDATA_FORCE_REPROCESS_TABLES} (a
+   * comma-separated table-name list), resolved fresh on every call via {@link VariableResolver}
+   * so a caller can change it between runs without restarting anything. Deliberately not cached:
+   * this is a manual, low-frequency operator trigger, not a hot path.
+   */
+  private static boolean isTableForceReprocessed(String pipelineName) {
+    String raw = VariableResolver.resolveEnvVars("${GOVDATA_FORCE_REPROCESS_TABLES:}");
+    if (raw == null || raw.isEmpty()) {
+      return false;
+    }
+    for (String table : raw.split(",")) {
+      if (table.trim().equals(pipelineName)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

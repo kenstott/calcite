@@ -10,9 +10,11 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -32,6 +34,45 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class EtlPipelineTest {
+
+  private static final String FORCE_PROP = "GOVDATA_FORCE_REPROCESS_TABLES";
+
+  // VariableResolver checks the env var first, then falls back to a system property of the
+  // same name — using the property lets this test drive the value without mutating real
+  // process environment (which Java cannot do for the current JVM in any case).
+  @AfterEach void clearForceProperty() {
+    System.clearProperty(FORCE_PROP);
+  }
+
+  private boolean isTableForceReprocessed(String pipelineName) throws Exception {
+    Method m = EtlPipeline.class.getDeclaredMethod("isTableForceReprocessed", String.class);
+    m.setAccessible(true);
+    return (Boolean) m.invoke(null, pipelineName);
+  }
+
+  @Test void testForceReprocessTablesUnsetIsFalse() throws Exception {
+    assertFalse(isTableForceReprocessed("industry_gdp"));
+  }
+
+  @Test void testForceReprocessTablesMatchesListedTable() throws Exception {
+    System.setProperty(FORCE_PROP, "industry_gdp");
+    assertTrue(isTableForceReprocessed("industry_gdp"));
+    assertFalse(isTableForceReprocessed("state_wages"));
+  }
+
+  @Test void testForceReprocessTablesCommaSeparatedList() throws Exception {
+    System.setProperty(FORCE_PROP, "industry_gdp,state_wages, county_qcew ");
+    assertTrue(isTableForceReprocessed("industry_gdp"));
+    assertTrue(isTableForceReprocessed("state_wages"));
+    // Surrounding whitespace in the list must not prevent a match.
+    assertTrue(isTableForceReprocessed("county_qcew"));
+    assertFalse(isTableForceReprocessed("fred_indicators"));
+  }
+
+  @Test void testForceReprocessTablesEmptyStringIsFalse() throws Exception {
+    System.setProperty(FORCE_PROP, "");
+    assertFalse(isTableForceReprocessed("industry_gdp"));
+  }
 
   @Test void testEtlPipelineConfigBuilder() {
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<String, DimensionConfig>();
