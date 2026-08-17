@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -134,6 +135,42 @@ public class IcebergSortVerifierTest {
 
     assertFalse(IcebergSortVerifier.verify(table, "name"),
         "a missing aperio.sorted-by must fail even when the data happens to be sorted");
+  }
+
+  /**
+   * Pins the catalog config key names against IcebergMaintenanceRunner's, which is the pair that
+   * actually works against MinIO.
+   *
+   * <p>This is a structural assertion because the failure mode is silent: wrong key names are
+   * ignored by the loader rather than rejected, so the endpoint never reaches the SDK and the
+   * call tries to resolve a real AWS host. Every other test here uses a local warehouse and
+   * therefore exercises no S3 path, which is exactly how the bug shipped.
+   */
+  @Test void buildsTheCatalogConfigKeysTheLoaderActuallyReads() {
+    Map<String, Object> cfg = IcebergSortVerifier.buildCatalogConfig(
+        "s3a://bucket/sec", "AK", "SK", "http://minio:9000");
+
+    assertEquals("hadoop", cfg.get("catalog"), "loader reads 'catalog', not 'catalogType'");
+    assertEquals("s3a://bucket/sec", cfg.get("warehouse"),
+        "loader reads 'warehouse', not 'warehousePath'");
+
+    @SuppressWarnings("unchecked")
+    Map<String, String> hadoop = (Map<String, String>) cfg.get("hadoopConfig");
+    assertNotNull(hadoop, "credentials travel in a hadoopConfig map, not as top-level keys");
+    assertEquals("AK", hadoop.get("fs.s3a.access.key"));
+    assertEquals("SK", hadoop.get("fs.s3a.secret.key"));
+    assertEquals("http://minio:9000", hadoop.get("fs.s3a.endpoint"),
+        "the endpoint must reach the SDK, or it resolves a real AWS host");
+    assertEquals("true", hadoop.get("fs.s3a.path.style.access"),
+        "MinIO needs path-style access");
+  }
+
+  @Test void omitsCredentialsWhenNoneAreGiven() {
+    Map<String, Object> cfg = IcebergSortVerifier.buildCatalogConfig("/tmp/wh", null, null, null);
+    @SuppressWarnings("unchecked")
+    Map<String, String> hadoop = (Map<String, String>) cfg.get("hadoopConfig");
+    assertNotNull(hadoop);
+    assertTrue(hadoop.isEmpty(), "a local warehouse must not get empty S3 settings");
   }
 
   @Test void failsOnAColumnThatIsNotInTheSchema() throws Exception {

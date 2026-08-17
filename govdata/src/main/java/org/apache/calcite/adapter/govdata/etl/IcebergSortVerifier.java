@@ -88,23 +88,43 @@ public final class IcebergSortVerifier {
     }
 
     try {
-      Map<String, Object> catalogConfig = new HashMap<>();
-      catalogConfig.put("catalogType", "hadoop");
-      catalogConfig.put("warehousePath", warehouse);
-      if (accessKey != null) {
-        catalogConfig.put("s3AccessKey", accessKey);
-        catalogConfig.put("s3SecretKey", secretKey);
-        if (endpoint != null) {
-          catalogConfig.put("s3Endpoint", endpoint);
-        }
-      }
-      Table table = IcebergCatalogManager.loadTable(catalogConfig, tableName);
+      Table table = IcebergCatalogManager.loadTable(
+          buildCatalogConfig(warehouse, accessKey, secretKey, endpoint), tableName);
       System.exit(verify(table, sortColumn) ? 0 : 1);
     } catch (Exception e) {
       System.err.println("Fatal error: " + e.getMessage());
       e.printStackTrace();
       System.exit(2);
     }
+  }
+
+  /**
+   * Builds the catalog config, mirroring IcebergMaintenanceRunner exactly.
+   *
+   * <p>Extracted so the key names can be asserted in a test. They are not interchangeable and
+   * getting them wrong fails silently: an earlier version of this class used
+   * {@code catalogType} / {@code warehousePath} / {@code s3Endpoint}, which the loader ignores,
+   * so the endpoint never reached the SDK and every call tried to resolve a real AWS host —
+   * surfacing as UnknownHostException against MinIO. A local-warehouse unit test cannot catch
+   * that, because it exercises no S3 path at all, which is precisely why this is asserted
+   * structurally instead.
+   */
+  static Map<String, Object> buildCatalogConfig(String warehouse, String accessKey,
+      String secretKey, String endpoint) {
+    Map<String, String> hadoopConfig = new HashMap<>();
+    if (accessKey != null) {
+      hadoopConfig.put("fs.s3a.access.key", accessKey);
+      hadoopConfig.put("fs.s3a.secret.key", secretKey);
+      if (endpoint != null) {
+        hadoopConfig.put("fs.s3a.endpoint", endpoint);
+        hadoopConfig.put("fs.s3a.path.style.access", "true");
+      }
+    }
+    Map<String, Object> catalogConfig = new HashMap<>();
+    catalogConfig.put("catalog", "hadoop");
+    catalogConfig.put("warehouse", warehouse);
+    catalogConfig.put("hadoopConfig", hadoopConfig);
+    return catalogConfig;
   }
 
   /** @return true when every check passed. */
