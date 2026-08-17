@@ -188,7 +188,10 @@ public class IndustryGdpTransformer implements ResponseTransformer {
    * @param year The data year for year-aware transformations
    * @return Transformed record with canonical field names and values
    */
-  private ObjectNode transformRecord(JsonNode record, int year) {
+  // Package-private rather than private so a test can pin the BEA field names directly. The
+  // IndusDesc/IndustrYDescription mismatch was invisible for the life of the table precisely
+  // because nothing asserted on the mapping.
+  ObjectNode transformRecord(JsonNode record, int year) {
     ObjectNode result = MAPPER.createObjectNode();
 
     // TableID: Direct mapping
@@ -202,15 +205,31 @@ public class IndustryGdpTransformer implements ResponseTransformer {
     industryCode = normalizeIndustryCode(industryCode, year);
     result.put("industry_code", industryCode);
 
-    // Industry description: Direct mapping
-    result.put("industry_description", getTextValue(record, "IndusDesc"));
+    // Industry description: BEA spells this field "IndustrYDescription", with a capital Y.
+    //
+    // This was mapped from "IndusDesc", which the GDPbyIndustry dataset does not return, so the
+    // column was null on every row ever loaded. That is worse than a missing label: on the
+    // component tables (TableID 6 "Components of Value Added by Industry" and 7, the same as a
+    // percentage of value added) this field carries the COMPONENT name rather than the industry
+    // name -- "Gross operating surplus", "Compensation of employees", "Taxes on production and
+    // imports less subsidies", alongside one row named for the industry itself that totals 100.
+    // Nulling it left four anonymous, indistinguishable rows per industry-year and made the
+    // entire profit/margin decomposition unusable, while the data itself was present the whole
+    // time. Verified live 2026-08-17: Industry=52, TableID=7, Year=2024 returns gross operating
+    // surplus 46.2, compensation 50.0, taxes 3.7, total 100.0.
+    result.put("industry_description", getTextValue(record, "IndustrYDescription"));
 
     // DataValue: Normalize from various formats to double-compatible string
     String dataValue = getTextValue(record, "DataValue");
     result.put("value", normalizeDataValue(dataValue));
 
-    // Units: Direct mapping
-    result.put("units", getTextValue(record, "CL_UNIT"));
+    // Units: GDPbyIndustry does not carry a per-row unit. The full field set is TableID,
+    // Frequency, Year, Quarter, Industry, IndustrYDescription, DataValue, NoteRef -- there is no
+    // CL_UNIT (that is a NIPA field), so the previous mapping could only ever yield null. The
+    // unit is a property of the table, not the row: TableID 1 is millions of dollars, 7 is a
+    // percentage of value added, 8 and 11 are index numbers. Left null deliberately rather than
+    // guessed at per row; resolve it from table_id when a unit is needed.
+    result.putNull("units");
 
     // NoteRef: Direct mapping
     result.put("note_ref", getTextValue(record, "NoteRef"));

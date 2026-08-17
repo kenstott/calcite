@@ -5231,12 +5231,34 @@ partitionedTables:
       frequency:
         - "A"  # Annual
         - "Q"  # Quarterly
+      # BEA GDPbyIndustry summary level. Previously only 31G/52/53/54/GSLG were loaded, which
+      # forced any question outside those five to be answered with a wrong-scale proxy or left
+      # the warehouse entirely -- a 2026-08-17 analysis had to stand in all-Manufacturing (31G)
+      # for both pharmaceuticals and semiconductors, tying two independent observations to one
+      # identical number, and go to BLS/USDA for agriculture, mining and information.
       industry:
-        - "31G"
-        - "52"
-        - "53"
-        - "54"
-        - "GSLG"
+        - "11"     # Agriculture, forestry, fishing, and hunting
+        - "21"     # Mining, quarrying, and oil and gas extraction
+        - "22"     # Utilities
+        - "23"     # Construction
+        - "31G"    # Manufacturing
+        - "42"     # Wholesale trade
+        - "44RT"   # Retail trade
+        - "48TW"   # Transportation and warehousing
+        - "51"     # Information
+        - "52"     # Finance and insurance
+        - "53"     # Real estate and rental and leasing
+        - "54"     # Professional, scientific, and technical services
+        - "55"     # Management of companies and enterprises
+        - "56"     # Administrative and waste management services
+        - "61"     # Educational services
+        - "62"     # Health care and social assistance
+        - "71"     # Arts, entertainment, and recreation
+        - "72"     # Accommodation and food services
+        - "81"     # Other services, except government
+        - "GFG"    # Federal general government
+        - "GFE"    # Federal government enterprises
+        - "GSLG"   # State and local general government
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2000}"
@@ -5257,10 +5279,22 @@ partitionedTables:
         - name: industry
           type: VARCHAR
     comment: >
-      GDP by industry value added from BEA GDPbyIndustry dataset, national level, annual and
-      quarterly, limited to 5 industry group codes (31G, 52, 53, 54, GSLG) — see the
-      industry_description column for each group's name. Not a full NAICS sector breakdown;
-      agriculture and mining codes are not loaded.
+      GDP by industry from the BEA GDPbyIndustry dataset, national, annual and quarterly, across
+      the 22 BEA summary industry groups (11 agriculture through 81 other services, plus GFG/GFE/
+      GSLG government). TableID=ALL is requested, so all 39 BEA tables land here and table_id
+      selects the measure: 1 value added in millions of dollars, 5 value added as a percent of
+      GDP, 6 components of value added, 7 those components as a percent of value added, 8 and 11
+      chain-type quantity and price indexes, 10 real value added. Units are a property of
+      table_id, not of the row — the units column is always null because GDPbyIndustry returns no
+      per-row unit.
+
+      On the component tables (6 and 7) industry_description carries the COMPONENT name rather
+      than the industry name: 'Gross operating surplus', 'Compensation of employees', 'Taxes on
+      production and imports less subsidies', plus one row named for the industry that totals to
+      100 percent (table 7) or to total value added (table 6). Gross operating surplus is BEA's
+      profit measure, so table 7 gives an industry profit margin directly — filter
+      industry_description = 'Gross operating surplus' and read value as percent of value added.
+      Use industry_code to pick the industry on those tables, not industry_description.
     columns:
       # Source columns from IndustryGdpTransformer output (snake_case)
       - name: table_id
