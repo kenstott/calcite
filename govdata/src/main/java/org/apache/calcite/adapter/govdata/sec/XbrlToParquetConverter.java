@@ -7016,6 +7016,101 @@ public class XbrlToParquetConverter implements FileConverter {
     return outputFiles;
   }
 
+  /** Matches a {@code CENTRAL INDEX KEY:} line in an EDGAR SGML submission header. */
+  private static final Pattern HEADER_CENTRAL_INDEX_KEY =
+      Pattern.compile("CENTRAL INDEX KEY:\\s*(\\d+)");
+
+  /**
+   * Both CIKs of a Schedule 13D/G, read from the filing's SGML submission header.
+   *
+   * <p>A 13D/G is one entity reporting ownership in another, so a row that identifies only one
+   * of them does not describe the relationship it exists to record. EDGAR puts both in the
+   * submission header — {@code SUBJECT COMPANY:} (the issuer whose shares are held) and
+   * {@code FILED BY:} (the reporting owner) — each with its own {@code CENTRAL INDEX KEY}, and
+   * indexes the filing under both.
+   *
+   * <p>Neither appears in the primary document, which is the file this converter downloads, so
+   * the header is fetched separately. It is the {@code .hdr.sgml} sidecar in the same filing
+   * directory — ~1.4KB, one request, no parsing of the full submission.
+   *
+   * <p>This replaces two wrong values. {@code subject_cik} was a local declared null and never
+   * assigned, so it was null on all 147,700 rows — which also made the table's declared
+   * {@code sortOrder: [subject_cik, ...]} sort on nothing. {@code filer_cik} was set to the
+   * filing CIK, on the stated assumption that the filing CIK is the filer's. It is usually the
+   * SUBJECT's: across 154,508 rows carrying both names, the filing CIK matched the subject's
+   * name 33,843 times and the filer's only 10,557, and on accession 0001193125-19-159860 the
+   * filing CIK 0001731831 is Eidos Therapeutics — the subject — while the filer is BridgeBio
+   * Pharma, 0001743881.
+   *
+   * <p>Returns nulls rather than guessing when the header cannot be read or a section is
+   * absent: an unknown counterparty is recoverable on a later run, whereas the filing CIK
+   * written into {@code filer_cik} is silently wrong and indistinguishable from a real value.
+   *
+   * @return two-element array, {@code [subjectCik, filerCik]}, either element possibly null
+   */
+  private String[] extract13DGPartyCiks(String cik, String accession) {
+    String[] parties = new String[] {null, null};
+    if (cik == null || accession == null || accession.isEmpty()) {
+      LOGGER.warn("13D/G header lookup skipped: cik={} accession={}", cik, accession);
+      return parties;
+    }
+    String url = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s.hdr.sgml",
+        cik.replaceFirst("^0+", ""), accession.replace("-", ""), accession);
+    String header = downloadFile(url);
+    if (header == null || header.isEmpty()) {
+      LOGGER.warn("13D/G submission header unavailable for accession={} ({}); subject_cik and "
+          + "filer_cik will be null for this filing", accession, url);
+      return parties;
+    }
+
+    parties = parseHeaderPartyCiks(header);
+
+    if (parties[0] == null || parties[1] == null) {
+      // A 13D/G with only one party named is malformed for this table's purpose. Say so — the
+      // row is still written, but with the missing side null rather than filled with the other.
+      LOGGER.warn("13D/G header for accession={} named only one party (subject={}, filer={})",
+          accession, parties[0], parties[1]);
+    }
+    return parties;
+  }
+
+  /**
+   * Splits an EDGAR SGML submission header into its two party blocks and reads a CIK from each.
+   *
+   * <p>Package-private so it can be tested against real header text without a network call.
+   *
+   * @return two-element array, {@code [subjectCik, filerCik]}, either element possibly null
+   */
+  static String[] parseHeaderPartyCiks(String header) {
+    int subjectAt = header.indexOf("SUBJECT COMPANY:");
+    int filerAt = header.indexOf("FILED BY:");
+    return new String[] {
+        cikInHeaderSection(header, subjectAt, filerAt),
+        cikInHeaderSection(header, filerAt, subjectAt)};
+  }
+
+  /**
+   * First {@code CENTRAL INDEX KEY} at or after {@code start}, stopping at {@code otherStart}
+   * when that section comes later. The two header blocks appear in either order, so the section
+   * end is whichever other label follows this one.
+   *
+   * @return the CIK zero-padded to 10 digits, matching the {@code cik} column convention, or
+   *         null when the section is absent or carries no key
+   */
+  private static String cikInHeaderSection(String header, int start, int otherStart) {
+    if (start < 0) {
+      return null;
+    }
+    int end = otherStart > start ? otherStart : header.length();
+    Matcher m = HEADER_CENTRAL_INDEX_KEY.matcher(header.substring(start, end));
+    if (!m.find()) {
+      return null;
+    }
+    String digits = m.group(1);
+    return digits.length() >= 10 ? digits
+        : String.format("%010d", Long.parseLong(digits));
+  }
+
   /**
    * Extract beneficial ownership data from Schedule 13D/G filing.
    * Handles both HTML (text parsing) and XML structured formats.
@@ -7032,7 +7127,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // Extract subject company from cover page
     String subjectCompany = extractPatternValue(bodyText,
         "(?i)Name of Issuer[:\\s]+([^\\n]+?)(?:\\s{2,}|$)");
-    String subjectCik = null;
+
+    // Both parties come from the submission header, which is authoritative and names them by
+    // CIK. The cover-page regex above is kept for subject_company because the header's
+    // COMPANY CONFORMED NAME and the cover page's "Name of Issuer" are not always the same
+    // string, and downstream text matching already depends on the cover-page form.
+    String[] partyCiks = extract13DGPartyCiks(cik, accession);
+    String subjectCik = partyCiks[0];
+    String filerCik = partyCiks[1];
 
     // Extract title of class and CUSIP
     String titleOfClass = extractPatternValue(bodyText,
@@ -7094,7 +7196,10 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("subject_company", subjectCompany);
     data.put("subject_cik", subjectCik);
     data.put("filer_name", filerName);
-    data.put("filer_cik", cik); // In EDGAR, the filer's CIK is the filing CIK
+    // NOT the filing CIK. EDGAR indexes a 13D/G under both parties, and the filing CIK this
+    // converter is invoked with is usually the SUBJECT's, not the filer's — see
+    // extract13DGPartyCiks for the evidence.
+    data.put("filer_cik", filerCik);
     data.put("date_of_event", dateOfEvent);
     data.put("title_of_class", titleOfClass);
     data.put("cusip", cusip);
