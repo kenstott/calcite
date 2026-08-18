@@ -74,20 +74,40 @@ pg_tracker_purge_table() {
 # marker parquet to exclude these table_names; here they are rows.
 #
 # @param in_list comma-separated, single-quoted table names, e.g. 'metadata','facts'
+# @param year_range optional "START,END" (both years, inclusive) to scope the delete via
+#   source_key's trailing "__year=YYYY" (format: "accession_number=<accession>__year=<year>",
+#   confirmed against live pipeline_tracker rows). Omit (or pass "") for the original unscoped
+#   whole-table-history behavior — that is data_purge.sh's correct, deliberate use (a full table
+#   purge wants every year gone). force-reprocess.sh MUST pass this: without it, a single-year
+#   reprocess call silently deletes per-accession completions for EVERY year that table has ever
+#   had, not just the target year — confirmed live 2026-08-17, a single 2018-scoped
+#   force-reprocess.sh call deleted 5,957,362 rows spanning 2010-2026, corrupting the "already
+#   correctly processed" completion state for every other year and forcing them to needlessly
+#   re-fetch on their next touch (Iceberg data itself is safe either way — accession-existence
+#   dedup on write protects it — but tracker state for unrelated years should never be touched
+#   by a request scoped to one).
 pg_tracker_purge_accessions() {
-  local ns="$1" in_list="$2" dry_run="$3"
+  local ns="$1" in_list="$2" dry_run="$3" year_range="${4:-}"
+  local year_clause=""
+  if [[ -n "$year_range" ]]; then
+    local y_start="${year_range%,*}" y_end="${year_range#*,}" y
+    for (( y=y_start; y<=y_end; y++ )); do
+      year_clause="${year_clause}${year_clause:+ OR }source_key LIKE '%__year=${y}'"
+    done
+    year_clause=" AND (${year_clause})"
+  fi
   local n
   n=$(pg_tracker_exec "
     SELECT count(*) FROM \"${ns}\".pipeline_tracker
-     WHERE phase = 'staging' AND table_name IN (${in_list})") || return 1
+     WHERE phase = 'staging' AND table_name IN (${in_list})${year_clause}") || return 1
   if [[ "$dry_run" == "true" ]]; then
-    echo "        [DRY RUN] Would delete ${n} accession completion row(s) from ${ns}"
+    echo "        [DRY RUN] Would delete ${n} accession completion row(s) from ${ns}${year_range:+ (years ${year_range})}"
     return 0
   fi
   pg_tracker_exec "
     DELETE FROM \"${ns}\".pipeline_tracker
-     WHERE phase = 'staging' AND table_name IN (${in_list});" > /dev/null || return 1
-  echo "        Deleted ${n} accession completion row(s) from ${ns}"
+     WHERE phase = 'staging' AND table_name IN (${in_list})${year_clause};" > /dev/null || return 1
+  echo "        Deleted ${n} accession completion row(s) from ${ns}${year_range:+ (years ${year_range})}"
 }
 
 # Maps a govdata table name to the per-accession completion suffix DocumentETLProcessor/
