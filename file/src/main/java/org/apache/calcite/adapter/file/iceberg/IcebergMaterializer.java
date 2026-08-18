@@ -254,6 +254,11 @@ public class IcebergMaterializer {
     // computed from batchPartitionColumns, letting a config target a partition its source pattern
     // has no directory segment for.
     private final Map<String, String> fixedPartitionValues;
+    // Keys (e.g. SEC accession numbers) being force-reprocessed. Their existing rows are deleted
+    // from the target table via IcebergTableWriter#deleteRows before this batch writes, so a
+    // correction actually lands instead of being silently dropped by the exclude-if-already-
+    // present accession dedup. Empty for a normal (non-forced) materialization — the common case.
+    private final Set<String> forceAccessions;
 
     private MaterializationConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -285,6 +290,12 @@ public class IcebergMaterializer {
       this.filePassthrough = builder.filePassthrough;
       this.fixedPartitionValues = builder.fixedPartitionValues != null
           ? builder.fixedPartitionValues : Collections.<String, String>emptyMap();
+      this.forceAccessions = builder.forceAccessions != null
+          ? builder.forceAccessions : Collections.<String>emptySet();
+    }
+
+    public Set<String> getForceAccessions() {
+      return forceAccessions;
     }
 
     public Map<String, String> getFixedPartitionValues() {
@@ -467,6 +478,7 @@ public class IcebergMaterializer {
       private List<String> dedupIgnoreColumns;
       private boolean filePassthrough;
       private Map<String, String> fixedPartitionValues;
+      private Set<String> forceAccessions;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -475,6 +487,11 @@ public class IcebergMaterializer {
 
       public Builder fixedPartitionValues(Map<String, String> fixedPartitionValues) {
         this.fixedPartitionValues = fixedPartitionValues;
+        return this;
+      }
+
+      public Builder forceAccessions(Set<String> forceAccessions) {
+        this.forceAccessions = forceAccessions;
         return this;
       }
 
@@ -782,6 +799,13 @@ public class IcebergMaterializer {
           config.getTargetTableId());
     }
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    // Forced accessions: delete their existing rows before this batch writes, so the corrected
+    // replacement actually lands instead of being silently excluded by getExcludedAccessions'
+    // accession-already-present check further down. See IcebergTableWriter#deleteRows.
+    if (!config.getForceAccessions().isEmpty()) {
+      writer.deleteRows(config.getAccessionColumn(), config.getForceAccessions());
+    }
 
     // Streaming file-passthrough: the source parquet already matches the table schema, so move it
     // into the table and commit DataFile metadata — no rows are read into memory. Used for the

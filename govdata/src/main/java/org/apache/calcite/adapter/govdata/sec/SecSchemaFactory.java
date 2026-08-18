@@ -1669,8 +1669,31 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .fixedPartitionValues(fixedPartitionValues)
+        .forceAccessions(parseForceAccessions(operand))
         .description(tableName)
         .build();
+  }
+
+  /**
+   * Parses the {@code forceAccessions} operand — the same field
+   * {@link #downloadSecDataUsingDocumentEtl} reads to bypass the per-accession tracker skip —
+   * so the materializer can also delete each one's existing row before writing its corrected
+   * replacement (see {@link IcebergMaterializer.MaterializationConfig#getForceAccessions}).
+   * Without this, a forced accession's corrected data was silently dropped at write time by the
+   * accession-already-present dedup, even though the fetch/parse correctly re-derived it.
+   */
+  @SuppressWarnings("unchecked")
+  private Set<String> parseForceAccessions(Map<String, Object> operand) {
+    Set<String> forceAccessions = new HashSet<String>();
+    Object forceAccObj = operand.get("forceAccessions");
+    if (forceAccObj instanceof List) {
+      for (Object acc : (List<?>) forceAccObj) {
+        if (acc instanceof String) {
+          forceAccessions.add((String) acc);
+        }
+      }
+    }
+    return forceAccessions;
   }
 
   /**

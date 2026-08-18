@@ -547,6 +547,129 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Deletes every row matching {@code column IN (values)} — a targeted, row-level delete rather
+   * than {@link #deletePartition}'s whole-partition scope.
+   *
+   * <p>Exists so a forced reprocess of specific keys (e.g. SEC accession numbers) can land a
+   * correction: the materializer's own write path excludes any row whose key already exists in
+   * the table (accession-existence dedup, not content comparison), so a corrected row for a key
+   * that already has any row — even a wrong one — is silently dropped rather than replacing it.
+   * Deleting just those keys' rows first, immediately before the forced batch writes its
+   * corrected replacements, closes that gap without the blast radius of purging the whole table.
+   *
+   * <p>NOT implemented via {@code table.newDelete().deleteFromRowFilter(...)} — that metadata-only
+   * delete requires every row in a matched data file to satisfy the filter, and throws
+   * {@code ValidationException} otherwise. Production data files here are merged batches (e.g.
+   * ~100 accessions per file), so a delete list will routinely target some, not all, rows in a
+   * shared file — confirmed by a real test failure before this method reached production. Instead:
+   * for each file the filter could match, read it, keep the non-matching rows, and replace the
+   * file via {@link RewriteFiles} — a whole-file delete with no replacement when every row
+   * matched, or delete-old/add-new when some did.
+   *
+   * @param column column name to filter on, e.g. {@code "accession_number"}
+   * @param values values to delete rows for; a no-op if empty
+   * @throws IOException if deletion fails
+   */
+  public void deleteRows(String column, Set<String> values) throws IOException {
+    if (column == null || column.isEmpty()) {
+      throw new IllegalArgumentException("Column is required for deleteRows");
+    }
+    if (values == null || values.isEmpty()) {
+      return;
+    }
+
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+    org.apache.iceberg.expressions.Expression matchFilter = Expressions.in(column, values);
+
+    List<DataFile> filesToDelete = new ArrayList<>();
+    List<DataFile> replacementFiles = new ArrayList<>();
+    long deletedRows = 0;
+
+    try (CloseableIterable<FileScanTask> tasks =
+             table.newScan().filter(matchFilter).planFiles()) {
+      for (FileScanTask task : tasks) {
+        DataFile oldFile = task.file();
+        List<Map<String, Object>> keepRows = new ArrayList<>();
+        long matchedInFile = 0;
+
+        InputFile in = table.io().newInputFile(oldFile.path().toString());
+        try (CloseableIterable<Record> records = Parquet.read(in)
+            .project(schema)
+            .createReaderFunc(fileSchema ->
+                org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
+                    schema, fileSchema))
+            .build()) {
+          for (Record record : records) {
+            Object fieldValue = record.getField(column);
+            if (fieldValue != null && values.contains(String.valueOf(fieldValue))) {
+              matchedInFile++;
+            } else {
+              keepRows.add(recordToMap(record, schema));
+            }
+          }
+        }
+
+        if (matchedInFile == 0) {
+          // Scan pruning is conservative (partition/stat-based); a returned file may still not
+          // actually contain a match once read. Nothing to do for it.
+          continue;
+        }
+        deletedRows += matchedInFile;
+        filesToDelete.add(oldFile);
+
+        if (!keepRows.isEmpty()) {
+          Map<String, String> partitionValues = new HashMap<>();
+          for (int i = 0; i < spec.fields().size(); i++) {
+            Object value = oldFile.partition().get(i, Object.class);
+            if (value != null) {
+              partitionValues.put(spec.fields().get(i).name(), String.valueOf(value));
+            }
+          }
+          DataFile replacement = writeRecords(keepRows, partitionValues);
+          if (replacement != null) {
+            replacementFiles.add(replacement);
+          }
+        }
+        // else: every row in this file matched — pure whole-file delete, no replacement.
+      }
+    }
+
+    if (filesToDelete.isEmpty()) {
+      LOGGER.info("deleteRows: no rows matched {} IN ({} value(s))", column, values.size());
+      return;
+    }
+
+    final long finalDeletedRows = deletedRows;
+    final List<DataFile> finalFilesToDelete = filesToDelete;
+    final List<DataFile> finalReplacementFiles = replacementFiles;
+    underCommitLock(() -> {
+      RewriteFiles rewrite = table.newRewrite();
+      if (table.currentSnapshot() != null) {
+        rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+      }
+      for (DataFile f : finalFilesToDelete) {
+        rewrite.deleteFile(f);
+      }
+      for (DataFile f : finalReplacementFiles) {
+        rewrite.addFile(f);
+      }
+      rewrite.commit();
+    });
+    LOGGER.info("deleteRows: removed {} row(s) across {} file(s) ({} replacement file(s) written)",
+        finalDeletedRows, finalFilesToDelete.size(), finalReplacementFiles.size());
+  }
+
+  /** Converts an Iceberg {@link Record} to a plain map, for feeding back into {@link #writeRecords}. */
+  private static Map<String, Object> recordToMap(Record record, Schema schema) {
+    Map<String, Object> row = new HashMap<>();
+    for (org.apache.iceberg.types.Types.NestedField field : schema.columns()) {
+      row.put(field.name(), record.getField(field.name()));
+    }
+    return row;
+  }
+
+  /**
    * Writes records to Iceberg using the native Parquet writer with proper field IDs.
    *
    * <p>This method creates Parquet files with Iceberg field IDs embedded in the schema,

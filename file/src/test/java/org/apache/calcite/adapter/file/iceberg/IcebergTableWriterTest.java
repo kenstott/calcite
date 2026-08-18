@@ -95,6 +95,102 @@ public class IcebergTableWriterTest {
     writer.commitFromStaging(stagingPath.toString(), null);
   }
 
+  // ---- deleteRows tests — the force-reprocess correction primitive: a targeted, row-level
+  // delete keyed on an arbitrary column (e.g. accession_number), not the whole-partition scope
+  // deletePartition has. Verified against real committed rows (countRows), not just "doesn't
+  // throw" — that distinction is exactly what this method exists to get right.
+
+  @Test void testDeleteRowsNullColumn() {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    assertTrue(org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        () -> writer.deleteRows(null, java.util.Collections.singleton("x")))
+        .getMessage().contains("Column"));
+  }
+
+  @Test void testDeleteRowsEmptyColumn() {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        () -> writer.deleteRows("", java.util.Collections.singleton("x")));
+  }
+
+  @Test void testDeleteRowsNullOrEmptyValuesIsNoop() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeAndCommitRow(writer, 1, "keep-me", 2024);
+    assertEquals(1, countRows());
+
+    // Neither call should touch the table — no values means nothing to delete.
+    writer.deleteRows("data", null);
+    writer.deleteRows("data", java.util.Collections.<String>emptySet());
+    assertEquals(1, countRows(), "no-op deleteRows must not remove any row");
+  }
+
+  @Test void testDeleteRowsRemovesOnlyMatchingRows() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeAndCommitRow(writer, 1, "wrong-accession-a", 2024);
+    writeAndCommitRow(writer, 2, "wrong-accession-b", 2024);
+    writeAndCommitRow(writer, 3, "unrelated-accession", 2024);
+    assertEquals(3, countRows());
+
+    // The force-reprocess scenario: two accessions are being corrected, one is untouched.
+    writer.deleteRows("data",
+        new java.util.HashSet<>(java.util.Arrays.asList("wrong-accession-a", "wrong-accession-b")));
+
+    assertEquals(1, countRows(), "only the two targeted rows should be deleted");
+    assertEquals("unrelated-accession", onlyRemainingDataValue());
+  }
+
+  @Test void testDeleteRowsThenRewriteLandsTheCorrection() throws Exception {
+    // The exact scenario this method exists for: an accession's row is wrong, force-reprocess
+    // re-derives it correctly, but a plain write would be silently excluded by the
+    // accession-already-present dedup elsewhere in the pipeline. This test operates one level
+    // down — proving deleteRows itself makes room for the replacement to land without duplicating.
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeAndCommitRow(writer, 1, "acc-123", 2024);
+    assertEquals(1, countRows());
+
+    writer.deleteRows("data", java.util.Collections.singleton("acc-123"));
+    assertEquals(0, countRows(), "old wrong row must be gone before the correction writes");
+
+    writeAndCommitRow(writer, 1, "acc-123", 2024);
+    assertEquals(1, countRows(), "corrected row lands as exactly one row, not a duplicate");
+  }
+
+  private void writeAndCommitRow(IcebergTableWriter writer, int id, String data, int year)
+      throws Exception {
+    Map<String, Object> row = new HashMap<>();
+    row.put("id", id);
+    row.put("data", data);
+    row.put("year", year);
+    java.util.List<Map<String, Object>> records = java.util.Collections.singletonList(row);
+    Map<String, String> partVals = new HashMap<>();
+    partVals.put("year", String.valueOf(year));
+    org.apache.iceberg.DataFile df = writer.writeRecords(records, partVals);
+    writer.commitDataFiles(java.util.Collections.singletonList(df), null);
+  }
+
+  private long countRows() throws Exception {
+    long total = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.FileScanTask> tasks =
+             table.newScan().planFiles()) {
+      for (org.apache.iceberg.FileScanTask task : tasks) {
+        total += task.file().recordCount();
+      }
+    }
+    return total;
+  }
+
+  private String onlyRemainingDataValue() throws Exception {
+    java.util.List<String> values = new java.util.ArrayList<>();
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(table).build()) {
+      for (org.apache.iceberg.data.Record r : records) {
+        values.add(String.valueOf(r.getField("data")));
+      }
+    }
+    assertEquals(1, values.size(), "expected exactly one remaining row");
+    return values.get(0);
+  }
+
   private static final long TARGET_128MB = 128L * 1024 * 1024;
 
   /**
