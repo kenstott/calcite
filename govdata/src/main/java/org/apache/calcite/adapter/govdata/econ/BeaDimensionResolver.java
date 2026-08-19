@@ -214,13 +214,25 @@ public class BeaDimensionResolver implements DimensionResolver {
     try (Connection conn = AbstractGovDataDownloader.getDuckDBConnection(storageProvider);
          Statement stmt = conn.createStatement()) {
 
-      // Read parquet files with hive partitioning. The 'tablename' column comes from
-      // the partition path (e.g., tablename=SAINC1/), and 'key' is the raw BEA
-      // line code column. geography_level is not stored in parquet — it is inferred
-      // from table name prefix (CA*=county, SA*/SQ*=state, MA*=msa) in loadFromResultSet.
+      // getDuckDBConnection only extracts the bundled iceberg extension to disk
+      // (DuckDbExtensionInstaller.ensureInstalled), it doesn't load it — iceberg_scan is a
+      // no-op elsewhere in this codebase only because those callers load it themselves too.
+      stmt.execute("LOAD '"
+          + org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller.getLocalExtensionPath("iceberg")
+          + "'");
+
+      // Read via iceberg_scan (manifest-driven — respects snapshot isolation and the table's
+      // real current file set) rather than a raw read_parquet glob over the data directory.
+      // This table's data dir holds ~5,900 files (one per tablename partition per write); a
+      // glob with union_by_name=true forces DuckDB to read every file's footer before the scan
+      // starts, which is thousands of network-bound footer reads and looks like a hang.
+      // iceberg_scan avoids that entirely via its manifest. 'tablename' is a partition column
+      // (e.g. tablename=SAINC1/) that iceberg_scan projects like any other column; 'key' is the
+      // raw BEA line code data column. geography_level is not stored in parquet — it is
+      // inferred from table name prefix (CA*=county, SA*/SQ*=state, MA*=msa) in
+      // loadFromResultSet.
       String sql = "SELECT DISTINCT tablename, key AS LineCode, NULL AS geography_level "
-          + "FROM read_parquet('" + linecodeTablePath + "/data/**/*.parquet', "
-          + "hive_partitioning=true, union_by_name=true) "
+          + "FROM iceberg_scan('" + linecodeTablePath + "', allow_moved_paths=true) "
           + "WHERE tablename IS NOT NULL AND key IS NOT NULL "
           + "ORDER BY 1, 2";
 
