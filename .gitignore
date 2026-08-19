@@ -133,3 +133,11 @@ runs/
 
 *.local.md
 askamerica-engine/.env
+
+# Editor swap/backup files. One .swp was committed by accident and tracked for a
+# while; these rules stop the next one. Covers vim (.swp/.swo/.swn), emacs (*~ and
+# #file#), and JetBrains scratch backups.
+*.sw[a-p]
+*~
+\#*\#
+.\#*
