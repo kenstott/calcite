@@ -450,6 +450,64 @@ final class ChartScene {
     }
 
     /** The same scene rasterised, for hosts that display images but not SVG. */
+    /**
+     * This scene as a nested {@code <svg>} placed at (x, y) and scaled into w by h.
+     *
+     * <p>Composition without re-layout. A nested {@code <svg>} carrying the panel's own
+     * {@code viewBox} establishes its own coordinate system, so a chart laid out for 800x500
+     * drops into a 380x260 dashboard cell with every coordinate inside it untouched — the
+     * geometry that was checked against the data stays exactly what was checked.
+     *
+     * <p>{@code idPrefix} is not optional in practice. Two panels of the same data would both
+     * emit {@code id="mark-california"}, and duplicate ids make the document invalid and the
+     * editing contract useless: a caller targeting an id would hit whichever came first.
+     */
+    void writeSvgNested(StringBuilder sb, double x, double y, double w, double h,
+            String idPrefix) {
+        sb.append("  <svg x=\"").append(num(x)).append("\" y=\"").append(num(y))
+            .append("\" width=\"").append(num(w)).append("\" height=\"").append(num(h))
+            .append("\" viewBox=\"0 0 ").append(width).append(' ').append(height)
+            .append("\" preserveAspectRatio=\"xMidYMid meet\">\n");
+        sb.append("    <rect x=\"0\" y=\"0\" width=\"").append(width).append("\" height=\"")
+            .append(height).append("\" class=\"chart-bg\" fill=\"").append(hex(background))
+            .append("\"/>\n");
+        StringBuilder inner = new StringBuilder();
+        for (Element e : elements) {
+            e.writeSvg(inner, "    ");
+        }
+        sb.append(prefixIds(inner.toString(), idPrefix));
+        sb.append("    <g id=\"").append(idPrefix)
+            .append("annotations\"><!-- panel annotations --></g>\n");
+        sb.append("  </svg>\n");
+    }
+
+    /** Namespaces every id in a panel's markup so panels cannot collide. */
+    private static String prefixIds(String svg, String idPrefix) {
+        return idPrefix == null || idPrefix.isEmpty()
+            ? svg : svg.replace(" id=\"", " id=\"" + idPrefix);
+    }
+
+    /** Draws this scene into an existing raster at (x, y), scaled to w by h. */
+    void drawInto(Graphics2D g, double x, double y, double w, double h) {
+        AffineTransform saved = g.getTransform();
+        java.awt.Shape clip = g.getClip();
+        g.translate(x, y);
+        g.scale(w / width, h / height);
+        g.setClip(0, 0, width, height);
+        g.setColor(background);
+        g.fillRect(0, 0, width, height);
+        for (Element e : elements) {
+            e.drawPng(g);
+        }
+        g.setClip(clip);
+        g.setTransform(saved);
+    }
+
+    /** The reserved band coordinates, for a composer that needs to place its own chrome. */
+    double plotTop() {
+        return plotY;
+    }
+
     byte[] toPng() throws IOException {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();

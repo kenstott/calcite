@@ -1171,6 +1171,44 @@ public class McpServer {
             + "passed, so shifting a mark makes the picture disagree with its own numbers.",
             schema(chartProps, new String[]{})));
 
+        ObjectNode dashProps = MAPPER.createObjectNode();
+        dashProps.set("title", prop("string", "Dashboard title, shown top-left."));
+        dashProps.set("subtitle", prop("string",
+            "One line under the title — the source, vintage, and units the whole board "
+            + "shares."));
+        dashProps.set("footnote", prop("string", "Caveat line along the bottom."));
+        dashProps.set("columns", prop("integer", "Grid columns, 1-4 (default 2)."));
+        dashProps.set("width", prop("integer", "Image width in pixels (default fits the grid)."));
+        dashProps.set("height", prop("integer", "Image height in pixels."));
+        ObjectNode panelsProp = MAPPER.createObjectNode();
+        panelsProp.put("type", "array");
+        panelsProp.put("description",
+            "The panels, in reading order. Each is either a chart or a stat tile.\n"
+            + "CHART panel: {\"type\":\"chart\", plus the same arguments render_chart takes "
+            + "— chart_type, title, x_label, y_label, and categories+series (line/bar/pie) or "
+            + "points (scatter/bubble)}.\n"
+            + "STAT panel: {\"type\":\"stat\", \"label\":\"Real 10-year rise\", "
+            + "\"value\":\"+$19,029\", \"delta\":\"+22.0%\", \"delta_direction\":"
+            + "\"up\"|\"down\"|\"flat\"} — a headline number the charts explain.\n"
+            + "Every panel also takes: \"caption\" (a line under the panel), \"span\" (how "
+            + "many columns it occupies, default 1), and \"scale_group\" (a name).\n"
+            + "USE scale_group whenever two panels are meant to be compared: panels sharing a "
+            + "group get one y-axis domain spanning all of them. Without it each panel fits "
+            + "its own axis, so the taller bar can be the smaller number and nothing on either "
+            + "panel looks wrong.");
+        dashProps.set("panels", panelsProp);
+        tools.add(
+            tool("compose_dashboard",
+            "Compose several charts and headline numbers into ONE dashboard, returned as a PNG "
+            + "plus a single self-contained SVG you can publish as an artifact or drop into an "
+            + "HTML page. Use this instead of several render_chart calls whenever the answer is "
+            + "a set of related figures rather than one chart — a stat tile for the headline "
+            + "number, a trend line, and a ranking bar chart read as one story where three "
+            + "separate images do not. Panels are placed, never redrawn, so each panel's "
+            + "geometry is still exactly what its own data produced. Pass scale_group on panels "
+            + "that should be compared so they share one axis domain.",
+            schema(dashProps, new String[]{"panels"})));
+
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
@@ -1723,6 +1761,46 @@ public class McpServer {
                     StatsOutput r = doubleMlAteTool(sql, outcome, treatment, controls, folds, method);
                     text = r.text;
                     diagnostics = r.diagnostics;
+                    break;
+                }
+                case "compose_dashboard": {
+                    java.util.List<DashboardLayout.Panel> panels = new java.util.ArrayList<>();
+                    for (JsonNode pn : args.path("panels")) {
+                        panels.add(readPanel(pn));
+                    }
+                    int cols = args.has("columns")
+                        ? Math.min(Math.max(1, args.get("columns").asInt()), 4) : 2;
+                    int[] size = DashboardLayout.defaultSize(panels, cols);
+                    int dw = args.has("width")
+                        ? Math.min(Math.max(300, args.get("width").asInt()), 2400) : size[0];
+                    int dh = args.has("height")
+                        ? Math.min(Math.max(200, args.get("height").asInt()), 2400) : size[1];
+                    String dTitle = args.has("title") && !args.get("title").isNull()
+                        ? args.get("title").asText() : null;
+                    String dSub = args.has("subtitle") && !args.get("subtitle").isNull()
+                        ? args.get("subtitle").asText() : null;
+                    String dFoot = args.has("footnote") && !args.get("footnote").isNull()
+                        ? args.get("footnote").asText() : null;
+                    log.println("[askamerica-mcp] tool=compose_dashboard panels="
+                        + panels.size() + " cols=" + cols);
+                    DashboardLayout.Dashboard dash = DashboardLayout.compose(
+                        dTitle, dSub, dFoot, panels, cols, dw, dh);
+                    chartPng = dash.toPng();
+                    chartSvg = dash.toSvg();
+                    int stats = 0;
+                    for (DashboardLayout.Panel p : panels) {
+                        if ("stat".equals(p.kind)) {
+                            stats++;
+                        }
+                    }
+                    text = "Composed a " + cols + "-column dashboard"
+                        + (dTitle == null ? "" : " '" + dTitle + "'") + " — "
+                        + (panels.size() - stats) + " chart panel(s), " + stats
+                        + " stat tile(s). The next block is the whole dashboard as one "
+                        + "self-contained SVG: publish it as an artifact or inline it in HTML. "
+                        + "Panel ids are namespaced p1-, p2-, ... so per-panel edits still "
+                        + "work (p2-mark-california), and each panel has a pN-annotations "
+                        + "group that paints last.";
                     break;
                 }
                 case "render_chart": {
@@ -2855,6 +2933,73 @@ public class McpServer {
         }
         quoted.addAll(seen);
         return out.toString();
+    }
+
+    /** Reads one dashboard panel out of its JSON, chart or stat tile. */
+    private static DashboardLayout.Panel readPanel(JsonNode pn) {
+        DashboardLayout.Panel p = new DashboardLayout.Panel();
+        p.kind = pn.path("type").asText("chart");
+        p.span = pn.has("span") ? Math.max(1, pn.get("span").asInt()) : 1;
+        p.caption = pn.has("caption") && !pn.get("caption").isNull()
+            ? pn.get("caption").asText() : null;
+        p.scaleGroup = pn.has("scale_group") && !pn.get("scale_group").isNull()
+            ? pn.get("scale_group").asText() : null;
+        if ("stat".equals(p.kind)) {
+            p.label = pn.path("label").asText(null);
+            p.value = pn.path("value").asText(null);
+            p.delta = pn.has("delta") && !pn.get("delta").isNull()
+                ? pn.get("delta").asText() : null;
+            p.deltaDirection = pn.path("delta_direction").asText("flat");
+            return p;
+        }
+        p.chartType = pn.has("chart_type") && !pn.get("chart_type").isNull()
+            ? pn.get("chart_type").asText() : "line";
+        p.title = pn.has("title") && !pn.get("title").isNull() ? pn.get("title").asText() : null;
+        p.xLabel = pn.has("x_label") && !pn.get("x_label").isNull()
+            ? pn.get("x_label").asText() : null;
+        p.yLabel = pn.has("y_label") && !pn.get("y_label").isNull()
+            ? pn.get("y_label").asText() : null;
+        if (pn.has("points") && pn.get("points").isArray() && pn.get("points").size() > 0) {
+            p.points = new java.util.ArrayList<>();
+            for (JsonNode sNode : pn.path("points")) {
+                java.util.List<Double> xs = new java.util.ArrayList<>();
+                for (JsonNode v : sNode.path("x")) {
+                    xs.add(v.isNull() ? null : v.asDouble());
+                }
+                java.util.List<Double> ys = new java.util.ArrayList<>();
+                for (JsonNode v : sNode.path("y")) {
+                    ys.add(v.isNull() ? null : v.asDouble());
+                }
+                java.util.List<Double> sz = null;
+                if (sNode.has("size") && !sNode.get("size").isNull()) {
+                    sz = new java.util.ArrayList<>();
+                    for (JsonNode v : sNode.path("size")) {
+                        sz.add(v.isNull() ? null : v.asDouble());
+                    }
+                }
+                p.points.add(new ChartRenderer.PointSeriesSpec(
+                    sNode.path("name").asText(), xs, ys, sz));
+            }
+            return p;
+        }
+        p.categories = new java.util.ArrayList<>();
+        for (JsonNode c : pn.path("categories")) {
+            p.categories.add(c.asText());
+        }
+        p.series = new java.util.ArrayList<>();
+        for (JsonNode sNode : pn.path("series")) {
+            java.util.List<Double> vals = new java.util.ArrayList<>();
+            for (JsonNode v : sNode.path("values")) {
+                vals.add(v.isNull() ? null : v.asDouble());
+            }
+            p.series.add(new ChartRenderer.SeriesSpec(sNode.path("name").asText(), vals));
+        }
+        if (p.categories.isEmpty() || p.series.isEmpty()) {
+            throw new IllegalArgumentException(
+                "chart panel '" + (p.title == null ? "untitled" : p.title)
+                + "' needs categories + series (line/bar/pie) or points (scatter/bubble)");
+        }
+        return p;
     }
 
     /**

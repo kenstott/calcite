@@ -82,6 +82,22 @@ final class ChartLayout {
     static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
             List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
             int height) {
+        return categoryChart(type, title, xLabel, yLabel, categories, series, width, height,
+            null);
+    }
+
+    /**
+     * As above, with an optional y-axis domain forced from outside.
+     *
+     * <p>Exists for dashboards. Two panels drawn side by side with independently fitted axes
+     * invite a comparison the picture does not support — the taller bar can be the smaller
+     * number — and that is the failure a reader is least likely to catch, because nothing on
+     * either panel looks wrong. A composer that means two panels to be compared computes one
+     * domain across both and passes it here.
+     */
+    static ChartScene categoryChart(String type, String title, String xLabel, String yLabel,
+            List<String> categories, List<ChartRenderer.SeriesSpec> series, int width,
+            int height, double[] forcedDomain) {
         ChartScene scene = new ChartScene(width, height, BACKGROUND);
 
         double min = 0;
@@ -97,7 +113,9 @@ final class ChartLayout {
         if (max == Double.NEGATIVE_INFINITY) {
             max = 1;
         }
-        Ticks ticks = niceTicks(min, max);
+        Ticks ticks = forcedDomain == null
+            ? niceTicks(min, max)
+            : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]));
 
         int legendHeight = series.size() > 1 ? 24 : 0;
         // Rotate rather than drop: measure first, then reserve the depth the choice needs.
