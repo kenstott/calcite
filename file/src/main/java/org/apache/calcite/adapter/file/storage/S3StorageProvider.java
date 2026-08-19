@@ -525,6 +525,20 @@ public class S3StorageProvider implements StorageProvider {
     return result.keyCount() != null && result.keyCount() > 0;
   }
 
+  /**
+   * Closes the underlying {@link S3Client}, releasing its connection pool.
+   *
+   * <p>Safe to call on a provider built around a caller-supplied client: the client is owned by
+   * whoever created it, and closing an SDK client twice is a no-op rather than an error.
+   */
+  @Override public void close() {
+    try {
+      s3Client.close();
+    } catch (RuntimeException e) {
+      LOGGER.debug("Ignoring failure closing S3 client", e);
+    }
+  }
+
   @Override public String getStorageType() {
     return "s3";
   }

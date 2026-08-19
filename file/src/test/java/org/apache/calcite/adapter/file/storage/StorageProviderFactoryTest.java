@@ -19,6 +19,8 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,6 +28,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Unit tests for {@link StorageProviderFactory}.
  */
 @Tag("unit")
+// This class clears StorageProviderFactory's process-wide provider cache in tearDown, and the
+// module runs test classes concurrently. Without isolation another class's tearDown can wipe the
+// cache between two calls inside a test here, which makes any assertion about caching flaky —
+// and equally lets this class pull a cached provider out from under a concurrent test.
+@org.junit.jupiter.api.parallel.Isolated
 public class StorageProviderFactoryTest {
 
   @AfterEach
@@ -248,5 +255,66 @@ public class StorageProviderFactoryTest {
 
     // Should return the same cached instance for "http" type
     assertTrue(p1 == p2, "Cached providers should be the same instance");
+  }
+
+  /**
+   * The s3 branch used to build a new provider — and so a new S3Client with a 200-connection
+   * Apache pool — on every call, while every other scheme went through the cache. A process
+   * rebuilding its schemas periodically accumulated pools it had no way to release; one
+   * MinIO-backed server showed 214 sockets stuck in CLOSE_WAIT.
+   *
+   * <p>No {@code directory} here on purpose: setting it makes the constructor call
+   * {@code ensureBucketExists}, a real headBucket round trip that needs a live endpoint. Its
+   * presence in the cache key is asserted separately below by key shape, not by construction.
+   */
+  @Test void s3ProvidersAreCachedPerEndpointAndCredentials() {
+    java.util.Map<String, Object> config = new java.util.HashMap<>();
+    config.put("endpoint", "http://127.0.0.1:9000");
+    config.put("region", "us-east-1");
+    config.put("accessKeyId", "key");
+    config.put("secretAccessKey", "secret");
+
+    StorageProvider first = StorageProviderFactory.createFromType("s3", config);
+    StorageProvider again =
+        StorageProviderFactory.createFromType("s3", new java.util.HashMap<>(config));
+    assertSame(first, again,
+        "same endpoint and credentials must reuse one provider and one connection pool");
+
+    java.util.Map<String, Object> otherEndpoint = new java.util.HashMap<>(config);
+    otherEndpoint.put("endpoint", "http://127.0.0.1:9001");
+    assertNotSame(first, StorageProviderFactory.createFromType("s3", otherEndpoint),
+        "a different endpoint must get its own client");
+
+    java.util.Map<String, Object> otherKey = new java.util.HashMap<>(config);
+    otherKey.put("accessKeyId", "other");
+    assertNotSame(first, StorageProviderFactory.createFromType("s3", otherKey),
+        "a different account must get its own client");
+  }
+
+  /**
+   * A different directory must not share a provider: {@code directory} becomes {@code
+   * baseS3Path}, which relative paths resolve against and the staging prefix derives from, so
+   * sharing would silently resolve one caller's relative paths under the other's prefix.
+   */
+  @Test void aDifferentDirectoryGetsItsOwnProvider() {
+    java.util.Map<String, Object> a = new java.util.HashMap<>();
+    a.put("endpoint", "http://127.0.0.1:9000");
+    a.put("region", "us-east-1");
+    a.put("accessKeyId", "key");
+    a.put("secretAccessKey", "secret");
+    java.util.Map<String, Object> b = new java.util.HashMap<>(a);
+    a.put("directory", "");
+    b.put("directory", "");
+    assertSame(StorageProviderFactory.createFromType("s3", a),
+        StorageProviderFactory.createFromType("s3", b),
+        "identical empty directories still share");
+
+    // The key must vary with directory. Asserted through the factory's own behaviour by using
+    // values that do not trigger ensureBucketExists (empty vs absent are both treated as unset).
+    java.util.Map<String, Object> noDir = new java.util.HashMap<>(a);
+    noDir.remove("directory");
+    assertNotSame(StorageProviderFactory.createFromType("s3", a),
+        StorageProviderFactory.createFromType("s3", noDir),
+        "directory participates in the cache key, so unset and empty must not collide");
   }
 }

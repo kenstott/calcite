@@ -457,12 +457,19 @@ public class HDFSStorageProvider implements StorageProvider {
 
   /**
    * Closes the HDFS filesystem connection.
-   * Should be called when the storage provider is no longer needed.
+   *
+   * <p>Declared without {@code throws} so it can implement {@link StorageProvider#close()}:
+   * releasing a resource is best-effort by nature, and a caller discarding a provider has nothing
+   * useful to do with a failure to hang up.
    */
-  public void close() throws IOException {
+  @Override public void close() {
     if (hdfsFileSystem != null) {
-      hdfsFileSystem.close();
-      LOGGER.info("Closed HDFS filesystem connection");
+      try {
+        hdfsFileSystem.close();
+        LOGGER.info("Closed HDFS filesystem connection");
+      } catch (IOException e) {
+        LOGGER.debug("Ignoring failure closing HDFS filesystem", e);
+      }
     }
   }
 }

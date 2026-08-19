@@ -1346,6 +1346,26 @@ public class McpServer {
      * Get (or start initializing) a per-schema connection.
      * Returns a live connection, or throws with the underlying cause. Never returns null.
      */
+    /**
+     * Closes a discarded schema connection, logging rather than throwing on failure.
+     *
+     * <p>A connection being replaced is already suspect — it may be past its TTL or dead — so a
+     * failure to close it must not propagate into the caller's tool call. The point is to release
+     * the sockets, and a best-effort close does that in every case where a close was possible at
+     * all.
+     */
+    private static void closeQuietly(Connection conn, String schemaName) {
+        if (conn == null) {
+            return;
+        }
+        try {
+            conn.close();
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] Failed to close discarded connection for '"
+                + schemaName + "': " + e);
+        }
+    }
+
     static Connection getSchemaConnection(final String schemaName) throws Exception {
         Connection existing = schemaConns.get(schemaName);
         if (existing != null) {
@@ -1368,6 +1388,16 @@ public class McpServer {
             schemaConnOpenedAtMillis.remove(schemaName);
             schemaLatches.remove(schemaName);
             schemaErrors.remove(schemaName);
+            // Dropping the map entry does NOT release the connection. Everything the schema
+            // built at open time stays reachable through it — including the S3 client each
+            // govdata schema creates for its materialized and cache storage, with a
+            // 200-connection Apache pool behind it. Left unclosed, those sockets sit idle
+            // until the object store sends FIN and nothing answers, so they pile up in
+            // CLOSE_WAIT: a user on a MinIO-backed dev server reported 214 of them.
+            // Reported as "calling MinIO every few minutes and never closing the connection";
+            // the periodic part is this TTL re-init, the leak is that the old connection was
+            // only forgotten, never closed.
+            closeQuietly(existing, schemaName);
         }
 
         // Atomically start initialization the first time this schema is requested.

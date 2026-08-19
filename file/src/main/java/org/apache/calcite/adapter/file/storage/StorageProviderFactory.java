@@ -115,11 +115,20 @@ public class StorageProviderFactory {
 
       case "s3":
         if (config != null && config.containsKey("s3Client")) {
-          // Custom S3 client provided
+          // Caller owns this client, so the provider wrapping it must not be shared or cached:
+          // its lifetime is the caller's to decide.
           return new S3StorageProvider((S3Client) config.get("s3Client"));
         } else if (config != null && !config.isEmpty()) {
-          // Configuration map provided with credentials/region
-          return new S3StorageProvider(config);
+          // Cached on the settings that define the client, exactly as every other scheme here
+          // already is. This branch used to build a fresh S3StorageProvider on every call while
+          // local/http/https all went through getCachedProvider — an omission, not a decision.
+          // Each provider carries an S3Client with a 200-connection Apache pool, and callers
+          // create one per schema for materialized storage and another for cache storage, so a
+          // process that rebuilds its schemas periodically accumulated pools it had no way to
+          // release. Observed as 214 CLOSE_WAIT sockets against a MinIO endpoint. Keyed per
+          // distinct directory rather than per endpoint — see s3CacheKey for why that is not
+          // just conservatism.
+          return getCachedProvider(s3CacheKey(config), () -> new S3StorageProvider(config));
         }
         throw new IllegalArgumentException(
             "S3 storage requires explicit credentials via model.json storageConfig. "
@@ -358,6 +367,36 @@ public class StorageProviderFactory {
    */
   public static void clearCache() {
     PROVIDER_CACHE.clear();
+  }
+
+  /**
+   * Cache key for an S3 provider: everything that changes what the provider resolves or addresses.
+   *
+   * <p>{@code directory} is part of the key and must stay part of it. It looks like metadata —
+   * the provider takes a full {@code s3://} path on most calls — but it becomes {@code
+   * baseS3Path}, which relative paths are resolved against and which the staging prefix is
+   * derived from. Two callers on different prefixes of the same bucket therefore cannot share a
+   * provider even though they could happily share a client: give them one and the second one's
+   * relative paths silently resolve under the first one's prefix.
+   *
+   * <p>That leaves the cache coarser than it could be — the real shareable unit is the {@code
+   * S3Client}, not the provider wrapping it — but it is correct, and it still collapses what was
+   * previously one client per schema per storage role down to one per distinct directory for the
+   * whole process.
+   *
+   * <p>The secret is hashed rather than concatenated: this key is only ever compared, never
+   * shown, but it lives in a static map for the life of the process and a credential sitting in
+   * a heap-dumpable string is not worth the convenience.
+   */
+  private static String s3CacheKey(Map<String, Object> config) {
+    String endpoint = String.valueOf(config.get("endpoint"));
+    String region = String.valueOf(config.get("region"));
+    String accessKey = String.valueOf(config.get("accessKeyId"));
+    String directory = String.valueOf(config.get("directory"));
+    String secret = String.valueOf(config.get("secretAccessKey"));
+    String sessionToken = String.valueOf(config.get("sessionToken"));
+    return "s3|" + endpoint + "|" + region + "|" + accessKey + "|" + directory + "|"
+        + Integer.toHexString((secret + "|" + sessionToken).hashCode());
   }
 
   private static StorageProvider getCachedProvider(String key,

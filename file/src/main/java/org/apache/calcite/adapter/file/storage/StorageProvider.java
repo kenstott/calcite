@@ -24,6 +24,24 @@ import java.util.List;
 public interface StorageProvider {
 
   /**
+   * Releases any client or connection pool this provider holds. Default no-op.
+   *
+   * <p>Providers were previously unclosable, which was fine while they were all cached
+   * singletons but not once one of them started being created per schema. The S3 provider builds
+   * an {@code S3Client} with a 200-connection Apache pool; when a caller replaced one and dropped
+   * the reference, the pool stayed alive behind the abandoned object and its idle sockets
+   * accumulated in CLOSE_WAIT as the object store hung them up — 214 of them on one MinIO-backed
+   * server. A provider that owns a pool has to be able to give it back.
+   *
+   * <p>Default rather than abstract because most providers hold nothing: the local and HTTP
+   * implementations have no pool to release, and forcing every one of them to write an empty
+   * method would add noise without adding safety.
+   */
+  default void close() {
+    // Providers that hold no client or pool have nothing to release.
+  }
+
+  /**
    * Lists files in a directory or container.
    *
    * @param path The directory or container path
