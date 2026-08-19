@@ -74,11 +74,11 @@ final class DashboardLayout {
      * Truncating the caveat to protect the branding would be the wrong trade, so the mark takes
      * its own line and the footnote keeps the full width above it.
      */
-    private static final int BOTTOM_MARGIN = 20;
-    private static final int BRAND_BAND = 22;
-    private static final int BYLINE_BAND = 17;
+    private static final int BOTTOM_MARGIN = 26;
+    private static final int BRAND_BAND = 27;
+    private static final int BYLINE_BAND = 20;
     /** Clear air between the last panel row and the first line of the footer block. */
-    private static final int FOOTER_GAP = 16;
+    private static final int FOOTER_GAP = 26;
 
     /**
      * Baselines for the footer block, measured up from the bottom edge.
