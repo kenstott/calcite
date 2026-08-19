@@ -1803,21 +1803,23 @@ public class McpServer {
                             stats++;
                         }
                     }
+                    String dashUrl = ArtifactServer.publishSvg(chartSvg);
                     text = "Composed a " + cols + "-column dashboard"
                         + (dTitle == null ? "" : " '" + dTitle + "'") + " — "
                         + (panels.size() - stats) + " chart panel(s), " + stats
-                        + " stat tile(s). The next block is the whole dashboard as one "
-                        + "self-contained SVG.\n\n"
-                        + "PUBLISH IT. Copy that SVG verbatim into an artifact (or an HTML "
-                        + "page) so the reader gets something they can open, zoom, and share. "
-                        + "It is self-contained — no external assets, no scripts — so it needs "
-                        + "no changes to travel, and it carries its own attribution. Do not "
-                        + "describe the chart in prose instead of showing it, and do not link "
-                        + "to a local file path: a path is not viewable to the person reading "
-                        + "your answer.\n\n"
-                        + "Panel ids are namespaced p1-, p2-, ... so per-panel edits still "
-                        + "work (p2-mark-california), and each panel has a pN-annotations "
-                        + "group that paints last.";
+                        + " stat tile(s).\n\n"
+                        + (dashUrl == null ? ""
+                            : "GIVE THE READER THIS LINK: " + dashUrl + "\n"
+                            + "It opens the dashboard full size in a browser, on this machine "
+                            + "only. Share the link — do NOT paste the SVG below into your "
+                            + "reply. The SVG is roughly 7,000 tokens; the link is twenty, and "
+                            + "it shows the same picture.\n\n")
+                        + "The image above is the same board as a PNG, already viewable inline. "
+                        + "The block after this is the SVG source — use it if you can save a "
+                        + "file or need to edit the chart, and otherwise ignore it. Panel ids "
+                        + "are namespaced p1-, p2-, ... so per-panel edits still work "
+                        + "(p2-mark-california), and each panel has a pN-annotations group "
+                        + "that paints last.";
                     break;
                 }
                 case "render_chart": {
