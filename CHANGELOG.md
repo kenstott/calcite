@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.77.0](https://github.com/kenstott/calcite/compare/engine-v0.76.1...engine-v0.77.0) (2026-08-19)
+
+
+### Features
+
+* **askamerica/mcp:** resolve_entity + entity_relationships, and embedder resolution ([cb0d4c0](https://github.com/kenstott/calcite/commit/cb0d4c09de21352ce0dbb7d00ff23b760209449c))
+* **file/etl,govdata/pool:** real GOVDATA_FORCE_REPROCESS_TABLES + force-reprocess.sh ([8cd1f4e](https://github.com/kenstott/calcite/commit/8cd1f4e4d593459f7f44a629257cde5d225f5a19))
+* **file/etl,govdata/scripts:** add bypassRawCache to force a live refetch without deleting cache ([b25b3d2](https://github.com/kenstott/calcite/commit/b25b3d2c23bddadf4b302785186369e5306a8de8))
+* **file/iceberg,govdata/sec:** force mechanism can now correct existing wrong rows, not just fill gaps ([41d26e5](https://github.com/kenstott/calcite/commit/41d26e5cd81b5202eccdcb4210e41dd4b68df18b))
+* **file/iceberg:** heal pass — rewrite whole partitions into sortOrder ([72d093a](https://github.com/kenstott/calcite/commit/72d093a1b1081bcd9e54442b244c68cfcf27984e))
+* **file/iceberg:** honour sortOrder when compacting small files ([825e872](https://github.com/kenstott/calcite/commit/825e872236bbfa91b95d0721cbc05e123317ab10))
+* **file/similarity:** JARO_WINKLER function, and score resolve_entity with it ([843d247](https://github.com/kenstott/calcite/commit/843d2476429f2bd7a2bcce97e5c6508897cb89b1))
+* **govdata/etl:** --sort-order and --heal-sort on the maintenance runner ([d3deb68](https://github.com/kenstott/calcite/commit/d3deb6895f92af07555688d532e8d230a317781f))
+* **govdata/etl:** verify healed tables were written correctly to MinIO ([3bda9ad](https://github.com/kenstott/calcite/commit/3bda9ad5b3ffdafa1bc87b23c211478fa6346ac6))
+* **govdata/officials:** align officials with the standard GOVDATA_START_YEAR/END_YEAR pattern ([6925ad8](https://github.com/kenstott/calcite/commit/6925ad828c62adebbc8520a27df1d0564dbca8ea))
+* **govdata/parallel:** add detect-modified-tables.py, the "fix modified tables" auto-detection layer ([3671911](https://github.com/kenstott/calcite/commit/367191182e7e822fc8fc61ef356076b83767c6ab))
+* **govdata/scripts:** heal-sort-order-final.sh — third pass at the 3 stuck SEC tables ([0ef399b](https://github.com/kenstott/calcite/commit/0ef399be079810d4d1e81d940fa9daf9c04ea51b))
+* **govdata/scripts:** one-off heal-sort-order.sh ([da914d8](https://github.com/kenstott/calcite/commit/da914d858919d344135313a5d1962ecf5ea7cf22))
+* **govdata/scripts:** sync-healed-tables-to-r2.sh — publish just the healed tables ([6c07bc4](https://github.com/kenstott/calcite/commit/6c07bc4b4dfa7e78ef786d46f6d2ec048fcdfc5c))
+
+
+### Bug Fixes
+
+* **askamerica/mcp:** reject unknown tool arguments instead of ignoring them ([83eeb69](https://github.com/kenstott/calcite/commit/83eeb69ff9fdea2b513dffbe360330c13b189629))
+* **askamerica/mcp:** resolve a ticker by name, not by CIK ([068e712](https://github.com/kenstott/calcite/commit/068e7127c205714e4d4e65e8bc86e878c06e8076))
+* **file/duckdb:** skip deferred views the catalog already holds ([3c99e62](https://github.com/kenstott/calcite/commit/3c99e62135bd7933ecf6a03ee5ea842d22935ae3))
+* **file/etl,govdata/pool:** stop silently losing a SEC accession to a transient failure ([b8fdbda](https://github.com/kenstott/calcite/commit/b8fdbda14e49ada7640a24df709b8ede52feabae))
+* **file/iceberg:** compaction honours the sort order a table declares ([9418b72](https://github.com/kenstott/calcite/commit/9418b72c3fa391388ede9677ef9b5e6b5dbdf2fa))
+* **file/iceberg:** size the sort buffer by decoded heap, not compressed file bytes ([1b93076](https://github.com/kenstott/calcite/commit/1b93076448f0d5b69a9dda9bf6d41fffc078379b))
+* **file/similarity:** make query-time embedding work in the shipped jar ([0c25831](https://github.com/kenstott/calcite/commit/0c258316fe30a066153e89c8a4a1052a683baa94))
+* **file/similarity:** stop double-quoting SEMANTIC_SEARCH's read_parquet argument ([06e70c1](https://github.com/kenstott/calcite/commit/06e70c13cd090a431781cd76cfbdd18f4efe687e))
+* **govdata/econ:** BEA industry description was null on every row, hiding the profit tables ([b9387ea](https://github.com/kenstott/calcite/commit/b9387eaf4d254e9e47dddb8e847c1c1a80b50640))
+* **govdata/econ:** BeaDimensionResolver globbed regional_linecodes' 5,880 files instead of iceberg_scan ([bf2cc1f](https://github.com/kenstott/calcite/commit/bf2cc1fcf66332d3cb8d745bfa68d51e0c5b662c))
+* **govdata/etl:** measure sort-bound overlap per partition, not across the table ([113cead](https://github.com/kenstott/calcite/commit/113ceadd165e35abc82b8a136f4cfe6c33a58e60))
+* **govdata/etl:** verifier used catalog config keys the loader ignores ([77c2106](https://github.com/kenstott/calcite/commit/77c2106ed0e4408c01ae936328c1775537de7aaf))
+* **govdata/parallel:** force-reprocess.sh refuses sec/sec_prices without GOVDATA_CIKS set ([a3f0d2c](https://github.com/kenstott/calcite/commit/a3f0d2cd4b936b77903a151215d48b134cf7aa65))
+* **govdata/pool:** data-fix.sh must ignore historical-year-complete markers ([ed3ef09](https://github.com/kenstott/calcite/commit/ed3ef09d28a3ac36cc33df13cd01cf2db9035d0b))
+* **govdata/pool:** don't mark a sec historical year complete if every accession failed ([8112cac](https://github.com/kenstott/calcite/commit/8112cac803bc8aff84fd6ed2b34cd18e9d97a22b))
+* **govdata/schema:** bare "end: current" bypassed GOVDATA_END_YEAR across every schema ([4ff181c](https://github.com/kenstott/calcite/commit/4ff181ccc4c0c8b17fc3f7a3d124eec24c630693))
+* **govdata/scripts:** data_purge.sh was missing 13f/13dg per-accession suffixes ([ab65d55](https://github.com/kenstott/calcite/commit/ab65d55b042a379c0f38e879c71fe28a842fe70f))
+* **govdata/scripts:** drop retired sec.vectorized_chunks from the heal chain ([b263fbc](https://github.com/kenstott/calcite/commit/b263fbcab846007b902e19869daf3dc5c47b3b2e))
+* **govdata/scripts:** force-reprocess.sh was cosmetic-only for SEC document tables ([8dc9358](https://github.com/kenstott/calcite/commit/8dc935805eb3fea2df91696b8a0fa1add6113c48))
+* **govdata/scripts:** pg_tracker_purge_accessions was purging ALL years, not just the target ([392d4ea](https://github.com/kenstott/calcite/commit/392d4eabbcd744bfda00571145430a3470da0805))
+* **govdata/scripts:** stale-jar guard rejected every jar, including correct ones ([f06eddb](https://github.com/kenstott/calcite/commit/f06eddbf24d20361e326e0d38adf34ff5cf6df29))
+* **govdata/scripts:** wire real tracker invalidation into data-fix.sh, add freshness gates ([cf75601](https://github.com/kenstott/calcite/commit/cf75601d03fa28e54f03445dd2fe5c92bfd0f117))
+* **govdata/sec:** 13D/G header parser searched for labels that don't exist in real EDGAR headers ([1b936b7](https://github.com/kenstott/calcite/commit/1b936b70dde52895b59175c63cdc644c7a5ef0f0))
+* **govdata/sec:** EDGAR's 2025 form-type rename broke full-index filtering and corrupted CIKs ([2d4dc25](https://github.com/kenstott/calcite/commit/2d4dc25463d2dd0eada1a4b84750c71f52cbceb7))
+* **govdata/sec:** generalize StaleInsiderFlagSweeper, add sec year/range worker mode ([08fb888](https://github.com/kenstott/calcite/commit/08fb88833602c805c761a45c5dcbc280c239df0a))
+* **govdata/sec:** identify both parties of a 13D/G from the submission header ([52411fe](https://github.com/kenstott/calcite/commit/52411fe9a3837d8f0c9b6115a8735d3c8c0edbbd))
+* **govdata/sec:** no-XBRL documents lost all metadata/MD&A extraction instead of falling back ([4a3253f](https://github.com/kenstott/calcite/commit/4a3253f203d34226e885e562fd67840bb2335b0e))
+
+
+### Performance Improvements
+
+* **askamerica/mcp:** equi-join resolve_entity to canonical_org_entity ([dda3b16](https://github.com/kenstott/calcite/commit/dda3b1624080e2caee485e802cd3dccba5784290))
+* **file/duckdb:** cut httpfs http_timeout from 60s to 12s ([f271cfd](https://github.com/kenstott/calcite/commit/f271cfd229470ca6326985fbcbec12e057b1f8c9))
+
 ## [0.76.1](https://github.com/kenstott/calcite/compare/engine-v0.76.0...engine-v0.76.1) (2026-08-16)
 
 
