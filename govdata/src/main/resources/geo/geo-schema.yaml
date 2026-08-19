@@ -1014,7 +1014,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "2023"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
       # No state_fips fan-out: Census publishes CD as ONE NATIONAL file per vintage
       # (tl_<year>_us_cd<NNN>.zip), never per state — verified 2013/2017/2021, where the

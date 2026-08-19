@@ -103,7 +103,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
     minYear: 1975
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
     descending: true
 
@@ -115,7 +115,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2018}"
     minYear: 1987
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
     descending: true
 
@@ -125,7 +125,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2018}"
     minYear: 1990
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
     descending: true
 
@@ -136,7 +136,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2018}"
     minYear: 2016
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
     descending: true
 

@@ -58,7 +58,7 @@ dimension_values:
   fr_year_range: &fr_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
   fr_months: &fr_months

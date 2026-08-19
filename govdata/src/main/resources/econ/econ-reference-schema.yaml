@@ -116,7 +116,7 @@ dimension_values:
   econ_reference_year_range: &econ_reference_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
 # Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may

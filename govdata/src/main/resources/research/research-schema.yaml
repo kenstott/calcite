@@ -261,7 +261,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
 
     columns:

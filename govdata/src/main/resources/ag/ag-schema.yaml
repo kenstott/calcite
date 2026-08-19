@@ -209,7 +209,7 @@ dimension_values:
   ag_year_range: &ag_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   # NASS geographic aggregation levels ingested (county + state; national totals

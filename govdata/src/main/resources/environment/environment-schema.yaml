@@ -108,7 +108,7 @@ dimension_values:
   aqs_year_range: &aqs_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   # EPA TRI publishes CY through 2024 (verified); GHGRP through ~2023. dataLag 2
@@ -117,7 +117,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
     minYear: 2010
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
     descending: true
 
@@ -129,7 +129,7 @@ dimension_values:
   egrid_year_range: &egrid_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2018}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
     releaseMonth: 2
     descending: true
@@ -139,7 +139,7 @@ dimension_values:
   usgs_year_range: &usgs_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
     descending: true
 

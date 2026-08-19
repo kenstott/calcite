@@ -1052,7 +1052,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2024}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         minYear: 2024
         dataLag: 0
         releaseMonth: 1

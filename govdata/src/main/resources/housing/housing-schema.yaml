@@ -93,7 +93,7 @@ dimension_values:
   bps_year_range: &bps_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   # HUD USER FMR/IL APIs return data from FY2017 onward (2016 -> HTTP 400,
@@ -103,7 +103,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2017}"
     minYear: 2017
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
   # 50 states + DC + PR + territories (exact set returned by HUD listStates).
@@ -135,7 +135,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2018}"
     minYear: 2018
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   # HMDA covers the 50 states + DC + Puerto Rico (the API's two-letter state
@@ -156,7 +156,7 @@ dimension_values:
     type: yearRange
     start: "${GOVDATA_START_YEAR:2022}"
     minYear: 2022
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
 # ============================================================================

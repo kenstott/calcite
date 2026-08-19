@@ -200,7 +200,7 @@ dimension_values:
   crime_year_range: &crime_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
   # Month range is encoded differently for CDE API (MM-YYYY format)
@@ -1832,7 +1832,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
         # daily publish-year window to that vintage so daily fetches the most-recent published
         # year; historical covers the back catalogue. URL uses {effective_year}; the partition
@@ -1974,7 +1974,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
         # daily publish-year window to that vintage so daily fetches the most-recent published
         # year; historical covers the back catalogue. URL uses {effective_year}; the partition
@@ -2102,7 +2102,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
         # daily publish-year window to that vintage so daily fetches the most-recent published
         # year; historical covers the back catalogue. URL uses {effective_year}; the partition
@@ -2221,7 +2221,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         # NCVS public-use files lag ~2 years (latest available = current-2). dataLag maps the
         # daily publish-year window to that vintage so daily fetches the most-recent published
         # year; historical covers the back catalogue. URL uses {effective_year}; the partition

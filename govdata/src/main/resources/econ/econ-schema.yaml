@@ -325,19 +325,19 @@ dimension_values:
   year_range_default: &year_range_default
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   year_range_from_2020: &year_range_from_2020
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   year_range_from_2000: &year_range_from_2000
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   # --- BEA Frequencies ---
@@ -431,7 +431,7 @@ bulkDownloads:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1      # QCEW annual data is released with ~1 year lag
         releaseMonth: 9  # Released in September (with Q1 data of following year)
       frequency:
@@ -518,7 +518,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
 
@@ -847,7 +847,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # Custom hooks for BLS response handling
     hooks:
@@ -930,7 +930,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
 
@@ -1012,7 +1012,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
 
@@ -1203,7 +1203,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # BLS SM-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
     # Series ID layout: SM + seasonal(1) + state(2) + area(5) + supersector(2) + industry(6) + datatype(2).
@@ -1333,7 +1333,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:1990}"  # QCEW data only available from 1990
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1       # QCEW annual data is released with ~1 year lag
         releaseMonth: 9  # Released in September (with Q1 data of following year)
 
@@ -1462,7 +1462,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # BLS SM-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
     # Series ID layout: SM + seasonal(1) + state(2) + area(5) + supersector(2) + industry(6) + datatype(2).
@@ -1627,7 +1627,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1       # QCEW annual data is released with ~1 year lag
         releaseMonth: 9  # Released in September
 
@@ -1742,7 +1742,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1       # QCEW annual data is released with ~1 year lag
         releaseMonth: 9  # Released in September
 
@@ -1863,7 +1863,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1       # QCEW annual data is released with ~1 year lag
         releaseMonth: 9  # Released in September
 
@@ -1954,7 +1954,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2001}"  # JOLTS data only available from December 2000
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     columns:
       # BLS TSV columns: series_id, year, period, value, footnote_codes
@@ -2023,7 +2023,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       metric:
         - "2.JobOpenings"
         - "3.Hires"
@@ -2162,7 +2162,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       metric:
         - "2.JobOpenings"
         - "3.Hires"
@@ -2306,7 +2306,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       metric:
         - "2.JobOpenings"
         - "3.Hires"
@@ -2402,7 +2402,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # API Configuration
     download:
@@ -2514,7 +2514,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # HTTP Source configuration for EtlPipeline
     source:
@@ -2607,7 +2607,7 @@ partitionedTables:
         # exported) previously declared a coverage window ten years narrower than what was
         # actually loaded, until the async observed-window probe caught up.
         start: "{env:GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
 
@@ -2821,7 +2821,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # Materialization configuration
     materialize:
@@ -2922,7 +2922,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # Materialization configuration
     materialize:
@@ -3040,7 +3040,7 @@ partitionedTables:
         yearFilter:
           field: "date"
           start: 2000
-          end: current
+          end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # Materialization configuration
     # Partition by coarse dimensions only - country_code uses column statistics for pruning
@@ -3275,7 +3275,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2020}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # FRED data typically available within days
       # Full monthly cadence: one fetch per (year, month) = one overwrite partition, so the
@@ -3612,7 +3612,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         minYear: 2008  # RPP data floor, verified live via BEA GetData Year=ALL
         dataLag: 1
       tablename:
@@ -5272,7 +5272,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "{env:GOVDATA_START_YEAR:2000}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         # BEA GDP-by-industry publishes the current year in arrears (tracker frontier = 2025;
         # 2026 not yet released). Request param Year already uses {effective_year}, so a 1-year
         # lag caps the request at the latest published vintage instead of fetching an empty 2026.

@@ -93,7 +93,7 @@ dimension_values:
   disasters_year_range: &disasters_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
   # NOAA finalizes prior years ~3 months after year-end; current year is
@@ -101,7 +101,7 @@ dimension_values:
   storm_year_range: &storm_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
 # ============================================================================

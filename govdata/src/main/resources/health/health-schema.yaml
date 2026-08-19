@@ -23,7 +23,7 @@ dimension_templates:
   health_year_range: &health_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
 # Compaction settings shared by every table below, merged in via `<<: *compaction_defaults`. A table may
 # override any key by restating it after the merge (YAML merge-key semantics). Kept as an anchor
@@ -1954,7 +1954,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         # BRFSS publishes ~2 years in arrears (probed 2026: latest vintage = 2024).
         dataLag: 2
 

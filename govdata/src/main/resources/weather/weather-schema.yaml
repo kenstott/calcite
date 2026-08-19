@@ -235,7 +235,7 @@ dimension_values:
   weather_year_range: &weather_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
   # GHCND daily year range (from 2000 for drought monitor compatibility)
@@ -248,7 +248,7 @@ dimension_values:
   drought_year_range: &drought_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    end: current
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
 # ============================================================================

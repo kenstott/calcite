@@ -906,7 +906,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2017}"   # CSAF coverage begins 2017; DQ narrows via GOVDATA_START_YEAR
-        end: current
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       advisory_path:
         type: custom                # CsafAdvisoryDimensionResolver filters index.txt by year context
         properties:
