@@ -1156,8 +1156,12 @@ public class McpServer {
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
             tool("render_chart",
-            "Render a chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG for "
-            + "the reader, and the same chart as editable SVG for you. line/bar/pie plot "
+            "Render ONE chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG "
+            + "for the reader, and the same chart as editable SVG for you. PREFER "
+            + "compose_dashboard whenever the answer has more than one figure worth showing — "
+            + "which is most of the time — and reach for this only when a single bare chart "
+            + "really is the whole deliverable; a reader handed three separate images has to "
+            + "assemble the story your analysis already did. line/bar/pie plot "
             + "categories+series against a shared category axis; scatter/bubble plot points "
             + "against true numeric x/y axes (bubble adds a third size dimension) — use "
             + "scatter/bubble for a genuine x-vs-y relationship rather than a trend over "
@@ -1199,10 +1203,11 @@ public class McpServer {
         dashProps.set("panels", panelsProp);
         tools.add(
             tool("compose_dashboard",
-            "Compose several charts and headline numbers into ONE dashboard, returned as a PNG "
-            + "plus a single self-contained SVG you can publish as an artifact or drop into an "
-            + "HTML page. Use this instead of several render_chart calls whenever the answer is "
-            + "a set of related figures rather than one chart — a stat tile for the headline "
+            "THE DEFAULT WAY TO VISUALISE AN ANSWER. Composes charts and headline numbers into "
+            + "ONE dashboard, returned as a PNG plus a single self-contained SVG you can "
+            + "publish as an artifact or drop into an HTML page. Use this rather than several "
+            + "render_chart calls whenever the answer is a set of related figures rather than "
+            + "one chart — a stat tile for the headline "
             + "number, a trend line, and a ranking bar chart read as one story where three "
             + "separate images do not. Panels are placed, never redrawn, so each panel's "
             + "geometry is still exactly what its own data produced. Pass scale_group on panels "
