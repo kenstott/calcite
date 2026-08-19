@@ -509,6 +509,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Materialized storage (parquet/iceberg output)
     String directory = resolveDirectory(operand, "directory");
     if (directory != null) {
+      // Update operand so downstream consumers (e.g. SecSchemaFactory reading
+      // operand.get("directory") directly) see the resolved value instead of the raw
+      // ${VAR} placeholder — env vars are derefed once here at the root, never downstream.
+      operand.put("directory", directory);
       if (directory.startsWith("s3://")) {
         // S3 storage requires explicit credentials - fail fast if missing
         if (s3Config == null || s3Config.isEmpty()) {
@@ -534,6 +538,14 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       cacheDirectory = GovDataUtils.resolveEnvVar("${GOVDATA_CACHE_DIR}");
     }
     if (cacheDirectory != null) {
+      // Update operand so downstream consumers (e.g. SecSchemaFactory reading
+      // operand.get("cacheDirectory") directly for EdgarFullIndexCache) see the resolved
+      // value instead of the raw ${VAR} placeholder — env vars are derefed once here at
+      // the root, never downstream. Without this, the raw "${GOVDATA_CACHE_DIR}/sec"
+      // string reached EdgarFullIndexCache verbatim and got treated as a literal local
+      // path, silently writing quarterly index caches to
+      // ./${GOVDATA_CACHE_DIR}/sec/sec/full-index/... instead of the real S3 cache.
+      operand.put("cacheDirectory", cacheDirectory);
       if (cacheDirectory.startsWith("s3://")) {
         // S3 storage requires explicit credentials - fail fast if missing
         if (s3Config == null || s3Config.isEmpty()) {

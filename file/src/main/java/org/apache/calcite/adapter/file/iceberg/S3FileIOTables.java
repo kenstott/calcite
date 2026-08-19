@@ -215,6 +215,15 @@ public final class S3FileIOTables {
     // connection that still loses the residual race blocks indefinitely instead of failing and
     // letting the SDK's default retry policy recover it. Bound it so a stale hit degrades to a
     // retried request, not a hang requiring a manual kill.
+    // NOTE: this is a per-read SO_TIMEOUT, not a total-call deadline — verified live (bytecode
+    // inspection of iceberg-aws 1.4.0's ApacheHttpClientConfigurations confirms the property is
+    // read and applied to ApacheHttpClient.Builder.socketTimeout()) yet a materialization still
+    // stalled past 60s with zero CPU progress (2026-08-19, financial_line_items reprocess). Iceberg
+    // 1.4.0 exposes no property for AWS SDK's total apiCallAttemptTimeout, which would catch a
+    // trickle response that keeps resetting this per-read clock without completing — so this
+    // setting reduces but does not eliminate indefinite stalls. Manual kill-and-restart (safe:
+    // forceAccessions delete-then-rewrite is idempotent) remains the fallback until that gap is
+    // closed, e.g. by wrapping S3FileIO with a caller-side watchdog.
     props.put("http-client.apache.socket-timeout-ms", "60000");
     return props;
   }

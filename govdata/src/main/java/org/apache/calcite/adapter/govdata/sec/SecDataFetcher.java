@@ -3085,6 +3085,13 @@ public class SecDataFetcher {
       String url = String.format(SUBMISSIONS_URL_TMPL, normalized);
       HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
       conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+      // A prolific filer's CIK gets looked up once per accession that names it; if its first
+      // lookup lands on a JDK keep-alive connection the server already dropped, that request
+      // hangs to the read timeout — and the empty result only gets cached on the same thread
+      // that made it, so every other in-flight accession for that CIK races the same stale
+      // connection before the cache catches up. Disabling keep-alive costs nothing here (a
+      // one-shot small JSON fetch, cached per-CIK afterward) and removes the failure mode.
+      conn.setRequestProperty("Connection", "close");
       conn.setConnectTimeout(8000);
       conn.setReadTimeout(10000);
       if (conn.getResponseCode() == 200) {
