@@ -360,10 +360,13 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
-      // If all parsing attempts failed, return empty
+      // No XBRL (inline or companion) found — common for DEF 14A and older-style filings.
+      // Still ingest what doesn't depend on XBRL: basic filing_metadata from hints/EDGAR
+      // submissions data, plus an MD&A/text-section extraction pass over the raw HTML.
       if (doc == null) {
-        LOGGER.warn("No XBRL data found for: {}", fileName);
-        return outputFiles;
+        LOGGER.warn("No XBRL data found for: {} — continuing with non-XBRL metadata/MD&A extraction",
+            fileName);
+        return processNoXbrlFallback(sourceFilePath, targetDirectoryPath, metadata);
       }
 
       // Debug: Check document structure after successful parsing
@@ -4785,6 +4788,68 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * No inline or companion XBRL was found for this document (common for DEF 14A and
+   * older-style filings). filing_metadata never depended on XBRL — it's written from
+   * hints/EDGAR submissions data, same as the 8-K/13D-G fallback paths. MD&A/text-section
+   * extraction is HTML-content driven (extractMDAWithChunker), not XBRL-driven, so it also
+   * runs here. Tables that genuinely require XBRL facts (financial_line_items,
+   * filing_contexts, xbrl_relationships) correctly produce nothing for this document.
+   */
+  private List<String> processNoXbrlFallback(String sourceFilePath, String targetDirectoryPath,
+      ConversionMetadata metadata) throws IOException {
+    List<String> outputFiles = new ArrayList<>();
+
+    String hintCik = metadata != null ? metadata.getHint("cik") : null;
+    String hintForm = metadata != null ? metadata.getHint("form") : null;
+    String hintDate = metadata != null ? metadata.getHint("filingDate") : null;
+    String hintAccession = metadata != null ? metadata.getHint("accession") : null;
+
+    String cik = hintCik != null ? hintCik : extractCikFromPath(sourceFilePath);
+    String filingType = hintForm;
+    String filingDate = hintDate;
+    String accession = hintAccession != null ? hintAccession
+        : extractAccessionFromPath(sourceFilePath);
+
+    if (cik == null || cik.equals("0000000000")) {
+      throw unidentifiedFiling("no-XBRL fallback", "cannot resolve CIK", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
+    }
+    if (filingDate == null) {
+      throw unidentifiedFiling("no-XBRL fallback", "no filing date", sourceFilePath,
+          hintCik, hintForm, hintDate, hintAccession, cik, accession);
+    }
+
+    String fileName = sourceFilePath.substring(sourceFilePath.lastIndexOf('/') + 1);
+    boolean isHtml = fileName.endsWith(".htm") || fileName.endsWith(".html");
+
+    String partitionYear = filingDate.substring(0, 4);
+    String relativePartitionPath = String.format("year=%s", partitionYear);
+    String uniqueId = (accession != null && !accession.isEmpty()) ? accession : filingDate;
+
+    String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
+        relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
+    writeHintBasedMetadata(null, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+    outputFiles.add(metadataPath);
+
+    if (isHtml) {
+      List<Map<String, Object>> mdaData = new ArrayList<>();
+      extractMDAWithChunker(sourceFilePath, mdaData, cik, accession, filingDate, filingType,
+          SemanticTextChunker.forMDA());
+      if (!mdaData.isEmpty()) {
+        String mdaPath = storageProvider.resolvePath(targetDirectoryPath,
+            relativePartitionPath + "/" + String.format("%s_%s_mda.parquet", cik, uniqueId));
+        writeMDAToParquetFromData(mdaData, mdaPath);
+        outputFiles.add(mdaPath);
+      }
+    }
+
+    LOGGER.info("Processed no-XBRL fallback: cik={}, type={}, date={}, accession={}, outputs={}",
+        cik, filingType, filingDate, accession, outputFiles.size());
+
+    return outputFiles;
+  }
+
+  /**
    * Check if this is an 8-K filing.
    */
   private boolean is8KFiling(String filingType) {
@@ -4908,10 +4973,11 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Write filing_metadata record for an 8-K accession.
-   * Follows the pattern of writeMetadataToParquet() but without XBRL DEI fields.
+   * Write filing_metadata record from hints/EDGAR submissions data alone, without XBRL DEI
+   * fields. Used for any filing type that has no parseable XBRL document (8-K, 13D/G HTML-only,
+   * and the generic no-XBRL fallback).
    */
-  private void write8KMetadata(String fileContent, String outputPath,
+  private void writeHintBasedMetadata(String fileContent, String outputPath,
       String cik, String filingType, String filingDate, String accession,
       String sourcePath) throws IOException {
 
@@ -5157,7 +5223,7 @@ public class XbrlToParquetConverter implements FileConverter {
       if (writeMetadata) {
         String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
             relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
-        write8KMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourcePath);
+        writeHintBasedMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourcePath);
         outputFiles.add(metadataPath);
       }
 
@@ -6982,7 +7048,7 @@ public class XbrlToParquetConverter implements FileConverter {
         // Write 8K-style metadata from HTML
         String metadataPath = storageProvider.resolvePath(targetDirectoryPath,
             relativePartitionPath + "/" + String.format("%s_%s_metadata.parquet", cik, uniqueId));
-        write8KMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
+        writeHintBasedMetadata(fileContent, metadataPath, cik, filingType, filingDate, accession, sourceFilePath);
         outputFiles.add(metadataPath);
       }
 
