@@ -23,6 +23,7 @@ import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -354,5 +355,68 @@ class DataCoverageAndInflationTest {
         args.put("base_year", "latest");
         assertNull(McpServer.optInt(args, "base_year"),
             "unparseable text must not collapse to 0 — that is the bug this guards");
+    }
+
+    /** CPI loaded up to a given year/month, as inflationHeader expects it. */
+    private static java.util.Map<Integer, McpServer.CpiYear> cpiThrough(int year, int months) {
+        java.util.Map<Integer, McpServer.CpiYear> cpi =
+            new java.util.LinkedHashMap<Integer, McpServer.CpiYear>();
+        for (int y = year - 3; y < year; y++) {
+            cpi.put(Integer.valueOf(y), new McpServer.CpiYear(300.0 + y, 12));
+        }
+        cpi.put(Integer.valueOf(year), new McpServer.CpiYear(330.0, months));
+        return cpi;
+    }
+
+    @Test void aStaleDeflatorSaysHowFarBehindAndWhereToGetTheRest() {
+        // The eval's standing failure: the warehouse stopped months short of the publisher and
+        // the grounded arm deflated to it anyway, three runs running.
+        java.time.YearMonth old = java.time.YearMonth.now().minusMonths(6);
+        ObjectNode stale = McpServer.cpiStaleness("CUUR0000SA0",
+            cpiThrough(old.getYear(), old.getMonthValue()));
+        assertNotNull(stale, "a CPI six months behind must be reported as behind");
+        assertTrue(stale.get("months_behind").asInt() >= 4,
+            "expected roughly six months behind, got " + stale.get("months_behind").asInt());
+        assertEquals(old.toString(), stale.get("latest_loaded").asText());
+        assertTrue(stale.get("publisher").asText().contains("bls.gov"),
+            "the caller must be told where to close the gap");
+        assertTrue(stale.get("action").asText().contains("splice"),
+            "the action must name the splice, not just note the gap");
+    }
+
+    @Test void aCurrentDeflatorCarriesNoStalenessNoise() {
+        // The newest reading that can exist: CPI for month M publishes mid-M+1, so a series
+        // holding last month is current, and one holding the month before that is not.
+        java.time.YearMonth recent = java.time.YearMonth.now().minusMonths(1);
+        assertNull(McpServer.cpiStaleness("CUUR0000SA0",
+            cpiThrough(recent.getYear(), recent.getMonthValue())),
+            "a series inside the publication lag must stay silent");
+    }
+
+    @Test void anOversizeSvgIsRefusedRatherThanTruncated() {
+        StringBuilder big = new StringBuilder();
+        while (big.length() < 32111) {
+            big.append("<rect x=\"1\" y=\"2\" width=\"3\" height=\"4\"/>");
+        }
+        String notice = McpServer.oversizeSvgNotice(big.toString(), "http://127.0.0.1:9/a/x.svg");
+        assertNotNull(notice, "32k of SVG is past what a client delivers in one block");
+        assertTrue(notice.contains("http://127.0.0.1:9/a/x.svg"),
+            "refusing to inline is only acceptable if the caller is told where to fetch it");
+        assertTrue(notice.contains("truncated") || notice.contains("withheld"),
+            "the caller must learn the source was withheld, not that it does not exist");
+        // 2026-08-19g: the first wording ended "or reduce the panel count", and an agent read
+        // it as instruction — it cut an 11-panel board to 9 to make the source fit. The size
+        // of the response has nothing to do with the quality of the board.
+        assertTrue(notice.contains("COMPLETE"),
+            "the caller must be told the board itself is unaffected");
+        assertTrue(notice.contains("Do NOT drop panels"),
+            "the notice must forbid degrading the board to shrink the response");
+        assertTrue(!notice.contains("reduce the panel"),
+            "never suggest shrinking the board: that trades the deliverable for the response");
+    }
+
+    @Test void anSvgThatFitsIsStillInlined() {
+        assertNull(McpServer.oversizeSvgNotice("<svg><rect/></svg>", "http://127.0.0.1:9/a/x.svg"),
+            "the guard must not cost every ordinary chart its editable source");
     }
 }

@@ -300,4 +300,132 @@ public class DashboardTest {
         assertTrue(first > second * 1.5,
             "a span=2 panel should be about twice as wide: " + first + " vs " + second);
     }
+
+    @Test void aLongStatValueShrinksInsteadOfOverrunningItsTile() {
+        // 2026-08-19f: "New Hampshire +$21,849" at the fixed 30px ran out of a quarter-width
+        // tile and into its neighbour. The headline number is the first thing read, so an
+        // overflow here is worse than the caption overflow fixed alongside it.
+        DashboardLayout.Panel wide = new DashboardLayout.Panel();
+        wide.kind = "stat";
+        wide.label = "Largest 5-yr NOMINAL rise (2019-2024)";
+        wide.value = "New Hampshire +$21,849";
+        DashboardLayout.Panel narrow = new DashboardLayout.Panel();
+        narrow.kind = "stat";
+        narrow.label = "Short";
+        narrow.value = "+$1,531";
+        List<DashboardLayout.Panel> panels = new ArrayList<DashboardLayout.Panel>();
+        panels.add(wide);
+        panels.add(narrow);
+        panels.add(narrow);
+        panels.add(narrow);
+        int[] size = DashboardLayout.defaultSize(panels, 4);
+        String svg = DashboardLayout.compose("t", null, null, panels, 4, size[0], size[1]).toSvg();
+
+        int at = svg.lastIndexOf("New Hampshire +$21,849");
+        assertTrue(at > 0, "the long value must still be drawn in full, not truncated");
+        String elem = svg.substring(svg.lastIndexOf("<text", at), at);
+        assertTrue(elem.contains("font-size:"),
+            "a value too wide for its tile must carry a shrunk inline size, got: " + elem);
+
+        int shortAt = svg.lastIndexOf("+$1,531");
+        String shortElem = svg.substring(svg.lastIndexOf("<text", shortAt), shortAt);
+        assertTrue(!shortElem.contains("font-size:"),
+            "a value that already fits must keep the full 30px class size, got: " + shortElem);
+    }
+
+    @Test void aLongStatDeltaShrinksInsteadOfOverrunningItsTile() {
+        // 2026-08-19h: a delta reading "vs Utah +$20,878, WA +$20,702, AK ... -- not separable"
+        // printed straight over the neighbouring tile's delta. The delta line is where an arm puts
+        // the qualification that stops a headline reading as more certain than it is.
+        DashboardLayout.Panel wide = new DashboardLayout.Panel();
+        wide.kind = "stat";
+        wide.label = "5-yr ($) leader";
+        wide.value = "+$21,849";
+        wide.delta = "vs Utah +$20,878, WA +$20,702, AK +$20,202, ID +$20,167 - not separable";
+        DashboardLayout.Panel narrow = new DashboardLayout.Panel();
+        narrow.kind = "stat";
+        narrow.label = "Short";
+        narrow.value = "+$1,531";
+        narrow.delta = "+1.5%";
+        List<DashboardLayout.Panel> panels = new ArrayList<DashboardLayout.Panel>();
+        panels.add(wide);
+        panels.add(narrow);
+        int[] size = DashboardLayout.defaultSize(panels, 2);
+        String svg = DashboardLayout.compose("t", null, null, panels, 2, size[0], size[1]).toSvg();
+
+        int at = svg.lastIndexOf("not separable");
+        assertTrue(at > 0, "the long delta must still be drawn in full, not truncated");
+        String elem = svg.substring(svg.lastIndexOf("<text", at), at);
+        assertTrue(elem.contains("font-size:"),
+            "a delta too wide for its tile must carry a shrunk inline size, got: " + elem);
+
+        int shortAt = svg.lastIndexOf("+1.5%");
+        String shortElem = svg.substring(svg.lastIndexOf("<text", shortAt), shortAt);
+        assertTrue(!shortElem.contains("font-size:"),
+            "a delta that already fits must keep its class size, got: " + shortElem);
+    }
+
+    @Test void aLongPanelTitleShrinksInsteadOfClippingAtBothEnds() {
+        // Panel titles are centred, so an overlong one is cut at BOTH ends - it damages the start
+        // of the string, which is what a reader uses to tell panels apart.
+        String longTitle = "10-year nominal dollar rise, top 8 states (2014-2024) by median";
+        List<DashboardLayout.Panel> panels = new ArrayList<DashboardLayout.Panel>();
+        panels.add(chart(longTitle, null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+        panels.add(chart("Short", null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+        panels.add(chart("Short too", null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+        int[] size = DashboardLayout.defaultSize(panels, 3);
+        String svg = DashboardLayout.compose("t", null, null, panels, 3, size[0], size[1]).toSvg();
+
+        int at = svg.indexOf(longTitle);
+        assertTrue(at > 0, "the title must still be drawn in full, not truncated");
+        String elem = svg.substring(svg.lastIndexOf("<text", at), at);
+        assertTrue(elem.contains("font-size"),
+            "a title too wide for its panel must carry a shrunk size, got: " + elem);
+    }
+
+    @Test void aLegendTooWideForItsPanelWrapsInsteadOfRunningOffTheEdge() {
+        // 2026-08-19h: a four-series line panel in a narrow column drew its last swatch with no
+        // name beside it — a coloured square identifying nothing, which makes a reader
+        // mis-attribute a line rather than merely look at a cramped key.
+        DashboardLayout.Panel p = new DashboardLayout.Panel();
+        p.kind = "chart";
+        p.chartType = "line";
+        p.title = "Income";
+        p.yLabel = "USD";
+        p.categories = YEARS;
+        p.series = Arrays.asList(
+            series("California nominal", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+            series("California real (2024$)", 2, 3, 4, 5, 6, 7, 8, 9, 10, 11),
+            series("Idaho nominal", 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            series("Idaho real (2024$)", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13));
+        List<DashboardLayout.Panel> panels = new ArrayList<DashboardLayout.Panel>();
+        panels.add(p);
+        panels.add(p);
+        int[] size = DashboardLayout.defaultSize(panels, 2);
+        String svg = DashboardLayout.compose("t", null, null, panels, 2, size[0], size[1]).toSvg();
+
+        // Every series must have BOTH a swatch and a label — the failure drew one without the other.
+        for (String name : new String[]{"California nominal", "California real (2024$)",
+            "Idaho nominal", "Idaho real (2024$)"}) {
+            assertTrue(svg.contains(">" + name + "<"),
+                "legend lost the label for " + name);
+        }
+        // And the labels must not all sit on one baseline, which is what overflowed.
+        java.util.Set<String> ys = new java.util.HashSet<String>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("<text[^>]*class=\"legend-label\"[^>]*y=\"([-0-9.]+)\"")
+            .matcher(svg);
+        while (m.find()) {
+            ys.add(m.group(1));
+        }
+        if (ys.isEmpty()) {
+            m = java.util.regex.Pattern.compile("class=\"legend-label\"[^>]*y=\"([-0-9.]+)\"")
+                .matcher(svg);
+            while (m.find()) {
+                ys.add(m.group(1));
+            }
+        }
+        assertTrue(ys.size() > 1,
+            "a legend too wide for its panel must wrap onto more than one row, got rows=" + ys);
+    }
 }

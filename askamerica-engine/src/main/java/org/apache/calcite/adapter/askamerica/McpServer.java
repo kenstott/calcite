@@ -1927,15 +1927,17 @@ public class McpServer {
                         + "The image above is the same board as a PNG, already viewable "
                         + "inline."
                         + (wantSvg
-                            ? " The block after this is the SVG source you asked for. Panel ids "
-                            + "are namespaced p1-, p2-, ... so per-panel edits work "
-                            + "(p2-mark-california), and each panel has a pN-annotations group "
-                            + "that paints last."
+                            ? (oversizeSvgNotice(chartSvg, dashUrl) == null
+                                ? " The block after this is the SVG source you asked for. Panel "
+                                + "ids are namespaced p1-, p2-, ... so per-panel edits work "
+                                + "(p2-mark-california), and each panel has a pN-annotations "
+                                + "group that paints last."
+                                : " " + oversizeSvgNotice(chartSvg, dashUrl))
                             : " To edit the chart — a callout, a greyed-out category, direct "
                             + "value labels — call again with include_svg:true to get the "
                             + "editable source. It is not returned by default because it costs "
                             + "roughly 7,000 tokens and the link already shows the board.");
-                    if (!wantSvg) {
+                    if (!wantSvg || oversizeSvgNotice(chartSvg, dashUrl) != null) {
                         chartSvg = null;
                     }
                     break;
@@ -3987,6 +3989,47 @@ public class McpServer {
         }
     }
 
+    /**
+     * The largest SVG worth inlining, in characters.
+     *
+     * <p>MCP clients cap a single content block; the comparative eval measured one truncating at
+     * roughly 30 KB. This sits far enough below that to survive a smaller cap, and the cost of
+     * being wrong in this direction is one extra fetch, against a silently corrupted document in
+     * the other.
+     */
+    private static final int INLINE_SVG_LIMIT = 24576;
+
+    /**
+     * Refuses to inline an SVG large enough that the client will truncate it, or null if it fits.
+     *
+     * <p>The 2026-08-19e eval watched an agent ask for the SVG four times. Each response carried
+     * 32,111 characters, each was cut off in transit, and the agent spent three extra round-trips
+     * slicing the fragments together — then reported the dashboard as undeliverable. Nothing was
+     * broken except that we handed over a document we could have known would not arrive.
+     *
+     * <p>Truncation is the worst available outcome because it is silent: the caller receives
+     * something that looks like an SVG, is not well-formed, and fails later at a place that has
+     * nothing to do with the cause. Returning the link instead is a smaller answer that is
+     * actually true. The board is already viewable as the PNG in the same response, so nothing
+     * is lost but the ability to hand-edit it in place — and the link fetches the same source.
+     */
+    static String oversizeSvgNotice(String svg, String url) {
+        if (svg == null || svg.length() <= INLINE_SVG_LIMIT) {
+            return null;
+        }
+        return "YOUR BOARD IS COMPLETE AND UNCHANGED — only this response's inline copy of "
+            + "its source is withheld. The SVG is " + svg.length() + " characters, past the "
+            + "roughly 30,000 an MCP client delivers in one block, so inlining it would hand "
+            + "you a truncated, malformed document rather than an error. "
+            + (url == null
+                ? "The PNG above shows the board; the saved file holds the full source."
+                : "Fetch the full source from " + url + " when you need to edit it. The PNG "
+                + "above already shows the board.")
+            + " Do NOT drop panels, simplify the board, or re-run to make the source fit: the "
+            + "size of this response has nothing to do with the quality of the dashboard, and "
+            + "a smaller board is a worse answer, not a fix.";
+    }
+
     /** The BLS series id for an {@code index} argument, or a failure naming the choices. */
     static String cpiSeriesFor(String index) {
         String key = (index == null || index.isEmpty()) ? "cpi_u" : index;
@@ -4038,8 +4081,72 @@ public class McpServer {
             out.put("warning", "base_year " + baseYear + " averages only " + base.months
                 + " monthly CPI readings, not 12 — it is a partial-year mean, not an annual "
                 + "average, and figures expressed in it are not comparable to a full-year "
-                + "base. Prefer the most recent year with 12 months.");
+                + "base. Either fetch the missing months from the publisher and complete the "
+                + "year (see the staleness block), or fall back to the most recent year with "
+                + "12 months. Do not report a partial-year mean as \"today's dollars\" "
+                + "without saying which months it covers.");
         }
+        ObjectNode stale = cpiStaleness(series, cpi);
+        if (stale != null) {
+            out.set("staleness", stale);
+        }
+        return out;
+    }
+
+    /**
+     * Says how far behind the publisher this loaded CPI is, and tells the caller to close the gap.
+     *
+     * <p>Added after the comparative eval measured the same failure three runs running. The
+     * warehouse's CPI stopped at May 2026 while BLS had published July; the ungrounded arms
+     * fetched July in one call, and the grounded arms did not — they deflated to a five-month
+     * partial mean and disclosed it in a footnote. Both had a standing instruction to splice a
+     * stale series from the publisher, and both ignored it, because nothing in the response said
+     * the series was behind <em>the world</em>. The old warning only ever pointed backwards —
+     * "prefer the most recent year with 12 months" — which is advice to retreat further into the
+     * warehouse.
+     *
+     * <p>So the response now states the gap in the same terms a person would: what is loaded,
+     * what should exist by now, and where to get the difference. An agent that has been handed
+     * the publisher's URL and a month count has no remaining excuse for reporting stale dollars
+     * as current ones.
+     *
+     * <p>Returns null when the series is current, so a healthy answer carries no noise.
+     */
+    static ObjectNode cpiStaleness(String series, java.util.Map<Integer, CpiYear> cpi) {
+        int latestYear = Integer.MIN_VALUE;
+        for (Integer y : cpi.keySet()) {
+            latestYear = Math.max(latestYear, y.intValue());
+        }
+        CpiYear latest = cpi.get(Integer.valueOf(latestYear));
+        if (latest == null) {
+            return null;
+        }
+        java.time.YearMonth loaded = java.time.YearMonth.of(latestYear, Math.max(1, latest.months));
+        // BLS publishes a month's CPI in the middle of the following month, so the newest
+        // reading that should exist is the previous calendar month once we are past mid-month,
+        // and the one before that otherwise. Erring a month late keeps this from crying stale
+        // on the days around a release.
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.YearMonth expected = java.time.YearMonth.from(today)
+            .minusMonths(today.getDayOfMonth() >= 15 ? 1 : 2);
+        long behind = java.time.temporal.ChronoUnit.MONTHS.between(loaded, expected);
+        if (behind < 1) {
+            return null;
+        }
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("series", series);
+        out.put("latest_loaded", loaded.toString());
+        out.put("expected_latest", expected.toString());
+        out.put("months_behind", behind);
+        out.put("publisher", "https://www.bls.gov/cpi/");
+        out.put("publisher_api", "https://api.bls.gov/publicAPI/v2/timeseries/data/" + series);
+        out.put("action", "REQUIRED before you describe any result as \"today's dollars\": "
+            + "fetch " + series + " for " + loaded.plusMonths(1) + " through " + expected
+            + " from the publisher above and splice it onto this series. The overlapping months "
+            + "must agree before you splice; if they do not, say so and stop rather than "
+            + "stitching two different vintages. If you cannot fetch it, state in your answer "
+            + "that the deflator is " + behind + " month(s) stale and name " + loaded
+            + " as the actual base — do not present it as current.");
         return out;
     }
 

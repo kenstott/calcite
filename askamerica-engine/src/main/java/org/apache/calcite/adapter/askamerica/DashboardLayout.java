@@ -92,11 +92,33 @@ final class DashboardLayout {
      * choosing baselines is how the earlier attempts went wrong: the numbers agreed enough not
      * to overlap and not enough to be readable.
      */
-    private static double[] footerBaselines(int height, boolean hasFootnote) {
+    private static final int FOOTNOTE_FONT = 11;
+    private static final int FOOTNOTE_LEADING = 14;
+
+    /**
+     * A footnote may run to {@value #FOOTNOTE_MAX_LINES} lines, and the footer grows to hold them.
+     *
+     * <p>It used to get exactly one, unwrapped, which meant a long footnote ran off the right
+     * edge of the canvas and was simply gone — cut mid-sentence with no indication anything was
+     * missing. A footnote is the board's caveat, so it is longest exactly when it matters most,
+     * and losing its tail silently is the worst available failure.
+     */
+    private static final int FOOTNOTE_MAX_LINES = 3;
+
+    private static double[] footerBaselines(int height, int footnoteLines) {
         double attribution = height - BOTTOM_MARGIN;
-        double footnote = attribution - BRAND_BAND;
-        double topmost = hasFootnote ? footnote : attribution;
+        double footnote = attribution - BRAND_BAND
+            - Math.max(0, footnoteLines - 1) * FOOTNOTE_LEADING;
+        double topmost = footnoteLines > 0 ? footnote : attribution;
         return new double[]{footnote, attribution, height - topmost + FOOTER_GAP};
+    }
+
+    /** The footnote broken to the canvas width; empty when there is no footnote. */
+    private static List<String> footnoteLines(String footnote, int width) {
+        if (footnote == null || footnote.isEmpty()) {
+            return new ArrayList<String>();
+        }
+        return wrapText(footnote, width - 2.0 * PAD, FOOTNOTE_FONT, FOOTNOTE_MAX_LINES);
     }
 
     /**
@@ -183,7 +205,18 @@ final class DashboardLayout {
 
     private static final int GUTTER = 16;
     private static final int PAD = 20;
-    private static final int CAPTION_H = 18;
+    /**
+     * A caption gets {@value #CAPTION_LINES} lines under its panel.
+     *
+     * <p>It used to get one, drawn as a single unwrapped run from the panel's left edge. A
+     * caption longer than its panel then ran straight across the gutter and printed on top of
+     * the next panel's caption — three overlapping sentences sharing one baseline, none of them
+     * readable. The panel width was available at the call site the whole time and simply unused.
+     */
+    private static final int CAPTION_LINES = 2;
+    private static final int CAPTION_FONT = 11;
+    private static final int CAPTION_LEADING = 13;
+    private static final int CAPTION_H = CAPTION_LINES * CAPTION_LEADING + 6;
     /** A stat tile holds a label, a number and a delta — three lines, not a chart. */
     private static final int STAT_ROW_H = 108;
 
@@ -323,16 +356,22 @@ final class DashboardLayout {
                     p.scene.writeSvgNested(sb, r[0], r[1], r[2], panelH, prefix);
                 }
                 if (p.caption != null) {
-                    sb.append(text("caption", r[0] + 4, r[1] + panelH + 13, p.caption, MUTED,
-                        "start"));
+                    List<String> capLines = wrapCaption(p.caption, r[2] - 8);
+                    for (int li = 0; li < capLines.size(); li++) {
+                        sb.append(text("caption", r[0] + 4,
+                            r[1] + panelH + 13 + li * CAPTION_LEADING, capLines.get(li), MUTED,
+                            "start"));
+                    }
                 }
             }
 
-            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty());
+            List<String> footLines = footnoteLines(footnote, width);
+            double[] base = footerBaselines(height, footLines.size());
             double footBase = base[0];
             double brandBase = base[1];
-            if (footnote != null && !footnote.isEmpty()) {
-                sb.append(text("footnote", PAD, footBase, footnote, MUTED, "start"));
+            for (int fi = 0; fi < footLines.size(); fi++) {
+                sb.append(text("footnote", PAD, footBase + fi * FOOTNOTE_LEADING,
+                    footLines.get(fi), MUTED, "start"));
             }
             sb.append("  <g id=\"brand\">\n");
             sb.append(markSvg(PAD, brandBase - MARK_SIZE + 3, MARK_SIZE));
@@ -399,14 +438,21 @@ final class DashboardLayout {
                     p.scene.drawInto(g, r[0], r[1], r[2], panelH);
                 }
                 if (p.caption != null) {
-                    draw(g, p.caption, r[0] + 4, r[1] + panelH + 13, 11, false, MUTED);
+                    List<String> capLines = wrapCaption(p.caption, r[2] - 8);
+                    for (int li = 0; li < capLines.size(); li++) {
+                        draw(g, capLines.get(li), r[0] + 4,
+                            r[1] + panelH + 13 + li * CAPTION_LEADING, CAPTION_FONT, false,
+                            MUTED);
+                    }
                 }
             }
-            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty());
+            List<String> footLines = footnoteLines(footnote, width);
+            double[] base = footerBaselines(height, footLines.size());
             double footBase = base[0];
             double brandBase = base[1];
-            if (footnote != null && !footnote.isEmpty()) {
-                draw(g, footnote, PAD, footBase, 11, false, MUTED);
+            for (int fi = 0; fi < footLines.size(); fi++) {
+                draw(g, footLines.get(fi), PAD, footBase + fi * FOOTNOTE_LEADING, FOOTNOTE_FONT,
+                    false, MUTED);
             }
             markPng(g, PAD, brandBase - MARK_SIZE + 3, MARK_SIZE);
             draw(g, BRAND + " \u00b7 " + BRAND_URL, PAD + MARK_SIZE + 7, brandBase, 11, true,
@@ -434,12 +480,16 @@ final class DashboardLayout {
                 sb.append(text("stat-label", x + 16, cy - 18, p.label, MUTED, "start"));
             }
             if (p.value != null) {
-                sb.append(text("stat-value", x + 16, cy + 12, p.value, INK, "start"));
+                int size = fittedStatSize(p.value, w - 32);
+                sb.append(text("stat-value", x + 16, cy + 12, p.value, INK, "start",
+                    size == STAT_VALUE_SIZE ? null : "font-size:" + size + "px"));
             }
             if (p.delta != null) {
                 Color c = "down".equals(p.deltaDirection) ? DOWN
                     : "up".equals(p.deltaDirection) ? UP : MUTED;
-                sb.append(text("stat-delta", x + 16, cy + 32, p.delta, c, "start"));
+                int dsize = fittedSize(p.delta, w - 32, STAT_DELTA_SIZE, 9);
+                sb.append(text("stat-delta", x + 16, cy + 32, p.delta, c, "start",
+                    dsize == STAT_DELTA_SIZE ? null : "font-size:" + dsize + "px"));
             }
             sb.append("  </g>\n");
             return sb.toString();
@@ -453,12 +503,13 @@ final class DashboardLayout {
                 draw(g, p.label, x + 16, cy - 18, 12, false, MUTED);
             }
             if (p.value != null) {
-                draw(g, p.value, x + 16, cy + 12, 30, true, INK);
+                draw(g, p.value, x + 16, cy + 12, fittedStatSize(p.value, w - 32), true, INK);
             }
             if (p.delta != null) {
                 Color c = "down".equals(p.deltaDirection) ? DOWN
                     : "up".equals(p.deltaDirection) ? UP : MUTED;
-                draw(g, p.delta, x + 16, cy + 32, 13, true, c);
+                draw(g, p.delta, x + 16, cy + 32, fittedSize(p.delta, w - 32, STAT_DELTA_SIZE, 9),
+                    true, c);
             }
         }
 
@@ -482,9 +533,15 @@ final class DashboardLayout {
 
         private static String text(String cls, double x, double y, String s, Color fill,
                 String anchor) {
+            return text(cls, x, y, s, fill, anchor, null);
+        }
+
+        private static String text(String cls, double x, double y, String s, Color fill,
+                String anchor, String style) {
             return "  <text class=\"" + cls + "\" x=" + '"' + ChartScene.num(x) + '"'
                 + " y=\"" + ChartScene.num(y) + "\" fill=\"" + ChartScene.hex(fill) + "\""
                 + ("start".equals(anchor) ? "" : " text-anchor=\"" + anchor + "\"")
+                + (style == null ? "" : " style=\"" + style + "\"")
                 + ">" + ChartScene.escape(s) + "</text>\n";
         }
     }
@@ -533,7 +590,7 @@ final class DashboardLayout {
             + (title == null || title.isEmpty() ? 0 : 26)
             + (subtitle == null || subtitle.isEmpty() ? 0 : 18) + 10;
         // Reserved from the baselines the writers will actually use, not from a constant.
-        double footH = footerBaselines(height, footnote != null && !footnote.isEmpty())[2];
+        double footH = footerBaselines(height, footnoteLines(footnote, width).size())[2];
 
         // Assign to rows first, because a row's height depends on what is in it.
         List<List<Panel>> rowList = new ArrayList<>();
@@ -638,6 +695,98 @@ final class DashboardLayout {
     static double[] statBox(double cellY, double cellH) {
         double h = Math.min(cellH, STAT_ROW_H);
         return new double[]{cellY + (cellH - h) / 2, h};
+    }
+
+    /**
+     * Breaks a caption into the lines that fit its panel, ellipsising whatever will not.
+     *
+     * <p>Width is approximated from the character count rather than measured with font metrics,
+     * so that the SVG and the PNG break in the same places. Measuring would let the raster wrap
+     * differently from the vector, and the two artifacts would then disagree about what the
+     * caption says — a worse failure than either wrapping slightly early.
+     *
+     * <p>Overflow is truncated rather than allowed to spill. A caption that cannot fit is the
+     * author's problem to shorten; silently painting it over the neighbouring panel hides the
+     * problem and destroys the neighbour.
+     */
+    private static List<String> wrapCaption(String caption, double widthPx) {
+        return wrapText(caption, widthPx, CAPTION_FONT, CAPTION_LINES);
+    }
+
+    private static List<String> wrapText(String s, double widthPx, int fontSize, int maxLines) {
+        String caption = s;
+        int perLine = Math.max(8, (int) (widthPx / (fontSize * 0.52)));
+        List<String> lines = new ArrayList<String>();
+        StringBuilder cur = new StringBuilder();
+        for (String word : caption.trim().split("\\s+")) {
+            if (cur.length() > 0 && cur.length() + 1 + word.length() > perLine) {
+                if (lines.size() == maxLines - 1) {
+                    while (cur.length() > Math.max(1, perLine - 1)) {
+                        cur.setLength(cur.length() - 1);
+                    }
+                    cur.append('\u2026');
+                    break;
+                }
+                lines.add(cur.toString());
+                cur.setLength(0);
+            }
+            if (cur.length() > 0) {
+                cur.append(' ');
+            }
+            cur.append(word);
+        }
+        if (cur.length() > 0) {
+            lines.add(cur.toString());
+        }
+        return lines;
+    }
+
+    /** Nominal stat-tile value size; the CSS class and the raster path must agree on it. */
+    private static final int STAT_VALUE_SIZE = 30;
+
+    /** Smallest a stat value may shrink before the tile is simply too narrow for it. */
+    private static final int STAT_VALUE_MIN = 17;
+
+    /**
+     * Shrinks a stat-tile value until it fits its tile, rather than letting it run into the next.
+     *
+     * <p>The 2026-08-19f board put "New Hampshire +$21,849" in a quarter-width tile at the fixed
+     * 30px and it overflowed into its neighbour. Stat tiles hold the headline numbers — they are
+     * the part of the board a reader looks at first — so an overflow here is more damaging than
+     * the caption overflow fixed alongside it, and it is the third instance of the same root
+     * cause: text drawn at a fixed size from a fixed origin with the available width in scope and
+     * unused.
+     *
+     * <p>Shrinking rather than truncating, because a headline figure with its last digits cut off
+     * is worse than a slightly smaller one, and rather than wrapping, because a two-line headline
+     * stops reading as a single number.
+     */
+    /** Nominal stat-tile delta size; the CSS class and the raster path must agree on it. */
+    private static final int STAT_DELTA_SIZE = 13;
+
+    private static int fittedStatSize(String value, double maxWidth) {
+        return fittedSize(value, maxWidth, STAT_VALUE_SIZE, STAT_VALUE_MIN);
+    }
+
+    /**
+     * The largest size at or below {@code nominal} that lets {@code s} fit {@code maxWidth}.
+     *
+     * <p>Bold sans runs near 0.58 em per character across the digits and letters these tiles
+     * carry. Approximated rather than measured for the same reason the captions are: the vector
+     * and the raster must pick the same size, or the two artifacts disagree about the board.
+     *
+     * <p>Applied to the delta line as well as the value after 2026-08-19h, where a delta reading
+     * "vs Utah +$20,878, WA +$20,702, AK +$20,202, ID +$20,167 -- not separable" ran straight
+     * through its tile and printed on top of the next tile's delta. The delta is where an arm puts
+     * the qualification that stops a headline being read as more certain than it is, so losing it
+     * to an overlap is worse than losing decoration.
+     */
+    private static int fittedSize(String s, double maxWidth, int nominal, int min) {
+        if (s == null || s.isEmpty() || maxWidth <= 0) {
+            return nominal;
+        }
+        int size = (int) Math.floor(maxWidth / (s.length() * 0.58));
+        return Math.max(min, Math.min(nominal, size));
     }
 
     private static boolean hasCaption(List<Panel> row) {

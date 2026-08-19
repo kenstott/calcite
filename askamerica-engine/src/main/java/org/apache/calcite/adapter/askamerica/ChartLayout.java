@@ -117,7 +117,7 @@ final class ChartLayout {
             ? niceTicks(min, max)
             : niceTicks(Math.min(min, forcedDomain[0]), Math.max(max, forcedDomain[1]));
 
-        int legendHeight = series.size() > 1 ? 24 : 0;
+        int legendHeight = legendBand(seriesNames(series), width);
         // Rotate rather than drop: measure first, then reserve the depth the choice needs.
         int widest = 0;
         for (String c : categories) {
@@ -211,13 +211,33 @@ final class ChartLayout {
     }
 
     /** Layout of a pie chart: one series, one slice per category. */
+    /**
+     * Shrinks a panel title until it fits the panel it sits on.
+     *
+     * <p>Titles are centred on the panel, so one wider than its panel overflows in <em>both</em>
+     * directions and is clipped at each end — "10-year nominal dollar rise, top 8 states" arrives
+     * as "0-year nominal dollar rise, top 8 states (2014-2024". A centred overflow is worse than a
+     * left-aligned one because it damages the start of the string, which is the part a reader uses
+     * to tell one panel from another.
+     *
+     * <p>Width is approximated from the character count, for the same reason the captions and stat
+     * values are: the SVG and the PNG must break identically or the two artifacts disagree.
+     */
+    private static int fittedTitleSize(String title, double width) {
+        if (title == null || title.isEmpty() || width <= 0) {
+            return TITLE_SIZE;
+        }
+        int size = (int) Math.floor((width - 12) / (title.length() * 0.55));
+        return Math.max(9, Math.min(TITLE_SIZE, size));
+    }
+
     static ChartScene pieChart(String title, List<String> categories,
             List<Double> values, int width, int height) {
         ChartScene scene = new ChartScene(width, height, BACKGROUND);
         double top = title == null || title.isEmpty() ? 16 : 44;
         if (title != null && !title.isEmpty()) {
-            scene.add(new Label(width / 2.0, 26, title, INK, TITLE_SIZE, Anchor.MIDDLE, 0, true)
-                .at("chart-title").styled("title"));
+            scene.add(new Label(width / 2.0, 26, title, INK, fittedTitleSize(title, width),
+                Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
         }
         double total = 0;
         for (Double v : values) {
@@ -300,7 +320,7 @@ final class ChartLayout {
         Ticks yt = niceTicks(ymin, ymax);
         Ticks xt = niceTicks(xmin, xmax);
 
-        int legendHeight = series.size() > 1 ? 24 : 0;
+        int legendHeight = legendBand(pointSeriesNames(series), width);
         int tickLabelWidth = 0;
         for (String t : yt.labels) {
             tickLabelWidth = Math.max(tickLabelWidth, ChartScene.textWidth(t, TICK_SIZE, false));
@@ -357,8 +377,8 @@ final class ChartLayout {
             double left, double top, double plotW, double plotH, int width, int height,
             Ticks ticks, int legendHeight) {
         if (title != null && !title.isEmpty()) {
-            scene.add(new Label(width / 2.0, 26, title, INK, TITLE_SIZE, Anchor.MIDDLE, 0, true)
-                .at("chart-title").styled("title"));
+            scene.add(new Label(width / 2.0, 26, title, INK, fittedTitleSize(title, width),
+                Anchor.MIDDLE, 0, true).at("chart-title").styled("title"));
         }
         Group grid = new Group().at("gridlines");
         for (int i = 0; i < ticks.values.size(); i++) {
@@ -384,21 +404,77 @@ final class ChartLayout {
         }
     }
 
-    private static void addLegend(ChartScene scene, List<String> names, double y, int width) {
-        int gap = 16;
-        int total = 0;
+    private static final int LEGEND_GAP = 16;
+    private static final int LEGEND_ROW_H = 20;
+
+    /** Width one legend entry occupies, swatch and trailing gap included. */
+    private static int legendItemWidth(String name) {
+        return 12 + 4 + ChartScene.textWidth(name, TICK_SIZE, false) + LEGEND_GAP;
+    }
+
+    /**
+     * Packs legend entries into rows that fit the panel, and returns where each row starts.
+     *
+     * <p>The legend used to be a single centred row whatever its length. A four-series panel in a
+     * narrow column then ran its last entry off the right edge — the swatch drew, the name did
+     * not, and the chart showed a coloured square identifying nothing. That is worse than a
+     * cramped legend: a key that silently loses an entry makes the reader mis-attribute a line.
+     *
+     * <p>Rows rather than shrinking, because a legend is already at the smallest size on the
+     * board; taking it below the tick size would make it unreadable to save space the panel can
+     * simply grow into.
+     */
+    private static List<List<String>> legendRows(List<String> names, int width) {
+        List<List<String>> rows = new ArrayList<List<String>>();
+        List<String> row = new ArrayList<String>();
+        int used = 0;
+        int avail = Math.max(60, width - 16);
         for (String n : names) {
-            total += 12 + 4 + ChartScene.textWidth(n, TICK_SIZE, false) + gap;
+            int w = legendItemWidth(n);
+            if (!row.isEmpty() && used + w - LEGEND_GAP > avail) {
+                rows.add(row);
+                row = new ArrayList<String>();
+                used = 0;
+            }
+            row.add(n);
+            used += w;
         }
-        double x = Math.max(8, (width - (total - gap)) / 2.0);
+        if (!row.isEmpty()) {
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    /** Vertical band the legend needs: zero for a single series, else one band per packed row. */
+    private static int legendBand(List<String> names, int width) {
+        if (names.size() <= 1) {
+            return 0;
+        }
+        return legendRows(names, width).size() * LEGEND_ROW_H + 4;
+    }
+
+    private static void addLegend(ChartScene scene, List<String> names, double y, int width) {
+        List<List<String>> rows = legendRows(names, width);
         Group legend = new Group().at("legend");
-        for (int i = 0; i < names.size(); i++) {
-            legend.add(new Rect(x, y - 8, 11, 11, color(i))
-                .at("legend-swatch-" + ChartScene.slug(names.get(i))));
-            legend.add(new Label(x + 16, y + 1, names.get(i), INK, TICK_SIZE, Anchor.START, 0,
-                false).styled("legend-label")
-                .at("legend-label-" + ChartScene.slug(names.get(i))));
-            x += 12 + 4 + ChartScene.textWidth(names.get(i), TICK_SIZE, false) + gap;
+        // Rows are laid out bottom-up from the baseline the caller gave us, so the last row keeps
+        // the position a single-row legend would have had and earlier rows stack above it.
+        double rowY = y - (rows.size() - 1) * LEGEND_ROW_H;
+        int idx = 0;
+        for (List<String> row : rows) {
+            int total = 0;
+            for (String n : row) {
+                total += legendItemWidth(n);
+            }
+            double x = Math.max(8, (width - (total - LEGEND_GAP)) / 2.0);
+            for (String n : row) {
+                legend.add(new Rect(x, rowY - 8, 11, 11, color(idx))
+                    .at("legend-swatch-" + ChartScene.slug(n)));
+                legend.add(new Label(x + 16, rowY + 1, n, INK, TICK_SIZE, Anchor.START, 0, false)
+                    .styled("legend-label").at("legend-label-" + ChartScene.slug(n)));
+                x += legendItemWidth(n);
+                idx++;
+            }
+            rowY += LEGEND_ROW_H;
         }
         scene.add(legend);
     }
