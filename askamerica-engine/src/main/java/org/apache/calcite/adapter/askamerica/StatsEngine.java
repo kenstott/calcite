@@ -66,10 +66,10 @@ final class StatsEngine {
      *  extraction reports how many were dropped so a tool can surface that rather than
      *  silently changing the effective sample size underneath the caller. */
     static Extraction extractColumns(Connection conn, String sql, String[] columns)
-            throws SQLException {
+            throws Exception {
         Statement stmt = conn.createStatement();
         try {
-            ResultSet rs = stmt.executeQuery(sql);
+            ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
                 int[] idx = new int[columns.length];
                 for (int i = 0; i < columns.length; i++) {
@@ -118,10 +118,10 @@ final class StatsEngine {
      *  column, numeric or categorical) but a label column can't go through the double-only
      *  path. */
     static LabeledExtraction extractColumnsWithLabels(Connection conn, String sql,
-            String[] numericColumns, String[] labelColumns) throws SQLException {
+            String[] numericColumns, String[] labelColumns) throws Exception {
         Statement stmt = conn.createStatement();
         try {
-            ResultSet rs = stmt.executeQuery(sql);
+            ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
                 int[] numIdx = new int[numericColumns.length];
                 for (int i = 0; i < numericColumns.length; i++) {
@@ -251,10 +251,10 @@ final class StatsEngine {
      *  dropped. Preserves first-seen group order (a {@link LinkedHashMap}) so a two-group
      *  t-test's "group_a"/"group_b" labeling is deterministic rather than hash-order-dependent. */
     static Map<String, double[]> extractGroupedColumn(Connection conn, String sql,
-            String groupCol, String valueCol) throws SQLException {
+            String groupCol, String valueCol) throws Exception {
         Statement stmt = conn.createStatement();
         try {
-            ResultSet rs = stmt.executeQuery(sql);
+            ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
                 int groupIdx = rs.findColumn(groupCol);
                 int valueIdx = rs.findColumn(valueCol);
@@ -294,10 +294,10 @@ final class StatsEngine {
      *  (row label -> col label -> count) for a chi-square test of independence. Rows with a
      *  null in either column are dropped. */
     static ContingencyTable extractContingencyTable(Connection conn, String sql, String rowCol,
-            String colCol) throws SQLException {
+            String colCol) throws Exception {
         Statement stmt = conn.createStatement();
         try {
-            ResultSet rs = stmt.executeQuery(sql);
+            ResultSet rs = McpServer.executeWithRepair(stmt, sql);
             try {
                 int rowIdx = rs.findColumn(rowCol);
                 int colIdx = rs.findColumn(colCol);

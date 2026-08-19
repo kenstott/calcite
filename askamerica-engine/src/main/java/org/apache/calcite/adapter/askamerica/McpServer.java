@@ -1362,6 +1362,9 @@ public class McpServer {
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
 
+        // Cleared per call so a repair reported below belongs to this statement, not a
+        // previous one that happened to run on the same worker thread.
+        LAST_REPAIR_NOTICE.remove();
         long t0 = System.currentTimeMillis();
         String text;
         String telemetrySql = null;
@@ -1411,11 +1414,9 @@ public class McpServer {
                     String sql = args.path("sql").asText();
                     telemetrySql = sql;
                     log.println("[askamerica-mcp] tool=query sql=" + sql);
-                    LAST_REPAIR_NOTICE.remove();
                     ArrayNode rows = query(sql, limit);
                     text = rows.toString();
                     diagnostics = diagnose(sql, rows, limit);
-                    addRepairNotice(diagnostics);
                     break;
                 }
                 case "critique_query": {
@@ -1905,11 +1906,21 @@ public class McpServer {
         // would change the bytes every existing host parses; as a sibling block it is additive
         // — a host that ignores it reads exactly what it read before, and one that reads it
         // can re-query with a control, change grain, or hedge.
+        addRepairNotice(diagnostics);
         if (diagnostics != null) {
             ObjectNode diagBlock = MAPPER.createObjectNode();
             diagBlock.put("type", "text");
             diagBlock.put("text", diagnostics.toString());
             content.add(diagBlock);
+        }
+        // A tool with no diagnostics envelope still owes the caller the rewrite it made.
+        String standaloneRepair = LAST_REPAIR_NOTICE.get();
+        LAST_REPAIR_NOTICE.remove();
+        if (standaloneRepair != null && diagnostics == null) {
+            ObjectNode noticeBlock = MAPPER.createObjectNode();
+            noticeBlock.put("type", "text");
+            noticeBlock.put("text", "Note: " + standaloneRepair);
+            content.add(noticeBlock);
         }
 
         ObjectNode body = MAPPER.createObjectNode();
@@ -2598,10 +2609,6 @@ public class McpServer {
         try {
             return runSqlRows(sql, limit);
         } catch (Exception e) {
-            ArrayNode repaired = retryQuotingReservedWords(sql, limit, e);
-            if (repaired != null) {
-                return repaired;
-            }
             String msg = e.getMessage();
             if (extractSchema(sql) == null && msg != null && looksLikeUnresolvedObject(msg)) {
                 throw new RuntimeException(msg
@@ -2621,52 +2628,53 @@ public class McpServer {
      */
     private static final ThreadLocal<String> LAST_REPAIR_NOTICE = new ThreadLocal<>();
 
+    /**
+     * Runs caller-supplied SQL, quoting reserved-word column names if that is what broke it.
+     *
+     * <p>This is the single place caller SQL reaches the database, and the repair has to live
+     * here rather than in one tool. It was first wired into {@code query} alone, and an eval run
+     * immediately found the hole: the same {@code CAST(year AS INTEGER)} that {@code query} now
+     * accepts still failed under {@code adjust_inflation}, so the caller met the identical error
+     * one tool over and paid for it a second time. {@code per_capita},
+     * {@code fetch_aligned_series} and the statistical tools all took SQL through their own
+     * executeQuery calls and had the same gap.
+     *
+     * <p>Attempted only when the statement failed to parse, and kept only if the rewrite then
+     * runs, so a working statement is never touched and a real error is never replaced by a
+     * confusing one.
+     */
+    static ResultSet executeWithRepair(Statement st, String sql) throws Exception {
+        String effective = quoteReservedIdentifiers(sql);
+        try {
+            return st.executeQuery(effective);
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            if (msg == null || !msg.contains("parse failed")) {
+                throw e;
+            }
+            java.util.Set<String> candidates = reservedColumnWords();
+            if (candidates.isEmpty()) {
+                throw e;
+            }
+            java.util.List<String> quoted = new ArrayList<>();
+            String repaired = quoteBareReservedColumns(effective, candidates, quoted);
+            if (repaired.equals(effective)) {
+                throw e;
+            }
+            ResultSet rs;
+            try {
+                rs = st.executeQuery(repaired);
+            } catch (Exception ignored) {
+                throw e;
+            }
+            noteReservedWordRepair(quoted, repaired);
+            return rs;
+        }
+    }
+
     /** Reserved words this run has already repaired, so the notice is only attached once. */
     private static final java.util.Set<String> REPAIRED_WORDS =
         java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
-
-    /**
-     * Re-runs a statement that failed to parse, quoting the reserved words used as columns.
-     *
-     * <p>Columns named {@code year}, {@code period} and {@code value} are ordinary in this
-     * warehouse and reserved in SQL, so a caller writing the obvious {@code SELECT year, value}
-     * gets a parse error naming a token it has no reason to think is special. It then guesses:
-     * aliases, brackets, backticks, a different column. In one observed run this cost 11 of 42
-     * calls — a quarter of the session spent rediscovering the quoting rule, not asking
-     * questions about data.
-     *
-     * <p>The rewrite cannot be driven by the parse error, because the parser does not reliably
-     * name the word that broke it: {@code SELECT year} reports {@code Encountered "year ,"},
-     * but {@code WHERE period = 'M05'} reports {@code Incorrect syntax near the keyword 'AND'}
-     * — the token *after* the real problem, because PERIOD opens the SQL:2011 period predicate.
-     * It is driven by the column list instead; see {@link #quoteBareReservedColumns}.
-     *
-     * <p>Returns null when the failure is not a parse error or the rewrite does not run, in
-     * which case the caller's original exception stands — a repair is never allowed to replace
-     * a real error with a confusing one.
-     */
-    private static ArrayNode retryQuotingReservedWords(String sql, int limit, Exception first) {
-        String msg = first.getMessage();
-        if (msg == null || !msg.contains("parse failed")) {
-            return null;
-        }
-        java.util.Set<String> candidates = reservedColumnWords();
-        if (candidates.isEmpty()) {
-            return null;
-        }
-        java.util.List<String> found = new ArrayList<>();
-        String repaired = quoteBareReservedColumns(sql, candidates, found);
-        if (repaired.equals(sql)) {
-            return null;
-        }
-        try {
-            ArrayNode rows = runSqlRows(repaired, limit);
-            noteReservedWordRepair(found, repaired);
-            return rows;
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     /**
      * Records a repair so the caller learns the rule instead of only getting rows back.
@@ -2915,7 +2923,7 @@ public class McpServer {
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
-        String effective = quoteReservedIdentifiers(sql);
+        String effective = sql;
         String lower = effective.toLowerCase();
         if (!lower.contains("fetch first") && !lower.contains(" limit ")) {
             effective = effective.replaceAll(";\\s*$", "")
@@ -2930,7 +2938,7 @@ public class McpServer {
         // join at 5996ms -- so it is a real bound rather than an advisory one.
         stmt.setQueryTimeout(queryTimeoutSeconds());
         try {
-            ResultSet rs = stmt.executeQuery(effective);
+            ResultSet rs = executeWithRepair(stmt, effective);
             ResultSetMetaData meta = rs.getMetaData();
             int cols = meta.getColumnCount();
             String[] names = new String[cols];
@@ -3497,7 +3505,7 @@ public class McpServer {
         List<Double> rowValue = new ArrayList<>();
         java.util.Set<Integer> years = new java.util.TreeSet<>();
         try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(quoteReservedIdentifiers(sql))) {
+             ResultSet rs = executeWithRepair(st, sql)) {
             java.sql.ResultSetMetaData md = rs.getMetaData();
             int cols = md.getColumnCount();
             int valueIdx = rs.findColumn(valueCol);
@@ -3868,7 +3876,7 @@ public class McpServer {
         int converted = 0;
         String realCol = valueCol + "_real_" + baseYear;
         try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(quoteReservedIdentifiers(sql))) {
+             ResultSet rs = executeWithRepair(st, sql)) {
             java.sql.ResultSetMetaData md = rs.getMetaData();
             int cols = md.getColumnCount();
             int valueIdx = rs.findColumn(valueCol);
@@ -4436,7 +4444,7 @@ public class McpServer {
         int droppedForNull = 0;
         int neverTreatedRows = 0;
         try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(quoteReservedIdentifiers(sql))) {
+             ResultSet rs = executeWithRepair(st, sql)) {
             int yIdx = rs.findColumn(outcome);
             int unitIdx = rs.findColumn(unitCol);
             int timeIdx = rs.findColumn(timeCol);
@@ -4648,10 +4656,13 @@ public class McpServer {
      * unquoted column again because nothing ever said otherwise. It is also simply not our
      * statement to change without saying so — the notice names the words and prints the SQL
      * that actually ran, so the result can be checked against what was executed.
+     *
+     * <p>Attached to whichever envelope the tool produced. A tool with no diagnostics still has
+     * to report the rewrite, so the caller of {@code adjust_inflation} learns the same rule as
+     * the caller of {@code query}; see the standalone block in the response assembly.
      */
     private static void addRepairNotice(ObjectNode diagnostics) {
         String notice = LAST_REPAIR_NOTICE.get();
-        LAST_REPAIR_NOTICE.remove();
         if (notice == null || diagnostics == null) {
             return;
         }

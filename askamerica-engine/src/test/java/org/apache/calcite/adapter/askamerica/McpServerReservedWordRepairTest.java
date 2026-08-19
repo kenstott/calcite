@@ -134,6 +134,27 @@ public class McpServerReservedWordRepairTest {
         assertTrue(quotedWords("SELECT geo_name FROM t ORDER BY geo_name").isEmpty());
     }
 
+    @Test void everySqlTakingToolReachesTheDatabaseThroughOneRepairedPath() throws Exception {
+        // The gap this pins: the repair was first wired into the query tool alone, so the same
+        // CAST(year AS INTEGER) that query accepted still failed under adjust_inflation. An
+        // eval run met the identical error one tool over and paid for it a second time.
+        // Guarding the call sites rather than the behaviour, because the behaviour needs a
+        // live catalog and the regression is structural — a new tool calling executeQuery
+        // directly is exactly how this comes back.
+        String src = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(
+            "src/main/java/org/apache/calcite/adapter/askamerica/McpServer.java")),
+            java.nio.charset.StandardCharsets.UTF_8);
+
+        assertFalse(src.contains("st.executeQuery(quoteReservedIdentifiers(sql))"),
+            "caller SQL must go through executeWithRepair, not straight to executeQuery");
+        assertTrue(src.contains("static ResultSet executeWithRepair(Statement st, String sql)"),
+            "the shared execution boundary must exist");
+
+        int direct = src.split("stmt\\.executeQuery\\(effective\\)", -1).length - 1;
+        assertEquals(0, direct,
+            "runSqlRows must not bypass the repair either");
+    }
+
     @Test void survivesAnUnterminatedLiteralWithoutLosingText() {
         String out = quote("SELECT value FROM t WHERE s = 'oops");
         assertTrue(out.contains("'oops"), "the tail must not be dropped: " + out);
