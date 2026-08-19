@@ -1181,6 +1181,9 @@ public class McpServer {
             "One line under the title — the source, vintage, and units the whole board "
             + "shares."));
         dashProps.set("footnote", prop("string", "Caveat line along the bottom."));
+        dashProps.set("byline", prop("string",
+            "Optional attribution line above the AskAmerica mark, bottom-right — e.g. "
+            + "'Prepared 2026-08-19' or an analyst name. The mark itself is always present."));
         dashProps.set("columns", prop("integer", "Grid columns, 1-4 (default 2)."));
         dashProps.set("width", prop("integer", "Image width in pixels (default fits the grid)."));
         dashProps.set("height", prop("integer", "Image height in pixels."));
@@ -1788,8 +1791,10 @@ public class McpServer {
                         ? args.get("footnote").asText() : null;
                     log.println("[askamerica-mcp] tool=compose_dashboard panels="
                         + panels.size() + " cols=" + cols);
+                    String dBy = args.has("byline") && !args.get("byline").isNull()
+                        ? args.get("byline").asText() : null;
                     DashboardLayout.Dashboard dash = DashboardLayout.compose(
-                        dTitle, dSub, dFoot, panels, cols, dw, dh);
+                        dTitle, dSub, dFoot, dBy, panels, cols, dw, dh);
                     chartPng = dash.toPng();
                     chartSvg = dash.toSvg();
                     int stats = 0;

@@ -49,6 +49,105 @@ final class DashboardLayout {
     private static final Color UP = new Color(0x05, 0x96, 0x69);
     private static final Color DOWN = new Color(0xdc, 0x26, 0x26);
 
+    /**
+     * The attribution strip along the bottom.
+     *
+     * <p>A dashboard is made to be shared — pasted into a doc, published as an artifact, dropped
+     * into a deck — and it travels away from whatever produced it. Without a mark on the image
+     * itself, a reader two hops downstream has a chart and no idea what computed it or against
+     * which data. The strip is deliberately quiet: muted, small, bottom-right, opposite the
+     * footnote, so it attributes without competing with the content.
+     */
+    private static final String BRAND = "AskAmerica";
+    private static final String BRAND_URL = "askamerica.ai";
+    private static final Color BRAND_INK = new Color(0x37, 0x41, 0x51);
+    /** Brand palette, from web/icon.svg in the askamerica site. */
+    private static final Color BRAND_BLUE = new Color(0x1a, 0x3a, 0x8a);
+    private static final Color BRAND_RED = new Color(0xd5, 0x32, 0x2f);
+    private static final int MARK_SIZE = 18;
+
+    /**
+     * The AskAmerica mark, inlined rather than linked.
+     *
+     * <p>Geometry copied from {@code web/icon.svg} on the site: a rounded tile split blue and
+     * red on the diagonal, carrying a white question-mark hook and a star. It is reproduced as
+     * primitives rather than fetched because the whole document has to stay self-contained —
+     * a dashboard that needs the network to show its own logo is not an artifact you can paste
+     * into a doc.
+     *
+     * <p>Its clip path is namespaced {@code brand-tile}: panel ids are already namespaced per
+     * panel, and an un-prefixed {@code id="tile"} from the source file would be the one id in
+     * the document that could still collide.
+     */
+    private static String markSvg(double x, double y, double size) {
+        double k = size / 100.0;
+        StringBuilder sb = new StringBuilder();
+        sb.append("  <svg x=\"").append(ChartScene.num(x)).append("\" y=\"")
+            .append(ChartScene.num(y)).append("\" width=\"").append(ChartScene.num(size))
+            .append("\" height=\"").append(ChartScene.num(size))
+            .append("\" viewBox=\"0 0 100 100\" role=\"img\" aria-label=\"AskAmerica\">\n")
+            .append("    <defs><clipPath id=\"brand-tile\">")
+            .append("<rect width=\"100\" height=\"100\" rx=\"22\"/></clipPath></defs>\n")
+            .append("    <g clip-path=\"url(#brand-tile)\">\n")
+            .append("      <polygon fill=\"").append(ChartScene.hex(BRAND_BLUE))
+            .append("\" points=\"0,0 100,0 0,100\"/>\n")
+            .append("      <polygon fill=\"").append(ChartScene.hex(BRAND_RED))
+            .append("\" points=\"100,0 100,100 0,100\"/>\n")
+            .append("    </g>\n")
+            .append("    <path d=\"M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63\" fill=\"none\"")
+            .append(" stroke=\"#ffffff\" stroke-width=\"12\" stroke-linecap=\"round\"/>\n")
+            .append("    <polygon fill=\"#ffffff\" points=\"50,68 52.82,76.12 61.4,76.29 ")
+            .append("54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 ")
+            .append("47.18,76.12\"/>\n")
+            .append("  </svg>\n");
+        return sb.toString();
+    }
+
+    /** The mark's five-point star, from the same point list the SVG polygon uses. */
+    private static java.awt.geom.Path2D.Double star() {
+        double[] pts = {50, 68, 52.82, 76.12, 61.4, 76.29, 54.57, 81.48, 57.05, 89.71,
+            50, 84.8, 42.95, 89.71, 45.43, 81.48, 38.6, 76.29, 47.18, 76.12};
+        java.awt.geom.Path2D.Double p = new java.awt.geom.Path2D.Double();
+        p.moveTo(pts[0], pts[1]);
+        for (int i = 2; i < pts.length; i += 2) {
+            p.lineTo(pts[i], pts[i + 1]);
+        }
+        p.closePath();
+        return p;
+    }
+
+    /** The same mark drawn into a raster, so the PNG carries the logo the SVG does. */
+    private static void markPng(Graphics2D g, double x, double y, double size) {
+        java.awt.Shape savedClip = g.getClip();
+        java.awt.geom.AffineTransform savedTx = g.getTransform();
+        g.translate(x, y);
+        g.scale(size / 100.0, size / 100.0);
+        java.awt.geom.RoundRectangle2D tile =
+            new java.awt.geom.RoundRectangle2D.Double(0, 0, 100, 100, 44, 44);
+        g.setClip(tile);
+        g.setColor(BRAND_BLUE);
+        g.fillPolygon(new int[]{0, 100, 0}, new int[]{0, 0, 100}, 3);
+        g.setColor(BRAND_RED);
+        g.fillPolygon(new int[]{100, 100, 0}, new int[]{0, 100, 100}, 3);
+        g.setColor(Color.WHITE);
+        g.setStroke(new java.awt.BasicStroke(12f, java.awt.BasicStroke.CAP_ROUND,
+            java.awt.BasicStroke.JOIN_ROUND));
+        // The source path is "M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63". Java2D has no
+        // SVG arc primitive, so the elliptical-arc segment is converted to Arc2D's centre
+        // parameterisation: centre (49.97, 33.06), start -176.8 degrees, extent -232.7 (the
+        // large, clockwise sweep the flags select). Eyeballing these numbers produced a blob
+        // rather than a question mark, which on a brand mark is worse than omitting it.
+        java.awt.geom.Path2D.Double hook = new java.awt.geom.Path2D.Double();
+        hook.append(new java.awt.geom.Arc2D.Double(49.97 - 17, 33.06 - 17, 34, 34,
+            -176.8, -232.7, java.awt.geom.Arc2D.OPEN), false);
+        hook.curveTo(55, 52, 50, 55, 50, 63);
+        g.draw(hook);
+        g.fill(star());
+        g.setClip(savedClip);
+        g.setTransform(savedTx);
+        g.setStroke(new java.awt.BasicStroke(1f));
+    }
+
     private static final int GUTTER = 16;
     private static final int PAD = 20;
     private static final int CAPTION_H = 18;
@@ -84,16 +183,18 @@ final class DashboardLayout {
         private final String title;
         private final String subtitle;
         private final String footnote;
+        private final String byline;
         private final List<Panel> panels;
         private final List<double[]> rects = new ArrayList<>();
 
         Dashboard(int width, int height, String title, String subtitle, String footnote,
-                List<Panel> panels) {
+                String byline, List<Panel> panels) {
             this.width = width;
             this.height = height;
             this.title = title;
             this.subtitle = subtitle;
             this.footnote = footnote;
+            this.byline = byline;
             this.panels = panels;
         }
 
@@ -136,6 +237,9 @@ final class DashboardLayout {
                 .append("    .dash-subtitle { font-size: 13px }\n")
                 .append("    .caption { font-size: 11px }\n")
                 .append("    .footnote { font-size: 11px; font-style: italic }\n")
+                .append("    .brand-mark { font-size: 11px; font-weight: 600; "
+                    + "letter-spacing: 0.02em }\n")
+                .append("    .byline { font-size: 11px }\n")
                 .append("    .stat-label { font-size: 12px }\n")
                 .append("    .stat-value { font-size: 30px; font-weight: 650 }\n")
                 .append("    .stat-delta { font-size: 13px; font-weight: 600 }\n")
@@ -149,7 +253,8 @@ final class DashboardLayout {
                 .append("      .panel-edge { stroke: #2c3038 }\n")
                 .append("      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,\n")
                 .append("      .stat-value, .title, .axis-title, .tick, .value-label,\n")
-                .append("      .callout, .legend-label { fill: #e6e8eb }\n")
+                .append("      .callout, .legend-label, .byline { fill: #e6e8eb }\n")
+                .append("      .brand-mark { fill: #9aa4b2 }\n")
                 .append("      .axis { stroke: #6b7280 }\n")
                 .append("      .grid { stroke: #2c3038 }\n")
                 .append("    }\n")
@@ -173,7 +278,8 @@ final class DashboardLayout {
                 String prefix = "p" + (i + 1) + "-";
                 double panelH = r[3] - (p.caption == null ? 0 : CAPTION_H);
                 if ("stat".equals(p.kind)) {
-                    sb.append(statSvg(p, r[0], r[1], r[2], panelH, prefix));
+                    double[] box = statBox(r[1], panelH);
+                    sb.append(statSvg(p, r[0], box[0], r[2], box[1], prefix));
                 } else {
                     sb.append("  <rect class=\"panel-edge\" x=\"").append(ChartScene.num(r[0]))
                         .append("\" y=\"").append(ChartScene.num(r[1]))
@@ -192,6 +298,17 @@ final class DashboardLayout {
             if (footnote != null && !footnote.isEmpty()) {
                 sb.append(text("footnote", PAD, height - 10, footnote, MUTED, "start"));
             }
+            sb.append("  <g id=\"brand\">\n");
+            String wordmark = BRAND + " · " + BRAND_URL;
+            double markX = width - PAD - ChartScene.textWidth(wordmark, 11, true) - MARK_SIZE - 6;
+            sb.append(markSvg(markX, height - 10 - MARK_SIZE + 3, MARK_SIZE));
+            sb.append("  ").append(text("brand-mark", width - PAD, height - 10,
+                wordmark, BRAND_INK, "end"));
+            if (byline != null && !byline.isEmpty()) {
+                sb.append("  ").append(text("byline", width - PAD, height - 24, byline,
+                    MUTED, "end"));
+            }
+            sb.append("  </g>\n");
             sb.append("  <g id=\"annotations\"><!-- dashboard-level callouts here --></g>\n");
             sb.append("</svg>\n");
             return sb.toString();
@@ -221,7 +338,8 @@ final class DashboardLayout {
                 double[] r = rects.get(i);
                 double panelH = r[3] - (p.caption == null ? 0 : CAPTION_H);
                 if ("stat".equals(p.kind)) {
-                    statPng(g, p, r[0], r[1], r[2], panelH);
+                    double[] box = statBox(r[1], panelH);
+                    statPng(g, p, r[0], box[0], r[2], box[1]);
                 } else {
                     g.setColor(PANEL_EDGE);
                     g.drawRoundRect((int) r[0], (int) r[1], (int) r[2], (int) panelH, 6, 6);
@@ -233,6 +351,13 @@ final class DashboardLayout {
             }
             if (footnote != null && !footnote.isEmpty()) {
                 draw(g, footnote, PAD, height - 10, 11, false, MUTED);
+            }
+            String mark = BRAND + " \u00b7 " + BRAND_URL;
+            markPng(g, width - PAD - ChartScene.textWidth(mark, 11, true) - MARK_SIZE - 6,
+                height - 10 - MARK_SIZE + 3, MARK_SIZE);
+            drawRight(g, mark, width - PAD, height - 10, 11, true, BRAND_INK);
+            if (byline != null && !byline.isEmpty()) {
+                drawRight(g, byline, width - PAD, height - 24, 11, false, MUTED);
             }
             g.dispose();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -282,6 +407,16 @@ final class DashboardLayout {
             }
         }
 
+        /** Right-aligned text, for the attribution strip that hangs off the right edge. */
+        private static void drawRight(Graphics2D g, String s, double x, double y, int size,
+                boolean bold, Color c) {
+            g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF,
+                bold ? java.awt.Font.BOLD : java.awt.Font.PLAIN, size));
+            g.setColor(c);
+            int w = g.getFontMetrics().stringWidth(s);
+            g.drawString(s, (float) (x - w), (float) y);
+        }
+
         private static void draw(Graphics2D g, String s, double x, double y, int size,
                 boolean bold, Color c) {
             g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF,
@@ -308,6 +443,12 @@ final class DashboardLayout {
      */
     static Dashboard compose(String title, String subtitle, String footnote, List<Panel> panels,
             int columns, int width, int height) {
+        return compose(title, subtitle, footnote, null, panels, columns, width, height);
+    }
+
+    /** As above, with an optional byline above the attribution mark. */
+    static Dashboard compose(String title, String subtitle, String footnote, String byline,
+            List<Panel> panels, int columns, int width, int height) {
         if (panels.isEmpty()) {
             throw new IllegalArgumentException("panels must not be empty");
         }
@@ -336,7 +477,10 @@ final class DashboardLayout {
         double headerH = PAD + 8
             + (title == null || title.isEmpty() ? 0 : 26)
             + (subtitle == null || subtitle.isEmpty() ? 0 : 18) + 10;
-        double footH = (footnote == null || footnote.isEmpty() ? 0 : 22) + PAD;
+        // The attribution strip always occupies the bottom, so it is reserved whether or not
+        // a footnote is present — branding that overlaps the last row is worse than no branding.
+        double footH = Math.max(footnote == null || footnote.isEmpty() ? 0 : 22,
+            byline == null || byline.isEmpty() ? 18 : 32) + PAD;
 
         // Assign to rows first, because a row's height depends on what is in it.
         List<List<Panel>> rowList = new ArrayList<>();
@@ -412,7 +556,8 @@ final class DashboardLayout {
             }
         }
 
-        Dashboard dash = new Dashboard(width, height, title, subtitle, footnote, panels);
+        Dashboard dash = new Dashboard(width, height, title, subtitle, footnote, byline,
+            panels);
         double y = headerH;
         for (int ri = 0; ri < rowList.size(); ri++) {
             double x = PAD;
@@ -425,6 +570,21 @@ final class DashboardLayout {
             y += rowH[ri] + GUTTER;
         }
         return dash;
+    }
+
+    /**
+     * A stat tile's own box within whatever cell it was given, centred vertically.
+     *
+     * <p>Row height is set by the tallest thing in the row, and a row mixing a chart with a
+     * tile therefore hands the tile a chart's worth of height. Observed 2026-08-19c: a tile
+     * beside a span=2 line chart rendered as a headline number floating in a box three times
+     * too tall, which reads as a rendering fault rather than a design. A tile is three lines of
+     * text; it never needs more than its natural height, and centring what is left keeps it
+     * aligned with the chart beside it.
+     */
+    static double[] statBox(double cellY, double cellH) {
+        double h = Math.min(cellH, STAT_ROW_H);
+        return new double[]{cellY + (cellH - h) / 2, h};
     }
 
     private static boolean hasCaption(List<Panel> row) {

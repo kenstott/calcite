@@ -171,6 +171,79 @@ public class DashboardTest {
             "the chart row should get the space the stat row gave up");
     }
 
+    @Test void aStatTileBesideAChartKeepsItsOwnHeight() {
+        // Row height is set by the tallest panel, so a mixed row handed the tile a chart's
+        // worth of box. Observed 2026-08-19c: a headline number floating in a box three times
+        // too tall, which reads as a rendering fault rather than a design.
+        DashboardLayout.Panel wide = chart("trend", null, 1, 2, 3);
+        wide.span = 2;
+        String svg = DashboardLayout.compose("t", null, null,
+            Arrays.asList(wide, stat("wage", "$1,772")), 3, 1200, 600).toSvg();
+
+        Matcher m = Pattern.compile(
+            "id=\"p2-stat\">\\s*<rect[^>]*?height=\"([\\d.]+)\"").matcher(svg);
+        assertTrue(m.find(), "the stat tile should be drawn: " + svg.substring(0, 600));
+        double tileH = Double.parseDouble(m.group(1));
+        assertTrue(tileH <= 130,
+            "a tile is three lines of text and must not stretch to the chart's height, got "
+                + tileH);
+    }
+
+    @Test void aStatTileIsCentredInTheCellItWasGiven() {
+        double[] box = DashboardLayout.statBox(100, 300);
+        assertEquals(108, box[1], "capped at its natural height");
+        assertEquals(100 + (300 - 108) / 2, box[0], 0.01, "centred in the cell");
+
+        double[] tight = DashboardLayout.statBox(50, 60);
+        assertEquals(60, tight[1], "never taller than the cell it was given");
+        assertEquals(50, tight[0], 0.01);
+    }
+
+    @Test void everyBoardCarriesTheAskAmericaMark() {
+        // A dashboard travels — pasted into a doc, published, dropped into a deck. Without a
+        // mark on the image, a reader two hops downstream has a chart and no idea what
+        // computed it. Branding is therefore not opt-in.
+        String svg = DashboardLayout.compose("t", null, null,
+            Arrays.asList(chart("c", null, 1, 2, 3)), 1, 700, 400).toSvg();
+
+        assertTrue(svg.contains("<g id=\"brand\">"), "brand group");
+        assertTrue(svg.contains("askamerica.ai"), "the URL a reader can act on");
+        assertTrue(svg.contains("aria-label=\"AskAmerica\""), "the mark itself");
+        assertTrue(svg.contains("#1a3a8a") && svg.contains("#d5322f"),
+            "brand blue and red, from web/icon.svg");
+    }
+
+    @Test void theMarkIsInlinedRatherThanLinked() {
+        String svg = DashboardLayout.compose("t", null, null,
+            Arrays.asList(chart("c", null, 1, 2, 3)), 1, 700, 400).toSvg();
+        assertFalse(svg.contains("<image"), "no external image reference");
+        // A board that needs the network to draw its own logo is not a portable artifact.
+        assertEquals(1, svg.split("http", -1).length - 1,
+            "the SVG namespace should remain the only http reference");
+    }
+
+    @Test void theMarksClipPathCannotCollideWithAPanel() {
+        // Panel ids are namespaced pN-; the mark's own clipPath is the one id that would not
+        // be, and the source file calls it plain "tile".
+        String svg = DashboardLayout.compose("t", null, null,
+            Arrays.asList(chart("a", null, 1, 2, 3), chart("b", null, 1, 2, 3)),
+            2, 900, 500).toSvg();
+        assertTrue(svg.contains("id=\"brand-tile\""), "namespaced clip path");
+        assertFalse(svg.contains("id=\"tile\""), "never the bare id from the source file");
+    }
+
+    @Test void aBylineSitsAboveTheMarkWhenGiven() {
+        String with = DashboardLayout.compose("t", null, null, "Prepared 2026-08-19",
+            Arrays.asList(chart("c", null, 1, 2, 3)), 1, 700, 400).toSvg();
+        assertTrue(with.contains("Prepared 2026-08-19"));
+        assertTrue(with.contains("class=\"byline\""));
+
+        String without = DashboardLayout.compose("t", null, null,
+            Arrays.asList(chart("c", null, 1, 2, 3)), 1, 700, 400).toSvg();
+        assertFalse(without.contains("class=\"byline\""), "byline is optional; the mark is not");
+        assertTrue(without.contains("askamerica.ai"), "the mark still renders");
+    }
+
     @Test void producesWellFormedSelfContainedXml() {
         String svg = DashboardLayout.compose("Title", "Subtitle", "Footnote",
             Arrays.asList(stat("Real rise", "+$19,029"), chart("trend", null, 1, 2, 3)),
