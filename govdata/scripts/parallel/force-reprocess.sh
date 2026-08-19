@@ -75,6 +75,7 @@ END_YEAR=""
 SKIP_HISTORICAL=false
 SKIP_DAILY=false
 DRY_RUN=false
+FORCE_DOWNLOAD=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -85,13 +86,26 @@ while [[ $# -gt 0 ]]; do
     --skip-historical) SKIP_HISTORICAL=true; shift ;;
     --skip-daily)      SKIP_DAILY=true; shift ;;
     --dry-run)         DRY_RUN=true;    shift ;;
+    --force-download)  FORCE_DOWNLOAD=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
 if [[ -z "$SCHEMA" || -z "$TABLES" ]]; then
   cat <<EOF >&2
-Usage: $0 --schema <schema> --tables <t1,t2,...> [--start YYYY] [--end YYYY] [--skip-historical] [--skip-daily] [--dry-run]
+Usage: $0 --schema <schema> --tables <t1,t2,...> [--start YYYY] [--end YYYY] [--skip-historical] [--skip-daily] [--dry-run] [--force-download]
+
+  --force-download   Makes the target table(s) treat their raw HTTP cache as always-miss for
+                      this run (GOVDATA_FORCE_DOWNLOAD_TABLES), so every dimension combo is
+                      live-fetched and the stale cached response gets overwritten — no files are
+                      deleted. GOVDATA_FORCE_REPROCESS_TABLES alone only bypasses the table-level
+                      tracker check — HttpSource still reads an existing cached response instead
+                      of re-fetching, so a fix to how the response is FETCHED OR PARSED (e.g. a
+                      bug that mishandled an API error shape and cached the bad result) needs
+                      this flag to actually take effect. A fix that only changes materialization/
+                      transform logic downstream of the cache does not need it — the cached raw
+                      response was fine, only what was done with it was wrong. Determine which
+                      case applies from the nature of the bug being fixed, not by default.
 
 Examples:
   force-reprocess.sh --schema econ --tables industry_gdp
@@ -235,6 +249,31 @@ if [[ "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" ]]; then
       echo ""
     fi
   fi
+fi
+
+# ── --force-download: make HttpSource treat the target table(s)' raw cache as always-miss for
+#    this run, instead of deleting the cached files. rawCache is immutable by design (see the
+#    govdata-data-cadence skill) — once a response.json is written, it is read forever and NEVER
+#    re-fetched on its own. If a bug lives in how the response was fetched or parsed (not just
+#    in downstream materialization), GOVDATA_FORCE_REPROCESS_TABLES alone just re-materializes
+#    the SAME bad cached response — confirmed live 2026-08-18: force-reprocessing
+#    econ.regional_income for 2025 after fixing BeaResponseTransformer's error-shape handling
+#    produced "0 unprocessed of 1 total (100% cached)" and zero row-count change.
+#
+#    FIRST implementation of this flag deleted the raw cache via rclone (superseded — see git
+#    history): correctness required either an unreliable glob (rclone's --include matched every
+#    year's directory, not just the target one) or purging a table's entire cache subtree
+#    wholesale, and deleting thousands of small per-dimension response.json files one-by-one on
+#    MinIO was also just slow (30+ min for one table-year in practice). This is simpler, faster,
+#    and exactly scoped: GOVDATA_FORCE_DOWNLOAD_TABLES (HttpSource.bypassRawCache, wired in
+#    EtlPipeline.isTableForceDownloaded, same shape as GOVDATA_FORCE_REPROCESS_TABLES) makes
+#    hasValidRawCache() report a miss unconditionally for these tables, forcing a live fetch —
+#    whose normal cache-write path then overwrites the stale entry (S3/MinIO PUT semantics
+#    replace an existing key, no delete needed) with the corrected response.
+if $FORCE_DOWNLOAD; then
+  export GOVDATA_FORCE_DOWNLOAD_TABLES="$TABLES"
+  echo "── force-download: GOVDATA_FORCE_DOWNLOAD_TABLES=${TABLES} — raw cache will be bypassed, not deleted ──"
+  echo ""
 fi
 
 export GOVDATA_FORCE_REPROCESS_TABLES="$TABLES"

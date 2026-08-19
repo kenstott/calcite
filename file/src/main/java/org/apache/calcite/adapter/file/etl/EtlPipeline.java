@@ -2504,7 +2504,7 @@ public class EtlPipeline {
     }
     // Use sourceStorageProvider for raw cache (not the materialized storage provider)
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
-        operatingDirectory, config.getColumns());
+        operatingDirectory, config.getColumns(), isTableForceDownloaded(config.getName()));
   }
 
   /**
@@ -2671,6 +2671,29 @@ public class EtlPipeline {
    */
   private static boolean isTableForceReprocessed(String pipelineName) {
     String raw = VariableResolver.resolveEnvVars("${GOVDATA_FORCE_REPROCESS_TABLES:}");
+    if (raw == null || raw.isEmpty()) {
+      return false;
+    }
+    for (String table : raw.split(",")) {
+      if (table.trim().equals(pipelineName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * True if {@code pipelineName} is listed in {@code GOVDATA_FORCE_DOWNLOAD_TABLES} (a
+   * comma-separated table-name list) — same shape and resolution as
+   * {@link #isTableForceReprocessed}. When true, the table's {@link HttpSource} treats every
+   * raw cache lookup as a miss and always fetches live, overwriting whatever was cached — the
+   * right tool when a bug lives in how a response was fetched or parsed (so the cached bytes
+   * themselves are wrong), as opposed to {@code GOVDATA_FORCE_REPROCESS_TABLES} alone, which
+   * only bypasses the table-level tracker and would just re-materialize the same bad cached
+   * response.
+   */
+  private static boolean isTableForceDownloaded(String pipelineName) {
+    String raw = VariableResolver.resolveEnvVars("${GOVDATA_FORCE_DOWNLOAD_TABLES:}");
     if (raw == null || raw.isEmpty()) {
       return false;
     }

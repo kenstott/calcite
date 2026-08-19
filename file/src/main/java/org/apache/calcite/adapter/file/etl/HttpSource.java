@@ -107,6 +107,14 @@ public class HttpSource implements DataSource {
   /** Operating directory from model operands (e.g., .aperio/<schema>), used for local cache base. */
   private final String operatingDirectory;
   /**
+   * When true, {@link #hasValidRawCache} always reports a miss regardless of what's on disk —
+   * forces a live fetch instead of reading a possibly-corrupted cached response (e.g. one
+   * written by a since-fixed response-parsing bug), and the live fetch's normal cache-write
+   * path then overwrites the stale entry with the corrected one. See {@code EtlPipeline}'s
+   * {@code GOVDATA_FORCE_DOWNLOAD_TABLES} handling for how this gets set.
+   */
+  private final boolean bypassRawCache;
+  /**
    * Fetch-time keys of the columns the table declares as textual. Delimited formats carry no
    * types, so {@link #parseValue} otherwise infers one per value — and an all-digit identifier
    * (FIPS code, ZIP, CIK) parses as a number, dropping its leading zeros. The declared type is
@@ -170,7 +178,7 @@ public class HttpSource implements DataSource {
    */
   public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
       StorageProvider storageProvider, String rawCachePath, String operatingDirectory) {
-    this(config, hooksConfig, storageProvider, rawCachePath, operatingDirectory, null);
+    this(config, hooksConfig, storageProvider, rawCachePath, operatingDirectory, null, false);
   }
 
   /**
@@ -188,6 +196,25 @@ public class HttpSource implements DataSource {
   public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
       StorageProvider storageProvider, String rawCachePath, String operatingDirectory,
       List<ColumnConfig> columns) {
+    this(config, hooksConfig, storageProvider, rawCachePath, operatingDirectory, columns, false);
+  }
+
+  /**
+   * Creates a new HttpSource with control over whether an existing raw cache entry may be read.
+   *
+   * @param config HTTP source configuration
+   * @param hooksConfig Optional hooks configuration for response transformation
+   * @param storageProvider Storage provider for raw response caching (S3, local, etc.)
+   * @param rawCachePath Base path for raw response cache (e.g., s3://bucket/.raw)
+   * @param operatingDirectory Operating directory for local cache (e.g., .aperio/schema); may be null
+   * @param columns Declared columns of the table being fetched; may be null when the table
+   *                declares none, in which case delimited values fall back to inference
+   * @param bypassRawCache when true, treat every raw cache lookup as a miss and always fetch
+   *                        live, overwriting whatever was cached
+   */
+  public HttpSource(HttpSourceConfig config, HooksConfig hooksConfig,
+      StorageProvider storageProvider, String rawCachePath, String operatingDirectory,
+      List<ColumnConfig> columns, boolean bypassRawCache) {
     this.config = config;
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
@@ -207,6 +234,7 @@ public class HttpSource implements DataSource {
     this.rawCachePath = rawCachePath;
     this.operatingDirectory = operatingDirectory;
     this.textualSourceKeys = textualSourceKeys(columns);
+    this.bypassRawCache = bypassRawCache;
   }
 
   /**
@@ -227,6 +255,7 @@ public class HttpSource implements DataSource {
     this.rawCachePath = null;
     this.operatingDirectory = null;
     this.textualSourceKeys = Collections.emptySet();
+    this.bypassRawCache = false;
   }
 
   /**
@@ -3606,6 +3635,10 @@ public class HttpSource implements DataSource {
    * @return true if cache hit, false otherwise
    */
   private boolean hasValidRawCache(String cachePath) {
+    if (bypassRawCache) {
+      LOGGER.debug("Raw cache bypassed (force-download): {}", cachePath);
+      return false;
+    }
     try {
       // Immutable data - if cache exists, it's valid
       // Staleness is determined by IncrementalTracker, not by TTL
