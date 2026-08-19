@@ -148,13 +148,20 @@ public class S3StorageProvider implements StorageProvider {
       // parquet files) and a large connection pool for heavy concurrent ETL. Socket timeout
       // 15 min (data transfer over slow links); connection timeout 60s (DNS + TCP handshake);
       // max 200 connections (default is too low for heavy ETL). Re-validate a pooled
-      // connection after 2s idle — under heavy load the server (e.g. MinIO) silently drops
-      // idle keep-alive sockets, and reusing a stale one throws "Connection reset".
+      // connection after 2s idle — not a load problem (a handful of JVMs is nowhere near
+      // enough to stress MinIO); the driver is time — callers can go many minutes between S3
+      // touches doing CPU-bound work in between, easily longer than any server keep-alive, so a
+      // pooled connection left that long is stale regardless of how busy the server is.
+      // Reusing a stale one throws "Connection reset" or hangs (see S3FileIOTables.toS3Properties
+      // for the fuller writeup and the same fix applied to Iceberg's separate S3 client).
+      // useIdleConnectionReaper actively evicts expired connections in the background instead of
+      // only checking at borrow time, which alone still leaves a narrow race.
       ApacheHttpClient.Builder httpClient = ApacheHttpClient.builder()
           .socketTimeout(Duration.ofMinutes(15))
           .connectionTimeout(Duration.ofSeconds(60))
           .connectionMaxIdleTime(Duration.ofSeconds(2))
           .connectionAcquisitionTimeout(Duration.ofSeconds(60))
+          .useIdleConnectionReaper(true)
           .maxConnections(200);
 
       // Retry transient failures — 5xx, throttling, and connection-level errors such as

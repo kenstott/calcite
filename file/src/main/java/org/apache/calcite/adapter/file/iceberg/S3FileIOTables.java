@@ -192,14 +192,30 @@ public final class S3FileIOTables {
     // AWS SDK v2 requires a region even against a custom endpoint; MinIO/R2 ignore it.
     String region = firstNonEmpty(src, "fs.s3a.endpoint.region", "region");
     props.put("client.region", region != null && !region.isEmpty() ? region : "us-east-1");
-    // Under heavy load MinIO silently drops idle keep-alive sockets; reusing a pooled
-    // connection past that point hangs forever waiting for a response that will never
-    // arrive (confirmed live via jstack — two independent jobs stuck in
-    // NioSocketImpl.timedRead with matching zero-CPU-progress samples, while `ss -tn`
-    // showed hundreds of connections stuck CLOSE-WAIT). Matches the same 2s idle
-    // revalidation as S3StorageProvider's own Apache HTTP client — this S3FileIO
+    // Not a concurrency/load problem — this table sees a handful of JVMs, nowhere near enough
+    // to stress MinIO. The real driver is time: Iceberg only touches S3 through this client in
+    // short bursts (secret setup, watermark checks, commits), with long CPU-bound gaps between
+    // them — 10-25+ minutes spent parsing documents was observed directly between one
+    // materialization step and the next. Any pooled connection left untouched that long is
+    // stale by any reasonable server keep-alive, regardless of how busy MinIO is. Reusing it
+    // hangs forever waiting for a response that will never arrive (confirmed live via jstack —
+    // independent jobs stuck in NioSocketImpl.timedRead with matching zero-CPU-progress
+    // samples, while `ss -tn` showed hundreds of connections stuck CLOSE-WAIT). Matches the
+    // same 2s idle revalidation as S3StorageProvider's own Apache HTTP client — this S3FileIO
     // instance is a separate client with its own pool, so that fix doesn't cover it.
     props.put("http-client.apache.connection-max-idle-time-ms", "2000");
+    // connection-max-idle-time-ms alone is a lazy, on-borrow check — without a background
+    // sweep, a connection can still be handed out believing it's within the idle window when
+    // the peer already closed it moments earlier (confirmed live: a second, independent job
+    // hung identically after running clean on the idle-time setting alone for over an hour).
+    // The reaper actively evicts expired pooled connections instead of only checking at borrow
+    // time, closing most of that gap.
+    props.put("http-client.apache.use-idle-connection-reaper-enabled", "true");
+    // Neither this client nor Iceberg's own S3FileIO sets any request timeout by default, so a
+    // connection that still loses the residual race blocks indefinitely instead of failing and
+    // letting the SDK's default retry policy recover it. Bound it so a stale hit degrades to a
+    // retried request, not a hang requiring a manual kill.
+    props.put("http-client.apache.socket-timeout-ms", "60000");
     return props;
   }
 
