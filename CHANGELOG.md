@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.77.1](https://github.com/kenstott/calcite/compare/engine-v0.77.0...engine-v0.77.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **govdata/seed:** replace the bundled seed catalog that had gone stale against current live data ([19ab5a7](https://github.com/kenstott/calcite/commit/19ab5a751534728bee76313cdc3e9c0a0460c307))
+
 ## [0.77.0](https://github.com/kenstott/calcite/compare/engine-v0.76.1...engine-v0.77.0) (2026-08-19)
 
 
