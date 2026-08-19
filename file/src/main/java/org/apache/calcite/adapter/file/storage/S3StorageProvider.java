@@ -153,7 +153,7 @@ public class S3StorageProvider implements StorageProvider {
       ApacheHttpClient.Builder httpClient = ApacheHttpClient.builder()
           .socketTimeout(Duration.ofMinutes(15))
           .connectionTimeout(Duration.ofSeconds(60))
-          .connectionMaxIdleTime(Duration.ofSeconds(60))
+          .connectionMaxIdleTime(Duration.ofSeconds(2))
           .connectionAcquisitionTimeout(Duration.ofSeconds(60))
           .maxConnections(200);
 
