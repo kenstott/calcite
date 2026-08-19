@@ -134,6 +134,49 @@ public class ChartSvgTest {
                 + "the data it came from");
     }
 
+    @Test void tellsTheCallerWhereThereIsRoomToAnnotate() {
+        // Observed 2026-08-19b: the first agent to use this scaffold put its callout through
+        // the top gridline label and its footnote off the right edge. It followed the header
+        // exactly — the header just never said where the free space was.
+        String svg = barSvg();
+        assertTrue(svg.contains("WHERE THERE IS ROOM"), "the header must name the free bands");
+        assertTrue(svg.contains("annotation band"), "band above the plot");
+        assertTrue(svg.contains("footnote line"), "band at the bottom");
+        assertTrue(svg.contains("The plot rectangle itself is x "),
+            "and the plot rectangle, so 'inside' is a deliberate choice not a guess");
+    }
+
+    @Test void reservesTheBandsItAdvertisesSoNothingIsAlreadyThere() {
+        String svg = barSvg();
+        java.util.regex.Matcher band = java.util.regex.Pattern
+            .compile("annotation band\\s+y ([0-9.]+)\\.\\.([0-9.]+)").matcher(svg);
+        assertTrue(band.find(), "band coordinates must be stated: " + svg.substring(0, 900));
+        double top = Double.parseDouble(band.group(1));
+        double bottom = Double.parseDouble(band.group(2));
+        assertTrue(bottom > top, "the band must have height");
+
+        // Nothing may already be drawn inside the band it calls empty.
+        java.util.regex.Matcher ys = java.util.regex.Pattern
+            .compile("<(?:text|rect|line|circle)[^>]*?\\sy(?:1)?=\"([0-9.]+)\"")
+            .matcher(svg);
+        while (ys.find()) {
+            double y = Double.parseDouble(ys.group(1));
+            assertFalse(y > top && y < bottom,
+                "element at y=" + y + " sits inside the supposedly free band "
+                    + top + ".." + bottom);
+        }
+    }
+
+    @Test void offersAnAnnotationsGroupThatPaintsLast() {
+        String svg = barSvg();
+        assertTrue(svg.contains("<g id=\"annotations\">"), "the group must exist");
+        // lastIndexOf on both: the header comment mentions each id by name, so indexOf would
+        // match the documentation rather than the element it documents.
+        assertTrue(svg.lastIndexOf("<g id=\"annotations\">")
+                > svg.lastIndexOf("<g id=\"series-"),
+            "annotations must come after the series, or additions paint underneath the data");
+    }
+
     @Test void isSelfContainedWithNoExternalReferencesOrScripts() {
         String svg = barSvg();
         assertFalse(svg.contains("<script"), "no scripts");

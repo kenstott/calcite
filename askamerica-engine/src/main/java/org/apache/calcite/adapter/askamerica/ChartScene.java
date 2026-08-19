@@ -338,10 +338,40 @@ final class ChartScene {
     final Color background;
     private final List<Element> elements = new ArrayList<>();
 
+    /**
+     * Where the data marks live, and the bands deliberately left empty around them.
+     *
+     * <p>Recorded so {@link #toSvg()} can hand the caller real coordinates instead of an
+     * invitation to guess. A caller told only that annotations are welcome puts one wherever it
+     * seems natural and lands on a tick label — which is exactly what happened the first time
+     * an agent used this scaffold: its callout printed over the top gridline label and its
+     * footnote ran off the right edge.
+     */
+    private double plotX;
+    private double plotY;
+    private double plotW;
+    private double plotH;
+    private double annotationBandTop;
+    private double annotationBandBottom;
+    private double footnoteY;
+
     ChartScene(int width, int height, Color background) {
         this.width = width;
         this.height = height;
         this.background = background;
+    }
+
+    /** Records the plot rectangle and the free bands reserved above it and below it. */
+    ChartScene bounds(double x, double y, double w, double h,
+            double bandTop, double bandBottom, double footnote) {
+        this.plotX = x;
+        this.plotY = y;
+        this.plotW = w;
+        this.plotH = h;
+        this.annotationBandTop = bandTop;
+        this.annotationBandBottom = bandBottom;
+        this.footnoteY = footnote;
+        return this;
     }
 
     ChartScene add(Element e) {
@@ -369,6 +399,21 @@ final class ChartScene {
             .append("    * de-emphasise one  — change fill on an id=\"mark-*\" element\n")
             .append("    * add value labels  — <text class=\"value-label\"> at a mark's x/y\n")
             .append("    * retitle / relabel — <text class=\"title|axis-title|tick\">\n")
+            .append("\n")
+            .append("  WHERE THERE IS ROOM. These bands are reserved and contain nothing, so\n")
+            .append("  anything you put in them cannot collide with a label or a gridline:\n")
+            .append(band("    * annotation band  ", annotationBandTop, annotationBandBottom))
+            .append(band("    * footnote line    ", footnoteY - 10, footnoteY))
+            .append("      (both span the full width, x from 8 to ").append(num(width - 8))
+            .append(")\n")
+            .append("    * append to <g id=\"annotations\"> at the end — it paints last, so\n")
+            .append("      nothing can cover what you add there\n")
+            .append("  The plot rectangle itself is x ").append(num(plotX)).append("..")
+            .append(num(plotX + plotW)).append(", y ").append(num(plotY)).append("..")
+            .append(num(plotY + plotH)).append(". Annotating INSIDE it is fine and often\n")
+            .append("  right — a leader line to one mark, say — but that is where the data and\n")
+            .append("  the gridlines are, so place deliberately rather than by eye.\n")
+            .append("\n")
             .append("  Do NOT move plotted geometry: every x/y below is computed from the data\n")
             .append("  you passed, so shifting a mark makes the picture disagree with the\n")
             .append("  numbers it came from. Change what a mark says, not where it sits.\n")
@@ -398,6 +443,8 @@ final class ChartScene {
         for (Element e : elements) {
             e.writeSvg(sb, "  ");
         }
+        // Last, so anything appended here paints over the chart rather than under it.
+        sb.append("  <g id=\"annotations\"><!-- add callouts and leaders here --></g>\n");
         sb.append("</svg>\n");
         return sb.toString();
     }
@@ -431,6 +478,14 @@ final class ChartScene {
         int w = g.getFontMetrics().stringWidth(text);
         g.dispose();
         return w;
+    }
+
+    /** One reserved-band line for the header, or nothing when the band was never set. */
+    private static String band(String label, double top, double bottom) {
+        if (bottom - top < 4) {
+            return "";
+        }
+        return label + "y " + num(top) + ".." + num(bottom) + "\n";
     }
 
     private static String attr(String name, String value) {

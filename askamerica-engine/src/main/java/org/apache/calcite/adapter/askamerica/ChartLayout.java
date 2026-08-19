@@ -57,6 +57,19 @@ final class ChartLayout {
     private static final Color AXIS = new Color(0x9c, 0xa3, 0xaf);
     private static final Color GRID = new Color(0xe5, 0xe7, 0xeb);
 
+    /**
+     * Empty space kept between the title and the plot, and at the very bottom.
+     *
+     * <p>Reserved rather than reclaimed. The SVG hands a caller ids and classes and invites
+     * annotations, and the first agent to accept the invitation put a callout straight through
+     * the top gridline label and a footnote off the right edge — not carelessly, but because
+     * the scaffold packed every pixel and then asked for more. Giving up ~34px of plot height
+     * buys a place to put the sentence that qualifies the chart, which on a chart worth
+     * annotating is the better trade.
+     */
+    private static final int ANNOTATION_BAND = 20;
+    private static final int FOOTNOTE_BAND = 16;
+
     private static final int TITLE_SIZE = 15;
     private static final int TICK_SIZE = 11;
     private static final int AXIS_TITLE_SIZE = 12;
@@ -98,17 +111,19 @@ final class ChartLayout {
         }
         double left = 18 + (yLabel == null || yLabel.isEmpty() ? 0 : 18) + tickLabelWidth + 10;
         double right = 22;
-        double top = title == null || title.isEmpty() ? 22 : 46;
+        double titleBottom = title == null || title.isEmpty() ? 12 : 36;
+        double top = titleBottom + ANNOTATION_BAND;
         double slotWidth = (width - left - right) / Math.max(1, categories.size());
         boolean rotate = widest > slotWidth - 6;
         double bottom = (rotate ? Math.min(96, widest * 0.72 + 22) : 30)
-            + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight;
+            + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight + FOOTNOTE_BAND;
 
         double plotW = width - left - right;
         double plotH = height - top - bottom;
 
         addFrame(scene, title, xLabel, yLabel, left, top, plotW, plotH, width, height, ticks,
             legendHeight);
+        scene.bounds(left, top, plotW, plotH, titleBottom + 4, top - 4, height - 4);
 
         // Category ticks. Every category gets a label, rotated when they would collide.
         Group xTicks = new Group().at("x-axis-labels");
@@ -172,7 +187,7 @@ final class ChartLayout {
         }
 
         if (series.size() > 1) {
-            addLegend(scene, seriesNames(series), height - 10, width);
+            addLegend(scene, seriesNames(series), height - 10 - FOOTNOTE_BAND, width);
         }
         return scene;
     }
@@ -193,6 +208,8 @@ final class ChartLayout {
         if (total <= 0) {
             total = 1;
         }
+        scene.bounds(0, top, width, height - top - FOOTNOTE_BAND,
+            title == null || title.isEmpty() ? 8 : 32, top - 4, height - 4);
         double cx = width / 2.0;
         double cy = top + (height - top - 20) / 2.0;
         double r = Math.min(width, height - top) * 0.32;
@@ -272,13 +289,16 @@ final class ChartLayout {
         }
         double left = 18 + (yLabel == null || yLabel.isEmpty() ? 0 : 18) + tickLabelWidth + 10;
         double right = 26;
-        double top = title == null || title.isEmpty() ? 22 : 46;
-        double bottom = 34 + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight;
+        double titleBottom = title == null || title.isEmpty() ? 12 : 36;
+        double top = titleBottom + ANNOTATION_BAND;
+        double bottom = 34 + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight
+            + FOOTNOTE_BAND;
         double plotW = width - left - right;
         double plotH = height - top - bottom;
 
         addFrame(scene, title, xLabel, yLabel, left, top, plotW, plotH, width, height, yt,
             legendHeight);
+        scene.bounds(left, top, plotW, plotH, titleBottom + 4, top - 4, height - 4);
 
         Group xTicks = new Group().at("x-axis-labels");
         for (int i = 0; i < xt.values.size(); i++) {
@@ -308,7 +328,7 @@ final class ChartLayout {
         }
 
         if (series.size() > 1) {
-            addLegend(scene, pointSeriesNames(series), height - 10, width);
+            addLegend(scene, pointSeriesNames(series), height - 10 - FOOTNOTE_BAND, width);
         }
         return scene;
     }
@@ -336,8 +356,8 @@ final class ChartLayout {
                 .styled("axis")));
         if (xLabel != null && !xLabel.isEmpty()) {
             // Above the legend when there is one, or it prints straight through the swatches.
-            scene.add(new Label(left + plotW / 2, height - 8 - legendHeight, xLabel, INK,
-                AXIS_TITLE_SIZE, Anchor.MIDDLE, 0, false)
+            scene.add(new Label(left + plotW / 2, height - 8 - legendHeight - FOOTNOTE_BAND,
+                xLabel, INK, AXIS_TITLE_SIZE, Anchor.MIDDLE, 0, false)
                 .at("x-axis-title").styled("axis-title"));
         }
         if (yLabel != null && !yLabel.isEmpty()) {
