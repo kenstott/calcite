@@ -1851,9 +1851,13 @@ public class McpServer {
                             ps, c, sz[0], sz[1]);
                         boardSvg = board.toSvg();
                         boardSvgUrl = ArtifactServer.publishSvg(boardSvg);
-                        // A quarter-scale render: enough to show the shape of the answer and
-                        // that the link is worth opening, at a sixteenth of the image tokens.
-                        thumb = board.toPng(0.25);
+                        // A 40% render. A quarter scale was cheaper still but showed only the
+                        // shape of the board — panel count and which way the lines went — with
+                        // every label illegible. At 40% the titles and headline figures can be
+                        // read, which is the difference between a picture that says "open the
+                        // link" and one that answers the question at a glance. Roughly an
+                        // eighth of a full-size board's image tokens either way.
+                        thumb = board.toPng(0.40);
                     }
                     chartPng = thumb;
                     String html = ReportPage.render(rTitle, rSub, secs, boardSvg, boardSvgUrl,
