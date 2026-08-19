@@ -76,25 +76,27 @@ final class DashboardLayout {
      */
     private static final int BOTTOM_MARGIN = 26;
     private static final int BRAND_BAND = 27;
-    private static final int BYLINE_BAND = 20;
     /** Clear air between the last panel row and the first line of the footer block. */
     private static final int FOOTER_GAP = 26;
 
     /**
      * Baselines for the footer block, measured up from the bottom edge.
      *
-     * <p>Returned as one array — {@code {footnote, byline, mark, requiredHeight}} — so the
-     * layout reserves exactly what the writers will use. Reserving a guessed constant and
-     * separately choosing baselines is how the first two attempts went wrong: the numbers
-     * agreed enough not to overlap and not enough to be readable, and the strip ended up
-     * crushed against the bottom edge with the mark 10px from it.
+     * <p>Two lines at most: the footnote across the full width, and beneath it one attribution
+     * line carrying the mark on the left and the byline on the right. Stacking the byline above
+     * the mark cost a third line and read as two separate footers; they are the same statement
+     * — who made this and when — so they belong on one baseline at opposite margins.
+     *
+     * <p>Returned as one array, {@code {footnote, attribution, requiredHeight}}, so the layout
+     * reserves exactly what the writers use. Reserving a guessed constant and separately
+     * choosing baselines is how the earlier attempts went wrong: the numbers agreed enough not
+     * to overlap and not enough to be readable.
      */
-    private static double[] footerBaselines(int height, boolean hasFootnote, boolean hasByline) {
-        double mark = height - BOTTOM_MARGIN;
-        double byline = mark - BYLINE_BAND;
-        double footnote = (hasByline ? byline : mark) - BRAND_BAND;
-        double topmost = hasFootnote ? footnote : (hasByline ? byline : mark);
-        return new double[]{footnote, byline, mark, height - topmost + FOOTER_GAP};
+    private static double[] footerBaselines(int height, boolean hasFootnote) {
+        double attribution = height - BOTTOM_MARGIN;
+        double footnote = attribution - BRAND_BAND;
+        double topmost = hasFootnote ? footnote : attribution;
+        return new double[]{footnote, attribution, height - topmost + FOOTER_GAP};
     }
 
     /**
@@ -326,22 +328,18 @@ final class DashboardLayout {
                 }
             }
 
-            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty(),
-                byline != null && !byline.isEmpty());
+            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty());
             double footBase = base[0];
-            double bylineBase = base[1];
-            double brandBase = base[2];
+            double brandBase = base[1];
             if (footnote != null && !footnote.isEmpty()) {
                 sb.append(text("footnote", PAD, footBase, footnote, MUTED, "start"));
             }
             sb.append("  <g id=\"brand\">\n");
-            String wordmark = BRAND + " · " + BRAND_URL;
-            double markX = width - PAD - ChartScene.textWidth(wordmark, 11, true) - MARK_SIZE - 6;
-            sb.append(markSvg(markX, brandBase - MARK_SIZE + 3, MARK_SIZE));
-            sb.append("  ").append(text("brand-mark", width - PAD, brandBase,
-                wordmark, BRAND_INK, "end"));
+            sb.append(markSvg(PAD, brandBase - MARK_SIZE + 3, MARK_SIZE));
+            sb.append("  ").append(text("brand-mark", PAD + MARK_SIZE + 7, brandBase,
+                BRAND + " · " + BRAND_URL, BRAND_INK, "start"));
             if (byline != null && !byline.isEmpty()) {
-                sb.append("  ").append(text("byline", width - PAD, bylineBase, byline,
+                sb.append("  ").append(text("byline", width - PAD, brandBase, byline,
                     MUTED, "end"));
             }
             sb.append("  </g>\n");
@@ -385,20 +383,17 @@ final class DashboardLayout {
                     draw(g, p.caption, r[0] + 4, r[1] + panelH + 13, 11, false, MUTED);
                 }
             }
-            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty(),
-                byline != null && !byline.isEmpty());
+            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty());
             double footBase = base[0];
-            double bylineBase = base[1];
-            double brandBase = base[2];
+            double brandBase = base[1];
             if (footnote != null && !footnote.isEmpty()) {
                 draw(g, footnote, PAD, footBase, 11, false, MUTED);
             }
-            String mark = BRAND + " \u00b7 " + BRAND_URL;
-            markPng(g, width - PAD - ChartScene.textWidth(mark, 11, true) - MARK_SIZE - 6,
-                brandBase - MARK_SIZE + 3, MARK_SIZE);
-            drawRight(g, mark, width - PAD, brandBase, 11, true, BRAND_INK);
+            markPng(g, PAD, brandBase - MARK_SIZE + 3, MARK_SIZE);
+            draw(g, BRAND + " \u00b7 " + BRAND_URL, PAD + MARK_SIZE + 7, brandBase, 11, true,
+                BRAND_INK);
             if (byline != null && !byline.isEmpty()) {
-                drawRight(g, byline, width - PAD, bylineBase, 11, false, MUTED);
+                drawRight(g, byline, width - PAD, brandBase, 11, false, MUTED);
             }
             g.dispose();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -519,8 +514,7 @@ final class DashboardLayout {
             + (title == null || title.isEmpty() ? 0 : 26)
             + (subtitle == null || subtitle.isEmpty() ? 0 : 18) + 10;
         // Reserved from the baselines the writers will actually use, not from a constant.
-        double footH = footerBaselines(height, footnote != null && !footnote.isEmpty(),
-            byline != null && !byline.isEmpty())[3];
+        double footH = footerBaselines(height, footnote != null && !footnote.isEmpty())[2];
 
         // Assign to rows first, because a row's height depends on what is in it.
         List<List<Panel>> rowList = new ArrayList<>();
