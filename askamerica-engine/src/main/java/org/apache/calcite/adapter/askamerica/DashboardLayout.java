@@ -74,8 +74,28 @@ final class DashboardLayout {
      * Truncating the caveat to protect the branding would be the wrong trade, so the mark takes
      * its own line and the footnote keeps the full width above it.
      */
-    private static final int BRAND_BAND = 18;
-    private static final int BYLINE_BAND = 14;
+    private static final int BOTTOM_MARGIN = 20;
+    private static final int BRAND_BAND = 22;
+    private static final int BYLINE_BAND = 17;
+    /** Clear air between the last panel row and the first line of the footer block. */
+    private static final int FOOTER_GAP = 16;
+
+    /**
+     * Baselines for the footer block, measured up from the bottom edge.
+     *
+     * <p>Returned as one array — {@code {footnote, byline, mark, requiredHeight}} — so the
+     * layout reserves exactly what the writers will use. Reserving a guessed constant and
+     * separately choosing baselines is how the first two attempts went wrong: the numbers
+     * agreed enough not to overlap and not enough to be readable, and the strip ended up
+     * crushed against the bottom edge with the mark 10px from it.
+     */
+    private static double[] footerBaselines(int height, boolean hasFootnote, boolean hasByline) {
+        double mark = height - BOTTOM_MARGIN;
+        double byline = mark - BYLINE_BAND;
+        double footnote = (hasByline ? byline : mark) - BRAND_BAND;
+        double topmost = hasFootnote ? footnote : (hasByline ? byline : mark);
+        return new double[]{footnote, byline, mark, height - topmost + FOOTER_GAP};
+    }
 
     /**
      * The AskAmerica mark, inlined rather than linked.
@@ -306,10 +326,11 @@ final class DashboardLayout {
                 }
             }
 
-            double brandBase = height - 10;
-            double bylineBase = brandBase - BYLINE_BAND;
-            double footBase = (byline == null || byline.isEmpty() ? brandBase : bylineBase)
-                - BRAND_BAND;
+            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty(),
+                byline != null && !byline.isEmpty());
+            double footBase = base[0];
+            double bylineBase = base[1];
+            double brandBase = base[2];
             if (footnote != null && !footnote.isEmpty()) {
                 sb.append(text("footnote", PAD, footBase, footnote, MUTED, "start"));
             }
@@ -364,10 +385,11 @@ final class DashboardLayout {
                     draw(g, p.caption, r[0] + 4, r[1] + panelH + 13, 11, false, MUTED);
                 }
             }
-            double brandBase = height - 10;
-            double bylineBase = brandBase - BYLINE_BAND;
-            double footBase = (byline == null || byline.isEmpty() ? brandBase : bylineBase)
-                - BRAND_BAND;
+            double[] base = footerBaselines(height, footnote != null && !footnote.isEmpty(),
+                byline != null && !byline.isEmpty());
+            double footBase = base[0];
+            double bylineBase = base[1];
+            double brandBase = base[2];
             if (footnote != null && !footnote.isEmpty()) {
                 draw(g, footnote, PAD, footBase, 11, false, MUTED);
             }
@@ -496,10 +518,9 @@ final class DashboardLayout {
         double headerH = PAD + 8
             + (title == null || title.isEmpty() ? 0 : 26)
             + (subtitle == null || subtitle.isEmpty() ? 0 : 18) + 10;
-        // The attribution block always occupies the bottom, on its own line, plus the
-        // footnote's line above it when there is one.
-        double brandH = BRAND_BAND + (byline == null || byline.isEmpty() ? 0 : BYLINE_BAND);
-        double footH = brandH + (footnote == null || footnote.isEmpty() ? 0 : 18) + PAD;
+        // Reserved from the baselines the writers will actually use, not from a constant.
+        double footH = footerBaselines(height, footnote != null && !footnote.isEmpty(),
+            byline != null && !byline.isEmpty())[3];
 
         // Assign to rows first, because a row's height depends on what is in it.
         List<List<Panel>> rowList = new ArrayList<>();
