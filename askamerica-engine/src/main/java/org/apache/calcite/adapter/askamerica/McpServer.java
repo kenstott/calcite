@@ -1181,6 +1181,12 @@ public class McpServer {
             "One line under the title — the source, vintage, and units the whole board "
             + "shares."));
         dashProps.set("footnote", prop("string", "Caveat line along the bottom."));
+        dashProps.set("include_svg", prop("boolean",
+            "Return the SVG source as well (default false). The response always carries a PNG "
+            + "and a loopback link to the full-size board, which is what a reader needs. Ask "
+            + "for the source only when you intend to EDIT the chart — add a callout, grey out "
+            + "a category, add value labels — or to save it to a file. It costs roughly 7,000 "
+            + "tokens, so do not request it merely to look at the result."));
         dashProps.set("byline", prop("string",
             "Optional attribution line above the AskAmerica mark, bottom-right — e.g. "
             + "'Prepared 2026-08-19' or an analyst name. The mark itself is always present."));
@@ -1216,6 +1222,45 @@ public class McpServer {
             + "geometry is still exactly what its own data produced. Pass scale_group on panels "
             + "that should be compared so they share one axis domain.",
             schema(dashProps, new String[]{"panels"})));
+
+        ObjectNode pubProps = MAPPER.createObjectNode();
+        pubProps.set("title", prop("string", "The finding, as a sentence a reader could quote."));
+        pubProps.set("subtitle", prop("string",
+            "Source, vintage and units the whole report shares."));
+        ObjectNode sectionsProp = MAPPER.createObjectNode();
+        sectionsProp.put("type", "array");
+        sectionsProp.put("description",
+            "The narrative, in order: [{\"heading\":\"Step 1 — ...\", \"html\":\"<p>...</p>\"}]. "
+            + "Bodies are HTML you write directly — <p>, <ul>, <table>, <strong>, <code>, "
+            + "<blockquote> all style correctly. Write HTML, not Markdown: nothing renders "
+            + "Markdown on the page. Scripts never execute, so do not include any.");
+        pubProps.set("sections", sectionsProp);
+        ObjectNode dashProp = MAPPER.createObjectNode();
+        dashProp.put("type", "object");
+        dashProp.put("description",
+            "Optional. The same arguments compose_dashboard takes (title, subtitle, columns, "
+            + "panels, footnote, byline). The board is composed and inlined at the top of the "
+            + "report, so one call produces the whole deliverable.");
+        pubProps.set("dashboard", dashProp);
+        ObjectNode sourcesProp = MAPPER.createObjectNode();
+        sourcesProp.put("type", "array");
+        sourcesProp.put("description",
+            "Citations: [{\"label\":\"Census ACS 1-year B19013\", \"url\":\"https://...\", "
+            + "\"note\":\"2024 vintage\"}]. Include the AskAmerica tables you queried as well "
+            + "as web sources — a reader cannot check a number whose origin is not named.");
+        pubProps.set("sources", sourcesProp);
+        pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
+        pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
+        tools.add(
+            tool("publish_report",
+            "Publish a complete answer — narrative, dashboard and citations — as one "
+            + "self-contained HTML page, and return its link. THIS IS THE DELIVERABLE for any "
+            + "question worth more than a sentence: the reader gets the finding, the figures, "
+            + "the caveats and the sourcing in one page they can open, save, print or send, "
+            + "instead of a chart plus prose they have to reassemble. Pass the dashboard "
+            + "argument to compose and inline the board in the same call. Costs about twenty "
+            + "tokens to return, because what comes back is a link rather than the page.",
+            schema(pubProps, new String[]{"title"})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
@@ -1771,6 +1816,65 @@ public class McpServer {
                     diagnostics = r.diagnostics;
                     break;
                 }
+                case "publish_report": {
+                    String rTitle = args.path("title").asText(null);
+                    String rSub = args.has("subtitle") && !args.get("subtitle").isNull()
+                        ? args.get("subtitle").asText() : null;
+                    java.util.List<ReportPage.Section> secs = new java.util.ArrayList<>();
+                    for (JsonNode sec : args.path("sections")) {
+                        secs.add(new ReportPage.Section(
+                            sec.path("heading").asText(null), sec.path("html").asText("")));
+                    }
+                    java.util.List<ReportPage.Source> srcs = new java.util.ArrayList<>();
+                    for (JsonNode src : args.path("sources")) {
+                        srcs.add(new ReportPage.Source(src.path("label").asText(null),
+                            src.path("url").asText(null),
+                            src.has("note") ? src.get("note").asText(null) : null));
+                    }
+                    String boardSvg = null;
+                    String boardSvgUrl = null;
+                    byte[] thumb = null;
+                    JsonNode dash = args.path("dashboard");
+                    if (dash.isObject() && dash.has("panels")) {
+                        java.util.List<DashboardLayout.Panel> ps = new java.util.ArrayList<>();
+                        for (JsonNode pn : dash.path("panels")) {
+                            ps.add(readPanel(pn));
+                        }
+                        int c = dash.has("columns")
+                            ? Math.min(Math.max(1, dash.get("columns").asInt()), 4) : 2;
+                        int[] sz = DashboardLayout.defaultSize(ps, c);
+                        DashboardLayout.Dashboard board = DashboardLayout.compose(
+                            dash.path("title").asText(null),
+                            dash.has("subtitle") ? dash.get("subtitle").asText(null) : null,
+                            dash.has("footnote") ? dash.get("footnote").asText(null) : null,
+                            dash.has("byline") ? dash.get("byline").asText(null) : null,
+                            ps, c, sz[0], sz[1]);
+                        boardSvg = board.toSvg();
+                        boardSvgUrl = ArtifactServer.publishSvg(boardSvg);
+                        // A quarter-scale render: enough to show the shape of the answer and
+                        // that the link is worth opening, at a sixteenth of the image tokens.
+                        thumb = board.toPng(0.25);
+                    }
+                    chartPng = thumb;
+                    String html = ReportPage.render(rTitle, rSub, secs, boardSvg, boardSvgUrl,
+                        srcs,
+                        args.has("footnote") ? args.get("footnote").asText(null) : null,
+                        args.has("byline") ? args.get("byline").asText(null) : null);
+                    String url = ArtifactServer.publish(
+                        html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "text/html; charset=utf-8", "html");
+                    log.println("[askamerica-mcp] tool=publish_report sections=" + secs.size()
+                        + " sources=" + srcs.size() + " board=" + (boardSvg != null));
+                    text = url == null
+                        ? "Report built (" + html.length() + " bytes) but no local server is "
+                            + "available to serve it."
+                        : "Report published: " + url + "\n\nGive the reader that link — it is "
+                        + "the whole answer in one page: " + secs.size() + " section(s), "
+                        + srcs.size() + " citation(s)"
+                        + (boardSvg == null ? "" : ", dashboard inlined")
+                        + ". It is self-contained and local to this machine.";
+                    break;
+                }
                 case "compose_dashboard": {
                     java.util.List<DashboardLayout.Panel> panels = new java.util.ArrayList<>();
                     for (JsonNode pn : args.path("panels")) {
@@ -1804,6 +1908,8 @@ public class McpServer {
                         }
                     }
                     String dashUrl = ArtifactServer.publishSvg(chartSvg);
+                    boolean wantSvg = args.has("include_svg")
+                        && args.get("include_svg").asBoolean(false);
                     text = "Composed a " + cols + "-column dashboard"
                         + (dTitle == null ? "" : " '" + dTitle + "'") + " — "
                         + (panels.size() - stats) + " chart panel(s), " + stats
@@ -1814,12 +1920,20 @@ public class McpServer {
                             + "only. Share the link — do NOT paste the SVG below into your "
                             + "reply. The SVG is roughly 7,000 tokens; the link is twenty, and "
                             + "it shows the same picture.\n\n")
-                        + "The image above is the same board as a PNG, already viewable inline. "
-                        + "The block after this is the SVG source — use it if you can save a "
-                        + "file or need to edit the chart, and otherwise ignore it. Panel ids "
-                        + "are namespaced p1-, p2-, ... so per-panel edits still work "
-                        + "(p2-mark-california), and each panel has a pN-annotations group "
-                        + "that paints last.";
+                        + "The image above is the same board as a PNG, already viewable "
+                        + "inline."
+                        + (wantSvg
+                            ? " The block after this is the SVG source you asked for. Panel ids "
+                            + "are namespaced p1-, p2-, ... so per-panel edits work "
+                            + "(p2-mark-california), and each panel has a pN-annotations group "
+                            + "that paints last."
+                            : " To edit the chart — a callout, a greyed-out category, direct "
+                            + "value labels — call again with include_svg:true to get the "
+                            + "editable source. It is not returned by default because it costs "
+                            + "roughly 7,000 tokens and the link already shows the board.");
+                    if (!wantSvg) {
+                        chartSvg = null;
+                    }
                     break;
                 }
                 case "render_chart": {

@@ -261,7 +261,9 @@ public class DashboardTest {
     @Test void rastersTheSameCompositionSoImageAndMarkupAgree() {
         DashboardLayout.Dashboard d = DashboardLayout.compose("t", null, null,
             Arrays.asList(stat("a", "1"), chart("c", null, 1, 2, 3)), 2, 900, 500);
-        byte[] png = assertDoesNotThrow(d::toPng);
+        // Explicit lambda, not a method reference: toPng is overloaded (full size and scaled),
+        // which makes d::toPng ambiguous between assertDoesNotThrow's Supplier and Executable.
+        byte[] png = assertDoesNotThrow(() -> d.toPng());
         assertEquals((byte) 0x89, png[0], "PNG magic byte");
         assertTrue(png.length > 500);
         assertTrue(d.toSvg().contains("p2-series-v"), "same composition backs both outputs");

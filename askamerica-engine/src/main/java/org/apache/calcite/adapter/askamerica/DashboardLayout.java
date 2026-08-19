@@ -350,8 +350,27 @@ final class DashboardLayout {
 
         /** The same dashboard rasterised, for hosts that display images but not SVG. */
         byte[] toPng() throws IOException {
-            BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            return toPng(1.0);
+        }
+
+        /**
+         * The dashboard rasterised at a fraction of full size, for an inline thumbnail.
+         *
+         * <p>A full-size board costs around 1,700 image tokens, which is a lot to spend on a
+         * picture whose purpose is to tell the reader the link is worth opening. A quarter-scale
+         * render costs roughly a sixteenth of that and still shows the shape of the answer —
+         * how many panels, which way the lines go, where the big numbers are.
+         *
+         * <p>Everything is drawn through a scaled transform rather than rendered full size and
+         * downsampled, so text is laid out at the final size instead of being shrunk into
+         * illegibility.
+         */
+        byte[] toPng(double scale) throws IOException {
+            int w = Math.max(1, (int) Math.round(width * scale));
+            int h = Math.max(1, (int) Math.round(height * scale));
+            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
             Graphics2D g = img.createGraphics();
+            g.scale(scale, scale);
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                 RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
