@@ -17,6 +17,7 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.sql.parser.SqlParser;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +67,10 @@ public class McpServer {
     static final String BUILD_ID = "telemetry-v13";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** Tool definitions, built on first use by {@link #toolDefs()}. */
+    private static volatile ArrayNode TOOL_DEFS;
+
     private static final int DEFAULT_LIMIT = 500;
     private static final int MAX_LIMIT = 5000;
 
@@ -486,6 +491,24 @@ public class McpServer {
     }
 
     private static ObjectNode handleToolsList(JsonNode id) {
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("tools", toolDefs());
+        return result(id, body);
+    }
+
+    /**
+     * The tool definitions this server advertises, built once and reused.
+     *
+     * <p>Split out of {@link #handleToolsList} so argument validation can read the same
+     * definitions the client was given. Validating against a hand-maintained second copy of
+     * each argument list is how a tool ends up accepting a name it never advertised: the copy
+     * drifts, and the drift is invisible until a caller pays for it.
+     */
+    private static ArrayNode toolDefs() {
+        ArrayNode cached = TOOL_DEFS;
+        if (cached != null) {
+            return cached;
+        }
         ArrayNode tools = MAPPER.createArrayNode();
 
         tools.add(
@@ -1187,9 +1210,8 @@ public class McpServer {
             + "Current status: " + (telemetryOptIn ? "OPTED IN" : "OPTED OUT") + ".",
             schema(telemetryProps, new String[]{"enabled"})));
 
-        ObjectNode body = MAPPER.createObjectNode();
-        body.set("tools", tools);
-        return result(id, body);
+        TOOL_DEFS = tools;
+        return tools;
     }
 
     /**
@@ -1342,6 +1364,10 @@ public class McpServer {
         // diagnostics existed — a host that ignores the extra content block sees no change.
         ObjectNode diagnostics = null;
         try {
+            // Inside the try so a rejection reaches the caller the same way every other tool
+            // failure does — as a result with isError=true. Thrown from outside it, the
+            // exception escaped the handler and the caller was answered with nothing at all.
+            validateArgs(name, args);
             switch (name) {
                 case "list_schemas":
                     log.println("[askamerica-mcp] tool=list_schemas");
@@ -1377,9 +1403,11 @@ public class McpServer {
                     String sql = args.path("sql").asText();
                     telemetrySql = sql;
                     log.println("[askamerica-mcp] tool=query sql=" + sql);
+                    LAST_REPAIR_NOTICE.remove();
                     ArrayNode rows = query(sql, limit);
                     text = rows.toString();
                     diagnostics = diagnose(sql, rows, limit);
+                    addRepairNotice(diagnostics);
                     break;
                 }
                 case "critique_query": {
@@ -1700,8 +1728,6 @@ public class McpServer {
                     // line chart of two series on incompatible scales — unreadable, and reported
                     // as a bar chart because that is what the caller thought it had asked for.
                     // One unknown key cost six round trips and produced a wrong artifact.
-                    checkKnownArgs(args, "render_chart", "chart_type", "title", "x_label",
-                        "y_label", "categories", "series", "points", "width", "height");
                     String chartType = args.has("chart_type") && !args.get("chart_type").isNull()
                         ? args.get("chart_type").asText() : "line";
                     String title = args.has("title") && !args.get("title").isNull()
@@ -1769,8 +1795,8 @@ public class McpServer {
                         chartType, title, xLabel, yLabel, categories, series, width, height);
                     text = "Rendered " + chartType + " chart"
                         + (title == null ? "" : " '" + title + "'")
-                        + " (" + categories.size() + " categories, " + series.size()
-                        + " series).";
+                        + " (" + series.size() + " series over "
+                        + categories.size() + " categories).";
                     break;
                 }
                 default:
@@ -2104,11 +2130,41 @@ public class McpServer {
         return o;
     }
 
+    /**
+     * Keyword search over the catalog.
+     *
+     * <p>An empty {@code []} used to stand for three unrelated conditions: the caller passed no
+     * query, the catalog was not loaded, and the catalog was searched and held nothing. Only the
+     * last is a real answer, and the other two are indistinguishable from it — a caller that
+     * asked for "income" and got {@code []} concluded the warehouse had no income tables and
+     * stopped looking, when in fact four such tables exist and the query had never arrived.
+     * The first case is now rejected before reaching here; the second says so; and a genuine
+     * miss names the fallback that does work.
+     */
     private static String searchCatalog(String query, int limit) {
-        if (query == null || query.trim().isEmpty() || !Catalog.available()) {
-            return "[]";
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                "search_catalog requires a non-empty 'query'.");
         }
-        return Catalog.search(query.trim(), limit).toString();
+        if (!Catalog.available()) {
+            throw new IllegalStateException(
+                "The catalog is not loaded, so search_catalog cannot answer. This is a server "
+                + "state problem, not an empty result — use list_schemas and list_tables, "
+                + "which read the live connection instead.");
+        }
+        ArrayNode hits = Catalog.search(query.trim(), limit);
+        if (hits.size() == 0) {
+            ObjectNode empty = MAPPER.createObjectNode();
+            empty.put("matches", 0);
+            empty.put("query", query.trim());
+            empty.put("hint",
+                "No catalog entry matched. The catalog was searched and is loaded, so this is a "
+                + "real miss: try fewer or more general words (one noun beats a phrase), or "
+                + "list_schemas then list_tables to browse. Do not conclude the data is absent "
+                + "from one unmatched search.");
+            return empty.toString();
+        }
+        return hits.toString();
     }
 
     /**
@@ -2521,6 +2577,10 @@ public class McpServer {
         try {
             return runSqlRows(sql, limit);
         } catch (Exception e) {
+            ArrayNode repaired = retryQuotingReservedWords(sql, limit, e);
+            if (repaired != null) {
+                return repaired;
+            }
             String msg = e.getMessage();
             if (extractSchema(sql) == null && msg != null && looksLikeUnresolvedObject(msg)) {
                 throw new RuntimeException(msg
@@ -2530,6 +2590,242 @@ public class McpServer {
             }
             throw e;
         }
+    }
+
+    /**
+     * The rewrite applied to the statement now being handled, or null when none was.
+     *
+     * <p>Per-thread because one worker handles one call at a time, and the notice has to travel
+     * from deep inside the execution path back out to the response the caller reads.
+     */
+    private static final ThreadLocal<String> LAST_REPAIR_NOTICE = new ThreadLocal<>();
+
+    /** Reserved words this run has already repaired, so the notice is only attached once. */
+    private static final java.util.Set<String> REPAIRED_WORDS =
+        java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+
+    /**
+     * Re-runs a statement that failed to parse, quoting the reserved words used as columns.
+     *
+     * <p>Columns named {@code year}, {@code period} and {@code value} are ordinary in this
+     * warehouse and reserved in SQL, so a caller writing the obvious {@code SELECT year, value}
+     * gets a parse error naming a token it has no reason to think is special. It then guesses:
+     * aliases, brackets, backticks, a different column. In one observed run this cost 11 of 42
+     * calls — a quarter of the session spent rediscovering the quoting rule, not asking
+     * questions about data.
+     *
+     * <p>The rewrite cannot be driven by the parse error, because the parser does not reliably
+     * name the word that broke it: {@code SELECT year} reports {@code Encountered "year ,"},
+     * but {@code WHERE period = 'M05'} reports {@code Incorrect syntax near the keyword 'AND'}
+     * — the token *after* the real problem, because PERIOD opens the SQL:2011 period predicate.
+     * It is driven by the column list instead; see {@link #quoteBareReservedColumns}.
+     *
+     * <p>Returns null when the failure is not a parse error or the rewrite does not run, in
+     * which case the caller's original exception stands — a repair is never allowed to replace
+     * a real error with a confusing one.
+     */
+    private static ArrayNode retryQuotingReservedWords(String sql, int limit, Exception first) {
+        String msg = first.getMessage();
+        if (msg == null || !msg.contains("parse failed")) {
+            return null;
+        }
+        java.util.Set<String> candidates = reservedColumnWords();
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        java.util.List<String> found = new ArrayList<>();
+        String repaired = quoteBareReservedColumns(sql, candidates, found);
+        if (repaired.equals(sql)) {
+            return null;
+        }
+        try {
+            ArrayNode rows = runSqlRows(repaired, limit);
+            noteReservedWordRepair(found, repaired);
+            return rows;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Records a repair so the caller learns the rule instead of only getting rows back.
+     *
+     * <p>Silently fixing the SQL would spend the same tokens again on the caller's next query.
+     * The notice names the words and shows the statement that ran, and is emitted once per
+     * word per process so a long session is not lectured on every call.
+     */
+    private static void noteReservedWordRepair(java.util.List<String> words, String repairedSql) {
+        java.util.List<String> fresh = new ArrayList<>();
+        for (String w : words) {
+            if (REPAIRED_WORDS.add(w)) {
+                fresh.add(w);
+            }
+        }
+        log.println("[askamerica-mcp] repaired reserved words " + words + " -> " + repairedSql);
+        LAST_REPAIR_NOTICE.set(String.join(", ", words)
+            + (words.size() == 1 ? " is a SQL reserved word" : " are SQL reserved words")
+            + " and must be double-quoted to be read as a column. The statement was rewritten "
+            + "and run as: " + repairedSql);
+    }
+
+    /** True when the token is a SQL reserved word, per the parser's own word list. */
+    static boolean isReservedWord(String token) {
+        try {
+            return SqlParser.create("VALUES 1").getMetadata()
+                .isReservedWord(token.toUpperCase(java.util.Locale.ROOT));
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Every column name that can appear in a query, lowercased. Built once. */
+    private static volatile java.util.Set<String> QUERYABLE_COLUMNS;
+
+    /**
+     * Column names taken from the live connection, falling back to the authored catalog.
+     *
+     * <p>{@code information_schema} is the authority here, not the catalog JSON: partition
+     * columns are declared as dimensions in the schema YAML and never reach the JSON's
+     * {@code columns} array, so {@code year} — the most common reserved-word collision in this
+     * warehouse — is absent from the catalog while being perfectly queryable.
+     */
+    private static java.util.Set<String> queryableColumnNames() {
+        java.util.Set<String> cached = QUERYABLE_COLUMNS;
+        if (cached != null) {
+            return cached;
+        }
+        java.util.Set<String> names = new java.util.HashSet<>();
+        try (Statement st = getCatalogConnection().createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT DISTINCT column_name FROM information_schema.columns")) {
+            while (rs.next()) {
+                String n = rs.getString(1);
+                if (n != null && !n.isEmpty()) {
+                    names.add(n.toLowerCase(java.util.Locale.ROOT));
+                }
+            }
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] column list unavailable, using catalog only: "
+                + e.getMessage());
+        }
+        if (Catalog.available()) {
+            names.addAll(Catalog.allColumnNames());
+        }
+        java.util.Set<String> frozen = java.util.Collections.unmodifiableSet(names);
+        QUERYABLE_COLUMNS = frozen;
+        return frozen;
+    }
+
+    private static volatile java.util.Set<String> RESERVED_COLUMN_WORDS;
+
+    /**
+     * Words that are both SQL reserved words and column names in this warehouse.
+     *
+     * <p>The set a rewrite may consider. {@code year}, {@code period} and {@code value} are in
+     * it; so, less obviously, are {@code count}, {@code order}, {@code desc}, {@code state} and
+     * {@code type} — which is exactly why membership alone cannot justify quoting a word.
+     */
+    private static java.util.Set<String> reservedColumnWords() {
+        java.util.Set<String> cached = RESERVED_COLUMN_WORDS;
+        if (cached != null) {
+            return cached;
+        }
+        java.util.Set<String> words = new java.util.HashSet<>();
+        for (String column : queryableColumnNames()) {
+            if (isReservedWord(column)) {
+                words.add(column);
+            }
+        }
+        java.util.Set<String> frozen = java.util.Collections.unmodifiableSet(words);
+        RESERVED_COLUMN_WORDS = frozen;
+        return frozen;
+    }
+
+    /**
+     * Tokens after which a word must be a name rather than syntax.
+     *
+     * <p>This is the whole discriminator. {@code count} names a column somewhere in this
+     * warehouse and is also how everyone writes an aggregate; {@code order} names a column and
+     * is also half of {@code ORDER BY}. Quoting either on the strength of the name alone turns
+     * {@code COUNT(*)} into {@code "count"(*)} and breaks a statement that was nearly right.
+     * What separates the two uses is position: a word sitting where a column reference belongs
+     * — just after SELECT, a comma, BY, WHERE, AND, a dot, an operator — is a name, and a word
+     * anywhere else is left exactly as written.
+     */
+    private static final java.util.Set<String> IDENTIFIER_POSITION_TOKENS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "SELECT", "WHERE", "AND", "OR", "BY", "ON", "HAVING", "AS", "SET", "DISTINCT",
+            "NOT", "THEN", "ELSE", "WHEN", "OVER", "USING",
+            ",", "(", ".", "=", "<", ">", "+", "-", "*", "/"));
+
+    /**
+     * Double-quotes reserved words used as column references, leaving syntax untouched.
+     *
+     * <p>Skips string literals and already-quoted names, matches whole words only, and emits
+     * the lowercase form because the engine folds unquoted identifiers to lowercase — so
+     * lowercase is what the caller's bare spelling already meant. A word directly followed by
+     * an opening parenthesis is a function call and is never quoted, which is what keeps
+     * {@code COUNT(*)} intact even though {@code count} is a column name here.
+     *
+     * <p>This is the bare-token counterpart to {@link #quoteReservedIdentifiers(String)}, which
+     * rewrites only dot-adjacent tokens because that is the one position it can be certain of
+     * without risking a working query. Going further is safe here and only here: this runs on a
+     * statement that has already failed to parse, and the rewrite is kept only if it then runs.
+     *
+     * <p>Every word actually rewritten is appended to {@code quoted}, so the caller can say
+     * which words were repaired rather than silently changing someone's SQL.
+     */
+    static String quoteBareReservedColumns(String sql, java.util.Set<String> candidates,
+        java.util.List<String> quoted) {
+        StringBuilder out = new StringBuilder(sql.length() + 16);
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        String prev = "SELECT";
+        int i = 0;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (c == '\'' || c == '"') {
+                int close = sql.indexOf(c, i + 1);
+                if (close < 0) {
+                    out.append(sql, i, sql.length());
+                    break;
+                }
+                out.append(sql, i, close + 1);
+                prev = "";
+                i = close + 1;
+                continue;
+            }
+            if (Character.isLetter(c) || c == '_') {
+                int j = i;
+                while (j < sql.length()
+                    && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                    j++;
+                }
+                String ident = sql.substring(i, j);
+                String lower = ident.toLowerCase(java.util.Locale.ROOT);
+                int k = j;
+                while (k < sql.length() && Character.isWhitespace(sql.charAt(k))) {
+                    k++;
+                }
+                boolean isCall = k < sql.length() && sql.charAt(k) == '(';
+                if (candidates.contains(lower) && !isCall
+                    && IDENTIFIER_POSITION_TOKENS.contains(prev)) {
+                    out.append('"').append(lower).append('"');
+                    seen.add(lower);
+                } else {
+                    out.append(ident);
+                }
+                prev = ident.toUpperCase(java.util.Locale.ROOT);
+                i = j;
+                continue;
+            }
+            out.append(c);
+            if (!Character.isWhitespace(c)) {
+                prev = String.valueOf(c);
+            }
+            i++;
+        }
+        quoted.addAll(seen);
+        return out.toString();
     }
 
     /** True when a SQL error reads like an unqualified or unknown table/column reference. */
@@ -4307,6 +4603,36 @@ public class McpServer {
         }
     }
 
+    /**
+     * Tells the caller its SQL was rewritten, on the same response that carries the rows.
+     *
+     * <p>Repairing silently would buy one query and cost the next: the caller writes the same
+     * unquoted column again because nothing ever said otherwise. It is also simply not our
+     * statement to change without saying so — the notice names the words and prints the SQL
+     * that actually ran, so the result can be checked against what was executed.
+     */
+    private static void addRepairNotice(ObjectNode diagnostics) {
+        String notice = LAST_REPAIR_NOTICE.get();
+        LAST_REPAIR_NOTICE.remove();
+        if (notice == null || diagnostics == null) {
+            return;
+        }
+        // The envelope nests as {"diagnostics":{"warnings":[...]}} and its warnings are objects,
+        // not strings — a bare string added at the top level is well-formed JSON that no reader
+        // of this envelope looks at, which is indistinguishable from not warning at all.
+        ObjectNode inner = diagnostics.get("diagnostics") instanceof ObjectNode
+            ? (ObjectNode) diagnostics.get("diagnostics")
+            : diagnostics;
+        ArrayNode warnings = inner.get("warnings") instanceof ArrayNode
+            ? (ArrayNode) inner.get("warnings")
+            : inner.putArray("warnings");
+        ObjectNode w = MAPPER.createObjectNode();
+        w.put("type", "sql_rewritten");
+        w.put("severity", "info");
+        w.put("note", notice);
+        warnings.add(w);
+    }
+
     /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped) {
@@ -4713,20 +5039,47 @@ public class McpServer {
      * schema to re-read.
      */
     static void checkKnownArgs(JsonNode args, String tool, String... known) {
-        if (args == null || !args.isObject()) {
-            return;
-        }
-        java.util.Set<String> allowed =
-            new java.util.LinkedHashSet<>(java.util.Arrays.asList(known));
+        checkArgs(args, tool, new java.util.LinkedHashSet<>(java.util.Arrays.asList(known)),
+            java.util.Collections.<String>emptySet());
+    }
+
+    /**
+     * Validates one call's arguments against the tool's advertised schema.
+     *
+     * <p>Two failures, both of which used to pass silently:
+     *
+     * <p>An <b>unknown</b> name means the value the caller sent is never read. The reader asks
+     * for the name it knows, does not find it, and proceeds on a default or an empty string.
+     * {@code render_chart} lost six round trips to this in one run. {@code search_catalog} lost
+     * an entire investigation to it: a caller sent {@code keyword} instead of {@code query},
+     * the missing {@code query} read as {@code ""}, and the tool answered {@code []} — which
+     * the caller reasonably read as "this catalog has no income tables" and stopped searching.
+     *
+     * <p>A <b>missing required</b> name is the same wound from the other side. {@code required}
+     * is declared in the schema the client was handed, so honouring it here costs nothing and
+     * turns a plausible-looking empty answer into a diagnosis.
+     */
+    static void checkArgs(JsonNode args, String tool, java.util.Set<String> allowed,
+        java.util.Set<String> required) {
         java.util.List<String> unknown = new java.util.ArrayList<>();
-        java.util.Iterator<String> names = args.fieldNames();
-        while (names.hasNext()) {
-            String name = names.next();
-            if (!allowed.contains(name)) {
-                unknown.add(name);
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        if (args != null && args.isObject()) {
+            java.util.Iterator<String> names = args.fieldNames();
+            while (names.hasNext()) {
+                String name = names.next();
+                if (!allowed.contains(name)) {
+                    unknown.add(name);
+                }
             }
         }
-        if (unknown.isEmpty()) {
+        for (String req : required) {
+            JsonNode v = args == null ? null : args.get(req);
+            if (v == null || v.isNull()
+                || (v.isTextual() && v.asText().trim().isEmpty())) {
+                missing.add(req);
+            }
+        }
+        if (unknown.isEmpty() && missing.isEmpty()) {
             return;
         }
         StringBuilder msg = new StringBuilder();
@@ -4735,17 +5088,36 @@ public class McpServer {
                 msg.append("; ");
             }
             msg.append(tool).append(" has no argument '").append(bad).append("'");
-            String near = closestArg(bad, allowed);
+            String near = closestArg(bad, allowed, missing);
             if (near != null) {
                 msg.append(" — did you mean '").append(near).append("'?");
             }
+        }
+        for (String req : missing) {
+            if (msg.length() > 0) {
+                msg.append("; ");
+            }
+            msg.append(tool).append(" requires '").append(req).append("'");
         }
         msg.append(". Known arguments: ").append(String.join(", ", allowed));
         throw new IllegalArgumentException(msg.toString());
     }
 
-    /** The known argument a bad one most plausibly meant, or null when nothing is close. */
-    private static String closestArg(String bad, java.util.Set<String> known) {
+    /**
+     * The known argument a bad one most plausibly meant, or null when nothing is close.
+     *
+     * <p>Ordered by how much the suggestion can be trusted. A required argument the call left
+     * unfilled is the strongest evidence available — when exactly one is missing and one name
+     * is unrecognised, the unrecognised name was meant to be it, whatever the two words look
+     * like. That is the only rule that maps {@code keyword} to {@code query}; nothing about
+     * the spelling relates them. Containment and edit distance then catch the ordinary
+     * abbreviations and typos ({@code type} for {@code chart_type}, {@code querry}).
+     */
+    private static String closestArg(String bad, java.util.Set<String> known,
+        java.util.List<String> missingRequired) {
+        if (missingRequired.size() == 1) {
+            return missingRequired.get(0);
+        }
         String lower = bad.toLowerCase(java.util.Locale.ROOT);
         // A containment match catches the common shape: an abbreviation of the real name.
         for (String k : known) {
@@ -4754,7 +5126,74 @@ public class McpServer {
                 return k;
             }
         }
-        return null;
+        // Then a typo: near in edit distance relative to the length of the name.
+        String best = null;
+        int bestDist = Integer.MAX_VALUE;
+        for (String k : known) {
+            int d = editDistance(lower, k.toLowerCase(java.util.Locale.ROOT));
+            if (d < bestDist) {
+                bestDist = d;
+                best = k;
+            }
+        }
+        return best != null && bestDist <= Math.max(1, best.length() / 3) ? best : null;
+    }
+
+    /**
+     * Damerau-Levenshtein distance, used only to suggest a near-miss argument name.
+     *
+     * <p>Counts an adjacent transposition as one edit rather than two. Plain Levenshtein scores
+     * {@code limti} two edits away from {@code limit} and so rejects it at any sane threshold,
+     * which loses the single most common typing mistake there is.
+     */
+    private static int editDistance(String a, String b) {
+        int[][] d = new int[a.length() + 1][b.length() + 1];
+        for (int i = 0; i <= a.length(); i++) {
+            d[i][0] = i;
+        }
+        for (int j = 0; j <= b.length(); j++) {
+            d[0][j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                d[i][j] = Math.min(d[i - 1][j - 1] + cost,
+                    Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1));
+                if (i > 1 && j > 1
+                    && a.charAt(i - 1) == b.charAt(j - 2)
+                    && a.charAt(i - 2) == b.charAt(j - 1)) {
+                    d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+                }
+            }
+        }
+        return d[a.length()][b.length()];
+    }
+
+    /**
+     * Validates a call against the tool's own advertised {@code inputSchema}.
+     *
+     * <p>Reads {@link #toolDefs()} rather than a per-tool argument list written out at the call
+     * site, so a tool cannot advertise one set of arguments and enforce another, and a tool
+     * added later is covered without anyone remembering to wire it up.
+     */
+    private static void validateArgs(String tool, JsonNode args) {
+        for (JsonNode def : toolDefs()) {
+            if (!tool.equals(def.path("name").asText())) {
+                continue;
+            }
+            JsonNode schema = def.path("inputSchema");
+            java.util.Set<String> allowed = new java.util.LinkedHashSet<>();
+            java.util.Iterator<String> props = schema.path("properties").fieldNames();
+            while (props.hasNext()) {
+                allowed.add(props.next());
+            }
+            java.util.Set<String> required = new java.util.LinkedHashSet<>();
+            for (JsonNode r : schema.path("required")) {
+                required.add(r.asText());
+            }
+            checkArgs(args, tool, allowed, required);
+            return;
+        }
     }
 
     private static ObjectNode prop(String type, String description) {

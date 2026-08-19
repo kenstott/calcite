@@ -144,6 +144,30 @@ final class Catalog {
         return null;
     }
 
+    /** Every column name known to the catalog, lowercased. Empty when no catalog is loaded. */
+    static java.util.Set<String> allColumnNames() {
+        java.util.Set<String> cached = ALL_COLUMN_NAMES;
+        if (cached != null) {
+            return cached;
+        }
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (JsonNode sc : root()) {
+            for (JsonNode tb : sc.path("tables")) {
+                for (JsonNode c : tb.path("columns")) {
+                    String n = txt(c.get("name"));
+                    if (!n.isEmpty()) {
+                        names.add(n.toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+        }
+        java.util.Set<String> frozen = java.util.Collections.unmodifiableSet(names);
+        ALL_COLUMN_NAMES = frozen;
+        return frozen;
+    }
+
+    private static volatile java.util.Set<String> ALL_COLUMN_NAMES;
+
     /** Table and view names known to the catalog for a schema; empty if unknown. */
     static List<String> tableNames(String schema) {
         List<String> out = new ArrayList<>();
