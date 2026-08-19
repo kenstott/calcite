@@ -938,7 +938,7 @@ partitionedTables:
         comment: 90% CI margin of error for not_hispanic_latino (Census variable B03003_002M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B02001_002E,B02001_003E,B02001_004E,B02001_005E,B02001_006E,B02001_007E,B02001_008E,B03003_002E,B03003_003E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B02001_002E,B02001_002M,B02001_003E,B02001_003M,B02001_004E,B02001_004M,B02001_005E,B02001_005M,B02001_006E,B02001_006M,B02001_007E,B02001_007M,B02001_008E,B02001_008M,B03003_002E,B03003_002M,B03003_003E,B03003_003M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1021,7 +1021,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B01002_001E,B01001_003E,B01001_004E,B01001_005E,B01001_006E,B01001_007E,B01001_008E,B01001_009E,B01001_010E,B01001_011E,B01001_012E,B01001_013E,B01001_014E,B01001_015E,B01001_016E,B01001_017E,B01001_018E,B01001_019E,B01001_020E,B01001_021E,B01001_022E,B01001_023E,B01001_024E,B01001_025E,B01001_027E,B01001_028E,B01001_029E,B01001_030E,B01001_031E,B01001_032E,B01001_033E,B01001_034E,B01001_035E,B01001_036E,B01001_037E,B01001_038E,B01001_039E,B01001_040E,B01001_041E,B01001_042E,B01001_043E,B01001_044E,B01001_045E,B01001_046E,B01001_047E,B01001_048E,B01001_049E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B01002_001E,B01002_001M,B01001_003E,B01001_004E,B01001_005E,B01001_006E,B01001_007E,B01001_008E,B01001_009E,B01001_010E,B01001_011E,B01001_012E,B01001_013E,B01001_014E,B01001_015E,B01001_016E,B01001_017E,B01001_018E,B01001_019E,B01001_020E,B01001_021E,B01001_022E,B01001_023E,B01001_024E,B01001_025E,B01001_027E,B01001_028E,B01001_029E,B01001_030E,B01001_031E,B01001_032E,B01001_033E,B01001_034E,B01001_035E,B01001_036E,B01001_037E,B01001_038E,B01001_039E,B01001_040E,B01001_041E,B01001_042E,B01001_043E,B01001_044E,B01001_045E,B01001_046E,B01001_047E,B01001_048E,B01001_049E&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1155,7 +1155,7 @@ partitionedTables:
         comment: 90% CI margin of error for mean_travel_time (Census variable B08135_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B08301_001E,B08301_003E,B08301_004E,B08301_010E,B08301_018E,B08301_019E,B08301_021E,B08135_001E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B08301_001E,B08301_001M,B08301_003E,B08301_003M,B08301_004E,B08301_004M,B08301_010E,B08301_010M,B08301_018E,B08301_018M,B08301_019E,B08301_019M,B08301_021E,B08301_021M,B08135_001E,B08135_001M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1251,7 +1251,7 @@ partitionedTables:
         comment: 90% CI margin of error for private_coverage (Census variable B27002_004M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B27001_001E,B27001_004E,B27001_005E,B27001_007E,B27001_008E,B27001_010E,B27001_011E,B27001_013E,B27001_014E,B27001_016E,B27001_017E,B27001_019E,B27001_020E,B27001_022E,B27001_023E,B27001_025E,B27001_026E,B27001_028E,B27001_029E,B27001_032E,B27001_033E,B27001_035E,B27001_036E,B27001_038E,B27001_039E,B27001_041E,B27001_042E,B27001_044E,B27001_045E,B27001_047E,B27001_048E,B27001_050E,B27001_051E,B27001_053E,B27001_054E,B27001_056E,B27001_057E,B27002_004E,B27003_004E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B27001_001E,B27001_001M,B27001_004E,B27001_005E,B27001_007E,B27001_008E,B27001_010E,B27001_011E,B27001_013E,B27001_014E,B27001_016E,B27001_017E,B27001_019E,B27001_020E,B27001_022E,B27001_023E,B27001_025E,B27001_026E,B27001_028E,B27001_029E,B27001_032E,B27001_033E,B27001_035E,B27001_036E,B27001_038E,B27001_039E,B27001_041E,B27001_042E,B27001_044E,B27001_045E,B27001_047E,B27001_048E,B27001_050E,B27001_051E,B27001_053E,B27001_054E,B27001_056E,B27001_057E,B27002_004E,B27002_004M,B27003_004E,B27003_004M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1375,7 +1375,7 @@ partitionedTables:
         comment: 90% CI margin of error for other_languages (Census variable B16001_012M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B16001_001E,B16001_002E,B16001_003E,B16001_005E,B16001_006E,B16001_009E,B16001_012E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B16001_001E,B16001_001M,B16001_002E,B16001_002M,B16001_003E,B16001_003M,B16001_005E,B16001_005M,B16001_006E,B16001_006M,B16001_009E,B16001_009M,B16001_012E,B16001_012M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1485,7 +1485,7 @@ partitionedTables:
         comment: 90% CI margin of error for ambulatory_difficulty (Census variable B18105_004M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B18101_001E,B18101_004E,B18101_007E,B18101_010E,B18101_013E,B18101_016E,B18101_019E,B18101_023E,B18101_026E,B18101_029E,B18101_032E,B18101_035E,B18101_038E,B18102_004E,B18103_004E,B18104_004E,B18105_004E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B18101_001E,B18101_001M,B18101_004E,B18101_007E,B18101_010E,B18101_013E,B18101_016E,B18101_019E,B18101_023E,B18101_026E,B18101_029E,B18101_032E,B18101_035E,B18101_038E,B18102_004E,B18102_004M,B18103_004E,B18103_004M,B18104_004E,B18104_004M,B18105_004E,B18105_004M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1588,7 +1588,7 @@ partitionedTables:
         comment: 90% CI margin of error for female_veterans (Census variable B21001_023M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B21001_001E,B21001_002E,B21001_003E,B21001_005E,B21001_023E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B21001_001E,B21001_001M,B21001_002E,B21001_002M,B21001_003E,B21001_003M,B21001_005E,B21001_005M,B21001_023E,B21001_023M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1704,7 +1704,7 @@ partitionedTables:
         comment: 90% CI margin of error for moved_from_abroad (Census variable B07001_081M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B07001_001E,B07001_017E,B07001_033E,B07001_049E,B07001_065E,B07001_081E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B07001_001E,B07001_001M,B07001_017E,B07001_017M,B07001_033E,B07001_033M,B07001_049E,B07001_049M,B07001_065E,B07001_065M,B07001_081E,B07001_081M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1819,7 +1819,7 @@ partitionedTables:
         comment: 90% CI margin of error for production_transportation_moving (Census variable C24010_037M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,C24010_001E,C24010_003E,C24010_019E,C24010_027E,C24010_030E,C24010_037E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,C24010_001E,C24010_001M,C24010_003E,C24010_003M,C24010_019E,C24010_019M,C24010_027E,C24010_027M,C24010_030E,C24010_030M,C24010_037E,C24010_037M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2014,7 +2014,7 @@ partitionedTables:
         comment: 90% CI margin of error for public_administration (Census variable C24030_028M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,C24030_001E,C24030_003E,C24030_006E,C24030_007E,C24030_008E,C24030_009E,C24030_010E,C24030_013E,C24030_014E,C24030_017E,C24030_021E,C24030_024E,C24030_027E,C24030_028E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,C24030_001E,C24030_001M,C24030_003E,C24030_003M,C24030_006E,C24030_006M,C24030_007E,C24030_007M,C24030_008E,C24030_008M,C24030_009E,C24030_009M,C24030_010E,C24030_010M,C24030_013E,C24030_013M,C24030_014E,C24030_014M,C24030_017E,C24030_017M,C24030_021E,C24030_021M,C24030_024E,C24030_024M,C24030_027E,C24030_027M,C24030_028E,C24030_028M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2130,7 +2130,7 @@ partitionedTables:
         comment: 90% CI margin of error for no_computer (Census variable B28001_011M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B28002_001E,B28002_002E,B28002_004E,B28002_013E,B28001_002E,B28001_011E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B28002_001E,B28002_001M,B28002_002E,B28002_002M,B28002_004E,B28002_004M,B28002_013E,B28002_013M,B28001_002E,B28001_002M,B28001_011E,B28001_011M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2206,7 +2206,7 @@ partitionedTables:
         comment: 90% CI margin of error for no_vehicle_households (Census variable B08201_002M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B08201_001E,B08201_002E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B08201_001E,B08201_001M,B08201_002E,B08201_002M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2309,7 +2309,7 @@ partitionedTables:
         comment: 90% CI margin of error for not_a_citizen (Census variable B05001_006M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B05001_001E,B05001_002E,B05001_005E,B05001_006E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B05001_001E,B05001_001M,B05001_002E,B05001_002M,B05001_005E,B05001_005M,B05001_006E,B05001_006M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2562,7 +2562,7 @@ partitionedTables:
         comment: 90% CI margin of error for average_household_size (Census variable B25010_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B11001_001E,B11001_002E,B11001_003E,B11001_005E,B11001_006E,B11001_007E,B11001_008E,B25010_001E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B11001_001E,B11001_001M,B11001_002E,B11001_002M,B11001_003E,B11001_003M,B11001_005E,B11001_005M,B11001_006E,B11001_006M,B11001_007E,B11001_007M,B11001_008E,B11001_008M,B25010_001E,B25010_001M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2676,7 +2676,7 @@ partitionedTables:
         comment: 90% CI margin of error for median_year_built (Census variable B25035_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25003_001E,B25003_002E,B25003_003E,B25077_001E,B25064_001E,B25035_001E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25003_001E,B25003_001M,B25003_002E,B25003_002M,B25003_003E,B25003_003M,B25077_001E,B25077_001M,B25064_001E,B25064_001M,B25035_001E,B25035_001M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2792,7 +2792,7 @@ partitionedTables:
         comment: 90% CI margin of error for gini_index (Census variable B19083_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B19001_001E,B19001_002E,B19001_003E,B19001_004E,B19001_005E,B19001_006E,B19001_007E,B19001_008E,B19001_009E,B19001_010E,B19001_011E,B19001_012E,B19001_013E,B19001_014E,B19001_015E,B19001_016E,B19001_017E,B19083_001E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B19001_001E,B19001_001M,B19001_002E,B19001_002M,B19001_003E,B19001_004E,B19001_005E,B19001_006E,B19001_007E,B19001_008E,B19001_009E,B19001_010E,B19001_011E,B19001_012E,B19001_013E,B19001_014E,B19001_015E,B19001_016E,B19001_017E,B19001_017M,B19083_001E,B19083_001M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -3150,7 +3150,7 @@ partitionedTables:
         comment: 90% CI margin of error for median_age (Census variable B01002_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B01001_001E,B01001_002E,B01001_026E,B01002_001E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B01001_001E,B01001_001M,B01001_002E,B01001_002M,B01001_026E,B01001_026M,B01002_001E,B01002_001M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -3225,7 +3225,7 @@ partitionedTables:
         comment: 90% CI margin of error for per_capita_income (Census variable B19301_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B19013_001E,B19301_001E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B19013_001E,B19013_001M,B19301_001E,B19301_001M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -4397,7 +4397,7 @@ partitionedTables:
         comment: 90% CI margin of error for median_earnings_female_graduate_degree (Census variable B20004_018M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B20004_001E,B20004_002E,B20004_003E,B20004_004E,B20004_005E,B20004_006E,B20004_007E,B20004_008E,B20004_009E,B20004_010E,B20004_011E,B20004_012E,B20004_013E,B20004_014E,B20004_015E,B20004_016E,B20004_017E,B20004_018E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B20004_001E,B20004_001M,B20004_002E,B20004_002M,B20004_003E,B20004_003M,B20004_004E,B20004_004M,B20004_005E,B20004_005M,B20004_006E,B20004_006M,B20004_007E,B20004_007M,B20004_008E,B20004_008M,B20004_009E,B20004_009M,B20004_010E,B20004_010M,B20004_011E,B20004_011M,B20004_012E,B20004_012M,B20004_013E,B20004_013M,B20004_014E,B20004_014M,B20004_015E,B20004_015M,B20004_016E,B20004_016M,B20004_017E,B20004_017M,B20004_018E,B20004_018M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -4539,7 +4539,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B06009_001E,B06009_011E,B06009_012E,B06009_017E,B06009_018E,B06009_023E,B06009_024E,B06009_025E,B06009_026E,B06009_027E,B06009_028E,B06009_029E,B06009_030E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B06009_001E,B06009_001M,B06009_011E,B06009_012E,B06009_017E,B06009_018E,B06009_023E,B06009_024E,B06009_025E,B06009_025M,B06009_026E,B06009_026M,B06009_027E,B06009_027M,B06009_028E,B06009_028M,B06009_029E,B06009_029M,B06009_030E,B06009_030M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
