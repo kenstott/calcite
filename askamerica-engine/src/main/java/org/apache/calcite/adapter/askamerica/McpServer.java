@@ -1156,12 +1156,19 @@ public class McpServer {
             "height", prop("integer", "Image height in pixels (default 500, max 2000)."));
         tools.add(
             tool("render_chart",
-            "Render a chart image (line, bar, pie, scatter, or bubble), returned inline as a "
-            + "PNG. line/bar/pie plot categories+series against a shared category axis; "
-            + "scatter/bubble plot points against true numeric x/y axes (bubble adds a third "
-            + "size dimension) — use scatter/bubble for a genuine x-vs-y relationship rather "
-            + "than a trend over categories. Build the arrays from a prior query or "
-            + "fetch_aligned_series result — this tool only draws, it does not fetch data.",
+            "Render a chart (line, bar, pie, scatter, or bubble). Returns TWO blocks: a PNG for "
+            + "the reader, and the same chart as editable SVG for you. line/bar/pie plot "
+            + "categories+series against a shared category axis; scatter/bubble plot points "
+            + "against true numeric x/y axes (bubble adds a third size dimension) — use "
+            + "scatter/bubble for a genuine x-vs-y relationship rather than a trend over "
+            + "categories. Build the arrays from a prior query or fetch_aligned_series result — "
+            + "this tool only draws, it does not fetch data. EDIT THE RETURNED SVG rather than "
+            + "re-rendering when you need an annotation or callout, direct value labels, one "
+            + "category greyed out or otherwise de-emphasised, or reworded titles and labels: "
+            + "every mark has an id (mark-*, series-*, xtick-*) and every label a class, so "
+            + "each of those is a targeted change. Re-render only when the data itself changes. "
+            + "Do not move plotted geometry — the coordinates are derived from the values you "
+            + "passed, so shifting a mark makes the picture disagree with its own numbers.",
             schema(chartProps, new String[]{})));
 
         ObjectNode reportProps = MAPPER.createObjectNode();
@@ -1359,6 +1366,7 @@ public class McpServer {
         String text;
         String telemetrySql = null;
         byte[] chartPng = null;
+        String chartSvg = null;
         // The diagnostics envelope for this call, when the tool is an analytical one. Kept
         // separate from `text` so the data payload stays byte-identical to what it was before
         // diagnostics existed — a host that ignores the extra content block sees no change.
@@ -1766,11 +1774,11 @@ public class McpServer {
 
                         log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
                             + " points=" + points.size());
-                        chartPng = ChartRenderer.renderPointsPng(
+                        ChartScene pointScene = ChartRenderer.layoutPoints(
                             chartType, title, xLabel, yLabel, points, width, height);
-                        text = "Rendered " + chartType + " chart"
-                            + (title == null ? "" : " '" + title + "'")
-                            + " (" + points.size() + " point series).";
+                        chartPng = pointScene.toPng();
+                        chartSvg = pointScene.toSvg();
+                        text = chartSummary(chartType, title, points.size() + " point series");
                         break;
                     }
 
@@ -1791,12 +1799,12 @@ public class McpServer {
 
                     log.println("[askamerica-mcp] tool=render_chart chart_type=" + chartType
                         + " categories=" + categories.size() + " series=" + series.size());
-                    chartPng = ChartRenderer.renderPng(
+                    ChartScene scene = ChartRenderer.layout(
                         chartType, title, xLabel, yLabel, categories, series, width, height);
-                    text = "Rendered " + chartType + " chart"
-                        + (title == null ? "" : " '" + title + "'")
-                        + " (" + series.size() + " series over "
-                        + categories.size() + " categories).";
+                    chartPng = scene.toPng();
+                    chartSvg = scene.toSvg();
+                    text = chartSummary(chartType, title,
+                        series.size() + " series over " + categories.size() + " categories");
                     break;
                 }
                 default:
@@ -1879,6 +1887,19 @@ public class McpServer {
         textBlock.put("type", "text");
         textBlock.put("text", text);
         content.add(textBlock);
+
+        // The same scene as editable markup, alongside the picture. The PNG is what a host
+        // displays — MCP image blocks render png/jpeg, not svg — but a raster is opaque to the
+        // caller that asked for it: it cannot check the chart against its own numbers, and its
+        // only way to change one label is to render the whole thing again. The SVG carries ids
+        // and classes for exactly that, and both come from one set of coordinates, so the
+        // markup the caller edits is provably the picture the reader saw.
+        if (chartSvg != null) {
+            ObjectNode svgBlock = MAPPER.createObjectNode();
+            svgBlock.put("type", "text");
+            svgBlock.put("text", chartSvg);
+            content.add(svgBlock);
+        }
 
         // The envelope rides as its own block, after the data. Merging it into the payload
         // would change the bytes every existing host parses; as a sibling block it is additive
@@ -2826,6 +2847,23 @@ public class McpServer {
         }
         quoted.addAll(seen);
         return out.toString();
+    }
+
+    /**
+     * The text block that accompanies a rendered chart, naming what the caller can now do.
+     *
+     * <p>The response carries the picture and its source, and a caller that does not know the
+     * source is there will not use it. Saying so once, on every chart, is what turns the SVG
+     * from a second payload into the thing that gets adjusted.
+     */
+    private static String chartSummary(String chartType, String title, String shape) {
+        return "Rendered " + chartType + " chart"
+            + (title == null ? "" : " '" + title + "'") + " (" + shape + "). "
+            + "The next block is the same chart as editable SVG — every mark carries an id "
+            + "(mark-*, series-*, xtick-*) and every label a class (title, tick, axis-title, "
+            + "value-label, callout). Edit it directly rather than re-rendering when you need "
+            + "an annotation, a callout, direct value labels, or one category de-emphasised; "
+            + "re-render only when the underlying data changes.";
     }
 
     /** True when a SQL error reads like an unqualified or unknown table/column reference. */

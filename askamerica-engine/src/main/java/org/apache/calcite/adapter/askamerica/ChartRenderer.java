@@ -10,33 +10,21 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
-import org.knowm.xchart.BitmapEncoder;
-import org.knowm.xchart.BubbleChart;
-import org.knowm.xchart.BubbleChartBuilder;
-import org.knowm.xchart.CategoryChart;
-import org.knowm.xchart.CategoryChartBuilder;
-import org.knowm.xchart.CategorySeries.CategorySeriesRenderStyle;
-import org.knowm.xchart.PieChart;
-import org.knowm.xchart.PieChartBuilder;
-import org.knowm.xchart.XYChart;
-import org.knowm.xchart.XYChartBuilder;
-import org.knowm.xchart.XYSeries.XYSeriesRenderStyle;
-import org.knowm.xchart.internal.chartpart.IChart;
-import org.knowm.xchart.style.CategoryStyler;
-import org.knowm.xchart.style.XYStyler;
-
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import javax.imageio.ImageIO;
-
 /**
- * Renders chart data to a PNG image via XChart, for the {@code render_chart} MCP tool. Runs
- * headless — the caller (McpServer) sets {@code java.awt.headless=true} before any chart is
- * rendered, since this is a stdio server process with no display.
+ * Validates chart data and lays it out, for the {@code render_chart} MCP tool.
+ *
+ * <p>Produces a {@link ChartScene} — one set of coordinates — which the caller writes out as
+ * both SVG and PNG. Rendering the same data twice through separate renderers would make their
+ * agreement a hope; rendering one scene twice makes it arithmetic, which is what lets the tool
+ * hand back markup a caller can trust to be the picture the reader saw.
+ *
+ * <p>Runs headless: the caller (McpServer) sets {@code java.awt.headless=true} before any chart
+ * is built, since this is a stdio server process with no display and text measurement still
+ * needs the font machinery.
  */
 final class ChartRenderer {
 
@@ -72,9 +60,9 @@ final class ChartRenderer {
         }
     }
 
-    static byte[] renderPng(String chartType, String title, String xLabel, String yLabel,
-            List<String> categories, List<SeriesSpec> series, int width, int height)
-            throws IOException {
+    /** Lays out a line, bar, or pie chart over a shared category axis. */
+    static ChartScene layout(String chartType, String title, String xLabel, String yLabel,
+            List<String> categories, List<SeriesSpec> series, int width, int height) {
         if (categories.isEmpty()) {
             throw new IllegalArgumentException("categories must not be empty");
         }
@@ -90,15 +78,20 @@ final class ChartRenderer {
         }
 
         String type = normalizeType(chartType);
-        IChart chart = "pie".equals(type)
-            ? buildPieChart(title, categories, series, width, height)
-            : buildCategoryChart(type, title, xLabel, yLabel, categories, series, width, height);
-        return toPngBytes(chart);
+        if ("pie".equals(type)) {
+            return ChartLayout.pieChart(title, categories, series.get(0).values, width, height);
+        }
+        if (!"bar".equals(type) && !"line".equals(type)) {
+            throw new IllegalArgumentException(
+                "Unknown chart_type: " + type + " — use line, bar, pie, scatter, or bubble.");
+        }
+        return ChartLayout.categoryChart(type, title, xLabel, yLabel, categories, series,
+            width, height);
     }
 
-    /** Renders a true numeric-axis scatter or bubble chart from (x, y[, size]) points. */
-    static byte[] renderPointsPng(String chartType, String title, String xLabel, String yLabel,
-            List<PointSeriesSpec> series, int width, int height) throws IOException {
+    /** Lays out a true numeric-axis scatter or bubble chart from (x, y[, size]) points. */
+    static ChartScene layoutPoints(String chartType, String title, String xLabel, String yLabel,
+            List<PointSeriesSpec> series, int width, int height) {
         if (series.isEmpty()) {
             throw new IllegalArgumentException("points must not be empty");
         }
@@ -133,99 +126,25 @@ final class ChartRenderer {
                 }
             }
         }
+        return ChartLayout.pointChart(bubble, title, xLabel, yLabel, series, width, height);
+    }
 
-        IChart chart = bubble
-            ? buildBubbleChart(title, xLabel, yLabel, series, width, height)
-            : buildXYChart(title, xLabel, yLabel, series, width, height);
-        return toPngBytes(chart);
+    /** Retained for callers that only want the raster. */
+    static byte[] renderPng(String chartType, String title, String xLabel, String yLabel,
+            List<String> categories, List<SeriesSpec> series, int width, int height)
+            throws IOException {
+        return layout(chartType, title, xLabel, yLabel, categories, series, width, height)
+            .toPng();
+    }
+
+    /** Retained for callers that only want the raster. */
+    static byte[] renderPointsPng(String chartType, String title, String xLabel, String yLabel,
+            List<PointSeriesSpec> series, int width, int height) throws IOException {
+        return layoutPoints(chartType, title, xLabel, yLabel, series, width, height).toPng();
     }
 
     private static String normalizeType(String chartType) {
         return (chartType == null || chartType.isEmpty())
             ? "line" : chartType.toLowerCase(Locale.ROOT);
-    }
-
-    private static CategoryChart buildCategoryChart(String type, String title, String xLabel,
-            String yLabel, List<String> categories, List<SeriesSpec> series, int width,
-            int height) {
-        CategorySeriesRenderStyle renderStyle;
-        switch (type) {
-            case "bar":
-                renderStyle = CategorySeriesRenderStyle.Bar;
-                break;
-            case "line":
-                renderStyle = CategorySeriesRenderStyle.Line;
-                break;
-            default:
-                throw new IllegalArgumentException(
-                    "Unknown chart_type: " + type + " — use line, bar, pie, scatter, or "
-                    + "bubble.");
-        }
-
-        CategoryChart chart = new CategoryChartBuilder()
-            .width(width).height(height)
-            .title(title == null ? "" : title)
-            .xAxisTitle(xLabel == null ? "" : xLabel)
-            .yAxisTitle(yLabel == null ? "" : yLabel)
-            .build();
-        CategoryStyler styler = chart.getStyler();
-        styler.setDefaultSeriesRenderStyle(renderStyle);
-        styler.setLegendVisible(series.size() > 1);
-        for (SeriesSpec s : series) {
-            chart.addSeries(s.name, categories, s.values);
-        }
-        return chart;
-    }
-
-    private static PieChart buildPieChart(String title, List<String> categories,
-            List<SeriesSpec> series, int width, int height) {
-        PieChart chart = new PieChartBuilder()
-            .width(width).height(height)
-            .title(title == null ? "" : title)
-            .build();
-        List<Double> values = series.get(0).values;
-        for (int i = 0; i < categories.size(); i++) {
-            chart.addSeries(categories.get(i), values.get(i));
-        }
-        return chart;
-    }
-
-    private static XYChart buildXYChart(String title, String xLabel, String yLabel,
-            List<PointSeriesSpec> series, int width, int height) {
-        XYChart chart = new XYChartBuilder()
-            .width(width).height(height)
-            .title(title == null ? "" : title)
-            .xAxisTitle(xLabel == null ? "" : xLabel)
-            .yAxisTitle(yLabel == null ? "" : yLabel)
-            .build();
-        XYStyler styler = chart.getStyler();
-        styler.setDefaultSeriesRenderStyle(XYSeriesRenderStyle.Scatter);
-        styler.setLegendVisible(series.size() > 1);
-        for (PointSeriesSpec s : series) {
-            chart.addSeries(s.name, s.x, s.y);
-        }
-        return chart;
-    }
-
-    private static BubbleChart buildBubbleChart(String title, String xLabel, String yLabel,
-            List<PointSeriesSpec> series, int width, int height) {
-        BubbleChart chart = new BubbleChartBuilder()
-            .width(width).height(height)
-            .title(title == null ? "" : title)
-            .xAxisTitle(xLabel == null ? "" : xLabel)
-            .yAxisTitle(yLabel == null ? "" : yLabel)
-            .build();
-        chart.getStyler().setLegendVisible(series.size() > 1);
-        for (PointSeriesSpec s : series) {
-            chart.addSeries(s.name, s.x, s.y, s.size);
-        }
-        return chart;
-    }
-
-    private static byte[] toPngBytes(IChart chart) throws IOException {
-        BufferedImage image = BitmapEncoder.getBufferedImage(chart);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", out);
-        return out.toByteArray();
     }
 }
