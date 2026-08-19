@@ -192,6 +192,14 @@ public final class S3FileIOTables {
     // AWS SDK v2 requires a region even against a custom endpoint; MinIO/R2 ignore it.
     String region = firstNonEmpty(src, "fs.s3a.endpoint.region", "region");
     props.put("client.region", region != null && !region.isEmpty() ? region : "us-east-1");
+    // Under heavy load MinIO silently drops idle keep-alive sockets; reusing a pooled
+    // connection past that point hangs forever waiting for a response that will never
+    // arrive (confirmed live via jstack — two independent jobs stuck in
+    // NioSocketImpl.timedRead with matching zero-CPU-progress samples, while `ss -tn`
+    // showed hundreds of connections stuck CLOSE-WAIT). Matches the same 2s idle
+    // revalidation as S3StorageProvider's own Apache HTTP client — this S3FileIO
+    // instance is a separate client with its own pool, so that fix doesn't cover it.
+    props.put("http-client.apache.connection-max-idle-time-ms", "2000");
     return props;
   }
 
