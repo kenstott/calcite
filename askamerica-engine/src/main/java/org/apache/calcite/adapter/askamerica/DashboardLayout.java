@@ -65,6 +65,17 @@ final class DashboardLayout {
     private static final Color BRAND_BLUE = new Color(0x1a, 0x3a, 0x8a);
     private static final Color BRAND_RED = new Color(0xd5, 0x32, 0x2f);
     private static final int MARK_SIZE = 18;
+    /**
+     * Height of the attribution block, which owns its own line.
+     *
+     * <p>Putting the footnote and the mark on one baseline — footnote left, mark right — works
+     * until the footnote is long, and a footnote is a caveat, so it is long exactly when it
+     * matters most. Observed 2026-08-19: "…D.C. shown for referen" running under the logo.
+     * Truncating the caveat to protect the branding would be the wrong trade, so the mark takes
+     * its own line and the footnote keeps the full width above it.
+     */
+    private static final int BRAND_BAND = 18;
+    private static final int BYLINE_BAND = 14;
 
     /**
      * The AskAmerica mark, inlined rather than linked.
@@ -295,17 +306,21 @@ final class DashboardLayout {
                 }
             }
 
+            double brandBase = height - 10;
+            double bylineBase = brandBase - BYLINE_BAND;
+            double footBase = (byline == null || byline.isEmpty() ? brandBase : bylineBase)
+                - BRAND_BAND;
             if (footnote != null && !footnote.isEmpty()) {
-                sb.append(text("footnote", PAD, height - 10, footnote, MUTED, "start"));
+                sb.append(text("footnote", PAD, footBase, footnote, MUTED, "start"));
             }
             sb.append("  <g id=\"brand\">\n");
             String wordmark = BRAND + " · " + BRAND_URL;
             double markX = width - PAD - ChartScene.textWidth(wordmark, 11, true) - MARK_SIZE - 6;
-            sb.append(markSvg(markX, height - 10 - MARK_SIZE + 3, MARK_SIZE));
-            sb.append("  ").append(text("brand-mark", width - PAD, height - 10,
+            sb.append(markSvg(markX, brandBase - MARK_SIZE + 3, MARK_SIZE));
+            sb.append("  ").append(text("brand-mark", width - PAD, brandBase,
                 wordmark, BRAND_INK, "end"));
             if (byline != null && !byline.isEmpty()) {
-                sb.append("  ").append(text("byline", width - PAD, height - 24, byline,
+                sb.append("  ").append(text("byline", width - PAD, bylineBase, byline,
                     MUTED, "end"));
             }
             sb.append("  </g>\n");
@@ -349,15 +364,19 @@ final class DashboardLayout {
                     draw(g, p.caption, r[0] + 4, r[1] + panelH + 13, 11, false, MUTED);
                 }
             }
+            double brandBase = height - 10;
+            double bylineBase = brandBase - BYLINE_BAND;
+            double footBase = (byline == null || byline.isEmpty() ? brandBase : bylineBase)
+                - BRAND_BAND;
             if (footnote != null && !footnote.isEmpty()) {
-                draw(g, footnote, PAD, height - 10, 11, false, MUTED);
+                draw(g, footnote, PAD, footBase, 11, false, MUTED);
             }
             String mark = BRAND + " \u00b7 " + BRAND_URL;
             markPng(g, width - PAD - ChartScene.textWidth(mark, 11, true) - MARK_SIZE - 6,
-                height - 10 - MARK_SIZE + 3, MARK_SIZE);
-            drawRight(g, mark, width - PAD, height - 10, 11, true, BRAND_INK);
+                brandBase - MARK_SIZE + 3, MARK_SIZE);
+            drawRight(g, mark, width - PAD, brandBase, 11, true, BRAND_INK);
             if (byline != null && !byline.isEmpty()) {
-                drawRight(g, byline, width - PAD, height - 24, 11, false, MUTED);
+                drawRight(g, byline, width - PAD, bylineBase, 11, false, MUTED);
             }
             g.dispose();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -477,10 +496,10 @@ final class DashboardLayout {
         double headerH = PAD + 8
             + (title == null || title.isEmpty() ? 0 : 26)
             + (subtitle == null || subtitle.isEmpty() ? 0 : 18) + 10;
-        // The attribution strip always occupies the bottom, so it is reserved whether or not
-        // a footnote is present — branding that overlaps the last row is worse than no branding.
-        double footH = Math.max(footnote == null || footnote.isEmpty() ? 0 : 22,
-            byline == null || byline.isEmpty() ? 18 : 32) + PAD;
+        // The attribution block always occupies the bottom, on its own line, plus the
+        // footnote's line above it when there is one.
+        double brandH = BRAND_BAND + (byline == null || byline.isEmpty() ? 0 : BYLINE_BAND);
+        double footH = brandH + (footnote == null || footnote.isEmpty() ? 0 : 18) + PAD;
 
         // Assign to rows first, because a row's height depends on what is in it.
         List<List<Panel>> rowList = new ArrayList<>();
