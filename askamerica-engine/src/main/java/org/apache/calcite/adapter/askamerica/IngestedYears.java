@@ -219,9 +219,9 @@ final class IngestedYears {
         // The column comes from the catalog's own partition metadata and the table/schema
         // through safeIdent, so none of this is caller-controlled text.
         // The column is referenced through an alias so it sits dot-adjacent: "year" is a
-        // reserved identifier, and quoteReservedIdentifiers only rewrites dot-adjacent
+        // reserved identifier, and normalizeCallerSql only rewrites dot-adjacent
         // tokens — a bare GROUP BY year would reach the parser unquoted and fail.
-        String sql = McpServer.quoteReservedIdentifiers(
+        String sql = McpServer.normalizeCallerSql(
             "SELECT t." + column + ", COUNT(*) FROM " + schema + "." + table + " t "
             + "GROUP BY t." + column + " ORDER BY t." + column);
         long started = System.currentTimeMillis();

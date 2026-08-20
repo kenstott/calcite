@@ -2744,9 +2744,16 @@ public class McpServer {
             "user", "day", "month", "hour", "minute", "second", "range", "period", "measure"));
 
     /**
-     * Quote reserved words used as identifiers, leaving reserved words used as keywords alone.
+     * Normalise caller SQL: quote reserved words used as identifiers, and accept {@code !=}.
      *
-     * <p>Only dot-adjacent tokens are rewritten, because those are the positions where a token
+     * <p>Both exist so a caller writing ordinary SQL is not made to learn this engine's quirks.
+     * {@code !=} is spelled that way in every mainstream dialect and rejected here only by
+     * Calcite's conformance level, which is a fact about our configuration rather than about the
+     * query; it is rewritten to {@code <>}. Doing it in this pass rather than a second one is
+     * deliberate — the scan below already skips string literals, quoted identifiers and
+     * comments, and a naive replace would corrupt {@code WHERE note = 'a != b'}.
+     *
+     * <p>Only dot-adjacent tokens are QUOTED, because those are the positions where a token
      * is unambiguously an identifier: the token before a {@code .} is a schema or table
      * qualifier, the token after a {@code .} is a table or column name. A bare {@code YEAR} is
      * left untouched — it may be {@code EXTRACT(YEAR FROM d)} or {@code ORDER BY}, and quoting
@@ -2754,7 +2761,7 @@ public class McpServer {
      * comments are skipped: the previous regex rewrote inside them, so
      * {@code WHERE note = 'see ref.table'} came out malformed.
      */
-    static String quoteReservedIdentifiers(String sql) {
+    static String normalizeCallerSql(String sql) {
         if (sql == null || sql.isEmpty()) {
             return sql;
         }
@@ -2817,6 +2824,12 @@ public class McpServer {
                     out.append(word);
                 }
                 i = j;
+                afterDot = false;
+                continue;
+            }
+            if (ch == '!' && i + 1 < n && sql.charAt(i + 1) == '=') {
+                out.append("<>");
+                i += 2;
                 afterDot = false;
                 continue;
             }
@@ -2902,7 +2915,7 @@ public class McpServer {
      * confusing one.
      */
     static ResultSet executeWithRepair(Statement st, String sql) throws Exception {
-        String effective = quoteReservedIdentifiers(sql);
+        String effective = normalizeCallerSql(sql);
         try {
             return st.executeQuery(effective);
         } catch (Exception e) {
@@ -2922,8 +2935,20 @@ public class McpServer {
             ResultSet rs;
             try {
                 rs = st.executeQuery(repaired);
-            } catch (Exception ignored) {
-                throw e;
+            } catch (Exception second) {
+                // The repair worked and the statement has ANOTHER defect. Rethrowing the
+                // original error names the word we just fixed, which sends the caller to fix
+                // something that is already correct — observed live: a statement with a bare
+                // `year` AND a `!=` reported only `year`, so the agent hand-quoted it and met
+                // the real error on the next round trip, concluding it must always quote by
+                // hand. Report the remaining problem instead, and say plainly that the SQL was
+                // rewritten first, since the message quotes text the caller did not write.
+                throw new RuntimeException(
+                    second.getMessage()
+                    + " (reserved-word column" + (quoted.size() == 1 ? " " : "s ")
+                    + String.join(", ", quoted)
+                    + " were auto-quoted first; that part succeeded and this is what remains)",
+                    second);
             }
             noteReservedWordRepair(quoted, repaired);
             return rs;
@@ -3054,7 +3079,7 @@ public class McpServer {
      * an opening parenthesis is a function call and is never quoted, which is what keeps
      * {@code COUNT(*)} intact even though {@code count} is a column name here.
      *
-     * <p>This is the bare-token counterpart to {@link #quoteReservedIdentifiers(String)}, which
+     * <p>This is the bare-token counterpart to {@link #normalizeCallerSql(String)}, which
      * rewrites only dot-adjacent tokens because that is the one position it can be certain of
      * without risking a working query. Going further is safe here and only here: this runs on a
      * statement that has already failed to parse, and the rewrite is kept only if it then runs.
@@ -4221,7 +4246,7 @@ public class McpServer {
         Connection c = getCatalogConnection();
         java.util.Map<Integer, CpiYear> out = new java.util.TreeMap<>();
         // "year" and "value" are reserved identifiers in this lex, quoted here rather than
-        // left to quoteReservedIdentifiers — that pass only rewrites dot-adjacent tokens.
+        // left to normalizeCallerSql — that pass only rewrites dot-adjacent tokens.
         String sql = "SELECT t.\"year\", AVG(t.\"value\"), COUNT(t.\"value\") "
             + "FROM econ.inflation_metrics t WHERE t.series = '" + series + "' "
             + "GROUP BY t.\"year\" ORDER BY t.\"year\"";

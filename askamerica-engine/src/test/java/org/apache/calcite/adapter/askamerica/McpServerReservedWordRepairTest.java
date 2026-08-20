@@ -145,7 +145,7 @@ public class McpServerReservedWordRepairTest {
             "src/main/java/org/apache/calcite/adapter/askamerica/McpServer.java")),
             java.nio.charset.StandardCharsets.UTF_8);
 
-        assertFalse(src.contains("st.executeQuery(quoteReservedIdentifiers(sql))"),
+        assertFalse(src.contains("st.executeQuery(normalizeCallerSql(sql))"),
             "caller SQL must go through executeWithRepair, not straight to executeQuery");
         assertTrue(src.contains("static ResultSet executeWithRepair(Statement st, String sql)"),
             "the shared execution boundary must exist");

@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class McpServerQuotingTest {
 
   private static String rewrite(String sql) {
-    return McpServer.quoteReservedIdentifiers(sql);
+    return McpServer.normalizeCallerSql(sql);
   }
 
   @Test @DisplayName("reserved schema qualifier is quoted")
@@ -98,5 +98,45 @@ class McpServerQuotingTest {
   void quotesBothSides() {
     assertEquals("SELECT \"ref\".\"type\" FROM \"ref\".naics",
         rewrite("SELECT ref.type FROM ref.naics"));
+  }
+
+  // ---- != is accepted, because every other dialect spells it that way ---------------
+
+  @Test @DisplayName("bang-equal becomes the conformant <>")
+  void rewritesBangEqual() {
+    assertEquals("SELECT * FROM t WHERE state <> '72'",
+        rewrite("SELECT * FROM t WHERE state != '72'"));
+  }
+
+  @Test @DisplayName("bang-equal inside a string literal is left alone")
+  void leavesBangEqualInsideLiterals() {
+    // A naive replace corrupts the caller's data. The literal must survive byte for byte.
+    assertEquals("SELECT * FROM t WHERE note = 'a != b'",
+        rewrite("SELECT * FROM t WHERE note = 'a != b'"));
+  }
+
+  @Test @DisplayName("bang-equal inside a comment is left alone")
+  void leavesBangEqualInsideComments() {
+    assertEquals("SELECT 1 -- x != y\nFROM t",
+        rewrite("SELECT 1 -- x != y\nFROM t"));
+  }
+
+  @Test @DisplayName("a lone ! is not touched")
+  void leavesLoneBang() {
+    assertEquals("SELECT '!' FROM t", rewrite("SELECT '!' FROM t"));
+  }
+
+  @Test @DisplayName("a reserved column and a bang-equal are both fixed in one pass")
+  void fixesBothInOnePass() {
+    // The live failure: two defects in one statement. Fixing only one leaves the caller to
+    // discover the other on a second round trip.
+    assertEquals("SELECT c.\"year\" FROM census.acs1 c WHERE c.state <> '72'",
+        rewrite("SELECT c.year FROM census.acs1 c WHERE c.state != '72'"));
+  }
+
+  @Test @DisplayName(">= and <= survive untouched")
+  void leavesOtherComparators() {
+    assertEquals("SELECT * FROM t WHERE a >= 1 AND b <= 2 AND c <> 3",
+        rewrite("SELECT * FROM t WHERE a >= 1 AND b <= 2 AND c <> 3"));
   }
 }
