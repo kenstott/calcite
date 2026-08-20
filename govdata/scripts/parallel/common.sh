@@ -482,9 +482,28 @@ ENDJSON
 # Generate a SEC reprocess model JSON targeting specific accessions.
 # Sets forceAccessions so filterUnprocessed bypasses tracker state for listed accessions.
 # Uses _ALL_EDGAR_FILERS so the full EDGAR index is loaded regardless of who filed.
-# Usage: generate_sec_reprocess_model <accessions_space_separated> <start_year> <end_year> <output_file>
+#
+# slot_type is REQUIRED and must be one of the real pool slot types (sec_primary,
+# sec_secondary, sec_13f) — it selects exactly that slot's filingTypes list, same as
+# worker.sh's own SEC1_FORMS/SEC2_FORMS/SEC13F_FORMS. There is no "all form types"
+# fallback: forceAccessions already names the exact accessions to touch, but the
+# filingTypes list still communicates which slot this reprocess belongs to and keeps
+# every SEC accession-targeted fix routed through a real slot type, never bare `sec`.
+#
+# Usage: generate_sec_reprocess_model <slot_type> <accessions_space_separated> <start_year> <end_year> <output_file>
 generate_sec_reprocess_model() {
-  local accessions_str=$1 start_year=$2 end_year=$3 output_file=$4
+  local slot_type=$1 accessions_str=$2 start_year=$3 end_year=$4 output_file=$5
+
+  local filing_types_json
+  case "$slot_type" in
+    sec_primary)   filing_types_json='["10-K", "10-K/A", "10-Q", "10-Q/A"]' ;;
+    sec_secondary) filing_types_json='["8-K", "8-K/A", "DEF 14A", "3", "4", "5", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"]' ;;
+    sec_13f)       filing_types_json='["13F-HR", "13F-HR/A"]' ;;
+    *)
+      echo "generate_sec_reprocess_model: slot_type must be sec_primary, sec_secondary, or sec_13f (got '${slot_type}')" >&2
+      return 1
+      ;;
+  esac
 
   local acc_json
   acc_json=$(printf '%s' "$accessions_str" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().split()))")
@@ -500,7 +519,7 @@ generate_sec_reprocess_model() {
     "operand": {
       "dataSource": "sec",
       "ciks": "_ALL_EDGAR_FILERS",
-      "filingTypes": ["10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A", "DEF 14A", "3", "4", "5", "13F-HR", "13F-HR/A", "SC 13D", "SC 13D/A", "SC 13G", "SC 13G/A"],
+      "filingTypes": ${filing_types_json},
       "fetchStockPrices": false,
       "forceAccessions": ${acc_json},
       "startYear": ${start_year},

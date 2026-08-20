@@ -26,18 +26,22 @@ MODEL_DIR="$SCRIPT_DIR/runs/$WORKER_ID/models"
 mkdir -p "$MODEL_DIR"
 
 FORCE_DOWNLOAD=false
+SLOT_TYPE=""
 ACCESSIONS=()
 
-for arg in "$@"; do
-  if [ "$arg" = "--force-download" ]; then
-    FORCE_DOWNLOAD=true
-  else
-    ACCESSIONS+=("$arg")
-  fi
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force-download) FORCE_DOWNLOAD=true; shift ;;
+    --schema)         SLOT_TYPE="$2"; shift 2 ;;
+    *)                ACCESSIONS+=("$1"); shift ;;
+  esac
 done
 
-if [ ${#ACCESSIONS[@]} -eq 0 ]; then
-  echo "Usage: $(basename "$0") [--force-download] <accession1> [accession2 ...]" >&2
+if [ -z "$SLOT_TYPE" ] || [ ${#ACCESSIONS[@]} -eq 0 ]; then
+  echo "Usage: $(basename "$0") --schema <sec_primary|sec_secondary|sec_13f> [--force-download] <accession1> [accession2 ...]" >&2
+  echo "  --schema is required — every accession-targeted reprocess must route through" >&2
+  echo "  a real pool slot type, never bare 'sec'. It selects the filingTypes list that" >&2
+  echo "  matches the form types these accessions actually are." >&2
   exit 1
 fi
 
@@ -66,8 +70,8 @@ fi
 ACCESSIONS_STR="${ACCESSIONS[*]}"
 
 MODEL_FILE="$MODEL_DIR/sec-reprocess-$(date +%Y%m%d_%H%M%S).json"
-generate_sec_reprocess_model "$ACCESSIONS_STR" "$MIN_YEAR" "$MAX_YEAR" "$MODEL_FILE"
+generate_sec_reprocess_model "$SLOT_TYPE" "$ACCESSIONS_STR" "$MIN_YEAR" "$MAX_YEAR" "$MODEL_FILE"
 
-log_info "$WORKER_ID reprocessing ${#ACCESSIONS[@]} accession(s) (years ${MIN_YEAR}-${MAX_YEAR}): ${ACCESSIONS[*]}"
+log_info "$WORKER_ID reprocessing ${#ACCESSIONS[@]} accession(s) as $SLOT_TYPE (years ${MIN_YEAR}-${MAX_YEAR}): ${ACCESSIONS[*]}"
 run_etl "$MODEL_FILE" "$WORKER_ID"
 log_info "$WORKER_ID complete"
