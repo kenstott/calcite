@@ -126,7 +126,42 @@ fi
 # run enumerated, which is what gets published and bundled.
 SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
 export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR"
-GOVDATA_VERIFY_DATA_DIR="$STAGING" "$SCRIPT_DIR/model-verify.sh" --mode "$MODE" --single-connection "${VERIFY_ARGS[@]}"
+
+# GENERATE must build every view fresh from the CURRENT schema YAML. GovDataSeedInstaller
+# (invoked by GovDataDriver on first connect) extracts the classpath jar's OWN bundled seed
+# into any empty operating dir before generation gets a chance to run — including this "clean"
+# staging dir — so a plain connection here just finds the OLD view definitions already
+# installed and reuses them: a view whose SQL changed since the last seed was built (e.g.
+# financial_facts's is_consolidated_total fix, commit 00e39f2b19) never reaches a "regenerated"
+# seed, no matter how many times this script runs. A jar with no seed resource makes
+# GovDataSeedInstaller cold-start instead, so every view actually gets rebuilt from
+# src/main/resources/**/*.yaml. Strip a throwaway copy rather than touching the checked-in
+# jar/resources — packaging below still zips whatever this run's connection produces.
+LIBS="$GOVDATA_HOME/build/libs"
+if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then
+    SOURCE_JAR="$MODEL_VERIFY_JAR"
+elif [[ -f "$LIBS/sih-govdata.jar" ]]; then
+    SOURCE_JAR="$LIBS/sih-govdata.jar"
+elif ls "$LIBS"/sih-govdata-[0-9]*.jar >/dev/null 2>&1; then
+    SOURCE_JAR="$(ls -t "$LIBS"/sih-govdata-[0-9]*.jar | head -1)"
+else
+    echo "ERROR: Cannot find govdata shaded jar in $LIBS. Build it: ./gradlew :govdata:shadowJar" >&2
+    exit 2
+fi
+if [[ ! -f "$SOURCE_JAR" ]]; then
+    echo "ERROR: jar not found: $SOURCE_JAR" >&2
+    exit 2
+fi
+GENERATE_JAR="$STAGING/generate.jar"
+cp "$SOURCE_JAR" "$GENERATE_JAR"
+# Exit 12 ("nothing to do") is expected for a jar nobody ever ran bundleGovdataSeed on yet —
+# tolerated, not swallowed: any other zip failure still aborts via set -e.
+zip -q -d "$GENERATE_JAR" duckdb/seed/govdata-seed.zip duckdb/seed/govdata-seed.version \
+    || { rc=$?; [[ $rc -eq 12 ]] || exit $rc; }
+echo "Generating with a seedless copy of $SOURCE_JAR (bundled seed stripped: $GENERATE_JAR)"
+
+GOVDATA_VERIFY_DATA_DIR="$STAGING" MODEL_VERIFY_JAR="$GENERATE_JAR" \
+    "$SCRIPT_DIR/model-verify.sh" --mode "$MODE" --single-connection "${VERIFY_ARGS[@]}"
 
 SCHEMA_CACHE="$SCHEMA_CACHE_DIR/iceberg-schema-cache.json"
 if [[ ! -f "$SCHEMA_CACHE" ]]; then

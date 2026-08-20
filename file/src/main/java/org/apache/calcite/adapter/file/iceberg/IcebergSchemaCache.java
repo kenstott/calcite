@@ -306,11 +306,26 @@ public final class IcebergSchemaCache {
   }
 
   /**
+   * Whether {@link #record} has fired at least once this JVM — i.e. some table's schema was
+   * actually read live rather than served from a trusted published cache.
+   *
+   * <p>Lets a caller of {@link #publishToWarehouse} tell "nothing needed publishing because the
+   * published cache already covered every table this run touched" (expected, not a failure) apart
+   * from "a live read happened but the publish itself failed" (a real problem worth failing on) —
+   * {@link #publishToWarehouse} returns {@code false} for both, since from inside the cache they
+   * look the same.
+   */
+  public static boolean anyLiveRead() {
+    return warehouseTablePath != null;
+  }
+
+  /**
    * Publishes to the warehouse this JVM has been reading from, as observed by {@link #record}.
    *
-   * <p>This is the seed-generation entry point: run a full catalog pull, then call this. It fails
-   * loudly (returns false) when nothing was read live, because that means there is nothing
-   * authoritative to publish.
+   * <p>This is the seed-generation entry point: run a full catalog pull, then call this. Returns
+   * false both when nothing was read live (the published cache already covered every table this
+   * run touched, so there is nothing new to publish — check {@link #anyLiveRead} to tell that
+   * apart from an actual write failure) and when the write itself failed.
    *
    * @return true when the published object was replaced
    */
@@ -318,8 +333,8 @@ public final class IcebergSchemaCache {
     String path = warehouseTablePath;
     Map<String, String> s3Config = warehouseS3Config;
     if (path == null || s3Config == null) {
-      LOGGER.warn("Cannot publish Iceberg schema cache: no object-store table was read live in "
-          + "this JVM, so no warehouse is known");
+      LOGGER.info("Nothing to publish to the Iceberg schema cache: no table was read live in "
+          + "this JVM (every lookup this run was served from the already-published cache)");
       return false;
     }
     return publish(path, s3Config);

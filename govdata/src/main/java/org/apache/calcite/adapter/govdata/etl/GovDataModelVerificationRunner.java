@@ -390,11 +390,17 @@ public final class GovDataModelVerificationRunner {
           System.out.println("  schema cache         : NOT published (run exited " + exit + ")");
         } else {
           int cached = org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.size();
+          boolean anyLiveRead =
+              org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.anyLiveRead();
           boolean published =
               org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.publishToWarehouse();
           System.out.println("  schema cache         : " + cached + " tables, published="
-              + published);
-          if (!published) {
+              + published + (published || anyLiveRead ? "" : " (nothing new — every table this "
+              + "run touched was already served from the published cache)"));
+          // publishToWarehouse() returns false both when nothing needed publishing (every lookup
+          // was a cache hit — expected, not a failure) and when an actual write failed. Only the
+          // second is fatal: !anyLiveRead means the first case, so the run stays green.
+          if (!published && anyLiveRead) {
             exit = 1;
           }
         }
