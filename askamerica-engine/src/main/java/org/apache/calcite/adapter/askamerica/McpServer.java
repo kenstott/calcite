@@ -1184,7 +1184,10 @@ public class McpServer {
         dashProps.set("title", prop("string", "Dashboard title, shown top-left."));
         dashProps.set("subtitle", prop("string",
             "One line under the title — the source, vintage, and units the whole board "
-            + "shares."));
+            + "shares. ONE line: it does not wrap, so it is shrunk to fit and then "
+            + "ellipsised. Around 120 characters is the practical ceiling at a typical board "
+            + "width; a 230-character subtitle loses its tail. Per-source detail belongs in "
+            + "the panel captions and the footnote, which have the room."));
         dashProps.set("footnote", prop("string", "Caveat line along the bottom."));
         dashProps.set("include_svg", prop("boolean",
             "Return the SVG source as well (default false). The response always carries a PNG "

@@ -330,12 +330,19 @@ final class DashboardLayout {
                 .append(ChartScene.hex(BACKGROUND)).append("\"/>\n");
 
             double y = PAD + 8;
+            double headerW = width - 2.0 * PAD;
             if (title != null && !title.isEmpty()) {
-                sb.append(text("dash-title", PAD, y + 14, title, INK, "start"));
+                int ts = fittedSize(title, headerW, DASH_TITLE_SIZE, 13);
+                sb.append(text("dash-title", PAD, y + 14,
+                    fittedHeader(title, headerW, ts, true), INK, "start",
+                    "font-size:" + ts + "px"));
                 y += 26;
             }
             if (subtitle != null && !subtitle.isEmpty()) {
-                sb.append(text("dash-subtitle", PAD, y + 12, subtitle, MUTED, "start"));
+                int ss = fittedSize(subtitle, headerW, DASH_SUBTITLE_SIZE, 9);
+                sb.append(text("dash-subtitle", PAD, y + 12,
+                    fittedHeader(subtitle, headerW, ss, false), MUTED, "start",
+                    "font-size:" + ss + "px"));
             }
 
             for (int i = 0; i < panels.size(); i++) {
@@ -418,12 +425,16 @@ final class DashboardLayout {
             g.fillRect(0, 0, width, height);
 
             double y = PAD + 8;
+            double headerW = width - 2.0 * PAD;
             if (title != null && !title.isEmpty()) {
-                draw(g, title, PAD, y + 14, 20, true, INK);
+                int ts = fittedSize(title, headerW, DASH_TITLE_SIZE, 13);
+                draw(g, fittedHeader(title, headerW, ts, true), PAD, y + 14, ts, true, INK);
                 y += 26;
             }
             if (subtitle != null && !subtitle.isEmpty()) {
-                draw(g, subtitle, PAD, y + 12, 13, false, MUTED);
+                int ss = fittedSize(subtitle, headerW, DASH_SUBTITLE_SIZE, 9);
+                draw(g, fittedHeader(subtitle, headerW, ss, false), PAD, y + 12, ss, false,
+                    MUTED);
             }
             for (int i = 0; i < panels.size(); i++) {
                 Panel p = panels.get(i);
@@ -763,6 +774,31 @@ final class DashboardLayout {
      */
     /** Nominal stat-tile delta size; the CSS class and the raster path must agree on it. */
     private static final int STAT_DELTA_SIZE = 13;
+
+    /** Nominal header sizes; the CSS classes and the raster path must agree on them. */
+    private static final int DASH_TITLE_SIZE = 20;
+    private static final int DASH_SUBTITLE_SIZE = 13;
+
+    /**
+     * A header line shortened to fit, with a visible ellipsis when shrinking is not enough.
+     *
+     * <p>The board title and subtitle were drawn from a fixed origin at a fixed size with the
+     * board width in scope and unused, so a long subtitle simply ran off the right edge — a live
+     * board ended "...CDC/NCHS age-ad", which reads as a complete source note and is not one.
+     * This is the same defect as the panel titles, captions, stat values and axis titles before
+     * it; the header was the last place still drawing unbounded text.
+     */
+    private static String fittedHeader(String s, double maxWidth, int size, boolean bold) {
+        if (s == null || s.isEmpty() || maxWidth <= 0
+            || ChartScene.textWidth(s, size, bold) <= maxWidth) {
+            return s;
+        }
+        String t = s;
+        while (t.length() > 1 && ChartScene.textWidth(t + "\u2026", size, bold) > maxWidth) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t + "\u2026";
+    }
 
     private static int fittedStatSize(String value, double maxWidth) {
         return fittedSize(value, maxWidth, STAT_VALUE_SIZE, STAT_VALUE_MIN);

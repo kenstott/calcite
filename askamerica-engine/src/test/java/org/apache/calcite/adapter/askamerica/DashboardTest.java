@@ -428,4 +428,45 @@ public class DashboardTest {
         assertTrue(ys.size() > 1,
             "a legend too wide for its panel must wrap onto more than one row, got rows=" + ys);
     }
+
+    // ---- the board header must not run off the right edge ---------------------------
+
+    /** The subtitle from a live board, which was drawn cut to "...CDC/NCHS age-ad". */
+    private static final String LONG_SUBTITLE =
+        "Violent crime: FBI CDE, 10-yr-avg 2019-2025 (7 yrs available) per 100k. Correlates: "
+        + "ACS 5-yr 10-yr-avg 2014-2023; CDC/NCHS age-adjusted mortality 2008-2017";
+
+    @Test void anOverlongSubtitleIsFittedNotRunOffTheEdge() {
+        String svg = DashboardLayout.compose("What correlates with state violent crime rates?",
+            LONG_SUBTITLE, null, Arrays.asList(stat("n", "51"), chart("c", null, 1, 2, 3)),
+            2, 880, 500).toSvg();
+
+        // Either it was shrunk enough to fit whole, or it is visibly ellipsised — never a
+        // silent cut, which reads as a complete source note and is not one.
+        boolean whole = svg.contains(LONG_SUBTITLE);
+        boolean ellipsised = svg.contains("\u2026</text>");
+        assertTrue(whole || ellipsised,
+            "the subtitle must be complete or visibly shortened, got: " + svg);
+    }
+
+    @Test void theHeaderCarriesItsSizeInline() {
+        // .dash-subtitle sets a font-size in the stylesheet, and a CSS rule outranks a
+        // presentation attribute — so a fitted size must ride as an inline style or the
+        // stylesheet silently restores the size that did not fit.
+        String svg = DashboardLayout.compose("t", LONG_SUBTITLE, null,
+            Arrays.asList(stat("n", "51"), chart("c", null, 1, 2, 3)), 2, 880, 500).toSvg();
+        // Anchor on the class ATTRIBUTE: the stylesheet also contains ".dash-subtitle {...}",
+        // and matching that instead tests nothing.
+        int at = svg.indexOf("class=\"dash-subtitle\"");
+        assertTrue(at > 0, "subtitle element missing");
+        String tag = svg.substring(at, svg.indexOf('>', at));
+        assertTrue(tag.contains("style=") && tag.contains("font-size"),
+            "the fitted size must be inline to beat the stylesheet, got: " + tag);
+    }
+
+    @Test void aShortSubtitleIsLeftExactlyAsGiven() {
+        String svg = DashboardLayout.compose("t", "ACS 2024", null,
+            Arrays.asList(stat("n", "51"), chart("c", null, 1, 2, 3)), 2, 880, 500).toSvg();
+        assertTrue(svg.contains(">ACS 2024</text>"), "a subtitle that fits must not be touched");
+    }
 }
