@@ -107,4 +107,23 @@ class McpServerErrorMessageTest {
     assertTrue(compact.contains("Do not read a timeout as evidence about the data"),
         "a timeout says nothing about contents, got: " + compact);
   }
+
+  @Test @DisplayName("TRY_CAST is explained, and explicitly not equated with CAST")
+  void explainsTryCast() {
+    String compact = McpServer.compactErrorMessage(new RuntimeException(
+        "No match found for function signature TRY_CAST(<CHARACTER>, <NUMERIC>)"));
+    assertTrue(compact.contains("not supported by this SQL parser"),
+        "the caller must learn the parser is the problem, got: " + compact);
+    assertTrue(compact.contains("NOT the same as CAST"),
+        "silently equating them would turn a working query into a failing one on the dirty "
+        + "data TRY_CAST exists for; got: " + compact);
+    assertTrue(compact.contains("CASE WHEN"),
+        "and it must give an alternative that actually parses, got: " + compact);
+  }
+
+  @Test @DisplayName("an unrelated signature error is not hijacked by the TRY_CAST branch")
+  void leavesOtherSignatureErrorsAlone() {
+    String msg = "No match found for function signature FOO(<CHARACTER>)";
+    assertEquals(msg, McpServer.compactErrorMessage(new RuntimeException(msg)));
+  }
 }

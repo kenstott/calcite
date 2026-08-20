@@ -1517,6 +1517,7 @@ public class McpServer {
             // Inside the try so a rejection reaches the caller the same way every other tool
             // failure does — as a result with isError=true. Thrown from outside it, the
             // exception escaped the handler and the caller was answered with nothing at all.
+            applyArgAliases(name, args);
             validateArgs(name, args);
             switch (name) {
                 case "list_schemas":
@@ -2233,6 +2234,28 @@ public class McpServer {
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
+        // TRY_CAST is correct DuckDB and correct in most dialects, and callers reach for it
+        // constantly on this warehouse because so many measure columns are VARCHAR. Calcite's
+        // parser does not know it: it reads the AS as an argument separator and reports a
+        // signature like TRY_CAST(<CHARACTER>, <NUMERIC>), which names nothing the caller can
+        // act on. It cannot simply be rewritten to CAST — TRY_CAST yields NULL where CAST
+        // throws, so that rewrite converts a working query into a failing one on exactly the
+        // dirty data TRY_CAST exists for. Say what is wrong and give the equivalent that parses.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && msg.contains("TRY_CAST")
+                && msg.contains("No match found for function signature")) {
+                return "TRY_CAST is not supported by this SQL parser (the engine reports it as an"
+                    + " unknown two-argument function, because it reads the AS as a separator)."
+                    + " It is NOT the same as CAST and is not rewritten to it: TRY_CAST returns"
+                    + " NULL where CAST fails, which is usually the whole reason for using it."
+                    + " For a VARCHAR measure column, the equivalent that parses here is a"
+                    + " guarded CAST, e.g."
+                    + " CASE WHEN <col> IS NOT NULL AND TRIM(<col>) <> '' THEN CAST(<col> AS"
+                    + " DOUBLE) END — add whatever further guard the column needs. Original"
+                    + " error: " + msg;
+            }
+        }
         // A query stopped by the time bound surfaces as DuckDB's own "INTERRUPT Error:
         // Interrupted!", which names neither the bound nor the fact that one exists. An agent
         // reading it cannot tell a timeout from a crash, so it retries the same shape and loses
@@ -5754,6 +5777,51 @@ public class McpServer {
      * site, so a tool cannot advertise one set of arguments and enforce another, and a tool
      * added later is covered without anyone remembering to wire it up.
      */
+    /**
+     * Argument names callers reach for that are not the ones we chose, mapped to the ones we did.
+     *
+     * <p>Measured, not guessed: {@code search_catalog}'s argument is {@code query}, and across
+     * six eval runs agents reached for {@code keyword} or {@code keywords} four times. The
+     * suggestion in the rejection message is good enough that they self-correct on the next
+     * call, so nothing was ever wrong with the ANSWER — it just cost a round trip every single
+     * run. A search tool taking a keyword is not a mistake worth charging for.
+     *
+     * <p>This is an explicit rename, not a relaxation. Unknown arguments are still rejected, and
+     * that rejection is deliberate — silently ignoring a misspelled argument once made this
+     * server answer as though data were absent when the caller had simply named a field wrong.
+     * An alias only applies when the real argument is ABSENT: passing both leaves the alias in
+     * place and the call is rejected, rather than one of the two being quietly discarded.
+     */
+    private static final java.util.Map<String, java.util.Map<String, String>> ARG_ALIASES;
+
+    static {
+        java.util.Map<String, java.util.Map<String, String>> m = new java.util.HashMap<>();
+        java.util.Map<String, String> search = new java.util.LinkedHashMap<>();
+        search.put("keyword", "query");
+        search.put("keywords", "query");
+        search.put("term", "query");
+        search.put("terms", "query");
+        search.put("q", "query");
+        search.put("search", "query");
+        m.put("search_catalog", java.util.Collections.unmodifiableMap(search));
+        ARG_ALIASES = java.util.Collections.unmodifiableMap(m);
+    }
+
+    /** Renames known synonyms in place; see {@link #ARG_ALIASES}. */
+    static void applyArgAliases(String tool, JsonNode args) {
+        java.util.Map<String, String> aliases = ARG_ALIASES.get(tool);
+        if (aliases == null || args == null || !args.isObject()) {
+            return;
+        }
+        ObjectNode obj = (ObjectNode) args;
+        for (java.util.Map.Entry<String, String> e : aliases.entrySet()) {
+            if (obj.has(e.getKey()) && !obj.has(e.getValue())) {
+                obj.set(e.getValue(), obj.get(e.getKey()));
+                obj.remove(e.getKey());
+            }
+        }
+    }
+
     private static void validateArgs(String tool, JsonNode args) {
         for (JsonNode def : toolDefs()) {
             if (!tool.equals(def.path("name").asText())) {
