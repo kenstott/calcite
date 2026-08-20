@@ -5033,7 +5033,7 @@ public class XbrlToParquetConverter implements FileConverter {
     dataList.add(data);
 
     storageProvider.writeAvroParquet(outputPath, columns, dataList, "FilingMetadata", "FilingMetadata");
-    LOGGER.info("Wrote 8-K filing metadata to {}", outputPath);
+    LOGGER.info("Wrote {} filing metadata to {}", filingType, outputPath);
   }
 
   /**
