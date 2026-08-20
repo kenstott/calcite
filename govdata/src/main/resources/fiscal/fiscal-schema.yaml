@@ -192,11 +192,14 @@ dimension_values:
   # confirmed live 2012 through 2024 (verified 2026-08-02); a plain bounded
   # range (not yearRange/current) since the actual ZIP filename/casing is
   # discovered per year by GovtFinanceTransformer, not templated, so there is
-  # no "current" auto-detection to anchor against.
+  # no "current" auto-detection to anchor against. Uses the standard
+  # GOVDATA_START_YEAR/END_YEAR directly, same as every other year-addressed
+  # schema — no dedicated override var, to avoid a second knob that could
+  # silently diverge from the range everything else is scoped to.
   govfin_year_range: &govfin_year_range
     type: range
-    start: "${GOVDATA_START_GOVFIN_YEAR:2012}"
-    end: "${GOVDATA_END_GOVFIN_YEAR:2024}"
+    start: "${GOVDATA_START_YEAR:2012}"
+    end: "${GOVDATA_END_YEAR:2024}"
 
 # ============================================================================
 # PARTITIONED TABLES

@@ -83,28 +83,35 @@ column_templates:
 dimension_values:
 
   # Congress.gov's nomination endpoint is filtered per-Congress (2-year window each), so this
-  # operand needs a Congress number — but the operator-facing knob is GOVDATA_START_YEAR/
-  # GOVDATA_END_YEAR like every other schema: worker.sh's officials case converts year to the
-  # covering Congress (N = (year-1789)/2 + 1) before invoking this schema, and only exports
-  # GOVDATA_START_CONGRESS/END_CONGRESS itself if the caller hasn't already set them. The
-  # 117-119 default below is the fallback for direct invocation outside worker.sh; deeper
-  # history is available via a lower GOVDATA_START_YEAR (worker.sh) or GOVDATA_START_CONGRESS
-  # (direct).
+  # operand needs a Congress number, not a calendar year. GOVDATA_START_CONGRESS/END_CONGRESS
+  # are NOT an operator-facing knob — the only standard demarc a caller sets, anywhere, is
+  # GOVDATA_START_YEAR/GOVDATA_END_YEAR, same as every other schema.
+  # OfficialsSchemaFactory.configureHooks() (Java) derives the Congress number from the
+  # resolved startYear/endYear operand (N = (year-1789)/2 + 1) and sets these as system
+  # properties at schema-load time, for every invocation path — not a shell/worker.sh step, so
+  # it can't be bypassed by calling this YAML a different way. The 117-119 default below only
+  # matters if startYear/endYear are themselves absent from the operand.
   congress_range: &congress_range
     type: range
     start: "${GOVDATA_START_CONGRESS:117}"
     end: "${GOVDATA_END_CONGRESS:119}"
 
-  # Presidential elections are quadrennial. NOT anchored at 1789: the founding election's
-  # inauguration-year numbering (1789, then 1792 onward) breaks a fixed step=4 arithmetic
-  # sequence (1789 -> 1793 by step 4 lands one year off from the real next election, 1792).
-  # 1976 is a plain, arithmetic-clean modern floor — deeper history needs a one-off manual
-  # backfill of the irregular 1789 point, not attempted here. Bump both on each new cycle.
+  # Presidential elections only happen every 4 years, but that doesn't need a special dimension
+  # step or a snapped-to-nearest-election-year range — it's the same question as any other
+  # source: does this year have published data or not? Both tables below already answer that
+  # per-year, at the source: presidential_election_results' transformer logs a warning and
+  # returns zero rows for a year with no matching FEC link (verified —
+  # PresidentialResultsTransformer, "no results link found"), and electoral_college_votes
+  # declares skipOn: [404] so a non-election year's archives.gov page (which doesn't exist)
+  # skips cleanly instead of failing the batch. So this is a plain annual range on the standard
+  # GOVDATA_START_YEAR/GOVDATA_END_YEAR, exactly like every other year-addressed schema — no
+  # dedicated override var, no step, no snapping. 1976 is a plain, arithmetic-clean modern floor
+  # (not 1789: the founding election's irregular inauguration-year numbering breaks any fixed
+  # arithmetic anchor) — deeper history needs a one-off manual backfill, not attempted here.
   presidential_year_range: &presidential_year_range
     type: range
-    start: "${GOVDATA_START_PRES_YEAR:1976}"
-    end: "${GOVDATA_END_PRES_YEAR:2024}"
-    step: 4
+    start: "${GOVDATA_START_YEAR:1976}"
+    end: "${GOVDATA_END_YEAR:2024}"
 
 # ============================================================================
 # COMPACTION DEFAULTS
@@ -779,6 +786,7 @@ partitionedTables:
       method: GET
       response:
         format: text
+      skipOn: [404]  # non-election years have no page — expected gap, not a failure
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]

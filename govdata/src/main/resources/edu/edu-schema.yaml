@@ -2207,8 +2207,11 @@ partitionedTables:
     dimensions:
       year:
         type: range
-        start: "${GOVDATA_START_PLS_YEAR:2014}"
-        end: "${GOVDATA_END_PLS_YEAR:2024}"
+        # Uses the standard GOVDATA_START_YEAR/END_YEAR directly, same as every other
+        # year-addressed schema — no dedicated override var, to avoid a second knob that could
+        # silently diverge from the range everything else is scoped to.
+        start: "${GOVDATA_START_YEAR:2014}"
+        end: "${GOVDATA_END_YEAR:2024}"
 
     materialize:
       enabled: true

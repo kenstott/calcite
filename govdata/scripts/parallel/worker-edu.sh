@@ -146,9 +146,9 @@ run_annual_cadence() {
       '"ipeds_financials"' "$START"
   fi
 
-  # library_outlets' year dimension is a plain bounded range (GOVDATA_START_PLS_YEAR..
-  # GOVDATA_END_PLS_YEAR), not a yearRange keyed off $START — re-verifying the whole
-  # range here (gated to its releaseWindow) is how it picks up a revised current year.
+  # library_outlets' year dimension is a plain bounded range on GOVDATA_START_YEAR/END_YEAR
+  # (same demarc as everything else), not a yearRange — re-verifying the whole range here
+  # (gated to its releaseWindow) is how it picks up a revised current year.
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "library_outlets"; then
     run_edu_model "edu-annual-libraries" \
       '"library_outlets"' "$START"

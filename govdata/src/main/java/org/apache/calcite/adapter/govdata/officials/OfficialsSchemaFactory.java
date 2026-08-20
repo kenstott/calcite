@@ -79,5 +79,36 @@ public class OfficialsSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for OFFICIALS schema");
+    deriveCongressRange(operand);
+  }
+
+  /**
+   * Congress.gov's endpoints are Congress-scoped, not year-scoped — but the only demarc a
+   * caller ever sets is {@code startYear}/{@code endYear} (the standard GOVDATA_START_YEAR/
+   * END_YEAR operand), same as every other schema. Derived here, once, at the moment this
+   * schema loads — the single place every invocation path (worker.sh, force-reprocess.sh, a
+   * direct model) goes through — rather than relying on any caller to separately compute and
+   * pass a Congress number.
+   *
+   * <p>Presidential-election-year tables need no equivalent: they're plain annual ranges on
+   * GOVDATA_START_YEAR/END_YEAR directly, and a non-election year already resolves as an
+   * expected zero-row gap at the source (electoral_college_votes' skipOn: [404];
+   * presidential_election_results' transformer logging and returning zero rows for a year with
+   * no matching link) — no dimension-level derivation needed.
+   */
+  private void deriveCongressRange(Map<String, Object> operand) {
+    Object startYearObj = operand.get("startYear");
+    Object endYearObj = operand.get("endYear");
+    if (startYearObj == null || endYearObj == null) {
+      return;
+    }
+    int startYear = Integer.parseInt(String.valueOf(startYearObj));
+    int endYear = Integer.parseInt(String.valueOf(endYearObj));
+
+    // Congress N spans [1789+2(N-1), 1791+2(N-1)); year Y -> N = (Y-1789)/2 + 1.
+    int startCongress = (startYear - 1789) / 2 + 1;
+    int endCongress = (endYear - 1789) / 2 + 1;
+    System.setProperty("GOVDATA_START_CONGRESS", String.valueOf(startCongress));
+    System.setProperty("GOVDATA_END_CONGRESS", String.valueOf(endCongress));
   }
 }

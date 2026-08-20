@@ -429,14 +429,13 @@ case "$SCHEMA" in
     ;;
 
   # ── Federal officials — universal historical|daily entry point ────────────
-  # Congress.gov's endpoints are themselves Congress-scoped (a 2-year window per call), so the
-  # fetch needs a Congress number — but the operator-facing knob is GOVDATA_START_YEAR/
-  # GOVDATA_END_YEAR, same as every other schema, translated to the covering Congress range here.
-  # Congress N spans [1789+2(N-1), 1791+2(N-1)); year Y -> N = (Y-1789)/2 + 1 (integer division;
-  # verified against officials-schema.yaml's own documented anchor: Y=2021 -> N=117, matching its
-  # "117th Congress (2021-2023)" comment). GOVDATA_START_CONGRESS/END_CONGRESS — the operand
-  # officials-schema.yaml's congress_range actually reads — remain directly overridable for
-  # anyone bypassing worker.sh.
+  # Congress.gov's endpoints are themselves Congress-scoped (a 2-year window per call), and the
+  # presidential-election tables only have data every 4 years — but the only demarc set here is
+  # GOVDATA_START_YEAR/GOVDATA_END_YEAR, same as every other schema. This block just resolves
+  # MODE to a start/end year and exports them; the Congress-number and election-year derivation
+  # itself lives in Java (OfficialsSchemaFactory.configureHooks(), reads the operand's
+  # startYear/endYear that build_inline_model sets from these exports) so it runs for every
+  # invocation path — worker.sh, force-reprocess.sh, or a hand-built model — not just this one.
   officials)
     case "$MODE" in
       historical|once)
@@ -460,8 +459,12 @@ case "$SCHEMA" in
         ;;
       *) echo "officials: unknown mode '$MODE'. Valid modes: historical, once, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
-    export GOVDATA_START_CONGRESS="${GOVDATA_START_CONGRESS:-$(( (_officials_start_year - 1789) / 2 + 1 ))}"
-    export GOVDATA_END_CONGRESS="${GOVDATA_END_CONGRESS:-$(( (_officials_end_year - 1789) / 2 + 1 ))}"
+    # Export as the standard demarc so build_inline_model's operand carries startYear/endYear —
+    # OfficialsSchemaFactory.configureHooks() (Java) derives the Congress number and nearest
+    # presidential-election-year bounds from that operand at load time, for every invocation
+    # path, not just this one. No Congress- or election-year-specific env var exists here.
+    export GOVDATA_START_YEAR="$_officials_start_year"
+    export GOVDATA_END_YEAR="$_officials_end_year"
     run_etl_inline "$(build_inline_model officials)" "worker-officials-${MODE}"
     ;;
 
