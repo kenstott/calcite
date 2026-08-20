@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.78.0](https://github.com/kenstott/calcite/compare/engine-v0.77.1...engine-v0.78.0) (2026-08-20)
+
+
+### Features
+
+* **askamerica/mcp:** compose_dashboard assembles panels into one publishable artifact ([00dd6db](https://github.com/kenstott/calcite/commit/00dd6dbc48945592056ce5f5c50ddf7e77141d8f))
+* **askamerica/mcp:** publish_report — the whole answer as one linkable HTML page ([3488edd](https://github.com/kenstott/calcite/commit/3488edd1450841dd67b7625c8d98f2b6966c5aca))
+* **askamerica/render_chart:** every dashboard carries the AskAmerica mark ([0ff50e5](https://github.com/kenstott/calcite/commit/0ff50e59cf6c595e6f716d80b9ac92d7a731f0a7))
+* **askamerica/render_chart:** return the chart as editable SVG beside the PNG ([0b8e2ff](https://github.com/kenstott/calcite/commit/0b8e2ff28c9223a1910e8b4faec8a0ba847a1637))
+* **askamerica/render_chart:** serve the dashboard over loopback and return a link ([8a5b0bd](https://github.com/kenstott/calcite/commit/8a5b0bde7d141ee20a1f4ab56de6b281f88d5c2d))
+* **govdata:** add --verbose to sync-to-r2.sh for per-file transfer logging ([647b537](https://github.com/kenstott/calcite/commit/647b53750a042cc5b86f6db2b80a88809a072d14))
+
+
+### Bug Fixes
+
+* **askamerica/charts:** fit axis titles, and stop the stylesheet undoing fitted sizes ([ec6c154](https://github.com/kenstott/calcite/commit/ec6c15418025390f498daea43598d28f92b7c627))
+* **askamerica/dashboard:** text drawn at a fixed size stopped overrunning its box ([2688164](https://github.com/kenstott/calcite/commit/2688164416971c7ec431b64228a164e1c24a8d75))
+* **askamerica/mcp:** a malformed call no longer answers as if the data were absent ([c14aa11](https://github.com/kenstott/calcite/commit/c14aa113fc23de52a5f5ebe834d52c3cebe226a4))
+* **askamerica/mcp:** accept != and stop discarding a successful SQL repair ([53de702](https://github.com/kenstott/calcite/commit/53de7024f2a8822b2232c44aace0f0788f755622))
+* **askamerica/mcp:** report thumbnail at 40%, not 25% ([5f6fdcb](https://github.com/kenstott/calcite/commit/5f6fdcb7c5b19776fbebe5732eebccb6f8c93b32))
+* **askamerica/render_chart:** loosen the footer spacing ([55742f2](https://github.com/kenstott/calcite/commit/55742f2e764b357d2fbf5d6b1935b3f144a034ac))
+* **askamerica/render_chart:** mark and byline share one footer line ([848e795](https://github.com/kenstott/calcite/commit/848e795df4dbc88d6ef9006b1b5249f0e498a456))
+* **askamerica/render_chart:** reserve the footer height from its own baselines ([ff6ec44](https://github.com/kenstott/calcite/commit/ff6ec44e9447342148d196a5db78e8eb965a7958))
+* **askamerica/render_chart:** the brand strip no longer overprints the footnote ([12fff3a](https://github.com/kenstott/calcite/commit/12fff3a9a919d2886a5a33b02f9dd3c5ebfb7980))
+* **askamerica/render_chart:** the SVG says where there is room to annotate ([bd6b20d](https://github.com/kenstott/calcite/commit/bd6b20dcd1824dd68259394db9d432cbffa2a1d1))
+* **file,askamerica:** S3 connection pools leaked until sockets piled up in CLOSE_WAIT ([50be295](https://github.com/kenstott/calcite/commit/50be295930289d0d745e943b09d194a1ac2fd7e7))
+* **file/duckdb,govdata,askamerica-engine:** resolve deferred views per-query, not per-connection ([dd584bc](https://github.com/kenstott/calcite/commit/dd584bce2bdcd06baaf11eddc6f3d24351249617))
+* **file/duckdb:** compute corr/regr_*/median in Java when pushdown is impossible ([16f1a79](https://github.com/kenstott/calcite/commit/16f1a797b511420c948892b7f1e2f2c92657ca3f))
+* **file/duckdb:** reinstate retry-until-convergence for deferred view creation ([1ff83a9](https://github.com/kenstott/calcite/commit/1ff83a94060b5309a8ce183f5b86634428767ab6))
+* **file/iceberg:** S3FileIOTables' S3FileIO had no idle-connection tuning at all ([e8df5a2](https://github.com/kenstott/calcite/commit/e8df5a2f61de954dd504cf47fcfb5a3291fcc220))
+* **file/s3:** connectionMaxIdleTime was 60s, code comment always said intended 2s ([2363056](https://github.com/kenstott/calcite/commit/23630567b111a2b4b16fd0c3f5e0dfdc0070e3cd))
+* **file/s3:** correct "heavy load" framing, add reaper + bounded socket timeout ([8e54dc0](https://github.com/kenstott/calcite/commit/8e54dc0ed8e050e3dbecef6b278f025ec4b01464))
+* **govdata,file/iceberg,govdata/sec:** resolve env vars once at the root and stop mid-stall silently ([dfcefe0](https://github.com/kenstott/calcite/commit/dfcefe0ff2dfe6d00a683aca0e79893446aacab8))
+* **govdata,file/iceberg:** stop the seed rebuild from silently reinstalling its own stale seed ([c0ecb13](https://github.com/kenstott/calcite/commit/c0ecb1344ded1b3639d46d58e77bcb23e829c845))
+* **govdata/census:** 20 ACS tables requested MOE columns' data but never fetched it ([9cec494](https://github.com/kenstott/calcite/commit/9cec49431cfa7860d7a4fb83e1c7c392f048d8c3))
+* **govdata/health:** stop cdc_mortality's coverage window from outrunning its frozen source data ([96101f1](https://github.com/kenstott/calcite/commit/96101f14ac09f8b4d6da7c279e7ca8e7427386e1))
+* **govdata/sec:** log the actual filing type, not a hardcoded 8-K label ([bbd9560](https://github.com/kenstott/calcite/commit/bbd956070b2af570df283ca837e8845d625e2c47))
+* **govdata/sec:** require a real slot type for accession-targeted reprocessing ([4263a93](https://github.com/kenstott/calcite/commit/4263a935ce96fa8972e5bcac9419d259481fe90c))
+* **govdata:** allow sec_primary/sec_secondary/sec_13f as force-reprocess.sh targets ([152b96c](https://github.com/kenstott/calcite/commit/152b96cf478d2a6299674e3507c270b948c505ac))
+* **govdata:** drop dedicated year-override vars in favor of the standard demarc ([c490e3f](https://github.com/kenstott/calcite/commit/c490e3fcc5d551036e55d56cef013f10e2c5bf8f))
+
 ## [0.77.1](https://github.com/kenstott/calcite/compare/engine-v0.77.0...engine-v0.77.1) (2026-08-19)
 
 
