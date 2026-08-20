@@ -1843,7 +1843,15 @@ partitionedTables:
       source_type:
         - annual
         - weekly
-      year: *health_year_range
+      # Both bi63-dtpu (annual) and muzy-jte6 (weekly) are frozen historical Socrata
+      # extracts, not rolling feeds (see the table comment above and
+      # CdcMortalityResponseTransformer) — a dynamic current-year end (health_year_range's
+      # default) would advance past the data every year. end is the true max year present
+      # across both sub-series (weekly's 2023, newer than annual's 2017).
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: 2023
 
     materialize:
       enabled: true
