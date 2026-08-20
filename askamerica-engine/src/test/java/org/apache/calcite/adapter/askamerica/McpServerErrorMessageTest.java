@@ -79,4 +79,32 @@ class McpServerErrorMessageTest {
         + "\"java.lang.String\"; candidates are: \"some.other.Thing.add(java.lang.String)\"";
     assertEquals(msg, McpServer.compactErrorMessage(new RuntimeException(msg)));
   }
+
+  @Test @DisplayName("a timed-out query says so, instead of leaking DuckDB's raw interrupt")
+  void explainsTheQueryTimeout() {
+    String compact = McpServer.compactErrorMessage(
+        new RuntimeException("INTERRUPT Error: Interrupted!"));
+    assertTrue(compact.contains("time bound"),
+        "the caller must learn a bound stopped it, got: " + compact);
+    assertTrue(compact.contains("ASKAMERICA_QUERY_TIMEOUT_SECONDS"),
+        "and how to change it, got: " + compact);
+    assertTrue(compact.contains("not a crash") && compact.contains("not missing"),
+        "and that this says nothing about the data, got: " + compact);
+    assertFalse(compact.equals("INTERRUPT Error: Interrupted!"),
+        "the raw message alone is what caused an agent to retry the same query");
+  }
+
+  @Test @DisplayName("the timeout explanation covers the already-narrow case too")
+  void doesNotOnlyBlameTheQuery() {
+    // A live run narrowed to table_id + year + quarter with FETCH FIRST 30 and STILL timed
+    // out. Advice that only says "narrow it" sends that agent round the loop again; the
+    // message must name the case where the table, not the statement, is at fault.
+    String compact = McpServer.compactErrorMessage(
+        new RuntimeException("Error while executing SQL: INTERRUPT Error: Interrupted!"));
+    assertTrue(compact.contains("DISTINCT"), "the common cause is still named, got: " + compact);
+    assertTrue(compact.contains("already-narrow") && compact.contains("report_issue"),
+        "and the already-narrow case must route to reporting, got: " + compact);
+    assertTrue(compact.contains("Do not read a timeout as evidence about the data"),
+        "a timeout says nothing about contents, got: " + compact);
+  }
 }

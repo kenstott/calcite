@@ -349,4 +349,40 @@ public class ChartSvgTest {
         assertTrue(svg.contains("more<") || svg.contains("more &"),
             "a capped legend must name the count it left out, got: " + svg);
     }
+
+    // ---- a short panel wraps the y title instead of gutting it ----------------------
+
+    @Test void aShortPanelWrapsTheYTitleRatherThanEllipsisingIt() {
+        // The live board ellipsised its y title to "% change in profita...", which names
+        // nothing. Use a title that cannot fit a short panel on one line at any legible size.
+        String label = "% change in profitability, pre- vs post-election";
+        String svg = svgAt(label, 430, 240);
+        assertTrue(svg.contains("y-axis-title-2"),
+            "a second line should carry the remainder, got a single line only");
+        // Both halves survive: no word is dropped, which ellipsising would have done.
+        assertTrue(svg.contains(">% change in profitability,<")
+                || svg.contains(">% change in<") || svg.contains(">% change in profitability<"),
+            "first line missing");
+        assertTrue(svg.contains("post-election<"), "second line missing");
+    }
+
+    @Test void aTallPanelStillUsesOneLine() {
+        String svg = svgAt("% change in profitability, pre- vs post-election", 430, 620);
+        assertFalse(svg.contains("y-axis-title-2"),
+            "with room to spare a second line is wasted margin");
+        assertTrue(svg.contains(">% change in profitability, pre- vs post-election<"),
+            "and the title stays whole");
+    }
+
+    @Test void aSingleWordTitleIsNotWrapped() {
+        // Nothing to split on; ellipsis remains the honest fallback.
+        String svg = svgAt("Dollarsandmorecharacterstoforceoverflowhere", 430, 240);
+        assertFalse(svg.contains("y-axis-title-2"), "a one-word title cannot wrap");
+    }
+
+    private static String svgAt(String yLabel, int w, int h) {
+        return ChartRenderer.layout("bar", "Profitability change", "Industry", yLabel,
+            Arrays.asList("Pharma", "Tech", "Oil", "Ag", "Banking"),
+            Arrays.asList(series("delta", -5.2, -3.2, -1.2, 35.0, 10.6)), w, h).toSvg();
+    }
 }

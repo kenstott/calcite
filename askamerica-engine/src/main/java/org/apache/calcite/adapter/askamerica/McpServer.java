@@ -1124,7 +1124,12 @@ public class McpServer {
         chartProps.set(
             "x_label", prop("string", "X-axis label. Ignored for 'pie'."));
         chartProps.set(
-            "y_label", prop("string", "Y-axis label. Ignored for 'pie'."));
+            "y_label", prop("string", "Y-axis label — keep it SHORT, ideally under about 25 "
+                + "characters. It is drawn rotated, so its budget is the panel's plot HEIGHT, "
+                + "not its width; a long one wraps to at most three lines and is ellipsised "
+                + "past that, which on a short panel leaves a stub like '% change ...'. Put "
+                + "the qualification in the panel caption instead, where there is room. "
+                + "Ignored for 'pie'."));
         ObjectNode categoriesProp = MAPPER.createObjectNode();
         categoriesProp.put("type", "array");
         categoriesProp.put(
@@ -2225,6 +2230,28 @@ public class McpServer {
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
+        // A query stopped by the time bound surfaces as DuckDB's own "INTERRUPT Error:
+        // Interrupted!", which names neither the bound nor the fact that one exists. An agent
+        // reading it cannot tell a timeout from a crash, so it retries the same shape and loses
+        // the same minutes again — observed live, twice in a row on one table. Say what
+        // happened and what would change the outcome.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && (msg.contains("INTERRUPT Error") || msg.contains("Interrupted!"))) {
+                int secs = queryTimeoutSeconds();
+                return "The query was stopped after " + secs + "s by the per-query time bound"
+                    + " (ASKAMERICA_QUERY_TIMEOUT_SECONDS). It was not a crash and the data is"
+                    + " not missing — the statement was still running. If the query scans"
+                    + " broadly, narrowing it usually helps: filter on the partition columns,"
+                    + " shorten the year range, or aggregate in SQL rather than scanning rows."
+                    + " DISTINCT and ORDER BY are common culprits, since both must read"
+                    + " everything before returning a first row. But if an already-narrow query"
+                    + " times out — few columns, tight filters, a small FETCH FIRST — then the"
+                    + " table itself is the problem, not the query: stop rewriting it, source"
+                    + " the figure elsewhere, and file it with report_issue naming the exact"
+                    + " statement. Do not read a timeout as evidence about the data's contents.";
+            }
+        }
         for (Throwable t = e; t != null; t = safeCause(t)) {
             String msg = t.getMessage();
             boolean compileShape = msg != null

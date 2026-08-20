@@ -128,17 +128,27 @@ final class ChartLayout {
         for (String t : ticks.labels) {
             tickLabelWidth = Math.max(tickLabelWidth, ChartScene.textWidth(t, TICK_SIZE, false));
         }
-        double left = 18 + (yLabel == null || yLabel.isEmpty() ? 0 : 18) + tickLabelWidth + 10;
         double right = 22;
         double titleBottom = title == null || title.isEmpty() ? 12 : 36;
         double top = titleBottom + ANNOTATION_BAND;
-        double slotWidth = (width - left - right) / Math.max(1, categories.size());
-        boolean rotate = widest > slotWidth - 6;
+
+        // left -> slotWidth -> rotate -> bottom -> plotH, and wrapping the y title needs plotH
+        // to decide on a second line: a genuine cycle. Broken with one provisional pass that
+        // assumes a single-line title. The second line costs ~14px of left margin, which shifts
+        // slotWidth by a fraction of a category and would have to sit exactly on the rotate
+        // threshold to change anything; the final pass below uses the real reserve regardless.
+        double provisionalLeft = 18 + (yLabel == null || yLabel.isEmpty() ? 0 : 18)
+            + tickLabelWidth + 10;
+        double provisionalSlot = (width - provisionalLeft - right)
+            / Math.max(1, categories.size());
+        boolean rotate = widest > provisionalSlot - 6;
         double bottom = (rotate ? Math.min(96, widest * 0.72 + 22) : 30)
             + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight + FOOTNOTE_BAND;
-
-        double plotW = width - left - right;
         double plotH = height - top - bottom;
+
+        double left = 18 + yTitleReserve(yLabel, plotH) + tickLabelWidth + 10;
+        double slotWidth = (width - left - right) / Math.max(1, categories.size());
+        double plotW = width - left - right;
 
         addFrame(scene, title, xLabel, yLabel, left, top, plotW, plotH, width, height, ticks,
             legendHeight);
@@ -327,14 +337,16 @@ final class ChartLayout {
         for (String t : yt.labels) {
             tickLabelWidth = Math.max(tickLabelWidth, ChartScene.textWidth(t, TICK_SIZE, false));
         }
-        double left = 18 + (yLabel == null || yLabel.isEmpty() ? 0 : 18) + tickLabelWidth + 10;
         double right = 26;
         double titleBottom = title == null || title.isEmpty() ? 12 : 36;
         double top = titleBottom + ANNOTATION_BAND;
         double bottom = 34 + (xLabel == null || xLabel.isEmpty() ? 8 : 22) + legendHeight
             + FOOTNOTE_BAND;
-        double plotW = width - left - right;
         double plotH = height - top - bottom;
+        // Nothing here depends on the left margin, so the y title can be measured against the
+        // real plot height before the margin is set.
+        double left = 18 + yTitleReserve(yLabel, plotH) + tickLabelWidth + 10;
+        double plotW = width - left - right;
 
         addFrame(scene, title, xLabel, yLabel, left, top, plotW, plotH, width, height, yt,
             legendHeight);
@@ -401,12 +413,26 @@ final class ChartLayout {
                 fittedAxisTitle(xLabel, plotW, xSize), INK, xSize, Anchor.MIDDLE, 0, false)
                 .at("x-axis-title").styled("axis-title"));
         }
-        if (yLabel != null && !yLabel.isEmpty()) {
+        List<String> yLines = yTitleLines(yLabel, plotH);
+        if (!yLines.isEmpty()) {
             // Rotated, so its budget is the PLOT HEIGHT — not the chart width. That is the
             // smaller number on a wide panel, which is why the y title is the one that clips.
-            int ySize = fittedAxisTitleSize(yLabel, plotH);
-            scene.add(new Label(14, top + plotH / 2, fittedAxisTitle(yLabel, plotH, ySize), INK,
-                ySize, Anchor.MIDDLE, -90, false).at("y-axis-title").styled("axis-title"));
+            String longest = yLines.get(0);
+            for (String l : yLines) {
+                if (ChartScene.textWidth(l, AXIS_TITLE_SIZE, false)
+                    > ChartScene.textWidth(longest, AXIS_TITLE_SIZE, false)) {
+                    longest = l;
+                }
+            }
+            int ySize = fittedAxisTitleSize(longest, plotH);
+            double lx = 14;
+            for (int i = 0; i < yLines.size(); i++) {
+                scene.add(new Label(lx, top + plotH / 2,
+                    fittedAxisTitle(yLines.get(i), plotH, ySize), INK, ySize, Anchor.MIDDLE, -90,
+                    false).at(i == 0 ? "y-axis-title" : "y-axis-title-" + (i + 1))
+                    .styled("axis-title"));
+                lx += ySize + 2;
+            }
         }
     }
 
@@ -466,6 +492,13 @@ final class ChartLayout {
      */
     private static final int SCATTER_IDENTITY_MIN = 12;
 
+    /**
+     * Most lines a rotated y-axis title may take. Each costs a column of left margin, so this
+     * is a bound on how much of the plot the label may eat in order to stay whole. Past it,
+     * ellipsis is the honest answer and the caller should shorten the title.
+     */
+    private static final int Y_TITLE_MAX_LINES = 3;
+
     /** Width one legend entry occupies, swatch and trailing gap included. */
     private static int legendItemWidth(String name) {
         return 12 + 4 + ChartScene.textWidth(name, TICK_SIZE, false) + LEGEND_GAP;
@@ -512,6 +545,83 @@ final class ChartLayout {
             rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * The rotated y-axis title, wrapped to two lines when one will not fit.
+     *
+     * <p>Rotation bounds this title by the plot HEIGHT, which on a short panel is small enough
+     * that shrinking to the legibility floor still leaves it overrunning — and the fallback then
+     * ellipsised it to things like "% change ...", which names nothing. Two lines cost about
+     * fourteen pixels of left margin and keep the words. Only splits on a space, and only when
+     * the wrap actually fits; otherwise the caller ellipsises as before, which is still better
+     * than a silent cut.
+     */
+    private static List<String> yTitleLines(String yLabel, double plotH) {
+        List<String> out = new ArrayList<String>();
+        if (yLabel == null || yLabel.isEmpty()) {
+            return out;
+        }
+        if (plotH <= 0 || ChartScene.textWidth(yLabel, AXIS_TITLE_MIN, false) <= plotH) {
+            out.add(yLabel);
+            return out;
+        }
+        String[] words = yLabel.split(" ");
+        for (int k = 2; k <= Y_TITLE_MAX_LINES && k <= words.length; k++) {
+            List<String> attempt = splitInto(words, k);
+            int widest = 0;
+            for (String line : attempt) {
+                widest = Math.max(widest, ChartScene.textWidth(line, AXIS_TITLE_MIN, false));
+            }
+            if (widest <= plotH) {
+                return attempt;
+            }
+        }
+        out.add(yLabel);
+        return out;
+    }
+
+    /**
+     * Split into {@code k} lines, keeping the longest line as short as possible. Greedy on a
+     * running width target rather than exhaustive: the candidates here are a handful of words,
+     * and an axis title that needs cleverer breaking than this is one the caller should shorten.
+     */
+    private static List<String> splitInto(String[] words, int k) {
+        int total = 0;
+        for (String w : words) {
+            total += ChartScene.textWidth(w + " ", AXIS_TITLE_MIN, false);
+        }
+        int target = total / k;
+        List<String> lines = new ArrayList<String>();
+        StringBuilder cur = new StringBuilder();
+        int used = 0;
+        for (int i = 0; i < words.length; i++) {
+            int w = ChartScene.textWidth(words[i] + " ", AXIS_TITLE_MIN, false);
+            boolean lastLine = lines.size() == k - 1;
+            if (cur.length() > 0 && !lastLine && used + w / 2 > target) {
+                lines.add(cur.toString());
+                cur = new StringBuilder();
+                used = 0;
+            }
+            if (cur.length() > 0) {
+                cur.append(' ');
+            }
+            cur.append(words[i]);
+            used += w;
+        }
+        if (cur.length() > 0) {
+            lines.add(cur.toString());
+        }
+        return lines;
+    }
+
+    /** Left-margin pixels the y-axis title needs; each extra line costs one more column. */
+    private static int yTitleReserve(String yLabel, double plotH) {
+        List<String> lines = yTitleLines(yLabel, plotH);
+        if (lines.isEmpty()) {
+            return 0;
+        }
+        return 18 + (lines.size() - 1) * (AXIS_TITLE_SIZE + 2);
     }
 
     /** True when a scatter is plotting one mark per name — identities, not categories. */
