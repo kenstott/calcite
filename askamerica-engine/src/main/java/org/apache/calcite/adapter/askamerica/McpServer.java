@@ -2083,15 +2083,21 @@ public class McpServer {
             errBlock.put("text", compact);
             errContent.add(errBlock);
             // The one refusal this server makes on analytical grounds rather than on a bad
-            // request: the aggregate has nowhere to execute. It is typed here so a host can
-            // route on it — take the suggested aligned-series path — instead of parsing prose.
-            // Every other imperfection returns its data with warnings attached; refusal is
-            // reserved for the un-runnable.
+            // request: the aggregate could not be evaluated on either path. It is typed here
+            // so a host can route on it instead of parsing prose. Every other imperfection
+            // returns its data with warnings attached; refusal is reserved for the un-runnable.
+            //
+            // The remedy deliberately does NOT send the caller to fetch_aligned_series any
+            // more. That tool needs warehouse tables, so it is no help when the operand was
+            // inline data — offering it there wasted an investigation on a workaround for a
+            // defect that should have been reported.
             if (QuestionDiagnostics.isPushdownFailure(compact)) {
                 ObjectNode refusal = QuestionDiagnostics.forRefusal("no_pushdown", compact,
-                    "fetch_aligned_series aligns the series on a shared key and computes "
-                    + "corr/regr inside one engine; or rewrite the aggregate so all of its "
-                    + "inputs come from a single schema.");
+                    "These aggregates run in DuckDB when the query pushes down and in Java "
+                    + "otherwise, so both paths failing is a defect, not a query shape to "
+                    + "work around. Report it with report_issue, quoting the underlying "
+                    + "error above. To keep moving meanwhile, ols_regression computes the "
+                    + "same relationship from any SELECT, including inline VALUES.");
                 ObjectNode refusalBlock = MAPPER.createObjectNode();
                 refusalBlock.put("type", "text");
                 refusalBlock.put("text", refusal.toString());
@@ -2194,9 +2200,13 @@ public class McpServer {
      *       shares the same {@code EnumerableAggregate}, Calcite's generated code instead
      *       fails to *compile*, before that stub ever runs — surfacing a raw Janino
      *       "No applicable constructor/method" error naming the stub class/method instead.
-     *       Both are the same underlying limitation (the aggregate's inputs span more than
-     *       one govdata schema, so the join can't be pushed to a single DuckDB catalog);
-     *       recognize the compile-failure shape too so it gets the same actionable message.</li>
+     *       These aggregates now have real Java implementations, so failing to push down is
+     *       normally not an error at all — the query runs locally and returns the same value.
+     *       A failure reaching here therefore means the LOCAL path broke, and must not be
+     *       explained as a cross-schema join: that explanation is simply false when the
+     *       operand is a derived relation (a {@code VALUES} literal has neither join nor
+     *       schema), and stating it sent a real investigation chasing a problem that did not
+     *       exist. Carry the underlying error instead of guessing.</li>
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
@@ -2205,21 +2215,22 @@ public class McpServer {
             boolean compileShape = msg != null
                 && msg.contains("No applicable constructor/method found")
                 && msg.contains("DuckDBStatsFunctions$");
-            // The stub's own clean throw, which reaches here whenever the aggregate is alone
-            // in its EnumerableAggregate rather than sharing one with a COUNT(*). Same
-            // limitation, so it gets the same directed answer instead of the bare
-            // "no Calcite enumerable implementation" the deepest-message path would return.
+            // The stub's own throw, from when these aggregates had no Java implementation and
+            // result() refused outright. Nothing raises it any more — the implementations are
+            // real — but an older engine jar in the same deployment still can, so the shape is
+            // still recognised rather than leaked as an unhandled message.
             boolean stubShape = msg != null
                 && msg.contains("is a DuckDB-only aggregate and must be pushed down");
             if (compileShape || stubShape) {
-                return "A statistical aggregate (corr, regr_*, median, skewness, kurtosis, "
-                    + "mad, quantile_cont, or quantile_disc) failed to push down to the "
-                    + "DuckDB engine, which is the only place these run — likely because its "
-                    + "inputs come from a join across two different schemas (each schema is "
-                    + "its own DuckDB catalog, so the join can't be pushed down as one query). "
-                    + "Use fetch_aligned_series to align the series first and compute the "
-                    + "statistic there, or keep the corr()/regr_*() call within a single "
-                    + "schema.";
+                // These aggregates have Java implementations (DuckDBStatsFunctions), so a
+                // failure here is NOT the old "cannot run outside DuckDB" limitation and must
+                // not be reported as one. It means the local path itself broke — typically a
+                // type the generated code could not bind. Carry the real message: guessing a
+                // cause the caller cannot verify is what sent an earlier investigation looking
+                // for a cross-schema join that did not exist.
+                return "A statistical aggregate (corr, regr_*, median, skewness, kurtosis, mad, "
+                    + "quantile_cont, or quantile_disc) could not be evaluated. It neither "
+                    + "pushed down to DuckDB nor ran locally. Underlying error: " + msg;
             }
         }
         for (Throwable t = e; t != null; t = safeCause(t)) {

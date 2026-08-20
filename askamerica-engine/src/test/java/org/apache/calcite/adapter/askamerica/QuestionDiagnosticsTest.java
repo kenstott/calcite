@@ -393,19 +393,24 @@ class QuestionDiagnosticsTest {
     assertEquals("use fetch_aligned_series", w.get("runnable_alternative").asText());
   }
 
-  @Test void bothPushdownFailureShapesAreRecognisedAsTheSameLimitation() {
+  @Test void bothStatsFailureShapesAreRecognisedAsUnevaluable() {
+    // The compile shape is the live one. The stub shape can only come from an older engine
+    // jar, since these aggregates now have Java implementations; both must still be typed as
+    // un-runnable so a host can route on them rather than parse prose.
     String compileShape = McpServer.compactErrorMessage(new RuntimeException(
         "No applicable constructor/method found for class "
         + "DuckDBStatsFunctions$CorrUdaf.result()"));
     String stubShape = McpServer.compactErrorMessage(new UnsupportedOperationException(
         "corr is a DuckDB-only aggregate and must be pushed down to the DuckDB engine; "
         + "it has no Calcite enumerable implementation."));
-    assertEquals(compileShape, stubShape,
-        "both shapes are the same limitation and must get the same directed answer");
     assertTrue(QuestionDiagnostics.isPushdownFailure(compileShape));
     assertTrue(QuestionDiagnostics.isPushdownFailure(stubShape));
-    assertTrue(compileShape.contains("fetch_aligned_series"),
-        "a refusal must name what the caller can run instead");
+    // Each carries its OWN underlying cause now, rather than being flattened into one
+    // generic sentence that named a cause neither of them had.
+    assertTrue(compileShape.contains("No applicable constructor/method"),
+        "the real cause must survive, got: " + compileShape);
+    assertFalse(compileShape.contains("fetch_aligned_series"),
+        "that tool needs warehouse tables and is no remedy for inline data");
     assertFalse(QuestionDiagnostics.isPushdownFailure("Table 'sec.nope' not found"));
   }
 

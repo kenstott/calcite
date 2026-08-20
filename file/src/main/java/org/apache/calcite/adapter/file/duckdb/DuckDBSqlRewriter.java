@@ -57,6 +57,23 @@ public final class DuckDBSqlRewriter {
     RESERVED_TO_ALIAS.put("regr_sxy", "agg_regr_sxy");
   }
 
+  /**
+   * Statistical aggregates whose operands are forced to DOUBLE. Their Java implementations
+   * (see {@code DuckDBStatsFunctions}) declare {@code Double} parameters, and Calcite derives
+   * the aggregate's SQL signature from those Java types — so a DECIMAL operand, which is what
+   * a literal like {@code VALUES (1.0, 5.0)} produces, reaches the generated code as a
+   * {@code BigDecimal} and fails to bind. Widening the Java parameter to {@code Number} is not
+   * an option: it maps to SQL {@code OTHER}, which fails validation outright with
+   * "No assign rules for OTHER defined". Forcing the operand instead keeps one unambiguous
+   * Java signature and costs nothing on the pushdown path, where DuckDB casts for free and
+   * these statistics are floating-point by definition.
+   */
+  private static final java.util.Set<String> FORCE_DOUBLE_ARGS =
+      new java.util.HashSet<>(java.util.Arrays.asList(
+          "corr", "regr_slope", "regr_intercept", "regr_r2", "regr_avgx", "regr_avgy",
+          "regr_sxy", "median", "skewness", "kurtosis", "mad", "quantile_cont",
+          "quantile_disc"));
+
   private DuckDBSqlRewriter() {
   }
 
@@ -110,13 +127,26 @@ public final class DuckDBSqlRewriter {
         while (k < n && Character.isWhitespace(sql.charAt(k))) {
           k++;
         }
-        String alias = k < n && sql.charAt(k) == '('
-            ? RESERVED_TO_ALIAS.get(word.toLowerCase(java.util.Locale.ROOT)) : null;
+        final String lower = word.toLowerCase(java.util.Locale.ROOT);
+        final boolean isCall = k < n && sql.charAt(k) == '(';
+        String alias = isCall ? RESERVED_TO_ALIAS.get(lower) : null;
         if (alias != null) {
           out.append(alias);
           changed = true;
         } else {
           out.append(word);
+        }
+        if (isCall && FORCE_DOUBLE_ARGS.contains(lower)) {
+          int close = matchingParen(sql, k);
+          if (close > k) {
+            out.append(sql, j, k);            // whitespace between name and '('
+            out.append('(');
+            out.append(castArgs(sql.substring(k + 1, close)));
+            changed = true;
+            i = close + 1;
+            out.append(')');
+            continue;
+          }
         }
         i = j;
         continue;
@@ -125,6 +155,97 @@ public final class DuckDBSqlRewriter {
       i++;
     }
     return changed ? out.toString() : sql;
+  }
+
+  /**
+   * Index of the {@code )} matching the {@code (} at {@code open}, or -1 when unbalanced.
+   * Parens inside string literals and quoted identifiers do not count.
+   */
+  private static int matchingParen(String sql, int open) {
+    int depth = 0;
+    for (int i = open; i < sql.length(); i++) {
+      char c = sql.charAt(i);
+      if (c == '\'' || c == '"') {
+        char q = c;
+        i++;
+        while (i < sql.length()) {
+          char d = sql.charAt(i);
+          if (d == q) {
+            if (i + 1 < sql.length() && sql.charAt(i + 1) == q) {
+              i++;                            // escaped quote
+            } else {
+              break;
+            }
+          }
+          i++;
+        }
+        continue;
+      }
+      if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        depth--;
+        if (depth == 0) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Wraps each top-level argument in {@code CAST(... AS DOUBLE)}. Splits on commas at paren
+   * depth zero and outside quotes, so a nested call's own arguments are left alone. An
+   * argument already cast is wrapped again, which is harmless and keeps this purely textual.
+   */
+  private static String castArgs(String args) {
+    if (args.trim().isEmpty()) {
+      return args;
+    }
+    StringBuilder out = new StringBuilder();
+    int depth = 0;
+    int start = 0;
+    for (int i = 0; i < args.length(); i++) {
+      char c = args.charAt(i);
+      if (c == '\'' || c == '"') {
+        char q = c;
+        i++;
+        while (i < args.length()) {
+          char d = args.charAt(i);
+          if (d == q) {
+            if (i + 1 < args.length() && args.charAt(i + 1) == q) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          i++;
+        }
+        continue;
+      }
+      if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        depth--;
+      } else if (c == ',' && depth == 0) {
+        appendCast(out, args.substring(start, i));
+        out.append(", ");
+        start = i + 1;
+      }
+    }
+    appendCast(out, args.substring(start));
+    return out.toString();
+  }
+
+  /** Appends one argument, cast to DOUBLE; {@code DISTINCT}/{@code *} are passed through. */
+  private static void appendCast(StringBuilder out, String arg) {
+    String trimmed = arg.trim();
+    if (trimmed.isEmpty() || "*".equals(trimmed)
+        || trimmed.toLowerCase(java.util.Locale.ROOT).startsWith("distinct ")) {
+      out.append(arg);
+      return;
+    }
+    out.append("CAST(").append(trimmed).append(" AS DOUBLE)");
   }
 
   private static boolean isIdentStart(char c) {

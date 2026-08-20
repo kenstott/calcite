@@ -133,14 +133,23 @@ public final class FileAdapterFunctions {
 
     // Reserved regression aggregates: registered under non-reserved ALIAS names. A
     // pre-parse rewrite turns the user's corr(...) into agg_corr(...); the DuckDB dialect
-    // (DuckDBFunctionMapping) maps agg_corr -> corr on unparse. One UDAF serves all seven.
-    final Class<?> regr = org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrUdaf.class;
-    root.add("AGG_CORR", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
-    root.add("AGG_REGR_SLOPE", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
-    root.add("AGG_REGR_INTERCEPT", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
-    root.add("AGG_REGR_R2", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
-    root.add("AGG_REGR_AVGX", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
-    root.add("AGG_REGR_AVGY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
-    root.add("AGG_REGR_SXY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(regr));
+    // (DuckDBFunctionMapping) maps agg_corr -> corr on unparse. Each gets its OWN class:
+    // they share an accumulator but the operator name is the only thing distinguishing
+    // corr from regr_slope, and a static UDAF cannot see the operator name, so one shared
+    // class could not tell which statistic to return.
+    root.add("AGG_CORR", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.CorrUdaf.class));
+    root.add("AGG_REGR_SLOPE", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrSlopeUdaf.class));
+    root.add("AGG_REGR_INTERCEPT", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrInterceptUdaf.class));
+    root.add("AGG_REGR_R2", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrR2Udaf.class));
+    root.add("AGG_REGR_AVGX", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrAvgXUdaf.class));
+    root.add("AGG_REGR_AVGY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrAvgYUdaf.class));
+    root.add("AGG_REGR_SXY", org.apache.calcite.schema.impl.AggregateFunctionImpl.create(
+        org.apache.calcite.adapter.file.duckdb.DuckDBStatsFunctions.RegrSxyUdaf.class));
   }
 }

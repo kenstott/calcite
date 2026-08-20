@@ -893,14 +893,17 @@ final class QuestionDiagnostics {
     }
 
     /**
-     * True when an error is the cross-schema push-down failure. Both shapes reduce to the
-     * same limitation: a statistical aggregate's inputs span more than one govdata schema,
-     * and each schema is its own DuckDB catalog, so the join cannot be pushed down as one
-     * query and the aggregate has nowhere to run.
+     * True when a statistical aggregate could not be evaluated at all.
+     *
+     * <p>This used to mean "the inputs span two schemas, so it cannot push down", and the
+     * remedy was to align the series elsewhere. That is no longer the situation: these
+     * aggregates have Java implementations, so a query that cannot push down simply runs
+     * locally and returns the same answer. Reaching here means BOTH paths failed, which is a
+     * defect rather than a shape the caller should work around.
      */
     static boolean isPushdownFailure(String compactMessage) {
         return compactMessage != null
-            && compactMessage.contains("failed to push down to the DuckDB engine");
+            && compactMessage.contains("could not be evaluated");
     }
 
     // ── critique_query ────────────────────────────────────────────────────────
