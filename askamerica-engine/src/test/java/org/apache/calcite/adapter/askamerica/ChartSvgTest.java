@@ -294,4 +294,59 @@ public class ChartSvgTest {
             "the default stylesheet must not set font-size; it would override the fitted "
             + "sizes the layout computes. Found: " + style);
     }
+
+    // ---- a legend must never eat the panel it labels --------------------------------
+
+    private static List<ChartRenderer.PointSeriesSpec> onePointEach(int n) {
+        List<ChartRenderer.PointSeriesSpec> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            out.add(new ChartRenderer.PointSeriesSpec("State " + i,
+                Arrays.asList((double) i), Arrays.asList((double) (i % 7)), null));
+        }
+        return out;
+    }
+
+    @Test void aFiftyOnePointScatterDrawsNoLegend() {
+        // The real board: one mark per state. Fifty-one hues are not distinguishable, so the
+        // key returned nothing while costing the plot its space.
+        String svg = ChartRenderer.layoutPoints("scatter", "R seat share vs income change",
+            "R share (%)", "10-yr real change (%)", onePointEach(51), 430, 300).toSvg();
+        // Assert on the legend GROUP, not the word: `.legend-label` lives in the stylesheet
+        // whether or not a legend is drawn, so a substring test on "legend" always passes.
+        assertFalse(svg.contains("id=\"legend\""),
+            "an identity scatter must not draw a colour key it cannot make legible");
+        assertFalse(svg.contains("legend-swatch-"),
+            "and must emit no swatches");
+    }
+
+    @Test void identityScatterKeepsEveryMarkAddressable() {
+        // Dropping the legend must not drop the names: annotation depends on these ids.
+        String svg = ChartRenderer.layoutPoints("scatter", "t", "x", "y", onePointEach(51),
+            430, 300).toSvg();
+        assertTrue(svg.contains("mark-state-0-0"), "each mark keeps its id, got: " + svg);
+        assertTrue(svg.contains("mark-state-50-0"), "including the last one");
+    }
+
+    @Test void aFewGroupsStillGetTheirLegend() {
+        // The cap must not punish the ordinary case.
+        List<ChartRenderer.PointSeriesSpec> few = new ArrayList<>();
+        few.add(new ChartRenderer.PointSeriesSpec("Republican",
+            Arrays.asList(1.0, 2.0), Arrays.asList(3.0, 4.0), null));
+        few.add(new ChartRenderer.PointSeriesSpec("Democratic",
+            Arrays.asList(2.0, 3.0), Arrays.asList(1.0, 5.0), null));
+        String svg = ChartRenderer.layoutPoints("scatter", "t", "x", "y", few, 430, 300).toSvg();
+        assertTrue(svg.contains("legend-label-republican") && svg.contains("legend-label-democratic"),
+            "two real series must still be keyed, got: " + svg);
+    }
+
+    @Test void anOverlongBarLegendSaysWhatItOmitted() {
+        // Category charts share the cap. Truncating in silence would read as a complete key.
+        List<ChartRenderer.SeriesSpec> many = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            many.add(series("Series number " + i, 1, 2, 3, 4, 5, 6, 7, 8));
+        }
+        String svg = ChartRenderer.layout("bar", "t", "x", "y", EIGHT, many, 500, 400).toSvg();
+        assertTrue(svg.contains("more<") || svg.contains("more &"),
+            "a capped legend must name the count it left out, got: " + svg);
+    }
 }

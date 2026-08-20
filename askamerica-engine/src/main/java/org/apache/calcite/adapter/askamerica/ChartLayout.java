@@ -321,7 +321,8 @@ final class ChartLayout {
         Ticks yt = niceTicks(ymin, ymax);
         Ticks xt = niceTicks(xmin, xmax);
 
-        int legendHeight = legendBand(pointSeriesNames(series), width);
+        boolean identity = isIdentityScatter(series);
+        int legendHeight = identity ? 0 : legendBand(pointSeriesNames(series), width);
         int tickLabelWidth = 0;
         for (String t : yt.labels) {
             tickLabelWidth = Math.max(tickLabelWidth, ChartScene.textWidth(t, TICK_SIZE, false));
@@ -350,7 +351,7 @@ final class ChartLayout {
 
         for (int si = 0; si < series.size(); si++) {
             ChartRenderer.PointSeriesSpec s = series.get(si);
-            Color c = color(si);
+            Color c = identity ? color(0) : color(si);
             Group g = new Group().at("series-" + ChartScene.slug(s.name))
                 .styled("series");
             for (int i = 0; i < s.x.size(); i++) {
@@ -366,7 +367,7 @@ final class ChartLayout {
             scene.add(g);
         }
 
-        if (series.size() > 1) {
+        if (series.size() > 1 && !identity) {
             addLegend(scene, pointSeriesNames(series), height - 10 - FOOTNOTE_BAND, width);
         }
         return scene;
@@ -447,6 +448,24 @@ final class ChartLayout {
     private static final int LEGEND_GAP = 16;
     private static final int LEGEND_ROW_H = 20;
 
+    /**
+     * Most legend rows a panel will give up. The legend used to wrap without limit and the panel
+     * reserved whatever it asked for, so a scatter naming 51 states produced a legend that
+     * swallowed the plot — the marks were squeezed into a sliver and the panel title was drawn
+     * through. Beyond this the remainder is summarised rather than listed; a key too long to
+     * scan is not serving a reader anyway.
+     */
+    private static final int LEGEND_MAX_ROWS = 3;
+
+    /**
+     * Above this many single-point groups, a scatter is plotting identities rather than
+     * categories, and a colour key is worse than none: fifty-one hues are not distinguishable
+     * from one another, so the legend costs the panel its plot and returns nothing usable. Such
+     * a scatter is drawn in one colour with no legend. The names are not lost — every mark keeps
+     * its {@code mark-<name>-0} id, which is what the annotation band exists to attach to.
+     */
+    private static final int SCATTER_IDENTITY_MIN = 12;
+
     /** Width one legend entry occupies, swatch and trailing gap included. */
     private static int legendItemWidth(String name) {
         return 12 + 4 + ChartScene.textWidth(name, TICK_SIZE, false) + LEGEND_GAP;
@@ -469,9 +488,19 @@ final class ChartLayout {
         List<String> row = new ArrayList<String>();
         int used = 0;
         int avail = Math.max(60, width - 16);
-        for (String n : names) {
+        for (int i = 0; i < names.size(); i++) {
+            String n = names.get(i);
             int w = legendItemWidth(n);
             if (!row.isEmpty() && used + w - LEGEND_GAP > avail) {
+                if (rows.size() + 1 == LEGEND_MAX_ROWS && i < names.size()) {
+                    // Last row we are willing to spend: say what is not shown rather than
+                    // silently dropping it, so the reader knows the key is partial.
+                    rows.add(row);
+                    List<String> tail = new ArrayList<String>();
+                    tail.add("+" + (names.size() - i) + " more");
+                    rows.add(tail);
+                    return rows;
+                }
                 rows.add(row);
                 row = new ArrayList<String>();
                 used = 0;
@@ -483,6 +512,19 @@ final class ChartLayout {
             rows.add(row);
         }
         return rows;
+    }
+
+    /** True when a scatter is plotting one mark per name — identities, not categories. */
+    private static boolean isIdentityScatter(List<ChartRenderer.PointSeriesSpec> series) {
+        if (series.size() < SCATTER_IDENTITY_MIN) {
+            return false;
+        }
+        for (ChartRenderer.PointSeriesSpec s : series) {
+            if (s.x.size() > 1) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Vertical band the legend needs: zero for a single series, else one band per packed row. */
