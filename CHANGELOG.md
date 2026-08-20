@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.78.1](https://github.com/kenstott/calcite/compare/engine-v0.78.0...engine-v0.78.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **askamerica/charts:** a legend can no longer swallow the panel it labels ([5d3f0a8](https://github.com/kenstott/calcite/commit/5d3f0a88726aff1163fbfa6048a03d5cf498bbd2))
+* **askamerica/charts:** thin numeric x-tick labels instead of overprinting them ([adb0eb7](https://github.com/kenstott/calcite/commit/adb0eb7d60944d6f1107c7e0d1a54df5be88c37e))
+* **askamerica/dashboard:** the board header was the last text still drawn unbounded ([8968841](https://github.com/kenstott/calcite/commit/896884107f4a59d37bec98dbd5c21023f097f984))
+* **askamerica/mcp:** accept search_catalog's obvious synonyms, and explain TRY_CAST ([b32fd72](https://github.com/kenstott/calcite/commit/b32fd729b11efe681e3b37704f7689947066e29b))
+* **askamerica:** explain a query timeout, and wrap the y-axis title instead of gutting it ([e06d691](https://github.com/kenstott/calcite/commit/e06d6914460254277dc15d6f89e9d249042d833e))
+
 ## [0.78.0](https://github.com/kenstott/calcite/compare/engine-v0.77.1...engine-v0.78.0) (2026-08-20)
 
 
