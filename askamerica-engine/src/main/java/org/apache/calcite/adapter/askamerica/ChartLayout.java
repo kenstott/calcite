@@ -73,6 +73,7 @@ final class ChartLayout {
     private static final int TITLE_SIZE = 15;
     private static final int TICK_SIZE = 11;
     private static final int AXIS_TITLE_SIZE = 12;
+    private static final int AXIS_TITLE_MIN = 8;
 
     static Color color(int index) {
         return PALETTE[Math.floorMod(index, PALETTE.length)];
@@ -394,14 +395,53 @@ final class ChartLayout {
                 .styled("axis")));
         if (xLabel != null && !xLabel.isEmpty()) {
             // Above the legend when there is one, or it prints straight through the swatches.
+            int xSize = fittedAxisTitleSize(xLabel, plotW);
             scene.add(new Label(left + plotW / 2, height - 8 - legendHeight - FOOTNOTE_BAND,
-                xLabel, INK, AXIS_TITLE_SIZE, Anchor.MIDDLE, 0, false)
+                fittedAxisTitle(xLabel, plotW, xSize), INK, xSize, Anchor.MIDDLE, 0, false)
                 .at("x-axis-title").styled("axis-title"));
         }
         if (yLabel != null && !yLabel.isEmpty()) {
-            scene.add(new Label(14, top + plotH / 2, yLabel, INK, AXIS_TITLE_SIZE,
-                Anchor.MIDDLE, -90, false).at("y-axis-title").styled("axis-title"));
+            // Rotated, so its budget is the PLOT HEIGHT — not the chart width. That is the
+            // smaller number on a wide panel, which is why the y title is the one that clips.
+            int ySize = fittedAxisTitleSize(yLabel, plotH);
+            scene.add(new Label(14, top + plotH / 2, fittedAxisTitle(yLabel, plotH, ySize), INK,
+                ySize, Anchor.MIDDLE, -90, false).at("y-axis-title").styled("axis-title"));
         }
+    }
+
+    /**
+     * Largest size at which an axis title fits the axis it labels, down to
+     * {@link #AXIS_TITLE_MIN}. Axis titles were drawn at a fixed size from a fixed origin with
+     * the available span in scope and unused, so a long one simply ran off the end — the same
+     * defect the panel titles, captions and stat values each had in turn. It shows on the y
+     * title first because rotation bounds it by the plot HEIGHT rather than the chart width.
+     */
+    private static int fittedAxisTitleSize(String text, double span) {
+        if (text == null || text.isEmpty() || span <= 0) {
+            return AXIS_TITLE_SIZE;
+        }
+        int size = AXIS_TITLE_SIZE;
+        while (size > AXIS_TITLE_MIN && ChartScene.textWidth(text, size, false) > span) {
+            size--;
+        }
+        return size;
+    }
+
+    /**
+     * The axis title, ellipsised if it still overruns at {@link #AXIS_TITLE_MIN}. Truncating is
+     * the last resort and deliberately visible: a title cut with no ellipsis reads as a complete
+     * (and wrong) label, which is how "…income chang" reached a published board.
+     */
+    private static String fittedAxisTitle(String text, double span, int size) {
+        if (text == null || text.isEmpty() || span <= 0
+            || ChartScene.textWidth(text, size, false) <= span) {
+            return text;
+        }
+        String s = text;
+        while (s.length() > 1 && ChartScene.textWidth(s + "…", size, false) > span) {
+            s = s.substring(0, s.length() - 1);
+        }
+        return s + "…";
     }
 
     private static final int LEGEND_GAP = 16;

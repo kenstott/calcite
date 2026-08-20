@@ -423,12 +423,17 @@ final class ChartScene {
             .append("\" width=\"").append(width).append("\" height=\"").append(height)
             .append("\" font-family=\"system-ui, -apple-system, Segoe UI, Helvetica, Arial, "
                 + "sans-serif\">\n");
+        // No font-size here, deliberately. Every <text> carries its own computed size as a
+        // presentation attribute, and several of those sizes are SHRUNK to fit — panel titles,
+        // axis titles, stat values. A stylesheet rule outranks a presentation attribute, so a
+        // blanket `.axis-title { font-size: 12px }` silently reinstated the size the layout had
+        // just reduced: the PNG (drawn from the same numbers) fitted, while the SVG overran, and
+        // the two artifacts disagreed about the same board. Weight and style are safe to set
+        // here because nothing computes them per label.
         sb.append("  <style>\n")
-            .append("    .title { font-size: 15px; font-weight: 600 }\n")
-            .append("    .axis-title { font-size: 12px }\n")
-            .append("    .tick { font-size: 11px }\n")
-            .append("    .value-label { font-size: 11px; font-weight: 600 }\n")
-            .append("    .callout { font-size: 11px; font-style: italic }\n")
+            .append("    .title { font-weight: 600 }\n")
+            .append("    .value-label { font-weight: 600 }\n")
+            .append("    .callout { font-style: italic }\n")
             .append("    @media (prefers-color-scheme: dark) {\n")
             .append("      .chart-bg { fill: #16181d }\n")
             .append("      .title, .axis-title, .tick, .value-label, .callout, .legend-label "

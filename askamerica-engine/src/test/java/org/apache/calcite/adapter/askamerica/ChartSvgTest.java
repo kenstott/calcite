@@ -237,4 +237,61 @@ public class ChartSvgTest {
         assertFalse(svg.contains("id=\"mark-s-2020\""),
             "a missing year is a gap, not a zero — the 2020 ACS was never published");
     }
+
+    // ---- axis titles must fit the axis they label ---------------------------------
+
+    /** The exact y-axis title that reached a published board clipped to "…income chang". */
+    private static final String LONG_Y = "10-yr real median HH income change (%)";
+
+    private static String svgWithLongAxisTitles(int width, int height) {
+        return ChartRenderer.layout("bar", "Party share vs income",
+            "Republican share of House+Senate seats (%)", LONG_Y, EIGHT,
+            Arrays.asList(series("Change",
+                38216, 38059, 38023, 35810, 35736, 35668, 34145, 33305)),
+            width, height).toSvg();
+    }
+
+    /** The font-size actually emitted on the element carrying the given id. */
+    private static int emittedSize(String svg, String id) {
+        int at = svg.indexOf("id=\"" + id + "\"");
+        assertTrue(at > 0, "no element with id " + id);
+        int end = svg.indexOf('>', at);
+        String tag = svg.substring(at, end);
+        int fs = tag.indexOf("font-size=\"");
+        assertTrue(fs > 0, "no font-size on " + id + ": " + tag);
+        int from = fs + "font-size=\"".length();
+        return Integer.parseInt(tag.substring(from, tag.indexOf('"', from)));
+    }
+
+    @Test void aRotatedYTitleShrinksToThePlotHeight() {
+        // Rotated, the title is bounded by the plot HEIGHT. On a short panel the nominal 12px
+        // does not fit, so the layout must reduce it — asserting on the EMITTED size is what
+        // distinguishes a real fix from an overflowing label, since SVG markup holds the whole
+        // string either way and only clips when rasterised.
+        int shortPanel = emittedSize(svgWithLongAxisTitles(900, 240), "y-axis-title");
+        int tallPanel = emittedSize(svgWithLongAxisTitles(900, 620), "y-axis-title");
+        assertTrue(shortPanel < tallPanel,
+            "a short panel must shrink the rotated title; got " + shortPanel
+            + "px vs " + tallPanel + "px");
+        assertTrue(shortPanel >= 8, "never shrink below the legibility floor, got " + shortPanel);
+    }
+
+    @Test void aRoomyPanelKeepsTheWholeAxisTitleAtFullSize() {
+        String svg = svgWithLongAxisTitles(900, 620);
+        assertTrue(svg.contains(">" + LONG_Y + "<"),
+            "with height to spare the title must not be shortened at all");
+        assertEquals(12, emittedSize(svg, "y-axis-title"),
+            "and it must stay at the nominal size");
+    }
+
+    @Test void theStylesheetDoesNotOverrideAComputedSize() {
+        // A CSS rule outranks a presentation attribute, so a blanket `.axis-title { font-size }`
+        // reinstates the size the layout just reduced — the SVG then overruns while the PNG,
+        // built from the same numbers, fits. Any size rule here would silently undo the fitting.
+        String svg = svgWithLongAxisTitles(900, 240);
+        String style = svg.substring(svg.indexOf("<style>"), svg.indexOf("</style>"));
+        assertFalse(style.contains("font-size"),
+            "the default stylesheet must not set font-size; it would override the fitted "
+            + "sizes the layout computes. Found: " + style);
+    }
 }
