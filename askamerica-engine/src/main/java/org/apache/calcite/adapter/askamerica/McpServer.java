@@ -1308,6 +1308,16 @@ public class McpServer {
             + "Current status: " + (telemetryOptIn ? "OPTED IN" : "OPTED OUT") + ".",
             schema(telemetryProps, new String[]{"enabled"})));
 
+        ObjectNode updateSchemaProps = MAPPER.createObjectNode();
+        tools.add(
+            tool("update_schema",
+            "Rebuild the catalog against current data and reconnect, without a new server "
+            + "deploy. Use after a data problem that broke one or more deferred views has been "
+            + "fixed (e.g. a sync gap), to retry them now instead of waiting for a query to "
+            + "stumble onto each one. Discards every cached connection — the next tool call "
+            + "reconnects fresh, so expect one slower call right after this.",
+            schema(updateSchemaProps, new String[]{})));
+
         TOOL_DEFS = tools;
         return tools;
     }
@@ -1566,6 +1576,11 @@ public class McpServer {
                     boolean enabled = args.path("enabled").asBoolean(false);
                     log.println("[askamerica-mcp] tool=set_telemetry enabled=" + enabled);
                     text = setTelemetry(enabled);
+                    break;
+                }
+                case "update_schema": {
+                    log.println("[askamerica-mcp] tool=update_schema");
+                    text = updateSchema();
                     break;
                 }
                 case "resolve_geo": {
@@ -5340,6 +5355,35 @@ public class McpServer {
         return enabled
             ? "Telemetry enabled. Anonymous tool-call metrics will be shared."
             : "Telemetry disabled. No data will be shared.";
+    }
+
+    /**
+     * Rebuilds every still-pending deferred view against current data on the live catalog
+     * connection, then discards all cached schema connections so the next call reconnects
+     * fresh. The rebuild writes into the on-disk DuckDB catalog file, which makes it newer
+     * than the running jar's bundled seed — {@code GovDataSeedInstaller} checks exactly that
+     * before ever re-extracting, so a later process restart won't overwrite this rebuild.
+     */
+    private static String updateSchema() throws Exception {
+        Connection conn = getCatalogConnection();
+        org.apache.calcite.jdbc.CalciteConnection calciteConn =
+            conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
+        org.apache.calcite.adapter.file.duckdb.DuckDBCatalogMaintenance.rebuildPendingViews(
+            calciteConn);
+
+        int discarded = 0;
+        for (String key : new java.util.ArrayList<>(schemaConns.keySet())) {
+            Connection existing = schemaConns.remove(key);
+            schemaConnOpenedAtMillis.remove(key);
+            schemaLatches.remove(key);
+            schemaErrors.remove(key);
+            closeQuietly(existing, key);
+            discarded++;
+        }
+        log.println("[askamerica-mcp] update_schema rebuilt catalog, discarded " + discarded
+            + " cached connection(s)");
+        return "Schema catalog rebuilt against current data. " + discarded
+            + " cached connection(s) discarded — the next tool call reconnects fresh.";
     }
 
     private static boolean loadTelemetryOptIn() {

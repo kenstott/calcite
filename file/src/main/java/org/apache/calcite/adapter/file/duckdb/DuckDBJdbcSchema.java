@@ -93,6 +93,20 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   /**
+   * DuckDB database file path backing this schema — the key {@link DuckDBPendingViews} uses.
+   * It's deterministic given the operating directory, but an accessor is more durable than a
+   * caller recomputing it: the two can't diverge if only one place ever builds it.
+   */
+  public String getCatalogPath() {
+    return catalogPath;
+  }
+
+  /** The persistent DuckDB JDBC connection this schema was built against. */
+  public Connection getPersistentConnection() {
+    return persistentConnection;
+  }
+
+  /**
    * Recreates a DuckDB view when the underlying parquet file has been refreshed.
    * This forces DuckDB to re-read the updated file.
    */
@@ -297,10 +311,6 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   @Override public Set<String> getTableNames() {
-    // Flush deferred views before querying DuckDB metadata so SQL views appear in the result
-    if (catalogPath != null && DuckDBPendingViews.hasPending(catalogPath)) {
-      DuckDBPendingViews.flush(catalogPath, persistentConnection);
-    }
     Set<String> tableNames = new java.util.LinkedHashSet<>(super.getTableNames());
     // Always include tables defined in FileSchema YAML regardless of DuckDB view state.
     // This ensures JDBC metadata (getTables/getColumns) works even when iceberg views
@@ -309,18 +319,22 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       tableNames.addAll(fileSchema.tables()
           .getNames(org.apache.calcite.schema.lookup.LikePattern.any()));
     }
-    // SQL views from YAML views: section are included if DuckDB registered them.
-    // Cross-schema views that failed to register won't be in super.getTableNames() — no exclusion needed.
+    // Deferred SQL views (YAML views: section) that haven't been created yet still have a known
+    // name — list it without creating the view, so a listing never creates (or hangs on) one.
     // Views that ARE in DuckDB appear with TABLE_TYPE=VIEW so getTables(type=TABLE) correctly skips them.
+    if (catalogPath != null) {
+      tableNames.addAll(DuckDBPendingViews.pendingViewNames(catalogPath, schemaName));
+    }
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
     return tableNames;
   }
 
   @Override public Table getTable(String name) {
     LOGGER.info("Looking for table: '{}'", name);
-    // Flush deferred views on first access — all schemas are registered by now
-    if (catalogPath != null && DuckDBPendingViews.hasPending(catalogPath)) {
-      DuckDBPendingViews.flush(catalogPath, persistentConnection);
+    // Create this one deferred view on demand — not the whole backlog — the first time
+    // something actually asks for it by name. See DuckDBPendingViews for why.
+    if (catalogPath != null) {
+      DuckDBPendingViews.createOnDemand(catalogPath, persistentConnection, schemaName, name);
     }
     // Heal a stale persistent-catalog view before Calcite introspects its columns, so a
     // schema change made by an earlier session doesn't bake a wrong row type into the plan.

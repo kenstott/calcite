@@ -114,6 +114,21 @@ public final class GovDataSeedInstaller {
     File base = new File(operatingBase);
     File marker = new File(base, MARKER_RELATIVE);
     File catalogFile = new File(base, CATALOG_RELATIVE);
+
+    // A catalog rebuilt at runtime (DuckDBCatalogMaintenance.rebuildPendingViews — e.g. an
+    // operator "update schema" command) is newer than whatever seed this jar was built with.
+    // Never clobber that with the jar's bundled copy, fingerprint match or not: the datetime
+    // alone settles which one is authoritative, so a rebuilt catalog survives a restart.
+    File jarFile = runningJarFile();
+    if (jarFile != null && catalogFile.isFile()
+        && catalogFile.lastModified() > jarFile.lastModified()) {
+      LOGGER.info("govdata catalog {} ({}) is newer than the running jar ({}); leaving it in place",
+          catalogFile.getAbsolutePath(),
+          java.time.Instant.ofEpochMilli(catalogFile.lastModified()),
+          java.time.Instant.ofEpochMilli(jarFile.lastModified()));
+      return;
+    }
+
     String onDiskFingerprint = marker.isFile() ? readFileText(marker) : null;
     if (bundledFingerprint.equals(onDiskFingerprint) && catalogFile.isFile()) {
       LOGGER.debug("govdata seed up to date (fingerprint {}, version {}); skipping extraction",
@@ -135,6 +150,25 @@ public final class GovDataSeedInstaller {
       // A failed seed is recoverable: the runtime rebuilds views/trackers from s3:// on demand.
       LOGGER.warn("Failed to seed govdata catalog into {}: {}", base.getAbsolutePath(),
           e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Absolute path this class was loaded from, or {@code null} if not running from an actual jar
+   * file (e.g. an exploded classes directory in a test/IDE run) — there's no meaningful build
+   * time to compare a catalog's freshness against in that case.
+   */
+  private static File runningJarFile() {
+    try {
+      java.security.CodeSource codeSource =
+          GovDataSeedInstaller.class.getProtectionDomain().getCodeSource();
+      if (codeSource == null) {
+        return null;
+      }
+      File jarFile = new File(codeSource.getLocation().toURI());
+      return jarFile.isFile() ? jarFile : null;
+    } catch (java.net.URISyntaxException e) {
+      return null;
     }
   }
 
