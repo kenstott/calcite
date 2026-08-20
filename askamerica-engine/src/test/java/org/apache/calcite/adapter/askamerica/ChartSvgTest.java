@@ -385,4 +385,58 @@ public class ChartSvgTest {
             Arrays.asList("Pharma", "Tech", "Oil", "Ag", "Banking"),
             Arrays.asList(series("delta", -5.2, -3.2, -1.2, 35.0, 10.6)), w, h).toSvg();
     }
+
+    // ---- numeric x-tick labels must not run into each other ------------------------
+
+    private static List<ChartRenderer.PointSeriesSpec> moneyPoints() {
+        List<Double> x = new ArrayList<>();
+        List<Double> y = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            x.add(35000.0 + i * 1000);
+            y.add(500.0 + (i % 9) * 50);
+        }
+        List<ChartRenderer.PointSeriesSpec> out = new ArrayList<>();
+        out.add(new ChartRenderer.PointSeriesSpec("states", x, y, null));
+        return out;
+    }
+
+    /** Every x tick label drawn, in document order, with its x coordinate. */
+    private static List<double[]> xTickPositions(String svg) {
+        List<double[]> out = new ArrayList<>();
+        // class="tick" sits between id and x, so the two attributes are not adjacent.
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("id=\"xtick-(\\d+)\"[^>]*?x=\"([0-9.]+)\"").matcher(svg);
+        while (m.find()) {
+            out.add(new double[] {Double.parseDouble(m.group(2))});
+        }
+        return out;
+    }
+
+    @Test void wideXTickLabelsAreThinnedRatherThanOverprinted() {
+        // A live board rendered "35,00040,00045,00050,000" — the labels are centred on their
+        // ticks and never rotated, so on a narrow panel they simply collide.
+        String svg = ChartRenderer.layoutPoints("scatter", "Mortality vs income",
+            "Median household income ($)", "Rate", moneyPoints(), 430, 300).toSvg();
+        List<double[]> ticks = xTickPositions(svg);
+        assertTrue(ticks.size() >= 2, "expected some x tick labels, got " + ticks.size());
+        // "$100,000"-width labels need roughly 45px; anything closer than that overprints.
+        for (int i = 1; i < ticks.size(); i++) {
+            double gap = ticks.get(i)[0] - ticks.get(i - 1)[0];
+            assertTrue(gap > 40,
+                "x tick labels only " + gap + "px apart — they will overprint");
+        }
+    }
+
+    @Test void thinningIsDrivenByTheSpaceAvailable() {
+        // Tick COUNT comes from the data range, not the panel width — niceTicks never sees the
+        // width — so a wider panel cannot gain labels. Thinning only ever removes, and must do
+        // so only when the labels would actually collide.
+        int narrow = xTickPositions(ChartRenderer.layoutPoints("scatter", "t",
+            "Median household income ($)", "Rate", moneyPoints(), 300, 300).toSvg()).size();
+        int roomy = xTickPositions(ChartRenderer.layoutPoints("scatter", "t",
+            "Median household income ($)", "Rate", moneyPoints(), 430, 300).toSvg()).size();
+        assertTrue(narrow < roomy,
+            "a panel too tight for its labels must drop some; got " + narrow + " vs " + roomy);
+        assertTrue(narrow >= 2, "but never below a readable minimum; got " + narrow);
+    }
 }

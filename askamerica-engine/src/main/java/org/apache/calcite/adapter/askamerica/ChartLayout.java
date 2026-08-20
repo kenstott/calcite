@@ -352,8 +352,29 @@ final class ChartLayout {
             legendHeight);
         scene.bounds(left, top, plotW, plotH, titleBottom + 4, top - 4, height - 4);
 
+        // Numeric x labels are centred on their tick and never rotated, so on a narrow panel
+        // wide ones (money, populations) run into each other and print as one unreadable
+        // string — a live board rendered "35,00040,00045,00050,000". A category axis avoids
+        // this by rotating when its slots get tight; this axis has no such escape, so thin the
+        // labels instead. Every Nth tick is kept, chosen as the smallest N that clears the
+        // widest label. The axis still communicates its scale: gridlines are horizontal here,
+        // so nothing depends on a label being present at every tick.
+        int widestXLabel = 0;
+        for (String t : xt.labels) {
+            widestXLabel = Math.max(widestXLabel, ChartScene.textWidth(t, TICK_SIZE, false));
+        }
+        int xStep = 1;
+        if (xt.values.size() > 1) {
+            double slot = plotW / (xt.values.size() - 1);
+            while (xStep < xt.values.size() && slot * xStep < widestXLabel + 8) {
+                xStep++;
+            }
+        }
         Group xTicks = new Group().at("x-axis-labels");
         for (int i = 0; i < xt.values.size(); i++) {
+            if (i % xStep != 0) {
+                continue;
+            }
             double v = xt.values.get(i);
             double x = left + (v - xt.min) / (xt.max - xt.min) * plotW;
             xTicks.add(new Label(x, top + plotH + 18, xt.labels.get(i), INK, TICK_SIZE,
