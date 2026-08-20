@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Deferred DuckDB view registration.
+ * Deferred DuckDB view registration with retry-until-convergence.
  *
  * <p>Views defined in schema YAMLs may reference tables or other views that
  * do not yet exist when the schema is first initialized (e.g. cross-schema
@@ -31,21 +31,29 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * definitions during schema initialization and flushes them lazily on the
  * first query, by which point all schemas and their base tables are registered.
  *
- * <p>Views are CREATEd but never proactively validated. DuckDB defers name resolution at
- * CREATE time, so {@code CREATE VIEW} is pure local DDL that never contacts the object store
- * and succeeds for any well-formed statement — including view-on-view chains, in any order.
- * Proving a view actually resolves requires querying it, and for an {@code iceberg_scan} view
- * that is an object-store round trip (~29ms against a local MinIO, more over a WAN).
+ * <p>{@code CREATE VIEW} is NOT pure order-independent DDL in DuckDB: binding the view body to
+ * determine its output row type happens at CREATE time, so a view whose SQL references another
+ * deferred view that hasn't been created yet in this pass fails immediately with DuckDB's own
+ * {@code Catalog Error}, rather than succeeding and resolving lazily on first query. (A prior
+ * version of this class assumed lazy resolution and dropped the retry loop for a cold-start
+ * perf win — confirmed wrong empirically: a real view-on-view chain, econ.trade_balance_summary
+ * over econ.trade_statistics, failed permanently under the single-pass version whenever
+ * trade_statistics happened to land later in the pending list.) The fix costs nothing extra on
+ * the common no-forward-reference case — a pass with zero failures is one pass, same as before.
  *
- * <p>Validating every deferred view was the single largest component of connect time: N round
- * trips to answer a question about tables the caller had not asked for. It is not done at all
- * now, in either the metadata path or the query path — relocating it merely moved the cost
- * from connect into whichever path ran first.
+ * <p>Each retry pass attempts every still-failing view; anything that fails due to a missing
+ * dependency is retried in the next pass. The loop stops once a full pass makes no progress —
+ * at that point the remaining failures are genuinely unresolvable (bad SQL, a missing column,
+ * or a true circular reference), not an ordering artifact, and are logged as errors. Views are
+ * still never proactively validated with a SELECT — creation itself is the only round trip, so
+ * this stays cheap even with retries: DuckDB's CREATE VIEW binding is local catalog metadata,
+ * not an object-store call, and only fails/retries on the minority of views with forward
+ * references, which is why this can restore correctness without reintroducing the actual
+ * expensive part the original perf pass removed (a validating SELECT per view).
  *
- * <p>Consequence: a view whose references cannot be resolved stays in the catalog and fails
- * when queried, carrying DuckDB's own error, instead of being dropped at connect and silently
- * missing from metadata. A view that vanishes is harder to diagnose than one that explains
- * itself on use.
+ * <p>Consequence: a view whose references genuinely cannot be resolved (after convergence) stays
+ * out of the catalog and its error is logged, instead of leaving a broken view registered that
+ * would fail cryptically when queried later.
  */
 public final class DuckDBPendingViews {
 
@@ -117,13 +125,13 @@ public final class DuckDBPendingViews {
   }
 
   /**
-   * Creates all pending views for the given database file, in a single pass.
+   * Creates all pending views for the given database file, retrying until convergence.
    *
-   * <p>One pass suffices: DuckDB resolves names lazily, so {@code CREATE VIEW} succeeds even
-   * when the view references a table or another view that does not exist yet. The previous
-   * retry-until-convergence loop existed only because creation was fused with a validating
-   * SELECT, which genuinely does depend on creation order; with validation gone there is
-   * nothing left for a second pass to resolve.
+   * <p>Each pass attempts every view that hasn't succeeded yet. A view that fails because a
+   * dependency (table or another deferred view) doesn't exist in the catalog yet is retried in
+   * the next pass, once whatever it depends on has (hopefully) been created. The loop stops when
+   * a full pass creates nothing new — the remainder is then a genuine SQL error, missing column,
+   * or circular reference, not an ordering artifact, and gets logged as such.
    *
    * <p>Safe to call from multiple threads — idempotent after first flush.
    */
@@ -198,18 +206,30 @@ public final class DuckDBPendingViews {
         LOGGER.info("Creating {} deferred SQL views for database '{}' ({} already in catalog)",
             pending.size(), dbPath, skipped);
 
-        for (PendingView pv : pending) {
-          SQLException err = createView(conn, pv);
-          if (err == null) {
-            LOGGER.debug("Created deferred view: {}.{}", pv.duckdbSchema, pv.viewName);
-          } else {
-            // A CREATE failure is a malformed statement, not an unresolved reference — retrying
-            // cannot help.
-            pv.lastError = err;
-            LOGGER.error("Cannot create view {}.{} — {}. SQL: {}",
-                pv.duckdbSchema, pv.viewName, classifyError(err),
-                pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
+        // Fixpoint: each pass creates as many views as possible; any view that fails because
+        // its referenced table/view hasn't been created yet THIS pass is retried next pass.
+        // Loop until a full pass resolves nothing new — the remainder is then a genuine error
+        // (bad SQL, missing column, or circular reference), not an ordering artifact.
+        while (!pending.isEmpty()) {
+          List<PendingView> failed = new ArrayList<>();
+          for (PendingView pv : pending) {
+            SQLException err = createView(conn, pv);
+            if (err == null) {
+              LOGGER.debug("Created deferred view: {}.{}", pv.duckdbSchema, pv.viewName);
+            } else {
+              pv.lastError = err;
+              failed.add(pv);
+            }
           }
+          if (failed.size() == pending.size()) {
+            for (PendingView pv : failed) {
+              LOGGER.error("Cannot create view {}.{} — {}. SQL: {}",
+                  pv.duckdbSchema, pv.viewName, classifyError(pv.lastError),
+                  pv.viewSql.length() > 200 ? pv.viewSql.substring(0, 200) + "..." : pv.viewSql);
+            }
+            break;
+          }
+          pending = failed;
         }
 
         LOGGER.info("Deferred view creation complete for database '{}'", dbPath);
@@ -231,8 +251,10 @@ public final class DuckDBPendingViews {
   }
 
   /**
-   * Creates one deferred view. Returns null on success, else the error. Local DDL only — DuckDB
-   * defers name resolution, so this succeeds even when the view's references do not exist yet.
+   * Creates one deferred view. Returns null on success, else the error. Local catalog metadata
+   * only, no object-store round trip — but DuckDB binds the view body at CREATE time, so this
+   * fails if a referenced table or view doesn't exist in the catalog yet; see the retry loop
+   * in {@link #flush}.
    */
   private static SQLException createView(Connection conn, PendingView pv) {
     try (Statement stmt = conn.createStatement()) {
