@@ -17,19 +17,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Operator-triggered entry point for rebuilding a DuckDB-backed catalog against current data,
- * without a new JAR — e.g. an "update schema" tool exposed by a long-lived server that holds a
- * govdata connection open across many calls.
+ * Operator-triggered entry points for adjusting a DuckDB-backed catalog against current data or
+ * current resource needs, without a new JAR — e.g. "update schema" / "set memory limit" tools
+ * exposed by a long-lived server that holds a govdata connection open across many calls.
  *
  * <p>Deliberately separate from the lazy per-view path in {@link DuckDBPendingViews}: that one
- * resolves a single view the first time a query actually asks for it. This one is the explicit,
+ * resolves a single view the first time a query actually asks for it. This class is the explicit,
  * whole-catalog counterpart — call it after fixing whatever made some views fail (a sync gap, a
- * bad row) to retry them all against a live connection, rather than waiting for a query to
- * stumble onto each one individually.
+ * bad row), or after discovering a query needs more headroom than the connection was opened with,
+ * rather than waiting for a query to stumble onto the problem or restarting the process.
  */
 public final class DuckDBCatalogMaintenance {
 
@@ -43,6 +44,43 @@ public final class DuckDBCatalogMaintenance {
    * rebuild pass, not one per schema, even on a many-schema catalog connection.
    */
   public static void rebuildPendingViews(CalciteConnection connection) throws SQLException {
+    forEachDuckDbCatalog(connection, (catalogPath, duckSchema) -> {
+      LOGGER.info("Rebuilding pending deferred views for catalog '{}'", catalogPath);
+      DuckDBPendingViews.buildAll(catalogPath, duckSchema.getPersistentConnection());
+    });
+  }
+
+  /**
+   * Sets DuckDB's {@code memory_limit}/{@code max_memory} on every DuckDB-backed catalog mounted
+   * on this connection, immediately — unlike the {@code -Dcalcite.duckdb.memoryLimit} system
+   * property (which only takes effect for connections opened AFTER it changes), this reaches the
+   * database instance(s) already backing this live connection.
+   *
+   * @param limit a DuckDB size literal, e.g. {@code "8GB"}
+   */
+  public static void setMemoryLimit(CalciteConnection connection, String limit)
+      throws SQLException {
+    forEachDuckDbCatalog(connection, (catalogPath, duckSchema) -> {
+      LOGGER.info("Setting memory_limit={} for catalog '{}'", limit, catalogPath);
+      try (Statement stmt = duckSchema.getPersistentConnection().createStatement()) {
+        stmt.execute("SET memory_limit = '" + limit + "'");
+        stmt.execute("SET max_memory = '" + limit + "'");
+      }
+    });
+  }
+
+  @FunctionalInterface
+  private interface CatalogAction {
+    void apply(String catalogPath, DuckDBJdbcSchema duckSchema) throws SQLException;
+  }
+
+  /**
+   * Walks every subschema mounted on this connection, applying {@code action} once per distinct
+   * underlying DuckDB database file (mounted schemas normally share one file, so this is
+   * normally one call, not one per schema, even on a many-schema catalog connection).
+   */
+  private static void forEachDuckDbCatalog(CalciteConnection connection, CatalogAction action)
+      throws SQLException {
     SchemaPlus root = connection.getRootSchema();
     Set<String> doneCatalogPaths = new HashSet<>();
     for (String name : root.getSubSchemaNames()) {
@@ -63,9 +101,7 @@ public final class DuckDBCatalogMaintenance {
       if (catalogPath == null || !doneCatalogPaths.add(catalogPath)) {
         continue;
       }
-      LOGGER.info("Rebuilding pending deferred views for catalog '{}' (schema '{}')",
-          catalogPath, name);
-      DuckDBPendingViews.buildAll(catalogPath, duckSchema.getPersistentConnection());
+      action.apply(catalogPath, duckSchema);
     }
   }
 }

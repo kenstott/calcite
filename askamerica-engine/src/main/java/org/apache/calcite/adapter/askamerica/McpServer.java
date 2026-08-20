@@ -137,6 +137,15 @@ public class McpServer {
         // otherwise probes for a real X11/Windows display and fails on a headless host.
         System.setProperty("java.awt.headless", "true");
 
+        // DuckDBJdbcSchemaFactory's own default (4GB) is sized for many small connections
+        // sharing a box; this server holds one long-lived, many-schema connection serving
+        // real analytical queries, which needs more headroom. Only sets it if the operator
+        // hasn't already passed -Dcalcite.duckdb.memoryLimit — never override an explicit
+        // choice. Adjustable at runtime via the set_memory_limit tool.
+        if (System.getProperty("calcite.duckdb.memoryLimit") == null) {
+            System.setProperty("calcite.duckdb.memoryLimit", "8GB");
+        }
+
         // Resolve the data dir: MCP_DATA_DIR (server-specific override) → default ~/.mcp_askamerica.
         // Exported as ASKAMERICA_DATA_DIR so any code that reads that name (e.g. a spawned
         // subprocess) sees it too, then pinned directly via AskAmericaDriver.pinOperatingDir().
@@ -1326,6 +1335,19 @@ public class McpServer {
             + "reconnects fresh, so expect one slower call right after this.",
             schema(updateSchemaProps, new String[]{})));
 
+        ObjectNode memoryLimitProps = MAPPER.createObjectNode();
+        memoryLimitProps.set(
+            "limit",
+            prop("string",
+            "DuckDB size literal, e.g. '8GB', '12GB'. Current default: 8GB."));
+        tools.add(
+            tool("set_memory_limit",
+            "Raise (or lower) the DuckDB memory ceiling for this server, e.g. after a query "
+            + "fails with an out-of-memory error on a large aggregation. Applies immediately "
+            + "to the live connection — no reconnect needed — and persists for connections "
+            + "opened after this call too.",
+            schema(memoryLimitProps, new String[]{"limit"})));
+
         TOOL_DEFS = tools;
         return tools;
     }
@@ -1590,6 +1612,12 @@ public class McpServer {
                 case "update_schema": {
                     log.println("[askamerica-mcp] tool=update_schema");
                     text = updateSchema();
+                    break;
+                }
+                case "set_memory_limit": {
+                    String limit = args.path("limit").asText();
+                    log.println("[askamerica-mcp] tool=set_memory_limit limit=" + limit);
+                    text = setMemoryLimit(limit);
                     break;
                 }
                 case "resolve_geo": {
@@ -5437,6 +5465,35 @@ public class McpServer {
             + " cached connection(s)");
         return "Schema catalog rebuilt against current data. " + discarded
             + " cached connection(s) discarded — the next tool call reconnects fresh.";
+    }
+
+    private static final java.util.regex.Pattern MEMORY_LIMIT_PATTERN =
+        java.util.regex.Pattern.compile("^[0-9]+(\\.[0-9]+)?\\s*(B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)?$",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Sets DuckDB's memory_limit/max_memory on the live connection immediately, and updates the
+     * calcite.duckdb.memoryLimit system property so connections opened later (e.g. after
+     * update_schema discards the cache, or a TTL-driven reconnect) pick up the same value
+     * instead of reverting to the 8GB startup default.
+     */
+    private static String setMemoryLimit(String limit) throws Exception {
+        if (limit == null || !MEMORY_LIMIT_PATTERN.matcher(limit.trim()).matches()) {
+            return "Invalid memory limit '" + limit
+                + "' — expected a DuckDB size literal, e.g. '8GB' or '12GB'.";
+        }
+        String normalized = limit.trim();
+        System.setProperty("calcite.duckdb.memoryLimit", normalized);
+
+        Connection conn = getCatalogConnection();
+        org.apache.calcite.jdbc.CalciteConnection calciteConn =
+            conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
+        org.apache.calcite.adapter.file.duckdb.DuckDBCatalogMaintenance.setMemoryLimit(
+            calciteConn, normalized);
+
+        log.println("[askamerica-mcp] memory_limit set to " + normalized);
+        return "DuckDB memory limit set to " + normalized + " on the live connection, and will "
+            + "apply to any new connections opened after this.";
     }
 
     private static boolean loadTelemetryOptIn() {

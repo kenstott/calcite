@@ -172,7 +172,7 @@ rm -rf "$GOVDATA_DATA_DIR/.aperio" "$GOVDATA_DATA_DIR/.duckdb"
 # same remote file), so cache_httpfs's persistent cache buys nothing here while its per-read
 # exclusion-regex mutex serializes every Parquet page/chunk read across scan threads — a severe
 # bottleneck on large schemas over a WAN endpoint (calcite issue #290). Skip loading it entirely.
-JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m -Dduckdb.cache_httpfs.disable=true}"
+JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m -Dduckdb.cache_httpfs.disable=true -Dcalcite.duckdb.memoryLimit=8GB}"
 LIBS="$GOVDATA_HOME/build/libs"
 if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then
     if [[ ! -f "$MODEL_VERIFY_JAR" ]]; then
@@ -262,8 +262,11 @@ fi
 # Each schema is an independent JDBC connection over its own bucket prefix — nothing is shared,
 # so serialising them only added wall-clock. A full sweep ran for hours at ~0.4s/table of actual
 # probe work, because 26 schemas waited on each other. Fan out instead, capped so the JVMs fit:
-# each is -Xmx2g, so the default 4 needs ~8GB. Output is buffered per schema and printed whole,
-# otherwise interleaved probe lines from concurrent schemas would be unreadable.
+# each is -Xmx2g, so the default 4 needs ~8GB of heap. DuckDB's memory_limit (8GB, set via
+# -Dcalcite.duckdb.memoryLimit above — off-heap, on top of -Xmx) adds up separately: worst
+# case is all 4 jobs hitting a heavy aggregate at once, ~32GB of DuckDB memory alone. Lower
+# VERIFY_JOBS on a smaller box. Output is buffered per schema and printed whole, otherwise
+# interleaved probe lines from concurrent schemas would be unreadable.
 JOBS="${VERIFY_JOBS:-4}"
 _outdir=$(mktemp -d "${TMPDIR:-/tmp}/model-verify-XXXXXX")
 trap 'rm -rf "$_outdir"' EXIT

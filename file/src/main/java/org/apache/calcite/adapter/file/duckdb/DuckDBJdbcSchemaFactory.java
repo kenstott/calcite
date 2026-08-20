@@ -456,10 +456,14 @@ public class DuckDBJdbcSchemaFactory {
         setupConn = DriverManager.getConnection(jdbcUrl);
       }
 
-      // Configure DuckDB settings for production use
+      // Configure DuckDB settings for production use. The limit is overridable per-JVM via
+      // -Dcalcite.duckdb.memoryLimit (e.g. model-verify.sh raises it for its own probes,
+      // which run standalone rather than sharing a box with production connections) —
+      // default unchanged at 4GB so every other caller keeps today's behavior.
+      String duckdbMemoryLimit = System.getProperty("calcite.duckdb.memoryLimit", "4GB");
       setupConn.createStatement().execute("SET threads TO 4");  // Adjust based on workload
-      setupConn.createStatement().execute("SET memory_limit = '4GB'");  // Prevent OOM
-      setupConn.createStatement().execute("SET max_memory = '4GB'");  // Hard limit
+      setupConn.createStatement().execute("SET memory_limit = '" + duckdbMemoryLimit + "'");  // Prevent OOM
+      setupConn.createStatement().execute("SET max_memory = '" + duckdbMemoryLimit + "'");  // Hard limit
       setupConn.createStatement().execute("SET temp_directory = '" + System.getProperty("java.io.tmpdir") + "'");  // Spill location
       setupConn.createStatement().execute("SET preserve_insertion_order = false");  // Better performance
       setupConn.createStatement().execute("SET enable_progress_bar = false");  // Cleaner output
