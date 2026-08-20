@@ -27,7 +27,10 @@
 #
 # Runs continuously (one pass every GOVDATA_R2_SYNC_INTERVAL seconds) from
 # run-scheduled.sh when PROD_* publish creds are set.
-# Can also be run manually: govdata/scripts/parallel/sync-to-r2.sh [--dry-run]
+# Can also be run manually: govdata/scripts/parallel/sync-to-r2.sh [--dry-run] [--verbose]
+# --verbose (or GOVDATA_R2_SYNC_VERBOSE=1) adds rclone -v so each file transfer logs a
+# "Copied (new)"/"Copied (replaced existing)" line instead of only the --stats summary —
+# use it to see exactly which files a slice is moving.
 #
 set -euo pipefail
 
@@ -48,7 +51,16 @@ trap _term_children TERM INT
 configure_r2_remote
 
 DRY_RUN=false
-[ "${1:-}" = "--dry-run" ] && DRY_RUN=true
+VERBOSE="${GOVDATA_R2_SYNC_VERBOSE:-false}"
+for _a in "$@"; do
+  case "$_a" in
+    --dry-run) DRY_RUN=true ;;
+    --verbose|--debug) VERBOSE=true ;;
+    *) log_error "sync-to-r2: unknown argument: $_a"; exit 2 ;;
+  esac
+done
+_VERBOSE_FLAG=""
+[ "$VERBOSE" = true ] && _VERBOSE_FLAG="-v"
 
 MINIO_REMOTE="${GOVDATA_RCLONE_REMOTE:-minio}"
 R2_REMOTE="r2"
@@ -147,7 +159,7 @@ for s in "${_schemas[@]}"; do
     _lo=$(( _cursor - BUFFER )); [ "$_lo" -lt 0 ] && _lo=0
     _max_age=$(( _now - _lo ))
     _min_age=$(( _now - _slice_end )); [ "$_min_age" -lt 0 ] && _min_age=0
-    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --stats 60s"
+    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --stats 60s $_VERBOSE_FLAG"
     $DRY_RUN && _slice_flags="$_slice_flags --dry-run"
 
     log_info "sync-to-r2: [$s] slice $(date -u -d "@$_lo" +%Y-%m-%dT%H:%MZ) .. $(date -u -d "@$_slice_end" +%Y-%m-%dT%H:%MZ)"
