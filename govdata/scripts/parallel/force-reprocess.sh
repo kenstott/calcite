@@ -41,17 +41,27 @@
 #   most-recent period, which only daily's window reaches, still wrong. Skip with --skip-daily
 #   for a schema where that doesn't apply (or that has no daily mode configured at all).
 #
-# SEC is special: run-pool.sh splits it into performance-partitioning pool slots (sec_primary:
-# 10-K/10-Q, sec_secondary: 8-K/proxy/insider/13D-G, sec_13f: 13F-HR, sec_prices: Stooq prices)
-# so historical backfills parallelize — but those are NOT what this script should target for a
-# table fix. worker.sh's bare `sec` case applies no filingTypes filter by default, so a single
-# `sec:<range>` run repopulates every document-derived table (filing_metadata,
-# financial_line_items, filing_contexts, mda_sections, xbrl_relationships, insider_transactions,
-# institutional_holdings, beneficial_ownership, earnings_transcripts, vectorized_chunks) across
-# every form type in one pass — targeting one of the split slots instead would silently
-# under-cover tables fed by multiple form types. Use --schema sec (bare) for all of the above;
-# the one exception is stock_prices, which worker.sh's `sec` case hardcodes fetchStockPrices:false
-# for — that table needs --schema sec_prices instead.
+# SEC: run-pool.sh splits it into performance-partitioning pool slots (sec_primary: 10-K/10-Q,
+# sec_secondary: 8-K/proxy/insider/13D-G, sec_13f: 13F-HR, sec_prices: Stooq prices) so historical
+# backfills parallelize. A table fix scoped to one of those slots (e.g. sec_primary for a bug
+# confirmed to affect only 10-K/10-Q accessions) is fine and often the more precise choice — this
+# script does not require --schema sec (bare) for that case. bare `sec` (no filingTypes filter)
+# remains the right choice when a fix isn't known to be confined to one form type — and it must
+# be used (or every relevant partitioned slot run together) whenever the reason for reprocessing
+# applies to the table as a whole rather than one form type's data: a new/changed column, a bug
+# in shared transform/materialization logic, or anything not proven form-type-specific. Scoping
+# that kind of fix to just sec_primary silently leaves sec_secondary's and sec_13f's rows never
+# touched — same missing-data outcome as under-covering after a purge (see below), just reached
+# without ever purging anything. The litmus test: is the fix/change itself confined to one form
+# type, or does it apply table-wide? Only the former justifies a partitioned slot alone.
+#
+# data_purge.sh should not be needed here at all. A forced reprocess already corrects existing
+# wrong rows in place — IcebergTableWriter's row-level delete-then-rewrite (wired via the
+# forceAccessions operand) targets exactly the rows a fix needs to touch and overwrites them,
+# without wiping anything else first. Reach for data_purge.sh only for the genuine edge case a
+# targeted rewrite can't handle — e.g. the table's Iceberg metadata itself is corrupted, a
+# structural/partition-key change requires a full rebuild, or the defect's scope is truly
+# unknown and can't be enumerated as a target list — not as a routine step before reprocessing.
 #
 # Usage:
 #   force-reprocess.sh --schema <schema> --tables <t1,t2,...> \
@@ -120,18 +130,6 @@ for i in "${!TABLE_ARR[@]}"; do
   TABLE_ARR[$i]="$(echo -n "${TABLE_ARR[$i]}" | xargs)"
 done
 
-case "$SCHEMA" in
-  sec_primary|sec_secondary|sec_13f)
-    echo "ERROR: '$SCHEMA' is a run-pool.sh performance-partitioning slot (one SEC form-type" >&2
-    echo "       subset), not the right target for a table fix — most SEC tables are fed by" >&2
-    echo "       accessions across multiple form types, so reprocessing only this slot would" >&2
-    echo "       silently under-cover them. Use --schema sec (bare) instead; it applies no" >&2
-    echo "       filingTypes filter and covers every SEC table except stock_prices, which" >&2
-    echo "       needs --schema sec_prices. See this script's header comment for details." >&2
-    exit 1
-    ;;
-esac
-
 # SecSchemaFactory#getCiksFromConfig returns an EMPTY list — not "all CIKs" — when the operand
 # has no "ciks" entry, and worker.sh's bare `sec`/`sec_prices` cases only add one when
 # GOVDATA_CIKS is set. Left unset, the ETL run enumerates zero companies and exits clean in
@@ -139,10 +137,26 @@ esac
 # looks exactly like a successful reprocess (confirmed live: an unset-CIKS run against
 # beneficial_ownership finished in 30s with no fetch activity at all). Refuse rather than risk
 # repeating that silently.
-if [[ ( "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" ) && -z "${GOVDATA_CIKS:-}" ]]; then
-  echo "ERROR: GOVDATA_CIKS is not set. For SEC, an unset ciks operand resolves to an EMPTY" >&2
-  echo "       company list — not 'all companies' — so the ETL run would silently process" >&2
-  echo "       nothing and still look successful. Export GOVDATA_CIKS explicitly:" >&2
+#
+# sec_primary/sec_secondary/sec_13f don't hit the empty-list case — worker.sh's cases for them
+# default to the 6-company DQ_SAMPLE (`${GOVDATA_CIKS:-DQ_SAMPLE}`) rather than omitting ciks
+# entirely — but that's its own silent-wrong-scope trap: a caller expecting a full-universe
+# remediation run gets a real, non-empty, plausible-looking result from just 6 companies instead.
+# Refuse the same way rather than let that pass quietly.
+if [[ ( "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" || "$SCHEMA" == "sec_primary" \
+       || "$SCHEMA" == "sec_secondary" || "$SCHEMA" == "sec_13f" ) \
+      && -z "${GOVDATA_CIKS:-}" ]]; then
+  echo "ERROR: GOVDATA_CIKS is not set." >&2
+  if [[ "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" ]]; then
+    echo "       For '$SCHEMA', an unset ciks operand resolves to an EMPTY company list — not" >&2
+    echo "       'all companies' — so the ETL run would silently process nothing and still" >&2
+    echo "       look successful." >&2
+  else
+    echo "       For '$SCHEMA', an unset ciks operand silently defaults to the 6-company" >&2
+    echo "       DQ_SAMPLE set instead of a real full-universe run — a plausible-looking but" >&2
+    echo "       badly under-scoped result, not an error." >&2
+  fi
+  echo "       Export GOVDATA_CIKS explicitly:" >&2
   echo "         GOVDATA_CIKS=_ALL_EDGAR_FILERS   for a real full-universe reprocess" >&2
   echo "         GOVDATA_CIKS=DQ_SAMPLE           for a small, fast correctness check" >&2
   echo "         GOVDATA_CIKS=<CIK,CIK,...>       for specific companies" >&2
@@ -227,7 +241,8 @@ echo ""
 #    needlessly re-fetch on their next touch. Confirmed live 2026-08-17: an unscoped call from an
 #    earlier version of this script deleted 5,957,362 rows spanning 2010-2026 from a single
 #    2018-only request.
-if [[ "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" ]]; then
+if [[ "$SCHEMA" == "sec" || "$SCHEMA" == "sec_prices" || "$SCHEMA" == "sec_primary" \
+     || "$SCHEMA" == "sec_secondary" || "$SCHEMA" == "sec_13f" ]]; then
   ACCESSION_SUFFIXES=()
   while IFS= read -r _s; do
     [[ -n "$_s" ]] && ACCESSION_SUFFIXES+=("$_s")
