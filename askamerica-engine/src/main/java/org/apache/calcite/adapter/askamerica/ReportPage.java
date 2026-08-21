@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,6 +38,26 @@ final class ReportPage {
     private ReportPage() {}
 
     /** One narrative section: a heading and a body the caller wrote as HTML. */
+    /**
+     * One reader-operable row filter: a labelled checkbox that hides the rows carrying
+     * {@code className}.
+     *
+     * <p>The class is applied by the caller inside its own section HTML — the engine only emits
+     * the control and the rule. That keeps the author deciding which rows are a coherent group,
+     * which is a judgement about the data rather than about the page.
+     */
+    static final class Filter {
+        final String label;
+        final String className;
+        final String note;
+
+        Filter(String label, String className, String note) {
+            this.label = label;
+            this.className = className;
+            this.note = note;
+        }
+    }
+
     static final class Section {
         final String heading;
         final String html;
@@ -85,7 +106,21 @@ final class ReportPage {
 
     static String render(String title, String subtitle, List<Section> sections,
             String dashboardSvg, String svgDownloadUrl, List<Source> sources, String footnote,
-            String byline) {
+            String byline, List<Filter> filters) {
+        // Sections are rewritten FIRST: sorting a table produces the CSS that drives it, and the
+        // <style> block is emitted before the body. Doing it in place would mean writing the
+        // rules after the stylesheet had already closed.
+        StringBuilder sortCss = new StringBuilder();
+        List<Section> prepared = new ArrayList<>();
+        if (sections != null) {
+            int n = 0;
+            for (Section sec : sections) {
+                prepared.add(new Section(sec.heading,
+                    withSortControls(sec.html, "s" + (++n) + "-", sortCss)));
+            }
+        }
+        sections = prepared;
+
         StringBuilder sb = new StringBuilder(32768);
         sb.append("<!doctype html>\n<html lang=\"en\">\n<head>\n")
             .append("<meta charset=\"utf-8\">\n")
@@ -93,7 +128,31 @@ final class ReportPage {
             .append("<title>").append(esc(title == null ? "AskAmerica report" : title))
             .append("</title>\n<style>\n")
             .append(css())
-            .append("</style>\n</head>\n<body>\n<main>\n");
+            .append(filterCss(filters))
+            .append(sortCss.length() == 0 ? "" : "@media screen{\n" + sortCss + "}\n")
+            .append("</style>\n</head>\n<body>\n");
+        // The checkboxes sit BEFORE <main> so the sibling combinator in filterCss can reach the
+        // rows. They are visually hidden, not display:none — a display:none input cannot be
+        // focused, and the label would stop being keyboard-operable.
+        if (filters != null) {
+            for (Filter f : filters) {
+                sb.append("<input type=\"checkbox\" class=\"fltbox\" id=\"flt-")
+                    .append(esc(f.className)).append("\">\n");
+            }
+        }
+        sb.append("<main>\n");
+        if (filters != null && !filters.isEmpty()) {
+            sb.append("<div class=\"filterbar\"><span class=\"fltlead\">Show</span>");
+            for (Filter f : filters) {
+                sb.append("<label class=\"fltlabel\" for=\"flt-").append(esc(f.className))
+                    .append("\">").append(esc(f.label));
+                if (f.note != null && !f.note.isEmpty()) {
+                    sb.append("<span class=\"fltnote\">").append(esc(f.note)).append("</span>");
+                }
+                sb.append("</label>");
+            }
+            sb.append("</div>\n");
+        }
 
         sb.append("<header>\n");
         if (title != null && !title.isEmpty()) {
@@ -198,6 +257,332 @@ final class ReportPage {
         return t;
     }
 
+    /**
+     * Per-filter rules, scoped to {@code @media screen} — which is the whole of how print is
+     * kept correct.
+     *
+     * <p>A printout must be the complete document, not a snapshot of whichever toggles happened
+     * to be set when someone hit print. Two people printing the same report would otherwise get
+     * different tables, and neither page would say so. Worse, the prose states an {@code n}: a
+     * filtered print silently disagrees with its own narrative.
+     *
+     * <p>Putting the hiding rule inside {@code @media screen} means print never sees it at all —
+     * no {@code !important} override to fight, no reliance on {@code display:revert} restoring
+     * the right value for a {@code <tr>}. The rows are simply never hidden on paper.
+     */
+    // ── Automatic per-table sorting ───────────────────────────────────────────
+
+    private static final java.util.regex.Pattern TAG =
+        java.util.regex.Pattern.compile("<[^>]*>");
+
+    /**
+     * Give every table in a section a sort control per column, without the caller doing anything.
+     *
+     * <p>Sorting happens HERE, at render time, not in the browser: the rows are already in hand,
+     * Java orders them once, and the page ships one {@code <tbody>} per column. The CSP forbids
+     * script, so a browser could not reorder them anyway — but even with script this is the
+     * better division, because the server knows which columns are numeric and a DOM sorter has to
+     * guess from text.
+     *
+     * <p>Parsed by hand rather than with jsoup, which build.gradle.kts excludes from this jar.
+     * The rule that makes that safe is conservative bail-out: any table that is nested, ragged,
+     * headerless, tiny, enormous or otherwise not obviously a plain data grid is returned
+     * BYTE-FOR-BYTE UNCHANGED. Failing to sort a table costs a convenience; corrupting a caller's
+     * markup costs the report.
+     *
+     * <p>Row markup is copied verbatim — the {@code <tr>} strings are reordered and rewrapped,
+     * never rewritten — so cell contents, classes and inline styles survive intact, including the
+     * classes the {@code filters} feature keys on.
+     */
+    private static String withSortControls(String html, String prefix, StringBuilder css) {
+        if (html == null || html.isEmpty()) {
+            return html;
+        }
+        StringBuilder out = new StringBuilder(html.length() + 4096);
+        String lower = html.toLowerCase(java.util.Locale.ROOT);
+        int pos = 0;
+        int seq = 0;
+        while (true) {
+            int start = lower.indexOf("<table", pos);
+            if (start < 0) {
+                break;
+            }
+            int end = lower.indexOf("</table>", start);
+            if (end < 0) {
+                break;
+            }
+            end += 8;
+            out.append(html, pos, start);
+            String table = html.substring(start, end);
+            String rebuilt = sortableTable(table, prefix + "t" + (++seq), css);
+            out.append(rebuilt == null ? table : rebuilt);
+            pos = end;
+        }
+        out.append(html.substring(pos));
+        return out.toString();
+    }
+
+    /** Returns the rewritten table, or null to leave the original untouched. */
+    private static String sortableTable(String table, String id, StringBuilder css) {
+        String low = table.toLowerCase(java.util.Locale.ROOT);
+        if (low.indexOf("<table", 1) >= 0) {
+            return null;
+        }
+        List<String> rows = new ArrayList<>();
+        List<Integer> ends = new ArrayList<>();
+        int p = 0;
+        while (true) {
+            int rs = low.indexOf("<tr", p);
+            if (rs < 0) {
+                break;
+            }
+            int re = low.indexOf("</tr>", rs);
+            if (re < 0) {
+                return null;
+            }
+            re += 5;
+            rows.add(table.substring(rs, re));
+            ends.add(re);
+            p = re;
+        }
+        int hdr = -1;
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).toLowerCase(java.util.Locale.ROOT).contains("<th")) {
+                hdr = i;
+                break;
+            }
+        }
+        if (hdr < 0) {
+            return null;
+        }
+        List<String> headers = cells(rows.get(hdr), "th");
+        List<String> body = new ArrayList<>();
+        for (int i = hdr + 1; i < rows.size(); i++) {
+            if (rows.get(i).toLowerCase(java.util.Locale.ROOT).contains("<td")) {
+                body.add(rows.get(i));
+            }
+        }
+        int cols = headers.size();
+        // Below four rows sorting is noise; beyond these bounds the emitted copies stop being
+        // free. Both are judgement calls, stated rather than tuned.
+        if (cols < 2 || cols > 10 || body.size() < 4 || body.size() > 200) {
+            return null;
+        }
+        String[][] grid = new String[body.size()][];
+        for (int i = 0; i < body.size(); i++) {
+            List<String> c = cells(body.get(i), "td");
+            if (c.size() != cols) {
+                return null;
+            }
+            grid[i] = c.toArray(new String[0]);
+        }
+
+        // The column header IS the control. A separate button bar duplicates something the
+        // reader is already looking at, and clicking a header to sort is the convention every
+        // data grid has used for thirty years — so each <th>'s content is wrapped in a <label>
+        // pointing at that column's radio. The original <th ...> tag is reused verbatim so
+        // class, colspan and style survive.
+        StringBuilder ctl = new StringBuilder();
+        for (int i = 0; i <= cols; i++) {
+            ctl.append("<input type=\"radio\" name=\"").append(id).append("\" class=\"srtbox\" id=\"")
+               .append(id).append("-s").append(i).append("\"").append(i == 0 ? " checked" : "")
+               .append(">");
+        }
+
+        List<String> thTags = cellTags(rows.get(hdr), "th");
+        if (thTags.size() != cols) {
+            return null;
+        }
+        StringBuilder hrow = new StringBuilder("<tr>");
+        for (int c = 0; c < cols; c++) {
+            hrow.append(thTags.get(c))
+                .append("<label class=\"srth\" for=\"").append(id).append("-s").append(c + 1)
+                .append("\">").append(headers.get(c))
+                .append("<span class=\"srtcue\" aria-hidden=\"true\">")
+                .append(numericColumn(grid, c) ? "\u2193" : "\u2191")
+                .append("</span></label></th>");
+        }
+        hrow.append("</tr>");
+
+        // A reset back to the author's chosen order, revealed only once a sort is active. It has
+        // to exist: the order the author wrote is a decision about the data, and a radio group
+        // cannot be un-checked by clicking a label again.
+        String reset = "<label class=\"srtreset\" for=\"" + id + "-s0\">reset order</label>";
+
+        String head = stripStray(table.substring(0, ends.get(hdr)));
+        head = head.substring(0, head.length() - rows.get(hdr).length()) + hrow;
+        StringBuilder bodies = new StringBuilder("<tbody class=\"srt s0\">");
+        for (String r : body) {
+            bodies.append(r);
+        }
+        bodies.append("</tbody>");
+        for (int c = 0; c < cols; c++) {
+            final int col = c;
+            final boolean num = numericColumn(grid, c);
+            final String[][] g = grid;
+            Integer[] order = new Integer[body.size()];
+            for (int i = 0; i < order.length; i++) {
+                order[i] = i;
+            }
+            java.util.Arrays.sort(order, (x, y) -> {
+                if (num) {
+                    Double a = parseNum(g[x][col]);
+                    Double b = parseNum(g[y][col]);
+                    if (a == null && b == null) {
+                        return 0;
+                    }
+                    if (a == null) {
+                        return 1;
+                    }
+                    if (b == null) {
+                        return -1;
+                    }
+                    return Double.compare(b, a);
+                }
+                return stripTags(g[x][col]).compareToIgnoreCase(stripTags(g[y][col]));
+            });
+            bodies.append("<tbody class=\"srt s").append(c + 1).append("\">");
+            for (Integer i : order) {
+                bodies.append(body.get(i));
+            }
+            bodies.append("</tbody>");
+            String sel = "#" + id + "-s" + (c + 1) + ":checked ~ ";
+            css.append(sel).append("table tbody.s0{display:none}\n")
+               .append(sel).append("table tbody.s").append(c + 1)
+               .append("{display:table-row-group}\n")
+               .append(sel).append("table label[for=\"").append(id).append("-s").append(c + 1)
+               .append("\"]{color:var(--link)}\n")
+               .append(sel).append("table label[for=\"").append(id).append("-s").append(c + 1)
+               .append("\"] .srtcue{opacity:1}\n")
+               .append(sel).append(".srtreset{display:inline-block}\n");
+        }
+        return ctl + head + bodies.toString() + "</table>" + reset;
+    }
+
+    private static String stripStray(String s) {
+        return s.replaceAll("(?i)</?tbody[^>]*>", "");
+    }
+
+    /** Opening tags of each cell, so a rebuilt row keeps class/colspan/style. */
+    private static List<String> cellTags(String row, String tag) {
+        List<String> out = new ArrayList<>();
+        String low = row.toLowerCase(java.util.Locale.ROOT);
+        int p = 0;
+        while (true) {
+            int cs = low.indexOf("<" + tag, p);
+            if (cs < 0) {
+                break;
+            }
+            int gt = low.indexOf('>', cs);
+            if (gt < 0) {
+                break;
+            }
+            out.add(row.substring(cs, gt + 1));
+            p = gt + 1;
+        }
+        return out;
+    }
+
+    private static List<String> cells(String row, String tag) {
+        List<String> out = new ArrayList<>();
+        String low = row.toLowerCase(java.util.Locale.ROOT);
+        int p = 0;
+        while (true) {
+            int cs = low.indexOf("<" + tag, p);
+            if (cs < 0) {
+                break;
+            }
+            int gt = low.indexOf('>', cs);
+            int ce = low.indexOf("</" + tag + ">", gt);
+            if (gt < 0 || ce < 0) {
+                break;
+            }
+            out.add(row.substring(gt + 1, ce));
+            p = ce + tag.length() + 3;
+        }
+        return out;
+    }
+
+    private static String stripTags(String s) {
+        return TAG.matcher(s == null ? "" : s).replaceAll("").trim();
+    }
+
+    /**
+     * A column sorts numerically only if MOST of its non-empty cells parse. One stray "n/a"
+     * should not turn a column of dollars into a string sort, and two state names containing a
+     * digit should not make a name column numeric.
+     */
+    private static boolean numericColumn(String[][] grid, int col) {
+        int ok = 0;
+        int seen = 0;
+        for (String[] row : grid) {
+            String v = stripTags(row[col]);
+            if (v.isEmpty()) {
+                continue;
+            }
+            seen++;
+            if (parseNum(v) != null) {
+                ok++;
+            }
+        }
+        return seen > 0 && ok * 2 > seen;
+    }
+
+    private static Double parseNum(String raw) {
+        String v = stripTags(raw);
+        if (v.isEmpty()) {
+            return null;
+        }
+        boolean paren = v.startsWith("(") && v.endsWith(")");
+        StringBuilder d = new StringBuilder();
+        for (char ch : v.toCharArray()) {
+            if ((ch >= '0' && ch <= '9') || ch == '.' || ch == '-') {
+                d.append(ch);
+            }
+        }
+        if (d.length() == 0) {
+            return null;
+        }
+        try {
+            double val = Double.parseDouble(d.toString());
+            return paren ? -val : val;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String filterCss(List<Filter> filters) {
+        if (filters == null || filters.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("@media screen{\n");
+        for (Filter f : filters) {
+            String c = cssIdent(f.className);
+            sb.append("#flt-").append(c).append(":checked ~ main .").append(c)
+                .append("{display:none}\n");
+            sb.append("#flt-").append(c).append(":checked ~ main label[for=\"flt-").append(c)
+                .append("\"]{background:var(--bg);color:var(--muted);"
+                    + "box-shadow:inset 0 0 0 1px var(--rule)}\n");
+        }
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    /** Only [a-z0-9_-] survives, so a caller-supplied class cannot break out of the selector. */
+    private static String cssIdent(String s) {
+        if (s == null) {
+            return "x";
+        }
+        StringBuilder out = new StringBuilder();
+        for (char ch : s.toLowerCase(java.util.Locale.ROOT).toCharArray()) {
+            if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+                out.append(ch);
+            }
+        }
+        return out.length() == 0 ? "x" : out.toString();
+    }
+
     private static String css() {
         return ""
             + ":root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}\n"
@@ -251,6 +636,37 @@ final class ReportPage {
             + "font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;"
             + "background:color-mix(in srgb,var(--rule) 45%,transparent)}\n"
             + "pre code{background:none;padding:0;font-size:inherit}\n"
+            // The checkbox is offscreen rather than display:none — a display:none input takes
+            // no focus, and the label stops being reachable by keyboard.
+            // Non-default sort bodies are hidden in EVERY medium, and only revealed by a
+            // checked radio inside @media screen. Print therefore shows exactly one copy of the
+            // rows — the order the author wrote — instead of one copy per column.
+            + "tbody.srt:not(.s0){display:none}\n"
+            + ".srtbox{position:absolute;left:-9999px;width:1px;height:1px}\n"
+            // The header cell is the control, so it has to look like one: pointer cursor, a
+            // hover colour, and a direction cue that is faint until that column is the active
+            // sort. Nothing else is added to the page.
+            + "th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;"
+            + "color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}\n"
+            + "th .srth:hover{color:var(--link)}\n"
+            + "th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}\n"
+            + ".srtcue{font-size:.85em;opacity:.28;line-height:1}\n"
+            + ".srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;"
+            + "color:var(--muted);text-decoration:underline;text-underline-offset:2px}\n"
+            + ".srtreset:hover{color:var(--link)}\n"
+            + ".fltbox{position:absolute;left:-9999px;width:1px;height:1px}\n"
+            + ".filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;"
+            + "margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);"
+            + "border-radius:8px}\n"
+            + ".fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;"
+            + "text-transform:uppercase;color:var(--muted);margin-right:.15rem}\n"
+            + ".fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;"
+            + "font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;"
+            + "background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}\n"
+            + ".fltlabel:hover{color:var(--link)}\n"
+            + ".fltbox:focus-visible + * .fltlabel,"
+            + ".fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}\n"
+            + ".fltnote{font-size:.68rem;color:var(--muted)}\n"
             + "abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;"
             + "cursor:help}\n"
             + ".printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;"
@@ -280,6 +696,13 @@ final class ReportPage {
             + "thead{display:table-header-group}\n"
             + "tr{break-inside:avoid}\n"
             + ".printhint{display:none}\n"
+            // The filter bar is a control, not content. The rows it hides are NOT
+            // hidden here — see filterCss: the hiding rule lives in @media screen, so a
+            // printout is always the complete table regardless of toggle state, and
+            // always agrees with the n stated in the prose.
+            + ".filterbar{display:none}\n"
+            + ".srtcue{display:none}\n"
+            + ".srtreset{display:none}\n"
             + "}\n"
             + "code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;"
             + "background:color-mix(in srgb,var(--rule) 55%,transparent);"

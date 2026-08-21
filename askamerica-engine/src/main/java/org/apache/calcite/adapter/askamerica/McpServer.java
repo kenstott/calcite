@@ -1341,6 +1341,21 @@ public class McpServer {
         pubProps.set("sources", sourcesProp);
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
+        pubProps.set("filters", prop("array",
+            "Optional reader-operable row filters, as [{label, class, note}]. Each renders a "
+            + "toggle that hides the rows carrying that CSS class — apply the class yourself on "
+            + "the <tr> elements in your section HTML, so YOU decide which rows form a coherent "
+            + "group. Use it for the sensitivity a reader would otherwise have to take on trust: "
+            + "'Exclude DC', 'High-confidence matches only', 'Drop territories'.\n"
+            + "TWO THINGS TO GET RIGHT. A filter changes n, so any statistic in your prose stops "
+            + "matching the visible table — put the consequence in `note` ('n drops to 50; text "
+            + "figures use 51'), or better, include a companion row carrying the recomputed "
+            + "figure, since you already computed with and without the influential unit. And a "
+            + "filter is an aid to reading, not a substitute for stating the result: if excluding "
+            + "a unit changes your finding, say so in the text as well.\n"
+            + "Filters apply ON SCREEN ONLY. A printout is always the complete table regardless "
+            + "of which toggles are set, so the paper version cannot silently disagree with the "
+            + "n in its own prose."));
         tools.add(
             tool("publish_report",
             "Publish a complete answer — narrative, dashboard and citations — as one "
@@ -2055,10 +2070,21 @@ public class McpServer {
                         thumb = board.toPng(0.40);
                     }
                     chartPng = thumb;
+                    java.util.List<ReportPage.Filter> flts = new java.util.ArrayList<>();
+                    for (JsonNode fn : args.path("filters")) {
+                        String cls = fn.path("class").asText(null);
+                        String lbl = fn.path("label").asText(null);
+                        if (cls == null || cls.isEmpty() || lbl == null || lbl.isEmpty()) {
+                            throw new IllegalArgumentException(
+                                "each filter needs a non-empty 'label' and 'class'");
+                        }
+                        flts.add(new ReportPage.Filter(lbl, cls,
+                            fn.has("note") ? fn.get("note").asText(null) : null));
+                    }
                     String html = ReportPage.render(rTitle, rSub, secs, boardSvg, boardSvgUrl,
                         srcs,
                         args.has("footnote") ? args.get("footnote").asText(null) : null,
-                        args.has("byline") ? args.get("byline").asText(null) : null);
+                        args.has("byline") ? args.get("byline").asText(null) : null, flts);
                     String url = ArtifactServer.publish(
                         html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         "text/html; charset=utf-8", "html");
