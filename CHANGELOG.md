@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.78.2](https://github.com/kenstott/calcite/compare/engine-v0.78.1...engine-v0.78.2) (2026-08-21)
+
+
+### Bug Fixes
+
+* **file/duckdb,askamerica-engine,govdata:** raise DuckDB memory ceiling, make it adjustable at runtime ([3a2cb0f](https://github.com/kenstott/calcite/commit/3a2cb0f81e3de9e1b2ca8f8214f7e3f93622706c))
+* **govdata/econ:** fix R2 read path and drop the dependency-ordering bug it exposed ([79191ad](https://github.com/kenstott/calcite/commit/79191ad6c5ffd957b39d4b12bdc3313266e4c2b0))
+
 ## [0.78.1](https://github.com/kenstott/calcite/compare/engine-v0.78.0...engine-v0.78.1) (2026-08-20)
 
 
