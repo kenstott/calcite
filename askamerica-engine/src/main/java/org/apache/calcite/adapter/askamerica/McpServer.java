@@ -387,7 +387,8 @@ public class McpServer {
             "Query US government data using PostgreSQL-compatible SQL. "
             + "Schemas: sec (SEC filings/XBRL), geo (TIGER/FIPS), "
             + "econ (BLS/BEA), census (ACS), crime (FBI UCR), "
-            + "weather (NOAA GHCND), ref (NAICS/SIC), fec (campaign finance), "
+            + "weather (NOAA GHCND), fec (campaign finance), "
+            + "ref (THE JOIN LAYER — see below — plus NAICS/SIC/calendar lookups), "
             + "fedregister, officials (Congress.gov members/nominations, FJC judges), "
             + "cyber_vuln (NVD CVEs), cyber_threat (CISA KEV), "
             + "energy (EIA), health (CDC/CMS), edu (NCES), econ_reference, "
@@ -410,6 +411,23 @@ public class McpServer {
             + "can be judged; correlation is not causation. For cross-dataset relations use "
             + "fetch_aligned_series to align series on a shared date grain or FIPS key, and "
             + "resolve_geo to map place names to FIPS before joining. "
+            + "THE `ref` SCHEMA IS THE JOIN LAYER, AND IT IS WHERE THIS SERVER'S HARDEST "
+            + "QUESTIONS ARE ANSWERED. Any question of the form 'these firms, across those two "
+            + "sources' is a join, and ref is what makes it exact. "
+            + "ref.canonical_org_entity is ONE ROW PER REAL-WORLD ORGANISATION with one nullable "
+            + "foreign key per source — sec_cik, patents_assignee_id, fec_committee_id, "
+            + "eia_utility_id, fmcsa_dot_number, exempt_org_ein, ipeds_unitid, "
+            + "clinical_trials_nct_id, nsf_herd_inst_id and more, each with a _confidence "
+            + "sibling — so 'every firm that files with the SEC and holds patents' is a "
+            + "predicate over columns, not a name-matching exercise. "
+            + "ref.current_gleif_parents walks corporate ownership; ref.gleif_cik_mapping "
+            + "bridges LEI to SEC CIK; ref.ticker_instrument_map and ref.figi_instruments cover "
+            + "securities; ref.vectorized_chunks indexes text across schemas on a generalised "
+            + "(source_schema, source_table, stringified_fk) key. "
+            + "BEFORE MATCHING ANYTHING BY NAME, CHECK WHETHER ref ALREADY CARRIES THE KEY. "
+            + "resolve_entity and resolve_geo exist for the case where a PERSON handed you a "
+            + "name; they are heuristics, and choosing one over an exact join because it is the "
+            + "more visible tool is the commonest way a precise question becomes a fuzzy one. "
             + "corr()/regr_*() only handle ONE predictor. For more than one predictor, a "
             + "suspected instrumented/endogenous relationship, a treatment-vs-control policy "
             + "comparison, or a significance test rather than a bare descriptive statistic, "
@@ -637,6 +655,9 @@ public class McpServer {
         resolveProps.set("term", prop("string",
             "Place text or code: a name ('California'), abbreviation ('CA'), 2-digit state FIPS "
             + "('06'), 5-digit county FIPS ('06037'), or ZCTA ('90012')."));
+        resolveProps.set("terms", prop("array",
+            "MANY place names at once, resolved together. Rows carry query_term, and the "
+            + "response lists any input that resolved to nothing."));
         resolveProps.set("level", prop("string",
             "'state' (geo.state_ref), 'county' (geo.counties), or 'zcta' (geo.zcta_ref). Default 'state'."));
         resolveProps.set("within_state", prop("string",
@@ -646,12 +667,20 @@ public class McpServer {
             "Resolve a free-text place name to canonical FIPS identifiers "
             + "(state_fips / county_fips / zcta). Call before joining a user-named place to "
             + "census/econ/geo tables so the join keys on the right code, not a guess.",
-            schema(resolveProps, new String[]{"term"})));
+            schema(resolveProps, new String[]{})));
 
         ObjectNode entityProps = MAPPER.createObjectNode();
         entityProps.set("term", prop("string",
             "Name or identifier: an org/person name or fragment ('Alphabet', 'berkshire'), an "
             + "LEI, a SEC CIK ('0000320193' or '320193'), an FEC committee id, or an EIN."));
+        entityProps.set("terms", prop("array",
+            "MANY names or identifiers at once — the efficient form, and the one to reach for. "
+            + "Resolved in a SINGLE scan, not one lookup per name, so resolving a whole cast "
+            + "costs about what one lookup costs. Every returned row carries query_term, the "
+            + "input that reached it, and the response also lists inputs that matched NOTHING "
+            + "— those would otherwise be silently absent from every figure you join "
+            + "downstream. Max 100 per call. Use this instead of term whenever you have more "
+            + "than one name."));
         entityProps.set("type", prop("string",
             "'org' (default, ref.canonical_org_entity) or 'person' (ref.canonical_person_entity)."));
         entityProps.set("source_schema", prop("string",
@@ -667,20 +696,64 @@ public class McpServer {
             + "many entities; every candidate is returned rather than assuming the first is right."));
         tools.add(
             tool("resolve_entity",
-            "Resolve one name or identifier to a canonical entity that spans EVERY source it "
-            + "appears in — one row per real-world org/person, carrying its LEI, SEC CIK, FEC "
-            + "committee, patent assignee, EIN, EIA utility, FMCSA DOT, FAA registrant, SBA "
-            + "borrower/lender and more, each with a match confidence. Call before joining a "
-            + "user-named company or person to any schema, exactly as resolve_geo is called "
-            + "before a place join: the colloquial name is rarely the registered one, and the "
-            + "key each schema carries differs per source. Backed by ref.canonical_org_entity / "
-            + "ref.canonical_person_entity (the resolved layer) — not a name LIKE over one "
-            + "registry. Use entity_relationships for corporate parents and siblings.",
-            schema(entityProps, new String[]{"term"})));
+            "Resolve a NAME SOMEONE GAVE YOU to a canonical entity — one row per real-world "
+            + "org/person, carrying its LEI, SEC CIK, FEC committee, patent assignee, EIN, EIA "
+            + "utility, FMCSA DOT, FAA registrant, SBA borrower/lender and more, each with a "
+            + "match confidence. Call before joining a user-named company to any schema, exactly "
+            + "as resolve_geo is called before a place join: the colloquial name is rarely the "
+            + "registered one, and the key each schema carries differs per source.\n\n"
+            + "DO NOT USE THIS TO BUILD A POPULATION. This tool matches on names, and name "
+            + "matching is a heuristic with failure modes you then have to review around. If you "
+            + "want 'every firm that files with the SEC and holds patents', that is an EXACT "
+            + "SQL join and needs no matching at all: ref.canonical_org_entity is a wide table "
+            + "with one nullable foreign key per source — sec_cik, patents_assignee_id, "
+            + "fec_committee_id, eia_utility_id, fmcsa_dot_number, exempt_org_ein, ipeds_unitid, "
+            + "clinical_trials_nct_id and ~15 more, each with a _confidence sibling. Select on "
+            + "those columns being non-null and join them to the source tables directly:\n"
+            + "  SELECT canonical_entity_id, canonical_name, sec_cik, patents_assignee_id\n"
+            + "  FROM ref.canonical_org_entity\n"
+            + "  WHERE sec_cik IS NOT NULL AND patents_assignee_id IS NOT NULL\n"
+            + "    AND patents_assignee_id_confidence = 'high'\n"
+            + "Use this tool when a person named one company and you need its keys. Use the "
+            + "table when you are defining a set. Reaching for the name matcher because it is "
+            + "the tool in the list, while an exact join sits in a column, is the most common "
+            + "way to turn a precise question into a fuzzy one.\n\n"
+            + "Use entity_relationships for corporate parents and siblings.",
+            schema(entityProps, new String[]{})));
+
+        ObjectNode semProps = MAPPER.createObjectNode();
+        semProps.set("query", prop("string",
+            "What you are looking for, in plain language — a phrase, not keywords. "
+            + "'a ransomware attack that disrupted operations' works; 'ransomware' does not, "
+            + "because it matches every risk factor that mentions the word."));
+        semProps.set("k", prop("integer",
+            "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
+            + "the top hits are frequently boilerplate, so a short list can contain no real "
+            + "match at all."));
+        semProps.set("include_text", prop("boolean",
+            "Return the chunk text and filing metadata alongside each hit (default true). "
+            + "Set false for ids and scores only, which is much faster."));
+        tools.add(
+            tool("semantic_search",
+            "Search the FILING TEXT by meaning rather than by keyword — MD&A, risk factors, "
+            + "footnotes and earnings-call passages across sec, ref, fedregister and "
+            + "cyber_threat. Use this instead of a LIKE over chunk_text: wording varies "
+            + "('unauthorized access', 'threat actor', 'security event' all describe one thing) "
+            + "and a keyword misses every phrasing you did not think of. Returns chunk_id, a "
+            + "cosine score, and by default the text and filing metadata, so a caller can read "
+            + "what matched. NOT a catalog search — use search_catalog to find TABLES. "
+            + "IMPORTANT: proximity is not occurrence. A passage saying a company MAY suffer an "
+            + "event scores as highly as one saying it DID, because the difference is modality, "
+            + "not topic. Read the returned text and decide; do not treat a high score as "
+            + "evidence the thing happened.",
+            schema(semProps, new String[]{"query"})));
 
         ObjectNode relProps = MAPPER.createObjectNode();
         relProps.set("lei", prop("string",
             "The entity's 20-character LEI. Get it from resolve_entity when you have a name."));
+        relProps.set("leis", prop("array",
+            "MANY LEIs at once. After confirming a set of entities with resolve_entity, expand "
+            + "them all in one call rather than one per entity. Rows carry query_lei."));
         relProps.set("direction", prop("string",
             "'parents' (default) — this entity's direct and ultimate parents; 'children' — "
             + "entities this one consolidates; 'siblings' — entities sharing its direct parent."));
@@ -694,7 +767,7 @@ public class McpServer {
             + "group structure lives in GLEIF, not in the filing. Restricted to ACTIVE, "
             + "PUBLISHED ownership edges (fund/branch/feeder edges excluded). Join the returned "
             + "LEIs back through resolve_entity to reach SEC/FEC/patent keys.",
-            schema(relProps, new String[]{"lei"})));
+            schema(relProps, new String[]{})));
 
         ObjectNode inflProps = MAPPER.createObjectNode();
         inflProps.set("base_year", prop("integer",
@@ -1621,17 +1694,19 @@ public class McpServer {
                     break;
                 }
                 case "resolve_geo": {
-                    String term = args.path("term").asText();
                     String level = args.has("level") && !args.get("level").isNull()
                         ? args.get("level").asText() : "state";
                     String withinState = args.has("within_state") && !args.get("within_state").isNull()
                         ? args.get("within_state").asText() : null;
-                    log.println("[askamerica-mcp] tool=resolve_geo term=" + term + " level=" + level);
-                    text = resolveGeo(term, level, withinState);
+                    final String fLevel = level;
+                    final String fWithin = withinState;
+                    log.println("[askamerica-mcp] tool=resolve_geo terms="
+                        + resolverTerms(args, "term", "terms").size() + " level=" + level);
+                    text = resolveMany(args, "term", "terms", "query_term",
+                        t -> resolveGeo(t, fLevel, fWithin));
                     break;
                 }
                 case "resolve_entity": {
-                    String term = args.path("term").asText();
                     String entType = args.has("type") && !args.get("type").isNull()
                         ? args.get("type").asText() : "org";
                     int entLimit = args.has("limit") && !args.get("limit").isNull()
@@ -1641,20 +1716,58 @@ public class McpServer {
                         ? args.get("source_schema").asText() : null;
                     String entJur = args.has("jurisdiction") && !args.get("jurisdiction").isNull()
                         ? args.get("jurisdiction").asText() : null;
-                    log.println("[askamerica-mcp] tool=resolve_entity term=" + term
+                    final String fType = entType;
+                    final int fLimit = entLimit;
+                    final String fSchema = entSchema;
+                    final String fJur = entJur;
+                    log.println("[askamerica-mcp] tool=resolve_entity terms="
+                        + resolverTerms(args, "term", "terms").size()
                         + " type=" + entType + " schema=" + entSchema + " jur=" + entJur);
-                    text = resolveEntity(term, entType, entLimit, entSchema, entJur);
+                    java.util.List<String> entTerms = resolverTerms(args, "term", "terms");
+                    if (args.path("terms").isArray() && entTerms.size() > 1
+                            && "org".equals(fType)) {
+                        // One scan for the whole cast. See buildResolveEntityBulkSql — looping
+                        // the single-term query would be one pass over the bridge per name.
+                        boolean cut = entTerms.size() > MAX_RESOLVER_TERMS;
+                        java.util.List<String> use = cut
+                            ? entTerms.subList(0, MAX_RESOLVER_TERMS) : entTerms;
+                        String rows = runSqlOn(buildResolveEntityBulkSql(
+                            use, fType, fLimit, fSchema, fJur), MAX_LIMIT);
+                        text = tagBulkResult(rows, use, "query_term", cut);
+                    } else {
+                        text = resolveMany(args, "term", "terms", "query_term",
+                            t -> resolveEntity(t, fType, fLimit, fSchema, fJur));
+                    }
+                    diagnostics = resolveTieDiagnostics(text);
+                    break;
+                }
+                case "semantic_search": {
+                    String semQ = args.path("query").asText("");
+                    if (semQ.trim().isEmpty()) {
+                        throw new IllegalArgumentException("query must be non-empty");
+                    }
+                    int semK = args.has("k") && !args.get("k").isNull()
+                        ? Math.min(Math.max(1, args.get("k").asInt()), 50) : 10;
+                    boolean semText = !args.has("include_text")
+                        || args.get("include_text").isNull()
+                        || args.get("include_text").asBoolean(true);
+                    log.println("[askamerica-mcp] tool=semantic_search k=" + semK
+                        + " text=" + semText);
+                    text = semanticSearch(semQ, semK, semText);
+                    diagnostics = semanticSearchDiagnostics();
                     break;
                 }
                 case "entity_relationships": {
-                    String relLei = args.path("lei").asText();
                     String relDir = args.has("direction") && !args.get("direction").isNull()
                         ? args.get("direction").asText() : "parents";
                     int relLimit = args.has("limit") && !args.get("limit").isNull()
                         ? args.get("limit").asInt() : 50;
-                    log.println("[askamerica-mcp] tool=entity_relationships lei=" + relLei
-                        + " direction=" + relDir);
-                    text = entityRelationships(relLei, relDir, relLimit);
+                    final String fDir = relDir;
+                    final int fRelLimit = relLimit;
+                    log.println("[askamerica-mcp] tool=entity_relationships leis="
+                        + resolverTerms(args, "lei", "leis").size() + " direction=" + relDir);
+                    text = resolveMany(args, "lei", "leis", "query_lei",
+                        l -> entityRelationships(l, fDir, fRelLimit));
                     break;
                 }
                 case "fetch_aligned_series": {
@@ -3510,6 +3623,312 @@ public class McpServer {
      * a caller can see at a glance whether the entity reaches the schema they intend to join,
      * without reading twenty mostly-null identifier columns.
      */
+    /**
+     * Resolve MANY names in one scan, rather than one scan per name.
+     *
+     * <p>Looping the single-term query would be N passes over a 1.07M-row bridge for an N-name
+     * cast, and resolution is meant to be the routine pre-step before any org join — so the
+     * bulk path has to cost about what one lookup costs, or callers go back to a name LIKE and
+     * the whole resolution layer is decoration.
+     *
+     * <p>The predicates stay LITERAL PREFIXES, one per term, OR'd into a single WHERE. That is
+     * the load-bearing detail: the single-term version documents that a leading wildcard
+     * defeats every Parquet zone-map prune and forced a 168-second full scan, and joining the
+     * bridge against a VALUES list on {@code LIKE t.norm || '%'} would reintroduce exactly that
+     * — a non-constant pattern prunes nothing. N literal prefixes in one disjunction keep the
+     * pruning and collapse N passes into one.
+     *
+     * <p>Attribution is a CASE ladder over the same normalised terms, so every row carries the
+     * query term that reached it. Grouping is by (query_term, entity_key) rather than
+     * entity_key alone: when two input names resolve to the same entity that is a finding the
+     * reviewer needs to see, not a duplicate to collapse.
+     */
+    /**
+     * Wrap a bulk result set, reporting which inputs found nothing.
+     *
+     * <p>The unmatched list is the point. A caller pins an identifier set from this result and
+     * joins on it; an input that silently produced no row is a firm absent from every figure
+     * downstream, and nothing later in the pipeline can notice.
+     */
+    private static String tagBulkResult(String rowsJson, java.util.List<String> terms,
+            String tagField, boolean truncated) throws Exception {
+        JsonNode rows = MAPPER.readTree(rowsJson);
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        if (rows.isArray()) {
+            for (JsonNode r : rows) {
+                JsonNode t = r.get(tagField);
+                if (t != null && !t.isNull()) {
+                    seen.add(t.asText());
+                }
+            }
+        }
+        ArrayNode unmatched = MAPPER.createArrayNode();
+        for (String t : terms) {
+            if (!seen.contains(t)) {
+                unmatched.add(t);
+            }
+        }
+        ObjectNode out = MAPPER.createObjectNode();
+        out.set("results", rows);
+        out.set("unmatched", unmatched);
+        out.put("truncated", truncated);
+        out.put("note", "Resolved in a single scan. Every row carries " + tagField + ", the "
+            + "input that reached it. 'unmatched' lists inputs that resolved to nothing — they "
+            + "are absent from 'results' and will be silently missing from anything you join "
+            + "downstream unless you handle them. Review candidates before pinning an "
+            + "identifier set: high confidence means the name normalised to the same string, "
+            + "not that it is the organisation you meant. Then expand each confirmed entity "
+            + "with entity_relationships — subsidiaries rarely share a name with the parent, "
+            + "and no name match will find them."
+            + (truncated ? " INPUT TRUNCATED at " + MAX_RESOLVER_TERMS + " terms." : ""));
+        return MAPPER.writeValueAsString(out);
+    }
+
+    /**
+     * Match a GLEIF jurisdiction, treating a bare country code as covering its subdivisions.
+     *
+     * <p>GLEIF registers most US corporations under an ISO 3166-2 subdivision — Apple Inc. is
+     * {@code US-CA}, Caterpillar {@code US-DE}, Merck {@code US-NJ} — while some entities carry
+     * the bare {@code US}. Exact matching therefore made {@code jurisdiction: "US"} return
+     * credit unions and miss every major filer, which is the opposite of what a caller asking
+     * for US entities means. A two-character code now matches itself OR any subdivision of it;
+     * a fully-qualified code still matches exactly, so {@code US-DE} stays precise.
+     */
+    private static String jurisdictionPredicate(String column, String jurisdiction) {
+        String j = jurisdiction.trim().toUpperCase(java.util.Locale.ROOT);
+        if (j.length() == 2) {
+            return "(upper(" + column + ") = " + sqlStr(j)
+                + " OR upper(" + column + ") LIKE " + sqlStr(j + "-%") + ")";
+        }
+        return "upper(" + column + ") = " + sqlStr(j);
+    }
+
+    /**
+     * Meaning-based search over filing prose, exposed as a tool rather than only as SQL.
+     *
+     * <p>{@code SEMANTIC_SEARCH(query, k)} has existed as a Calcite table function for some time
+     * and is documented in the {@code vectorized_chunks} table comment. That was not enough: a
+     * caller enumerating this server's tools finds nothing semantic and concludes the capability
+     * is absent — which is exactly what happened during an evaluation, twice, to a reader who had
+     * the catalog search that would have corrected it. The tool list is the surface people read,
+     * so a capability that is not on it does not exist in practice.
+     *
+     * <p>The join back to {@code vectorized_chunks} is folded in here because the two-step —
+     * search, then look up each {@code chunk_id} — is the step a caller skips, and skipping it
+     * means ranking passages nobody read.
+     */
+    private static String semanticSearch(String query, int k, boolean includeText)
+            throws Exception {
+        String q = sqlStr(query.trim());
+        if (!includeText) {
+            return runSqlOn("SELECT chunk_id, score FROM TABLE(SEMANTIC_SEARCH(" + q + ", " + k
+                + ")) ORDER BY score DESC", k);
+        }
+        return runSqlOn(
+            "SELECT s.chunk_id, s.score, v.cik, v.filing_date, v.source_type, v.section, "
+            + "SUBSTRING(v.chunk_text, 1, 600) AS text "
+            + "FROM TABLE(SEMANTIC_SEARCH(" + q + ", " + k + ")) s "
+            + "LEFT JOIN sec.vectorized_chunks v ON v.chunk_id = s.chunk_id "
+            + "ORDER BY s.score DESC", k);
+    }
+
+    /**
+     * The caution that has to travel with every result, because the failure is invisible.
+     *
+     * <p>Measured against this corpus: searching "ransomware attack disrupted operations" returns
+     * "the impact of POSSIBLE security breaches" at 0.874 and "our ability to MANAGE RISKS RELATED
+     * TO security breaches" at 0.846. Both are forward-looking boilerplate. Embeddings encode
+     * topic, and the difference between an event and a risk factor is modality — so no threshold
+     * separates them, and a caller who filters on score alone builds a population of hypotheticals.
+     */
+    private static ObjectNode semanticSearchDiagnostics() {
+        ObjectNode w = MAPPER.createObjectNode();
+        w.put("type", "semantic_match_is_not_occurrence");
+        w.put("severity", QuestionDiagnostics.CAUTION);
+        w.put("note", "A high cosine score means the passage is ABOUT this topic, not that the "
+            + "event happened. A risk factor saying a company MAY suffer an incident scores as "
+            + "highly as a disclosure saying it DID — measured on this corpus, the top two hits "
+            + "for 'ransomware attack disrupted operations' were both forward-looking boilerplate, "
+            + "at 0.874 and 0.846. The difference is modality ('possible', 'may') versus a dated "
+            + "past-tense event, and embeddings encode topic, so no score threshold separates "
+            + "them. Read the returned text and classify each hit yourself. Where a structural "
+            + "filter exists — a form type, a filing section — prefer it for defining a "
+            + "population and use this to characterise what you found, not to find it.");
+        ObjectNode inner = MAPPER.createObjectNode();
+        ArrayNode warnings = MAPPER.createArrayNode();
+        warnings.add(w);
+        inner.set("warnings", warnings);
+        inner.put("basis", "Standing property of embedding search, not a measurement of this result.");
+        ObjectNode out = MAPPER.createObjectNode();
+        out.set("diagnostics", inner);
+        return out;
+    }
+
+    private static String buildResolveEntityBulkSql(java.util.List<String> terms, String type,
+            int limit, String sourceSchema, String jurisdiction) {
+        String kind = (type == null || type.isEmpty()) ? "org"
+            : type.toLowerCase(java.util.Locale.ROOT);
+        if (!"org".equals(kind)) {
+            throw new IllegalArgumentException(
+                "bulk resolution is implemented for type 'org'; got " + type);
+        }
+        // Per-term cap, applied with a window function below. A single global FETCH FIRST
+        // over an ORDER BY query_term starves the terms that sort last — the first names in
+        // the list eat the whole budget and the rest are reported as UNMATCHED, which is a
+        // wrong answer wearing the label that exists to prevent wrong answers.
+        int perTerm = Math.min(Math.max(1, limit), 200);
+        java.util.List<String> norms = new java.util.ArrayList<>();
+        for (String t : terms) {
+            norms.add(normalizeOrgName(t.trim()));
+        }
+        StringBuilder where = new StringBuilder();
+        StringBuilder qterm = new StringBuilder("CASE ");
+        StringBuilder score = new StringBuilder("CASE ");
+        for (int i = 0; i < terms.size(); i++) {
+            String raw = terms.get(i).trim();
+            String nl = sqlStr(norms.get(i));
+            String pfx = sqlStr(norms.get(i) + "%");
+            // A ticker is not indexed as an identifier — the bridge's sec_cik is populated only
+            // for EIN-path matches — so it is resolved to its registered name and matched as a
+            // name, the same treatment the single-term path gives it.
+            String alias = tickerAlias(raw);
+            boolean hasAlias = alias != null && !alias.isEmpty();
+            String aliasPfx = hasAlias ? sqlStr(alias + "%") : null;
+            // An LEI or a CIK is exact by construction and bypasses name scoring. Without this
+            // the bulk path could resolve names but not identifiers, so a caller pinning a set
+            // of LEIs from a previous step could not feed them back in.
+            String padded = sqlStr(raw);
+            if (raw.matches("\\d{1,10}")) {
+                StringBuilder pad = new StringBuilder(raw);
+                while (pad.length() < 10) {
+                    pad.insert(0, '0');
+                }
+                padded = sqlStr(pad.toString());
+            }
+            String idHit = "upper(lei) = " + sqlStr(raw.toUpperCase(java.util.Locale.ROOT))
+                + " OR sec_cik = " + padded;
+
+            String anyMatch = "(" + idHit + " OR source_name_normalized LIKE " + pfx
+                + (hasAlias ? " OR source_name_normalized LIKE " + aliasPfx : "") + ")";
+            if (i > 0) {
+                where.append(" OR ");
+            }
+            where.append(anyMatch);
+            // CAST to VARCHAR per branch: a CASE over bare literals of different lengths
+            // unifies to CHAR(n) and pads the shorter ones, so "Capital One" comes back as
+            // "Capital One   " and no longer equals the input the caller sent. That silently
+            // breaks the row-to-input mapping AND makes every term look unmatched.
+            qterm.append("WHEN ").append(anyMatch)
+                 .append(" THEN CAST(").append(sqlStr(raw)).append(" AS VARCHAR) ");
+            score.append("WHEN ").append(idHit).append(" THEN 1.0 ")
+                 .append("WHEN source_name_normalized = ").append(nl).append(" THEN 1.0 ");
+            if (hasAlias) {
+                score.append("WHEN source_name_normalized = ").append(sqlStr(alias))
+                     .append(" THEN 1.0 ");
+            }
+            score.append("WHEN source_name_normalized LIKE ").append(pfx)
+                 .append(" THEN JARO_WINKLER(source_name_normalized, ").append(nl).append(") ");
+            if (hasAlias) {
+                score.append("WHEN source_name_normalized LIKE ").append(aliasPfx)
+                     .append(" THEN JARO_WINKLER(source_name_normalized, ")
+                     .append(sqlStr(alias)).append(") ");
+            }
+        }
+        qterm.append("ELSE CAST(NULL AS VARCHAR) END");
+        score.append("ELSE 0 END");
+
+        return "WITH raw AS ("
+            + "SELECT COALESCE(lei, sec_cik, source_name_normalized) AS entity_key, "
+            + qterm + " AS query_term, lei, sec_cik, gleif_legal_name, match_score, "
+            + "match_method, match_confidence, source_schema, source_name_raw, "
+            + score + " AS name_score "
+            + "FROM ref.entity_org_bridge WHERE (" + where + ")"
+            + (sourceSchema == null || sourceSchema.isEmpty() ? ""
+                : " AND source_schema = " + sqlStr(sourceSchema)) + "), "
+            + "sch AS (SELECT DISTINCT query_term, entity_key, source_schema FROM raw), "
+            + "nm AS (SELECT DISTINCT query_term, entity_key, source_name_raw FROM raw), "
+            + "agg_sch AS (SELECT query_term, entity_key, string_agg(source_schema) AS matched_in "
+            + "FROM sch GROUP BY query_term, entity_key), "
+            + "agg_nm AS (SELECT query_term, entity_key, string_agg(source_name_raw) AS variants, "
+            + "COUNT(*) AS name_variants FROM nm GROUP BY query_term, entity_key), "
+            + "m AS (SELECT r.query_term, r.entity_key, MAX(r.lei) AS lei, "
+            + "MAX(r.sec_cik) AS sec_cik, MAX(r.gleif_legal_name) AS gleif_legal_name, "
+            + "MAX(r.match_score) AS best_match_score, MAX(r.match_method) AS match_method, "
+            + "MAX(r.match_confidence) AS match_confidence, MAX(r.name_score) AS name_score, "
+            + "COUNT(*) AS mentions FROM raw r WHERE r.name_score > 0 "
+            + "GROUP BY r.query_term, r.entity_key), "
+            + "joined AS (SELECT m.query_term, c.canonical_entity_id, "
+            + "COALESCE(c.canonical_name, m.gleif_legal_name, m.entity_key) AS canonical_name, "
+            + "m.lei, m.sec_cik, c.fec_committee_id, c.patents_assignee_id, c.exempt_org_ein, "
+            + "c.eia_utility_id, c.fmcsa_dot_number, m.name_score, m.best_match_score, "
+            + "m.match_method, m.match_confidence, m.mentions, agg_nm.name_variants, "
+            + "agg_sch.matched_in, agg_nm.variants, "
+            // The discriminators a reader actually judges on, and the reason no reranking model
+            // is needed for the common case. Six entities named "Apple" all score 1.0 on the
+            // name; five are trusts and management shells in Panama, Switzerland, Cayman, Jersey
+            // and Canada, and one is in Cupertino. That distinction is in the data — it was
+            // simply never returned, so neither a person nor a model calling this tool could see
+            // it. jurisdiction was already accepted as a FILTER, which is useless to a caller
+            // who cannot see the values to filter on.
+            + "ge2.entity_status, ge2.jurisdiction, ge2.headquarters_city, "
+            + "ge2.entity_legal_form, "
+            // How many INDEPENDENT registries know this entity. Used to break ties between
+            // equal name scores, and returned so the ranking can be inspected rather than
+            // trusted. See the ORDER BY below for why it beats `mentions`.
+            + "(CASE WHEN m.lei IS NOT NULL THEN 1 ELSE 0 END "
+            + "+ CASE WHEN m.sec_cik IS NOT NULL THEN 1 ELSE 0 END "
+            + "+ CASE WHEN c.fec_committee_id IS NOT NULL THEN 1 ELSE 0 END "
+            + "+ CASE WHEN c.patents_assignee_id IS NOT NULL THEN 1 ELSE 0 END "
+            + "+ CASE WHEN c.exempt_org_ein IS NOT NULL THEN 1 ELSE 0 END "
+            + "+ CASE WHEN c.eia_utility_id IS NOT NULL THEN 1 ELSE 0 END "
+            + "+ CASE WHEN c.fmcsa_dot_number IS NOT NULL THEN 1 ELSE 0 END) AS identifier_count "
+            + "FROM m "
+            + (jurisdiction == null || jurisdiction.isEmpty() ? ""
+                : " JOIN ref.gleif_entities ge ON ge.lei = m.lei AND "
+                  + jurisdictionPredicate("ge.jurisdiction", jurisdiction) + " ")
+            + "LEFT JOIN agg_sch ON agg_sch.entity_key = m.entity_key "
+            + "AND agg_sch.query_term = m.query_term "
+            + "LEFT JOIN agg_nm ON agg_nm.entity_key = m.entity_key "
+            + "AND agg_nm.query_term = m.query_term "
+            + "LEFT JOIN ref.canonical_org_entity c "
+            + "ON c.canonical_entity_id = m.entity_key "
+            + "LEFT JOIN ref.gleif_entities ge2 ON ge2.lei = m.lei), "
+            // Tie-break on identifier breadth, NOT on mentions alone.
+            //
+            // Exact-normalised matches all score 1.0, so the tie-break decides what a caller
+            // sees first. `mentions` counts how often a NAME STRING appears in the bridge,
+            // which rewards entities with many spelling variants — that is why resolving
+            // "AAPL" put APPLE MANAGEMENT INC., Apple Trust and Apple Ltd above Apple Inc.,
+            // all six at 1.0.
+            //
+            // identifier_count instead counts how many INDEPENDENT registries know the
+            // entity. It is a prior on "this is a substantial organisation", and it is
+            // deliberately domain-neutral: boosting SEC registration specifically would
+            // privilege the ~20k entities with a CIK over 9.03M without, and the registry is
+            // mostly exempt orgs (1.81M EINs), carriers and borrowers — public companies are
+            // the rare case here, not the common one.
+            //
+            // It only ever breaks a tie: name_score leads the sort, so a better-matching name
+            // always outranks a better-connected entity. A prior that could override name
+            // evidence would eventually return a well-connected entity for a name that did
+            // not match.
+            + "ranked AS (SELECT query_term, canonical_entity_id, canonical_name, lei, "
+            + "sec_cik, fec_committee_id, patents_assignee_id, exempt_org_ein, eia_utility_id, "
+            + "fmcsa_dot_number, name_score, best_match_score, match_method, match_confidence, "
+            + "mentions, name_variants, matched_in, variants, identifier_count, "
+            + "entity_status, jurisdiction, headquarters_city, entity_legal_form, "
+            + "ROW_NUMBER() OVER (PARTITION BY query_term "
+            + "ORDER BY name_score DESC, identifier_count DESC, mentions DESC) AS rn "
+            + "FROM joined) "
+            + "SELECT query_term, canonical_entity_id, canonical_name, lei, sec_cik, "
+            + "fec_committee_id, patents_assignee_id, exempt_org_ein, eia_utility_id, "
+            + "fmcsa_dot_number, name_score, identifier_count, entity_status, jurisdiction, "
+            + "headquarters_city, entity_legal_form, best_match_score, match_method, "
+            + "match_confidence, mentions, name_variants, matched_in, variants "
+            + "FROM ranked WHERE rn <= " + perTerm + " "
+            + "ORDER BY query_term, name_score DESC, identifier_count DESC, mentions DESC";
+    }
+
     private static String buildResolveEntitySql(String term, String type, int limit,
             String sourceSchema, String jurisdiction, boolean exactOnly,
             String aliasNorm) {
@@ -3647,8 +4066,8 @@ public class McpServer {
             + "m.mentions, agg_nm.name_variants, agg_sch.matched_in, agg_nm.variants "
             + "FROM m "
             + (jurisdiction == null || jurisdiction.isEmpty() ? ""
-                : " JOIN ref.gleif_entities ge ON ge.lei = m.lei AND upper(ge.jurisdiction) = "
-                  + sqlStr(jurisdiction.toUpperCase(java.util.Locale.ROOT)) + " ")
+                : " JOIN ref.gleif_entities ge ON ge.lei = m.lei AND "
+                  + jurisdictionPredicate("ge.jurisdiction", jurisdiction) + " ")
             + "LEFT JOIN agg_sch ON agg_sch.entity_key = m.entity_key "
             + "LEFT JOIN agg_nm ON agg_nm.entity_key = m.entity_key "
             // Equi-join on a single key, NOT a disjunction. canonical_entity_id is documented
@@ -3752,19 +4171,242 @@ public class McpServer {
         }
     }
 
+    /** Upper bound on inputs to one bulk resolver call. */
+    private static final int MAX_RESOLVER_TERMS = 100;
+
+    /**
+     * Gather the inputs to a resolver call from either the scalar key or the array key.
+     *
+     * <p>Resolution is meant to be a pre-step: resolve the whole cast, review it, then join on
+     * confirmed identifiers. One call per name makes that pre-step cost N round trips for an
+     * N-firm study, which is precisely the pressure that sends a caller back to a name LIKE —
+     * so the correct path has to be the cheap one or it does not get taken.
+     *
+     * <p>Reviewing in bulk is also better review. Five hundred candidates in one table can be
+     * scanned, sorted and deduplicated; five hundred separate responses cannot, and two names
+     * collapsing onto one entity is invisible unless they are seen together.
+     */
+    /**
+     * Tell the caller when resolution did not actually decide anything.
+     *
+     * <p>MCP is client-driven: this server cannot call back, cannot ask a follow-up, and cannot
+     * rerank on the caller's behalf. Its only lever is what it returns. So when several
+     * candidates tie on the name score, the response has to (a) carry the fields that separate
+     * them and (b) say so — a tie left unremarked reads as an answer, and the top row gets used.
+     *
+     * <p>The guidance names the field that actually differs in THIS result rather than offering
+     * a general caution, because "six candidates tie at 1.0 and differ by jurisdiction" is
+     * actionable and "matching is imprecise" is not.
+     */
+    private static ObjectNode resolveTieDiagnostics(String rowsJson) {
+        try {
+            JsonNode parsed = MAPPER.readTree(rowsJson);
+            JsonNode rows = parsed.isObject() && parsed.has("results")
+                ? parsed.get("results") : parsed;
+            if (!rows.isArray() || rows.size() < 2) {
+                return null;
+            }
+            // Group the top-scoring candidates per query term.
+            java.util.Map<String, java.util.List<JsonNode>> byTerm = new java.util.LinkedHashMap<>();
+            for (JsonNode r : rows) {
+                String k = r.hasNonNull("query_term") ? r.get("query_term").asText() : "";
+                byTerm.computeIfAbsent(k, x -> new java.util.ArrayList<>()).add(r);
+            }
+            ArrayNode warnings = MAPPER.createArrayNode();
+            for (java.util.Map.Entry<String, java.util.List<JsonNode>> e : byTerm.entrySet()) {
+                java.util.List<JsonNode> rs = e.getValue();
+                double top = 0;
+                for (JsonNode r : rs) {
+                    top = Math.max(top, r.path("name_score").asDouble(0));
+                }
+                java.util.List<JsonNode> tied = new java.util.ArrayList<>();
+                for (JsonNode r : rs) {
+                    if (Math.abs(r.path("name_score").asDouble(0) - top) < 1e-9) {
+                        tied.add(r);
+                    }
+                }
+                if (tied.size() < 2) {
+                    continue;
+                }
+                // Which returned fields actually distinguish the tied candidates?
+                java.util.List<String> discriminating = new java.util.ArrayList<>();
+                for (String f : new String[]{"jurisdiction", "headquarters_city",
+                        "entity_status", "entity_legal_form", "identifier_count", "matched_in"}) {
+                    java.util.Set<String> vals = new java.util.HashSet<>();
+                    for (JsonNode r : tied) {
+                        vals.add(r.hasNonNull(f) ? r.get(f).asText() : "");
+                    }
+                    if (vals.size() > 1) {
+                        discriminating.add(f);
+                    }
+                }
+                StringBuilder note = new StringBuilder();
+                note.append(tied.size()).append(" candidates tie at the top name score");
+                if (!e.getKey().isEmpty()) {
+                    note.append(" for '").append(e.getKey()).append("'");
+                }
+                note.append(". The name did not decide between them, so the row order did — and ")
+                    .append("row order here is not evidence. ");
+                if (discriminating.isEmpty()) {
+                    note.append("Nothing in the returned fields separates them either, which "
+                        + "usually means the bridge attached the same source mentions to every "
+                        + "candidate. Treat this as unresolved rather than picking the first: "
+                        + "narrow with source_schema or jurisdiction, or resolve a fuller name.");
+                } else {
+                    note.append("They DIFFER on: ").append(String.join(", ", discriminating))
+                        .append(". Choose using those fields — you have the context for it and "
+                        + "this server does not. If jurisdiction is among them, note that an "
+                        + "operating company and an offshore vehicle can share a name exactly.");
+                }
+                ObjectNode w = MAPPER.createObjectNode();
+                w.put("type", "unresolved_entity_tie");
+                w.put("severity", QuestionDiagnostics.CAUTION);
+                w.put("note", note.toString());
+                w.put("tied", tied.size());
+                warnings.add(w);
+            }
+            if (warnings.size() == 0) {
+                return null;
+            }
+            ObjectNode inner = MAPPER.createObjectNode();
+            inner.set("warnings", warnings);
+            inner.put("basis", "Measured from the candidates in this response.");
+            ObjectNode out = MAPPER.createObjectNode();
+            out.set("diagnostics", inner);
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static java.util.List<String> resolverTerms(JsonNode args, String scalarKey,
+            String arrayKey) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (args.has(scalarKey) && !args.get(scalarKey).isNull()) {
+            String t = args.get(scalarKey).asText().trim();
+            if (!t.isEmpty()) {
+                out.add(t);
+            }
+        }
+        for (JsonNode n : args.path(arrayKey)) {
+            String t = n.asText().trim();
+            if (!t.isEmpty() && !out.contains(t)) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
+    /** A resolver that answers one term at a time. */
+    private interface OneTermResolver {
+        String resolve(String term) throws Exception;
+    }
+
+    /**
+     * Run a single-term resolver over many terms and return one reviewable result.
+     *
+     * <p>Every row is tagged with the input that produced it, because a merged table whose rows
+     * cannot be traced back to a query term is not reviewable — and review is the entire point
+     * of resolving as a separate step.
+     *
+     * <p>Terms that matched nothing are returned explicitly rather than being absent. A silent
+     * gap here is the worst failure this tool has: the caller pins an identifier set, joins on
+     * it, and never learns that twelve of five hundred firms are missing from every figure
+     * downstream.
+     *
+     * <p>Shape depends on how it was called. A scalar {@code term} returns the bare array it
+     * always did, so existing callers are unaffected. An array returns an object carrying
+     * {@code results}, {@code unmatched} and {@code truncated}.
+     */
+    private static String resolveMany(JsonNode args, String scalarKey, String arrayKey,
+            String tagField, OneTermResolver fn) throws Exception {
+        java.util.List<String> terms = resolverTerms(args, scalarKey, arrayKey);
+        if (terms.isEmpty()) {
+            return "[]";
+        }
+        boolean bulk = args.path(arrayKey).isArray();
+        boolean truncated = terms.size() > MAX_RESOLVER_TERMS;
+        if (truncated) {
+            terms = terms.subList(0, MAX_RESOLVER_TERMS);
+        }
+        ArrayNode merged = MAPPER.createArrayNode();
+        ArrayNode unmatched = MAPPER.createArrayNode();
+        for (String t : terms) {
+            JsonNode parsed = MAPPER.readTree(fn.resolve(t));
+            int before = merged.size();
+            if (parsed.isArray()) {
+                for (JsonNode row : parsed) {
+                    if (row.isObject()) {
+                        ((ObjectNode) row).put(tagField, t);
+                    }
+                    merged.add(row);
+                }
+            }
+            if (merged.size() == before) {
+                unmatched.add(t);
+            }
+        }
+        if (!bulk) {
+            return MAPPER.writeValueAsString(merged);
+        }
+        ObjectNode out = MAPPER.createObjectNode();
+        out.set("results", merged);
+        out.set("unmatched", unmatched);
+        out.put("truncated", truncated);
+        out.put("note", "Every row carries " + tagField + ", the input that produced it. "
+            + "'unmatched' lists inputs that resolved to nothing — they are not in 'results' "
+            + "and will be silently absent from anything you join downstream unless you handle "
+            + "them. Review the candidates before pinning an identifier set: a high-confidence "
+            + "match means the name normalised to the same string, not that it is the "
+            + "organisation you meant."
+            + (truncated ? " INPUT TRUNCATED at " + MAX_RESOLVER_TERMS
+                + " terms — the rest were not attempted." : ""));
+        return MAPPER.writeValueAsString(out);
+    }
+
+    /**
+     * One term, resolved by the same query the bulk path uses.
+     *
+     * <p>This used to run an exact-only pass and RETURN AS SOON AS IT MATCHED, falling through
+     * to prefix matching only when exact found nothing. That short-circuit is why
+     * {@code resolve_entity('Capital One')} returned two entities and never
+     * "CAPITAL ONE SERVICES, LLC" — the exact hits stopped the search before the prefix pass
+     * that would have found the rest of the family. The tool's own description promises that
+     * "the colloquial name is rarely the registered one", which is precisely the case an
+     * exact-only short-circuit cannot serve.
+     *
+     * <p>The prefix predicate subsumes exact ({@code norm%} matches {@code norm}) and the score
+     * still gives an exact match 1.0, so exact candidates continue to rank first — they are
+     * simply no longer the only ones returned.
+     *
+     * <p>Routing through the bulk builder rather than duplicating its logic is deliberate: two
+     * paths that must agree eventually stop agreeing, and the divergence shows up as one call
+     * shape returning entities the other cannot find.
+     */
     private static String resolveEntity(String term, String type, int limit,
             String sourceSchema, String jurisdiction) throws Exception {
         int cap = Math.min(Math.max(1, limit), 200);
-        String aliasNorm = tickerAlias(term);
-        String exact = runSqlOn(
-            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, true, aliasNorm),
-            cap);
-        if (exact != null && !exact.trim().equals("[]")) {
-            return exact;
+        String kind = (type == null || type.isEmpty()) ? "org"
+            : type.toLowerCase(java.util.Locale.ROOT);
+        if (!"org".equals(kind)) {
+            // The person registry has its own, much simpler shape.
+            return runSqlOn(buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction,
+                false, tickerAlias(term)), cap);
         }
-        return runSqlOn(
-            buildResolveEntitySql(term, type, cap, sourceSchema, jurisdiction, false, aliasNorm),
-            cap);
+        String rows = runSqlOn(buildResolveEntityBulkSql(
+            java.util.Collections.singletonList(term), kind, cap, sourceSchema, jurisdiction),
+            MAX_LIMIT);
+        // Single-term callers get the bare array they always did, without the query_term tag
+        // that only means something when several terms share a result set.
+        JsonNode parsed = MAPPER.readTree(rows);
+        if (parsed.isArray()) {
+            for (JsonNode r : parsed) {
+                if (r.isObject()) {
+                    ((ObjectNode) r).remove("query_term");
+                }
+            }
+        }
+        return MAPPER.writeValueAsString(parsed);
     }
 
     // ── entity_relationships ─────────────────────────────────────────────────
