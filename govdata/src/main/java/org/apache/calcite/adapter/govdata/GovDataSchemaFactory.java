@@ -62,10 +62,8 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -195,37 +193,24 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Get the appropriate sub-schema factory
     SubSchemaFactory factory = getFactoryForDataSource(dataSource);
 
-    // Build processor with dependencies first, then the requested schema
+    // Dependency data sources (e.g. econ needs econ_reference) are no longer pre-processed
+    // here. That used to be required so a schema's views wouldn't fail when created before
+    // their cross-schema reference existed — DuckDBPendingViews.createOnDemand now resolves
+    // that lazily (parses the missing-reference error, creates the dependency, retries), so
+    // ordering is no longer load-bearing for correctness. Pre-processing had a real cost:
+    // whichever schema's factory ran first claimed the shared DuckDB JdbcConvention (see
+    // DuckDBJdbcSchemaFactory.createSchemaInSharedDatabase), baking that schema's name into
+    // the expression generated code uses to fetch the DataSource. A dependency processed
+    // before the schema the caller actually asked for meant every query against that schema's
+    // OWN tables failed with a NullPointerException on a single-source connection, because the
+    // dependency (never mounted at Calcite's root there — see below) doesn't resolve. Any
+    // ETL-time data need a schema has of another (e.g. BeaDimensionResolver reading
+    // econ_reference for BEA dimension lookups) goes through its own direct DuckDB connection
+    // (AbstractGovDataDownloader.getDuckDBConnection), not this Schema-object machinery, so it
+    // was never actually order-dependent on this loop either.
     ModelLifecycleProcessor.Builder processorBuilder = ModelLifecycleProcessor.builder()
         .sourceStorage(sourceStorage)
         .materializedStorage(materializedStorage);
-
-    // Process dependencies first (in order)
-    for (String depDataSource : factory.getDependencies()) {
-      if (!processedDependencies.contains(depDataSource)) {
-        LOGGER.info("Processing dependency '{}' for schema '{}'", depDataSource, name);
-
-        String depOperatingDir = establishOperatingDirectory(depDataSource, null);
-        IncrementalTracker depTracker = createIncrementalTracker(depOperatingDir, depDataSource, operand);
-        SubSchemaFactory depFactory = getFactoryForDataSource(depDataSource);
-        Map<String, Object> depOperand = enrichOperand(operand, depDataSource, depDataSource);
-        String depResource = depFactory.getSchemaResourceName();
-        if (depResource != null) {
-          Map<String, Map<String, Object>> depConstraints =
-              GovDataUtils.loadTableConstraints(depFactory.getClass(), depResource);
-          if (!depConstraints.isEmpty()) {
-            depOperand.put("tableConstraints", depConstraints);
-          }
-        }
-
-        processorBuilder
-            .operatingDirectory(depOperatingDir)
-            .incrementalTracker(depTracker)
-            .addSchema(depDataSource, depFactory, depOperand);
-
-        processedDependencies.add(depDataSource);
-      }
-    }
 
     // Now add the main schema
     String operatingDirectory = establishOperatingDirectory(dataSource, operand);
@@ -282,17 +267,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
           .process();
     }
 
-    // Cache dependency schemas so they can be returned if requested later
-    String operatingBase = System.getProperty("govdata.operating.dir.base", "");
-    for (String depDataSource : factory.getDependencies()) {
-      String depSchemaName = depDataSource.toLowerCase();
-      Schema depSchema = result.getSchema(depSchemaName);
-      if (depSchema != null) {
-        schemaCache.put(depSchemaName + "@" + operatingBase, depSchema);
-        LOGGER.debug("Cached dependency schema '{}'", depSchemaName);
-      }
-    }
-
     // Return the created schema directly (not the SchemaPlus wrapper)
     // This is essential because CachingCalciteSchema.snapshot() fails
     // with SchemaPlus wrappers (SchemaPlusImpl.snapshot() throws UnsupportedOperationException)
@@ -318,11 +292,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.info("Schema '{}' created successfully", name);
     return schema;
   }
-
-  // Track processed dependencies to avoid duplicates across factory instances
-  // Static because Calcite creates new factory instances per schema
-  private static final Set<String> processedDependencies =
-      Collections.synchronizedSet(new HashSet<>());
 
   // Cache schemas that were created as dependencies so we can return them
   // when they are requested as main schemas (avoids double processing)

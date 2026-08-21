@@ -730,6 +730,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -866,6 +867,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -989,6 +991,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1174,6 +1177,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1291,6 +1295,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1434,6 +1439,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1549,6 +1555,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1670,6 +1677,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1785,6 +1793,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -1906,6 +1915,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -2067,6 +2077,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         batchPartitionColumns: [year, metric]
         incrementalKeys: [year, metric]
@@ -2204,6 +2215,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         batchPartitionColumns: [year, metric]
         incrementalKeys: [year, metric]
@@ -2351,6 +2363,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         batchPartitionColumns: [year, metric]
         incrementalKeys: [year, metric]
@@ -2459,6 +2472,7 @@ partitionedTables:
         stagingMode: local
         emptyResultTtlMillis: 86400000  # Retry after 24 hours if no data
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -2564,6 +2578,7 @@ partitionedTables:
         stagingMode: local
         emptyResultTtlMillis: 86400000  # Retry after 24 hours if no data
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -2731,6 +2746,7 @@ partitionedTables:
         stagingMode: local
         emptyResultTtlMillis: 86400000  # Retry after 24 hours if no data
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -2836,6 +2852,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -2937,6 +2954,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -3059,6 +3077,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [indicator]
@@ -3306,6 +3325,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year, month]
@@ -3503,6 +3523,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -3640,6 +3661,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -3777,6 +3799,7 @@ partitionedTables:
         batchSize: 100000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -3904,6 +3927,7 @@ partitionedTables:
         batchSize: 100000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -4031,6 +4055,7 @@ partitionedTables:
         batchSize: 100000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -4158,6 +4183,7 @@ partitionedTables:
         batchSize: 100000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -4285,6 +4311,7 @@ partitionedTables:
         batchSize: 100000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -4562,6 +4589,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         # Process in batches by year AND geo_fips_set to avoid OOM on the
@@ -4763,6 +4791,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -4911,6 +4940,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg: &fdi_iceberg
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -5116,6 +5146,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -5218,6 +5249,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -5427,6 +5459,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
         batchPartitionColumns: [year]
@@ -5555,6 +5588,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         runMaintenance: true
@@ -5680,6 +5714,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         runMaintenance: true
@@ -5828,6 +5863,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         runMaintenance: true
@@ -5967,6 +6003,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -6080,6 +6117,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [indicator]
@@ -6206,6 +6244,7 @@ partitionedTables:
         valueSource:
           year: effective_year
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
@@ -6318,6 +6357,7 @@ partitionedTables:
         batchSize: 50000
         stagingMode: local
       iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
         catalogType: hadoop
         targetFileSizeBytes: 134217728
         batchPartitionColumns: [year]
