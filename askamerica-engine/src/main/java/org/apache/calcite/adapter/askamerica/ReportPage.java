@@ -169,7 +169,14 @@ final class ReportPage {
         if (byline != null && !byline.isEmpty()) {
             sb.append("<span class=\"byline\">").append(esc(byline)).append("</span>");
         }
-        sb.append("</p>\n</footer>\n</main>\n</body>\n</html>\n");
+        sb.append("</p>\n</footer>\n</main>\n")
+            // A print hint, not a print button. window.print() needs script and the
+            // CSP forbids it (javascript: URLs included), so a clickable button here
+            // would look like a control and do nothing. The shortcut is the honest
+            // affordance: faint until hovered, and absent from the printed page.
+            .append("<aside class=\"printhint\" aria-hidden=\"true\">"
+                + "Print \u00b7 <kbd>Ctrl</kbd>/<kbd>\u2318</kbd>+<kbd>P</kbd></aside>\n")
+            .append("</body>\n</html>\n");
         return sb.toString();
     }
 
@@ -212,6 +219,68 @@ final class ReportPage {
             + "th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}\n"
             + "th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;"
             + "letter-spacing:.04em}\n"
+            // Screen-only interaction. Everything in this block is scoped away from print
+            // deliberately: the page's strongest property is that it prints well, and a
+            // sticky header or a scroll container is meaningless on paper at best and
+            // clips content at worst. The print rules below restore each one.
+            + "@media screen{\n"
+            // Sticky headers: these reports are mostly 51-row state tables, and a header
+            // scrolling out of view is the commonest way one becomes unreadable. Needs an
+            // opaque background (it scrolls over cells) and a box-shadow rather than a
+            // border, because border-collapse:collapse will not paint a border on a stuck
+            // element.
+            + "th{position:sticky;top:0;z-index:1;background:var(--bg);"
+            + "box-shadow:inset 0 -1px 0 var(--rule)}\n"
+            + "tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}\n"
+            // A long query scrolls sideways in its own box rather than widening the page.
+            + "pre{overflow-x:auto}\n"
+            + "}\n"
+            // Progressive disclosure. Section bodies routinely carry an audit trail — the
+            // exact SQL behind each figure — which has to be present but should not stand
+            // between the reader and the finding. <details> is the only interactive control
+            // available: the CSP forbids script, so a disclosure that works without it is
+            // the whole toolkit.
+            + "details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}\n"
+            + "summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;"
+            + "color:var(--muted);text-transform:uppercase;letter-spacing:.04em}\n"
+            + "summary:hover{color:var(--link)}\n"
+            + "summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}\n"
+            + "details[open] summary{border-bottom:1px solid var(--rule)}\n"
+            + "details > *:not(summary){margin:.7rem}\n"
+            + "pre{padding:.7rem;border-radius:6px;"
+            + "font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;"
+            + "background:color-mix(in srgb,var(--rule) 45%,transparent)}\n"
+            + "pre code{background:none;padding:0;font-size:inherit}\n"
+            + "abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;"
+            + "cursor:help}\n"
+            + ".printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;"
+            + "border:1px solid var(--rule);border-radius:999px;background:var(--bg);"
+            + "font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;"
+            + "transition:opacity .15s}\n"
+            + ".printhint:hover{opacity:1}\n"
+            + ".printhint kbd{font:inherit;font-weight:600;color:var(--ink)}\n"
+            + "@media(prefers-reduced-motion:reduce){.printhint{transition:none}}\n"
+            // Print. The page printing cleanly is a property worth protecting, so each
+            // screen affordance is undone rather than left to degrade on its own.
+            + "@media print{\n"
+            // A collapsed <details> cannot be opened on paper, and the audit trail is the
+            // part most worth having there. Show the content and drop the chrome that only
+            // made sense as a control.
+            + "details{border:0;margin:.6rem 0}\n"
+            + "details > *:not(summary){display:block;margin:.4rem 0}\n"
+            + "details[open] summary{border-bottom:0}\n"
+            + "summary{padding:0;list-style:none}\n"
+            + "summary::-webkit-details-marker{display:none}\n"
+            // overflow-x:auto CLIPS on paper — there is no scrollbar to reach the rest of
+            // the line. Wrap instead, and keep a border since browsers drop backgrounds.
+            + "pre{overflow:visible;white-space:pre-wrap;word-break:break-word;"
+            + "border:1px solid var(--rule)}\n"
+            // The paper equivalent of a sticky header: repeat it on every page a long
+            // table spills across, and keep a row from splitting across the break.
+            + "thead{display:table-header-group}\n"
+            + "tr{break-inside:avoid}\n"
+            + ".printhint{display:none}\n"
+            + "}\n"
             + "code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;"
             + "background:color-mix(in srgb,var(--rule) 55%,transparent);"
             + "padding:.1em .35em;border-radius:4px}\n"
