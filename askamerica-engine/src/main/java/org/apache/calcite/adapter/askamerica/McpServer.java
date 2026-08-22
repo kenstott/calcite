@@ -787,7 +787,12 @@ public class McpServer {
             tool("search_catalog",
             "Search the full data catalog by keyword to discover which schemas, tables, and "
             + "columns are relevant — each match includes its description. Call this FIRST when "
-            + "you don't already know the exact table, then confirm with describe_table.",
+            + "you don't already know the exact table, then confirm with describe_table. "
+            + "Returns {matches: [...]} plus, when the query also matches a keyless public "
+            + "endpoint, external_sources: [...] and external_sources_caveat — the same "
+            + "candidates suggest_external_sources would return for this query, surfaced here so "
+            + "a coverage gap and a live alternative show up in one call instead of two. Read "
+            + "external_sources_caveat before using any of them: they are not askamerica data.",
             schema(searchProps, new String[]{"query"})));
 
         ObjectNode listTablesProps = MAPPER.createObjectNode();
@@ -985,7 +990,13 @@ public class McpServer {
             + "IMPORTANT: proximity is not occurrence. A passage saying a company MAY suffer an "
             + "event scores as highly as one saying it DID, because the difference is modality, "
             + "not topic. Read the returned text and decide; do not treat a high score as "
-            + "evidence the thing happened.",
+            + "evidence the thing happened.\n\n"
+            + "RECOMMENDED PATTERN — semantic recall, literal exclusion: ask for more chunks than "
+            + "you need (a high k), then filter the returned text yourself for hedging language "
+            + "('may', 'could', 'in the event of', 'risk of', 'if we were to') to separate actual "
+            + "occurrence from mere risk-factor boilerplate. semantic_search is the wide net for "
+            + "meaning; a literal string exclusion on its own output is the precision pass — do "
+            + "not expect the embedding score alone to make that distinction.",
             schema(semProps, new String[]{"query"})));
 
         ObjectNode relProps = MAPPER.createObjectNode();
@@ -2989,6 +3000,7 @@ public class McpServer {
                 + "which read the live connection instead.");
         }
         ArrayNode hits = Catalog.search(query.trim(), limit);
+        ArrayNode extSources = ExternalSources.matchesFor(query.trim(), 5);
         if (hits.size() == 0) {
             ObjectNode empty = MAPPER.createObjectNode();
             empty.put("matches", 0);
@@ -2998,9 +3010,19 @@ public class McpServer {
                 + "real miss: try fewer or more general words (one noun beats a phrase), or "
                 + "list_schemas then list_tables to browse. Do not conclude the data is absent "
                 + "from one unmatched search.");
+            if (extSources.size() > 0) {
+                empty.set("external_sources", extSources);
+                empty.put("external_sources_caveat", ExternalSources.CAVEAT);
+            }
             return empty.toString();
         }
-        return hits.toString();
+        ObjectNode out = MAPPER.createObjectNode();
+        out.set("matches", hits);
+        if (extSources.size() > 0) {
+            out.set("external_sources", extSources);
+            out.put("external_sources_caveat", ExternalSources.CAVEAT);
+        }
+        return out.toString();
     }
 
     /**
