@@ -152,7 +152,8 @@ class DeferredItemsTest {
       this.injectedSource = injectedSource;
     }
 
-    @Override protected DataSource createDataSource(EtlPipelineConfig config) {
+    @Override protected DataSource createDataSource(EtlPipelineConfig config,
+        boolean forceReprocessAll) {
       return injectedSource;
     }
   }

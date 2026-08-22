@@ -647,7 +647,7 @@ public class EtlPipeline {
 
       // Phase 3: Create data source based on type
       LOGGER.info("Phase 3: Creating data source (type={})", config.getSourceType());
-      DataSource dataSource = createDataSource(config);
+      DataSource dataSource = createDataSource(config, forceReprocessAll);
 
       // Phase 3b: Freshness skip-gate (pre-download types only).
       // If freshness: is configured and the source hasn't changed since the last successful
@@ -2463,7 +2463,7 @@ public class EtlPipeline {
    * @param config Pipeline configuration
    * @return DataSource instance (HttpSource or ConstantsSource)
    */
-  protected DataSource createDataSource(EtlPipelineConfig config) {
+  protected DataSource createDataSource(EtlPipelineConfig config, boolean forceReprocessAll) {
     String sourceType = config.getSourceType();
 
     if (EtlPipelineConfig.SOURCE_TYPE_CONSTANTS.equals(sourceType)) {
@@ -2503,8 +2503,16 @@ public class EtlPipeline {
       LOGGER.info("Creating HttpSource for type: {}", sourceType);
     }
     // Use sourceStorageProvider for raw cache (not the materialized storage provider)
+    // bypassRawCache must also fire when the pipeline has already decided it holds no reliable
+    // committed state (forceReprocessAll) — not just on the manual GOVDATA_FORCE_DOWNLOAD_TABLES
+    // override. Without this OR, a pipeline that concluded "I have no committed data, I must
+    // reprocess" (e.g. a dq-rebuild that just tore down Iceberg) still trusted an existing raw
+    // cache file at hasValidRawCache() — which only checks file existence, not whether this run
+    // has any memory of writing it — and silently replayed whatever was in it instead of forcing
+    // the live fetch that "reprocess" was supposed to guarantee.
+    boolean bypassRawCache = isTableForceDownloaded(config.getName()) || forceReprocessAll;
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
-        operatingDirectory, config.getColumns(), isTableForceDownloaded(config.getName()));
+        operatingDirectory, config.getColumns(), bypassRawCache);
   }
 
   /**
