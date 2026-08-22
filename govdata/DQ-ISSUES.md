@@ -355,3 +355,85 @@ shape, which no observed question required.
 **Why this matters commercially**: every banking, insurance and corporate-strategy question that
 needs ownership structure depends on it. Those are the highest-value audiences and the ones
 currently least served.
+
+---
+
+## DQ-016 — `sec.financial_facts` filters do not push through its own JOIN — a hang, not just a slow query
+
+**Table**: `sec.financial_facts` (VIEW over `financial_line_items` LEFT JOIN `filing_contexts` JOIN
+a `concept_aliases` VALUES mapping)
+**Severity**: High — not a wrong answer, a hang: 45+ minutes at 900%+ CPU and ~9.7GB RAM, no error
+ever surfaced to the caller
+**Scope**: any query filtering `financial_facts` by `cik`/`accession_number`; the identical filter
+run directly against the base table `financial_line_items` returns instantly
+**Discovered**: 2026-08-22
+
+**Symptom**: `SELECT DISTINCT canonical_name FROM sec.financial_facts WHERE cik IN (...)` never
+returned. The server process was found still alive ~20+ minutes later, pinned at 950%+ CPU with
+181 cumulative CPU-minutes logged; killing it (`kill -9`) released free memory from ~71MB to
+~9.7GB. `EXPLAIN PLAN FOR` on the hang-triggering shape shows the entire filter+join collapsing
+into one `JdbcTableScan` — the whole view expansion is handed to DuckDB as a single opaque SQL
+statement, so the runaway work happens inside DuckDB's own engine, not Calcite's Enumerable path.
+
+**Root cause (confirmed by direct comparison, not inferred)**: filtering `financial_facts` by `cik`
+does not push the predicate down through the view's `LEFT JOIN`/`VALUES`-join into
+`financial_line_items` before that join runs — a query that reads as "filtered to one company"
+becomes a full-corpus scan-and-join. Filtering `financial_line_items` directly by the same `cik`
+(60,310 rows for the filer tested) returned instantly.
+
+**Why the query timeout didn't save it**: `ASKAMERICA_QUERY_TIMEOUT_SECONDS` (default 180s) is
+demonstrably enforced elsewhere in this codebase, but did not fire here — the hang ran at least an
+order of magnitude past the configured bound with no `queryExecutionTimeoutReached` error ever
+raised. Calcite core does carry a mechanism to propagate the outer timeout into a fully-pushed-down
+statement (`ResultSetEnumerable.setTimeout`/`setTimeoutIfPossible`), but which of its two hops
+actually failed here — timeout propagation into `DataContext.Variable.TIMEOUT`, or DuckDB's own
+cooperative cancellation being unable to interrupt a query already wedged inside one oversized
+native operator — was not conclusively isolated, to avoid re-triggering the outage with a live
+repro.
+
+**A second, related gap**: sub-category breakdowns (loan class, business segment, geography,
+product line) are not reachable as columns at all — they require joining
+`financial_line_items.context_ref = filing_contexts.context_id` and reading
+`filing_contexts.segment`, a semicolon-joined string of XBRL `Axis=Member` pairs namespaced to
+each filer's own taxonomy prefix (e.g. `fbc:CommercialRealEstateLoansMember`). Nothing in the
+original schema comments indicated this join path existed; `filing_contexts.segment`'s comment
+was a single line ("Segment dimension information (XML fragment)") giving no indication it was a
+usable, documented key.
+
+**Fixed so far**:
+- `financial_line_items`, `filing_contexts.segment`, and `financial_facts`' own comments rewritten
+  to state the scope limit, the performance divergence, and the join path explicitly (shipped).
+- `askamerica-engine`'s `McpServer.java` instructions and `query` tool description updated with a
+  generalized version of this pattern (any `<entity>_facts`-style view built from a join over a
+  much larger base table is a candidate for the same failure) (shipped).
+- A wall-clock watchdog added server-side: any statement still active at 2x its configured timeout
+  gets `Statement.cancel()`; still active at 4x, the shared connection is evicted so subsequent
+  callers get a fresh one rather than queuing behind the wedged one indefinitely (shipped, compiled
+  and regression-tested against normal queries; the escalation path itself was not live-fired
+  against a real hang, deliberately, to avoid re-triggering the outage). If the watchdog's
+  `cancel()` is what unblocks the query, the caller now gets an explicit, accurate message — real
+  elapsed time, which multiple of the timeout fired — instead of DuckDB's bare "Interrupted!" text,
+  so the calling agent can tell a timeout from a crash and decide to narrow the query rather than
+  retry the same shape blind. The remaining gap: if `cancel()` itself fails to unblock the thread
+  and only the stage-2 connection eviction eventually runs, the caller may still get no response at
+  all rather than a labeled timeout — a request-level hard deadline would close this, not attempted
+  here given the risk of restructuring `DB_LOCK`'s serialization without live-hang test coverage.
+- `sec.financial_facts_by_segment` — a convenience view unpivoting `filing_contexts.segment` into a
+  searchable `segment_members` column — drafted, tested against a real filing (see the join and
+  matching figures above), and **NOT added to the live schema**. A schema YAML edit invalidates the
+  bundled DuckDB seed and forces a full reseed, which is the data team's call to schedule, not
+  something to apply ad hoc from an investigation session — matching DQ-015's precedent. The
+  proposal also has an open correctness gap that should be resolved before it ships: a plain
+  `segment_members ILIKE '%X%'` filter returns every context that mentions the category anywhere in
+  its dimension list, including credit-quality/delinquency sub-breakdowns of the same category
+  (e.g. querying for a bank's CRE loans returned the two clean consolidated totals plus 12
+  additional rows further broken out by Pass/Substandard/Non-Accrual status) — summing
+  `value_dollars` across the returned rows without further filtering double-counts, the same trap
+  `financial_facts` itself already warns about for its own `is_consolidated_total` column.
+
+**Suggested remaining fix**: either rewrite `financial_facts`'s (and, if deployed,
+`financial_facts_by_segment`'s) SQL so the entity-key filter is applied inside a subquery on
+`financial_line_items` before the joins run (forcing the pushdown Calcite/DuckDB isn't doing on
+its own), or add an explicit single-dimension flag/column to `financial_facts_by_segment` so a
+caller can select one Axis at a time instead of ILIKE-matching across the whole concatenated
+Member list.
