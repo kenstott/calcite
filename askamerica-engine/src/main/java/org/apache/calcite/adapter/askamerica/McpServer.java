@@ -311,6 +311,113 @@ public class McpServer {
         new java.util.HashSet<>(java.util.Arrays.asList(
             "suggest_external_sources", "set_telemetry", "report_issue"));
 
+    /**
+     * Every in-flight JDBC {@link Statement}, with when it started and the timeout it was given
+     * (see {@link #runSqlRows}). {@code DB_LOCK} means at most one entry exists at a time in
+     * practice, but the registry is keyed by statement rather than a single field so a stuck
+     * entry can't be silently overwritten by the next call.
+     *
+     * <p>This exists because the per-query {@code stmt.setQueryTimeout()} bound has been observed
+     * NOT to fire on a query wedged inside DuckDB's own engine — a hang ran 45+ minutes past a
+     * 180s configured timeout with no error ever surfaced, pinning the process at 900%+ CPU and
+     * ~9.7GB of memory until it was killed from outside (see runs/DEFECTS-OPEN.md #16). DuckDB's
+     * cancellation is understood to be cooperative and checked at operator boundaries, so a query
+     * stuck deep inside one oversized operation can outlast its own timeout. This is the backstop
+     * for that case, not a replacement for {@code setQueryTimeout} — it only ever acts after the
+     * statement's own configured bound has already been exceeded by a wide margin.
+     */
+    private static final ConcurrentHashMap<Statement, long[]> ACTIVE_STATEMENTS =
+        new ConcurrentHashMap<>();
+
+    /**
+     * Set by the watchdog the moment it calls {@link Statement#cancel()} on an entry, so the
+     * thread that was actually blocked inside that statement — once it unblocks, whether via the
+     * cancel succeeding or the connection later being evicted — can tell an agent "this was a
+     * timeout, specifically the watchdog's, not a crash" rather than surfacing DuckDB's raw
+     * "Interrupted!" text or, worse, whatever generic error a closed connection produces. Read
+     * and removed by {@link #runSqlRows} in its catch block; a caller must never see a stale
+     * entry from a previous statement, which is why it is keyed by the exact {@link Statement}
+     * instance rather than anything coarser.
+     */
+    private static final ConcurrentHashMap<Statement, Long> WATCHDOG_CANCELLED_AT =
+        new ConcurrentHashMap<>();
+
+    /**
+     * How many multiples of a statement's own configured timeout the watchdog waits before
+     * escalating. Stage 1 (this multiple) calls {@link Statement#cancel()} — the JDBC-standard,
+     * cross-thread-safe way to ask a driver to abort in-flight work. Stage 2 (double this
+     * multiple) evicts and closes the shared connection outright if the statement is still
+     * registered, on the reasoning that {@code DB_LOCK} means nothing else can legitimately be
+     * using that connection at that moment — so a statement still active well past a cancel
+     * attempt is presumed wedged past the point cancellation can reach, and the only way left to
+     * restore the server's responsiveness to OTHER callers is to force the next caller onto a
+     * fresh connection rather than wait on this one forever. It does not reclaim whatever the
+     * stuck native call is still doing in the background — see the caveat in DEFECTS-OPEN.md #16.
+     */
+    private static final int WATCHDOG_TIMEOUT_MULTIPLE = 2;
+
+    static {
+        Thread watchdog = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(15_000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                long now = System.currentTimeMillis();
+                for (java.util.Map.Entry<Statement, long[]> e : ACTIVE_STATEMENTS.entrySet()) {
+                    Statement stmt = e.getKey();
+                    long startedAt = e.getValue()[0];
+                    long timeoutSeconds = e.getValue()[1];
+                    // A caller that explicitly disabled the timeout (0 or negative, see
+                    // queryTimeoutSeconds()'s own doc) genuinely wants to wait — the watchdog
+                    // must honour that opt-out rather than second-guess it.
+                    if (timeoutSeconds <= 0) {
+                        continue;
+                    }
+                    long ageMillis = now - startedAt;
+                    long cancelAtMillis = timeoutSeconds * 1000L * WATCHDOG_TIMEOUT_MULTIPLE;
+                    long evictAtMillis = cancelAtMillis * 2;
+                    if (ageMillis >= evictAtMillis) {
+                        log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                            + (ageMillis / 1000) + "s after starting (timeout was "
+                            + timeoutSeconds + "s) — cancel() did not unstick it; evicting the "
+                            + "shared connection so future callers get a fresh one. This does "
+                            + "NOT reclaim whatever the stuck query is still doing.");
+                        String catalogKey = String.join(",", allowedSchemas());
+                        Connection stuck = schemaConns.remove(catalogKey);
+                        schemaConnOpenedAtMillis.remove(catalogKey);
+                        // Removing the entry (not the ACTIVE_STATEMENTS registration) is
+                        // deliberate: leaving the registration in place stops this branch from
+                        // re-firing every 15s for the same statement while it is still there,
+                        // without pretending the underlying work actually stopped.
+                        ACTIVE_STATEMENTS.put(stmt, new long[]{startedAt, -1});
+                        if (stuck != null) {
+                            closeQuietly(stuck, catalogKey);
+                        }
+                    } else if (ageMillis >= cancelAtMillis) {
+                        log.println("[askamerica-mcp] WATCHDOG: statement active " + (ageMillis
+                            / 1000) + "s after starting (timeout was " + timeoutSeconds
+                            + "s, " + WATCHDOG_TIMEOUT_MULTIPLE + "x exceeded) — calling "
+                            + "Statement.cancel().");
+                        // Set BEFORE cancel(), not after — cancel() can itself unblock the
+                        // waiting thread synchronously on some drivers, and that thread must find
+                        // this entry already there when it wakes, not race to check before the
+                        // watchdog thread gets around to writing it.
+                        WATCHDOG_CANCELLED_AT.put(stmt, now);
+                        try {
+                            stmt.cancel();
+                        } catch (Throwable t) {
+                            log.println("[askamerica-mcp] WATCHDOG: cancel() itself threw: " + t);
+                        }
+                    }
+                }
+            }
+        }, "mcp-query-watchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
+    }
+
     private static ObjectNode dispatch(JsonNode req, String method) {
         JsonNode id = req.get("id");
         JsonNode params = req.path("params");
@@ -468,6 +575,40 @@ public class McpServer {
             + "For analytical or aggregation queries omit the row limit so all "
             + "matching rows are processed. The limit parameter caps the rows "
             + "returned to the client (default 500, max 5000). "
+            + "A VIEW THAT JOINS SEVERAL LARGE TABLES MAY NOT PUSH YOUR FILTER THROUGH THE "
+            + "JOIN. Some schemas expose a normalized VIEW built from a LEFT JOIN (or a join "
+            + "against a lookup mapping) over a much larger base table — e.g. "
+            + "sec.financial_facts is financial_line_items LEFT JOIN filing_contexts. Filtering "
+            + "the view by an entity key (cik, a company id, a facility id) does not always "
+            + "prune the base table BEFORE the join runs, so what looks like a narrow, filtered "
+            + "query can silently become a full scan-and-join over every row of the largest "
+            + "table involved. THE SYMPTOM IS NOT AN ERROR — it is a query that never returns, "
+            + "or returns far slower than its filter implies. IF A FILTERED QUERY AGAINST A "
+            + "VIEW IS SLOW OR HANGS: re-issue the same filter directly against the view's "
+            + "underlying base table (see the view's definition or ask describe_table on the "
+            + "base table), add any further scoping key available there (a filing/accession "
+            + "id, a period, a document id) to narrow to one record before joining anything "
+            + "else, and only then bring in the joined columns you need — either by adding your "
+            + "own JOIN with the same keys, or by re-running the view's query with your filter "
+            + "moved onto the base table inside it. This pattern generalizes beyond SEC data: "
+            + "any '<entity>_facts' or '<entity>_summary' VIEW built from a JOIN is a candidate "
+            + "for this, and DISTINCT or an unfiltered aggregate over such a view is the "
+            + "riskiest shape of all, because there is no predicate for the planner to push "
+            + "down in the first place. "
+            + "A SUB-CATEGORY BREAKDOWN (BY LOAN CLASS, SEGMENT, GEOGRAPHY, PRODUCT LINE) IS "
+            + "OFTEN A DIMENSIONAL JOIN, NOT A COLUMN. A source that reports one consolidated "
+            + "total per concept/period, plus separate rows for each sub-category breakdown of "
+            + "that same total, typically keys the breakdown through a context/dimension table "
+            + "rather than a column on the fact table itself — e.g. sec.filing_contexts.segment "
+            + "holds XBRL Axis=Member pairs (filer-specific member names, such as "
+            + "'...ClassOfFinancingReceivableAxis=<ticker>:CommercialRealEstateLoansMember') "
+            + "that join back to sec.financial_line_items on (cik, accession_number, "
+            + "context_ref = context_id). To find the sub-category you want: filter that "
+            + "dimension/context table's descriptive column with ILIKE for the category name "
+            + "first (it is cheap once scoped to one entity/filing), read off the matching "
+            + "context/dimension id(s), then join those back to the fact table. Do not assume a "
+            + "missing 'concept' name for the sub-category means the data is absent — check "
+            + "whether it is disclosed as a dimensional breakdown of a broader concept instead. "
             + "STATISTICS RUN IN SQL — push analysis into the query rather than pulling rows "
             + "to compute by hand. Aggregates: correlation corr(y,x)/covar_pop/covar_samp; "
             + "regression regr_slope/regr_intercept/regr_r2/regr_count/regr_avgx/regr_avgy/"
@@ -706,7 +847,17 @@ public class McpServer {
             + "Add FETCH FIRST N ROWS ONLY when exploring; omit for aggregations. "
             + "Statistical aggregates run in-engine — corr(y,x), regr_slope/regr_intercept/"
             + "regr_r2(y,x), median(x), quantile_cont(x,p), stddev_samp(x), skewness(x) — so "
-            + "push analysis into the SQL instead of computing over returned rows."));
+            + "push analysis into the SQL instead of computing over returned rows. "
+            + "(5) If a query filtered by an entity key (cik, a company/facility id) against a "
+            + "normalized VIEW is slow or never returns, the filter is likely not pushing "
+            + "through the view's join — re-run the same filter directly against the view's "
+            + "underlying base table instead (describe_table it to see its columns), scope "
+            + "further by any id available there (accession/filing/document id), and add back "
+            + "only the joined columns you need. DISTINCT or an aggregate with no filter at all "
+            + "over such a view is the highest-risk shape. A sub-category breakdown (loan "
+            + "class, segment, geography) that is not a plain concept/column is often reached "
+            + "through a dimension/context table instead — search that table's descriptive "
+            + "column for the category name, then join its id back to the fact table."));
         queryProps.set(
             "limit", prop("integer",
             "Max rows to return (default 500, max 5000)."));
@@ -1399,7 +1550,13 @@ public class McpServer {
             + "number, a trend line, and a ranking bar chart read as one story where three "
             + "separate images do not. Panels are placed, never redrawn, so each panel's "
             + "geometry is still exactly what its own data produced. Pass scale_group on panels "
-            + "that should be compared so they share one axis domain.",
+            + "that should be compared so they share one axis domain. "
+            + "THIS CALL ALONE RETURNS ONLY THE BOARD — no narrative, sourcing or caveats travel "
+            + "with it. That is enough for a chart embedded in an answer you are writing "
+            + "yourself, but for any question worth more than a sentence the deliverable is "
+            + "publish_report, not this call in isolation: pass these same panels via its "
+            + "dashboard argument and it composes the board and inlines it under your prose in "
+            + "one page.",
             schema(dashProps, new String[]{"panels"})));
 
         ObjectNode pubProps = MAPPER.createObjectNode();
@@ -1410,6 +1567,13 @@ public class McpServer {
         sectionsProp.put("type", "array");
         sectionsProp.put("description",
             "The narrative, in order: [{\"heading\":\"Step 1 — ...\", \"html\":\"<p>...</p>\"}]. "
+            + "MAKE THE FIRST SECTION A SUMMARY, HEADED \"Summary\" or \"Answer\" — two or three "
+            + "plain-English sentences giving the actual answer and its key number(s), before any "
+            + "methodology, table or statistical test. The title states the finding as one "
+            + "headline sentence; a reader who stops after the summary section should still know "
+            + "what was asked, what was found, and how confident to be — not have to read the "
+            + "methodology to find out. Everything after it is the detail that supports that "
+            + "answer, not a substitute for stating it. "
             + "Bodies are HTML you write directly — <p>, <ul>, <table>, <strong>, <code>, "
             + "<blockquote> all style correctly. Write HTML, not Markdown: nothing renders "
             + "Markdown on the page. Scripts never execute, so do not include any.");
@@ -2322,6 +2486,18 @@ public class McpServer {
                             // not a silent 0 — v.asDouble() would coerce null to 0.0.
                             values.add(v.isNull() ? null : v.asDouble());
                         }
+                        // A series with a name but a missing (not just empty) "values" field parses
+                        // to zero values and used to render as an empty series with no error — a
+                        // caller that named the field "data" instead got a chart with correct axes
+                        // and category labels and no bars at all. Name the mistake explicitly.
+                        if (values.isEmpty() && s.path("values").isMissingNode()) {
+                            java.util.List<String> seenKeys = new java.util.ArrayList<>();
+                            s.fieldNames().forEachRemaining(seenKeys::add);
+                            throw new IllegalArgumentException(
+                                "series '" + s.path("name").asText("(unnamed)")
+                                + "' has no 'values' array (saw fields: " + seenKeys
+                                + "). Each series needs values (array of numbers) — not data or points.");
+                        }
                         series.add(new ChartRenderer.SeriesSpec(s.path("name").asText(), values));
                     }
 
@@ -2490,6 +2666,17 @@ public class McpServer {
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
+        // The watchdog (see ACTIVE_STATEMENTS/WATCHDOG_CANCELLED_AT) already builds a complete,
+        // accurate message — real elapsed time, which multiple of the timeout fired, the same
+        // narrowing guidance the normal timeout gives — before this exception reaches here.
+        // Return it as-is rather than let it fall through to the generic INTERRUPT branch below,
+        // which would report the nominal configured timeout instead of what actually happened.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && msg.startsWith("WATCHDOG_TIMEOUT: ")) {
+                return msg.substring("WATCHDOG_TIMEOUT: ".length());
+            }
+        }
         // TRY_CAST is correct DuckDB and correct in most dialects, and callers reach for it
         // constantly on this warehouse because so many measure columns are VARCHAR. Calcite's
         // parser does not know it: it reads the AS as an argument separator and reports a
@@ -3556,6 +3743,22 @@ public class McpServer {
             for (JsonNode v : sNode.path("values")) {
                 vals.add(v.isNull() ? null : v.asDouble());
             }
+            // A series with a name but no values parses to a non-empty p.series holding an
+            // EMPTY vals list — the categories/series list-level check below never catches this,
+            // and without this per-series check the panel used to render its axes, gridlines and
+            // category labels perfectly, then draw nothing: no bars, no error, no signal to the
+            // caller that anything was wrong. The commonest cause is passing "data" instead of
+            // "values" — a more common convention elsewhere that this schema does not use — so
+            // name the field explicitly rather than leaving the caller to guess from a blank chart.
+            if (vals.isEmpty() && sNode.path("values").isMissingNode()) {
+                java.util.List<String> seenKeys = new java.util.ArrayList<>();
+                sNode.fieldNames().forEachRemaining(seenKeys::add);
+                throw new IllegalArgumentException(
+                    "chart panel '" + (p.title == null ? "untitled" : p.title)
+                    + "': series '" + sNode.path("name").asText("(unnamed)")
+                    + "' has no 'values' array (saw fields: " + seenKeys
+                    + "). Each series needs values (array of numbers) — not data or points.");
+            }
             p.series.add(new ChartRenderer.SeriesSpec(sNode.path("name").asText(), vals));
         }
         if (p.categories.isEmpty() || p.series.isEmpty()) {
@@ -3645,7 +3848,13 @@ public class McpServer {
         // at all appears to hang because it is queued behind the query that is still
         // running. Verified enforced on this path -- a 5s limit aborted a three-way cross
         // join at 5996ms -- so it is a real bound rather than an advisory one.
-        stmt.setQueryTimeout(queryTimeoutSeconds());
+        int timeoutSeconds = queryTimeoutSeconds();
+        stmt.setQueryTimeout(timeoutSeconds);
+        // Registered with the WATCHDOG above: setQueryTimeout has been observed not to fire on
+        // a query wedged inside DuckDB's own engine (see ACTIVE_STATEMENTS' doc), so this is the
+        // backstop, not a duplicate of the line above.
+        long startedAtMillis = System.currentTimeMillis();
+        ACTIVE_STATEMENTS.put(stmt, new long[]{startedAtMillis, timeoutSeconds});
         try {
             ResultSet rs = executeWithRepair(stmt, effective);
             ResultSetMetaData meta = rs.getMetaData();
@@ -3690,7 +3899,31 @@ public class McpServer {
             }
             rs.close();
             return arr;
+        } catch (Exception ex) {
+            // If the watchdog cancelled this exact statement, say so explicitly and with the
+            // real elapsed time — the alternative is DuckDB's own "Interrupted!" text (which
+            // names neither a timeout nor a bound) or, if cancel() itself failed to unblock the
+            // thread and it only returns because the connection was later evicted, whatever
+            // generic "connection closed" error that produces. Both leave an agent unable to
+            // tell "narrow the query" from "this looks like a crash".
+            Long cancelledAt = WATCHDOG_CANCELLED_AT.remove(stmt);
+            if (cancelledAt != null) {
+                long elapsedSeconds = (System.currentTimeMillis() - startedAtMillis) / 1000;
+                throw new java.sql.SQLException(
+                    "WATCHDOG_TIMEOUT: this query ran " + elapsedSeconds + "s — past its own "
+                    + timeoutSeconds + "s bound and the server's " + WATCHDOG_TIMEOUT_MULTIPLE
+                    + "x cancellation watchdog, which then cancelled it directly (the normal "
+                    + "per-query timeout did not stop it on its own). This IS a timeout, not a "
+                    + "crash and not missing data — the statement was still running. If the "
+                    + "query scans broadly, narrowing it usually helps: filter on the partition "
+                    + "columns, shorten the year range, or aggregate in SQL rather than "
+                    + "scanning rows. If an already-narrow query still hits this, the table "
+                    + "itself is the problem: stop rewriting it, source the figure elsewhere, "
+                    + "and file it with report_issue naming the exact statement.", ex);
+            }
+            throw ex;
         } finally {
+            ACTIVE_STATEMENTS.remove(stmt);
             stmt.close();
         }
     }
