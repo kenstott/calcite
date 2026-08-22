@@ -477,3 +477,55 @@ session; reported here and in the Govdata Defect Register for them to apply.
 **Also still open**: no congressional committee membership/jurisdiction table exists anywhere in
 the catalog. Suggest adding one (e.g. sourced from Congress.gov's committee-membership endpoint)
 to the `officials` schema.
+
+---
+
+## DQ-018 — `cftc.commodity_derivatives` hangs on a bare COUNT(*); and CFTC COT positioning is a real, missing dataset
+
+**Table**: `cftc.commodity_derivatives` (and likely its siblings — `credit_default_swaps`,
+`equity_derivatives`, `fx_derivatives`, `rate_swaps` — all filtered VIEWs over the same
+`cftc_trades` base table)
+**Severity**: Medium — a hang, not a wrong answer, but on the simplest possible query
+**Scope**: any unfiltered or lightly-filtered query against these views
+**Discovered**: 2026-08-22
+
+**Symptom**: `SELECT COUNT(*) FROM cftc.commodity_derivatives` does not return within 60s on a
+freshly-started, otherwise-idle host — reproduced directly, independent of any specific question
+or prior host state. Same failure shape as DQ-016 (`sec.financial_facts`): a VIEW's own filter
+(here, presumably a WHERE/asset-class filter selecting energy/ag/metals swaps out of all asset
+classes) appears not to push down before scanning the much larger base table (`cftc_trades`,
+individual DTCC GTR swap dissemination records — plausibly a very large table given it covers
+every reported OTC swap event across all asset classes).
+
+**Context this was found in**: arm A of the comparative-eval harness
+(`cftc-positioning-vs-physical-energy-production`, 2026-08-22) was asked to report speculative
+*futures* positioning (the CFTC Commitments of Traders concept) for energy contracts. It correctly
+judged that `cftc.commodity_derivatives` — OTC swap transaction records — was not the right table
+for that (COT positioning and OTC swap dissemination are two entirely different CFTC datasets) and
+went to CFTC's own public data directly instead, which is the right call independent of whether
+the table also hangs.
+
+**The more important finding: CFTC Commitments of Traders (COT) does not exist in this catalog at
+all**, and it should — it is the standard weekly speculative-positioning series used across
+finance/commodities questions, and confirmed independently needed twice in one day: this
+harness's own bare arm and a real Claude Desktop session (run by the user, outside this harness)
+both went straight to CFTC's public Socrata API for it, unprompted, and produced correct results.
+
+**Concrete source, verified working today**:
+- Portal: `publicreporting.cftc.gov`, Socrata API.
+- Dataset: Disaggregated Futures-Only report, resource ID `72hh-3qpy` (verify current ID before
+  building — CFTC's dataset IDs can change; `WebSearch "CFTC publicreporting.cftc.gov disaggregated
+  futures only resource id"` if in doubt).
+- Query shape: `https://publicreporting.cftc.gov/resource/72hh-3qpy.json?cftc_contract_market_code=067651&$where=report_date_as_yyyy_mm_dd>='2024-01-01'&$order=report_date_as_yyyy_mm_dd&$limit=5000`
+  (067651 = NYMEX WTI crude, 023651 = NYMEX Henry Hub natural gas — other contracts have their own
+  codes).
+- Key fields: `report_date_as_yyyy_mm_dd`, `m_money_positions_long_all` /
+  `m_money_positions_short_all` (managed-money long/short — the standard "speculative positioning"
+  proxy), `open_interest_all`. `net_managed_money = long - short`, weekly, as-of-Tuesday.
+- No API key required.
+
+**Suggested, for the data team**: (1) investigate the same filter-pushdown pattern as DQ-016 for
+`commodity_derivatives` and its sibling filtered views — likely the same root cause, possibly the
+same fix. (2) Add CFTC COT (Disaggregated Futures-Only, and possibly Legacy/Supplemental) as a new
+govdata source — it is a real, independently-confirmed gap, not a hypothetical one, and the public
+endpoint above is already verified working with no auth required.
