@@ -109,7 +109,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal"
+  echo "                 ref, fec, fedregister, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -182,6 +182,7 @@ for arg in "$@"; do
       queue+=(environment:historical environment:daily)
       queue+=(research:historical research:daily)
       queue+=(fiscal:historical fiscal:daily)
+      queue+=(banking:historical banking:daily)
       queue+=(econ_reference:daily)
       # See the daily) alias below for why ref:daily is queued last here too.
       queue+=(ref:daily)
@@ -239,7 +240,7 @@ for arg in "$@"; do
       # census=qwi_employment (fixed literal 2022-2024 quarter list, no year dimension --
       # without this slot it fell through to every census:${_y} worker at once, all racing
       # to commit the same Iceberg partitions concurrently; confirmed live 2026-08-14).
-      for _s in ag disasters housing transport environment fiscal census; do
+      for _s in ag disasters housing transport environment fiscal census banking; do
         hcy_enqueue "$_s" once
       done
       # Year loop (current year is daily's slot, so start at cy-1).
@@ -249,7 +250,7 @@ for arg in "$@"; do
         fec fedregister cftc
         health edu patents lands
         # Split-schema year-addressable tables (snapshots handled by the :once slots above).
-        housing transport environment ag disasters fiscal
+        housing transport environment ag disasters fiscal banking
       )
       _y=$((_cy - 1))
       while [ "$_y" -ge 2010 ]; do
@@ -267,7 +268,7 @@ for arg in "$@"; do
         sec:dq sec_secondary:dq sec_prices:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq officials:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq
+        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq banking:dq
       )
       ;;
 
@@ -280,7 +281,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild officials:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild banking:dq-rebuild
       )
       ;;
 
@@ -293,7 +294,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume officials:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume banking:dq-etl-resume
       )
       ;;
 
@@ -320,6 +321,7 @@ for arg in "$@"; do
         environment:daily
         research:daily
         fiscal:daily
+        banking:daily
         econ_reference:daily
         # ref:daily is queued last, not for a hard ordering guarantee (this pool has none —
         # admission is memory-budget-gated, not dependency-gated, so ref can still start
@@ -484,6 +486,8 @@ active_starts=()
 active_slots=()         # "schema:mode" for each active worker (used for re-queuing)
 active_heap_mb=()       # Max heap in MB for each active worker
 active_timeout_secs=()  # Per-worker idle timeout in seconds
+active_last_line=()     # Last real (INFO/WARN/ERROR) log line seen per worker — content, not GC noise
+active_last_time=()     # Wall-clock time that content last changed, per worker
 committed_mb=0          # Sum of max heaps of all active workers
 
 # Counters
@@ -592,6 +596,8 @@ launch_worker() {
   local foot_mb=$((heap_mb + WORKER_NATIVE_MB))
   active_heap_mb+=("$foot_mb")
   active_timeout_secs+=("$timeout_secs")
+  active_last_line+=("")
+  active_last_time+=("$(date +%s)")
   committed_mb=$((committed_mb + foot_mb))
 
   log_info "Launched $id (PID $pid, heap ${heap_mb}MB +${WORKER_NATIVE_MB}MB native = ${foot_mb}MB, timeout ${timeout_mins}min) — committed: ${committed_mb}MB / ${budget_mb}MB budget"
@@ -665,6 +671,7 @@ remove_active() {
   if [ "$committed_mb" -lt 0 ]; then committed_mb=0; fi
 
   local new_pids=() new_labels=() new_starts=() new_slots=() new_heaps=() new_timeouts=()
+  local new_lastlines=() new_lasttimes=()
   for i in "${!active_pids[@]}"; do
     if [ "$i" -ne "$idx" ]; then
       new_pids+=("${active_pids[$i]}")
@@ -673,6 +680,8 @@ remove_active() {
       new_slots+=("${active_slots[$i]}")
       new_heaps+=("${active_heap_mb[$i]}")
       new_timeouts+=("${active_timeout_secs[$i]}")
+      new_lastlines+=("${active_last_line[$i]}")
+      new_lasttimes+=("${active_last_time[$i]}")
     fi
   done
   active_pids=("${new_pids[@]+"${new_pids[@]}"}")
@@ -681,6 +690,8 @@ remove_active() {
   active_slots=("${new_slots[@]+"${new_slots[@]}"}")
   active_heap_mb=("${new_heaps[@]+"${new_heaps[@]}"}")
   active_timeout_secs=("${new_timeouts[@]+"${new_timeouts[@]}"}")
+  active_last_line=("${new_lastlines[@]+"${new_lastlines[@]}"}")
+  active_last_time=("${new_lasttimes[@]+"${new_lasttimes[@]}"}")
 }
 
 # Kill a stuck worker and re-queue its slot
@@ -778,10 +789,40 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     fi
   fi
 
+  # Refresh real-activity tracking for every active worker, every poll — independent of
+  # the uptime gate below, so active_last_time always reflects the true last-progress
+  # moment by the time a worker crosses its timeout threshold.
+  #
+  # Deliberately NOT raw file mtime: launch.log interleaves the JVM's own -Xlog:gc output
+  # with application log lines (both go to the same '>> log_file 2>&1' redirect), and GC
+  # threads keep running — and appending '[gc]' lines — even while the main thread is
+  # permanently deadlocked on a stuck socket read (one real hang's log had 4,795 GC-only
+  # lines, the file's very last write being a GC event long after real work stopped). That
+  # keeps the file's mtime "fresh" forever, so a raw-mtime idle check can never fire no
+  # matter how long the hang runs — confirmed the actual reason sec_primary/sec_secondary
+  # hangs have needed manual kill+relaunch every time despite a correctly-configured
+  # 720-minute timeout (common.sh get_timeout_config). Match the same
+  # 'grep -E " (INFO|WARN|ERROR) "' filter the status display below already uses (it
+  # already excludes GC lines, since those use a different '[info][gc]' bracket format,
+  # not ' INFO '/' WARN '/' ERROR ' with spaces) — content-based, not timestamp-parsed, so
+  # it doesn't need to handle the app log's bare HH:MM:SS (no date) format or day rollovers
+  # across multi-hour runs.
+  for i in "${!active_pids[@]}"; do
+    id="${active_labels[$i]}"
+    log_file="$SCRIPT_DIR/runs/${id}/launch.log"
+    cur_line=""
+    if [ -f "$log_file" ]; then
+      cur_line=$(grep -E " (INFO|WARN|ERROR) " "$log_file" 2>/dev/null | tail -1)
+    fi
+    if [ "$cur_line" != "${active_last_line[$i]}" ]; then
+      active_last_line[$i]="$cur_line"
+      active_last_time[$i]="$(date +%s)"
+    fi
+  done
+
   # Check for stuck workers
   i=0
   while [ "$i" -lt "${#active_pids[@]}" ]; do
-    id="${active_labels[$i]}"
     now=$(date +%s)
     worker_timeout_secs="${active_timeout_secs[$i]:-$TIMEOUT_SECS}"
     uptime_secs=$(( now - active_starts[$i] ))
@@ -789,18 +830,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
       ((i++)) || true
       continue
     fi
-    log_file="$SCRIPT_DIR/runs/${id}/launch.log"
-    if [ -f "$log_file" ]; then
-      # launch.log is a symlink to launch_<ts>.log; the symlink's own mtime is
-      # frozen at creation (launch time). stat does NOT dereference by default,
-      # so plain 'stat -c %Y' returns that frozen mtime and idle_secs collapses to
-      # uptime — turning this idle check into a hard wall-clock cap that kills any
-      # worker still busy at its timeout. -L follows the link to the live log file.
-      last_modified=$(stat -L -c '%Y' "$log_file" 2>/dev/null || echo "$now")
-      idle_secs=$(( now - last_modified ))
-    else
-      idle_secs=$uptime_secs
-    fi
+    idle_secs=$(( now - active_last_time[$i] ))
     if [ "$idle_secs" -ge "$worker_timeout_secs" ]; then
       kill_and_requeue "$i"
       continue

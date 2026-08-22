@@ -1,0 +1,1197 @@
+# ============================================================================
+# U.S. Banking Schema (BANKING)
+# ============================================================================
+# Data Sources (validated live in this session — real curl samples, not docs):
+#   - FDIC BankFind Suite API (api.fdic.gov/banks/*) — institutions, locations,
+#     branch history, failures, Summary of Deposits, call-report financials,
+#     and industry summaries — free, no key
+#   - CFPB Consumer Complaint Database search API
+#     (consumerfinance.gov/data-research/consumer-complaints/search/api/v1) —
+#     free, no key
+#
+# Design principles (see govdata-schema-authoring):
+#   - One ETL table = one raw source. No multi-source transformers.
+#   - FDIC pages every endpoint via the engine-native OFFSET paginator
+#     (limit/offset — FDIC's own param names). limit is capped at 10000/request;
+#     offset has no deep-pagination wall (confirmed against offset=27000 on a
+#     27,836-row table).
+#   - FDIC dates arrive as MM/DD/YYYY strings, not ISO-8601 — AbstractFdicTransformer's
+#     putFdicDate parses them and emits ISO yyyy-MM-dd. The sentinel 12/31/9999
+#     ("still open/active") is carried through as a real (very large) date, not nulled.
+#   - institutions and locations are snapshot tables (no year dimension; whole file
+#     re-fetched and overwritten each run). history, failures, sod, financials, and
+#     summary are delta tables windowed by a `year` dimension, each fetched as one
+#     annual FDIC filter query (backfill_period: annual).
+#   - consumer_complaints is CFPB-sourced (different host, OpenSearch-shaped response,
+#     ISO-8601 dates) and is fanned out over year x state x product to keep each fetch
+#     unit under CFPB's 10,000-row page cap.
+#   - FDIC's institutions/locations endpoints return a real ETag header (confirmed live:
+#     `curl -sI` on institutions returned a stable content-hash ETag), so those two
+#     snapshot tables use freshness: {type: etag} to skip re-fetching when unchanged.
+#     CFPB's HMDA/complaint endpoints expose no such header, so CFPB-sourced tables use
+#     freshness: {type: hash} instead; delta tables rely on period-gating (past years
+#     immutable) with no freshness gate needed.
+#   - Cross-schema joins to geo (states/counties/zctas).
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:banking}"
+dataLagYears: 0
+materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+
+comment: >
+  U.S. banking-sector data: FDIC-insured institution and branch registries,
+  branch-network change history, bank failures, branch-level deposit summaries,
+  call-report financials, and industry-wide summaries, plus CFPB consumer
+  complaints against financial companies. Each institution/branch row carries
+  a county_fips/state_abbr for joins to geo (states/counties), and complaint
+  rows join to institutions/companies by name for consumer-protection research.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  county_fips_column: &county_fips_column
+    name: county_fips
+    type: string
+    nullable: true
+    comment: 5-digit county FIPS code (FK to geo.counties)
+
+  state_abbr_column: &state_abbr_column
+    name: state_abbr
+    type: string
+    nullable: true
+    comment: 2-char USPS state abbreviation (FK to geo.state_ref.state_abbr)
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  partition_state: &partition_state
+    name: state
+    type: VARCHAR
+
+  partition_product: &partition_product
+    name: product
+    type: VARCHAR
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  complaints_partitions: &complaints_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - *partition_state
+      - *partition_product
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # FDIC history/failures/financials/summary genuinely go back to 1934 (FDIC's founding
+  # year); no publish lag since past years are immutable and the current year is useful
+  # as-is.
+  banking_year_range: &banking_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1934}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
+  # Summary of Deposits (sod) earliest sample seen is 1994.
+  sod_year_range: &sod_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1994}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
+  # CFPB complaint data starts ~2011/2012.
+  complaints_year_range: &complaints_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2011}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
+  # 50 states + DC + Puerto Rico (same set as housing's hmda_states; YAML anchors do not
+  # cross files, so the values are duplicated here).
+  banking_states: &banking_states
+    type: list
+    values: ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID",
+             "IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO",
+             "MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
+             "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR"]
+
+  # Each of these 5 products individually stays under CFPB's 10,000-row page cap even
+  # for the largest state/recent-year combination tested (California, 2023).
+  banking_products: &banking_products
+    type: list
+    values:
+      - "Checking or savings account"
+      - "Mortgage"
+      - "Credit card"
+      - "Money transfer, virtual currency, or money service"
+      - "Debt collection"
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # INSTITUTIONS — FDIC BankFind Suite /banks/institutions (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: institutions
+    # Freshness gate: FDIC BankFind Suite returns a real ETag on this endpoint (confirmed
+    # live via `curl -sI`) — a cheap pre-download probe skips the whole paginated fetch
+    # when the underlying data hasn't changed, rather than re-downloading every run.
+    freshness:
+      type: etag
+    pattern: "type=institutions/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Snapshot of every FDIC-insured institution, active and inactive — charter class,
+      chartering/regulating agency, main-office location, and total_assets_thousands /
+      total_deposits_thousands as of the latest call report. One row per institution;
+      PK is cert. Joins to locations, history, failures, sod, and financials by cert.
+      Source: api.fdic.gov/banks/institutions.
+
+    dimensions:
+      type:
+        - institutions
+
+    columns:
+      - name: cert
+        type: long
+        nullable: false
+        comment: FDIC certificate number (PK)
+      - name: name
+        type: string
+        nullable: false
+        comment: Institution legal name
+      - name: active
+        type: boolean
+        nullable: true
+        comment: Whether the institution is currently FDIC-insured and active
+      - name: charter_class
+        type: string
+        nullable: true
+        comment: FDIC charter class code (e.g. NM, SM, N, SB)
+      - name: charter_agency
+        type: string
+        nullable: true
+        comment: Chartering agency
+      - name: regulator
+        type: string
+        nullable: true
+        comment: Primary federal regulator
+      - name: city
+        type: string
+        nullable: true
+        comment: Main office city
+      - <<: *state_abbr_column
+      - name: zip
+        type: string
+        nullable: true
+        comment: Main office ZIP code
+      - <<: *county_fips_column
+        comment: 5-digit state+county FIPS of the main office (FK to geo.counties)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Main office latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Main office longitude
+      - name: established_date
+        type: date
+        nullable: true
+        comment: Date the institution was established
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Date the current institution record became effective
+      - name: inactive_date
+        type: date
+        nullable: true
+        comment: >
+          Date the institution ceased to be FDIC-insured. The sentinel 9999-12-31 is
+          FDIC's own "still open" marker (carried through as a real, very-large date,
+          not nulled), meaning the institution is still active.
+      - name: total_assets_thousands
+        type: long
+        nullable: true
+        comment: Total assets as of the latest call report (USD thousands)
+      - name: total_deposits_thousands
+        type: long
+        nullable: true
+        comment: Total deposits as of the latest call report (USD thousands)
+      - name: webaddr
+        type: string
+        nullable: true
+        comment: Institution website
+      - name: specialization_group
+        type: string
+        nullable: true
+        comment: FDIC specialization group description
+      - name: report_date
+        type: date
+        nullable: true
+        comment: Date of the latest call report reflected in this snapshot
+
+    source:
+      type: http
+      url: "https://api.fdic.gov/banks/institutions"
+      method: GET
+      parameters:
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicInstitutionsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=institutions/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: institutions
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # LOCATIONS — FDIC BankFind Suite /banks/locations (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: locations
+    # Freshness gate: same ETag-based probe as institutions (confirmed live on this
+    # endpoint too) — skips the whole paginated fetch when unchanged.
+    freshness:
+      type: etag
+    pattern: "type=locations/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Snapshot of every FDIC-insured institution's branch/office locations —
+      main-office flag, service type, and geocoded address. One row per office;
+      PK is uninum. Joins to institutions by cert and to sod (branch-level deposits)
+      by uninum. Source: api.fdic.gov/banks/locations.
+
+    dimensions:
+      type:
+        - locations
+
+    columns:
+      - name: uninum
+        type: long
+        nullable: false
+        comment: FDIC unique office number (PK)
+      - name: cert
+        type: long
+        nullable: true
+        comment: FK to banking.institutions.cert
+      - name: office_name
+        type: string
+        nullable: true
+        comment: Office name
+      - name: is_main_office
+        type: boolean
+        nullable: true
+        comment: Whether this office is the institution's main office
+      - name: service_type
+        type: string
+        nullable: true
+        comment: Office service type description
+      - name: address
+        type: string
+        nullable: true
+        comment: Street address
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - <<: *state_abbr_column
+      - name: zip
+        type: string
+        nullable: true
+        comment: ZIP code
+      - <<: *county_fips_column
+      - name: cbsa_name
+        type: string
+        nullable: true
+        comment: Core-based statistical area name
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Office latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Office longitude
+      - name: established_date
+        type: date
+        nullable: true
+        comment: Date the office was established
+      - name: acquired_date
+        type: date
+        nullable: true
+        comment: Date the office was acquired (nullable — FDIC often returns JSON null)
+
+    source:
+      type: http
+      url: "https://api.fdic.gov/banks/locations"
+      method: GET
+      parameters:
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicLocationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=locations/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: locations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # HISTORY — FDIC BankFind Suite /banks/history (delta, annual)
+  # ---------------------------------------------------------------------------
+  - name: history
+    pattern: "type=history/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Branch-network change events (opening / closing / acquired-in-merger, etc.) — the
+      branch open/close/merger event log. One row per transaction; PK is transnum.
+      Windowed by EFFYEAR (effective year of the change). Joins to institutions by cert.
+      Source: api.fdic.gov/banks/history.
+
+    dimensions:
+      type:
+        - history
+      year: *banking_year_range
+
+    columns:
+      - name: transnum
+        type: long
+        nullable: false
+        comment: FDIC transaction number (PK)
+      - name: cert
+        type: long
+        nullable: true
+        comment: FK to banking.institutions.cert
+      - name: institution_name
+        type: string
+        nullable: true
+        comment: Institution name at time of the event
+      - name: changecode
+        type: integer
+        nullable: true
+        comment: FDIC change-event code
+      - name: changecode_label
+        type: string
+        nullable: true
+        comment: >
+          Human-readable changecode label, e.g. 'Branch Closing', 'Branch Opening',
+          'Branch Acquired in Merger/Consolidation/Failure'.
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Effective date of the change (drives the year partition)
+      - name: office_name
+        type: string
+        nullable: true
+        comment: Office name
+      - name: office_city
+        type: string
+        nullable: true
+        comment: Office city
+      - name: office_state_abbr
+        type: string
+        nullable: true
+        comment: Office 2-char state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: office_county_name
+        type: string
+        nullable: true
+        comment: Office county name
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Office latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Office longitude
+      - name: proc_date
+        type: date
+        nullable: true
+        comment: Date FDIC processed the change record
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://api.fdic.gov/banks/history"
+      method: GET
+      parameters:
+        filters: "EFFYEAR:[{year} TO {year}]"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicHistoryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=history/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: history
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAILURES — FDIC BankFind Suite /banks/failures (delta, annual)
+  # ---------------------------------------------------------------------------
+  - name: failures
+    pattern: "type=failures/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Bank failure resolutions — resolution type, deposits/assets at failure, and the
+      acquiring institution (when any). One row per failure; PK is id. Windowed by
+      FAILYR. cert is nullable — some very old records have no CERT. Joins to
+      institutions by cert. Source: api.fdic.gov/banks/failures.
+
+    dimensions:
+      type:
+        - failures
+      year: *banking_year_range
+
+    columns:
+      - name: id
+        type: integer
+        nullable: false
+        comment: FDIC failure record id (PK)
+      - name: cert
+        type: long
+        nullable: true
+        comment: FK to banking.institutions.cert (nullable — some very old records have no CERT)
+      - name: institution_name
+        type: string
+        nullable: true
+        comment: Failed institution name
+      - name: city
+        type: string
+        nullable: true
+        comment: Failed institution city
+      - <<: *state_abbr_column
+      - name: fail_date
+        type: date
+        nullable: true
+        comment: Date of failure (drives the year partition)
+      - name: resolution_type
+        type: string
+        nullable: true
+        comment: FDIC resolution type code
+      - name: deposits_at_failure_thousands
+        type: long
+        nullable: true
+        comment: Deposits at time of failure (USD thousands)
+      - name: assets_at_failure_thousands
+        type: long
+        nullable: true
+        comment: Assets at time of failure (USD thousands)
+      - name: acquirer_name
+        type: string
+        nullable: true
+        comment: Acquiring institution name (null if no acquirer / deposit payoff)
+      - name: acquirer_city
+        type: string
+        nullable: true
+        comment: Acquiring institution city
+      - name: acquirer_state_abbr
+        type: string
+        nullable: true
+        comment: Acquiring institution 2-char state abbreviation
+      - name: cost_thousands
+        type: double
+        nullable: true
+        comment: Estimated cost to the Deposit Insurance Fund (USD thousands)
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://api.fdic.gov/banks/failures"
+      method: GET
+      parameters:
+        filters: "FAILYR:[{year} TO {year}]"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicFailuresTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=failures/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: failures
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # SOD (Summary of Deposits) — FDIC BankFind Suite /banks/sod (delta, annual)
+  # ---------------------------------------------------------------------------
+  - name: sod
+    pattern: "type=sod/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Annual branch-level deposit totals from FDIC's Summary of Deposits survey —
+      deposits_branch_thousands per branch plus the owning institution's
+      deposits_institution_total_thousands. One row per (branch, year); windowed by
+      the literal YEAR field (a plain equality filter, not a range). Joins to
+      locations by uninum and to institutions by cert. Source: api.fdic.gov/banks/sod.
+
+    dimensions:
+      type:
+        - sod
+      year: *sod_year_range
+
+    columns:
+      - name: uninum
+        type: long
+        nullable: false
+        comment: FDIC unique office number (FK to banking.locations.uninum)
+      - name: cert
+        type: long
+        nullable: true
+        comment: FK to banking.institutions.cert
+      - name: office_name
+        type: string
+        nullable: true
+        comment: Branch office name
+      - name: address
+        type: string
+        nullable: true
+        comment: Branch street address
+      - name: city
+        type: string
+        nullable: true
+        comment: Branch city
+      - <<: *state_abbr_column
+      - <<: *county_fips_column
+      - name: zip
+        type: string
+        nullable: true
+        comment: Branch ZIP code
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Branch latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Branch longitude
+      - name: deposits_branch_thousands
+        type: long
+        nullable: true
+        comment: Deposits held at this branch as of June 30 (USD thousands)
+      - name: deposits_institution_total_thousands
+        type: long
+        nullable: true
+        comment: Total deposits across the owning institution's entire branch network (USD thousands)
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://api.fdic.gov/banks/sod"
+      method: GET
+      parameters:
+        filters: "YEAR:{year}"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicSodTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=sod/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: sod
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FINANCIALS — FDIC BankFind Suite /banks/financials (delta, annual) — HUGE
+  # ---------------------------------------------------------------------------
+  - name: financials
+    pattern: "type=financials/year=*/*.parquet"
+    partitions: *standard_partitions
+    # DQ sample cap (GOVDATA_DQ mode): call-report financials are millions of rows
+    # nationwide across all history. Cap each year's sample so DQ stops paginating
+    # early; prod loads everything.
+    dqRowLimit: 5000
+    comment: >
+      Quarterly call-report financials — total assets/liabilities, domestic deposits,
+      net income, employee count, and key ratios (equity/assets, net interest margin)
+      per institution per report date. One row per (cert, repdte). VERY LARGE
+      (millions of rows all-history). Windowed by a REPDTE date range covering the
+      calendar year. Joins to institutions by cert. Source: api.fdic.gov/banks/financials.
+
+    dimensions:
+      type:
+        - financials
+      year: *banking_year_range
+
+    columns:
+      - name: cert
+        type: long
+        nullable: false
+        comment: FK to banking.institutions.cert
+      - name: repdte
+        type: date
+        nullable: false
+        comment: Call-report date (part of the PK together with cert)
+      - name: total_assets_thousands
+        type: long
+        nullable: true
+        comment: Total assets (USD thousands)
+      - name: domestic_deposits_thousands
+        type: long
+        nullable: true
+        comment: Domestic office deposits (USD thousands)
+      - name: net_income_thousands
+        type: long
+        nullable: true
+        comment: Net income for the reporting period (USD thousands)
+      - name: total_liabilities_thousands
+        type: long
+        nullable: true
+        comment: Total liabilities (USD thousands)
+      - name: num_employees
+        type: integer
+        nullable: true
+        comment: Full-time-equivalent employee count
+      - name: equity_to_assets_pct
+        type: double
+        nullable: true
+        comment: Equity capital / total assets (%)
+      - name: net_interest_margin_pct
+        type: double
+        nullable: true
+        comment: Net interest margin, annualized (%)
+      - name: interest_expense_thousands
+        type: long
+        nullable: true
+        comment: Total interest expense (USD thousands)
+
+    backfill_period: annual
+
+    source:
+      type: http
+      # Confirmed live: the YYYYMMDD range filter below returns real rows. Also confirmed
+      # live: this endpoint's own REPDTE field in the response is YYYYMMDD (e.g. "20250331"),
+      # unlike institutions/locations/history/failures/sod which all render MM/DD/YYYY —
+      # AbstractFdicTransformer.putFdicDate() tries both formats to handle this.
+      url: "https://api.fdic.gov/banks/financials"
+      method: GET
+      parameters:
+        filters: "REPDTE:[{year}0101 TO {year}1231]"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicFinancialsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=financials/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: financials
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # SUMMARY — FDIC BankFind Suite /banks/summary (delta, annual)
+  # ---------------------------------------------------------------------------
+  - name: summary
+    pattern: "type=summary/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Annual FDIC industry summary — bank count, net income, interest income,
+      liabilities, and equity, either per-state or (when state_abbr is absent) a
+      nationwide rollup. One row per (year, state_abbr); windowed by the literal
+      YEAR field. Small table (~8K rows nationwide). Many fields are legitimately
+      null in 1930s-40s records because call reports genuinely did not collect them
+      then — real historical sparsity, not an ETL defect. Source:
+      api.fdic.gov/banks/summary.
+
+    dimensions:
+      type:
+        - summary
+      year: *banking_year_range
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: >
+          Report year. Source YEAR field arrives as a string (e.g. "1934"); parsed
+          to int.
+      - <<: *state_abbr_column
+        comment: >
+          2-char USPS state abbreviation. Null/absent means a nationwide rollup row,
+          not a per-state one — FDIC's own aggregation grain, not a data defect.
+      - name: num_banks
+        type: integer
+        nullable: true
+        comment: Number of FDIC-insured institutions
+      - name: net_income_thousands
+        type: long
+        nullable: true
+        comment: Aggregate net income (USD thousands)
+      - name: total_interest_income_thousands
+        type: long
+        nullable: true
+        comment: Aggregate total interest income (USD thousands)
+      - name: total_liabilities_thousands
+        type: long
+        nullable: true
+        comment: Aggregate total liabilities (USD thousands)
+      - name: total_equity_thousands
+        type: long
+        nullable: true
+        comment: Aggregate total equity capital (USD thousands)
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://api.fdic.gov/banks/summary"
+      method: GET
+      parameters:
+        filters: "YEAR:{year}"
+        format: "json"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "meta.total"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.FdicSummaryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=summary/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: summary
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # CONSUMER COMPLAINTS — CFPB Consumer Complaint Database search API
+  # (delta year x state x product, JSON, OpenSearch-shaped) — HUGE
+  # ---------------------------------------------------------------------------
+  - name: consumer_complaints
+    pattern: "type=consumer_complaints/year=*/state=*/product=*/*.parquet"
+    partitions: *complaints_partitions
+    # DQ sample cap (GOVDATA_DQ mode): the full complaint database is millions of rows
+    # nationwide across all history. Cap each (year, state, product) fetch unit so DQ
+    # stops paginating early; prod loads everything.
+    dqRowLimit: 2000
+    comment: >
+      CFPB Consumer Complaint Database — one row per consumer complaint against a
+      financial company, with product/issue taxonomy and company response. Fanned out
+      over year x state x product (5 products) to keep each fetch unit under CFPB's
+      10,000-row page cap; the aggregations endpoint has no equivalent, so this is a
+      genuine per-complaint fetch, not an aggregate. PK is complaint_id. Different host
+      and response shape from the FDIC tables above (OpenSearch hits.hits[]._source;
+      ISO-8601 dates). Source:
+      consumerfinance.gov/data-research/consumer-complaints/search/api/v1.
+
+    dimensions:
+      type:
+        - consumer_complaints
+      year: *complaints_year_range
+      state: *banking_states
+      product: *banking_products
+
+    columns:
+      - name: complaint_id
+        type: long
+        nullable: false
+        comment: CFPB complaint id (PK)
+      - name: date_received
+        type: date
+        nullable: true
+        comment: Date CFPB received the complaint (drives the year partition)
+      - name: date_sent_to_company
+        type: date
+        nullable: true
+        comment: Date the complaint was sent to the company
+      - name: product
+        type: string
+        nullable: true
+        comment: Product category (drives the product partition)
+      - name: sub_product
+        type: string
+        nullable: true
+        comment: Sub-product category
+      - name: issue
+        type: string
+        nullable: true
+        comment: Complaint issue category
+      - name: sub_issue
+        type: string
+        nullable: true
+        comment: Complaint sub-issue category
+      - name: company
+        type: string
+        nullable: true
+        comment: Company the complaint is against
+      - <<: *state_abbr_column
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: Consumer-reported ZIP code
+      - name: submitted_via
+        type: string
+        nullable: true
+        comment: Complaint submission channel (Web, Phone, Referral, etc.)
+      - name: company_response
+        type: string
+        nullable: true
+        comment: Company's public response to the complaint
+      - name: timely_response
+        type: string
+        nullable: true
+        comment: Whether the company responded within the CFPB timeliness standard
+      - name: has_narrative
+        type: boolean
+        nullable: true
+        comment: Whether the consumer opted to publish a complaint narrative
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/"
+      method: GET
+      parameters:
+        date_received_min: "{year}-01-01"
+        date_received_max: "{year}-12-31"
+        state: "{state}"
+        product: "{product}"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 10000
+          limitParam: "size"
+          offsetParam: "frm"
+          countPath: "hits.total.value"
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.banking.CfpbComplaintsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=consumer_complaints/year=*/state=*/product=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/banking"
+        tableName: consumer_complaints
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+# ============================================================================
+# CONSTRAINTS
+# ============================================================================
+
+constraints:
+
+  institutions:
+    primaryKey: [cert]
+
+  locations:
+    primaryKey: [uninum]
+    foreignKeys:
+      - columns: [cert]
+        targetSchema: banking
+        targetTable: institutions
+        targetColumns: [cert]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  history:
+    primaryKey: [transnum]
+    foreignKeys:
+      - columns: [cert]
+        targetSchema: banking
+        targetTable: institutions
+        targetColumns: [cert]
+      - columns: [office_state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  failures:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [cert]
+        targetSchema: banking
+        targetTable: institutions
+        targetColumns: [cert]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  sod:
+    primaryKey: [uninum, year]
+    foreignKeys:
+      - columns: [uninum]
+        targetSchema: banking
+        targetTable: locations
+        targetColumns: [uninum]
+      - columns: [cert]
+        targetSchema: banking
+        targetTable: institutions
+        targetColumns: [cert]
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  financials:
+    primaryKey: [cert, repdte]
+    foreignKeys:
+      - columns: [cert]
+        targetSchema: banking
+        targetTable: institutions
+        targetColumns: [cert]
+
+  summary:
+    primaryKey: [year, state_abbr]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  consumer_complaints:
+    primaryKey: [complaint_id]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit ZIP to the conformed ZCTA dimension

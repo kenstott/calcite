@@ -96,6 +96,7 @@ public final class GovDataModelVerificationRunner {
     SCHEMA_YAML.put("environment", "/environment/environment-schema.yaml");
     SCHEMA_YAML.put("research", "/research/research-schema.yaml");
     SCHEMA_YAML.put("fiscal", "/fiscal/fiscal-schema.yaml");
+    SCHEMA_YAML.put("banking", "/banking/banking-schema.yaml");
     KNOWN_SCHEMAS.addAll(SCHEMA_YAML.keySet());
   }
 

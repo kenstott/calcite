@@ -84,7 +84,7 @@ public class McpServer {
     static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
-        + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal";
+        + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking";
 
     // Connections keyed by comma-joined source set. The all-schemas set is warmed at
     // startup and backs every tool; narrower sets exist only for legacy callers.
