@@ -437,3 +437,43 @@ usable, documented key.
 its own), or add an explicit single-dimension flag/column to `financial_facts_by_segment` so a
 caller can select one Axis at a time instead of ILIKE-matching across the whole concatenated
 Member list.
+
+---
+
+## DQ-017 — `fec.committees` name collides with congressional committees; description was correct, discovery wasn't
+
+**Table**: `fec.committees`
+**Severity**: Low — a metadata/discoverability improvement, not a description error
+**Scope**: any question about congressional committee membership or jurisdiction
+**Discovered**: 2026-08-22
+
+**Symptom**: no schema in the catalog covers congressional committee membership or jurisdiction
+(`officials.members` has no committee-assignment field either). A caller reaching for that data —
+e.g. "who sits on House Financial Services" — has a plausible reason to try `fec.committees`
+first, given the name, and only discovers the mismatch after reading its description or querying
+it directly.
+
+**Not a misdescription.** The table's existing comment was already accurate: "All political
+committees registered with the FEC. Includes PACs, party committees, campaign committees, and
+Super PACs." It never claimed to cover congressional committees and nothing in it was wrong. The
+actual problem is narrower: a correct, generic description does not by itself warn off a plausible
+confusion a caller is likely to walk into via the table's name — especially through keyword-based
+`search_catalog` matching, where "committee" surfaces this table as a false-positive-looking
+candidate for an unrelated question.
+
+**Found by**: arm A of the comparative-eval harness (`campaign-money-vs-committee-jurisdiction-
+alignment`, 2026-08-22), which confirmed via `list_schemas`/`list_tables`/`search_catalog` that no
+committee-assignment table exists, filed the gap via `report_issue`, and worked around it with an
+external research pass for 118th Congress committee rosters — the run's headline result was not
+degraded by this, just the effort to reach it.
+
+**Suggested fix, not applied here — for the data team to schedule**: lead `fec.committees`'
+comment with an explicit disambiguation ("NOT CONGRESSIONAL COMMITTEES"), naming the actual gap
+(no schema carries committee assignments) so a caller who lands here via the name collision is
+redirected immediately rather than after a wasted query. Comment-only change, no reseed required —
+but govdata schema/metadata edits are the data team's call, not applied unilaterally from this
+session; reported here and in the Govdata Defect Register for them to apply.
+
+**Also still open**: no congressional committee membership/jurisdiction table exists anywhere in
+the catalog. Suggest adding one (e.g. sourced from Congress.gov's committee-membership endpoint)
+to the `officials` schema.
