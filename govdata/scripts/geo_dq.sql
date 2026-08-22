@@ -663,72 +663,103 @@ SELECT 'geo', tbl, 'existence',
 FROM counts;
 
 -- ============================================================================
--- VIEW CHECKS — county_adjacency
+-- TABLE CHECKS — county_adjacency
 -- ============================================================================
--- The view itself is not an Iceberg table (no s3:// path of its own) — it's a
--- computed SQL view over counties, built directly against the latest TIGER
--- vintage. Recompute its logic inline here against the raw counties table so
--- this check is self-contained and doesn't require the full schema-factory
--- view-registration pipeline that GOVDATA_DQ runs outside of.
+-- Real Census Bureau County Adjacency File, ingested directly (see geo-schema.yaml
+-- comment on this table) — replaces the ST_Touches-on-TIGER-boundary-polygons
+-- derivation this check used to recompute inline, which only covered ~15% of true
+-- adjacency (TIGER shared-edge polygons rarely align closely enough for an exact
+-- touch). The old derivation is kept, unused, as the `county_adjacency_st_touches_legacy`
+-- view for comparison; these checks now read the real ingested table instead.
+
+-- T1 — existence + volume sanity: the verified live source file has 18,966 real
+-- adjacency-pair rows (2026-08-21 fetch, undirected-symmetric, self-pairs excluded).
+-- A single evergreen file re-fetched per configured year, so total row count across
+-- all ingested years should be a small multiple of ~18,966, never near the old
+-- ST_Touches derivation's ~2,648.
+INSERT INTO dq_results
+SELECT 'geo', 'county_adjacency', 'T1_existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+       n::VARCHAR, '1',
+       CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true)) t;
 
 INSERT INTO dq_results
-WITH latest_year AS (
-  SELECT MAX(year) AS yr
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true)
-),
-c AS (
-  SELECT county_fips, state_fips, county_name, ST_GeomFromText(geometry) AS geom
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true), latest_year
+SELECT 'geo', 'county_adjacency', 'T2_row_count_per_year',
+       CASE WHEN n >= 15000 THEN 'pass' ELSE 'fail' END,
+       n::VARCHAR, '15000',
+       'distinct adjacency pairs for the latest ingested year — expect ~18,966; well below indicates a truncated fetch, not the old ST_Touches ~15% coverage'
+FROM (
+  SELECT COUNT(DISTINCT county_fips || '-' || neighbor_county_fips) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true), (
+    SELECT MAX(year) AS yr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true)
+  ) latest_year
   WHERE year = latest_year.yr
-),
-adjacency AS (
-  SELECT a.county_fips, a.state_fips
-  FROM c a
-  JOIN c b ON b.county_fips <> a.county_fips AND ST_Touches(a.geom, b.geom)
-)
-SELECT 'geo', 'county_adjacency', 'existence',
-       CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
-       COUNT(*)::VARCHAR, '1',
-       CASE WHEN COUNT(*) > 0 THEN 'readable' ELSE 'NO ROWS — adjacency view produced zero pairs' END
-FROM adjacency;
+) t;
 
--- T7 — coverage: every county in the latest vintage should have at least one
--- adjacent neighbor, EXCEPT genuine islands that have no land border with any
--- other county. Only Hawaii (state_fips='15', entirely island counties) is
--- auto-excluded below — a real but incomplete list. Other genuinely isolated
--- counties (e.g. Nantucket, MA) will still show up in the 'fail' list; that's
--- expected until they're added to the exclusion below, not a false alarm to
--- ignore — triage each flagged county_fips individually (island vs. a real
--- geometry/adjacency defect) before extending this list.
+-- T3 — symmetry: the source file is undirected-symmetric (A/B and B/A each get a
+-- row); every pair should have its reverse present. A large asymmetric count means
+-- the fetch/parse silently dropped rows, not a real one-directional adjacency.
 INSERT INTO dq_results
-WITH latest_year AS (
-  SELECT MAX(year) AS yr
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true)
+SELECT 'geo', 'county_adjacency', 'T3_symmetry',
+       CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+       n::VARCHAR, '0',
+       'adjacency pairs with no reverse (neighbor, county) row present in the latest ingested year'
+FROM (
+  WITH latest_year AS (
+    SELECT MAX(year) AS yr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true)
+  ),
+  pairs AS (
+    SELECT DISTINCT county_fips, neighbor_county_fips
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true), latest_year
+    WHERE year = latest_year.yr
+  )
+  SELECT COUNT(*) AS n
+  FROM pairs p
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pairs r
+    WHERE r.county_fips = p.neighbor_county_fips AND r.neighbor_county_fips = p.county_fips
+  )
+) t;
+
+-- T4 — coverage: every county in the latest TIGER vintage should appear as
+-- county_fips at least once in the latest-year adjacency table, EXCEPT genuine
+-- islands with no land-adjacent county. Only Hawaii (state_fips='15', entirely
+-- island counties) is auto-excluded below — a real but incomplete list. Other
+-- genuinely isolated counties (e.g. Nantucket, MA) will still show up in the
+-- 'fail' list; that's expected until they're added to the exclusion below, not a
+-- false alarm to ignore — triage each flagged county_fips individually (island vs.
+-- a real source-file gap) before extending this list.
+INSERT INTO dq_results
+WITH latest_tiger_year AS (
+  SELECT MAX(year) AS yr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true)
+),
+latest_adjacency_year AS (
+  SELECT MAX(year) AS yr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true)
 ),
 c AS (
-  SELECT county_fips, state_fips, county_name, ST_GeomFromText(geometry) AS geom
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true), latest_year
-  WHERE year = latest_year.yr
+  SELECT county_fips, state_fips, county_name
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties', allow_moved_paths := true), latest_tiger_year
+  WHERE year = latest_tiger_year.yr
 ),
-neighbor_counts AS (
-  SELECT a.county_fips, a.state_fips, a.county_name,
-         COUNT(*) FILTER (WHERE b.county_fips IS NOT NULL) AS n_neighbors
-  FROM c a
-  LEFT JOIN c b ON b.county_fips <> a.county_fips AND ST_Touches(a.geom, b.geom)
-  GROUP BY a.county_fips, a.state_fips, a.county_name
+adjacent_counties AS (
+  SELECT DISTINCT county_fips
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_adjacency', allow_moved_paths := true), latest_adjacency_year
+  WHERE year = latest_adjacency_year.yr
 ),
 isolated AS (
-  SELECT *,
+  SELECT c.*,
          -- Hawaii (state_fips '15') is entirely island counties with no land
          -- border to any other county — an acknowledged exception, not a defect.
-         (state_fips = '15') AS is_acknowledged_island
-  FROM neighbor_counts
-  WHERE n_neighbors = 0
+         (c.state_fips = '15') AS is_acknowledged_island
+  FROM c
+  LEFT JOIN adjacent_counties a ON a.county_fips = c.county_fips
+  WHERE a.county_fips IS NULL
 )
-SELECT 'geo', 'county_adjacency', 'coverage',
+SELECT 'geo', 'county_adjacency', 'T4_coverage',
        CASE WHEN COALESCE(SUM(CASE WHEN NOT is_acknowledged_island THEN 1 ELSE 0 END), 0) = 0 THEN 'pass' ELSE 'fail' END,
        COALESCE(SUM(CASE WHEN NOT is_acknowledged_island THEN 1 ELSE 0 END), 0)::VARCHAR, '0',
-       'counties with zero adjacent neighbors, excluding acknowledged island exceptions (Hawaii, state_fips=15): '
+       'counties with no adjacency row at all, excluding acknowledged island exceptions (Hawaii, state_fips=15): '
          || COALESCE(STRING_AGG(CASE WHEN NOT is_acknowledged_island THEN county_fips END, ', '), 'none')
 FROM isolated;
 

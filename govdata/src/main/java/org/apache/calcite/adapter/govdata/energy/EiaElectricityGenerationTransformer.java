@@ -17,8 +17,31 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 public class EiaElectricityGenerationTransformer extends EiaV2Transformer
     implements ResponseTransformer {
+
+  /** Real US state/DC postal codes -- everything else EIA reports under
+   * {@code location} (e.g. "US" for the national total, or numeric/named
+   * census-division codes such as "90" for Pacific) is a geographic rollup,
+   * not a state. */
+  private static final Set<String> US_STATE_ABBREVIATIONS =
+      Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+          "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA",
+          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA",
+          "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY",
+          "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX",
+          "UT", "VT", "VA", "WA", "WV", "WI", "WY")));
+
+  /** Sector codes that are rollups/aggregations of other sector codes rather
+   * than true leaf-level sectors. */
+  private static final Set<String> ROLLUP_CODES =
+      Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+          "ALL", "FOS", "REN", "AOR", "COW", "PET", "TSN")));
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -56,10 +79,20 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
         }
 
         String stateAbbr = getString(row, "location", "stateid");
-        if (stateAbbr != null) {
+        if (stateAbbr != null && "US".equals(stateAbbr)) {
+          out.putNull("state_abbr");
+          out.put("geo_level", "national");
+        } else if (stateAbbr != null && US_STATE_ABBREVIATIONS.contains(stateAbbr)) {
           out.put("state_abbr", stateAbbr);
+          out.put("geo_level", "state");
+        } else if (stateAbbr != null) {
+          // Census division codes (e.g. numeric codes like "90" for Pacific) leak through
+          // the same location field -- these are rollups, not real states.
+          out.putNull("state_abbr");
+          out.put("geo_level", "division");
         } else {
           out.putNull("state_abbr");
+          out.putNull("geo_level");
         }
 
         String stateDesc = getString(row, "locationDescription", "stateDescription");
@@ -72,8 +105,10 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
         String sourceCode = getString(row, "fueltypeid");
         if (sourceCode != null) {
           out.put("energy_source_code", sourceCode);
+          out.put("fuel_is_rollup", ROLLUP_CODES.contains(sourceCode));
         } else {
           out.putNull("energy_source_code");
+          out.putNull("fuel_is_rollup");
         }
 
         String sourceDesc = getString(row, "fuelTypeDescription");
@@ -86,8 +121,10 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
         String sectorCode = getString(row, "sectorid");
         if (sectorCode != null) {
           out.put("sector_code", sectorCode);
+          out.put("sector_is_rollup", ROLLUP_CODES.contains(sectorCode));
         } else {
           out.putNull("sector_code");
+          out.putNull("sector_is_rollup");
         }
 
         String sectorDesc = getString(row, "sectorDescription");

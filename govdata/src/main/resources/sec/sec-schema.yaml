@@ -349,8 +349,11 @@ partitionedTables:
     comment: >
       SEC filing metadata for all public company submissions. Forms include:
       10-K (annual report with audited financials), 10-Q (quarterly report),
-      8-K (current report for material events like earnings, M&A, executive changes),
-      DEF 14A (proxy statement for shareholder meetings), and Form 3/4/5 (insider trading).
+      8-K (current report of a material event), DEF 14A (proxy statement for shareholder
+      meetings), and Form 3/4/5 (insider trading). This table does not carry 8-K item codes
+      (which event a given 8-K reports — earnings, M&A, executive changes, etc.); those are
+      queryable as `section` on vectorized_chunks where source_type='8k_item', derived from
+      the filing text by XbrlToParquetConverter's item-header regex.
       Use for: identifying available filings, filtering by company/date/type, joining to
       other SEC tables, and tracking filing history.
 

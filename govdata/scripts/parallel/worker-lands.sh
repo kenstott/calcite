@@ -64,6 +64,7 @@ run_lands_model() {
       "directory": "${parquet_dir}",
       "cacheDirectory": "${cache_dir}",
       "autoDownload": true,
+      "ignoreReleaseWindow": true,
       "startYear": ${start_year}${end_year_json},
       "enabledTables": [${enabled_tables}],
       "s3Config": {

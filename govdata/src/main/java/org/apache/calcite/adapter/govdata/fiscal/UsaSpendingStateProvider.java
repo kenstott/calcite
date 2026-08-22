@@ -47,6 +47,29 @@ public class UsaSpendingStateProvider implements DataProvider {
       "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\","
       + "\"02\",\"03\",\"04\",\"05\",\"06\",\"10\",\"07\",\"08\",\"09\",\"11\"";
 
+  /** Same set as {@link #AWARD_TYPE_CODES} minus the two loan award types ('07' direct
+   * loans, '08' guaranteed/insured loans). Loans report face value at the lender/servicer's
+   * place of performance rather than the borrower's, which inflates place-of-performance
+   * totals for states with large loan servicers -- this excl-loans figure is a truer measure
+   * of spending actually landing in a state. */
+  private static final String AWARD_TYPE_CODES_EXCL_LOANS =
+      "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\","
+      + "\"02\",\"03\",\"04\",\"05\",\"06\",\"10\",\"09\",\"11\"";
+
+  /** CMS-funded awards report place of performance at the Medicare Administrative
+   * Contractor's location, not the beneficiary's -- e.g. Noridian Healthcare Solutions
+   * (Fargo, ND) processes Medicare fee-for-service claims nationwide, but every claim
+   * geocodes to ND. Confirmed nationwide, not an ND-specific anomaly: filtering to this
+   * one funding sub-agency alone (FY2023) shows Minnesota at $165.8B and Indiana at
+   * $133.4B -- both exceeding California's $125.5B despite population a fraction of the
+   * size -- consistent with other states hosting large Medicare Administrative
+   * Contractors. Subtracting it drops ND from $82.0B (implausible for its population) to
+   * $6.98B; CA/TX/NY, where CMS is a much smaller share of the total (15-30%), stay large
+   * and plausible. */
+  private static final String CMS_AGENCY_FILTER =
+      "\"agencies\":[{\"type\":\"funding\",\"tier\":\"subtier\","
+      + "\"name\":\"Centers for Medicare and Medicaid Services\"}],";
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
     String year = variables.get("effective_year");
@@ -80,6 +103,57 @@ public class UsaSpendingStateProvider implements DataProvider {
     } finally {
       in.close();
     }
+
+    String bodyExclLoans =
+        "{\"filters\":{\"time_period\":[{\"start_date\":\"" + start + "\",\"end_date\":\"" + end
+        + "\"}],\"award_type_codes\":[" + AWARD_TYPE_CODES_EXCL_LOANS + "]},"
+        + "\"scope\":\"place_of_performance\",\"geo_layer\":\"state\","
+        + "\"spending_level\":\"transactions\",\"subawards\":false}";
+    LOGGER.info("usaspending_by_state: POST {} fy={} (excl loans)", ENDPOINT, fy);
+    JsonNode rootExclLoans;
+    InputStream inExclLoans = FiscalHttp.openPostJson(ENDPOINT, bodyExclLoans).getInputStream();
+    try {
+      rootExclLoans = MAPPER.readTree(inExclLoans);
+    } finally {
+      inExclLoans.close();
+    }
+    Map<String, Double> exclLoansByCode = new LinkedHashMap<String, Double>();
+    JsonNode resultsExclLoans = rootExclLoans.path("results");
+    if (resultsExclLoans.isArray()) {
+      for (JsonNode r : resultsExclLoans) {
+        String code = text(r, "shape_code");
+        if (code == null) {
+          continue;
+        }
+        exclLoansByCode.put(code, num(r, "aggregated_amount"));
+      }
+    }
+
+    String bodyCms =
+        "{\"filters\":{\"time_period\":[{\"start_date\":\"" + start + "\",\"end_date\":\"" + end
+        + "\"}]," + CMS_AGENCY_FILTER + "\"award_type_codes\":[" + AWARD_TYPE_CODES_EXCL_LOANS
+        + "]},\"scope\":\"place_of_performance\",\"geo_layer\":\"state\","
+        + "\"spending_level\":\"transactions\",\"subawards\":false}";
+    LOGGER.info("usaspending_by_state: POST {} fy={} (CMS only, excl loans)", ENDPOINT, fy);
+    JsonNode rootCms;
+    InputStream inCms = FiscalHttp.openPostJson(ENDPOINT, bodyCms).getInputStream();
+    try {
+      rootCms = MAPPER.readTree(inCms);
+    } finally {
+      inCms.close();
+    }
+    Map<String, Double> cmsByCode = new LinkedHashMap<String, Double>();
+    JsonNode resultsCms = rootCms.path("results");
+    if (resultsCms.isArray()) {
+      for (JsonNode r : resultsCms) {
+        String code = text(r, "shape_code");
+        if (code == null) {
+          continue;
+        }
+        cmsByCode.put(code, num(r, "aggregated_amount"));
+      }
+    }
+
     JsonNode results = root.path("results");
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     if (results.isArray()) {
@@ -92,8 +166,13 @@ public class UsaSpendingStateProvider implements DataProvider {
         row.put("state_abbr", code);
         row.put("state_name", text(r, "display_name"));
         row.put("obligated_amount", num(r, "aggregated_amount"));
-        row.put("population", numLong(r, "population"));
-        row.put("per_capita", num(r, "per_capita"));
+        row.put("obligated_amount_excl_loans", exclLoansByCode.get(code));
+        Double exclLoans = exclLoansByCode.get(code);
+        Double cms = cmsByCode.get(code);
+        if (exclLoans != null) {
+          row.put("obligated_amount_excl_loans_excl_cms_admin",
+              exclLoans - (cms == null ? 0.0 : cms));
+        }
         rows.add(row);
       }
     }
@@ -116,13 +195,5 @@ public class UsaSpendingStateProvider implements DataProvider {
       return null;
     }
     return FiscalHttp.toDouble(v.asText());
-  }
-
-  private static Long numLong(JsonNode node, String field) {
-    JsonNode v = node.get(field);
-    if (v == null || v.isNull()) {
-      return null;
-    }
-    return FiscalHttp.toLong(v.asText());
   }
 }

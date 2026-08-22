@@ -183,6 +183,30 @@ final class Catalog {
         return out;
     }
 
+    // ── Backfill status ────────────────────────────────────────────────────────
+
+    /**
+     * Defect Register Recommendation 5. A table's declared {@code backfill: in_progress} flag,
+     * or null when the table declares none (the common case — nothing states this by default,
+     * and the field is meant to be removed once a table's initial load completes, not left in
+     * place). Purely a schema-YAML declaration; there is no scan or measurement behind it, since
+     * a scan can only report what has landed, not whether more is still coming — that is
+     * precisely the fact a caller has no way to infer on their own.
+     *
+     * <p>Motivating case: this register itself carried a withdrawn finding claiming "15% of
+     * 8-Ks are never chunked" against {@code sec.vectorized_chunks} — a real number, but one
+     * describing an in-progress backfill's current state, not a defect, and nothing in the
+     * catalog said so at the time.
+     */
+    static String backfillStatus(String schema, String table) {
+        JsonNode tb = tableNodeOf(schema, table);
+        if (tb == null || !tb.hasNonNull("backfill")) {
+            return null;
+        }
+        String status = tb.get("backfill").asText(null);
+        return (status != null && !status.isEmpty()) ? status : null;
+    }
+
     // ── Coverage window ───────────────────────────────────────────────────────
 
     /**
@@ -212,6 +236,19 @@ final class Catalog {
         Integer maxYear = intOrNull(cov.get("maxYear"));
         Integer dataLag = intOrNull(cov.get("dataLag"));
         int lag = (dataLag != null && dataLag > 0) ? dataLag.intValue() : 0;
+        // Defect Register B2-3: DimensionIterator#resolveYearRange (file/ module) pulls its
+        // ceiling ("latestEffectiveYear") back one further year when today's calendar month is
+        // still before the source's own releaseMonth, on top of the plain dataLag shift applied
+        // below -- this method previously had no releaseMonth handling at all, so the declared
+        // window overstated the real ceiling by exactly one year for most of any given year.
+        // Ceiling only, same as the file/ module logic being mirrored here: releaseMonth timing
+        // never bears on whether an old, already-published start year has been released.
+        Integer releaseMonth = intOrNull(cov.get("releaseMonth"));
+        boolean pastReleaseCeiling = false;
+        if (releaseMonth != null && releaseMonth.intValue() >= 1 && releaseMonth.intValue() <= 12) {
+            int currentMonth = java.time.LocalDate.now(ZoneOffset.UTC).getMonthValue();
+            pastReleaseCeiling = currentMonth < releaseMonth.intValue();
+        }
 
         Integer start = resolveYear(cov.path("start").asText(null), currentYear);
 
@@ -253,6 +290,9 @@ final class Catalog {
             if (end != null) {
                 end = Integer.valueOf(end.intValue() - lag);
             }
+        }
+        if (pastReleaseCeiling && end != null) {
+            end = Integer.valueOf(end.intValue() - 1);
         }
 
         ObjectNode out = MAPPER.createObjectNode();

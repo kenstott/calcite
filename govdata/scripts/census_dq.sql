@@ -241,11 +241,14 @@ INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_null_cols', '
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_income_distribution', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'decennial_housing', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing', allow_moved_paths := true)) WHERE null_percentage = 100.0;
--- pep_population: `density` is only provided by the <=2019 PEP vintage; the 2020+ pep/charv
--- endpoint returns POP (no DENSITY), so any build of recent years legitimately has density
--- 100% null — warn, not fail. Every other entirely-null column still fails.
+-- pep_population: `density` is only provided by the <=2020 PEP vintage; the 2021+ pep/charv
+-- endpoint returns POP (no DENSITY), so any build of 2021+ data years legitimately has
+-- density 100% null — warn, not fail. Every other entirely-null column still fails.
+-- (Vintage boundary moved from 2020 to 2021 in the fix for the 2020 double-claim defect —
+-- both APIs could previously answer for data year 2020 with conflicting values; 2020 is now
+-- claimed exclusively by the <=2020 API, which does provide density.)
 INSERT INTO dq_results SELECT 'census', 'pep_population', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name <> 'density';
-INSERT INTO dq_results SELECT 'census', 'pep_population', 'all_null_cols', 'warn', column_name, '< 100% null', 'density only exists in the <=2019 PEP vintage; expected null for 2020+ builds' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name = 'density';
+INSERT INTO dq_results SELECT 'census', 'pep_population', 'all_null_cols', 'warn', column_name, '< 100% null', 'density only exists in the <=2020 PEP vintage; expected null for 2021+ builds' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name = 'density';
 INSERT INTO dq_results SELECT 'census', 'cbp_establishments', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs1_population', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs1_income', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income', allow_moved_paths := true)) WHERE null_percentage = 100.0;
@@ -392,6 +395,41 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population', allow_moved_paths := true)
   WHERE county_fips IS NOT NULL AND LENGTH(county_fips) != 5
+);
+
+-- acs_nativity: native_born + foreign_born must equal total_population (Defect Register #1
+-- guardrail — catches a re-mapping to the wrong ACS variable the way foreign_born was wrongly
+-- mapped to not_a_citizen alone before this fix)
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_nativity', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where native_born + foreign_born != total_population'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity', allow_moved_paths := true)
+  WHERE native_born IS NOT NULL AND foreign_born IS NOT NULL AND total_population IS NOT NULL
+    AND native_born + foreign_born != total_population
+);
+
+-- acs_nativity: full component identity — with born_in_us/born_in_pr_island_areas/
+-- born_abroad_american_parents exposed as real columns, the whole B05001 breakdown
+-- (002+003+004+005+006 = 001) is checkable in-row, not just the two-term sum above
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_nativity', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where born_in_us + born_in_pr_island_areas + born_abroad_american_parents + naturalized_citizen + not_a_citizen != total_population'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity', allow_moved_paths := true)
+  WHERE born_in_us IS NOT NULL AND born_in_pr_island_areas IS NOT NULL
+    AND born_abroad_american_parents IS NOT NULL AND naturalized_citizen IS NOT NULL
+    AND not_a_citizen IS NOT NULL AND total_population IS NOT NULL
+    AND born_in_us + born_in_pr_island_areas + born_abroad_american_parents
+        + naturalized_citizen + not_a_citizen != total_population
 );
 
 -- pep_population: population estimates must be >= 0

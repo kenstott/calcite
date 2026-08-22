@@ -24,12 +24,19 @@ import java.util.Map;
 /**
  * Dimension resolver for Population Estimates Program (PEP) API.
  *
- * <p>Handles the API structure change at the 2020 data-year boundary. All decisions key on the
+ * <p>Handles the API structure change at the 2021 data-year boundary. All decisions key on the
  * data reference year ({@code publish year - dataLag}), not the publish year:
  * <ul>
- *   <li>data year &le; 2019: /pep/population, vintage = the data year, POP+DENSITY, no YEAR</li>
- *   <li>data year &ge; 2020: /pep/charv in the latest vintage, POP, selected via &amp;YEAR=&lt;data year&gt;</li>
+ *   <li>data year &le; 2020: /pep/population, vintage = the data year, POP+DENSITY, no YEAR</li>
+ *   <li>data year &ge; 2021: /pep/charv in the latest vintage, POP, selected via &amp;YEAR=&lt;data year&gt;</li>
  * </ul>
+ *
+ * <p>The boundary is deliberately at 2021, not 2020: both the pep/population dataset (queried
+ * per data year, vintage = the data year) and pep/charv (queried in a single latest vintage,
+ * selected via YEAR) are capable of answering for data year 2020, but with different reported
+ * values -- fetching 2020 from both would double-claim that year with conflicting figures.
+ * Keeping data year 2020 exclusively on the pep/population side (and starting pep/charv at
+ * 2021) keeps every data year claimed by exactly one vintage.
  *
  * <p>The resolver injects these companion dimensions, used in the URL template:
  * <ul>
@@ -61,11 +68,13 @@ public class CensusPepDimensionResolver implements DimensionResolver {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CensusPepDimensionResolver.class);
 
-  // PEP restructured at Vintage 2020: data years 2020+ live in the pep/charv dataset, selected
-  // by a YEAR predicate; 2019 and earlier are standalone pep/population vintages.
-  private static final int NEW_API_CUTOFF = 2020;
+  // PEP restructured at Vintage 2020: data years 2021+ live in the pep/charv dataset, selected
+  // by a YEAR predicate; 2020 and earlier are standalone pep/population vintages. The cutoff is
+  // 2021 (not 2020) so that data year 2020 -- answerable by both APIs, with different reported
+  // values -- is claimed by exactly one of them (pep/population). See the class Javadoc.
+  private static final int NEW_API_CUTOFF = 2021;
 
-  // Latest published PEP vintage. pep/charv serves every year it covers (2020..this) via the
+  // Latest published PEP vintage. pep/charv serves every year it covers (2021..this) via the
   // YEAR predicate, so this is a fixed value — bump it when the Census Bureau releases a new
   // vintage (and revisit the year-range floor / dataLag in census-schema.yaml's pep block).
   private static final String CURRENT_VINTAGE = "2023";

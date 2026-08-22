@@ -1774,10 +1774,13 @@ partitionedTables:
     comment: >
       CDC/NCHS mortality statistics at the state level (annual data also includes a
       United States total row). Unions annual (bi63-dtpu: NCHS leading/113-cause
-      deaths and age-adjusted rate per 100,000, 2000 US standard population) and
-      weekly provisional (muzy-jte6: COVID-19 deaths by MMWR week-ending date) data;
-      source_type distinguishes the two, and age_adjusted_rate is populated for
-      annual rows only.
+      deaths and age-adjusted rate per 100,000, 2000 US standard population, 1999-2017)
+      and weekly provisional data (source_type=weekly) from two Socrata vintages of the
+      same "AH Weekly Death Counts by State and Select Causes" series: 3yf8-kanr
+      (2018-2019, no COVID columns) and muzy-jte6 (2020-2023, adds COVID-19 columns).
+      Weekly rows surface the all-cause weekly total for 2018-2019 and the COVID-19
+      underlying-cause count for 2020-2023; source_type distinguishes annual from
+      weekly, and age_adjusted_rate is populated for annual rows only.
     columns:
       - name: year
         comment: "Data year of deaths; MMWR year for weekly rows"
@@ -1826,9 +1829,12 @@ partitionedTables:
           limitParam: "$limit"
           offsetParam: "$offset"
       urlRules:
+        - url: "https://data.cdc.gov/resource/3yf8-kanr.json"
+          variableMatch:
+            source_type: weekly_precovid
         - url: "https://data.cdc.gov/resource/muzy-jte6.json"
           variableMatch:
-            source_type: weekly
+            source_type: weekly_covid
       rateLimit:
         requestsPerSecond: 1.0
         maxRetries: 3
@@ -1840,18 +1846,30 @@ partitionedTables:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcMortalityResponseTransformer"
 
     dimensions:
+      # bi63-dtpu (annual), 3yf8-kanr (weekly, 2018-2019), and muzy-jte6 (weekly,
+      # 2020-2023) are all frozen historical Socrata extracts that each return their
+      # *entire* history in one unfiltered call — not rolling feeds, and Socrata's
+      # $where isn't scoped per urlRule in this framework. A yearRange dimension here
+      # previously iterated 2010-2023 (14 values) and re-issued the same full,
+      # unscoped fetch for every one, appending 14 identical copies of the dataset
+      # into the same source_type partition buffer (14x/5.8x row duplication,
+      # confirmed live against production — see the remediation ledger). Fetching is
+      # now driven by source_type alone, one value per URL, so each of the three
+      # sources is fetched exactly once per run regardless of year:
+      # weekly_precovid and weekly_covid route (via urlRules variableMatch, no year
+      # condition needed) to the two weekly vintages; annual falls through to the
+      # table's base url. CdcMortalityResponseTransformer still writes the output
+      # source_type column as "annual"/"weekly" — this 3-way split only controls
+      # fetch routing, not the materialized schema.
+      # Trade-off: this table no longer has a `dimensions.year` node, so
+      # GovDataCatalog#putCoverage emits no coverage window for it (the "no year
+      # dimension" case, its own documented honest-omission behavior) — previously
+      # inaccurate anyway (declared 2010-2023 vs. real 1999-2017 annual / 2018-2023
+      # weekly).
       source_type:
         - annual
-        - weekly
-      # Both bi63-dtpu (annual) and muzy-jte6 (weekly) are frozen historical Socrata
-      # extracts, not rolling feeds (see the table comment above and
-      # CdcMortalityResponseTransformer) — a dynamic current-year end (health_year_range's
-      # default) would advance past the data every year. end is the true max year present
-      # across both sub-series (weekly's 2023, newer than annual's 2017).
-      year:
-        type: yearRange
-        start: "${GOVDATA_START_YEAR:2010}"
-        end: 2023
+        - weekly_precovid
+        - weekly_covid
 
     materialize:
       enabled: true

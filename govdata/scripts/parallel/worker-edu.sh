@@ -65,6 +65,7 @@ run_edu_model() {
       "directory": "${parquet_dir}",
       "cacheDirectory": "${cache_dir}",
       "autoDownload": true,
+      "ignoreReleaseWindow": true,
       "startYear": ${start_year}${end_year_json},
       "enabledTables": [${enabled_tables}],
       "s3Config": {
@@ -109,6 +110,9 @@ run_historical_cadence() {
   run_edu_model "edu-initial-libraries" \
     '"library_outlets"' "$START" "$END"
 
+  run_edu_model "edu-initial-f33" \
+    '"f33_district_finance"' "$START" "$END"
+
   if [ -n "${API_DATA_GOV:-}" ]; then
     run_edu_model "edu-initial-scorecard" \
       '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
@@ -152,6 +156,11 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "library_outlets"; then
     run_edu_model "edu-annual-libraries" \
       '"library_outlets"' "$START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "f33_district_finance"; then
+    run_edu_model "edu-annual-f33" \
+      '"f33_district_finance"' "$START"
   fi
 }
 
