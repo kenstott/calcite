@@ -2512,6 +2512,41 @@ public class McpServer {
                     + " error: " + msg;
             }
         }
+        // An object-store credential or bucket-policy failure surfaces as DuckDB's own
+        // "HTTP 403 Forbidden" / "Authentication Failure" from the parquet reader. The raw text
+        // names a bucket path and says nothing about what it means for the ANSWER, and the
+        // observed consequence is the worst available one: the caller does not stop. It falls
+        // back to the open web, writes a well-sourced literature answer, and ships it as though
+        // the corpus had been consulted. Measured — three of four connector callers in one batch
+        // hit this; one abandoned the connector entirely and produced an answer indistinguishable
+        // from a caller who never had it. A product whose whole claim is the data must never
+        // degrade silently to "I read some articles".
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg == null) {
+                continue;
+            }
+            boolean authShape = msg.contains("HTTP 403")
+                || msg.contains("403 Forbidden")
+                || msg.contains("Authentication Failure")
+                || (msg.contains("HTTP Error") && msg.contains("s3://"));
+            if (authShape) {
+                return "THIS DATA IS UNREACHABLE RIGHT NOW — the object store refused the read"
+                    + " (HTTP 403 / authentication failure). This is an INFRASTRUCTURE FAULT, not"
+                    + " a statement about the data: the table is not empty, the rows are not"
+                    + " missing, and the coverage window is unknown rather than absent."
+                    + " DO NOT report this as a coverage gap, and DO NOT quietly answer from web"
+                    + " research instead as though this corpus had been consulted — an answer"
+                    + " built entirely on outside sources while the connector was failing is"
+                    + " indistinguishable from one written without the connector at all, and"
+                    + " presenting it as a grounded answer misrepresents where the numbers came"
+                    + " from. If you answer from other sources, SAY IN THE ANSWER that the"
+                    + " warehouse was unavailable and which figures therefore came from"
+                    + " elsewhere. Retry once — these failures are often transient. If it"
+                    + " persists, call report_issue with the exact table and statement so the"
+                    + " fault is recorded, and tell the reader plainly. Original error: " + msg;
+            }
+        }
         // A query stopped by the time bound surfaces as DuckDB's own "INTERRUPT Error:
         // Interrupted!", which names neither the bound nor the fact that one exists. An agent
         // reading it cannot tell a timeout from a crash, so it retries the same shape and loses
