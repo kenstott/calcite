@@ -529,3 +529,45 @@ both went straight to CFTC's public Socrata API for it, unprompted, and produced
 same fix. (2) Add CFTC COT (Disaggregated Futures-Only, and possibly Legacy/Supplemental) as a new
 govdata source — it is a real, independently-confirmed gap, not a hypothetical one, and the public
 endpoint above is already verified working with no auth required.
+
+## DQ-019 — `energy.eia_electricity_generation` only 2023-2024 actually loaded despite declared 2008-2024, and `generation_year` is offset +2 from the real year
+
+**Table**: `energy.eia_electricity_generation`
+
+**Severity**: High — the table is unusable for any multi-year trend despite advertising 17 years
+of history, and the typed year column actively misleads any query that filters/groups on it.
+
+**Discovered**: 2026-08-22, via the AskAmerica comparative-eval harness
+(`renewable-share-vs-retail-electricity-prices`), arm A, using `data_coverage`/`describe_table`/
+direct `query` — not a guess, independently reproduced.
+
+**Symptom, part 1 — coverage gap**: `describe_table`/`data_coverage` declare `yearRange`
+2008-2024, but a direct row scan shows only years 2023-2024 are actually loaded (296,786 rows
+total, all in 2023-2024). `data_coverage`'s own `missing_vs_declared` lists 2008-2022 entirely
+absent.
+
+**Symptom, part 2 — `generation_year` corruption**: the partition column `year` (varchar) correctly
+holds `'2023'`/`'2024'`, but the typed `generation_year` (integer) column is offset **+2** for
+every row: 2023-partition rows carry `generation_year=2025`, 2024-partition rows carry
+`generation_year=2026`. Reproduced via:
+```sql
+SELECT year, generation_year, generation_month, COUNT(*) AS n
+FROM energy.eia_electricity_generation
+GROUP BY year, generation_year, generation_month
+ORDER BY year, generation_year, generation_month
+```
+Any query filtering or grouping on `generation_year` — the documented, typed year column — silently
+returns future, non-existent years (2025/2026) and appears empty for the real 2023/2024 data. A
+caller who trusts the typed column over the varchar partition column gets zero rows and no error,
+which reads as "no data" rather than "wrong column."
+
+**Context**: the arm correctly abandoned this table and substituted `energy.eia_state_energy_consumption`
+(EIA SEDS, confirmed fully loaded 1960-2024, no gaps) after discovering both defects, filed the
+issue in-product via `report_issue`, and delivered a complete answer from the substitute source.
+No workaround was applied to the schema/data here — report-only, per this session's scope.
+
+**Suggested, for the data team**: (1) backfill 2008-2022 to match the declared window, or correct
+the declared `yearRange` to 2023-2024 if backfill is not planned. (2) Fix the `generation_year`
+derivation in the transformer — it appears to derive from an apparent current-run-year-based offset
+rather than the year/month the row actually describes; the varchar `year` partition column has the
+correct value and can serve as the reference during the fix.
