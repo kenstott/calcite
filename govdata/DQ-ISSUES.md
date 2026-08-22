@@ -254,3 +254,104 @@ Ooma uses a third pattern: all linkbase arcs (`calculationLink`, `presentationLi
 
 **Revised assessment**: FALSE POSITIVE. NCES `COUNTYCD` is the full 5-digit state+county FIPS code stored as an integer (e.g., `6037` for California/LA = FIPS `06037`). `String.format("%05d", fipsInt)` correctly restores the leading zero. The transformer is correct as written.
 
+
+---
+
+## DQ-015 — `ref` has no multi-hop ownership view; the obvious query silently answers a different question
+
+**Table**: `ref.gleif_relationships` (recommendation: add a `ref.gleif_ownership_ancestry` view)
+**Severity**: Medium — no data is wrong, but the correct answer is unreachable in practice
+**Scope**: 126,025 `IS_DIRECTLY_CONSOLIDATED_BY` edges; all ownership-structure questions
+**Discovered**: 2026-08-21
+
+**Symptom**: There is no way to ask "how deep does this ownership chain go" or "give me everything
+under ultimate parent X" without hand-writing a recursive CTE. Callers instead reach for
+`IS_ULTIMATELY_CONSOLIDATED_BY`, which is a single-hop shortcut, and get a **wrong answer with no
+error**: it reports depth 1 for entities that are several layers down.
+
+Concretely, walking direct-parent edges puts HSBC USA four layers below HSBC Holdings plc — US bank
+→ HSBC North America Holdings (US) → HSBC Overseas Holdings (UK) → HSBC Holdings plc — while the
+ultimate-parent edge reports a single hop. The intermediate holding companies are invisible.
+
+**Impact**: An analyst question that should be a census becomes an anecdote. `entity_relationships`
+takes ~212s for ONE entity, so a bank-ownership analysis came back covering 16 hand-picked firms
+rather than the population, explicitly for cost reasons. This is also why no public source states a
+depth distribution for US bank ownership, and why the OFR's own graph-theoretic study
+(Flood, Kenett, Lumsdaine & Simon 2017) reported entity COUNTS instead — the naive query answers a
+different question, and the correct one is expensive to assemble.
+
+Edge-type counts, for context:
+
+```
+IS_FUND-MANAGED_BY              148,578
+IS_ULTIMATELY_CONSOLIDATED_BY   132,198   <- single-hop shortcut
+IS_DIRECTLY_CONSOLIDATED_BY     126,025   <- the real chain
+IS_SUBFUND_OF                    72,697
+IS_INTERNATIONAL_BRANCH_OF        1,939
+IS_FEEDER_TO                      1,387
+```
+
+**Fix needed**: a `ref.gleif_ownership_ancestry` view, one row per (entity, ancestor). Tested
+against the live corpus:
+
+```
+116,978 ancestry rows | 89,392 entities | max depth 9 | ~15s for the whole forest
+```
+
+```sql
+WITH RECURSIVE edges AS (
+  SELECT start_node_id AS child_lei, end_node_id AS parent_lei
+  FROM gleif_relationships
+  WHERE relationship_type = 'IS_DIRECTLY_CONSOLIDATED_BY'
+    AND relationship_status = 'ACTIVE'
+    AND registration_status = 'PUBLISHED'
+    AND start_node_id IS NOT NULL AND end_node_id IS NOT NULL
+),
+walk AS (
+  SELECT child_lei AS lei,
+         parent_lei AS immediate_parent_lei,
+         parent_lei AS ancestor_lei,
+         1 AS depth,
+         CAST(child_lei AS VARCHAR) || '>' || CAST(parent_lei AS VARCHAR) AS path
+  FROM edges
+  UNION ALL
+  SELECT w.lei, w.immediate_parent_lei, e.parent_lei, w.depth + 1,
+         w.path || '>' || CAST(e.parent_lei AS VARCHAR)
+  FROM walk w
+  JOIN edges e ON e.child_lei = w.ancestor_lei
+  WHERE w.depth < 20
+    AND POSITION(CAST(e.parent_lei AS VARCHAR) IN w.path) = 0
+)
+SELECT w.lei, w.immediate_parent_lei, w.ancestor_lei, w.depth, w.path,
+       CASE WHEN top.child_lei IS NULL THEN TRUE ELSE FALSE END AS ancestor_is_ultimate
+FROM walk w
+LEFT JOIN edges top ON top.child_lei = w.ancestor_lei
+```
+
+**Three observations from testing, each of which will bite whoever implements this:**
+
+1. **THE GRAPH HAS CYCLES.** Without the `POSITION(...) = 0` path-membership guard the recursion
+   does not terminate, and — worse — the spurious rows look like genuine depth rather than an
+   error: depths 10, 11 and 12 each returned exactly 9 rows. With the guard, real max depth is 9.
+   The cycles are GLEIF data errors and are worth reporting upstream in their own right.
+
+2. **Array literals and `list_append` do not parse through this SQL layer.** Both `[child, parent]`
+   and `list_append(path, x)` fail. Hence the `'>'`-delimited VARCHAR path, which also makes the
+   cycle guard a simple `POSITION`. If an array `path` is wanted, build it in a materialisation job
+   rather than in a query the engine must parse.
+
+3. **Source from `gleif_relationships`, NOT `current_gleif_parents` — worth 4.6x.** Both produce
+   byte-identical results (116,978 rows / 89,392 entities), but the convenience view resolves legal
+   names on both endpoints, and inside a recursive CTE that join is re-evaluated at every level:
+   **68.8s versus 14.9s**. Resolve names on the OUTER query, joined once, never inside the walk.
+
+**Materialised vs view**: 15s is acceptable once, not per query. A flat physical table refreshed
+whenever `gleif_relationships` re-ingests is preferable to a live view, and flat beats a nested
+JSON tree for the queries actually asked — `depth` becomes an indexed integer, "everyone under X at
+depth <= N" is a filter and a join, and full ancestry is still available via `path` without JSON
+path operators. A nested tree only pays off if something needs to render the downward org-chart
+shape, which no observed question required.
+
+**Why this matters commercially**: every banking, insurance and corporate-strategy question that
+needs ownership structure depends on it. Those are the highest-value audiences and the ones
+currently least served.
