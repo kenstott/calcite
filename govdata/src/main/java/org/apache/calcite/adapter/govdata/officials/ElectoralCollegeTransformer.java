@@ -55,6 +55,10 @@ public class ElectoralCollegeTransformer implements ResponseTransformer {
   // "Kamala D. Harris, of California" or "John F. Kennedy of Massachusetts" -> name + home state
   private static final Pattern NAME_OF_STATE =
       Pattern.compile("^(.*?),?\\s+of\\s+([A-Za-z .]+)$");
+  // Trailing generational suffix ("Albert Gore, Jr." -> drop ", Jr." before taking the last
+  // name token), so a suffix never gets mistaken for the surname in lastNameKey().
+  private static final Pattern TRAILING_SUFFIX =
+      Pattern.compile(",?\\s+(Jr\\.?|Sr\\.?|II|III|IV)$", Pattern.CASE_INSENSITIVE);
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -112,6 +116,18 @@ public class ElectoralCollegeTransformer implements ResponseTransformer {
     Elements rows = table.select("tr");
     if (rows.size() < 2) {
       return "[]";
+    }
+
+    // Fallback index for when the summary block and the state-by-state table format the same
+    // candidate's name differently -- confirmed live on two distinct patterns in the same table:
+    // a dropped middle initial ("Donald J. Trump" summary vs "Donald Trump, of New York" table,
+    // 2016) and a nickname ("Bob Dole" summary vs "Robert Dole, of Kansas" table, 1996). Exact
+    // match stays primary (tried first, below); this only applies when that misses. Collision
+    // risk is low enough to accept: presidential and VP candidates on the same page essentially
+    // never share a surname.
+    java.util.Map<String, String> partyByLastName = new java.util.HashMap<>();
+    for (java.util.Map.Entry<String, String> e : partyByName.entrySet()) {
+      partyByLastName.putIfAbsent(lastNameKey(e.getKey()), e.getValue());
     }
 
     Element groupHeaderRow = rows.get(0);
@@ -194,6 +210,9 @@ public class ElectoralCollegeTransformer implements ResponseTransformer {
           row.putNull("candidate_home_state");
         }
         String party = partyByName.get(candidateNames[i]);
+        if (party == null) {
+          party = partyByLastName.get(lastNameKey(candidateNames[i]));
+        }
         if (party != null) {
           row.put("candidate_party", party);
         } else {
@@ -249,6 +268,19 @@ public class ElectoralCollegeTransformer implements ResponseTransformer {
     // affected state+year (discovered via officials.state_political_index returning a stale
     // presidential cycle for Texas because "Texas***" 2016 never matched "Texas").
     return s.replaceAll("[\\d*]+$", "").trim();
+  }
+
+  /**
+   * Reduces a candidate name to a lowercase surname key for the fallback match in
+   * {@link #parseStateTable}: strips a trailing generational suffix first (so "Albert Gore, Jr."
+   * keys on "gore", not "jr"), then takes the last whitespace-separated token.
+   */
+  // Package-visible for the same reason as stripFootnote: direct testing without HTML fixtures.
+  String lastNameKey(String fullName) {
+    String name = TRAILING_SUFFIX.matcher(fullName.trim()).replaceAll("");
+    String[] parts = name.trim().split("\\s+");
+    return parts.length == 0 ? name.toLowerCase(java.util.Locale.ROOT)
+        : parts[parts.length - 1].toLowerCase(java.util.Locale.ROOT);
   }
 
   private int parseColspan(Element th) {

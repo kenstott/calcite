@@ -48,4 +48,18 @@ class ElectoralCollegeTransformerTest {
   @Test void leavesANameWithNoFootnoteUnchanged() {
     assertEquals("California", transformer.stripFootnote("California"));
   }
+
+  @ParameterizedTest
+  @CsvSource({
+      // Real mismatches confirmed live between NARA's summary block and its results table.
+      "'Donald J. Trump',   trump",   // 2016: table says "Donald Trump" (no middle initial)
+      "'Donald Trump',      trump",
+      "'Bob Dole',          dole",    // 1996: table says "Robert Dole" (nickname)
+      "'Robert Dole',       dole",
+      "'Albert Gore, Jr.',  gore",    // trailing generational suffix must not become the key
+      "'William J. Clinton', clinton"
+  })
+  void lastNameKeyReducesToTheSurname(String fullName, String expectedKey) {
+    assertEquals(expectedKey, transformer.lastNameKey(fullName));
+  }
 }
