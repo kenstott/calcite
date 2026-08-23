@@ -1953,49 +1953,75 @@ public class HttpSource implements DataSource {
     return name.matches(regex) || name.endsWith(pattern.replace("*", ""));
   }
 
+  /**
+   * Extracts every zip entry matching {@code pattern} into one concatenated cache file — a
+   * wildcard pattern (e.g. {@code *__ALL_AREAS_*.csv}) can legitimately match many entries (BEA's
+   * SAINC.zip carries one CSV per SAINC table), and dropping every match after the first silently
+   * discards the rest. For a CSV response, the header row of every match after the first is
+   * skipped so the concatenated file stays one valid CSV rather than a header repeated mid-file.
+   */
   private String extractFromZip(InputStream input, String pattern, String cachePath)
       throws IOException {
-    try (ZipInputStream zis = new ZipInputStream(input)) {
+    boolean csvFormat = config.getResponse().getFormat() == HttpSourceConfig.ResponseFormat.CSV;
+    File tempFile = File.createTempFile("http-source-", ".tmp");
+    tempFile.deleteOnExit();
+    long totalBytes = 0;
+    boolean matchedAny = false;
+    try (ZipInputStream zis = new ZipInputStream(input);
+         FileOutputStream fos = new FileOutputStream(tempFile)) {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
         String name = entry.getName();
         if (zipEntryMatches(name, pattern)) {
           LOGGER.info("Extracting from ZIP: {}", name);
-
-          // Extract to temp file (ZIP streaming requires it)
-          File tempFile = File.createTempFile("http-source-", ".tmp");
-          tempFile.deleteOnExit();
-          long totalBytes = 0;
-
-          try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-            byte[] buffer = new byte[65536];
-            int len;
-            long lastLogTime = System.currentTimeMillis();
-            while ((len = zis.read(buffer)) > 0) {
-              fos.write(buffer, 0, len);
-              totalBytes += len;
-              long now = System.currentTimeMillis();
-              if (now - lastLogTime > 5000) {
-                LOGGER.info("Extracting... {} MB", totalBytes / (1024 * 1024));
-                lastLogTime = now;
-              }
-            }
-          }
-
-          // Write to cache
-          try (InputStream fis = new FileInputStream(tempFile)) {
-            String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
-            storageProvider.createDirectories(parentPath);
-            storageProvider.writeFile(cachePath, fis);
-          }
-          tempFile.delete();
-          LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
-          return cachePath;
+          totalBytes += copyZipEntry(zis, fos, csvFormat && matchedAny);
+          matchedAny = true;
         }
         zis.closeEntry();
       }
     }
-    throw new IOException("No file matching pattern '" + pattern + "' found in ZIP");
+    if (!matchedAny) {
+      tempFile.delete();
+      throw new IOException("No file matching pattern '" + pattern + "' found in ZIP");
+    }
+
+    // Write to cache
+    try (InputStream fis = new FileInputStream(tempFile)) {
+      String parentPath = cachePath.substring(0, cachePath.lastIndexOf('/'));
+      storageProvider.createDirectories(parentPath);
+      storageProvider.writeFile(cachePath, fis);
+    }
+    tempFile.delete();
+    LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
+    return cachePath;
+  }
+
+  /**
+   * Copies one zip entry's bytes to {@code out}, optionally dropping its first line (used to
+   * strip a repeated CSV header when concatenating multiple matched entries into one file).
+   */
+  private static long copyZipEntry(InputStream in, OutputStream out, boolean skipFirstLine)
+      throws IOException {
+    if (skipFirstLine) {
+      int b;
+      while ((b = in.read()) != -1 && b != '\n') {
+        // discard header bytes up to and including the newline
+      }
+    }
+    byte[] buffer = new byte[65536];
+    long total = 0;
+    long lastLogTime = System.currentTimeMillis();
+    int len;
+    while ((len = in.read(buffer)) > 0) {
+      out.write(buffer, 0, len);
+      total += len;
+      long now = System.currentTimeMillis();
+      if (now - lastLogTime > 5000) {
+        LOGGER.info("Extracting... {} MB", total / (1024 * 1024));
+        lastLogTime = now;
+      }
+    }
+    return total;
   }
 
   /**

@@ -945,6 +945,89 @@ class HttpSourceLineCoverageTest {
     source.close();
   }
 
+  /**
+   * Regression test: a wildcard extractPattern (e.g. BEA's {@code *__ALL_AREAS_*.csv}, which
+   * matches one CSV per SAINC table inside SAINC.zip) must pull every matching entry, not just
+   * the first — the bug behind {@code econ.state_personal_income} loading only 1 of 12 declared
+   * BEA tables. For a CSV response, every entry after the first has its header row stripped so
+   * the concatenated cache file stays a single valid CSV.
+   */
+  @Test void testExtractFromZipConcatenatesAllMatchesAndDedupesCsvHeader() throws Exception {
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+      ZipEntry e1 = new ZipEntry("SAINC1__ALL_AREAS_1929_2024.csv");
+      zos.putNextEntry(e1);
+      zos.write("GeoFIPS,TableName,2023\n01000,SAINC1,45123\n".getBytes(StandardCharsets.UTF_8));
+      zos.closeEntry();
+
+      ZipEntry e2 = new ZipEntry("SAINC4__ALL_AREAS_1929_2024.csv");
+      zos.putNextEntry(e2);
+      zos.write("GeoFIPS,TableName,2023\n01000,SAINC4,99887\n".getBytes(StandardCharsets.UTF_8));
+      zos.closeEntry();
+
+      ZipEntry e3 = new ZipEntry("readme.txt");
+      zos.putNextEntry(e3);
+      zos.write("not a match".getBytes(StandardCharsets.UTF_8));
+      zos.closeEntry();
+    }
+
+    ByteArrayInputStream zipInput = new ByteArrayInputStream(baos.toByteArray());
+    String cachePath = tempDir.resolve("zip-multi/extracted.csv").toString();
+
+    HttpSourceConfig config = HttpSourceConfig.builder()
+        .url("http://localhost/test")
+        .response(HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "csv")))
+        .build();
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
+        null, null);
+
+    String result =
+        (String) invokePrivate(source, "extractFromZip", new Class[]{InputStream.class, String.class, String.class},
+        zipInput, "*__ALL_AREAS_*.csv", cachePath);
+    assertEquals(cachePath, result);
+
+    String extracted =
+        new String(Files.readAllBytes(new File(cachePath).toPath()), StandardCharsets.UTF_8);
+    // Both tables' data rows present...
+    assertTrue(extracted.contains("SAINC1,45123"), "First table's data missing: " + extracted);
+    assertTrue(extracted.contains("SAINC4,99887"), "Second table's data missing: " + extracted);
+    // ...but the header appears exactly once, not once per matched entry.
+    int headerCount = extracted.split("GeoFIPS,TableName,2023", -1).length - 1;
+    assertEquals(1, headerCount, "CSV header should appear exactly once: " + extracted);
+    source.close();
+  }
+
+  @Test void testExtractFromZipConcatenatesAllMatchesWithoutHeaderStrippingForNonCsv()
+      throws Exception {
+    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+    try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+      ZipEntry e1 = new ZipEntry("part1.json");
+      zos.putNextEntry(e1);
+      zos.write("{\"a\":1}\n".getBytes(StandardCharsets.UTF_8));
+      zos.closeEntry();
+
+      ZipEntry e2 = new ZipEntry("part2.json");
+      zos.putNextEntry(e2);
+      zos.write("{\"a\":2}\n".getBytes(StandardCharsets.UTF_8));
+      zos.closeEntry();
+    }
+
+    ByteArrayInputStream zipInput = new ByteArrayInputStream(baos.toByteArray());
+    String cachePath = tempDir.resolve("zip-multi-json/extracted.json").toString();
+
+    HttpSource source = createLocalCacheSource();
+    String result =
+        (String) invokePrivate(source, "extractFromZip", new Class[]{InputStream.class, String.class, String.class},
+        zipInput, "*.json", cachePath);
+    assertEquals(cachePath, result);
+
+    String extracted =
+        new String(Files.readAllBytes(new File(cachePath).toPath()), StandardCharsets.UTF_8);
+    assertTrue(extracted.contains("{\"a\":1}"), "First entry missing: " + extracted);
+    assertTrue(extracted.contains("{\"a\":2}"), "Second entry missing: " + extracted);
+    source.close();
+  }
+
   // ======= transformResponse tests =======
 
   @Test void testTransformResponseWithNullTransformer() throws Exception {
