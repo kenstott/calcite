@@ -61,6 +61,7 @@ import org.apache.calcite.rex.RexProgram;
 import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.rex.RexVisitor;
+import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.sql.SqlExplainFormat;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.sql.SqlKind;
@@ -793,6 +794,26 @@ public class RelFieldTrimmer implements ReflectiveVisitor {
   }
 
   /**
+   * Returns all the top level {@link RexSubQuery}s in a given expression.
+   *
+   * <p>Unlike {@link RexUtil.SubQueryCollector#collect(Project)}, this is not restricted to a
+   * {@link Project}'s project list — it is used to find a {@link RexSubQuery} embedded directly
+   * in a {@link Join}'s condition (or match condition), which is where a correlated sub-query
+   * lives before {@code SubQueryRemoveRule} expands it into a {@link LogicalCorrelate}.
+   */
+  private static List<RexSubQuery> subQueriesOf(RexNode node) {
+    final List<RexSubQuery> subQueries = new ArrayList<>();
+    node.accept(
+        new RexVisitorImpl<Void>(true) {
+          @Override public Void visitSubQuery(RexSubQuery subQuery) {
+            subQueries.add(subQuery);
+            return super.visitSubQuery(subQuery);
+          }
+        });
+    return subQueries;
+  }
+
+  /**
    * Variant of {@link #trimFields(RelNode, ImmutableBitSet, Set)} for
    * {@link org.apache.calcite.rel.logical.LogicalJoin}.
    */
@@ -818,7 +839,34 @@ public class RelFieldTrimmer implements ReflectiveVisitor {
     if (matchConditionExpr != null) {
       matchConditionExpr.accept(inputFinder);
     }
-    final ImmutableBitSet fieldsUsedPlus = inputFinder.build();
+
+    // Collect any RexSubQuery embedded directly in the condition(s) — a correlated scalar/
+    // IN/EXISTS sub-query that SubQueryRemoveRule has not yet expanded into a Correlate.
+    // InputFinder's (deep) visitSubQuery only walks a RexSubQuery's own operands, not the
+    // correlate-variable references buried inside the sub-query's own RelNode tree, so on its
+    // own it will not discover that the outer join still needs the columns those correlate
+    // variables read. Retain them the same way trimFields(Project, ...) above does, and (per
+    // SubQueryRemoveRule#matchJoin, which performs the actual expansion later) a correlate
+    // variable's field indices are already expressed in the join's own combined
+    // (system + left + right) ordinal space, so they can be unioned in directly.
+    final List<RexSubQuery> subQueries = new ArrayList<>(subQueriesOf(conditionExpr));
+    if (matchConditionExpr != null) {
+      subQueries.addAll(subQueriesOf(matchConditionExpr));
+    }
+    final ImmutableBitSet.Builder correlatedFieldsUsed = ImmutableBitSet.builder();
+    for (RexSubQuery subQuery : subQueries) {
+      for (CorrelationId id : RelOptUtil.getVariablesUsed(subQuery.rel)) {
+        correlatedFieldsUsed.addAll(RelOptUtil.correlationColumns(id, subQuery.rel));
+      }
+    }
+    final ImmutableBitSet fieldsUsedPlus =
+        inputFinder.build().union(correlatedFieldsUsed.build());
+
+    // Unlike a single Project's expression list (which assumes at most one active
+    // correlation), a join condition may legitimately AND together more than one equi-join
+    // clause, each with its own independently-correlated sub-query, so all correlation ids
+    // found across every sub-query in the condition(s) are tracked, not just one.
+    final Set<CorrelationId> correlationIds = RelOptUtil.getVariablesUsed(subQueries);
 
     // If no system fields are used, we can remove them.
     int systemFieldUsedCount = 0;
@@ -906,9 +954,31 @@ public class RelFieldTrimmer implements ReflectiveVisitor {
     }
 
     // Build new join.
-    final RexVisitor<RexNode> shuttle =
-        new RexPermuteInputsShuttle(
-            mapping, newInputs.get(0), newInputs.get(1));
+    final RexVisitor<RexNode> shuttle;
+    if (!correlationIds.isEmpty()) {
+      // A correlate variable's field indices are relative to the join's own combined
+      // (system + left + right) row, same as above, so the sub-query's correlate reference(s)
+      // need remapping against that same combined mapping — not either input's own mapping.
+      final RelDataType newJoinRowType = join.getCluster().getTypeFactory().builder()
+          .addAll(newInputs.get(0).getRowType().getFieldList())
+          .addAll(newInputs.get(1).getRowType().getFieldList())
+          .build();
+      // mapping is reassigned below (SEMI/ANTI case), so capture the pre-switch value that
+      // actually corresponds to newJoinRowType for the anonymous shuttle to close over.
+      final Mapping conditionMapping = mapping;
+      shuttle = new RexPermuteInputsShuttle(mapping, newInputs.get(0), newInputs.get(1)) {
+        @Override public RexNode visitSubQuery(RexSubQuery subQuery) {
+          RexSubQuery newSubQuery = (RexSubQuery) super.visitSubQuery(subQuery);
+          for (CorrelationId id : correlationIds) {
+            newSubQuery = RelOptUtil.remapCorrelatesInSuqQuery(relBuilder.getRexBuilder(),
+                newSubQuery, id, newJoinRowType, conditionMapping);
+          }
+          return newSubQuery;
+        }
+      };
+    } else {
+      shuttle = new RexPermuteInputsShuttle(mapping, newInputs.get(0), newInputs.get(1));
+    }
     RexNode newConditionExpr =
         conditionExpr.accept(shuttle);
     RexNode newMatchConditionExpr =

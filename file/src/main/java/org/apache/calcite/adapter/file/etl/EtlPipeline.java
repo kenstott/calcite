@@ -742,33 +742,10 @@ public class EtlPipeline {
           ? materializeConfig.getFormat() : MaterializeConfig.Format.ICEBERG;
       LOGGER.info("Phase 4: Creating MaterializationWriter (format={})", format);
 
-      // Merge table-level config into materialize config:
-      // 1. Default name to pipeline name for Iceberg table ID
-      // 2. Default columns to table-level columns if not defined in materialize section
-      if (materializeConfig != null) {
-        boolean needsName = (materializeConfig.getName() == null || materializeConfig.getName().isEmpty())
-            && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty());
-        boolean needsColumns = (materializeConfig.getColumns() == null || materializeConfig.getColumns().isEmpty())
-            && config.getColumns() != null && !config.getColumns().isEmpty();
-
-        if (needsName || needsColumns) {
-          materializeConfig = MaterializeConfig.builder()
-              .enabled(materializeConfig.isEnabled())
-              .format(materializeConfig.getFormat())
-              .targetTableId(materializeConfig.getTargetTableId())
-              .output(materializeConfig.getOutput())
-              .partition(materializeConfig.getPartition())
-              .columns(needsColumns ? config.getColumns() : materializeConfig.getColumns())
-              .options(materializeConfig.getOptions())
-              .name(needsName ? config.getName() : materializeConfig.getName())
-              .iceberg(materializeConfig.getIceberg())
-              .tableComment(materializeConfig.getTableComment())
-              .columnComments(materializeConfig.getColumnComments())
-              .build();
-          LOGGER.debug("Merged table config: name={}, columns={}",
-              needsName, needsColumns ? config.getColumns().size() : 0);
-        }
-      }
+      // Merge table-level config into materialize config: default name to pipeline name for
+      // Iceberg table ID, and default columns to table-level columns if not defined in the
+      // materialize section (see MaterializeConfig.withTableDefaults).
+      materializeConfig = MaterializeConfig.withTableDefaults(materializeConfig, config);
 
       // Append table name to base directory: schema/tableName/
       // Skip for Iceberg format - Iceberg catalog manages table location using warehousePath/tableName

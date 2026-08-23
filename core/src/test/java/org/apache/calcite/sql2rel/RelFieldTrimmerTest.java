@@ -31,8 +31,12 @@ import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.hint.HintPredicates;
 import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.hint.RelHint;
+import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.rules.CoreRules;
+import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexCorrelVariable;
+import org.apache.calcite.rex.RexFieldAccess;
+import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -53,6 +57,7 @@ import java.util.List;
 import static org.apache.calcite.test.Matchers.hasTree;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -718,6 +723,95 @@ class RelFieldTrimmerTest {
         + "      LogicalTableScan(table=[[scott, EMP]])\n";
 
     assertThat(trimmed, hasTree(expected));
+  }
+
+  /**
+   * Test case for a correlated {@code RexSubQuery} embedded directly in a {@link Join}'s
+   * condition (not yet expanded into a {@link org.apache.calcite.rel.logical.LogicalCorrelate}
+   * by {@code SubQueryRemoveRule}) — the sibling case of {@link #testTrimCorrelatedSubquery()}
+   * (CALCITE-3772), which only covers a correlated sub-query in a {@link Project}'s expression
+   * list. Before the fix, trimming dropped {@code EMP.MGR} (used only by the sub-query's
+   * {@code $cor0.MGR} correlate reference, invisible to {@code trimFields(Join, ...)}'s plain
+   * {@code InputFinder} walk of the condition) while leaving the correlate reference's ordinal
+   * unchanged, so it ended up pointing at whatever field trimming left behind at that position
+   * — producing a join condition comparing columns of mismatched types.
+   */
+  @Test void testTrimCorrelatedSubqueryInJoinCondition() {
+    final RelBuilder builder = RelBuilder.create(config().build());
+    final Holder<@Nullable RexCorrelVariable> v = Holder.empty();
+    RelNode root = builder.scan("EMP")
+        .variable(v::set)
+        .scan("DEPT")
+        .join(JoinRelType.INNER,
+            builder.equals(
+                builder.field(2, 1, "DEPTNO"),
+                builder.scalarQuery(b2 -> builder.scan("EMP")
+                    .filter(
+                        builder.equals(builder.field(0),
+                            builder.field(v.get(), "MGR")))
+                    .project(builder.field("DEPTNO"))
+                    .build())))
+        .project(
+            builder.field("EMPNO"),
+            builder.field("DNAME"))
+        .build();
+
+    String origTree = ""
+        + "LogicalProject(EMPNO=[$0], DNAME=[$9])\n"
+        + "  LogicalJoin(condition=[=($8, $SCALAR_QUERY({\n"
+        + "LogicalProject(DEPTNO=[$7])\n"
+        + "  LogicalFilter(condition=[=($0, $cor0.MGR)])\n"
+        + "    LogicalTableScan(table=[[scott, EMP]])\n"
+        + "}))], joinType=[inner])\n"
+        + "    LogicalTableScan(table=[[scott, EMP]])\n"
+        + "    LogicalTableScan(table=[[scott, DEPT]])\n";
+    assertThat(root, hasTree(origTree));
+
+    final RelFieldTrimmer fieldTrimmer = new RelFieldTrimmer(null, builder);
+    final RelNode trimmed = fieldTrimmer.trim(root);
+
+    // EMP.MGR (needed only by the correlated sub-query, not by the outer projection) must
+    // survive trimming on the left input, and the sub-query's $cor0.MGR reference must be
+    // remapped to the new (trimmed) ordinal — not left pointing at whatever field trimming
+    // happened to leave behind.
+    assertThat(trimmed, instanceOf(Project.class));
+    final Join trimmedJoin = (Join) trimmed.getInput(0);
+    assertTrue(trimmedJoin.isValid(org.apache.calcite.util.Litmus.THROW, null));
+
+    final String expected = ""
+        + "LogicalProject(EMPNO=[$0], DNAME=[$3])\n"
+        + "  LogicalJoin(condition=[=($2, $SCALAR_QUERY({\n"
+        + "LogicalProject(DEPTNO=[$7])\n"
+        + "  LogicalFilter(condition=[=($0, $cor0.MGR)])\n"
+        + "    LogicalTableScan(table=[[scott, EMP]])\n"
+        + "}))], joinType=[inner])\n"
+        + "    LogicalProject(EMPNO=[$0], MGR=[$3])\n"
+        + "      LogicalTableScan(table=[[scott, EMP]])\n"
+        + "    LogicalProject(DEPTNO=[$0], DNAME=[$1])\n"
+        + "      LogicalTableScan(table=[[scott, DEPT]])\n";
+    assertThat(trimmed, hasTree(expected));
+
+    // hasTree()'s printed form names a RexFieldAccess by field NAME ("$cor0.MGR"), not by the
+    // ordinal/row-type it is actually resolved against, so it cannot by itself distinguish a
+    // correctly-remapped correlate reference from a stale one still pointing at the ORIGINAL
+    // (untrimmed, 8-field) EMP row. Check that directly: a correlate variable referenced from a
+    // join condition is declared against the join's own combined (left + right) row — same as
+    // an ordinary top-level RexInputRef in that condition — so after trimming it must equal the
+    // TRIMMED join's combined row type, and the field access must still resolve to "MGR" within
+    // it. This is exactly what was broken before the fix: the correlate variable kept
+    // referencing the ORIGINAL (untrimmed) row, so "MGR"'s old ordinal silently became whatever
+    // ended up at that position of the newly-trimmed join row (a type mismatch once expanded
+    // into a real join by SubQueryRemoveRule/RelDecorrelator).
+    final RexCall conditionCall = (RexCall) trimmedJoin.getCondition();
+    final RexSubQuery subQuery = (RexSubQuery) conditionCall.getOperands().get(1);
+    final LogicalFilter subQueryFilter = (LogicalFilter) subQuery.rel.getInput(0);
+    final RexCall subQueryFilterCondition = (RexCall) subQueryFilter.getCondition();
+    final RexFieldAccess correlFieldAccess =
+        (RexFieldAccess) subQueryFilterCondition.getOperands().get(1);
+    assertThat(correlFieldAccess.getField().getName(), is("MGR"));
+    final RexCorrelVariable correlVariable =
+        (RexCorrelVariable) correlFieldAccess.getReferenceExpr();
+    assertThat(correlVariable.getType(), is(trimmedJoin.getRowType()));
   }
 
 }

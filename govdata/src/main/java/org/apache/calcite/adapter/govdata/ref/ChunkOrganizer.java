@@ -364,7 +364,11 @@ public class ChunkOrganizer implements TableLifecycleListener {
     out.put("source_schema", "sec");
     out.put("source_table", "vectorized_chunks");
     out.put("stringified_fk", cik + ":" + accessionNumber);
-    out.put("sequence", row.get("sequence"));
+    // Coerce to Long: ResultSet#getObject doesn't guarantee a consistent Number subtype for
+    // this BIGINT column, and ref.vectorized_chunks has no source: block, so its Iceberg schema
+    // is inferred from this value's runtime type on first write.
+    Object sequence = row.get("sequence");
+    out.put("sequence", sequence == null ? null : ((Number) sequence).longValue());
     out.put("source_type", row.get("source_type"));
     out.put("chunk_text", row.get("chunk_text"));
     out.put("enriched_text", row.get("enriched_text"));
@@ -372,7 +376,10 @@ public class ChunkOrganizer implements TableLifecycleListener {
     out.put("subsection", row.get("subsection"));
     out.put("section_path", row.get("section_path"));
     out.put("paragraph_continuation", row.get("paragraph_continuation"));
-    out.put("paragraph_number", row.get("paragraph_number"));
+    // Same coercion as sequence above.
+    Object paragraphNumber = row.get("paragraph_number");
+    out.put("paragraph_number",
+        paragraphNumber == null ? null : ((Number) paragraphNumber).longValue());
     out.put("content_type", row.get("content_type"));
     out.put("financial_concepts", row.get("financial_concepts"));
     out.put("exhibit_number", row.get("exhibit_number"));
@@ -612,7 +619,8 @@ public class ChunkOrganizer implements TableLifecycleListener {
   private static void writeTable(TableContext context, String tableName,
       List<Map<String, Object>> rows) throws IOException {
     EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
-    MaterializeConfig matConfig = tableConfig.getMaterialize();
+    MaterializeConfig matConfig =
+        MaterializeConfig.withTableDefaults(tableConfig.getMaterialize(), tableConfig);
     String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
         + "/" + context.getSchemaName();
     MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
@@ -631,7 +639,8 @@ public class ChunkOrganizer implements TableLifecycleListener {
    *  overwrite) is what keeps repeated/resumed runs from duplicating rows. */
   private static void writeAppendBatch(TableContext context, String tableName,
       List<Map<String, Object>> rows) throws IOException {
-    MaterializeConfig baseConfig = tableConfigOf(context, tableName).getMaterialize();
+    EtlPipelineConfig tableConfig = tableConfigOf(context, tableName);
+    MaterializeConfig baseConfig = tableConfig.getMaterialize();
     List<String> partitionColumns = baseConfig.getPartition() != null
         && baseConfig.getPartition().getColumns() != null
         ? baseConfig.getPartition().getColumns()
@@ -645,7 +654,6 @@ public class ChunkOrganizer implements TableLifecycleListener {
         .name(tableName)
         .targetTableId(targetTableId)
         .output(org.apache.calcite.adapter.file.etl.MaterializeOutputConfig.builder().build())
-        .columns(Collections.<org.apache.calcite.adapter.file.etl.ColumnConfig>emptyList())
         .iceberg(MaterializeConfig.IcebergConfig.builder()
             .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
             .overwritePartitions(false)
@@ -655,7 +663,8 @@ public class ChunkOrganizer implements TableLifecycleListener {
           .columns(partitionColumns)
           .build());
     }
-    MaterializeConfig appendConfig = builder.build();
+    MaterializeConfig appendConfig =
+        MaterializeConfig.withTableDefaults(builder.build(), tableConfig);
 
     String schemaMaterializeDir = context.getSchemaContext().getMaterializeDirectory()
         + "/" + context.getSchemaName();
