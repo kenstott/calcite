@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.79.0](https://github.com/kenstott/calcite/compare/engine-v0.78.1...engine-v0.79.0) (2026-08-23)
+
+
+### Features
+
+* **core,file,govdata:** narrow conformance override + heal-sort force/dry-run fixes ([536fbc1](https://github.com/kenstott/calcite/commit/536fbc1ab1990d6fd95a85fb587b595b6187b26a))
+* **govdata/officials:** state_political_index as a per-congress time series; fix asterisk footnote stripping ([a1b96b6](https://github.com/kenstott/calcite/commit/a1b96b6ae8533fdc7ede70f97cbfef6381b1827e))
+* **govdata:** add banking schema (FDIC + CFPB), add housing.hmda_lar ([c04a702](https://github.com/kenstott/calcite/commit/c04a70252a7a38e46c544e6558f8e0da85ceb435))
+
+
+### Bug Fixes
+
+* **core:** retain correlated-subquery columns when RelFieldTrimmer trims a Join ([279ea41](https://github.com/kenstott/calcite/commit/279ea41df11f4cf3e011ea694c36c368798f23ed))
+* **file/duckdb,askamerica-engine,govdata:** raise DuckDB memory ceiling, make it adjustable at runtime ([3a2cb0f](https://github.com/kenstott/calcite/commit/3a2cb0f81e3de9e1b2ca8f8214f7e3f93622706c))
+* **file/etl:** extract every zip entry matching extractPattern, not just the first ([d55e6e1](https://github.com/kenstott/calcite/commit/d55e6e1c3c0c6bd1e38f425bc60b9dd1732f08e3))
+* **file/etl:** propagate forceReprocessAll into bypassRawCache ([d0408d8](https://github.com/kenstott/calcite/commit/d0408d8c852c55885e15a1e7c3b6d88c2d4ec6aa))
+* **govdata/econ:** fix R2 read path and drop the dependency-ordering bug it exposed ([79191ad](https://github.com/kenstott/calcite/commit/79191ad6c5ffd957b39d4b12bdc3313266e4c2b0))
+* **govdata/file:** resolve int/bigint drift on vectorized_chunks sequence columns ([dd1be34](https://github.com/kenstott/calcite/commit/dd1be34c43db8e509db12db6d431fb6fa7e844aa))
+* **govdata/fiscal:** case-insensitive zip-link selector for govt_finance_by_unit ([e04f316](https://github.com/kenstott/calcite/commit/e04f3160bf0996035e09ff71b44dc40120aa5e9d))
+* **govdata/officials:** last-name fallback for electoral_college_votes candidate_party ([c23c5e1](https://github.com/kenstott/calcite/commit/c23c5e11311f655a3862daa3fae253ee8ff07b31))
+* **govdata/pool:** guard the new real-activity grep against set -e under no matches ([c3a60a2](https://github.com/kenstott/calcite/commit/c3a60a2a6513391857eca8f4d6c172ab55b3bdf8))
+* **govdata:** defect-register remediation batch — census/fiscal/health/ref/energy/edu/geo ([c86cc37](https://github.com/kenstott/calcite/commit/c86cc37b412c6c35f38e0902594352adf11fc114))
+* **govdata:** reseed generation used a tmpfs spill dir and missed lazily-created views ([d3caec9](https://github.com/kenstott/calcite/commit/d3caec97705038e68b7f77c3ffe00f47d3420e38))
+
 ## [0.78.1](https://github.com/kenstott/calcite/compare/engine-v0.78.0...engine-v0.78.1) (2026-08-20)
 
 
