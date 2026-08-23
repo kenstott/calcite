@@ -1594,16 +1594,21 @@ public class IcebergTableWriter {
    * record per run resident. Peak heap is therefore bounded by the larger of one input file and
    * the merge frontier, not by partition size.
    *
+   * @param force bypasses the {@link #SORTED_BY_PROPERTY} idempotency check. Nothing invalidates
+   *     that property if the table's data is later replaced wholesale (a full rebuild after a
+   *     schema/column-set change, e.g.), so it can go stale and falsely claim already-sorted
+   *     while the fresh files are actually unordered. Use only after confirming that live (e.g.
+   *     via file-level min/max ranges overlapping instead of forming disjoint slices).
    * @return number of partitions rewritten
    */
   public int healSortOrder(java.util.List<String> sortOrder, long targetFileSizeBytes,
-      int retentionDays) throws IOException {
+      int retentionDays, boolean force) throws IOException {
     if (sortOrder == null || sortOrder.isEmpty()) {
       return 0;
     }
     String desired = String.join(",", sortOrder);
     String current = table.properties().get(SORTED_BY_PROPERTY);
-    if (desired.equals(current)) {
+    if (desired.equals(current) && !force) {
       LOGGER.info("Table {} already sorted by [{}]; heal is a no-op", table.name(), desired);
       return 0;
     }

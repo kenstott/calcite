@@ -55,6 +55,12 @@
 #   govdata/scripts/parallel/heal-sort-order.sh --confirm       # actually rewrite
 #   govdata/scripts/parallel/heal-sort-order.sh --confirm entity_org_bridge   # one table
 #   govdata/scripts/parallel/heal-sort-order.sh --list          # show the table list and exit
+#   govdata/scripts/parallel/heal-sort-order.sh --confirm --force canonical_org_entity
+#                       # re-heal even though aperio.sorted-by already matches -- needed when a
+#                       # table's data was replaced wholesale (a full rebuild) without that
+#                       # property being invalidated. Confirm the property is actually stale first
+#                       # (e.g. overlapping file-level min/max ranges across files), don't reach
+#                       # for this just because a plain heal reported 0 healed partitions.
 #
 # Env:
 #   GOVDATA_HEAP        JVM max heap for the rewrite (default 4g)
@@ -122,9 +128,16 @@ TABLES=(
 
 CONFIRM=""
 FILTER=""
+FORCE=""
 for arg in "$@"; do
   case "$arg" in
     --confirm) CONFIRM="yes" ;;
+    # Bypasses the aperio.sorted-by idempotency check. Needed when a table's data was replaced
+    # wholesale (a full rebuild after a schema/column-set change) without the property being
+    # invalidated -- it then falsely claims already-sorted while the fresh files are unordered.
+    # Confirm that live (e.g. overlapping file-level min/max ranges across files) before reaching
+    # for this rather than assuming a heal that reports 0 healed partitions needs forcing.
+    --force) FORCE="yes" ;;
     --list)
       printf '%-6s %-26s %s\n' "SCHEMA" "TABLE" "SORT ORDER"
       for entry in "${TABLES[@]}"; do
@@ -178,6 +191,7 @@ echo "  Jar:       $JAR"
 echo "  Heap:      $HEAP"
 [ -n "$BUDGET_ARG" ] && echo "  Sort budget override: ${GOVDATA_SORT_BUDGET} bytes"
 [ -n "$FILTER" ] && echo "  Filter:    $FILTER"
+[ -n "$FORCE" ] && echo "  Force:     bypassing the aperio.sorted-by idempotency check"
 if [ -z "$CONFIRM" ]; then
   echo "  Mode:      DRY RUN (pass --confirm to rewrite)"
 else
@@ -200,6 +214,8 @@ for entry in "${TABLES[@]}"; do
 
   DRY_ARG=""
   [ -z "$CONFIRM" ] && DRY_ARG="--dry-run"
+  FORCE_ARG=""
+  [ -n "$FORCE" ] && FORCE_ARG="--force"
 
   set +e
   # shellcheck disable=SC2086
@@ -214,6 +230,7 @@ for entry in "${TABLES[@]}"; do
     --expire-days 7 \
     $S3_ARGS \
     $DRY_ARG \
+    $FORCE_ARG \
     2>&1 | grep -vE "^log4j:|WARN.*hadoop|WARN.*Metrics|^$"
   rc=${PIPESTATUS[0]}
   set -e
