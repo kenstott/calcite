@@ -900,12 +900,13 @@ partitionedTables:
     comment: >
       Federal spending summarized by place-of-performance state x fiscal year — the
       spatial counterpart to the SOI revenue tables and one level up from the
-      county-grain usaspending_by_county. Carries obligated_amount plus a
-      population figure and a derived per_capita spending amount; that population
-      is USAspending's own reference (2020 decennial, per usaspending_by_county),
-      so prefer census.acs_population for a current denominator. From USAspending
-      spending_by_geography (geo_layer=state, all award types, FY expressed as
-      Oct-Sep). Joins to geo.state_ref via state_abbr. Source:
+      county-grain usaspending_by_county. Carries obligated_amount (all award types)
+      alongside obligated_amount_excl_loans, which drops award types '07'/'08' (loans):
+      loans report face value at the lender/servicer's place of performance rather than
+      the borrower's, which inflates place-of-performance totals for states with large
+      loan servicers. For per-capita, join census.acs_population rather than a stored
+      figure here. From USAspending spending_by_geography (geo_layer=state, all award
+      types, FY expressed as Oct-Sep). Joins to geo.state_ref via state_abbr. Source:
       api.usaspending.gov/api/v2/search/spending_by_geography/.
 
     dimensions:
@@ -923,15 +924,32 @@ partitionedTables:
       - name: obligated_amount
         type: double
         nullable: true
-        comment: Aggregated obligations for the fiscal year (USD)
-      - name: population
-        type: long
-        nullable: true
-        comment: State population (USAspending reference)
-      - name: per_capita
+        comment: Aggregated obligations for the fiscal year (USD), all award types
+      - name: obligated_amount_excl_loans
         type: double
         nullable: true
-        comment: Spending per capita (USD)
+        comment: >
+          Aggregated obligations for the fiscal year (USD), excluding loan award types
+          '07' (direct loans) and '08' (guaranteed/insured loans). Loans report face
+          value at the lender/servicer's place of performance rather than the
+          borrower's, which inflates obligated_amount for states with large loan
+          servicers; this figure is a truer measure of spending actually landing
+          in the state.
+      - name: obligated_amount_excl_loans_excl_cms_admin
+        type: double
+        nullable: true
+        comment: >
+          obligated_amount_excl_loans further excluding CMS (Centers for Medicare and
+          Medicaid Services) funded awards. CMS-funded awards report place of
+          performance at the Medicare Administrative Contractor's location, not the
+          beneficiary's — e.g. Noridian Healthcare Solutions (Fargo, ND) processes
+          Medicare fee-for-service claims nationwide, but every claim geocodes to ND.
+          Confirmed nationwide, not an ND-specific anomaly (other MAC-hosting states
+          show the same effect at FY2023 scale, e.g. Minnesota $165.8B and Indiana
+          $133.4B in CMS-funded place-of-performance alone, both exceeding California's
+          total obligated_amount despite a fraction of the population). This is the
+          truest measure of spending actually landing in the state for states with a
+          large Medicare Administrative Contractor presence.
 
     source:
       type: http
@@ -988,10 +1006,12 @@ partitionedTables:
       all award types, FY expressed as Oct-Sep); ~2,800 counties per year. Joins to
       geo.counties via county_fips. Award types span contracts, IDVs, grants, direct
       payments and loans, so totals are wider than a contracts-only USAspending screen
-      — filter in SQL if you need the A/B/C/D contract slice alone. For per-capita,
-      join census.acs_population rather than using USAspending's own population
-      reference, which is 2020 decennial. Source:
-      api.usaspending.gov/api/v2/search/spending_by_geography/.
+      — filter in SQL if you need the A/B/C/D contract slice alone. Carries
+      obligated_amount_excl_loans alongside obligated_amount because loans (award
+      types '07'/'08') report face value at the lender/servicer's place of performance
+      rather than the borrower's. For per-capita, join census.acs_population rather
+      than using USAspending's own population reference, which is 2020 decennial.
+      Source: api.usaspending.gov/api/v2/search/spending_by_geography/.
 
     dimensions:
       type:
@@ -1008,7 +1028,27 @@ partitionedTables:
       - name: obligated_amount
         type: double
         nullable: true
-        comment: Aggregated obligations for the fiscal year (USD)
+        comment: Aggregated obligations for the fiscal year (USD), all award types
+      - name: obligated_amount_excl_loans
+        type: double
+        nullable: true
+        comment: >
+          Aggregated obligations for the fiscal year (USD), excluding loan award types
+          '07' (direct loans) and '08' (guaranteed/insured loans). Loans report face
+          value at the lender/servicer's place of performance rather than the
+          borrower's, which inflates obligated_amount for counties with large loan
+          servicers; this figure is a truer measure of spending actually landing
+          in the county.
+      - name: obligated_amount_excl_loans_excl_cms_admin
+        type: double
+        nullable: true
+        comment: >
+          obligated_amount_excl_loans further excluding CMS (Centers for Medicare and
+          Medicaid Services) funded awards — matches usaspending_by_state's column of
+          the same name; see that table's comment for the nationwide evidence. CMS-funded
+          awards report place of performance at the Medicare Administrative Contractor's
+          location, not the beneficiary's, which concentrates Medicare claims spending
+          into the specific counties hosting MAC contractors' offices.
 
     source:
       type: http

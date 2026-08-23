@@ -566,7 +566,7 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
       Map<String, Object> operand) throws Exception {
     String dbPath = "test3-db-" + System.nanoTime();
     method.invoke(null, dbPath, schema, operand);
-    DuckDBPendingViews.flush(dbPath, conn);
+    DuckDBPendingViews.buildAll(dbPath, conn);
   }
 
   @Test void testRegisterSqlViewsNullOperand() throws Exception {

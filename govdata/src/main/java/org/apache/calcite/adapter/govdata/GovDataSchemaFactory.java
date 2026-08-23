@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.file.partition.PipelineTrackerFactory;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.ag.AgSchemaFactory;
+import org.apache.calcite.adapter.govdata.banking.BankingSchemaFactory;
 import org.apache.calcite.adapter.govdata.disasters.DisastersSchemaFactory;
 import org.apache.calcite.adapter.govdata.census.CensusSchemaFactory;
 import org.apache.calcite.adapter.govdata.crime.CrimeSchemaFactory;
@@ -93,6 +94,8 @@ import org.apache.calcite.adapter.file.etl.VariableResolver;
  *   <li>cyber_threat - Cyber threat intelligence (ATT&CK, IOC feeds, exploits, standards)</li>
  *   <li>energy - U.S. energy data (EIA electricity, fossil fuel production, storage, prices)</li>
  *   <li>lands - U.S. federal public lands (USFS, NPS, BLM, ONRR, FIA)</li>
+ *   <li>banking - FDIC-insured institutions, branches, structure-change events,
+ *       failures, deposits, financials, and CFPB consumer complaints</li>
  * </ul>
  *
  * <p>Example model configuration:
@@ -429,12 +432,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "usaspending":
         return new FiscalSchemaFactory();
 
+      case "banking":
+      case "fdic":
+        return new BankingSchemaFactory();
+
       default:
         throw new IllegalArgumentException(
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
             + " fedregister, officials, cyber_vuln, cyber_threat, health, energy, edu, patents, lands,"
-            + " cftc, ag, housing, transport, environment, research, fiscal");
+            + " cftc, ag, housing, transport, environment, research, fiscal, banking");
     }
   }
 
@@ -740,6 +747,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     System.setProperty("CYBER_VULN_SCHEMA_NAME", cyberVulnSchemaName);
     String cyberThreatSchemaName = getStringOrDefault(operand, "cyberThreatSchemaName", "cyber_threat");
     System.setProperty("CYBER_THREAT_SCHEMA_NAME", cyberThreatSchemaName);
+
+    // PATENTS schema name
+    String patentsSchemaName = getStringOrDefault(operand, "patentsSchemaName", "patents");
+    System.setProperty("PATENTS_SCHEMA_NAME", patentsSchemaName);
 
     // Set parquet directory for cross-schema references (e.g., BeaDimensionResolver)
     // This allows dimension resolvers to find reference tables from other schemas

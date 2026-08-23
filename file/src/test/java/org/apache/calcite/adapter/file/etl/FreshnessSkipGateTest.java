@@ -321,7 +321,8 @@ class FreshnessSkipGateTest {
       this.stubSource = stubSource;
     }
 
-    @Override protected DataSource createDataSource(EtlPipelineConfig config) {
+    @Override protected DataSource createDataSource(EtlPipelineConfig config,
+        boolean forceReprocessAll) {
       return stubSource;
     }
   }

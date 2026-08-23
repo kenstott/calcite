@@ -54,6 +54,22 @@ public class UsaSpendingCountyProvider implements DataProvider {
       "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\","
       + "\"02\",\"03\",\"04\",\"05\",\"06\",\"10\",\"07\",\"08\",\"09\",\"11\"";
 
+  /** Same set as {@link #AWARD_TYPE_CODES} minus the two loan award types ('07' direct
+   * loans, '08' guaranteed/insured loans) — matches by_state's excl-loans figure. Loans
+   * report face value at the lender/servicer's place of performance rather than the
+   * borrower's, which inflates place-of-performance totals. */
+  private static final String AWARD_TYPE_CODES_EXCL_LOANS =
+      "\"A\",\"B\",\"C\",\"D\",\"IDV_A\",\"IDV_B\",\"IDV_C\",\"IDV_D\",\"IDV_E\","
+      + "\"02\",\"03\",\"04\",\"05\",\"06\",\"10\",\"09\",\"11\"";
+
+  /** CMS-funded awards report place of performance at the Medicare Administrative
+   * Contractor's location, not the beneficiary's -- matches by_state's excl-CMS-admin
+   * figure; see that class's javadoc for the nationwide evidence (confirmed at county
+   * granularity too: 319 of ~2,800 counties carry CMS-funded activity). */
+  private static final String CMS_AGENCY_FILTER =
+      "\"agencies\":[{\"type\":\"funding\",\"tier\":\"subtier\","
+      + "\"name\":\"Centers for Medicare and Medicaid Services\"}],";
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
     String year = variables.get("effective_year");
@@ -87,6 +103,57 @@ public class UsaSpendingCountyProvider implements DataProvider {
     } finally {
       in.close();
     }
+
+    String bodyExclLoans =
+        "{\"filters\":{\"time_period\":[{\"start_date\":\"" + start + "\",\"end_date\":\"" + end
+        + "\"}],\"award_type_codes\":[" + AWARD_TYPE_CODES_EXCL_LOANS + "]},"
+        + "\"scope\":\"place_of_performance\",\"geo_layer\":\"county\","
+        + "\"spending_level\":\"transactions\",\"subawards\":false}";
+    LOGGER.info("usaspending_by_county: POST {} fy={} (excl loans)", ENDPOINT, fy);
+    JsonNode rootExclLoans;
+    InputStream inExclLoans = FiscalHttp.openPostJson(ENDPOINT, bodyExclLoans).getInputStream();
+    try {
+      rootExclLoans = MAPPER.readTree(inExclLoans);
+    } finally {
+      inExclLoans.close();
+    }
+    Map<String, Double> exclLoansByCode = new LinkedHashMap<String, Double>();
+    JsonNode resultsExclLoans = rootExclLoans.path("results");
+    if (resultsExclLoans.isArray()) {
+      for (JsonNode r : resultsExclLoans) {
+        String code = text(r, "shape_code");
+        if (code == null) {
+          continue;
+        }
+        exclLoansByCode.put(code, num(r, "aggregated_amount"));
+      }
+    }
+
+    String bodyCms =
+        "{\"filters\":{\"time_period\":[{\"start_date\":\"" + start + "\",\"end_date\":\"" + end
+        + "\"}]," + CMS_AGENCY_FILTER + "\"award_type_codes\":[" + AWARD_TYPE_CODES_EXCL_LOANS
+        + "]},\"scope\":\"place_of_performance\",\"geo_layer\":\"county\","
+        + "\"spending_level\":\"transactions\",\"subawards\":false}";
+    LOGGER.info("usaspending_by_county: POST {} fy={} (CMS only, excl loans)", ENDPOINT, fy);
+    JsonNode rootCms;
+    InputStream inCms = FiscalHttp.openPostJson(ENDPOINT, bodyCms).getInputStream();
+    try {
+      rootCms = MAPPER.readTree(inCms);
+    } finally {
+      inCms.close();
+    }
+    Map<String, Double> cmsByCode = new LinkedHashMap<String, Double>();
+    JsonNode resultsCms = rootCms.path("results");
+    if (resultsCms.isArray()) {
+      for (JsonNode r : resultsCms) {
+        String code = text(r, "shape_code");
+        if (code == null) {
+          continue;
+        }
+        cmsByCode.put(code, num(r, "aggregated_amount"));
+      }
+    }
+
     JsonNode results = root.path("results");
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     if (results.isArray()) {
@@ -99,6 +166,13 @@ public class UsaSpendingCountyProvider implements DataProvider {
         row.put("county_fips", code);
         row.put("county_name", text(r, "display_name"));
         row.put("obligated_amount", num(r, "aggregated_amount"));
+        row.put("obligated_amount_excl_loans", exclLoansByCode.get(code));
+        Double exclLoans = exclLoansByCode.get(code);
+        Double cms = cmsByCode.get(code);
+        if (exclLoans != null) {
+          row.put("obligated_amount_excl_loans_excl_cms_admin",
+              exclLoans - (cms == null ? 0.0 : cms));
+        }
         rows.add(row);
       }
     }

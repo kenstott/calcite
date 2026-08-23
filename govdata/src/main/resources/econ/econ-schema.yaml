@@ -6967,7 +6967,20 @@ tables:
     type: view
     sql: "SELECT na.table_id, na.line_number, na.line_description, na.series_code, na.year, na.value, na.units, na.frequency, r.description AS table_description FROM ${ECON_SCHEMA_NAME:econ}.national_accounts na LEFT JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables r ON na.table_id = r.table_name"
     comment: >
-      National accounts (NIPA) data enriched with table metadata. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA). Enables semantic queries without manual joins. (The nipa_tables reference catalog exposes only table_name/description from the BEA API; its former section categorization was never populated — the partition was changed section->type in commit a2c400aaa — so no section column is emitted.)
+      National accounts (NIPA) data enriched with table metadata. Columns: table_id (BEA table code), line_number (line within table), line_description (component description), series_code (BEA series code), year, value (millions of dollars), units, frequency (A=Annual/Q=Quarterly), table_description (full table description from BEA). Enables semantic queries without manual joins. (The nipa_tables reference catalog exposes only table_name/description from the BEA API; its former section categorization was never populated — the partition was changed section->type in commit a2c400aaa — so no section column is emitted.) To discover available table_id values, query national_accounts_tables instead of `SELECT DISTINCT table_id FROM national_accounts_enriched` — the latter forces a full scan of the (large) national_accounts fact table plus this join before the DISTINCT can apply.
+
+  - name: national_accounts_tables
+    type: view
+    sql: "SELECT table_name AS table_id, description FROM ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.nipa_tables"
+    comment: >
+      Lightweight catalog of available national_accounts/national_accounts_enriched table_id
+      values: a plain scan over the small nipa_tables reference table, with no join against
+      the full national_accounts fact table. Use this (not national_accounts_enriched) to
+      discover table_id values — e.g. SELECT DISTINCT table_id FROM
+      national_accounts_enriched pays for a full fact-table scan and join before the DISTINCT
+      can apply, since nothing declares nipa_tables.table_name unique. Columns: table_id (BEA
+      table code, aliased from nipa_tables.table_name), description (full table description
+      from BEA).
 
   - name: regional_income_enriched
     type: view

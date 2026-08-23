@@ -1,6 +1,6 @@
 # AskAmerica JDBC Driver
 
-Query 25 US government datasets — SEC filings, census, economic indicators, crime, weather, and more — using standard SQL from any JDBC client.
+Query 27 US government datasets — SEC filings, census, economic indicators, crime, weather, and more — using standard SQL from any JDBC client.
 
 ## Download
 
@@ -49,6 +49,7 @@ jdbc:askamerica:source=fec,crime,weather
 | `weather` | NOAA GHCND daily observations (temperature, precipitation) |
 | `fec` | FEC campaign finance contributions and expenditures |
 | `fedregister` | Federal Register rules and notices |
+| `officials` | Congress members, PAS nominations, federal judges, electoral results |
 | `cyber_vuln` | NIST NVD CVE vulnerability database |
 | `cyber_threat` | CISA known exploited vulnerabilities |
 | `energy` | EIA energy production and consumption |
@@ -65,6 +66,7 @@ jdbc:askamerica:source=fec,crime,weather
 | `research` | NSF NCSES R&D: National Patterns, Federal Funds for R&D, Higher Education R&D (HERD) |
 | `fiscal` | Federal revenue and outlays: IRS SOI income/tax by ZIP and county, USAspending obligations, SBA loans, SSA |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
+| `banking` | FDIC institutions/branches/failures/deposits/financials, CFPB consumer complaints |
 
 ## DBeaver setup
 

@@ -58,7 +58,7 @@ if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "  Schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
   echo "           weather, ref, fec, fedregister, officials, econ_reference, research," >&2
   echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-  echo "           housing, transport, environment, disasters, fiscal" >&2
+  echo "           housing, transport, environment, disasters, fiscal, banking" >&2
   exit 1
 fi
 
@@ -515,7 +515,8 @@ case "$SCHEMA" in
 
   # ── Split-aware annual schemas — year tables per-year; snapshot/full-archive :once ──
   # housing (FHFA/Census/HUD), transport (NHTSA/BTS/FAA/FTA/FHWA), environment
-  # (EPA/USGS), ag (USDA NASS/ERS/RMA/FSA), disasters (FEMA/NOAA/WFIGS). Each mixes
+  # (EPA/USGS), ag (USDA NASS/ERS/RMA/FSA), disasters (FEMA/NOAA/WFIGS), banking
+  # (FDIC BankFind + CFPB complaints). Each mixes
   # year-addressable tables with snapshot/full-archive tables — see the
   # _split_year_tables/_split_once_tables sets above. Modes:
   #   once           — snapshot/full-archive tables only, ingested once over the full range
@@ -525,7 +526,7 @@ case "$SCHEMA" in
   #                    it emits :once + per-year)
   #   daily          — ALL tables (snapshots refresh + current-year data; currentMonth passed
   #                    so month-partitioned tables like transport's airline_ontime bust cache)
-  housing|transport|environment|ag|disasters|fiscal|census)
+  housing|transport|environment|ag|disasters|fiscal|census|banking)
     ENABLED=""
     EXTRA=""
     case "$MODE" in
@@ -550,7 +551,8 @@ case "$SCHEMA" in
         ;;
       *) echo "${SCHEMA}: unknown mode '$MODE'. Valid modes: historical, daily, once, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
-    # census's ACS tables need enabledSources regardless of mode/enabledTables.
+    # census's ACS tables need enabledSources regardless of mode/enabledTables. banking has no
+    # equivalent gating — every FDIC/CFPB table is unauthenticated (see BankingSchemaFactory).
     [ "$SCHEMA" = "census" ] && EXTRA="${EXTRA:+${EXTRA},}\"enabledSources\":[\"acs\"]"
     # Comma-join the optional operands (enabledTables, currentMonth) into one fragment.
     OPS="$ENABLED"
@@ -563,7 +565,7 @@ case "$SCHEMA" in
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, officials, econ_reference, research," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-    echo "               housing, transport, environment, disasters, fiscal" >&2
+    echo "               housing, transport, environment, disasters, fiscal, banking" >&2
     exit 1
     ;;
 esac

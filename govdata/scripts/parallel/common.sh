@@ -188,9 +188,14 @@ load_env() {
   export GOVDATA_TRACKER_PG_PASSWORD="${GOVDATA_TRACKER_PG_PASSWORD:-}"
 }
 
-# Emit the JSON operand fragment for the tracker backend, read from the CURRENT environment.
-# Postgres is the only backend; an explicit non-pg value is rejected rather than quietly emitted,
-# because an unknown backend makes the JVM throw at schema-open time with a far less obvious error.
+# Emit the JSON operand fragment shared by every generated model: the tracker backend
+# (read from the CURRENT environment) plus ignoreReleaseWindow, which every slot type
+# bypasses unconditionally so a table's releaseWindow: (e.g. dow-restricted) never silently
+# no-ops a force-reprocess/run-pool launch on the "wrong" day — the caller already decided
+# to run this table now, so the engine's day-gating shouldn't second-guess that.
+# Postgres is the only tracker backend; an explicit non-pg value is rejected rather than
+# quietly emitted, because an unknown backend makes the JVM throw at schema-open time with
+# a far less obvious error.
 # Emitted WITHOUT a trailing comma; callers append the comma in the heredoc.
 tracker_operand_json() {
   case "${CALCITE_TRACKER_BACKEND:-pg}" in
@@ -201,7 +206,7 @@ tracker_operand_json() {
       return 1
       ;;
   esac
-  printf '"trackerBackend": "pg", "trackerConfig": { "jdbcUrl": "%s", "user": "%s", "password": "%s" }' \
+  printf '"trackerBackend": "pg", "trackerConfig": { "jdbcUrl": "%s", "user": "%s", "password": "%s" }, "ignoreReleaseWindow": true' \
     "${GOVDATA_TRACKER_PG_URL:-}" "${GOVDATA_TRACKER_PG_USER:-}" "${GOVDATA_TRACKER_PG_PASSWORD:-}"
 }
 
@@ -679,7 +684,7 @@ generate_single_schema_model() {
       ${_YEAR_RANGE}"
       ;;
     edu)
-      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","naep_achievement_levels","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition","library_outlets"'
+      local _EDU_TABLES='"ccd_districts","ccd_schools","naep_scores","naep_achievement_levels","crdc_schools","ipeds_institutions","ipeds_completions","ipeds_financials","ipeds_tuition","library_outlets","f33_district_finance"'
       if [ -n "${API_DATA_GOV:-}" ]; then
         _EDU_TABLES="${_EDU_TABLES},\"college_scorecard\",\"college_scorecard_programs\""
       fi

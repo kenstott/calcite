@@ -23,10 +23,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Resolves Building Permits Survey (BPS) year dimensions dynamically.
+ * Resolves Building Permits Survey (BPS) period_code dimensions dynamically.
  *
- * <p>BPS data is published annually in December. The year dimension uses YYMM format
- * (e.g., 2112 = December 2021, 2212 = December 2022) for Census API URL compatibility.
+ * <p>BPS data is published annually in December. The period_code dimension uses YYMM format
+ * (e.g., 2112 = December 2021, 2212 = December 2022) for Census API URL compatibility. It is
+ * a URL code, not a year — e.g. 2012 means December 2020, not the year 2012 — so it must never
+ * be filtered as a year; see the table's survey_year/survey_month columns for that.
  *
  * <p>This resolver generates the YYMM codes from a yearRange configuration, avoiding
  * hardcoded year lists that become stale.
@@ -34,7 +36,7 @@ import java.util.Map;
  * <p>Schema configuration:
  * <pre>{@code
  * dimensions:
- *   year:
+ *   period_code:
  *     type: custom
  *     start: "${GOVDATA_START_YEAR:2010}"   # publish-year demarcation (daily -> current year)
  *     dataLag: 1                             # data year = publish - dataLag; emitted YYMM is final
@@ -51,7 +53,7 @@ public class BuildingPermitsDimensionResolver implements DimensionResolver {
   @Override
   public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
-    if (!"year".equals(dimensionName)) {
+    if (!"period_code".equals(dimensionName)) {
       return Collections.emptyList();
     }
 
@@ -74,17 +76,18 @@ public class BuildingPermitsDimensionResolver implements DimensionResolver {
 
     int currentYear = Calendar.getInstance().get(Calendar.YEAR);
 
-    List<String> yymms = new ArrayList<>();
+    List<String> periodCodes = new ArrayList<>();
     for (int publishYear = startPublish; publishYear <= currentYear; publishYear++) {
       int dataYear = publishYear - dataLag;
-      String yymm = toYYMM(dataYear);
-      yymms.add(yymm);
-      LOGGER.debug("BPS-YEARS: publish {} -> data {} -> YYMM {}", publishYear, dataYear, yymm);
+      String periodCode = toYYMM(dataYear);
+      periodCodes.add(periodCode);
+      LOGGER.debug("BPS-PERIODS: publish {} -> data {} -> period_code {}",
+          publishYear, dataYear, periodCode);
     }
 
-    LOGGER.info("BPS-YEARS: resolved {} year codes (startPublish={}, currentYear={}, dataLag={})",
-        yymms.size(), startPublish, currentYear, dataLag);
-    return yymms;
+    LOGGER.info("BPS-PERIODS: resolved {} period codes (startPublish={}, currentYear={}, "
+        + "dataLag={})", periodCodes.size(), startPublish, currentYear, dataLag);
+    return periodCodes;
   }
 
   /**

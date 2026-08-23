@@ -26,6 +26,7 @@ import org.apache.calcite.sql.fun.SqlLibrary;
 import org.apache.calcite.sql.fun.SqlLibraryOperatorTableFactory;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
+import org.apache.calcite.sql.validate.SqlDelegatingConformance;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.checker.nullness.qual.PolyNull;
@@ -186,8 +187,30 @@ public class CalciteConnectionConfigImpl extends ConnectionConfigImpl
   }
 
   @Override public SqlConformance conformance() {
-    return CalciteConnectionProperty.CONFORMANCE.wrap(properties)
+    SqlConformance base = CalciteConnectionProperty.CONFORMANCE.wrap(properties)
         .getEnum(SqlConformanceEnum.class);
+    boolean raggedUnionToVarying =
+        CalciteConnectionProperty.CONFORMANCE_RAGGED_UNION_TO_VARYING.wrap(properties)
+            .getBoolean();
+    if (!raggedUnionToVarying || base.shouldConvertRaggedUnionTypesToVarying()) {
+      // Already true under the base conformance (e.g. conformance=MYSQL_5), or not requested;
+      // wrapping would be a no-op layer for no reason.
+      return base;
+    }
+    return new RaggedUnionToVaryingConformance(base);
+  }
+
+  /** Layers {@link SqlConformance#shouldConvertRaggedUnionTypesToVarying()} = true onto a base
+   * conformance, without adopting that conformance's other behavior differences. See
+   * {@link CalciteConnectionProperty#CONFORMANCE_RAGGED_UNION_TO_VARYING}. */
+  private static class RaggedUnionToVaryingConformance extends SqlDelegatingConformance {
+    RaggedUnionToVaryingConformance(SqlConformance delegate) {
+      super(delegate);
+    }
+
+    @Override public boolean shouldConvertRaggedUnionTypesToVarying() {
+      return true;
+    }
   }
 
   @Override public String timeZone() {

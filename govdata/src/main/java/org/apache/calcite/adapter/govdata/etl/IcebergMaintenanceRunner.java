@@ -218,12 +218,7 @@ public class IcebergMaintenanceRunner {
     System.out.println();
     System.out.println("Partitions needing compaction: " + partitionsNeedingCompaction);
 
-    if (config.dryRun) {
-      System.out.println("\n[DRY RUN] Would compact " + partitionsNeedingCompaction + " partitions");
-      return 0;
-    }
-
-    // Create storage provider for S3/R2 (needed for both maintenance and compaction)
+    // Create storage provider for S3/R2 (needed for maintenance, heal, and compaction)
     StorageProvider storageProvider = buildStorageProvider(config);
 
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
@@ -251,9 +246,13 @@ public class IcebergMaintenanceRunner {
       return 0;
     }
 
-    // Heal runs BEFORE the no-compaction early exit, because "no partitions need compaction"
-    // is exactly the state it exists for: a table already packed into large files has no small
-    // files to trigger a size-based pass and would otherwise never be sorted at all.
+    // Heal runs BEFORE the plain compaction dry-run/no-op returns below, because "no partitions
+    // need compaction" is exactly the state it exists for: a table already packed into large
+    // files has no small files to trigger a size-based pass and would otherwise never be sorted
+    // at all. It also has to run before the general dry-run return, not after: that return fires
+    // on ANY dry run regardless of --heal-sort, so putting heal's own dry-run branch after it
+    // was unreachable dead code -- --dry-run --heal-sort silently printed only the compaction
+    // summary and exited, never mentioning heal.
     if (config.healSort) {
       if (config.sortOrder.isEmpty()) {
         System.err.println("--heal-sort requires --sort-order; nothing to sort into.");
@@ -270,10 +269,15 @@ public class IcebergMaintenanceRunner {
 
       System.out.println("\nHealing sort order " + config.sortOrder + " ...");
       int healed = writer.healSortOrder(config.sortOrder, config.targetFileSize,
-          config.expireSnapshotsDays);
+          config.expireSnapshotsDays, config.force);
       System.out.println("Healed " + healed + " partition(s)"
           + (healed == 0 ? " (already recorded at this sort order, or nothing to do)" : ""));
       table.refresh();
+    }
+
+    if (config.dryRun) {
+      System.out.println("\n[DRY RUN] Would compact " + partitionsNeedingCompaction + " partitions");
+      return 0;
     }
 
     if (partitionsNeedingCompaction == 0) {
@@ -355,6 +359,12 @@ public class IcebergMaintenanceRunner {
     System.err.println("                          already packed into large files, which normal");
     System.err.println("                          compaction never revisits. One-off and costly:");
     System.err.println("                          skipped once the table records that order.");
+    System.err.println("  --force                 With --heal-sort, re-heal even when the table");
+    System.err.println("                          already records the requested order. That");
+    System.err.println("                          property is not invalidated by a later wholesale");
+    System.err.println("                          data replacement, so it can go stale. Confirm live");
+    System.err.println("                          (e.g. overlapping file-level min/max ranges) before");
+    System.err.println("                          using this rather than assuming it is needed.");
     System.err.println();
     System.err.println("S3/R2 options:");
     System.err.println("  --s3-access-key KEY     S3 access key ID");
@@ -402,6 +412,17 @@ public class IcebergMaintenanceRunner {
      * has to be asked for.
      */
     boolean healSort = false;
+    /**
+     * Bypasses the {@code aperio.sorted-by} idempotency check, forcing a re-heal even when the
+     * table already records the requested sort order. That property is set only by a successful
+     * {@code healSortOrder} run, but nothing invalidates it if the table's data is later replaced
+     * wholesale (a full rebuild after a schema/column-set change, e.g.) -- the property then
+     * falsely claims already-sorted while the fresh files are actually unordered. Confirmed live
+     * on ref.canonical_org_entity: file-level min/max ranges for canonical_name overlapped across
+     * every file (not disjoint alphabetical slices), yet the property already read
+     * "lei,canonical_name" from an earlier heal that predated a full rebuild.
+     */
+    boolean force = false;
 
     static Config fromArgs(String[] args) {
       Config config = new Config();
@@ -458,6 +479,9 @@ public class IcebergMaintenanceRunner {
           break;
         case "--maintenance-only":
           config.maintenanceOnly = true;
+          break;
+        case "--force":
+          config.force = true;
           break;
         case "--help":
           printUsage();

@@ -84,7 +84,7 @@ public class McpServer {
     static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
-        + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal";
+        + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking";
 
     // Connections keyed by comma-joined source set. The all-schemas set is warmed at
     // startup and backs every tool; narrower sets exist only for legacy callers.
@@ -3150,8 +3150,19 @@ public class McpServer {
             out.set("coverage", cov);
         }
 
+        // Defect Register Recommendation 5: a table's own coverage/row-count numbers describe an
+        // in-progress backfill's current state, not the source's real shape, and nothing else in
+        // this response can tell the two apart. Declared in schema YAML only where it applies —
+        // most tables carry no such flag — and meant to be removed once the initial load
+        // finishes, not left in place as permanent metadata.
+        String backfill = Catalog.backfillStatus(s, t);
+        if (backfill != null) {
+            out.put("backfill", backfill);
+        }
+
         log.println("[askamerica-mcp] describe_table " + s + "." + t
-            + " columns=" + cols.size() + " coverage=" + (cov != null));
+            + " columns=" + cols.size() + " coverage=" + (cov != null)
+            + (backfill != null ? " backfill=" + backfill : ""));
         return out.toString();
     }
 
@@ -4392,14 +4403,17 @@ public class McpServer {
             + "source_name_normalized, " + normLit + ") "
             + "ELSE 0 END";
         // Identifier hits are exact by construction and bypass name scoring entirely. The
-        // ticker path reaches canonical_org_entity, NOT the bridge: bridge.sec_cik is
-        // populated only for EIN-path matches, so a ticker resolved through it found nothing.
-        // A ticker is NOT matched as an identifier here. entity_org_bridge.sec_cik is populated
-        // only for EIN-path matches, so a filer matched through GLEIF carries a lei and a null
-        // sec_cik — AAPL resolved to CIK 0000320193 and then matched no bridge row at all.
-        // canonical_org_entity.sec_cik is populated the same way and is equally sparse. The
-        // ticker is instead resolved to its registered name by the caller and passed in as
-        // aliasNorm, turning it into a name match, which the bridge does index.
+        // ticker path reaches canonical_org_entity, NOT the bridge, and does not attempt a
+        // direct sec_cik lookup: a ticker is resolved to its registered name by the caller and
+        // passed in as aliasNorm, turning it into a name match, which the bridge does index.
+        // (Defect Register B2-2, historical note: sec_cik used to be populated only via the
+        // EIN match path, which had no EIN-bearing SEC-side source wired in and so was
+        // effectively always null — a GLEIF-matched filer like AAPL carried a lei but no
+        // sec_cik. That gap is closed: sec_cik now also resolves via gleif_cik_mapping on the
+        // lei any name match already produces, so this ticker-to-name workaround is no longer
+        // load-bearing for AAPL-shaped cases, though it is left in place rather than reworked
+        // here — the identifier-vs-name distinction it encodes is still real for tickers that
+        // never had a name-matchable GLEIF entity in the first place.)
         String identifierHit = "upper(lei) = " + upper + " OR sec_cik = " + padded;
 
         return "WITH raw AS ("
@@ -4516,12 +4530,13 @@ public class McpServer {
     /**
      * Resolves a ticker to the normalized form of its registered company name, or null.
      *
-     * <p>Tickers are absent from the entity bridge entirely, and the CIK they resolve to is
-     * a dead end there: bridge.sec_cik is filled only for EIN-path matches, so a filer matched
-     * through GLEIF has a null one. Translating the ticker into the name it trades under turns
-     * the lookup into a name match, which the bridge does index — "AAPL" becomes "apple inc",
-     * normalized here through the same function every other name goes through so the two sides
-     * cannot drift apart.
+     * <p>Tickers are absent from the entity bridge entirely, so a ticker itself is never a
+     * lookup key there. Translating the ticker into the name it trades under turns the lookup
+     * into a name match, which the bridge does index — "AAPL" becomes "apple inc", normalized
+     * here through the same function every other name goes through so the two sides cannot
+     * drift apart. (bridge.sec_cik is no longer an EIN-path-only dead end for GLEIF-matched
+     * filers — see the identifierHit note above — but that backfill still runs off a resolved
+     * name, so this ticker-to-name translation remains the way a bare ticker reaches it.)
      *
      * <p>ref.sec_company_tickers is ~10k rows, so this costs a small scan and only runs when
      * the term could plausibly be a ticker.

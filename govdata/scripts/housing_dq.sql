@@ -213,6 +213,47 @@ SELECT 'housing', 'income_limits_county', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/income_limits_county', allow_moved_paths := true) WHERE hud_area_code IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: hmda_lar (CFPB HMDA loan-level CSV; partition cols: type, year, state)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'hmda_lar', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_lar', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hmda_lar', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 loan-level rows (dqRowLimit caps each year x state at 200000)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_lar', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_lar', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'housing', 'hmda_lar', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_lar', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'state')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hmda_lar', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_lar', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'state')));
+
+-- No single-column PK (grain is the CFPB record order within a year x state file).
+-- census_tract is the column this table exists to carry, so a NOT NULL check on it
+-- stands in for T6 — a NULL here silently defeats the whole reason hmda_lar exists.
+INSERT INTO dq_results
+SELECT 'housing', 'hmda_lar', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0, 'NULL census_tract rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_lar', allow_moved_paths := true) WHERE census_tract IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 -- ============================================================================

@@ -2229,6 +2229,210 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  # ==========================================================================
+  # F-33 DISTRICT FINANCE — Census Bureau Annual Survey of School System
+  # Finances, individual-unit file. One row per LEA per fiscal year.
+  # ~14,000 LEAs per year; real dollar revenue/expenditure figures (the only
+  # such table in this schema — see ccd_districts and district_naep_spending's
+  # comments, both of which explicitly note the absence of finance data).
+  # ==========================================================================
+  - name: f33_district_finance
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+
+    comment: >
+      Census Bureau Annual Survey of School System Finances ("F-33"),
+      individual-unit file — one row per public school district (LEA) per
+      fiscal year. Source: the Census Bureau's published elsec{yy}t.txt
+      comma-delimited file, one per fiscal year (14,088 LEAs in the verified
+      FY2023 file). leaid (source column NCESID) is the Census Bureau's own
+      copy of the NCES LEA ID and joins directly to ccd_districts.leaid and
+      geo.school_districts.sd_lea. Unlike ccd_districts (a staffing/enrollment
+      directory with no dollar figures at all), this table carries the actual
+      survey dollar aggregates: total_revenue_thousand, total_expenditure_thousand,
+      and current_expenditure_thousand are reported in thousands of dollars
+      (the source's own convention, not converted here — see each column's
+      comment); per_pupil_current_expenditure, per_pupil_instruction_expenditure,
+      and per_pupil_support_services_expenditure are the source's own per-pupil
+      dollar figures (PPCSTOT/PPITOTAL/PPSTOTAL), computed by the Census Bureau
+      from fall membership, not derived here. A two-year data lag applies
+      (dataLag: 2 below) — the Census Bureau's most recently published fiscal
+      year is real time minus roughly two years (verified live 2026-08-21: the
+      FY2024 file was the latest published, FY2025 was not yet available).
+      Verified live against the FY2023 file: NCESID is unique per row (0
+      duplicates) and always 7 digits; none of TOTALREV/TOTALEXP/TCURSPND/
+      PPCSTOT/ENROLL carried a negative value in that file, so (unlike CCD)
+      this table does not null out negative sentinel codes — none were
+      observed, but this has only been checked for FY2023/FY2024.
+
+    columns:
+      - name: leaid
+        type: string
+        nullable: false
+        comment: >
+          NCES LEA ID (7-digit string), from source column NCESID — PK
+          component. FK to ccd_districts.leaid and geo.school_districts.sd_lea.
+      - name: year
+        type: int
+        nullable: false
+        comment: >
+          Fiscal year of the survey (the yearRange dimension's effective_year,
+          after dataLag=2 is applied) — PK component. Matches ccd_districts.year.
+      - name: pid6
+        type: string
+        nullable: true
+        comment: >
+          Census Bureau 6-digit processing identifier for the school system,
+          source column PID6 (as of FY2023 this replaced the older IDCENSUS
+          identifier as the Census Bureau's primary key for the unit).
+      - name: unit_type
+        type: string
+        nullable: true
+        comment: Census government unit type code, source column UNIT_TYPE (raw code)
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS code, source column FIPST — FK to geo.states.state_fips
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS (state+county), source column CONUM — FK to geo.counties.county_fips
+      - name: district_name
+        type: string
+        nullable: true
+        comment: School system name, source column NAME
+      - name: cbsa
+        type: string
+        nullable: true
+        comment: Core-Based Statistical Area code, source column CBSA
+      - name: school_level
+        type: string
+        nullable: true
+        comment: School level code, source column SCHLEV (raw code)
+      - name: enrollment
+        type: long
+        nullable: true
+        comment: Fall membership (student enrollment) used to compute the per-pupil columns, source column ENROLL
+      - name: total_revenue_thousand
+        type: double
+        nullable: true
+        comment: Total elementary-secondary revenue, in thousands of dollars, source column TOTALREV
+      - name: federal_revenue_thousand
+        type: double
+        nullable: true
+        comment: Total revenue from federal sources, in thousands of dollars, source column TFEDREV
+      - name: state_revenue_thousand
+        type: double
+        nullable: true
+        comment: Total revenue from state sources, in thousands of dollars, source column TSTREV
+      - name: local_revenue_thousand
+        type: double
+        nullable: true
+        comment: Total revenue from local sources, in thousands of dollars, source column TLOCREV
+      - name: total_expenditure_thousand
+        type: double
+        nullable: true
+        comment: Total elementary-secondary expenditure, in thousands of dollars, source column TOTALEXP
+      - name: current_expenditure_thousand
+        type: double
+        nullable: true
+        comment: >
+          Total current spending (operating expenditure — excludes capital
+          outlay and debt service), in thousands of dollars, source column TCURSPND
+      - name: instruction_expenditure_thousand
+        type: double
+        nullable: true
+        comment: Current spending for instruction, in thousands of dollars, source column TCURINST
+      - name: support_services_expenditure_thousand
+        type: double
+        nullable: true
+        comment: Current spending for support services, in thousands of dollars, source column TCURSSVC
+      - name: capital_outlay_expenditure_thousand
+        type: double
+        nullable: true
+        comment: Total capital outlay expenditure, in thousands of dollars, source column TCAPOUT
+      - name: interest_on_debt_thousand
+        type: double
+        nullable: true
+        comment: Interest on school system indebtedness, in thousands of dollars, source column TINTRST
+      - name: long_term_debt_outstanding_thousand
+        type: double
+        nullable: true
+        comment: Long-term debt outstanding at end of the fiscal year, in thousands of dollars, source column DEBTOUT
+      - name: per_pupil_current_expenditure
+        type: double
+        nullable: true
+        comment: >
+          Per-pupil total current spending, in whole dollars — the source's
+          own derived per-pupil figure (source column PPCSTOT), not computed here.
+      - name: per_pupil_instruction_expenditure
+        type: double
+        nullable: true
+        comment: Per-pupil current spending for instruction, in whole dollars, source column PPITOTAL
+      - name: per_pupil_support_services_expenditure
+        type: double
+        nullable: true
+        comment: Per-pupil current spending for support services, in whole dollars, source column PPSTOTAL
+
+    source:
+      type: http
+      # Nominal source; F33DistrictFinanceProvider builds the real per-fiscal-year URL
+      # (https://www2.census.gov/programs-surveys/school-finances/tables/{year}/
+      # secondary-education-finance/elsec{yy}t.txt, {yy} = last 2 digits of {year}) from
+      # effective_year and downloads/parses the comma-delimited individual-unit file directly —
+      # the framework's plain {year} URL substitution cannot also produce the 2-digit filename
+      # segment, so a dataProvider is used instead of a URL-templated source + responseTransformer.
+      url: "https://www2.census.gov/programs-surveys/school-finances/tables/"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.edu.F33DistrictFinanceProvider"
+
+    dimensions:
+      year:
+        type: yearRange
+        # 2025/2026 deliberately exercises both dispatch modes (2025 = historical, 2026 =
+        # daily/current-year) on this newly-added table; not a historical backfill. dataLag: 2
+        # matches this survey's real ~2-year publication lag (verified live 2026-08-21: FY2024
+        # was the latest published file, FY2025 was not yet available) and shifts these two
+        # publish years to effective_year 2023/2024, both confirmed live. minYear: 2000 reflects
+        # only what was verified live in this session (the elsec{yy}t.txt URL pattern resolves
+        # back to FY2000); earlier years were not checked and may use a different naming scheme.
+        start: "${GOVDATA_START_YEAR:2025}"
+        end: "${GOVDATA_END_YEAR:2026}"
+        minYear: 2000
+        dataLag: 2
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
 # ============================================================================
 # Views
 # ============================================================================
@@ -2277,7 +2481,8 @@ views:
     comment: >
       NAEP aggregate trends for all-student subgroup by state, subject, and grade.
       Filters to variable_type=TOTAL to avoid double-counting disaggregations.
-      One row per state × year × subject × grade.
+      One row per state × year × subject × grade. subject holds the raw NAEP code:
+      MAT=mathematics, RED=reading.
     sql: >
       SELECT
         n.jurisdiction,

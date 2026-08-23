@@ -128,7 +128,12 @@ dimension_values:
   acs1_year_range: &acs1_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
-    minYear: 2006          # ACS 1-year feed began 2006 (informational; below the 2010 default floor)
+    # 2005, not 2006 (Defect Register B2-3): verified live against acs1_income/acs1_population,
+    # rows run 2005-2024 (2020 absent -- ACS 1-Year wasn't fielded that year, a real gap, not
+    # a bug). minYear is the informational floor below the 2010 default start, and per B2-3's
+    # own note this should be the value any declared-coverage reporting derives its lower bound
+    # from, rather than a hand-maintained figure that can drift from what's actually loaded.
+    minYear: 2005
     dataLag: 1
     releaseMonth: 9
 
@@ -2244,6 +2249,15 @@ partitionedTables:
     comment: >
       Population counts by nativity and citizenship (native born, foreign born, naturalized
       citizen, not a citizen), from the ACS 5-Year survey, at state and county levels.
+      native_born and foreign_born are both derived sums (B05001 has no single variable for
+      either concept): native_born = born_in_us + born_in_pr_island_areas +
+      born_abroad_american_parents (002+003+004), foreign_born = naturalized_citizen +
+      not_a_citizen (005+006). The three native_born components are also exposed as their own
+      columns — born_in_pr_island_areas in particular is analytically live on its own (most of
+      Florida's Puerto Rico-born population), not just a summand. The full row identity is
+      native_born + foreign_born = total_population, and at the component level
+      born_in_us + born_in_pr_island_areas + born_abroad_american_parents + naturalized_citizen +
+      not_a_citizen = total_population; both are DQ-asserted.
 
     dimensions:
       type:
@@ -2269,18 +2283,48 @@ partitionedTables:
       - name: native_born
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."B05001_002E" AS BIGINT)'
-        comment: Native born (US citizen at birth)
+        expression: 'TRY_CAST(src."B05001_002E" AS BIGINT) + TRY_CAST(src."B05001_003E" AS BIGINT) + TRY_CAST(src."B05001_004E" AS BIGINT)'
+        comment: Native born (born in the US, plus Puerto Rico/island areas, plus abroad of American parents — sum of its three real components rather than a residual)
       - name: native_born_moe
         type: bigint
         nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_002M" AS BIGINT) < 0 OR TRY_CAST(src."B05001_003M" AS BIGINT) < 0 OR TRY_CAST(src."B05001_004M" AS BIGINT) < 0 THEN NULL ELSE CAST(ROUND(SQRT(POWER(TRY_CAST(src."B05001_002M" AS DOUBLE), 2) + POWER(TRY_CAST(src."B05001_003M" AS DOUBLE), 2) + POWER(TRY_CAST(src."B05001_004M" AS DOUBLE), 2))) AS BIGINT) END'
+        comment: 90% CI margin of error for native_born, aggregated per Census MOE-of-a-sum convention (sqrt of sum of squared component MOEs — B05001_002M/003M/004M; negative sentinels on any component normalize the whole value to null)
+      - name: born_in_us
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_002E" AS BIGINT)'
+        comment: Born in the United States (Census variable B05001_002E) — the largest component of native_born, exposed directly rather than only summed
+      - name: born_in_us_moe
+        type: bigint
+        nullable: true
         expression: 'CASE WHEN TRY_CAST(src."B05001_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_002M" AS BIGINT) END'
-        comment: 90% CI margin of error for native_born (Census variable B05001_002M; negative sentinels normalized to null)
+        comment: 90% CI margin of error for born_in_us (Census variable B05001_002M; negative sentinels normalized to null)
+      - name: born_in_pr_island_areas
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_003E" AS BIGINT)'
+        comment: Born in Puerto Rico or a US island area (Census variable B05001_003E) — analytically live on its own, not just a native_born component
+      - name: born_in_pr_island_areas_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for born_in_pr_island_areas (Census variable B05001_003M; negative sentinels normalized to null)
+      - name: born_abroad_american_parents
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_004E" AS BIGINT)'
+        comment: Born abroad of American parent(s) (Census variable B05001_004E)
+      - name: born_abroad_american_parents_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for born_abroad_american_parents (Census variable B05001_004M; negative sentinels normalized to null)
       - name: foreign_born
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."B05001_006E" AS BIGINT)'
-        comment: Foreign born
+        expression: 'TRY_CAST(src."B05001_005E" AS BIGINT) + TRY_CAST(src."B05001_006E" AS BIGINT)'
+        comment: Foreign born (naturalized citizens plus non-citizens; there is no single Census variable for this concept)
       - name: foreign_born_moe
         type: bigint
         nullable: true
@@ -2309,7 +2353,7 @@ partitionedTables:
         comment: 90% CI margin of error for not_a_citizen (Census variable B05001_006M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B05001_001E,B05001_001M,B05001_002E,B05001_002M,B05001_005E,B05001_005M,B05001_006E,B05001_006M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B05001_001E,B05001_001M,B05001_002E,B05001_002M,B05001_003E,B05001_003M,B05001_004E,B05001_004M,B05001_005E,B05001_005M,B05001_006E,B05001_006M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -2912,8 +2956,11 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Population Estimates Program (PEP) annual population estimate, at state and county
-      levels, for the years between decennial censuses. The 2019 vintage also includes a
-      population density column; other vintages carry population only.
+      levels, for the years between decennial censuses. Data years <= 2020 come from the
+      pep/population dataset (which also includes a population density column for those
+      years); data years >= 2021 come from the shared latest pep/charv vintage (population
+      only). The vintage column identifies which of the two source datasets produced each
+      row, so the two never double-claim a data year.
 
     dimensions:
       type:
@@ -2922,8 +2969,9 @@ partitionedTables:
         type: yearRange
         # Floor is a literal 2022 (NOT ${GOVDATA_START_YEAR}): with dataLag=3 this yields data
         # years 2019-2023 — the only range the PEP API serves cleanly (charv vintage 2023 covers
-        # 2020-2023; pep/population for 2019). Pre-2019 vintages use different variable names and
-        # are intentionally excluded. Bump the floor when CURRENT_VINTAGE advances in the resolver.
+        # 2021-2023; pep/population for 2019-2020). Pre-2019 vintages use different variable
+        # names and are intentionally excluded. Bump the floor when CURRENT_VINTAGE advances in
+        # the resolver.
         start: 2022
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 3
@@ -2958,7 +3006,16 @@ partitionedTables:
         type: double
         nullable: true
         expression: 'TRY_CAST(src."DENSITY" AS DOUBLE)'
-        comment: Population density (only for 2019 vintage)
+        comment: Population density (only for pep/population data years, i.e. <= 2020)
+      - name: vintage
+        type: string
+        nullable: true
+        expression: '{vintage}'
+        comment: >
+          PEP data vintage used to fetch this row: either the data year itself
+          (pep/population, data years <= 2020) or the shared latest published
+          vintage (pep/charv, data years >= 2021). Distinguishes the two source
+          datasets so a data year is never ambiguous between them.
 
     source:
       type: http
@@ -2981,7 +3038,7 @@ partitionedTables:
       output:
         pattern: "type=pep/year=*/geography=*/"
       partition:
-        columns: [type, year, geography]
+        columns: [type, year, geography, vintage]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: pep_population
@@ -2991,6 +3048,7 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
+        overwritePartitions: true
 
 # ============================================================================
 # COUNTY BUSINESS PATTERNS (CBP)
@@ -3814,20 +3872,23 @@ partitionedTables:
   # BUILDING PERMITS - Residential construction activity
   # ---------------------------------------------------------------------------
   - name: building_permits
-    pattern: "type=bps/year=*/*.parquet"
+    pattern: "type=bps/period_code=*/*.parquet"
     partitions:
       style: hive
       columnDefinitions:
         - name: type
           type: VARCHAR
-        - name: year
+        - name: period_code
           type: VARCHAR
     comment: >
       Building Permits Survey tracks new privately-owned residential
       construction permits by state. Uses December cumulative (YTD) totals.
       Data from https://www2.census.gov/econ/bps/State/
       URL format is stYYMMy.txt where YYMM is year-month code (e.g., 2212 = Dec 2022).
-      Partition 'year' stores the YYMM code for URL compatibility; actual year derived from survey_date.
+      Partition 'period_code' stores the raw YYMM code for URL compatibility only — it is
+      NOT a year (e.g. 2012 is Dec 2020, not 2012) and must never be filtered as one. Use the
+      derived survey_year / survey_month columns (parsed from survey_date) for year/month
+      filtering.
 
     dimensions:
       type:
@@ -3837,7 +3898,7 @@ partitionedTables:
       # demarcation), converts each to its data year (effective = publish - dataLag), and emits
       # the final YYMM code consumed directly by the URL. No literal floor: BPS data runs back to
       # 1992, so the global start (default 2010) is the only floor.
-      year:
+      period_code:
         type: custom
         start: "${GOVDATA_START_YEAR:2010}"
         dataLag: 1
@@ -3845,74 +3906,83 @@ partitionedTables:
     # Columns match Census Building Permits Survey fixed-width text file format
     # Data parsed from https://www2.census.gov/econ/bps/State/stYYMMy.txt
     columns:
-      - name: column0
+      - name: survey_date
         type: string
         nullable: true
         comment: Survey date in YYYYMM format
-      - name: column1
+      - name: state_fips
         type: string
         nullable: true
         comment: State FIPS code (2-digit)
-      - name: column4
+      - name: state_name
         type: string
         nullable: true
         comment: State name
-      - name: column6
+      - name: single_family_units
         type: string
         nullable: true
         comment: Single-family housing units authorized
-      - name: column7
+      - name: single_family_value_thousands
         type: string
         nullable: true
         comment: Value of single-family permits ($1000)
-      - name: column9
+      - name: duplex_units
         type: string
         nullable: true
         comment: Duplex housing units authorized
-      - name: column10
+      - name: duplex_value_thousands
         type: string
         nullable: true
         comment: Value of duplex permits ($1000)
-      - name: column12
+      - name: three_four_unit_units
         type: string
         nullable: true
         comment: 3-4 unit housing units authorized
-      - name: column13
+      - name: three_four_unit_value_thousands
         type: string
         nullable: true
         comment: Value of 3-4 unit permits ($1000)
-      - name: column15
+      - name: five_plus_unit_units
         type: string
         nullable: true
         comment: 5+ unit housing units authorized
-      - name: column16
+      - name: five_plus_unit_value_thousands
         type: string
         nullable: true
         comment: Value of 5+ unit permits ($1000)
+      - name: survey_year
+        type: INTEGER
+        nullable: true
+        comment: Calendar year parsed from survey_date (YYYYMM); the real time filter target
+      - name: survey_month
+        type: INTEGER
+        nullable: true
+        comment: Calendar month (1-12) parsed from survey_date (YYYYMM)
 
     hooks:
       dimensionResolver: "org.apache.calcite.adapter.govdata.census.BuildingPermitsDimensionResolver"
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.BuildingPermitsResponseTransformer"
 
     source:
       type: http
-      url: "https://www2.census.gov/econ/bps/State/st{year}y.txt"
+      url: "https://www2.census.gov/econ/bps/State/st{period_code}y.txt"
       response:
         format: csv
         hasHeader: false
-        columnNames: "column0,column1,column2,column3,column4,column5,column6,column7,column8,column9,column10,column11,column12,column13,column14,column15,column16,column17,column18,column19,column20,column21,column22,column23,column24,column25,column26,column27,column28"
+        columnNames: "survey_date,state_fips,column2,column3,state_name,column5,single_family_units,single_family_value_thousands,column8,duplex_units,duplex_value_thousands,column11,three_four_unit_units,three_four_unit_value_thousands,column14,five_plus_unit_units,five_plus_unit_value_thousands,column17,column18,column19,column20,column21,column22,column23,column24,column25,column26,column27,column28"
       rawCache:
         enabled: true
       # Filter to only include data rows (6-digit survey_date in first column)
       rowFilter:
-        column: column0
+        column: survey_date
         pattern: '^\d{6}$'
 
     materialize:
       format: iceberg
       output:
-        pattern: "type=bps/year=*/"
+        pattern: "type=bps/period_code=*/"
       partition:
-        columns: [type, year]
+        columns: [type, period_code]
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/census"
         tableName: building_permits
@@ -3920,6 +3990,7 @@ partitionedTables:
         snapshotRetentionDays: 7
         catalogType: hadoop
         runCompaction: true
+        overwritePartitions: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
@@ -5424,7 +5495,7 @@ constraints:
 
   # Building Permits
   building_permits:
-    primaryKey: [year, column1]
+    primaryKey: [period_code, state_fips]
 
   # QWI Employment
   qwi_employment:

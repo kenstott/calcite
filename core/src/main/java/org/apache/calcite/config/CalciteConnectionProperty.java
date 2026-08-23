@@ -177,6 +177,19 @@ public enum CalciteConnectionProperty implements ConnectionProperty {
    * semantics. */
   CONFORMANCE("conformance", Type.ENUM, SqlConformanceEnum.DEFAULT, false),
 
+  /** Whether {@link SqlConformance#shouldConvertRaggedUnionTypesToVarying()} should return true,
+   * layered on top of whatever {@link #CONFORMANCE conformance} is otherwise configured, default
+   * false.
+   *
+   * <p>Several named conformances (e.g. {@code MYSQL_5}, the {@code PRAGMATIC_*} family) already
+   * return true for this, but switching {@code conformance} to one of them to get just this one
+   * behavior also pulls in that conformance's other differences (GROUP BY rules, alias handling,
+   * etc.) -- a much larger blast radius than intended when only this one flag is wanted. This
+   * property lets a caller opt into just the ragged-VALUES/UNION-widens-to-VARYING behavior
+   * without adopting a different conformance wholesale. */
+  CONFORMANCE_RAGGED_UNION_TO_VARYING("conformance.raggedUnionTypesToVarying", Type.BOOLEAN,
+      false, false),
+
   /** Whether to make implicit type coercion when type mismatch
    * for validation, default true. */
   TYPE_COERCION("typeCoercion", Type.BOOLEAN, true, false),

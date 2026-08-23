@@ -247,6 +247,15 @@ partitionedTables:
         comment: Calendar month (1-12) of the generation period
       - <<: *state_abbr_column
       - <<: *state_description_column
+      - name: geo_level
+        type: string
+        nullable: true
+        comment: >
+          Geographic granularity of this row's location: 'state' (real state_abbr),
+          'division' (Census division rollup, e.g. code '90' for Pacific), or
+          'national' (US total). Distinguishes the 3 location granularities that
+          all share the same underlying EIA location field, to prevent overcounting
+          on a naive SUM across state + division + national rows.
       - name: energy_source_code
         type: string
         nullable: true
@@ -255,6 +264,14 @@ partitionedTables:
         type: string
         nullable: true
         comment: Full energy source description
+      - name: fuel_is_rollup
+        type: boolean
+        nullable: true
+        comment: >
+          True when energy_source_code is a rollup/aggregate fuel code (e.g. 'COW'
+          aggregates 'COL'/'LIG'/'SUB', 'TSN' aggregates 'SPV'/'DPV') rather than a
+          true leaf-level fuel, so it should be excluded from a naive SUM alongside
+          its constituent codes.
       - name: sector_code
         type: string
         nullable: true
@@ -263,6 +280,13 @@ partitionedTables:
         type: string
         nullable: true
         comment: Sector description (e.g., 'Electric Utility', 'IPP Non-CHP')
+      - name: sector_is_rollup
+        type: boolean
+        nullable: true
+        comment: >
+          True when sector_code is a rollup/aggregate sector code (e.g. 'ALL') rather
+          than a true leaf-level sector, so it should be excluded from a naive SUM
+          alongside its constituent sectors.
       - name: generation_thousand_mwh
         type: double
         nullable: true
@@ -320,6 +344,7 @@ partitionedTables:
         columns: [type, year, month]
         valueSource:
           year: effective_year
+          month: generation_month
       iceberg:
         <<: *iceberg_common
         tableName: eia_electricity_generation
@@ -1686,7 +1711,11 @@ partitionedTables:
 constraints:
 
   eia_electricity_generation:
-    primaryKey: [state_abbr, energy_source_code, sector_code, generation_year, generation_month]
+    # state_abbr is null for every division and for the national row, so it alone can't
+    # distinguish rows within either group (verified live: 12 real, distinct census divisions —
+    # "Pacific", "New England", "Puerto Rico", etc. — collapsed to one key without this).
+    # state_description carries the real per-division/national label and is always populated.
+    primaryKey: [geo_level, state_abbr, state_description, energy_source_code, sector_code, generation_year, generation_month]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: geo

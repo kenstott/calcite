@@ -115,7 +115,7 @@ public class IcebergSortVerifierTest {
     writeInterleaved(6, 100);
     assertFalse(IcebergSortVerifier.verify(table, "name"), "precondition: starts unsorted");
 
-    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0);
+    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0, false);
     table.refresh();
 
     assertTrue(IcebergSortVerifier.verify(table, "name"),
@@ -150,7 +150,7 @@ public class IcebergSortVerifierTest {
 
   @Test void passesWhenEveryPartitionHoldsOneFileSpanningTheKeyRange() throws Exception {
     writeOneFilePerYear(8, 100);
-    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0);
+    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0, false);
     table.refresh();
 
     // Pooling every file's bounds across partitions reports 8 of 8 files (100%) here and fails
@@ -166,7 +166,7 @@ public class IcebergSortVerifierTest {
 
   @Test void failsWhenTheSortPropertyIsMissing() throws Exception {
     writeInterleaved(4, 50);
-    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0);
+    writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 0, false);
     table.refresh();
     assertTrue(IcebergSortVerifier.verify(table, "name"), "precondition: healed table passes");
 

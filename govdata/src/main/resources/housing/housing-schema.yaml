@@ -899,6 +899,203 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CFPB HMDA — loan-level records (delta year × state, CSV data-browser export)
+  # ---------------------------------------------------------------------------
+  - name: hmda_lar
+    # Freshness gate: FFIEC CFPB data-browser API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
+    pattern: "type=hmda_lar/year=*/state=*/*.parquet"
+    partitions: *state_partitions
+    comment: >
+      HMDA Loan/Application Register — actual loan-level records from the CFPB
+      Data Browser CSV export (a different endpoint from hmda_loans /
+      hmda_applicant_demographics, which query the aggregations API and are
+      capped at two breakdown dimensions per request and so can never carry
+      census_tract). One row per LAR record, curated to a subset of the
+      source's 99 columns. In DQ mode dqRowLimit caps each (year, state); a
+      single state-year (e.g. CA 2023) is ~1M rows in production. Joins to
+      geo.counties via county_fips (state_code+county_code) and to geo tracts
+      via census_tract. Source:
+      ffiec.cfpb.gov/v2/data-browser-api/view/csv.
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - hmda_lar
+      year: *hmda_year_range
+      state: *hmda_states
+
+    columns:
+      - name: activity_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."activity_year" AS INTEGER)'
+        comment: HMDA reporting (activity) year
+      - name: lei
+        type: string
+        nullable: true
+        expression: 'src."lei"'
+        comment: Legal Entity Identifier of the reporting institution
+      - name: county_code
+        type: string
+        nullable: true
+        expression: 'src."county_code"'
+        comment: 5-digit county FIPS (state+county) — FK to geo.counties.county_fips
+      - name: census_tract
+        type: string
+        nullable: true
+        expression: 'src."census_tract"'
+        comment: >
+          11-digit census tract FIPS GEOID — the geography hmda_loans /
+          hmda_applicant_demographics cannot carry (the aggregations API caps
+          breakdowns at 2 dimensions per request); this table exists to carry it
+      - name: derived_msa_md
+        type: string
+        nullable: true
+        expression: 'src."derived_msa-md"'
+        comment: Derived MSA/MD code (5-digit CBSA/Metropolitan Division) of the property location
+      - name: derived_loan_product_type
+        type: string
+        nullable: true
+        expression: 'src."derived_loan_product_type"'
+        comment: "Derived loan product type (e.g. Conventional:First Lien, FHA:Subordinate Lien)"
+      - name: derived_dwelling_category
+        type: string
+        nullable: true
+        expression: 'src."derived_dwelling_category"'
+        comment: "Derived dwelling category (e.g. Single Family (1-4 Units):Site-Built)"
+      - name: derived_ethnicity
+        type: string
+        nullable: true
+        expression: 'src."derived_ethnicity"'
+        comment: Derived single-value applicant ethnicity (summarizes applicant_ethnicity-1..5)
+      - name: derived_race
+        type: string
+        nullable: true
+        expression: 'src."derived_race"'
+        comment: Derived single-value applicant race (summarizes applicant_race-1..5)
+      - name: derived_sex
+        type: string
+        nullable: true
+        expression: 'src."derived_sex"'
+        comment: Derived single-value applicant sex
+      - name: action_taken
+        type: string
+        nullable: true
+        expression: 'src."action_taken"'
+        comment: >
+          HMDA action code (1 originated, 2 approved-not-accepted, 3 denied,
+          4 withdrawn, 5 closed-incomplete, 6 purchased, 7 preapproval-denied,
+          8 preapproval-approved-not-accepted)
+      - name: loan_type
+        type: string
+        nullable: true
+        expression: 'src."loan_type"'
+        comment: "HMDA loan type code (1 conventional, 2 FHA-insured, 3 VA-guaranteed, 4 USDA/RHS)"
+      - name: loan_purpose
+        type: string
+        nullable: true
+        expression: 'src."loan_purpose"'
+        comment: >
+          HMDA loan-purpose code (1 home purchase, 2 home improvement,
+          31 refinancing, 32 cash-out refinancing, 4 other, 5 not applicable)
+      - name: lien_status
+        type: string
+        nullable: true
+        expression: 'src."lien_status"'
+        comment: "Lien status code (1 first lien, 2 subordinate lien)"
+      - name: loan_amount
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."loan_amount" AS DOUBLE)'
+        comment: Loan amount (USD)
+      - name: loan_to_value_ratio
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."loan_to_value_ratio" AS DOUBLE)'
+        comment: Loan-to-value ratio (percent); TRY_CAST nulls the 'Exempt' sentinel some institutions report
+      - name: interest_rate
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."interest_rate" AS DOUBLE)'
+        comment: Note interest rate (percent); TRY_CAST nulls the 'NA'/'Exempt' sentinels some institutions report
+      - name: rate_spread
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."rate_spread" AS DOUBLE)'
+        comment: Rate spread over the average prime offer rate (percent); TRY_CAST nulls the 'Exempt' sentinel
+      - name: property_value
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."property_value" AS DOUBLE)'
+        comment: Property value (USD); TRY_CAST nulls the 'Exempt' sentinel
+      - name: income
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."income" AS DOUBLE)'
+        comment: Applicant/co-applicant combined gross annual income (USD thousands)
+      - name: debt_to_income_ratio
+        type: string
+        nullable: true
+        expression: 'src."debt_to_income_ratio"'
+        comment: >
+          Debt-to-income ratio: an exact percent for most loans, but a bucketed
+          range (e.g. '36%-<37%', '<20%', '>60%') above the CFPB's exact-value
+          disclosure threshold, or 'Exempt' — kept as string, not numeric, so no
+          value is silently nulled by a cast
+      - name: occupancy_type
+        type: string
+        nullable: true
+        expression: 'src."occupancy_type"'
+        comment: "Occupancy type code (1 principal residence, 2 second residence, 3 investment property)"
+      - name: applicant_sex
+        type: string
+        nullable: true
+        expression: 'src."applicant_sex"'
+        comment: "Applicant sex code (1 male, 2 female, 3 not provided, 4 not applicable, 6 both)"
+      - name: co_applicant_sex
+        type: string
+        nullable: true
+        expression: 'src."co-applicant_sex"'
+        comment: "Co-applicant sex code (same coding as applicant_sex; 5 no co-applicant)"
+
+    source:
+      type: http
+      url: "https://ffiec.cfpb.gov/v2/data-browser-api/view/csv?states={state}&years={year}"
+      method: GET
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 5.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hmda_lar/year=*/state=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hmda_lar
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # HUD OPPORTUNITY ZONES — ArcGIS FeatureServer (static snapshot, paginated)
   # ---------------------------------------------------------------------------
   - name: opportunity_zones

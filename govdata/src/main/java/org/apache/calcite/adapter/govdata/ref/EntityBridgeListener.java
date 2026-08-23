@@ -348,11 +348,17 @@ public class EntityBridgeListener implements TableLifecycleListener {
       createMacros(conn);
       stageGleif(conn, base);
       stageEinHub(conn, base);
+      stageGleifCikMapping(conn, base);
       execute(conn,
           "CREATE OR REPLACE TEMP TABLE all_org_mentions ("
           + "source_schema VARCHAR, source_table VARCHAR, source_column VARCHAR, source_key VARCHAR, "
           + "name_raw VARCHAR, name_norm VARCHAR, lei VARCHAR, sec_cik VARCHAR, gleif_legal_name VARCHAR, "
           + "match_method VARCHAR, match_confidence VARCHAR, match_score DOUBLE, "
+          // Defect Register B2-4: how many raw source rows collapsed into this source_key (e.g.
+          // for patents.patent_assignees, keyExpr=s.assignee_id, so this is literally the patent
+          // count behind that assignee_id). Threaded through so PivotOrgIterator can pick the
+          // best-supported source_key per canonical entity instead of an arbitrary last-row-wins.
+          + "support_count BIGINT, "
           + "canonical_entity_id VARCHAR, canonical_column VARCHAR)");
 
       for (OrgSource src : ORG_SOURCES) {
@@ -443,10 +449,16 @@ public class EntityBridgeListener implements TableLifecycleListener {
         .append("org_block_key(name_raw) AS block_key, org_remainder(name_raw) AS remainder, ")
         .append("org_last_token(name_raw) AS last_token, org_given_part(name_raw) AS given_part, ")
         .append("is_person_shaped(name_raw) AS is_person, ")
-        .append("source_key, ein_val FROM (")
+        .append("source_key, ein_val, support_count FROM (")
         .append("SELECT COALESCE(").append(src.keyExpr != null ? src.keyExpr : "NULL")
         .append(", norm_org_name(").append(src.nameExpr).append(")) AS source_key, ")
-        .append(nameAgg).append(" AS name_raw, ").append(einAgg).append(" AS ein_val ")
+        .append(nameAgg).append(" AS name_raw, ").append(einAgg).append(" AS ein_val, ")
+        // Defect Register B2-4: raw-row count behind this source_key before any collapsing —
+        // for patents.patent_assignees (keyExpr=s.assignee_id) this is literally the patent
+        // count that assignee_id carries, the exact signal needed to prefer the real id over an
+        // arbitrary one when a name maps to several (measured: Schlumberger's 10,227-patent id
+        // vs. a sibling id with 1).
+        .append("count(*) AS support_count ")
         .append("FROM iceberg_scan('").append(loc).append("', allow_moved_paths=true) AS s ")
         .append("WHERE ").append(src.nameExpr).append(" IS NOT NULL AND trim(").append(src.nameExpr)
         .append(") <> '' ")
@@ -505,11 +517,23 @@ public class EntityBridgeListener implements TableLifecycleListener {
           + "  SELECT n.source_key, e.cik AS sec_cik "
           + "  FROM stage_norm n JOIN stage_norm_batch b ON n.name_norm = b.name_norm "
           + "  JOIN ein_hub e ON n.ein_val = e.irs_number"
+          // Defect Register B2-1: unqualified, this join fans out one row per GLEIF entity
+          // sharing a normalized name -- measured live at 6 distinct LEIs for
+          // name_norm='apple', every one asserted at 'high' with identical evidence, which
+          // blocks ranking (resolve_entity can't tie-break candidates that all carry the same
+          // score) as well as counting. The register's own cheapest fix: reserve 'high' for a
+          // name that resolves to exactly one LEI here, demote a genuine fan-out to
+          // 'ambiguous' rather than asserting every candidate as equally certain. Rows are
+          // still written for every candidate -- this changes the label, not the candidate set.
           + "), exact_matched AS ("
-          + "  SELECT d.name_norm, CAST(NULL AS VARCHAR) AS sec_cik, "
+          + "  SELECT d.name_norm, gc.cik AS sec_cik, "
           + "         g.lei, g.legal_name AS gleif_legal_name, "
-          + "         'exact_normalized' AS match_method, 'high' AS match_confidence, 1.0 AS match_score "
-          + "  FROM stage_norm_batch d JOIN current_gleif g ON d.name_norm = g.norm_name"
+          + "         'exact_normalized' AS match_method, "
+          + "         CASE WHEN count(*) OVER (PARTITION BY d.name_norm) > 1 THEN 'ambiguous' "
+          + "              ELSE 'high' END AS match_confidence, "
+          + "         1.0 AS match_score "
+          + "  FROM stage_norm_batch d JOIN current_gleif g ON d.name_norm = g.norm_name "
+          + "  LEFT JOIN gleif_cik gc ON g.lei = gc.lei"
           + "), fuzzy_best_business AS ("
           + "  SELECT d.name_norm, g.lei, g.legal_name AS gleif_legal_name, "
           // Scored on the remainder AFTER the shared block token, not the full name — see
@@ -540,11 +564,12 @@ public class EntityBridgeListener implements TableLifecycleListener {
           + "), fuzzy_best AS ("
           + "  SELECT * FROM fuzzy_best_business UNION ALL SELECT * FROM fuzzy_best_person"
           + "), fuzzy_matched AS ("
-          + "  SELECT name_norm, CAST(NULL AS VARCHAR) AS sec_cik, lei, gleif_legal_name, "
+          + "  SELECT fb.name_norm, gc.cik AS sec_cik, fb.lei, fb.gleif_legal_name, "
           + "         'fuzzy' AS match_method, "
-          + "         CASE WHEN score >= " + FUZZY_HIGH_THRESHOLD + " THEN 'high' ELSE 'low' END AS match_confidence, "
-          + "         score AS match_score "
-          + "  FROM fuzzy_best WHERE score >= " + FUZZY_LOW_THRESHOLD
+          + "         CASE WHEN fb.score >= " + FUZZY_HIGH_THRESHOLD + " THEN 'high' ELSE 'low' END AS match_confidence, "
+          + "         fb.score AS match_score "
+          + "  FROM fuzzy_best fb LEFT JOIN gleif_cik gc ON fb.lei = gc.lei "
+          + "  WHERE fb.score >= " + FUZZY_LOW_THRESHOLD
           + "), name_matched AS ("
           + "  SELECT * FROM exact_matched UNION ALL SELECT * FROM fuzzy_matched"
           + ") "
@@ -557,6 +582,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
           + "COALESCE(CASE WHEN e.sec_cik IS NOT NULL THEN 'exact_ein' END, nm.match_method), "
           + "COALESCE(CASE WHEN e.sec_cik IS NOT NULL THEN 'high' END, nm.match_confidence), "
           + "COALESCE(CASE WHEN e.sec_cik IS NOT NULL THEN 1.0 END, nm.match_score), "
+          + "n.support_count, "
           + "COALESCE(nm.lei, e.sec_cik, nm.sec_cik, 'h:' || md5('" + esc(src.schema) + "."
           + esc(src.sourceTableLabel())
           + "." + esc(src.sourceColumnLabel) + ".' || n.source_key)), '"
@@ -967,6 +993,22 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "', allow_moved_paths=true) WHERE irs_number IS NOT NULL AND trim(irs_number) <> ''");
   }
 
+  // Defect Register B2-2: sec_cik was only ever populated via ein_matched (exact_ein against
+  // ein_hub, itself sourced from sec.filing_metadata.irs_number), and the only ORG_SOURCES entry
+  // that supplies an EIN at all is fiscal.exempt_org_master -- tax-exempt nonprofits, whose EINs
+  // essentially never coincide with a public company's. That path is not broken; it is a real
+  // mechanism applied to a population with ~no overlap with the target, so it was always going to
+  // sit near zero matches regardless of data quality. gleif_cik_mapping (LEI -> CIK, restricted to
+  // SEC's own registration authority) is a second, independent path: once a source name has
+  // already resolved to a GLEIF lei (via exact_matched or fuzzy_matched below), that lei can also
+  // resolve a real sec_cik -- measured live in the register at 20,231 recoverable rows this way.
+  private static void stageGleifCikMapping(Connection conn, String base) throws SQLException {
+    execute(conn,
+        "CREATE OR REPLACE TEMP TABLE gleif_cik AS "
+        + "SELECT lei, cik FROM iceberg_scan('" + loc(base, "ref", "gleif_cik_mapping")
+        + "', allow_moved_paths=true) WHERE lei IS NOT NULL AND cik IS NOT NULL");
+  }
+
   private Connection openDuckDb(TableContext context) throws SQLException {
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try (Statement stmt = conn.createStatement()) {
@@ -1247,7 +1289,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
       this.orgSources = orgSources;
       this.src = new ResultSetIterator(conn,
           "SELECT canonical_entity_id, canonical_column, source_key, match_confidence, "
-          + "lei, sec_cik, gleif_legal_name, name_raw FROM all_org_mentions "
+          + "lei, sec_cik, gleif_legal_name, name_raw, support_count FROM all_org_mentions "
           + "ORDER BY canonical_entity_id");
       advanceLookahead();
     }
@@ -1275,6 +1317,12 @@ public class EntityBridgeListener implements TableLifecycleListener {
       String secCik = null;
       Map<String, String> perSourceKey = new HashMap<String, String>();
       Map<String, String> perSourceConf = new HashMap<String, String>();
+      // Defect Register B2-4: when more than one source_key maps to the same (canonical
+      // entity, canonical_column) -- a lossy many-to-one FK, e.g. patents_assignee_id -- prefer
+      // the one with the most support (measured: Schlumberger's real id carries 10,227 patents,
+      // the one previously linked carried 1) instead of whichever row happens to come last in
+      // result order.
+      Map<String, Long> perSourceSupport = new HashMap<String, Long>();
 
       while (lookahead != null && groupId.equals(lookahead.get("canonical_entity_id"))) {
         Map<String, Object> row = lookahead;
@@ -1296,8 +1344,14 @@ public class EntityBridgeListener implements TableLifecycleListener {
         }
         String canonicalColumn = (String) row.get("canonical_column");
         if (canonicalColumn != null) {
-          perSourceKey.put(canonicalColumn, (String) row.get("source_key"));
-          perSourceConf.put(canonicalColumn, (String) row.get("match_confidence"));
+          Number rowSupportNum = (Number) row.get("support_count");
+          long rowSupport = rowSupportNum != null ? rowSupportNum.longValue() : 0L;
+          Long bestSupport = perSourceSupport.get(canonicalColumn);
+          if (bestSupport == null || rowSupport > bestSupport) {
+            perSourceKey.put(canonicalColumn, (String) row.get("source_key"));
+            perSourceConf.put(canonicalColumn, (String) row.get("match_confidence"));
+            perSourceSupport.put(canonicalColumn, rowSupport);
+          }
         }
         advanceLookahead();
       }

@@ -912,9 +912,16 @@ constraints:
 
   nipa_tables:
     primaryKey:
-      - section
       - table_name
-    comment: Reference dimension table for NIPA table classifications and descriptions
+    comment: >
+      Reference dimension table for NIPA table classifications and descriptions. PK is
+      table_name alone — the former section categorization named in an earlier PK here was
+      never populated and the partition column was renamed section->type in commit
+      a2c400aaa, so the table no longer has a section column (see the columns block above
+      and national_accounts_enriched's comment in econ-schema.yaml). Declaring table_name
+      unique lets a planner recognize national_accounts_tables (a plain scan over this
+      table, econ-schema.yaml) as the cheap path for discovering table_id values instead of
+      DISTINCT-ing through the national_accounts_enriched join.
 
   naics_sectors:
     primaryKey:

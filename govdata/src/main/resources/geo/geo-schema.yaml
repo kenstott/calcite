@@ -2904,6 +2904,120 @@ partitionedTables:
         compactionMinFiles: 5
         compactionSmallFileSizeBytes: 10485760
 
+  # --------------------------------------------------------------------------
+  # County Adjacency — real Census Bureau County Adjacency File
+  # --------------------------------------------------------------------------
+  # Replaces the ST_Touches-on-TIGER-boundary-polygons derivation that used to compute
+  # this table's contents as a query-time view (kept, unused, as
+  # county_adjacency_st_touches_legacy under `views:` below, for comparison). That
+  # approach only covered roughly 15% of true adjacency, because TIGER shared-edge
+  # polygons rarely line up closely enough for an exact ST_Touches match. This table is
+  # ingested directly from the Census Bureau's own published adjacency file instead.
+  - name: county_adjacency
+    pattern: "year={year}/county_adjacency.parquet"
+    comment: >
+      Real Census Bureau County Adjacency File (https://www2.census.gov/geo/docs/
+      reference/county_adjacency.txt) — one row per adjacent county pair,
+      undirected-symmetric as published (A/B and B/A each get a row; verified live
+      2026-08-21, sampled 2000 pairs, 0 missing reverse pairs). Excludes the source
+      file's self-pair row (every county's block starts by listing itself) — 3,234
+      excluded in the verified live file, matching the county count. year is a
+      fetch/vintage marker, not a field carried by the source file itself — the
+      Census Bureau publishes one evergreen, non-year-versioned file (confirmed live:
+      county_adjacency2023.txt/2024.txt/2025.txt all 404; only the un-suffixed
+      county_adjacency.txt resolves), so this table is re-fetched under each
+      configured year purely to give the ETL pool a freshness/re-fetch cadence.
+      Column names match the table this replaces (county_fips, state_fips,
+      county_name, neighbor_county_fips, neighbor_state_fips, neighbor_county_name)
+      for compatibility with existing queries against county_adjacency.
+
+    columns:
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: 5-digit county FIPS (state+county) — PK component. FK to geo.counties.county_fips.
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS, derived from county_fips[0:2] — FK to geo.state_ref.state_fips
+      - name: county_name
+        type: string
+        nullable: true
+        comment: >
+          County name with the source file's trailing ", ST" state-abbreviation
+          suffix stripped (e.g. source "Autauga County, AL" -> "Autauga County"),
+          to match geo.counties.county_name's convention.
+      - name: neighbor_county_fips
+        type: string
+        nullable: false
+        comment: 5-digit FIPS of the adjacent county — PK component. FK to geo.counties.county_fips.
+      - name: neighbor_state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS of the adjacent county, derived from neighbor_county_fips[0:2] — FK to geo.state_ref.state_fips
+      - name: neighbor_county_name
+        type: string
+        nullable: true
+        comment: Adjacent county's name, state suffix stripped — same convention as county_name
+      - name: year
+        type: int
+        nullable: false
+        comment: >
+          Fetch/vintage year — PK component. Not a field in the source file (see
+          table comment); the source is refetched once per configured year.
+
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_year
+
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/docs/reference/county_adjacency.txt"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CountyAdjacencyResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        # New table (no prior declared start year) — 2025/2026 deliberately exercises both
+        # dispatch modes (2025 = historical, 2026 = daily/current-year) on this table rather
+        # than a full historical backfill. No dataLag/minYear: the source is a single evergreen
+        # file with no real per-year availability constraint to model.
+        start: "${GOVDATA_START_YEAR:2025}"
+        end: "${GOVDATA_END_YEAR:2026}"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: county_adjacency
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2960,6 +3074,27 @@ constraints:
       - columns: [state_fips]
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  county_adjacency:
+    primaryKey: [county_fips, neighbor_county_fips, year]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [neighbor_county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [neighbor_state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
+    comment: >
+      Real Census Bureau County Adjacency File, ingested directly (see the table's
+      own comment) — replaces the county_adjacency_st_touches_legacy view's
+      ST_Touches-on-TIGER-boundary-polygons derivation. year is a fetch/vintage
+      marker, not a field carried by the source file.
 
   places:
     primaryKey: [place_fips, year]
@@ -3248,20 +3383,29 @@ constraints:
 
 views:
 
-  - name: county_adjacency
+  - name: county_adjacency_st_touches_legacy
     comment: >
-      One row per adjacent county pair (undirected, both directions present —
-      A/B and B/A each get a row) for the most recent TIGER vintage year
-      present in counties (MAX(year), not a hard-coded year — this table is
-      partitioned by TIGER vintage and a self-join across multiple vintages
-      would produce a cartesian blowup of spurious pairs). Adjacency is true
-      geometric adjacency (ST_Touches on the WKT boundary polygons via
-      DuckDB's spatial extension) — counties that share only a single point
-      (e.g. the Four Corners) count as touching, same as sharing a full
-      border segment. Island counties with no land or water-crossing land
-      border to any other county (all of Hawaii, plus isolated mainland
-      island counties) legitimately have zero rows here — see geo_dq.sql's
-      county_adjacency coverage check for the acknowledged-exception list.
+      SUPERSEDED — county_adjacency is now a real ingested table (see
+      partitionedTables above), sourced directly from the Census Bureau's
+      published County Adjacency File, not derived from boundary geometry.
+      This view is kept only for comparison against the old derivation and is
+      no longer wired up as county_adjacency; nothing else in this schema
+      references it. Original comment, preserved as-is: One row per adjacent
+      county pair (undirected, both directions present — A/B and B/A each get
+      a row) for the most recent TIGER vintage year present in counties
+      (MAX(year), not a hard-coded year — this table is partitioned by TIGER
+      vintage and a self-join across multiple vintages would produce a
+      cartesian blowup of spurious pairs). Adjacency is true geometric
+      adjacency (ST_Touches on the WKT boundary polygons via DuckDB's spatial
+      extension) — counties that share only a single point (e.g. the Four
+      Corners) count as touching, same as sharing a full border segment.
+      Island counties with no land or water-crossing land border to any other
+      county (all of Hawaii, plus isolated mainland island counties)
+      legitimately have zero rows here — see geo_dq.sql's county_adjacency
+      coverage check for the acknowledged-exception list. KNOWN BAD: this
+      ST_Touches derivation covers only roughly 15% of true county adjacency,
+      because TIGER shared-edge polygons rarely align exactly enough for an
+      exact-touch predicate to fire — this is why it was replaced.
     sql: >
       WITH latest_year AS (
         SELECT MAX(year) AS yr FROM counties

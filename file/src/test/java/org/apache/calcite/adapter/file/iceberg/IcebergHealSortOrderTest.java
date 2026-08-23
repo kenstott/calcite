@@ -139,7 +139,7 @@ public class IcebergHealSortOrderTest {
     Collections.sort(expected);
     assertTrue(!before.equals(expected), "precondition: partition starts unsorted");
 
-    int healed = writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7);
+    int healed = writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false);
 
     assertEquals(1, healed, "the one partition should be rewritten");
     assertEquals(expected, namesIn(2024), "heal must leave the partition sorted on disk");
@@ -199,23 +199,45 @@ public class IcebergHealSortOrderTest {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
 
-    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7));
+    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
     table.refresh();
     assertEquals("name", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY));
 
     // Second call must cost nothing: this runs every ETL cycle and a full rewrite each time
     // would be ruinous.
-    assertEquals(0, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7),
+    assertEquals(0, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false),
         "a table already recording this order must not be rewritten again");
+  }
+
+  @Test void forceBypassesTheRecordedPropertyEvenWhenItAlreadyMatches() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
+    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
+
+    // The property can go stale if a table's data is later replaced wholesale (a full rebuild)
+    // without anything invalidating it -- simulate that by appending new, unsorted data without
+    // re-healing, then confirm force re-sorts even though the property still matches.
+    writeFile(writer, 2024, Arrays.asList(row("yak", 3, 2024), row("bravo", 4, 2024)));
+    table.refresh();
+    assertEquals("name", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
+        "the stale property is the premise of this test");
+
+    assertEquals(0, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false),
+        "without force, the stale-but-matching property still short-circuits the heal");
+
+    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, true),
+        "force must re-heal despite the property already matching");
+    assertEquals(Arrays.asList("alpha", "bravo", "yak", "zebra"), namesIn(2024),
+        "the forced heal must actually re-sort the newly-appended data");
   }
 
   @Test void changingTheDeclaredOrderTriggersAnotherHeal() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024), row("alpha", 2, 2024)));
 
-    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7));
+    assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
     // A different declared order is exactly the case the property gate must NOT swallow.
-    assertEquals(1, writer.healSortOrder(Arrays.asList("id"), 128L * 1024 * 1024, 7),
+    assertEquals(1, writer.healSortOrder(Arrays.asList("id"), 128L * 1024 * 1024, 7, false),
         "a changed sortOrder must re-heal rather than being treated as already done");
     table.refresh();
     assertEquals("id", table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY));
@@ -226,7 +248,7 @@ public class IcebergHealSortOrderTest {
     writeFile(writer, 2023, Arrays.asList(row("delta", 1, 2023), row("apple", 2, 2023)));
     writeFile(writer, 2024, Arrays.asList(row("zebra", 3, 2024), row("beta", 4, 2024)));
 
-    assertEquals(2, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7));
+    assertEquals(2, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
 
     assertEquals(Arrays.asList("apple", "delta"), namesIn(2023));
     assertEquals(Arrays.asList("beta", "zebra"), namesIn(2024));
@@ -238,7 +260,7 @@ public class IcebergHealSortOrderTest {
 
     // Rewriting the whole table and THEN recording a sort order it was not written in would be
     // worse than doing nothing: the claim would be false and the cost already paid.
-    assertEquals(0, writer.healSortOrder(Arrays.asList("no_such_column"), 128L * 1024 * 1024, 7));
+    assertEquals(0, writer.healSortOrder(Arrays.asList("no_such_column"), 128L * 1024 * 1024, 7, false));
     table.refresh();
     assertEquals(null, table.properties().get(IcebergTableWriter.SORTED_BY_PROPERTY),
         "a refused heal must not record a sort order");
@@ -265,7 +287,7 @@ public class IcebergHealSortOrderTest {
     String previous = System.getProperty(BUDGET_PROPERTY);
     System.setProperty(BUDGET_PROPERTY, "1");
     try {
-      assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7));
+      assertEquals(1, writer.healSortOrder(Arrays.asList("name"), 128L * 1024 * 1024, 7, false));
     } finally {
       if (previous == null) {
         System.clearProperty(BUDGET_PROPERTY);
@@ -282,6 +304,6 @@ public class IcebergHealSortOrderTest {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     writeFile(writer, 2024, Arrays.asList(row("zebra", 1, 2024)));
     assertEquals(0, writer.healSortOrder(Collections.<String>emptyList(),
-        128L * 1024 * 1024, 7));
+        128L * 1024 * 1024, 7, false));
   }
 }

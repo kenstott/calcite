@@ -178,6 +178,7 @@ public final class GovDataCatalog {
       putInt(cov, "maxYear", year.get("maxYear"));
       // A dimension without its own lag still inherits the schema's.
       putInt(cov, "dataLag", year.hasNonNull("dataLag") ? year.get("dataLag") : schemaLag);
+      putInt(cov, "releaseMonth", year.get("releaseMonth"));
       to.set("coverage", cov);
       return;
     }

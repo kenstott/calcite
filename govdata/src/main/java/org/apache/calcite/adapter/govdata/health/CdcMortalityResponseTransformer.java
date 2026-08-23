@@ -22,26 +22,35 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Transforms CDC mortality data from two Socrata endpoints into a unified schema.
+ * Transforms CDC mortality data from three Socrata endpoints into a unified schema.
  *
- * <p>Handles two response shapes based on the "source_type" dimension:
+ * <p>Handles three response shapes based on the "source_type" dimension, which now carries
+ * three fetch-routing values (annual, weekly_precovid, weekly_covid) — one per URL, so each
+ * source is fetched exactly once per run instead of being iterated by year:
  * <ul>
- *   <li>annual: NCHS Leading Causes of Death (bi63-dtpu) — source fields: year, state,
- *       cause_name (short leading-cause name), _113_cause_name (detailed ICD-10 cause),
+ *   <li>annual: NCHS Leading Causes of Death (bi63-dtpu, 1999-2017) — source fields: year,
+ *       state, cause_name (short leading-cause name), _113_cause_name (detailed ICD-10 cause),
  *       deaths, aadr (age-adjusted death rate)</li>
- *   <li>weekly: Weekly Provisional Counts of Deaths by State and Select Causes (muzy-jte6) —
- *       a wide table with one column per cause. We surface the COVID-19 underlying-cause count
+ *   <li>weekly, 2018-2019 vintage (3yf8-kanr) — a wide table with one column per select
+ *       cause and no COVID columns (the series predates COVID-19). Field names in this
+ *       vintage are unspaced (allcause, weekendingdate), unlike the newer vintage below.
+ *       We surface the all-cause weekly total (allcause) as a single "All Cause" row per
+ *       state-week, sourcing mmwryear, weekendingdate, and jurisdiction_of_occurrence.</li>
+ *   <li>weekly, 2020-2023 vintage (muzy-jte6) — the same wide-table shape as 3yf8-kanr but
+ *       with underscored field names (all_cause, week_ending_date) and added COVID-19
+ *       columns. We surface the COVID-19 underlying-cause count
  *       (covid_19_u071_underlying_cause_of_death) as a single COVID-19 row per state-week,
  *       sourcing mmwryear, week_ending_date, and jurisdiction_of_occurrence.</li>
  * </ul>
- * Both are normalised to: year, week_ending_date, state, cause_name, full_cause_name, deaths,
- * age_adjusted_rate. Weekly carries raw counts only, so age_adjusted_rate is null.
+ * All three are normalised to: year, week_ending_date, state, cause_name, full_cause_name,
+ * deaths, age_adjusted_rate. Weekly carries raw counts only, so age_adjusted_rate is null.
  *
  * <p>Implements {@link PerRecordResponseTransformer} so HttpSource's streamFromRawCache path
  * handles the paginated {@code {"results":[...]}} cache envelope correctly.
  */
 public class CdcMortalityResponseTransformer implements PerRecordResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String PRE_COVID_WEEKLY_DATASET = "3yf8-kanr";
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -55,10 +64,13 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
       }
 
       boolean isWeekly = isWeekly(context);
+      boolean isPreCovidWeekly = isWeekly && isPreCovidWeekly(context);
 
       for (JsonNode record : root) {
         ObjectNode row = MAPPER.createObjectNode();
-        if (isWeekly) {
+        if (isPreCovidWeekly) {
+          mapPreCovidWeekly(record, row);
+        } else if (isWeekly) {
           mapWeekly(record, row);
         } else {
           mapAnnual(record, row);
@@ -76,7 +88,9 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
   public void transformRecord(Map<String, Object> row, RequestContext context) {
     Map<String, Object> source = new HashMap<>(row);
     row.clear();
-    if (isWeekly(context)) {
+    if (isWeekly(context) && isPreCovidWeekly(context)) {
+      mapPreCovidWeeklyMap(source, row);
+    } else if (isWeekly(context)) {
       mapWeeklyMap(source, row);
     } else {
       mapAnnualMap(source, row);
@@ -84,7 +98,27 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
   }
 
   private static boolean isWeekly(RequestContext context) {
-    return context != null && "weekly".equals(context.getDimensionValues().get("source_type"));
+    if (context == null) {
+      return false;
+    }
+    String sourceType = context.getDimensionValues().get("source_type");
+    return "weekly_precovid".equals(sourceType) || "weekly_covid".equals(sourceType);
+  }
+
+  /**
+   * Distinguishes the 2018-2019 (3yf8-kanr) weekly vintage from the 2020-2023 (muzy-jte6)
+   * vintage. The source_type dimension carries this distinction directly
+   * (weekly_precovid/weekly_covid); the request URL is checked too as a redundant signal
+   * in case dimension values and urlRules ever drift apart.
+   */
+  private static boolean isPreCovidWeekly(RequestContext context) {
+    if (context == null) {
+      return false;
+    }
+    if ("weekly_precovid".equals(context.getDimensionValues().get("source_type"))) {
+      return true;
+    }
+    return context.getUrl() != null && context.getUrl().contains(PRE_COVID_WEEKLY_DATASET);
   }
 
   private void mapAnnual(JsonNode r, ObjectNode row) {
@@ -107,6 +141,28 @@ public class CdcMortalityResponseTransformer implements PerRecordResponseTransfo
     put(row, "deaths", text(r, "covid_19_u071_underlying_cause_of_death"));
     put(row, "age_adjusted_rate", null);
     put(row, "source_type", "weekly");
+  }
+
+  private void mapPreCovidWeekly(JsonNode r, ObjectNode row) {
+    put(row, "year", text(r, "mmwryear"));
+    put(row, "week_ending_date", text(r, "weekendingdate"));
+    put(row, "state", text(r, "jurisdiction_of_occurrence"));
+    put(row, "cause_name", "All Cause");
+    put(row, "full_cause_name", "All Cause (weekly provisional)");
+    put(row, "deaths", text(r, "allcause"));
+    put(row, "age_adjusted_rate", null);
+    put(row, "source_type", "weekly");
+  }
+
+  private void mapPreCovidWeeklyMap(Map<String, Object> r, Map<String, Object> row) {
+    row.put("year", str(r.get("mmwryear")));
+    row.put("week_ending_date", str(r.get("weekendingdate")));
+    row.put("state", str(r.get("jurisdiction_of_occurrence")));
+    row.put("cause_name", "All Cause");
+    row.put("full_cause_name", "All Cause (weekly provisional)");
+    row.put("deaths", str(r.get("allcause")));
+    row.put("age_adjusted_rate", null);
+    row.put("source_type", "weekly");
   }
 
   private void mapAnnualMap(Map<String, Object> r, Map<String, Object> row) {

@@ -1190,7 +1190,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
     method.setAccessible(true);
     method.invoke(null, dbPath, schema, operand);
     // Flush deferred views into the in-memory connection
-    DuckDBPendingViews.flush(dbPath, c);
+    DuckDBPendingViews.buildAll(dbPath, c);
   }
 
   private void invokeRegisterSimilarityFunctions(Connection c) throws Exception {

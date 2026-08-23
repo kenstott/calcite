@@ -47,6 +47,7 @@ FROM (
   UNION ALL SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -88,6 +89,7 @@ FROM (
   UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)  -- dqRowLimit=3000/year
   UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
   UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
+  UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
 );
 
 -- ============================================================
@@ -107,6 +109,7 @@ SELECT 'college_scorecard'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ
 SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1;
 SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
 SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1;
+SELECT 'f33_district_finance'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
 -- T4: ALL-NULL COLUMNS
@@ -212,6 +215,14 @@ WHERE null_percentage = 100.0
   -- unreported source rows); library_id excluded from PK but never itself all-null.
   AND column_name NOT IN ('type', 'year');
 
+INSERT INTO dq_results
+SELECT 'edu', 'f33_district_finance', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year');
+
 -- ============================================================
 -- T5: ALL-SAME-VALUE COLUMNS
 -- approx_unique <= 1 and not already 100% null = every non-null row has same value.
@@ -315,6 +326,14 @@ SELECT 'edu', 'library_outlets', 'all_same_value',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  AND column_name NOT IN ('type', 'year');
+
+INSERT INTO dq_results
+SELECT 'edu', 'f33_district_finance', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'year');
 
 -- ============================================================
@@ -597,6 +616,33 @@ FROM (
   )
 );
 
+-- f33_district_finance PK: leaid, year
+INSERT INTO dq_results
+SELECT 'edu', 'f33_district_finance', 'pk_nulls',
+  CASE WHEN null_leaid + null_year > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(null_leaid + null_year AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN null_leaid > 0 THEN 'leaid:' || null_leaid ELSE NULL END,
+    CASE WHEN null_year  > 0 THEN 'year:'  || null_year  ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN leaid IS NULL THEN 1 ELSE 0 END) AS null_leaid,
+    SUM(CASE WHEN year  IS NULL THEN 1 ELSE 0 END) AS null_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
+);
+
+-- f33_district_finance: leaid must be unique per year (one row per LEA per fiscal year)
+INSERT INTO dq_results
+SELECT 'edu', 'f33_district_finance', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT leaid, year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
+  GROUP BY leaid, year HAVING COUNT(*) > 1
+);
+
 -- ============================================================
 -- T7: EXPECTED VALUE DISTRIBUTIONS
 -- Dimension columns must fall within known enumerated sets.
@@ -837,6 +883,25 @@ FROM (
   SELECT SUM(CASE WHEN square_feet < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true)
   WHERE square_feet IS NOT NULL
+);
+
+-- f33_district_finance: no negative revenue/expenditure or enrollment. Unlike ccd_districts,
+-- this table does not null out NCES sentinel codes (verified live FY2023/FY2024: none observed
+-- in TOTALREV/TOTALEXP/TCURSPND/ENROLL) — any negative value here is a real anomaly, not a
+-- known sentinel to exclude.
+INSERT INTO dq_results
+SELECT 'edu', 'f33_district_finance', 'negative_dollar_or_enrollment',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(
+    CASE WHEN total_revenue_thousand < 0
+       OR total_expenditure_thousand < 0
+       OR current_expenditure_thousand < 0
+       OR enrollment < 0
+    THEN 1 ELSE 0 END
+  ) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
 );
 
 -- ============================================================

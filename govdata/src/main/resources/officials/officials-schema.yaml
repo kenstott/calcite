@@ -1001,11 +1001,30 @@ views:
 
   - name: state_political_index
     comment: >
-      Composite Political Index (CPI) per state: 0.50*I_Pres + 0.30*I_Senate +
-      0.20*I_House, on a -100 (max Republican) to +100 (max Democratic) scale.
-      "Current" = the latest congress present in members (bounded by
-      GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS — not necessarily the literal
-      current Congress if those knobs haven't been bumped for a new session).
+      Composite Political Index (CPI) per state PER CONGRESS: 0.50*I_Pres +
+      0.30*I_Senate + 0.20*I_House, on a -100 (max Republican) to +100 (max
+      Democratic) scale. One row per (congress, state) — a full historical time
+      series, not just the latest congress. `congress`/`congress_start_year`
+      identify which congress each row describes; join congress_start_year to
+      any other schema's `year` for a same-period comparison (House/Senate
+      composition is constant across both years of a congress, so a caller
+      wanting an exact calendar year should pick whichever congress covers it,
+      not assume a 1:1 congress-to-year mapping).
+
+      Converted from a single "current only" snapshot to this per-congress
+      series 2026-08-23: the prior version hardcoded
+      `congress = (SELECT MAX(congress) FROM members)` for House/Senate and
+      always used the two most recent presidential cycles globally. Both
+      members (full historical congress coverage) and electoral_college_votes
+      (1976-2024) already carried everything needed for a real series — the
+      only change is computing every congress's index using the data available
+      AS OF that congress's start year, instead of collapsing to "now". The
+      presidential component for congress N is resolved via
+      congress_start_year = 1787 + 2*congress (inverse of
+      OfficialsSchemaFactory.deriveCongressRange's N = (year-1789)/2 + 1),
+      then taking the two most recent electoral_college_votes years <= that
+      start year — the same 2-cycle blend as before, just anchored per-congress
+      instead of to today.
 
       DEVIATION FROM THE ORIGINAL SPEC (deliberate, decided 2026-08-02): I_Pres was
       specified as a two-party POPULAR vote share margin, blended 2:1 across the two
@@ -1032,8 +1051,72 @@ views:
       (4) H_D/H_R (and S_D/S_R) denominators are exactly as the original formula
       specified — vacant seats and non-D/R members are excluded from the denominator
       entirely, not counted as a third bucket.
+      (5) I_Senate's /2 denominator assumes exactly 2 senators per state per congress;
+      a mid-congress death/resignation plus appointed/special-election replacement
+      (both rows present in members for that congress, e.g. California's 118th:
+      Feinstein died in office, Butler was appointed to finish her term, alongside
+      the two full-term senators) inflates s_d+s_r past 2 for that congress, which
+      can push cpi/i_senate past the documented +-100 scale. Real turnover, not a
+      bug — a single "current" snapshot could land on either side of a mid-congress
+      swap and never surface this; a full series makes every such congress visible.
     sql: >
+      WITH congresses AS (
+        SELECT DISTINCT congress, 1787 + 2 * congress AS congress_start_year
+        FROM members
+      ),
+      house AS (
+        SELECT
+          congress, state_name,
+          SUM(CASE WHEN party_name = 'Democratic' THEN 1 ELSE 0 END) AS h_d,
+          SUM(CASE WHEN party_name = 'Republican' THEN 1 ELSE 0 END) AS h_r
+        FROM members
+        WHERE district IS NOT NULL
+        GROUP BY congress, state_name
+      ),
+      senate AS (
+        SELECT
+          congress, state_name,
+          SUM(CASE WHEN party_name = 'Democratic' THEN 1 ELSE 0 END) AS s_d,
+          SUM(CASE WHEN party_name = 'Republican' THEN 1 ELSE 0 END) AS s_r
+        FROM members
+        WHERE district IS NULL
+        GROUP BY congress, state_name
+      ),
+      pres_margin AS (
+        SELECT
+          state_name, year,
+          100.0 * (SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
+                  - SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END))
+            / NULLIF(SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
+                    + SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END), 0) AS margin
+        FROM electoral_college_votes
+        WHERE office = 'PRESIDENT' AND candidate_party IN ('D', 'R')
+        GROUP BY state_name, year
+      ),
+      pres_ranked AS (
+        SELECT
+          c.congress, m.state_name, m.year, m.margin,
+          RANK() OVER (PARTITION BY c.congress, m.state_name ORDER BY m.year DESC) AS yr_rank
+        FROM congresses c
+        JOIN pres_margin m ON m.year <= c.congress_start_year
+      ),
+      pres AS (
+        SELECT
+          congress, state_name,
+          (2 * MAX(CASE WHEN yr_rank = 1 THEN margin END)
+            + COALESCE(MAX(CASE WHEN yr_rank = 2 THEN margin END),
+                       MAX(CASE WHEN yr_rank = 1 THEN margin END))) / 3.0 AS i_pres,
+          MAX(CASE WHEN yr_rank = 1 THEN margin END) AS margin_t,
+          MAX(CASE WHEN yr_rank = 2 THEN margin END) AS margin_t1,
+          MAX(CASE WHEN yr_rank = 1 THEN year END)   AS year_t,
+          MAX(CASE WHEN yr_rank = 2 THEN year END)   AS year_t1
+        FROM pres_ranked
+        WHERE yr_rank <= 2
+        GROUP BY congress, state_name
+      )
       SELECT
+        h.congress,
+        c.congress_start_year,
         h.state_name,
         0.50 * p.i_pres
           + 0.30 * (100.0 * (s.s_d - s.s_r) / 2)
@@ -1050,58 +1133,7 @@ views:
           WHEN 0.50 * p.i_pres + 0.30 * (100.0 * (s.s_d - s.s_r) / 2) + 0.20 * (100.0 * (h.h_d - h.h_r) / NULLIF(h.h_d + h.h_r, 0)) > -50.0 THEN 'Lean Republican'
           ELSE 'Solid Republican'
         END                                                                      AS political_lean
-      FROM (
-        SELECT
-          state_name,
-          SUM(CASE WHEN party_name = 'Democratic' THEN 1 ELSE 0 END) AS h_d,
-          SUM(CASE WHEN party_name = 'Republican' THEN 1 ELSE 0 END) AS h_r
-        FROM members
-        WHERE district IS NOT NULL AND congress = (SELECT MAX(congress) FROM members)
-        GROUP BY state_name
-      ) h
-      JOIN (
-        SELECT
-          state_name,
-          SUM(CASE WHEN party_name = 'Democratic' THEN 1 ELSE 0 END) AS s_d,
-          SUM(CASE WHEN party_name = 'Republican' THEN 1 ELSE 0 END) AS s_r
-        FROM members
-        WHERE district IS NULL AND congress = (SELECT MAX(congress) FROM members)
-        GROUP BY state_name
-      ) s ON s.state_name = h.state_name
-      JOIN (
-        SELECT
-          cur.state_name,
-          (2 * cur.margin + COALESCE(prev.margin, cur.margin)) / 3.0 AS i_pres,
-          cur.margin  AS margin_t,
-          prev.margin AS margin_t1,
-          cur.year    AS year_t,
-          prev.year   AS year_t1
-        FROM (
-          SELECT state_name, year, margin FROM (
-            SELECT
-              state_name, year,
-              100.0 * (SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
-                      - SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END))
-                / NULLIF(SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
-                        + SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END), 0) AS margin,
-              RANK() OVER (PARTITION BY state_name ORDER BY year DESC) AS yr_rank
-            FROM electoral_college_votes
-            WHERE office = 'PRESIDENT' AND candidate_party IN ('D', 'R')
-            GROUP BY state_name, year
-          ) ranked_cur WHERE yr_rank = 1
-        ) cur
-        LEFT JOIN (
-          SELECT state_name, year, margin FROM (
-            SELECT
-              state_name, year,
-              100.0 * (SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
-                      - SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END))
-                / NULLIF(SUM(CASE WHEN candidate_party = 'D' THEN electoral_votes_won ELSE 0 END)
-                        + SUM(CASE WHEN candidate_party = 'R' THEN electoral_votes_won ELSE 0 END), 0) AS margin,
-              RANK() OVER (PARTITION BY state_name ORDER BY year DESC) AS yr_rank
-            FROM electoral_college_votes
-            WHERE office = 'PRESIDENT' AND candidate_party IN ('D', 'R')
-            GROUP BY state_name, year
-          ) ranked_prev WHERE yr_rank = 2
-        ) prev ON prev.state_name = cur.state_name
-      ) p ON p.state_name = h.state_name
+      FROM house h
+      JOIN senate s ON s.state_name = h.state_name AND s.congress = h.congress
+      JOIN pres p ON p.state_name = h.state_name AND p.congress = h.congress
+      JOIN congresses c ON c.congress = h.congress
