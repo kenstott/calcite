@@ -238,6 +238,48 @@ public class MaterializeConfig {
   }
 
   /**
+   * Fills in {@code name}/{@code columns} from the owning table's config wherever this
+   * materialize config doesn't declare its own -- the same merge {@link EtlPipeline}'s standard
+   * fetch flow applies before handing a config to a {@link MaterializationWriter}. Callers that
+   * build a writer directly (e.g. a {@code tableLifecycleListener} writing outside the standard
+   * fetch flow) need this too: a table's declared {@code columns:} is what puts
+   * {@link IcebergMaterializationWriter} on the eager, type-coercing schema path instead of
+   * inferring (and therefore guessing the narrowest Java type of) the schema from the first
+   * batch written.
+   *
+   * @param materializeConfig the config to fill in; returned unchanged if already complete
+   * @param tableConfig the owning table's config, supplying the defaults
+   * @return a config with name/columns filled in, or {@code materializeConfig} itself if nothing
+   *     needed filling
+   */
+  public static MaterializeConfig withTableDefaults(MaterializeConfig materializeConfig,
+      EtlPipelineConfig tableConfig) {
+    if (materializeConfig == null) {
+      return null;
+    }
+    boolean needsName = (materializeConfig.getName() == null || materializeConfig.getName().isEmpty())
+        && (materializeConfig.getTargetTableId() == null || materializeConfig.getTargetTableId().isEmpty());
+    boolean needsColumns = (materializeConfig.getColumns() == null || materializeConfig.getColumns().isEmpty())
+        && tableConfig.getColumns() != null && !tableConfig.getColumns().isEmpty();
+    if (!needsName && !needsColumns) {
+      return materializeConfig;
+    }
+    return MaterializeConfig.builder()
+        .enabled(materializeConfig.isEnabled())
+        .format(materializeConfig.getFormat())
+        .targetTableId(materializeConfig.getTargetTableId())
+        .output(materializeConfig.getOutput())
+        .partition(materializeConfig.getPartition())
+        .columns(needsColumns ? tableConfig.getColumns() : materializeConfig.getColumns())
+        .options(materializeConfig.getOptions())
+        .name(needsName ? tableConfig.getName() : materializeConfig.getName())
+        .iceberg(materializeConfig.getIceberg())
+        .tableComment(materializeConfig.getTableComment())
+        .columnComments(materializeConfig.getColumnComments())
+        .build();
+  }
+
+  /**
    * Creates a MaterializeConfig from a YAML/JSON map.
    *
    * @param map Configuration map

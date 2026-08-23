@@ -55,7 +55,7 @@ public class ChunkOrganizerTest {
     assertEquals("sec", out.get("source_schema"));
     assertEquals("vectorized_chunks", out.get("source_table"));
     assertEquals("0000320193:0000320193-24-000123", out.get("stringified_fk"));
-    assertEquals(3, out.get("sequence"));
+    assertEquals(Long.valueOf(3), out.get("sequence"));
     assertEquals("mda_paragraph", out.get("source_type"));
     assertEquals("Revenue increased 5%.", out.get("chunk_text"));
     assertEquals("Revenue increased 5% [FY2024].", out.get("enriched_text"));
@@ -63,7 +63,7 @@ public class ChunkOrganizerTest {
     assertEquals("Results of Operations", out.get("subsection"));
     assertEquals("Item 7 > Results of Operations", out.get("section_path"));
     assertEquals(false, out.get("paragraph_continuation"));
-    assertEquals(12, out.get("paragraph_number"));
+    assertEquals(Long.valueOf(12), out.get("paragraph_number"));
     assertEquals("paragraph", out.get("content_type"));
     assertEquals("Revenue", out.get("financial_concepts"));
     assertNull(out.get("exhibit_number"));
@@ -88,5 +88,26 @@ public class ChunkOrganizerTest {
 
     assertNull(out.get("filing_date"));
     assertEquals("123:abc", out.get("stringified_fk"));
+  }
+
+  /**
+   * {@code ResultSet#getObject} doesn't guarantee a consistent {@code Number} subtype across
+   * calls for a given column, and {@code sequence}/{@code paragraph_number} are declared
+   * {@code bigint} in both ref-schema.yaml and sec-schema.yaml. Simulates a narrower subtype
+   * (e.g. {@code Integer}) coming back from the driver and asserts the transform still
+   * normalizes to {@code Long}.
+   */
+  @Test public void testTransformSecChunkRowNormalizesIntSequenceAndParagraphNumberToLong() {
+    Map<String, Object> sourceRow = new LinkedHashMap<String, Object>();
+    sourceRow.put("cik", "0000320193");
+    sourceRow.put("accession_number", "0000320193-24-000123");
+    sourceRow.put("chunk_id", "sec:0000320193:0000320193-24-000123:mda_paragraph:3");
+    sourceRow.put("sequence", 3);
+    sourceRow.put("paragraph_number", 12);
+
+    Map<String, Object> out = ChunkOrganizer.transformSecChunkRow(sourceRow);
+
+    assertEquals(Long.valueOf(3), out.get("sequence"));
+    assertEquals(Long.valueOf(12), out.get("paragraph_number"));
   }
 }

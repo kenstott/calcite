@@ -2541,7 +2541,7 @@ partitionedTables:
           PKs uniformly). The generic cross-schema fallback identifier -- works for a
           28th source added tomorrow with no schema change.
       - name: sequence
-        type: integer
+        type: bigint
         nullable: false
         comment: Order within this source row's chunks (0 for a row-concat text that fit in one chunk)
       - name: source_type
@@ -2589,7 +2589,7 @@ partitionedTables:
         nullable: true
         comment: Document-structure column (SEC/XBRL sources); null for row_concat
       - name: paragraph_number
-        type: integer
+        type: bigint
         nullable: true
         comment: Document-structure column, populated only for document-blob sources; null for row_concat
       - name: content_type

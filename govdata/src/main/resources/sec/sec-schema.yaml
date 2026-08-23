@@ -1449,7 +1449,7 @@ partitionedTables:
         nullable: true
         comment: True when this chunk is a continuation piece of an oversized prose or atomic element
       - name: sequence
-        type: int
+        type: bigint
         nullable: false
         comment: Order within parent section
       - *filing_date
@@ -1485,7 +1485,7 @@ partitionedTables:
         nullable: true
         comment: Role/title of speaker (CEO, CFO, Analyst, etc.)
       - name: paragraph_number
-        type: int
+        type: bigint
         nullable: true
         comment: Original paragraph number in earnings_transcripts for traceability
       # Generalized columns matching ref.vectorized_chunks -- see SecSchemaFactory
