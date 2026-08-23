@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Worked analysis patterns, surfaced on demand by the MCP tool find_recipe rather than",
+    "carried in full in the top-level instructions — the instructions carry only a short",
+    "trigger index naming when a recipe exists, so the context cost of a growing catalog",
+    "is paid only by callers who actually need one, not by every connection.",
+    "",
+    "Add a recipe whenever a defect is traced to a caller doing something plausible but",
+    "wrong that the instructions never actually taught — that is the bar, not 'this is a",
+    "commonly asked question'. Keep 'triggers' as the literal words/phrases a caller doing",
+    "this analysis would actually type or think, not abstract category names."
+  ],
+  "recipes": [
+    {
+      "id": "cost-of-living-adjusted-comparison",
+      "title": "Comparing a dollar figure across STATES, not just across years",
+      "triggers": ["cost of living", "cost-of-living", "regional price parity", "rpp",
+                   "real income by state", "adjusted for cost of living", "purchasing power",
+                   "state to state comparison", "compare states real dollars",
+                   "does the lead survive", "state cost of living adjustment"],
+      "body": "adjust_inflation deflates against ONE national CPI series — it removes economy-wide inflation over TIME, but every state is still assumed to face the same prices. That is correct for comparing one place across years; it is NOT a cost-of-living adjustment, because it does not account for a dollar buying more in Mississippi than in California in the same year.\n\nA genuine state-to-state real-income or real-growth comparison needs a SECOND, independent step: divide by each state's own value in econ.regional_price_parities (BEA RPP, all-items, US=100 baseline) for that year. The two adjustments answer different questions and neither substitutes for the other:\n\n  1. adjust_inflation(nominal, year) -> real national dollars (removes time-inflation only)\n  2. real_national_dollars / (regional_price_parities.value / 100) -> real, cost-of-living-adjusted dollars (removes the cross-state price-level gap too)\n\nSkip step 2 and a result that says 'adjusted for cost of living' has actually only done step 1 - a national-inflation adjustment wearing a cost-of-living label. This is not a hypothetical: measured directly in this harness, an analysis that applied RPP alone (skipping adjust_inflation) reported a state's growth lead as 'surviving the cost-of-living check' when two independent analyses that applied BOTH steps found the same lead did NOT survive - same RPP table, different arithmetic, opposite conclusion.\n\nDo both steps, in that order, whenever the question compares places, not just times. Name which state(s) the ranking is sensitive to if the two adjustments move the answer versus a national-inflation-only adjustment - that sensitivity is itself part of the answer, not a footnote."
+    }
+  ]
+}

@@ -507,6 +507,37 @@ final class ReportPage {
         return TAG.matcher(s == null ? "" : s).replaceAll("").trim();
     }
 
+    private static final java.util.regex.Pattern BLOCK_BREAK = java.util.regex.Pattern.compile(
+        "(?i)</p>|</li>|</tr>|</h[1-6]>|<br\\s*/?>");
+
+    /**
+     * A section's HTML flattened to plain text, for a caller with no browser to open the report
+     * in — the tool result text a model reads, not the page itself. Unlike {@link #stripTags},
+     * this keeps paragraph/list/row breaks as newlines so the result reads as prose rather than
+     * one run-on line, and unescapes the handful of entities a model's own HTML is likely to
+     * contain. Not a general HTML-to-text converter: nested/complex markup degrades gracefully to
+     * a run-on line rather than throwing, which is the right failure mode for a text summary that
+     * is a convenience, not the deliverable.
+     */
+    static String sectionPlainText(String html) {
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
+        String withBreaks = BLOCK_BREAK.matcher(html).replaceAll("\n");
+        String noTags = stripTags(withBreaks);
+        String unescaped = noTags
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'");
+        return unescaped.replaceAll("[ \\t]+", " ")
+            .replaceAll("\n[ \\t]+", "\n")
+            .replaceAll("\n{3,}", "\n\n")
+            .trim();
+    }
+
     /**
      * A column sorts numerically only if MOST of its non-empty cells parse. One stray "n/a"
      * should not turn a column of dollars into a string sort, and two state names containing a
