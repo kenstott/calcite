@@ -19,7 +19,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.select.Elements;
+import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +34,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -43,32 +44,44 @@ import java.util.zip.ZipInputStream;
  *
  * <p>Three-step process, all driven by this single transformer since the download filename is
  * neither year-templatable nor stable across years (confirmed live: {@code
- * 2023_Individual_Unit_Files.zip}, {@code 2021_Individual_Unit_File.zip} — singular/plural and
- * casing both vary, and the year-templated
+ * 2023_Individual_Unit_Files.zip}, {@code 2021_Individual_Unit_File.zip}, {@code
+ * 2013_Individual_Unit_file.zip}, {@code 2014-individual-unit-file.zip} — singular/plural,
+ * casing, and underscore-vs-hyphen all vary by year, and the year-templated
  * {@code https://www2.census.gov/programs-surveys/gov-finances/tables/{year}/{year}_Individual_Unit_Files.zip}
  * guess 404s for most years): (1) the framework fetches Census's per-year "Public Use Datasets"
  * landing page ({@code https://www.census.gov/data/datasets/{year}/econ/local/public-use-datasets.html})
- * and hands its HTML to {@link #transform}; this method Jsoup-selects the anchor whose href
- * contains {@code Individual_Unit_Fil} (matches File/Files, upper/lower case); (2) downloads that
- * ZIP; (3) inside the ZIP, picks the largest {@code .txt} entry that is not the {@code Fin_PID_*}
- * identifier file (the ZIP always contains exactly one 32-char fixed-width data file, one PID
- * lookup file, and technical-documentation PDFs — the data file is unambiguously the largest
- * .txt), and parses its fixed-width records per the technical documentation's record layout:
- * positions 1-12 = ID (1-2 state FIPS, 3 = government type, 4-6 county/county-type FIPS, 7-12 unit
- * identifier), 13-15 = item code, 16-27 = amount in thousands of dollars, 28-31 = data year, 32 =
- * imputation flag.
+ * and hands its HTML to {@link #transform}; this method scans every anchor href for
+ * {@link #ZIP_LINK_PATTERN} (matches {@code individual[-_]unit[-_]fil}, case-insensitive — covers
+ * every filename variant seen above, unlike a plain case-sensitive substring check, which missed
+ * 2013-2016); (2) downloads that ZIP; (3) inside the ZIP, picks the largest {@code .txt} entry
+ * that is not the {@code Fin_PID_*} identifier file (the ZIP always contains exactly one 32-char
+ * fixed-width data file, one PID lookup file, and technical-documentation PDFs — the data file is
+ * unambiguously the largest .txt), and parses its fixed-width records per the technical
+ * documentation's record layout: positions 1-12 = ID (1-2 state FIPS, 3 = government type, 4-6
+ * county/county-type FIPS, 7-12 unit identifier), 13-15 = item code, 16-27 = amount in thousands
+ * of dollars, 28-31 = data year, 32 = imputation flag.
  *
  * <p>Verified live against the real 2023 file (downloaded 2026-08-02,
  * {@code 2023FinEstDAT_06052025modp_pu.txt}, 509,080 records): record layout, item codes E12/F12
  * (elementary-secondary education current/construction), E36/F36 (hospitals current/construction)
  * and E61/F61 (parks &amp; recreation current/construction) all confirmed present with the
  * technical documentation's stated descriptions. Landing-page discovery confirmed live for 2012,
- * 2020, 2021, 2022, 2023, and 2024.
+ * 2013, 2014, 2015, 2016, 2017, 2020, 2021, 2022, 2023, and 2024 (2013-2016 confirmed only after
+ * the case-insensitive/hyphen-agnostic pattern replaced the original case-sensitive selector).
  */
 public class GovtFinanceTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GovtFinanceTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  /**
+   * Matches an anchor href naming the Individual Unit File, independent of case and of
+   * underscore/hyphen choice — confirmed live to vary by year: {@code Individual_Unit_File}
+   * (2012, 2017+), {@code Individual_Unit_file} (2013, 2016), {@code individual-unit-file}
+   * (2014, 2015).
+   */
+  private static final Pattern ZIP_LINK_PATTERN =
+      Pattern.compile("individual[-_]unit[-_]fil", Pattern.CASE_INSENSITIVE);
 
   private static final Map<String, String> GOV_TYPE_NAMES = buildGovTypeNameMap();
 
@@ -104,12 +117,13 @@ public class GovtFinanceTransformer implements ResponseTransformer {
 
   private String findZipUrl(String landingHtml) {
     Document doc = Jsoup.parse(landingHtml);
-    Elements links = doc.select("a[href*=Individual_Unit_Fil]");
-    if (links.isEmpty()) {
-      return null;
+    for (Element link : doc.select("a[href]")) {
+      String href = link.attr("href");
+      if (ZIP_LINK_PATTERN.matcher(href).find()) {
+        return href.startsWith("http") ? href : "https://www.census.gov" + href;
+      }
     }
-    String href = links.first().attr("href");
-    return href.startsWith("http") ? href : "https://www.census.gov" + href;
+    return null;
   }
 
   private byte[] extractDataFile(byte[] zipBytes) throws IOException {
