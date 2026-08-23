@@ -125,7 +125,18 @@ fi
 # it at the empty staging dir makes the cache this run produces contain exactly the tables this
 # run enumerated, which is what gets published and bundled.
 SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
-export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR"
+
+# DuckDB spills large joins/aggregates (e.g. COUNT(*) over an intra-schema view like
+# sec.financial_facts, which has to actually join/aggregate sec's 200M+/270M-row base tables
+# rather than answer from Iceberg manifests the way a base table's COUNT(*) can) to
+# `temp_directory`, which DuckDBJdbcSchemaFactory defaults to `java.io.tmpdir`. Left unset that
+# resolves to /tmp, which on this host is a 14GB tmpfs (RAM-backed) — nowhere near enough headroom
+# for those views and indistinguishable from an OOM once exhausted. The production ETL workers
+# avoid this by launching with -Djava.io.tmpdir=/var/tmp/govdata (real disk); mirror that here with
+# a staging-scoped dir so generation gets real disk too, without touching the live workers' own.
+TMPDIR_STAGING="$STAGING/tmp"
+mkdir -p "$TMPDIR_STAGING"
+export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING"
 
 # GENERATE must build every view fresh from the CURRENT schema YAML. GovDataSeedInstaller
 # (invoked by GovDataDriver on first connect) extracts the classpath jar's OWN bundled seed

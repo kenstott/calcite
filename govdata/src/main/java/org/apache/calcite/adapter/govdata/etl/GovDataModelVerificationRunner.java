@@ -444,6 +444,44 @@ public final class GovDataModelVerificationRunner {
     }
     tabs.close();
 
+    // DatabaseMetaData.getTables() only lists what the DuckDB catalog already has a table/view
+    // object for. A declared intra-/inter-schema view that has never yet been resolved by name
+    // in this connection has no such object yet -- the CREATE VIEW behind it is built lazily, on
+    // first getTable()/query-by-name -- so it is invisible here even though it queries fine.
+    // Union in every declared view the bundled schema YAML names for the primary schema (an
+    // inter-schema view only if its dependency schema is actually in cfg.schemaFilter this run,
+    // preserving the existing "not exposed — dependency not mounted" tolerance below for a
+    // genuinely-unmounted dependency) so every declared view gets a real probe attempt instead of
+    // silently reading as MISSING regardless of whether it actually works.
+    if (cfg.primary != null) {
+      Set<String> primaryOnly = new LinkedHashSet<String>();
+      primaryOnly.add(cfg.primary);
+      Map<String, Defined> declared = classifyDefined(primaryOnly);
+      Set<String> already = new LinkedHashSet<String>();
+      for (String[] c : coords) {
+        already.add((c[0] + "." + c[1]).toLowerCase());
+      }
+      for (Defined d : declared.values()) {
+        String key = (d.schema + "." + d.table).toLowerCase();
+        if (already.contains(key)) {
+          continue;
+        }
+        if (INTER_VIEW.equals(d.category) && !cfg.schemaFilter.isEmpty()) {
+          boolean depsMounted = true;
+          for (String dep : d.deps) {
+            if (!cfg.schemaFilter.contains(dep)) {
+              depsMounted = false;
+              break;
+            }
+          }
+          if (!depsMounted) {
+            continue;
+          }
+        }
+        coords.add(new String[] {d.schema, d.table});
+      }
+    }
+
     // Primary-key columns per base table (schema.table → [pk cols]) from the bundled YAML,
     // used by the duplicate-row check below. Loaded once for the schema(s) being probed.
     Set<String> pkSchemas = new LinkedHashSet<String>();
