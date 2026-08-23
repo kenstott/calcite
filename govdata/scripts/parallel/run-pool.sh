@@ -812,7 +812,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
     log_file="$SCRIPT_DIR/runs/${id}/launch.log"
     cur_line=""
     if [ -f "$log_file" ]; then
-      cur_line=$(grep -E " (INFO|WARN|ERROR) " "$log_file" 2>/dev/null | tail -1)
+      cur_line=$(grep -E " (INFO|WARN|ERROR) " "$log_file" 2>/dev/null | tail -1 || true)
     fi
     if [ "$cur_line" != "${active_last_line[$i]}" ]; then
       active_last_line[$i]="$cur_line"
