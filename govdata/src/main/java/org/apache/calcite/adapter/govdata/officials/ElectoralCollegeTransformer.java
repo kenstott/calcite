@@ -239,8 +239,16 @@ public class ElectoralCollegeTransformer implements ResponseTransformer {
    * "Connecticut3", seen on the 1824 page's footnoted state/candidate cells). No real
    * state or candidate name ends in a bare digit, so this is unambiguous.
    */
-  private String stripFootnote(String s) {
-    return s.replaceAll("\\d+$", "").trim();
+  // Package-visible (not private) so ElectoralCollegeTransformerTest can exercise the footnote
+  // patterns directly, without fabricating full NARA-page HTML fixtures for a pure string rule.
+  String stripFootnote(String s) {
+    // NARA marks footnotes with a trailing superscript digit on most pages, but some years
+    // (confirmed live: 2008, 2016, 2020) use one or more trailing asterisks instead -- e.g.
+    // "Texas***" in 2016 vs plain "Texas" in every other year. A digit-only pattern let those
+    // through unstripped, silently breaking any exact-match join/filter on state_name for the
+    // affected state+year (discovered via officials.state_political_index returning a stale
+    // presidential cycle for Texas because "Texas***" 2016 never matched "Texas").
+    return s.replaceAll("[\\d*]+$", "").trim();
   }
 
   private int parseColspan(Element th) {
