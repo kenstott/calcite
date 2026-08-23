@@ -767,7 +767,8 @@ public class EtlPipelineDeepCoverageTest4 {
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     DataSource ds =
-        (DataSource) invokePrivate(pipeline, "createDataSource", new Class[]{EtlPipelineConfig.class}, config);
+        (DataSource) invokePrivate(pipeline, "createDataSource",
+            new Class[]{EtlPipelineConfig.class, boolean.class}, config, false);
     assertNotNull(ds);
   }
 
@@ -782,7 +783,8 @@ public class EtlPipelineDeepCoverageTest4 {
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     DataSource ds =
-        (DataSource) invokePrivate(pipeline, "createDataSource", new Class[]{EtlPipelineConfig.class}, config);
+        (DataSource) invokePrivate(pipeline, "createDataSource",
+            new Class[]{EtlPipelineConfig.class, boolean.class}, config, false);
     assertNull(ds);
   }
 
@@ -802,7 +804,8 @@ public class EtlPipelineDeepCoverageTest4 {
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     DataSource ds =
-        (DataSource) invokePrivate(pipeline, "createDataSource", new Class[]{EtlPipelineConfig.class}, config);
+        (DataSource) invokePrivate(pipeline, "createDataSource",
+            new Class[]{EtlPipelineConfig.class, boolean.class}, config, false);
     assertNotNull(ds);
   }
 

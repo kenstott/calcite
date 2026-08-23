@@ -761,9 +761,10 @@ public class EtlPipelineDeepCoverageTest3 {
         .materialize(MaterializeConfig.builder().output(MaterializeOutputConfig.builder().build()).build())
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    assertNull(m.invoke(pipeline, config));
+    assertNull(m.invoke(pipeline, config, false));
   }
 
   @Test void testCreateDataSource_constants() throws Exception {
@@ -777,9 +778,10 @@ public class EtlPipelineDeepCoverageTest3 {
         .materialize(MaterializeConfig.builder().output(MaterializeOutputConfig.builder().build()).build())
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    DataSource ds = (DataSource) m.invoke(pipeline, config);
+    DataSource ds = (DataSource) m.invoke(pipeline, config, false);
     assertNotNull(ds);
     assertEquals("constants", ds.getType());
   }
@@ -794,17 +796,19 @@ public class EtlPipelineDeepCoverageTest3 {
         .materialize(MaterializeConfig.builder().output(MaterializeOutputConfig.builder().build()).build())
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    assertNotNull(m.invoke(pipeline, config));
+    assertNotNull(m.invoke(pipeline, config, false));
   }
 
   @Test void testCreateDataSource_httpDefault() throws Exception {
     EtlPipelineConfig config = createHttpConfig("h", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline = new EtlPipeline(config, mockStorage(), tempDir.toString());
-    Method m = EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+    Method m =
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    assertNotNull(m.invoke(pipeline, config));
+    assertNotNull(m.invoke(pipeline, config, false));
   }
 
   // ===== execute() fast-path scenarios =====

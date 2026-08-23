@@ -1145,9 +1145,9 @@ public class EtlPipelineDeepCoverageTest5 {
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, sourceSp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
     Method m =
-        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    DataSource ds = (DataSource) m.invoke(pipeline, config);
+    DataSource ds = (DataSource) m.invoke(pipeline, config, false);
     assertNotNull(ds);
   }
 
@@ -1166,9 +1166,9 @@ public class EtlPipelineDeepCoverageTest5 {
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op/dir");
     Method m =
-        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    DataSource ds = (DataSource) m.invoke(pipeline, config);
+    DataSource ds = (DataSource) m.invoke(pipeline, config, false);
     assertNotNull(ds);
   }
 
@@ -1185,9 +1185,9 @@ public class EtlPipelineDeepCoverageTest5 {
         .build();
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
     Method m =
-        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
-    DataSource ds = (DataSource) m.invoke(pipeline, config);
+    DataSource ds = (DataSource) m.invoke(pipeline, config, false);
     assertNotNull(ds);
     assertEquals("http", ds.getType());
   }

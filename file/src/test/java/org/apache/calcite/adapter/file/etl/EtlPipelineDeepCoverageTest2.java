@@ -951,10 +951,10 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     method.setAccessible(true);
 
-    DataSource ds = (DataSource) method.invoke(pipeline, config);
+    DataSource ds = (DataSource) method.invoke(pipeline, config, false);
     assertNotNull(ds);
     assertEquals("constants", ds.getType());
   }
@@ -977,11 +977,11 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     method.setAccessible(true);
 
     // Document sources return null (they use DocumentETLProcessor which writes files directly)
-    DataSource ds = (DataSource) method.invoke(pipeline, config);
+    DataSource ds = (DataSource) method.invoke(pipeline, config, false);
     assertEquals(null, ds);
   }
 
@@ -990,10 +990,10 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipeline pipeline = new EtlPipeline(config, storageProvider, tempDir.toString());
 
     Method method =
-        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class);
+        EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     method.setAccessible(true);
 
-    DataSource ds = (DataSource) method.invoke(pipeline, config);
+    DataSource ds = (DataSource) method.invoke(pipeline, config, false);
     assertNotNull(ds);
     assertEquals("http", ds.getType());
   }
