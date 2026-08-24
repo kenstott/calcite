@@ -178,6 +178,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private long totalCommittedFiles = 0;
   /** Iceberg partition column names — buffer key uses only these, not all dimension variables. */
   private Set<String> icebergPartitionColumns = Collections.emptySet();
+  /**
+   * partition.valueSource: maps a partition column to the row field its TRUE value comes from,
+   * when that differs from the column's own name. Consulted per-row in {@link #processBatch} so a
+   * column already present among the batch's dimension variables (e.g. a fetch loop's nominal
+   * {@code month}) still fans out correctly when a row's own field (e.g. {@code generation_month})
+   * disagrees — see the general per-row partitioning block for why this matters.
+   */
+  private Map<String, String> partitionValueSource = Collections.emptyMap();
   private boolean overwritePartitions = false;
 
   /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
@@ -287,6 +295,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (partConfig != null && partConfig.getColumns() != null && !partConfig.getColumns().isEmpty()) {
       this.icebergPartitionColumns = new HashSet<String>(partConfig.getColumns());
       LOGGER.info("Iceberg partition columns for buffer key: {}", icebergPartitionColumns);
+    }
+    if (partConfig != null && partConfig.getValueSource() != null
+        && !partConfig.getValueSource().isEmpty()) {
+      this.partitionValueSource = partConfig.getValueSource();
+      LOGGER.info("Partition valueSource for per-row fan-out: {}", partitionValueSource);
     }
 
     // Build catalog configuration
@@ -946,9 +959,17 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // partition — a flat table unqueryable by that column (e.g. cyber_threat.ioc_urls put all
     // 77k rows into first_seen=null). This is the date/string analogue of the effectiveYearField
     // per-row fan-out above; year-partitioned tables return earlier and never reach this.
+    //
+    // A column also fans out per-row when partition.valueSource names it explicitly, even though
+    // resolvedVars DOES carry a value for it — that batch-level value is only the fetch loop's
+    // nominal dimension, which can disagree with individual rows' true value. EIA's electricity
+    // generation API returns overlapping month data across adjacent fetches: a batch nominally
+    // fetched for month=6 can contain rows whose real generation_month is 5, and without this,
+    // both fetches' overlapping rows land under the wrong single partition, duplicating data
+    // across two partitions instead of each row landing in the one it actually belongs to.
     List<String> perRowPartitionCols = new ArrayList<String>();
     for (String pc : icebergPartitionColumns) {
-      if (!resolvedVars.containsKey(pc)) {
+      if (!resolvedVars.containsKey(pc) || partitionValueSource.containsKey(pc)) {
         perRowPartitionCols.add(pc);
       }
     }
@@ -961,8 +982,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         Map<String, String> rowVars = new LinkedHashMap<String, String>(resolvedVars);
         StringBuilder keyBuilder = new StringBuilder();
         for (String pc : perRowPartitionCols) {
-          Object val = getValueCaseInsensitive(row, pc);
-          String sval = val != null ? String.valueOf(val) : null;
+          String rowField = partitionValueSource.containsKey(pc) ? partitionValueSource.get(pc) : pc;
+          Object val = getValueCaseInsensitive(row, rowField);
+          String sval = val != null ? String.valueOf(val) : resolvedVars.get(pc);
           rowVars.put(pc, sval);
           keyBuilder.append(pc).append('=').append(sval).append('|');
         }

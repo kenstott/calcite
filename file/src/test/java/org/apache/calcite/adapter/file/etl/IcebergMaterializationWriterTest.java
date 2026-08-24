@@ -693,6 +693,12 @@ public class IcebergMaterializationWriterTest {
 
   private MaterializeConfig buildIcebergConfig(File warehouseDir, String tableName,
       List<ColumnConfig> columns, List<String> partitionColumns) {
+    return buildIcebergConfig(warehouseDir, tableName, columns, partitionColumns, null);
+  }
+
+  private MaterializeConfig buildIcebergConfig(File warehouseDir, String tableName,
+      List<ColumnConfig> columns, List<String> partitionColumns,
+      Map<String, String> partitionValueSource) {
 
     MaterializeConfig.Builder builder = MaterializeConfig.builder()
         .enabled(true)
@@ -708,11 +714,87 @@ public class IcebergMaterializationWriterTest {
             .build());
 
     if (!partitionColumns.isEmpty()) {
-      builder.partition(MaterializePartitionConfig.builder()
-          .columns(partitionColumns)
-          .build());
+      MaterializePartitionConfig.Builder partitionBuilder = MaterializePartitionConfig.builder()
+          .columns(partitionColumns);
+      if (partitionValueSource != null && !partitionValueSource.isEmpty()) {
+        partitionBuilder.valueSource(partitionValueSource);
+      }
+      builder.partition(partitionBuilder.build());
     }
 
     return builder.build();
+  }
+
+  /**
+   * FILE-<issue>: partition.valueSource must fan a batch out per-row even when the batch's own
+   * partition variables already carry a (nominal) value for that column. Reproduces the EIA
+   * electricity generation bug: a batch is nominally fetched for month=6, but two of its rows'
+   * true reporting month (generation_month, the row field valueSource maps "month" to) is 5 —
+   * without the fix both rows land under month=6 alongside the real month=6 rows, duplicating
+   * data across what should be two disjoint partitions.
+   */
+  @Test public void testValueSourceFansOutPerRowEvenWhenBatchHasNominalValue() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_valuesource");
+    warehouseDir.mkdirs();
+    writer =
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+
+    List<String> partitionColumns = Arrays.asList("month");
+    MaterializeConfig config =
+        buildIcebergConfig(
+            warehouseDir, "test_valuesource_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("generation_month", "INTEGER"),
+            createColumnConfig("month", "INTEGER")),
+        partitionColumns,
+        Collections.singletonMap("month", "generation_month"));
+
+    writer.initialize(config);
+
+    // One batch, nominally fetched for month=6, but containing rows whose true
+    // generation_month is 5 (the overlap EIA's API returns across adjacent fetches).
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row1 = new HashMap<String, Object>();
+    row1.put("id", 1);
+    row1.put("generation_month", 5);
+    rows.add(row1);
+
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("id", 2);
+    row2.put("generation_month", 6);
+    rows.add(row2);
+
+    Map<String, String> partitionVars = new HashMap<String, String>();
+    partitionVars.put("month", "6");
+    writer.writeBatch(rows.iterator(), partitionVars);
+    writer.commit();
+
+    assertEquals(2, writer.getTotalRowsWritten(), "Should have written both rows");
+
+    String tableLocation = writer.getTableLocation();
+    String dataDir = tableLocation.replaceFirst("^file:", "") + "/data";
+    Set<String> partitionDirs = new HashSet<String>();
+    collectPartitionDirNames(new File(dataDir), partitionDirs);
+
+    assertTrue(partitionDirs.contains("month=5"),
+        "Row with generation_month=5 must land in the month=5 partition, not month=6: "
+            + partitionDirs);
+    assertTrue(partitionDirs.contains("month=6"),
+        "Row with generation_month=6 must land in the month=6 partition: " + partitionDirs);
+  }
+
+  private void collectPartitionDirNames(File dir, Set<String> names) {
+    File[] children = dir.listFiles();
+    if (children == null) {
+      return;
+    }
+    for (File child : children) {
+      if (child.isDirectory()) {
+        if (child.getName().startsWith("month=")) {
+          names.add(child.getName());
+        }
+        collectPartitionDirNames(child, names);
+      }
+    }
   }
 }
