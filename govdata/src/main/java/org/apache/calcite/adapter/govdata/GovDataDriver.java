@@ -32,6 +32,7 @@ import java.util.Properties;
  * <ul>
  *   <li>lex = ORACLE (unless overridden)</li>
  *   <li>unquotedCasing = TO_LOWER (unless overridden)</li>
+ *   <li>conformance.raggedUnionTypesToVarying = true (unless overridden)</li>
  *   <li>Automatic model configuration based on data source</li>
  *   <li>Support for connection parameters</li>
  * </ul>
@@ -134,6 +135,15 @@ public class GovDataDriver extends Driver {
     if (!govDataInfo.containsKey("fun")) {
       govDataInfo.setProperty("fun", "standard,postgresql,spatial");
       LOGGER.debug("Using default fun=standard,postgresql,spatial");
+    }
+    // Without this, a VALUES row constructor with ragged-width string literals types its
+    // column as CHAR(n) (n = widest literal) and blank-pads every shorter one, so an equi-join
+    // against a VARCHAR column silently drops every row except the literals tied for widest.
+    // CAST(... AS VARCHAR) does not fix it (the padding is already baked into the value); this
+    // widens ragged VALUES/UNION columns to VARCHAR at the type-derivation stage instead.
+    if (!govDataInfo.containsKey("conformance.raggedUnionTypesToVarying")) {
+      govDataInfo.setProperty("conformance.raggedUnionTypesToVarying", "true");
+      LOGGER.debug("Using default conformance.raggedUnionTypesToVarying=true");
     }
 
     try {
