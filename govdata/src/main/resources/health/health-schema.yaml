@@ -2000,6 +2000,1954 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_wonder_cancer_incidence
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      United States Cancer Statistics (USCS) invasive + in situ cancer incidence by state
+      and year, 1999-2022, from CDC WONDER database D205. State-level grouping is confirmed
+      to work through the WONDER XML API (unlike mortality/natality, USCS is not a National
+      Vital Statistics System database and is not subject to that API's location-grouping
+      restriction). No cancer data exists elsewhere in govdata.
+    columns:
+      - name: year
+        comment: "Data year of diagnosis, 1999-2022"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "State of residence at diagnosis"
+        type: VARCHAR
+        nullable: true
+      - name: state_fips
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: cases
+        comment: "Invasive + in situ cancer incidence case count, all sites combined"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_cancer_incidence"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D205"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D205.V1</value></parameter>
+          <parameter><name>B_2</name><value>D205.V2</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>M_1</name><value>D205.M1</value></parameter>
+          <parameter><name>M_2</name><value>D205.M2</value></parameter>
+          <parameter><name>O_PR</name><value>false</value></parameter>
+          <parameter><name>O_V11_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_cancer</name><value>D205.V8</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D205.V2</value></parameter>
+          <parameter><name>O_precision</name><value>1</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_stdpop</name><value>201</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>V_D205.V1</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V10</name><value>0</value></parameter>
+          <parameter><name>V_D205.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V2</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V3</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V6</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V8</name><value>*All*</value></parameter>
+          <parameter><name>V_D205.V9</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D205</value></parameter>
+          <parameter><name>dataset_id</name><value>D205</value></parameter>
+          <parameter><name>dataset_label</name><value>United States and Puerto Rico Cancer Statistics, 1999-2022 Incidence</value></parameter>
+          <parameter><name>dataset_vintage_latest</name><value>Cancer Incidence</value></parameter>
+          <parameter><name>finder-stage-D205.V11</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderCancerIncidenceResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_cancer_incidence
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_std_morbidity
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      Sexually Transmitted Disease Morbidity (reported case counts) by state, year, and
+      disease, 1984-2014, from CDC WONDER database D127. CDC WONDER stopped updating this
+      database after 2014 — it is a historical archive, not a live surveillance feed; current
+      STI surveillance is published outside WONDER (e.g. NCHHSTP AtlasPlus). No STI data
+      exists elsewhere in govdata.
+    columns:
+      - name: year
+        comment: "Data year, 1984-2014 (CDC WONDER's STD Morbidity database was not updated past 2014; current STI surveillance lives outside WONDER, e.g. NCHHSTP AtlasPlus)"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "Reporting state/jurisdiction"
+        type: VARCHAR
+        nullable: true
+      - name: state_fips
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: disease
+        comment: "Disease category name — a rollup hierarchy (e.g. Total Syphilis is the parent of Primary and Secondary Syphilis), not a flat list; see disease_hierarchy_level"
+        type: VARCHAR
+        nullable: true
+      - name: disease_hierarchy_level
+        comment: "Depth of this disease row in the rollup hierarchy (1=top-level disease e.g. Gonorrhea/Total Syphilis; 2/3=descendants e.g. Primary and Secondary Syphilis, Primary Syphilis). Filter to one level before summing cases — parent and child rows overlap and double-count if summed together."
+        type: VARCHAR
+        nullable: true
+      - name: cases
+        comment: "Reported case count"
+        type: VARCHAR
+        nullable: true
+      - name: population
+        comment: "Population denominator used for the rate"
+        type: VARCHAR
+        nullable: true
+      - name: rate_per_100k
+        comment: "Cases per 100,000 population"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_std_morbidity"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D127"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D127.V1</value></parameter>
+          <parameter><name>B_2</name><value>D127.V2</value></parameter>
+          <parameter><name>B_3</name><value>D127.V3</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D127.V5</name><value>*All*</value></parameter>
+          <parameter><name>F_D127.V6</name><value>*All*</value></parameter>
+          <parameter><name>F_D127.V7</name><value>*All*</value></parameter>
+          <parameter><name>M_1</name><value>D127.M1</value></parameter>
+          <parameter><name>M_2</name><value>D127.M2</value></parameter>
+          <parameter><name>M_2</name><value>D127.M2</value></parameter>
+          <parameter><name>M_3</name><value>D127.M3</value></parameter>
+          <parameter><name>M_3</name><value>D127.M3</value></parameter>
+          <parameter><name>O_V5_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V6_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V7_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D127.V2</value></parameter>
+          <parameter><name>O_precision</name><value>2</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>V_D127.V1</name><value>*All*</value></parameter>
+          <parameter><name>V_D127.V2</name><value>*All*</value></parameter>
+          <parameter><name>V_D127.V3</name><value>*All*</value></parameter>
+          <parameter><name>V_D127.V4</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D127</value></parameter>
+          <parameter><name>dataset_id</name><value>D127</value></parameter>
+          <parameter><name>dataset_label</name><value>Sexually Transmitted Disease Morbidity, 1984-2014</value></parameter>
+          <parameter><name>dataset_vintage_latest</name><value>STD</value></parameter>
+          <parameter><name>finder-stage-D127.V5</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D127.V6</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D127.V7</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderStdMorbidityResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_std_morbidity
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_tb
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      Tuberculosis case counts by state and year, 1993-2024, from CDC WONDER's Online
+      Tuberculosis Information System (OTIS), database D209. No TB data exists elsewhere in
+      govdata.
+    columns:
+      - name: year
+        comment: "Data year, 1993-2024"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "State of residence at diagnosis"
+        type: VARCHAR
+        nullable: true
+      - name: state_fips
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: cases
+        comment: "Tuberculosis case count"
+        type: VARCHAR
+        nullable: true
+      - name: pct_of_total
+        comment: "This row's cases as a percent of the grand total across the full result set (not just this state or year) — a WONDER-computed convenience field, not independently meaningful per row"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_tb"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D209"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D209.V20</value></parameter>
+          <parameter><name>B_2</name><value>D209.V22</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>M_1</name><value>D209.M1</value></parameter>
+          <parameter><name>M_2</name><value>D209.M2</value></parameter>
+          <parameter><name>O_age</name><value>D209.V1</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_precision</name><value>2</value></parameter>
+          <parameter><name>O_race</name><value>D209.V16</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>V_D209.V1</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V10</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V11</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V14</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V15</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V16</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V17</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V18</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V19</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V2</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V21</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V22</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V24</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V25</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V26</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V27</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V29</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V3</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V30</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V31</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V6</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V8</name><value>*All*</value></parameter>
+          <parameter><name>V_D209.V9</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D209</value></parameter>
+          <parameter><name>dataset_id</name><value>D209</value></parameter>
+          <parameter><name>dataset_label</name><value>OTIS TB Data 1993-2024</value></parameter>
+          <parameter><name>dataset_vintage_latest</name><value>TB</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderTbResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_tb
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_natality
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      National annual live birth counts, 2016-2024, from the NVSS Natality (expanded)
+      database via CDC WONDER, database D149. National-only: CDC WONDER's API explicitly
+      rejects grouping or limiting National Vital Statistics System data (mortality,
+      natality) by any location field, even though the interactive web UI offers it — this
+      is a documented CDC WONDER API policy, not a gap in this table. No births/fertility
+      data exists elsewhere in govdata.
+    columns:
+      - name: year
+        comment: "Birth year, 2016-2024 (expanded Natality dataset)"
+        type: VARCHAR
+        nullable: true
+      - name: births
+        comment: "Live birth count, national total (CDC WONDER's API rejects sub-national location grouping for National Vital Statistics System data — this table is national-only by design, not an omission)"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_natality"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D149"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D149.V20</value></parameter>
+          <parameter><name>B_2</name><value>*None*</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D149.V21</name><value>*All*</value></parameter>
+          <parameter><name>F_D149.V22</name><value>*All*</value></parameter>
+          <parameter><name>F_D149.V37</name><value>*All*</value></parameter>
+          <parameter><name>I_D149.V21</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D149.V22</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D149.V37</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>M_002</name><value>D149.M002</value></parameter>
+          <parameter><name>O_V21_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V22_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V37_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_age</name><value>D149.V1</value></parameter>
+          <parameter><name>O_apgar10</name><value>D149.V113</value></parameter>
+          <parameter><name>O_apgar5</name><value>D149.V111</value></parameter>
+          <parameter><name>O_cig_before</name><value>D149.V143</value></parameter>
+          <parameter><name>O_cig_trim1</name><value>D149.V144</value></parameter>
+          <parameter><name>O_cig_trim2</name><value>D149.V145</value></parameter>
+          <parameter><name>O_cig_trim3</name><value>D149.V146</value></parameter>
+          <parameter><name>O_delivery</name><value>D149.V101</value></parameter>
+          <parameter><name>O_f_ethnicity</name><value>D149.V53</value></parameter>
+          <parameter><name>O_frace</name><value>D149.V54</value></parameter>
+          <parameter><name>O_gestation</name><value>D149.V23</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D149.V21</value></parameter>
+          <parameter><name>O_m_ethnicity</name><value>D149.V43</value></parameter>
+          <parameter><name>O_oc-sect1-request</name><value></value></parameter>
+          <parameter><name>O_oe_gestation</name><value>D149.V33</value></parameter>
+          <parameter><name>O_pay</name><value>D149.V110</value></parameter>
+          <parameter><name>O_place</name><value>D149.V45</value></parameter>
+          <parameter><name>O_precision</name><value>2</value></parameter>
+          <parameter><name>O_prenatal</name><value>D149.V63</value></parameter>
+          <parameter><name>O_prenatal2</name><value>D149.V65</value></parameter>
+          <parameter><name>O_race</name><value>D149.V42</value></parameter>
+          <parameter><name>O_rate_per</name><value>1000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>O_urban</name><value>D149.V154</value></parameter>
+          <parameter><name>O_weight</name><value>D149.V9</value></parameter>
+          <parameter><name>V_D149.V1</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V10</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V100</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V101</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V102</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V103</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V104</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V105</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V106</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V107</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V108</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V109</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V110</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V111</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V112</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V113</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V114</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V115</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V116</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V117</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V118</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V119</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V120</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V121</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V122</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V123</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V124</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V125</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V126</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V127</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V128</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V129</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V130</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V131</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V132</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V133</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V134</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V135</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V136</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V137</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V138</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V139</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V140</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V141</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V142</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V143</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V144</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V145</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V146</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V147</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V149</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V150</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V151</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V152</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V153</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V154</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V155</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V156</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V157</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V158</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V159</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V16</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V17</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V18</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V23</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V24</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V25</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V26</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V27</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V28</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V29</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V3</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V30</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V31</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V32</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V33</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V34</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V35</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V38</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V39</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V41</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V42</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V43</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V44</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V45</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V46</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V47</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V48</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V49</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V50</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V51</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V52</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V53</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V54</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V55</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V56</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V57</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V58</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V59</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V6</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V60</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V61</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V62</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V63</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V64</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V65</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V66</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V70</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V71</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V73</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V74</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V75</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V76</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V77</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V78</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V79</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V8</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V80</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V81</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V82</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V83</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V84</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V85</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V86</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V87</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V88</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V89</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V9</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V90</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V91</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V92</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V93</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V94</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V95</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V96</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V97</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V98</name><value>*All*</value></parameter>
+          <parameter><name>V_D149.V99</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D149</value></parameter>
+          <parameter><name>dataset_id</name><value>D149</value></parameter>
+          <parameter><name>dataset_label</name><value>Natality, 2016-2024 expanded</value></parameter>
+          <parameter><name>dataset_vintage</name><value>2024</value></parameter>
+          <parameter><name>finder-stage-D149.V21</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D149.V22</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D149.V37</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderNatalityResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_natality
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_cause_of_death
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      National deaths by year and ICD-10 sub-chapter cause-of-death category, 1999-2020,
+      from the NVSS Underlying Cause of Death database via CDC WONDER, database D76.
+      National-only for the same CDC WONDER API location-grouping policy documented on
+      cdc_wonder_natality. Finer cause-of-death granularity than the existing state-level
+      113-cause cdc_mortality table (which comes from a different source, data.cdc.gov/
+      Socrata, not CDC WONDER) — complements rather than duplicates it.
+    columns:
+      - name: year
+        comment: "Data year, 1999-2020"
+        type: VARCHAR
+        nullable: true
+      - name: icd_subchapter
+        comment: "ICD-10 sub-chapter cause-of-death category name"
+        type: VARCHAR
+        nullable: true
+      - name: icd_subchapter_code
+        comment: "ICD-10 sub-chapter code range, e.g. A00-A09"
+        type: VARCHAR
+        nullable: true
+      - name: deaths
+        comment: "Death count, national total (CDC WONDER's API rejects sub-national location grouping for National Vital Statistics System data — this table is national-only by design, not an omission)"
+        type: VARCHAR
+        nullable: true
+      - name: population
+        comment: "National population denominator for the crude rate"
+        type: VARCHAR
+        nullable: true
+      - name: crude_rate
+        comment: "Deaths per 100,000 population, national"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_cause_of_death"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D76"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D76.V1-level1</value></parameter>
+          <parameter><name>B_2</name><value>D76.V2-level2</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D76.V10</name><value>*All*</value></parameter>
+          <parameter><name>F_D76.V2</name><value>*All*</value></parameter>
+          <parameter><name>F_D76.V25</name><value>*All*</value></parameter>
+          <parameter><name>F_D76.V27</name><value>*All*</value></parameter>
+          <parameter><name>F_D76.V9</name><value>*All*</value></parameter>
+          <parameter><name>I_D76.V10</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D76.V2</name><value>*All* (All Causes of Death)</value></parameter>
+          <parameter><name>I_D76.V25</name><value>All Causes of Death</value></parameter>
+          <parameter><name>I_D76.V27</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D76.V9</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>M_1</name><value>D76.M1</value></parameter>
+          <parameter><name>M_2</name><value>D76.M2</value></parameter>
+          <parameter><name>M_2</name><value>D76.M2</value></parameter>
+          <parameter><name>M_3</name><value>D76.M3</value></parameter>
+          <parameter><name>M_3</name><value>D76.M3</value></parameter>
+          <parameter><name>O_V10_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V1_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V25_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V27_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V2_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V9_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_aar</name><value>aar_none</value></parameter>
+          <parameter><name>O_aar_pop</name><value>0000</value></parameter>
+          <parameter><name>O_age</name><value>D76.V5</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D76.V9</value></parameter>
+          <parameter><name>O_oc-sect1-request</name><value></value></parameter>
+          <parameter><name>O_precision</name><value>1</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>O_ucd</name><value>D76.V2</value></parameter>
+          <parameter><name>O_urban</name><value>D76.V19</value></parameter>
+          <parameter><name>VM_D76.M6_D76.V17</name><value>*All*</value></parameter>
+          <parameter><name>VM_D76.M6_D76.V7</name><value>*All*</value></parameter>
+          <parameter><name>VM_D76.M6_D76.V8</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V11</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V17</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V19</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V21</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V22</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V23</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V24</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V51</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V52</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V6</name><value>00</value></parameter>
+          <parameter><name>V_D76.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D76.V8</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D76</value></parameter>
+          <parameter><name>dataset_id</name><value>D76</value></parameter>
+          <parameter><name>dataset_label</name><value>Underlying Cause of Death, 1999-2020</value></parameter>
+          <parameter><name>dataset_vintage</name><value>2020</value></parameter>
+          <parameter><name>finder-stage-D76.V1</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D76.V10</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D76.V2</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D76.V25</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D76.V27</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D76.V9</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderCauseOfDeathResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_cause_of_death
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+  - name: cdc_wonder_cause_of_death_2018_2024
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      National deaths by year and ICD-10 sub-chapter cause-of-death category, 2018-2024,
+      from the NVSS Underlying Cause of Death (Single Race) database via CDC WONDER,
+      database D158 — the post-2020 continuation of cdc_wonder_cause_of_death (D76, frozen
+      at 1999-2020). Same national-only restriction as D76 (confirmed live: the WONDER API
+      rejects location grouping, including County even though the interactive web UI offers
+      it, for every vintage of this NVSS database). Overlaps D76 for 2018-2020 by design —
+      see the cdc_wonder_cause_of_death_1999_2024 view, which picks D158 for 2018+ and D76
+      for earlier years to give one non-overlapping 1999-2024 series.
+    columns:
+      - name: year
+        comment: "Data year, 2018-2024"
+        type: VARCHAR
+        nullable: true
+      - name: icd_subchapter
+        comment: "ICD-10 sub-chapter cause-of-death category name"
+        type: VARCHAR
+        nullable: true
+      - name: icd_subchapter_code
+        comment: "ICD-10 sub-chapter code range, e.g. A00-A09"
+        type: VARCHAR
+        nullable: true
+      - name: deaths
+        comment: "Death count, national total (CDC WONDER's API rejects sub-national location grouping for National Vital Statistics System data — this table is national-only by design, not an omission)"
+        type: VARCHAR
+        nullable: true
+      - name: population
+        comment: "National population denominator for the crude rate"
+        type: VARCHAR
+        nullable: true
+      - name: crude_rate
+        comment: "Deaths per 100,000 population, national"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_cause_of_death_2018_2024"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D158"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D158.V1-level1</value></parameter>
+          <parameter><name>B_2</name><value>D158.V2-level2</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D158.V10</name><value>*All*</value></parameter>
+          <parameter><name>F_D158.V2</name><value>*All*</value></parameter>
+          <parameter><name>F_D158.V25</name><value>*All*</value></parameter>
+          <parameter><name>F_D158.V27</name><value>*All*</value></parameter>
+          <parameter><name>F_D158.V30</name><value>*All*</value></parameter>
+          <parameter><name>F_D158.V31</name><value>*All*</value></parameter>
+          <parameter><name>F_D158.V9</name><value>*All*</value></parameter>
+          <parameter><name>I_D158.V10</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D158.V2</name><value>*All* (All Causes of Death)</value></parameter>
+          <parameter><name>I_D158.V25</name><value>All Causes of Death</value></parameter>
+          <parameter><name>I_D158.V27</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D158.V30</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D158.V31</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D158.V9</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>M_1</name><value>D158.M1</value></parameter>
+          <parameter><name>M_2</name><value>D158.M2</value></parameter>
+          <parameter><name>M_2</name><value>D158.M2</value></parameter>
+          <parameter><name>M_3</name><value>D158.M3</value></parameter>
+          <parameter><name>M_3</name><value>D158.M3</value></parameter>
+          <parameter><name>O_V10_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V1_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V25_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V27_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V2_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V30_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V31_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V9_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_aar</name><value>aar_none</value></parameter>
+          <parameter><name>O_aar_pop</name><value>0000</value></parameter>
+          <parameter><name>O_age</name><value>D158.V5</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D158.V9</value></parameter>
+          <parameter><name>O_oc-sect1-request</name><value></value></parameter>
+          <parameter><name>O_precision</name><value>1</value></parameter>
+          <parameter><name>O_race</name><value>D158.V42</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>O_ucd</name><value>D158.V2</value></parameter>
+          <parameter><name>O_urban</name><value>D158.V19</value></parameter>
+          <parameter><name>VM_D158.M6_D158.V17</name><value>*All*</value></parameter>
+          <parameter><name>VM_D158.M6_D158.V42</name><value>*All*</value></parameter>
+          <parameter><name>VM_D158.M6_D158.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V11</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V17</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V18</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V19</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V21</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V22</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V23</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V24</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V42</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V43</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V44</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V45</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V51</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V52</name><value>*All*</value></parameter>
+          <parameter><name>V_D158.V6</name><value>00</value></parameter>
+          <parameter><name>V_D158.V7</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D158</value></parameter>
+          <parameter><name>dataset_id</name><value>D158</value></parameter>
+          <parameter><name>dataset_label</name><value>Underlying Cause of Death, 2018-2024, Single Race</value></parameter>
+          <parameter><name>dataset_vintage</name><value>2024</value></parameter>
+          <parameter><name>finder-stage-D158.V1</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V10</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V2</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V25</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V27</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V30</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V31</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D158.V9</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderCauseOfDeathResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_cause_of_death_2018_2024
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_county_overdose_deaths
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
+    comment: >
+      Provisional 12-month-ending drug overdose death counts by county of residence, from CDC's
+      Vital Statistics Rapid Release (VSRR) program. Currently updated (not a frozen historical
+      archive). County-level drug overdose mortality is NOT obtainable from CDC WONDER — its API
+      rejects location grouping for National Vital Statistics System mortality data even though
+      the interactive web UI offers it (confirmed live) — so this Socrata feed is the only public
+      source for this grain. Counts of 1-9 are suppressed for privacy (see footnote).
+    columns:
+      - name: data_as_of
+        comment: "Date this provisional data snapshot was generated"
+        type: VARCHAR
+        nullable: true
+      - name: year
+        comment: "12-month-ending period's year"
+        type: VARCHAR
+        nullable: true
+      - name: month
+        comment: "12-month-ending period's month (numeric)"
+        type: VARCHAR
+        nullable: true
+      - name: st_abbrev
+        comment: "State postal abbreviation"
+        type: VARCHAR
+        nullable: true
+      - name: state_name
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+      - name: countyname
+        comment: "County name (decedent's county of residence)"
+        type: VARCHAR
+        nullable: true
+      - name: fips
+        comment: "Combined state+county FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: statefips
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: countyfips
+        comment: "County FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: provisional_drug_overdose
+        comment: "Provisional 12-month-ending drug overdose death count for this county"
+        type: VARCHAR
+        nullable: true
+      - name: footnote
+        comment: "Suppression/reliability footnote (e.g. counts under 10 are suppressed for privacy)"
+        type: VARCHAR
+        nullable: true
+      - name: percentage_of_records_pending
+        comment: "Percent of this period's death records still pending investigation/certification — provisional counts rise as pending records finalize"
+        type: VARCHAR
+        nullable: true
+      - name: monthendingdate
+        comment: "Last date of the 12-month-ending window"
+        type: VARCHAR
+        nullable: true
+      - name: start_date
+        comment: "First date of the 12-month-ending window"
+        type: VARCHAR
+        nullable: true
+      - name: end_date
+        comment: "Last date of the 12-month-ending window"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_county_overdose_deaths"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/gb4e-yj24.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_county_overdose_deaths
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_county_injury_mortality
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
+    comment: >
+      County-level death counts and rates for drug overdose, suicide, homicide, and firearm
+      injury, from CDC's Mapping Injury, Overdose, and Violence (MIOV) tool. Both yearly and
+      trailing-twelve-month periods. Currently updated. Complements cdc_county_overdose_deaths
+      with suicide/homicide/firearm categories and both crude and model-smoothed rates. Counts
+      of 1-9 are suppressed for privacy (see count_sup).
+    columns:
+      - name: geoid
+        comment: "County FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: name
+        comment: "County name"
+        type: VARCHAR
+        nullable: true
+      - name: st_geoid
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: st_name
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+      - name: intent
+        comment: "Death category: All_Homicide, All_Suicide, Drug_OD, FA_Deaths (all firearm deaths), FA_Homicide, FA_Suicide"
+        type: VARCHAR
+        nullable: true
+      - name: period
+        comment: "Yearly or trailing-twelve-months reporting period"
+        type: VARCHAR
+        nullable: true
+      - name: count_sup
+        comment: "Death count; suppressed (blank/flagged) when 1-9 deaths in the area for privacy"
+        type: VARCHAR
+        nullable: true
+      - name: rate
+        comment: "Crude death rate per 100,000 population"
+        type: VARCHAR
+        nullable: true
+      - name: rate_m
+        comment: "Model-based (smoothed) death rate per 100,000 population, used when the crude rate is unreliable due to small counts"
+        type: VARCHAR
+        nullable: true
+      - name: rate_m_ci
+        comment: "Confidence interval for the model-based rate"
+        type: VARCHAR
+        nullable: true
+      - name: ttm_date_range
+        comment: "Date range covered when period is trailing-twelve-months"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_county_injury_mortality"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/psx4-wq38.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_county_injury_mortality
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_state_vital_provisional
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
+    comment: >
+      State-level monthly provisional counts of live births, deaths, and infant deaths, from
+      CDC's Vital Statistics Rapid Release (VSRR) program. State-level Natality is NOT obtainable
+      from CDC WONDER — its API rejects location grouping for NVSS data even though the
+      interactive web UI offers it (confirmed live) — so this Socrata feed is the only public
+      source for state-grain birth counts. Also gives state-level all-cause and infant mortality
+      trend, independent of cdc_mortality (data.cdc.gov, different endpoint) and
+      cdc_wonder_cause_of_death (national-only, cause-specific).
+    columns:
+      - name: state
+        comment: "State name, or UNITED STATES for the national total row"
+        type: VARCHAR
+        nullable: true
+      - name: year
+        comment: "Data year"
+        type: VARCHAR
+        nullable: true
+      - name: month
+        comment: "Data month name"
+        type: VARCHAR
+        nullable: true
+      - name: period
+        comment: "Reporting period type (Monthly)"
+        type: VARCHAR
+        nullable: true
+      - name: indicator
+        comment: "Number of Live Births, Number of Deaths, or Number of Infant Deaths"
+        type: VARCHAR
+        nullable: true
+      - name: data_value
+        comment: "Provisional count for this state/year/month/indicator, rounded (nearest thousand for births/deaths, nearest hundred for infant deaths)"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_state_vital_provisional"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/hmz2-vwda.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_state_vital_provisional
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_teen_birth_rates_county
+    # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
+    # this hashes the response body post-fetch to skip the materialize/commit when
+    # unchanged (fails open on a missing prior token).
+    freshness:
+      type: hash
+    comment: >
+      County-level birth rates for females age 15-19, from NCHS. General county-level Natality
+      counts are not publicly available (NCHS's All-County Natality File requires a restricted-
+      access application for privacy reasons), but this teen-birth-rate subset is public.
+    columns:
+      - name: year
+        comment: "Data year"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+      - name: county
+        comment: "County name"
+        type: VARCHAR
+        nullable: true
+      - name: state_fips_code
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: county_fips_code
+        comment: "County FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: combined_fips_code
+        comment: "Combined state+county FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: birth_rate
+        comment: "Birth rate per 1,000 females age 15-19"
+        type: VARCHAR
+        nullable: true
+      - name: lower_confidence_limit
+        comment: "95% confidence interval lower bound"
+        type: VARCHAR
+        nullable: true
+      - name: upper_confidence_limit
+        comment: "95% confidence interval upper bound"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_teen_birth_rates_county"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/3h58-x6cd.json"
+      method: GET
+      parameters:
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_teen_birth_rates_county
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_multiple_cause_of_death
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      National deaths by year and MCD (Multiple Cause of Death) Drug/Alcohol Induced Cause
+      category, 1999-2020, from CDC WONDER database D77. Counts a death if the cause appears
+      anywhere among its up to 20 listed multiple causes, not only as the underlying cause —
+      the standard epidemiological definition for drug overdose mortality surveillance, and
+      the reason this table (unlike cdc_wonder_cause_of_death, which is underlying-cause-only)
+      actually answers an opioid/drug-involvement question. National-only for the same CDC
+      WONDER API location-grouping restriction documented on cdc_wonder_natality.
+    columns:
+      - name: year
+        comment: "Data year"
+        type: VARCHAR
+        nullable: true
+      - name: cause
+        comment: "MCD Drug/Alcohol Induced Cause category, e.g. 'Drug poisonings (overdose) Unintentional (X40-X44)' — the ICD-10 code range is embedded in the label text, not a separate column"
+        type: VARCHAR
+        nullable: true
+      - name: deaths
+        comment: "Death count where this cause appears anywhere among the death's up to 20 listed multiple causes (not just the underlying cause) — the standard epidemiological definition for drug overdose mortality. National total (CDC WONDER's API rejects sub-national location grouping for National Vital Statistics System data — this table is national-only by design, not an omission)"
+        type: VARCHAR
+        nullable: true
+      - name: population
+        comment: "National population denominator for the crude rate"
+        type: VARCHAR
+        nullable: true
+      - name: crude_rate
+        comment: "Deaths per 100,000 population, national"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_multiple_cause_of_death"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D77"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D77.V1-level1</value></parameter>
+          <parameter><name>B_2</name><value>D77.V26-level2</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D77.V10</name><value>*All*</value></parameter>
+          <parameter><name>F_D77.V2</name><value>*All*</value></parameter>
+          <parameter><name>F_D77.V25</name><value>*All*</value></parameter>
+          <parameter><name>F_D77.V27</name><value>*All*</value></parameter>
+          <parameter><name>F_D77.V9</name><value>*All*</value></parameter>
+          <parameter><name>I_D77.V10</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D77.V2</name><value>*All* (All Causes of Death)</value></parameter>
+          <parameter><name>I_D77.V25</name><value>All Causes of Death</value></parameter>
+          <parameter><name>I_D77.V27</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D77.V9</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>L_D77.V15</name><value>*All*</value></parameter>
+          <parameter><name>L_D77.V16</name><value>*All*</value></parameter>
+          <parameter><name>M_1</name><value>D77.M1</value></parameter>
+          <parameter><name>M_2</name><value>D77.M2</value></parameter>
+          <parameter><name>M_2</name><value>D77.M2</value></parameter>
+          <parameter><name>M_3</name><value>D77.M3</value></parameter>
+          <parameter><name>M_3</name><value>D77.M3</value></parameter>
+          <parameter><name>O_V10_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V13_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V15_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V16_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V1_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V25_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V26_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V27_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V2_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V9_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_aar</name><value>aar_none</value></parameter>
+          <parameter><name>O_aar_pop</name><value>0000</value></parameter>
+          <parameter><name>O_age</name><value>D77.V5</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D77.V9</value></parameter>
+          <parameter><name>O_mcd</name><value>D77.V13</value></parameter>
+          <parameter><name>O_oc-sect1-request</name><value></value></parameter>
+          <parameter><name>O_precision</name><value>1</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>O_ucd</name><value>D77.V2</value></parameter>
+          <parameter><name>O_urban</name><value>D77.V19</value></parameter>
+          <parameter><name>VM_D77.M6_D77.V17</name><value>*All*</value></parameter>
+          <parameter><name>VM_D77.M6_D77.V7</name><value>*All*</value></parameter>
+          <parameter><name>VM_D77.M6_D77.V8</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V11</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V13</name><value></value></parameter>
+          <parameter><name>V_D77.V13_AND</name><value></value></parameter>
+          <parameter><name>V_D77.V15</name><value></value></parameter>
+          <parameter><name>V_D77.V15_AND</name><value></value></parameter>
+          <parameter><name>V_D77.V16</name><value></value></parameter>
+          <parameter><name>V_D77.V16_AND</name><value></value></parameter>
+          <parameter><name>V_D77.V17</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V19</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V21</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V22</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V23</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V24</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V26</name><value></value></parameter>
+          <parameter><name>V_D77.V26_AND</name><value></value></parameter>
+          <parameter><name>V_D77.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V51</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V52</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V6</name><value>00</value></parameter>
+          <parameter><name>V_D77.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D77.V8</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D77</value></parameter>
+          <parameter><name>dataset_id</name><value>D77</value></parameter>
+          <parameter><name>dataset_label</name><value>Multiple Cause of Death, 1999-2020</value></parameter>
+          <parameter><name>dataset_vintage</name><value>2020</value></parameter>
+          <parameter><name>finder-stage-D77.V1</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V10</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V13</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V15</name><value></value></parameter>
+          <parameter><name>finder-stage-D77.V16</name><value></value></parameter>
+          <parameter><name>finder-stage-D77.V2</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V25</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V26</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V27</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D77.V9</name><value>codeset</value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderMultipleCauseOfDeathResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_multiple_cause_of_death
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_multiple_cause_of_death_2018_2024
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      National deaths by year and MCD Drug/Alcohol Induced Cause category, 2018-2024, from CDC
+      WONDER database D157 — the post-2020 continuation of cdc_wonder_multiple_cause_of_death
+      (D77, frozen at 1999-2020). Overlaps D77 for 2018-2020 by design — see the
+      cdc_wonder_multiple_cause_of_death_1999_2024 view, which picks D157 for 2018+ and D77 for
+      earlier years to give one non-overlapping 1999-2024 series.
+    columns:
+      - name: year
+        comment: "Data year"
+        type: VARCHAR
+        nullable: true
+      - name: cause
+        comment: "MCD Drug/Alcohol Induced Cause category, e.g. 'Drug poisonings (overdose) Unintentional (X40-X44)' — the ICD-10 code range is embedded in the label text, not a separate column"
+        type: VARCHAR
+        nullable: true
+      - name: deaths
+        comment: "Death count where this cause appears anywhere among the death's up to 20 listed multiple causes (not just the underlying cause) — the standard epidemiological definition for drug overdose mortality. National total (CDC WONDER's API rejects sub-national location grouping for National Vital Statistics System data — this table is national-only by design, not an omission)"
+        type: VARCHAR
+        nullable: true
+      - name: population
+        comment: "National population denominator for the crude rate"
+        type: VARCHAR
+        nullable: true
+      - name: crude_rate
+        comment: "Deaths per 100,000 population, national"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_multiple_cause_of_death_2018_2024"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D157"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D157.V1-level1</value></parameter>
+          <parameter><name>B_2</name><value>D157.V26-level2</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D157.V10</name><value>*All*</value></parameter>
+          <parameter><name>F_D157.V2</name><value>*All*</value></parameter>
+          <parameter><name>F_D157.V25</name><value>*All*</value></parameter>
+          <parameter><name>F_D157.V27</name><value>*All*</value></parameter>
+          <parameter><name>F_D157.V30</name><value>*All*</value></parameter>
+          <parameter><name>F_D157.V31</name><value>*All*</value></parameter>
+          <parameter><name>F_D157.V9</name><value>*All*</value></parameter>
+          <parameter><name>I_D157.V10</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D157.V2</name><value>*All* (All Causes of Death)</value></parameter>
+          <parameter><name>I_D157.V25</name><value>All Causes of Death</value></parameter>
+          <parameter><name>I_D157.V27</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D157.V30</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D157.V31</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>I_D157.V9</name><value>*All* (The United States)</value></parameter>
+          <parameter><name>L_D157.V15</name><value>*All*</value></parameter>
+          <parameter><name>L_D157.V16</name><value>*All*</value></parameter>
+          <parameter><name>M_1</name><value>D157.M1</value></parameter>
+          <parameter><name>M_2</name><value>D157.M2</value></parameter>
+          <parameter><name>M_2</name><value>D157.M2</value></parameter>
+          <parameter><name>M_3</name><value>D157.M3</value></parameter>
+          <parameter><name>M_3</name><value>D157.M3</value></parameter>
+          <parameter><name>O_V10_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V13_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V15_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V16_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V1_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V25_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V26_fmode</name><value>fadv</value></parameter>
+          <parameter><name>O_V27_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V2_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V30_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V31_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V9_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_aar</name><value>aar_none</value></parameter>
+          <parameter><name>O_aar_pop</name><value>0000</value></parameter>
+          <parameter><name>O_age</name><value>D157.V5</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_location</name><value>D157.V9</value></parameter>
+          <parameter><name>O_mcd</name><value>D157.V13</value></parameter>
+          <parameter><name>O_oc-sect1-request</name><value></value></parameter>
+          <parameter><name>O_precision</name><value>1</value></parameter>
+          <parameter><name>O_race</name><value>D157.V42</value></parameter>
+          <parameter><name>O_rate_per</name><value>100000</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>O_ucd</name><value>D157.V2</value></parameter>
+          <parameter><name>O_urban</name><value>D157.V19</value></parameter>
+          <parameter><name>VM_D157.M6_D157.V17</name><value>*All*</value></parameter>
+          <parameter><name>VM_D157.M6_D157.V42</name><value>*All*</value></parameter>
+          <parameter><name>VM_D157.M6_D157.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V11</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V13</name><value></value></parameter>
+          <parameter><name>V_D157.V13_AND</name><value></value></parameter>
+          <parameter><name>V_D157.V15</name><value></value></parameter>
+          <parameter><name>V_D157.V15_AND</name><value></value></parameter>
+          <parameter><name>V_D157.V16</name><value></value></parameter>
+          <parameter><name>V_D157.V16_AND</name><value></value></parameter>
+          <parameter><name>V_D157.V17</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V18</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V19</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V21</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V22</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V23</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V24</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V26</name><value></value></parameter>
+          <parameter><name>V_D157.V26_AND</name><value></value></parameter>
+          <parameter><name>V_D157.V4</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V42</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V43</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V44</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V45</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V51</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V52</name><value>*All*</value></parameter>
+          <parameter><name>V_D157.V6</name><value>00</value></parameter>
+          <parameter><name>V_D157.V7</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D157</value></parameter>
+          <parameter><name>dataset_id</name><value>D157</value></parameter>
+          <parameter><name>dataset_label</name><value>Multiple Cause of Death, 2018-2024, Single Race</value></parameter>
+          <parameter><name>dataset_vintage</name><value>2024</value></parameter>
+          <parameter><name>finder-stage-D157.V1</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V10</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V13</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V15</name><value></value></parameter>
+          <parameter><name>finder-stage-D157.V16</name><value></value></parameter>
+          <parameter><name>finder-stage-D157.V2</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V25</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V26</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V27</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V30</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V31</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D157.V9</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderMultipleCauseOfDeathResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_multiple_cause_of_death_2018_2024
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: cdc_wonder_vaers
+    # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
+    # response body and skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    comment: >
+      Vaccine Adverse Event Reporting System (VAERS) report counts by year reported and
+      state/territory, from CDC WONDER database D8. CAUTION: VAERS is a raw, unverified
+      self-reporting system — reports can be filed by anyone (patients, providers,
+      manufacturers) with minimal validation, a report being present does NOT establish that
+      the vaccine caused the reported event, and the data includes known data-entry errors
+      (e.g. a small number of reports dated before VAERS existed in 1990). Use for signal
+      detection / reporting-volume trends only, never as evidence of causation. Public access
+      to full VAERS detail was expanded May 2025; older third-party WONDER "saved queries" for
+      this database predate that change and are no longer valid — this table's fields were
+      rebuilt against the current form.
+    columns:
+      - name: year
+        comment: "Year the report was received by VAERS (not necessarily the year of vaccination)"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "State/territory of the vaccinated person"
+        type: VARCHAR
+        nullable: true
+      - name: events
+        comment: "Count of VAERS reports (raw report counts, not verified adverse events — see table comment)"
+        type: VARCHAR
+        nullable: true
+      - name: pct_of_total
+        comment: "This row's reports as a percent of the grand total across the full result set (not just this state or year) — a WONDER-computed convenience field, not independently meaningful per row"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_wonder_vaers"
+        type: VARCHAR
+        nullable: false
+    source:
+      type: http
+      url: "https://wonder.cdc.gov/controller/datarequest/D8"
+      method: POST
+      bodyFormat: FORM_URLENCODED
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      body:
+        accept_datause_restrictions: "true"
+        request_xml: |
+          <?xml version='1.0' encoding='utf-8'?>
+          <request-parameters>
+          <parameter><name>accept_datause_restrictions</name><value>true</value></parameter>
+          <parameter><name>B_1</name><value>D8.V16-level1</value></parameter>
+          <parameter><name>B_2</name><value>D8.V12</value></parameter>
+          <parameter><name>B_3</name><value>*None*</value></parameter>
+          <parameter><name>B_4</name><value>*None*</value></parameter>
+          <parameter><name>B_5</name><value>*None*</value></parameter>
+          <parameter><name>F_D8.V13</name><value>*All*</value></parameter>
+          <parameter><name>F_D8.V14</name><value>*All*</value></parameter>
+          <parameter><name>F_D8.V16</name><value>*All*</value></parameter>
+          <parameter><name>F_D8.V17</name><value>*All*</value></parameter>
+          <parameter><name>F_D8.V18</name><value>*All*</value></parameter>
+          <parameter><name>F_D8.V2</name><value>*All*</value></parameter>
+          <parameter><name>F_D8.V3</name><value>*All*</value></parameter>
+          <parameter><name>I_D8.V13</name><value>*All* (All Symptoms)</value></parameter>
+          <parameter><name>I_D8.V14</name><value>*All* (All Vaccine Products)</value></parameter>
+          <parameter><name>I_D8.V16</name><value>*All* (All Dates)</value></parameter>
+          <parameter><name>I_D8.V17</name><value>*All* (All Dates)</value></parameter>
+          <parameter><name>I_D8.V18</name><value>*All* (All Dates)</value></parameter>
+          <parameter><name>I_D8.V2</name><value>*All* (All Dates)</value></parameter>
+          <parameter><name>I_D8.V3</name><value>*All* (All Dates)</value></parameter>
+          <parameter><name>M_1</name><value>D8.M1</value></parameter>
+          <parameter><name>M_2</name><value>D8.M2</value></parameter>
+          <parameter><name>O_V13_fand_htadv</name><value>codes-div-extra2</value></parameter>
+          <parameter><name>O_V13_fand_htreg</name><value>codes-div-extra</value></parameter>
+          <parameter><name>O_V13_fand_sect</name><value>2</value></parameter>
+          <parameter><name>O_V13_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V14_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V16_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V17_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V18_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V2_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_V3_fmode</name><value>freg</value></parameter>
+          <parameter><name>O_javascript</name><value>off</value></parameter>
+          <parameter><name>O_oc-sect1-request</name><value></value></parameter>
+          <parameter><name>O_precision</name><value>2</value></parameter>
+          <parameter><name>O_show_totals</name><value>true</value></parameter>
+          <parameter><name>O_timeout</name><value>600</value></parameter>
+          <parameter><name>V_D8.V1</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V10</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V11</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V12</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V13</name><value></value></parameter>
+          <parameter><name>V_D8.V13_AND2</name><value></value></parameter>
+          <parameter><name>V_D8.V13_AND3</name><value></value></parameter>
+          <parameter><name>V_D8.V13_AND4</name><value></value></parameter>
+          <parameter><name>V_D8.V13_AND5</name><value></value></parameter>
+          <parameter><name>V_D8.V14</name><value></value></parameter>
+          <parameter><name>V_D8.V15</name><value></value></parameter>
+          <parameter><name>V_D8.V16</name><value></value></parameter>
+          <parameter><name>V_D8.V17</name><value></value></parameter>
+          <parameter><name>V_D8.V18</name><value></value></parameter>
+          <parameter><name>V_D8.V19</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V2</name><value></value></parameter>
+          <parameter><name>V_D8.V20</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V22</name><value></value></parameter>
+          <parameter><name>V_D8.V24</name><value></value></parameter>
+          <parameter><name>V_D8.V25</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V26</name><value></value></parameter>
+          <parameter><name>V_D8.V27</name><value></value></parameter>
+          <parameter><name>V_D8.V28</name><value></value></parameter>
+          <parameter><name>V_D8.V29</name><value></value></parameter>
+          <parameter><name>V_D8.V3</name><value></value></parameter>
+          <parameter><name>V_D8.V30</name><value></value></parameter>
+          <parameter><name>V_D8.V31</name><value></value></parameter>
+          <parameter><name>V_D8.V32</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V33</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V5</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V6</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V7</name><value>*All*</value></parameter>
+          <parameter><name>V_D8.V9</name><value>*All*</value></parameter>
+          <parameter><name>action-Send</name><value>Send</value></parameter>
+          <parameter><name>dataset_code</name><value>D8</value></parameter>
+          <parameter><name>dataset_id</name><value>D8</value></parameter>
+          <parameter><name>dataset_label</name><value>The Vaccine Adverse Event Reporting System (VAERS)</value></parameter>
+          <parameter><name>dataset_vintage</name><value>07/31/2026</value></parameter>
+          <parameter><name>finder-stage-D8.V13</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D8.V14</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D8.V16</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D8.V17</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D8.V18</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D8.V2</name><value>codeset</value></parameter>
+          <parameter><name>finder-stage-D8.V3</name><value>codeset</value></parameter>
+          <parameter><name>saved_id</name><value></value></parameter>
+          <parameter><name>stage</name><value>request</value></parameter>
+          </request-parameters>
+      response:
+        format: xml
+      rateLimit:
+        # CDC WONDER enforces a strict 15-second minimum between automated XML API
+        # requests (returns HTTP 429 otherwise) — far stricter than most sources.
+        # requestsPerSecond is parsed as a Java int (HttpSourceConfig.RateLimitConfig),
+        # so it cannot express "less than 1 request/sec" — a fractional value here would
+        # silently truncate to 0 rather than throttling at all. retryBackoffMs is the
+        # actual lever: long enough that even the first retry clears WONDER's 15s floor.
+        requestsPerSecond: 1
+        maxRetries: 5
+        retryBackoffMs: 16000
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcWonderVaersResponseTransformer"
+
+    dimensions:
+      type:
+        - cdc_wonder_vaers
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cms_open_payments
     # Freshness gate: CMS bulk zip on a date-stamped but stable-per-cycle static path.
     # A Last-Modified probe skips the re-download and re-materialize on unchanged runs
@@ -2339,6 +4287,44 @@ partitionedTables:
 # ============================================================================
 
 views:
+
+  # --- CDC WONDER underlying cause of death, unified across vintages --------
+  # D76 (1999-2020) and D158 (2018-2024) overlap for 2018-2020; this view picks D158
+  # for 2018+ (the more current vintage) and D76 only for years D158 doesn't cover, so
+  # summing across the view never double-counts the overlap years.
+  - name: cdc_wonder_cause_of_death_1999_2024
+    comment: >
+      National deaths by year and ICD-10 sub-chapter, 1999-2024 — cdc_wonder_cause_of_death
+      (D76, 1999-2020) unioned with cdc_wonder_cause_of_death_2018_2024 (D158, 2018-2024),
+      preferring D158 for the 2018-2020 years both cover so the combined series never
+      double-counts.
+    sql: >
+      SELECT year, icd_subchapter, icd_subchapter_code, deaths, population, crude_rate
+      FROM cdc_wonder_cause_of_death
+      WHERE CAST(year AS INTEGER) < 2018
+      UNION ALL
+      SELECT year, icd_subchapter, icd_subchapter_code, deaths, population, crude_rate
+      FROM cdc_wonder_cause_of_death_2018_2024
+
+  # --- CDC WONDER multiple cause of death, unified across vintages ----------
+  # D77 (1999-2020) and D157 (2018-2024) overlap for 2018-2020; this view picks D157
+  # for 2018+ (the more current vintage) and D77 only for years D157 doesn't cover, so
+  # summing across the view never double-counts the overlap years.
+  - name: cdc_wonder_multiple_cause_of_death_1999_2024
+    comment: >
+      National deaths by year and MCD Drug/Alcohol Induced Cause category, 1999-2024 —
+      cdc_wonder_multiple_cause_of_death (D77, 1999-2020) unioned with
+      cdc_wonder_multiple_cause_of_death_2018_2024 (D157, 2018-2024), preferring D157 for the
+      2018-2020 years both cover so the combined series never double-counts. This is the
+      multiple-cause series (a cause counts if listed anywhere among a death's up to 20 causes)
+      — the standard basis for drug overdose mortality trend analysis.
+    sql: >
+      SELECT year, cause, deaths, population, crude_rate
+      FROM cdc_wonder_multiple_cause_of_death
+      WHERE CAST(year AS INTEGER) < 2018
+      UNION ALL
+      SELECT year, cause, deaths, population, crude_rate
+      FROM cdc_wonder_multiple_cause_of_death_2018_2024
 
   # --- International / UN feed view -----------------------------------------
   # Reads who_gho_indicators; resolves once that table is populated.

@@ -96,7 +96,9 @@ ENDJSON
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
-# Run all 18 health tables, grouped so a single model failure isolates to its group.
+# Run the 18 pre-existing health tables, grouped so a single model failure isolates to its
+# group. Called from both historical and daily — same rationale as every other group here
+# already: each table self-manages its own cadence via freshness:/releaseWindow:.
 run_all_health_tables() {
   run_health_model "health-fda" \
     '"fda_ndc_products", "fda_drug_approvals", "fda_drug_recalls", "fda_adverse_events", "fda_device_recalls"'
@@ -120,6 +122,22 @@ run_all_health_tables() {
     '"ahrf_physician_supply"'
 }
 
+# Daily-only: the 9 CDC WONDER tables and 4 data.cdc.gov Socrata county/state tables are all
+# single raw artifacts (dimensions: type: [<name>] only — no year axis), refreshed in place and
+# gated by freshness: type: hash. There is nothing for a historical run to backfill — running
+# them there would just re-pull the same current snapshot daily already handles, redundantly
+# (and, for the WONDER group, burn through its 15s-per-request budget for no new data). Same
+# rationale as cyber_threat being daily-only in worker-cyber.sh.
+run_daily_only_health_tables() {
+  run_health_model "health-cdc-geo" \
+    '"cdc_county_overdose_deaths", "cdc_county_injury_mortality", "cdc_state_vital_provisional", "cdc_teen_birth_rates_county"'
+
+  # CDC WONDER XML API tables — isolated from health-cdc-geo because WONDER enforces a strict
+  # 15-second minimum between requests (HTTP 429 otherwise), unlike data.cdc.gov Socrata.
+  run_health_model "health-wonder" \
+    '"cdc_wonder_cancer_incidence", "cdc_wonder_std_morbidity", "cdc_wonder_tb", "cdc_wonder_natality", "cdc_wonder_cause_of_death", "cdc_wonder_cause_of_death_2018_2024", "cdc_wonder_multiple_cause_of_death", "cdc_wonder_multiple_cause_of_death_2018_2024", "cdc_wonder_vaers"'
+}
+
 case "$MODE" in
 
   historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
@@ -137,6 +155,7 @@ case "$MODE" in
   daily)
     export GOVDATA_START_YEAR="${INCREMENTAL_YEAR}"
     run_all_health_tables
+    run_daily_only_health_tables
     ;;
 
   *)
