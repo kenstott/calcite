@@ -348,6 +348,7 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: eia_electricity_generation
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year, month]
@@ -1030,9 +1031,11 @@ partitionedTables:
         columns: [type, year, month]
         valueSource:
           year: effective_year
+          month: production_month
       iceberg:
         <<: *iceberg_common
         tableName: eia_fossil_fuel_production
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year, month]
@@ -1573,9 +1576,11 @@ partitionedTables:
         columns: [type, year, month]
         valueSource:
           year: effective_year
+          month: report_month
       iceberg:
         <<: *iceberg_common
         tableName: eia_refinery_operations
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year, month]

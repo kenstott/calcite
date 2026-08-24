@@ -60,6 +60,21 @@ class DatasetTypeTest {
     assertEquals("2024-12-31", enriched.get("period_end"));
   }
 
+  /**
+   * A dataLag-shifted table (e.g. eia_electricity_generation, dataLag: 2) carries both the
+   * raw publish-year {@code year} and the injected {@code effective_year = year - dataLag}
+   * in the same combo. The fetch URL must be built from the DATA year, not the publish year,
+   * or the API gets asked for data 2 years newer than the year it's written under.
+   */
+  @Test void annualBoundsPrefersEffectiveYearOverPublishYear() {
+    Map<String, String> vars = new HashMap<String, String>();
+    vars.put("year", "2026");
+    vars.put("effective_year", "2024");
+    Map<String, String> enriched = EtlPipeline.enrichWithPeriodBounds(vars, "annual");
+    assertEquals("2024-01-01", enriched.get("period_start"));
+    assertEquals("2024-12-31", enriched.get("period_end"));
+  }
+
   @Test void quarterlyBoundsQ1() {
     Map<String, String> vars = new HashMap<String, String>();
     vars.put("year", "2024");

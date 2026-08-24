@@ -3998,7 +3998,8 @@ public class EtlPipeline {
       java.time.LocalDate start = null;
       java.time.LocalDate end = null;
 
-      String yearStr = variables.get("year");
+      String yearStr = variables.containsKey("effective_year")
+          ? variables.get("effective_year") : variables.get("year");
       if (yearStr == null) {
         return variables; // Can't compute without year
       }
