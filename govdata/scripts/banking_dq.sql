@@ -465,7 +465,7 @@ SELECT 'banking', 'consumer_complaints', 'all_null_cols',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/consumer_complaints', allow_moved_paths := true))
-  WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'state', 'product')
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'state_abbr', 'product')
 );
 
 -- T5: all_same_value
@@ -476,7 +476,7 @@ SELECT 'banking', 'consumer_complaints', 'all_same_value',
 FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/consumer_complaints', allow_moved_paths := true))
-  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'state', 'product')
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'state_abbr', 'product')
 );
 
 -- T6: pk_nulls (complaint_id NOT NULL)
