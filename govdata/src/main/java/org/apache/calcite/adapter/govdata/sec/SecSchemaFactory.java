@@ -182,7 +182,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     return "/sec/sec-schema.yaml";
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for SEC schema");
 
     // Initialize storage provider from operand if available
@@ -1649,7 +1649,40 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           rowFilter.split(",").length);
     }
 
-    return IcebergMaterializer.MaterializationConfig.builder()
+    // Post-commit maintenance/compaction knobs, from this table's materialize.iceberg block.
+    // Left unset (class defaults apply) when the table declares no iceberg block at all.
+    Map<String, Object> icebergConfig = materializeConfig != null
+        ? (Map<String, Object>) materializeConfig.get("iceberg") : null;
+    IcebergMaterializer.MaterializationConfig.Builder builder =
+        IcebergMaterializer.MaterializationConfig.builder();
+    if (icebergConfig != null) {
+      Object runCompactionObj = icebergConfig.get("runCompaction");
+      if (runCompactionObj instanceof Boolean) {
+        builder.runCompaction((Boolean) runCompactionObj);
+      }
+      Object targetSizeObj = icebergConfig.get("compactionTargetFileSizeBytes");
+      if (targetSizeObj instanceof Number) {
+        builder.compactionTargetFileSizeBytes(((Number) targetSizeObj).longValue());
+      }
+      Object minFilesObj = icebergConfig.get("compactionMinFiles");
+      if (minFilesObj instanceof Number) {
+        builder.compactionMinFiles(((Number) minFilesObj).intValue());
+      }
+      Object smallSizeObj = icebergConfig.get("compactionSmallFileSizeBytes");
+      if (smallSizeObj instanceof Number) {
+        builder.compactionSmallFileSizeBytes(((Number) smallSizeObj).longValue());
+      }
+      Object runMaintenanceObj = icebergConfig.get("runMaintenance");
+      if (runMaintenanceObj instanceof Boolean) {
+        builder.runMaintenance((Boolean) runMaintenanceObj);
+      }
+      Object retentionObj = icebergConfig.get("snapshotRetentionDays");
+      if (retentionObj instanceof Number) {
+        builder.snapshotRetentionDays(((Number) retentionObj).intValue());
+      }
+    }
+
+    return builder
         .sourcePattern(sourcePattern)
         .sourceFormat(IcebergMaterializer.SourceFormat.PARQUET)
         .targetTableId(icebergTableName)

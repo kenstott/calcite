@@ -13,7 +13,13 @@ package org.apache.calcite.adapter.govdata;
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.SubSchemaFactory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Interface for government data sub-schema factories.
@@ -82,7 +88,9 @@ public interface GovDataSubSchemaFactory extends SubSchemaFactory {
    * Configure schema-specific hooks on the builder.
    *
    * <p>Called by {@link org.apache.calcite.adapter.file.ModelLifecycleProcessor}
-   * before running ETL. Implementations should register any hooks needed:
+   * before running ETL, via the {@link #configureHooks(FileSchemaBuilder, Map)} default
+   * below, which layers the generic {@code enabledTables} gate ({@link #applyEnabledTablesFilter})
+   * on top after this method registers whatever schema-specific hooks it needs:
    * <ul>
    *   <li>{@link FileSchemaBuilder#resolveDimensions} - Dynamic dimension resolution</li>
    *   <li>{@link FileSchemaBuilder#isEnabled} - Conditional table enablement</li>
@@ -93,5 +101,61 @@ public interface GovDataSubSchemaFactory extends SubSchemaFactory {
    * @param builder The schema builder to configure
    * @param operand Configuration operand from model file
    */
-  @Override void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand);
+  void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand);
+
+  /**
+   * Registers this schema's own hooks ({@link #configureSchemaHooks}), then layers a generic
+   * {@code enabledTables} gate on top for every table the schema's YAML declares
+   * ({@code partitionedTables} + {@code tables}).
+   *
+   * <p>{@code enabledTables} is an optional operand — a list of table names — that scopes a run
+   * to exactly those tables, e.g. for a targeted DQ/backfill run against one or two new tables
+   * instead of the whole schema. Absent or empty means no filtering (every table runs, as
+   * before). Because {@link FileSchemaBuilder#isEnabled} now AND-composes multiple predicates
+   * for the same table rather than overwriting, this applies uniformly whether or not the
+   * schema already has its own bespoke filter (e.g. econ's {@code blsConfig}, fiscal's
+   * {@code enabledSources}) — both must agree for a table to run.
+   *
+   * <p>Implementations should not override this method; override {@link #configureSchemaHooks}
+   * instead. This method is intentionally not {@code default} so every implementor is forced to
+   * go through {@link #configureSchemaHooks} — a factory that still declares its own
+   * {@code configureHooks} would silently skip the generic gate.
+   */
+  @Override default void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+    configureSchemaHooks(builder, operand);
+    applyEnabledTablesFilter(builder, operand);
+  }
+
+  /**
+   * Applies the generic {@code enabledTables} operand (a list of table names) as an
+   * AND-composed {@link FileSchemaBuilder#isEnabled} predicate on every table this schema's
+   * YAML declares. No-op when the operand is absent or empty.
+   */
+  default void applyEnabledTablesFilter(FileSchemaBuilder builder, Map<String, Object> operand) {
+    Object enabledTablesObj = operand.get("enabledTables");
+    if (!(enabledTablesObj instanceof List) || ((List<?>) enabledTablesObj).isEmpty()) {
+      return;
+    }
+    Set<String> enabledTables = new HashSet<>();
+    for (Object o : (List<?>) enabledTablesObj) {
+      if (o != null) {
+        enabledTables.add(String.valueOf(o));
+      }
+    }
+    Logger logger = LoggerFactory.getLogger(getClass());
+    List<Map<String, Object>> tableDefs =
+        GovDataUtils.loadTableDefinitions(getClass(), getSchemaResourceName());
+    int gated = 0;
+    for (Map<String, Object> tableDef : tableDefs) {
+      Object nameObj = tableDef.get("name");
+      if (nameObj == null) {
+        continue;
+      }
+      String tableName = String.valueOf(nameObj);
+      builder.isEnabled(tableName, ctx -> enabledTables.contains(tableName));
+      gated++;
+    }
+    logger.info("enabledTables filter: {} of {} — gated {} tables from {}",
+        enabledTables, tableDefs.size(), gated, getSchemaResourceName());
+  }
 }

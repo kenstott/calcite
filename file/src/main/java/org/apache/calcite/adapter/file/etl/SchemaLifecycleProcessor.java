@@ -1170,7 +1170,10 @@ public class SchemaLifecycleProcessor {
     }
 
     /**
-     * Registers an enabled hook for a specific table.
+     * Registers an enabled hook for a specific table, AND-composed with any predicate already
+     * registered for the same table (e.g. a schema's own source filter plus a generic
+     * enabledTables gate applied on top) rather than overwriting it. A table is enabled only
+     * when every registered predicate returns true.
      *
      * <p>When the predicate returns false, the table is skipped during ETL
      * and excluded from the final schema metadata.
@@ -1180,7 +1183,8 @@ public class SchemaLifecycleProcessor {
      */
     public Builder isEnabled(String tableName,
         java.util.function.Predicate<TableContext> hook) {
-      filterHooks.put(tableName, hook);
+      java.util.function.Predicate<TableContext> existing = filterHooks.get(tableName);
+      filterHooks.put(tableName, existing == null ? hook : existing.and(hook));
       return this;
     }
 

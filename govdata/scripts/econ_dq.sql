@@ -51,6 +51,9 @@ FROM (
   UNION ALL SELECT 'inflation_metrics',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',    allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_cpi',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',         allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'metro_cpi',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',            allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'food_cpi',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',             allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'regional_food_cpi',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',    allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'metro_food_cpi',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'state_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'state_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'metro_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',       allow_moved_paths := true) LIMIT 1) t)
@@ -105,6 +108,9 @@ FROM (
   UNION ALL SELECT 'inflation_metrics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',     allow_moved_paths := true)), 50
   UNION ALL SELECT 'regional_cpi',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',          allow_moved_paths := true)), 80
   UNION ALL SELECT 'metro_cpi',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',             allow_moved_paths := true)), 200
+  UNION ALL SELECT 'food_cpi',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',              allow_moved_paths := true)), 3000  -- 8 series x ~59yr x 12mo bulk file, full history regardless of GOVDATA_START_YEAR
+  UNION ALL SELECT 'regional_food_cpi',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',     allow_moved_paths := true)), 80   -- mirrors regional_cpi: same 4-series API fetch
+  UNION ALL SELECT 'metro_food_cpi',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',        allow_moved_paths := true)), 200  -- mirrors metro_cpi: same 20-series API fetch
   UNION ALL SELECT 'state_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',        allow_moved_paths := true)), 19000  -- DQ window = current + 1 lookback year (by design). Within that window ~19.7K rows is the true floor; 20000 was set against a stale assumption. Separate concern under investigation: older years carry far fewer distinct series than the current year (truncated historical series fetch).
   UNION ALL SELECT 'state_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',           allow_moved_paths := true)), 200
   UNION ALL SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 7000  -- BLS rejects nonexistent metro×industry series (HTTP 400); ~7456 valid rows is the real ceiling, not 10000
@@ -148,6 +154,9 @@ SELECT 'employment_statistics'  AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'inflation_metrics'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',      allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_cpi'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',           allow_moved_paths := true) LIMIT 1;
 SELECT 'metro_cpi'              AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',              allow_moved_paths := true) LIMIT 1;
+SELECT 'food_cpi'               AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',               allow_moved_paths := true) LIMIT 1;
+SELECT 'regional_food_cpi'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',      allow_moved_paths := true) LIMIT 1;
+SELECT 'metro_food_cpi'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',         allow_moved_paths := true) LIMIT 1;
 SELECT 'state_industry'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',         allow_moved_paths := true) LIMIT 1;
 SELECT 'state_wages'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',            allow_moved_paths := true) LIMIT 1;
 SELECT 'metro_industry'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',         allow_moved_paths := true) LIMIT 1;
@@ -207,6 +216,27 @@ INSERT INTO dq_results
 SELECT 'econ', 'metro_cpi', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- food_cpi
+INSERT INTO dq_results
+SELECT 'econ', 'food_cpi', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- regional_food_cpi
+INSERT INTO dq_results
+SELECT 'econ', 'regional_food_cpi', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- metro_food_cpi
+INSERT INTO dq_results
+SELECT 'econ', 'metro_food_cpi', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi', allow_moved_paths := true))
 WHERE null_percentage = 100.0;
 
 -- state_industry
@@ -455,6 +485,33 @@ INSERT INTO dq_results
 SELECT 'econ', 'metro_cpi', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
+                          'industry_classification', 'src_line_nbr', 'unit_mult');
+
+-- food_cpi
+INSERT INTO dq_results
+SELECT 'econ', 'food_cpi', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
+                          'industry_classification', 'src_line_nbr', 'unit_mult');
+
+-- regional_food_cpi
+INSERT INTO dq_results
+SELECT 'econ', 'regional_food_cpi', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
+                          'industry_classification', 'src_line_nbr', 'unit_mult');
+
+-- metro_food_cpi
+INSERT INTO dq_results
+SELECT 'econ', 'metro_food_cpi', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
@@ -771,6 +828,32 @@ SELECT
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi', allow_moved_paths := true)
+  WHERE area_code IS NOT NULL AND area_code NOT IN ('0100','0200','0300','0400')
+);
+
+-- food_cpi: Food at Home (CUUR0000SAF11) index value should be > 0
+INSERT INTO dq_results
+SELECT
+  'econ', 'food_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where Food at Home (CUUR0000SAF11) value is <= 0'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi', allow_moved_paths := true)
+  WHERE series = 'CUUR0000SAF11' AND value IS NOT NULL AND value <= 0
+);
+
+-- regional_food_cpi: area_code must be one of the 4 Census region codes
+INSERT INTO dq_results
+SELECT
+  'econ', 'regional_food_cpi', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with area_code not in known Census region codes (0100,0200,0300,0400)'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi', allow_moved_paths := true)
   WHERE area_code IS NOT NULL AND area_code NOT IN ('0100','0200','0300','0400')
 );
 

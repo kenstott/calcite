@@ -1152,8 +1152,28 @@ build_inline_model() {
     extra_json=",${extra_operand}"
   fi
 
-  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s}}]}' \
-    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json"
+  # GOVDATA_TABLES: optional comma-separated table-name override, honored by every schema
+  # arm through this one shared function (rather than each of worker.sh's ~15 case arms
+  # needing its own wiring). Appended LAST so it wins over any schema-computed enabledTables
+  # (e.g. housing/transport/../banking's once-vs-year split) on JSON's last-key-wins duplicate
+  # semantics — an explicit user override always takes priority. Requires the generic
+  # enabledTables gate in GovDataSubSchemaFactory (applyEnabledTablesFilter) to actually filter;
+  # a schema factory that still overrides configureHooks() directly bypasses it.
+  local user_tables_json=""
+  if [ -n "${GOVDATA_TABLES:-}" ]; then
+    local _tbl_json="" _tbl
+    IFS=',' read -ra _tbl_arr <<< "$GOVDATA_TABLES"
+    for _tbl in "${_tbl_arr[@]}"; do
+      _tbl="$(echo "$_tbl" | xargs)"  # trim whitespace
+      [ -n "$_tbl" ] && _tbl_json="${_tbl_json}\"${_tbl}\","
+    done
+    if [ -n "$_tbl_json" ]; then
+      user_tables_json=",\"enabledTables\":[${_tbl_json%,}]"
+    fi
+  fi
+
+  printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s%s}}]}' \
+    "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }
 
 # Run the ETL with a given model file

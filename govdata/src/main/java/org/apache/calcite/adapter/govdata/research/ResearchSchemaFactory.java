@@ -84,7 +84,7 @@ public class ResearchSchemaFactory implements GovDataSubSchemaFactory {
     return Collections.emptyList();
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for RESEARCH schema");
 
     Set<String> enabledSources = parseEnabledSources(operand);

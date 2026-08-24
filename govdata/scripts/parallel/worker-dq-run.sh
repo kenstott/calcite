@@ -66,6 +66,15 @@ while [[ $# -gt 0 ]]; do
       shift
       REBUILD_START_YEAR="${1:?--start-year requires a 4-digit year}"
       ;;
+    --tables)
+      # Scopes this DQ run to a comma-separated table subset instead of the whole schema —
+      # e.g. testing 3 new econ tables without a full 40+ table rebuild. Exported as
+      # GOVDATA_TABLES, honored by build_inline_model (common.sh) for every schema arm
+      # worker.sh dispatches to. Requires the schema's factory to route through
+      # GovDataSubSchemaFactory's generic enabledTables gate (all govdata schemas do).
+      shift
+      export GOVDATA_TABLES="${1:?--tables requires a comma-separated list of table names}"
+      ;;
     *)
       echo "Unknown argument: $1" >&2
       exit 1

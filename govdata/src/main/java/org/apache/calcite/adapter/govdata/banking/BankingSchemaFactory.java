@@ -33,7 +33,7 @@ public class BankingSchemaFactory implements GovDataSubSchemaFactory {
     return "/banking/banking-schema.yaml";
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for BANKING schema");
     // FDIC and CFPB sources are free and unauthenticated — no auth-gating hooks needed.
   }

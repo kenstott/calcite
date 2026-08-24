@@ -45,7 +45,7 @@ public class EconReferenceSchemaFactory implements GovDataSubSchemaFactory {
     return "/econ/econ-reference-schema.yaml";
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for ECON_REFERENCE schema");
     // Reference tables have no special hooks - enablement is controlled via YAML
     // The 'enabled' field in the schema uses variable substitution for API key checks

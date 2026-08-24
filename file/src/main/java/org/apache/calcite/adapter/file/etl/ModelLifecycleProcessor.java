@@ -536,8 +536,15 @@ public class ModelLifecycleProcessor {
       return this;
     }
 
+    /**
+     * Registers an isEnabled predicate for a table, AND-composed with any predicate already
+     * registered for the same table (e.g. a schema's own source filter plus a generic
+     * enabledTables gate applied on top) rather than overwriting it. A table is enabled only
+     * when every registered predicate returns true.
+     */
     public Builder isEnabled(String schemaTable, Predicate<TableContext> hook) {
-      this.filterHooks.put(schemaTable, hook);
+      Predicate<TableContext> existing = this.filterHooks.get(schemaTable);
+      this.filterHooks.put(schemaTable, existing == null ? hook : existing.and(hook));
       return this;
     }
 

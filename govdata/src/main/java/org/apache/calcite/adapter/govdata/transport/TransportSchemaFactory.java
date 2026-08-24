@@ -81,7 +81,7 @@ public class TransportSchemaFactory implements GovDataSubSchemaFactory {
     return Collections.emptyList();
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     Set<String> enabledSources = parseEnabledSources(operand);
     if (enabledSources == null) {
       return;

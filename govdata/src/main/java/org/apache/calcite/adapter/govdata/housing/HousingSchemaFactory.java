@@ -81,7 +81,7 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     return Collections.emptyList();
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     Set<String> enabledSources = parseEnabledSources(operand);
     boolean hudTokenPresent = isHudTokenPresent();
     if (!hudTokenPresent) {

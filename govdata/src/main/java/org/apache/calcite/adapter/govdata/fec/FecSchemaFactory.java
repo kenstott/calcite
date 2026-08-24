@@ -46,7 +46,7 @@ public class FecSchemaFactory implements GovDataSubSchemaFactory {
     return "/fec/fec-schema.yaml";
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for FEC schema");
     // FEC uses standard CSV/pipe-delimited bulk downloads — no special hooks needed
   }

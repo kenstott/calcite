@@ -60,7 +60,7 @@ public class CftcSchemaFactory implements GovDataSubSchemaFactory {
     return Collections.emptyList();
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     // No source filtering — cftc_trades is the single table covering all asset classes
     // via the asset_class partition dimension.
   }

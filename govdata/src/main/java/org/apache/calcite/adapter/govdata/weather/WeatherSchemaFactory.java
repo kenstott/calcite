@@ -79,7 +79,7 @@ public class WeatherSchemaFactory implements GovDataSubSchemaFactory {
     return Collections.emptyList();
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder,
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder,
       Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for WEATHER schema");
 

@@ -35,7 +35,7 @@ public class EduSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   @Override
-  public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for EDU schema");
   }
 }

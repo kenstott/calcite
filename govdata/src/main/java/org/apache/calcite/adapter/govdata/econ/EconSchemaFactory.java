@@ -45,6 +45,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
   private static final Set<String> BLS_TABLES =
       new HashSet<>(
           Arrays.asList("employment_statistics", "inflation_metrics", "regional_cpi", "metro_cpi",
+      "food_cpi", "regional_food_cpi", "metro_food_cpi",
       "state_industry", "state_wages", "metro_industry", "metro_wages",
       "county_qcew", "county_wages", "jolts_regional", "jolts_state", "jolts_industry",
       "wage_growth", "regional_employment"));
@@ -77,7 +78,7 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
     return Collections.singletonList("econ_reference");
   }
 
-  @Override public void configureHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
+  @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for ECON schema");
 
     // Parse filtering configuration

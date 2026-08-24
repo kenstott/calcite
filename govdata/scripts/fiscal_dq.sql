@@ -368,6 +368,45 @@ SELECT 'fiscal', 'ssa_benefits_by_geography', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/ssa_benefits_by_geography', allow_moved_paths := true) WHERE county_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: snap_benefits_by_geography (USDA FNA; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_benefits_by_geography', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_benefits_by_geography', 'T2_row_count',
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END, n, 20000, 'Expected >=20000 state-year-month rows (FY1989-present x 56 geographies x ~13 rows/year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_benefits_by_geography', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true))
+    -- month is legitimately null on every Total (fiscal-year rollup) row, not a data defect
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'month')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_benefits_by_geography', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_benefits_by_geography', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true) WHERE state_fips IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: ssa_benefits_by_geography_acs (Census ACS derived; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
