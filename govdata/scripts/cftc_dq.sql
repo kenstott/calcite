@@ -279,6 +279,125 @@ FROM (
 ) t;
 
 -- ============================================================================
+-- cot_disaggregated_futures: CFTC public Socrata weekly positioning report
+--   (a different CFTC dataset from cftc_trades — DTCC OTC swaps vs. futures COT)
+-- ============================================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'cftc' AS schema,
+  'cot_disaggregated_futures' AS tbl,
+  'existence' AS test,
+  CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END AS status,
+  CAST(n AS VARCHAR) AS value,
+  '1'                AS threshold,
+  CASE WHEN n > 0 THEN 'table is readable'
+       ELSE 'table returned 0 rows — may not yet be ingested' END AS detail
+FROM (
+  SELECT (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true) LIMIT 1) t) AS n
+) src;
+
+-- T2: row_count — ~13k rows/year (weekly x ~250 tracked markets); a single default
+-- DQ year should clear a low floor even with GOVDATA_DQ sampling in effect elsewhere.
+INSERT INTO dq_results
+SELECT
+  'cftc'                       AS schema,
+  'cot_disaggregated_futures'  AS tbl,
+  'row_count'                  AS test,
+  CASE WHEN n >= 1000 THEN 'pass'
+       WHEN n >= 100  THEN 'warn'
+       ELSE 'fail' END AS status,
+  CAST(n AS VARCHAR) AS value,
+  '1000'             AS threshold,
+  'Total disaggregated futures-only COT rows across the ingested year range' AS detail
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true)
+) t;
+
+-- T3: sample
+SELECT
+  'cftc'                      AS schema,
+  'cot_disaggregated_futures' AS tbl,
+  'sample'                    AS test,
+  report_date,
+  contract_market_name,
+  cftc_contract_market_code,
+  open_interest_all,
+  money_manager_long_all,
+  money_manager_short_all
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true)
+LIMIT 3;
+
+-- T4: all-null columns (excludes partition columns type/year)
+INSERT INTO dq_results
+WITH totals AS (
+  SELECT COUNT(*) AS total_rows
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true)
+),
+null_counts AS (
+  SELECT
+    SUM(CASE WHEN report_date                IS NULL THEN 1 ELSE 0 END) AS n_report_date,
+    SUM(CASE WHEN cftc_contract_market_code   IS NULL THEN 1 ELSE 0 END) AS n_market_code,
+    SUM(CASE WHEN open_interest_all           IS NULL THEN 1 ELSE 0 END) AS n_open_interest
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true)
+)
+SELECT
+  'cftc'                       AS schema,
+  'cot_disaggregated_futures'  AS tbl,
+  'all_null_cols'              AS test,
+  CASE WHEN
+    n_report_date  = totals.total_rows OR
+    n_market_code  = totals.total_rows OR
+    n_open_interest = totals.total_rows
+  THEN 'warn' ELSE 'pass' END AS status,
+  '0' AS value,
+  '0' AS threshold,
+  CASE WHEN n_report_date = totals.total_rows    THEN 'report_date is 100% NULL'
+       WHEN n_market_code = totals.total_rows    THEN 'cftc_contract_market_code is 100% NULL'
+       WHEN n_open_interest = totals.total_rows  THEN 'open_interest_all is 100% NULL'
+       ELSE 'core columns populated' END AS detail
+FROM null_counts, totals;
+
+-- T6: pk_nulls (report_date, cftc_contract_market_code)
+INSERT INTO dq_results
+SELECT
+  'cftc'                      AS schema,
+  'cot_disaggregated_futures' AS tbl,
+  'pk_nulls'                  AS test,
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END AS status,
+  CAST(n AS VARCHAR) AS value,
+  '0'                AS threshold,
+  CASE WHEN n = 0 THEN 'report_date/cftc_contract_market_code: no NULLs'
+       ELSE CONCAT(n, ' rows with NULL report_date or cftc_contract_market_code') END AS detail
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true)
+  WHERE report_date IS NULL OR cftc_contract_market_code IS NULL
+) t;
+
+-- T7: pk_duplicates — (report_date, cftc_contract_market_code) must be unique
+INSERT INTO dq_results
+SELECT
+  'cftc'                      AS schema,
+  'cot_disaggregated_futures' AS tbl,
+  'pk_duplicates'             AS test,
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END AS status,
+  CAST(n AS VARCHAR) AS value,
+  '0'                AS threshold,
+  CASE WHEN n = 0 THEN 'no duplicate (report_date, cftc_contract_market_code) pairs'
+       ELSE CONCAT(n, ' duplicate (report_date, cftc_contract_market_code) pairs') END AS detail
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT report_date, cftc_contract_market_code, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/cftc/cot_disaggregated_futures', allow_moved_paths := true)
+    GROUP BY report_date, cftc_contract_market_code
+    HAVING COUNT(*) > 1
+  ) d
+) t;
+
+-- ============================================================================
 -- Final result output
 -- ============================================================================
 

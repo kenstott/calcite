@@ -1136,6 +1136,225 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # COT DISAGGREGATED FUTURES-ONLY — CFTC public Socrata (delta by year, JSON)
+  # ---------------------------------------------------------------------------
+  - name: cot_disaggregated_futures
+    # Freshness gate: Socrata SODA JSON query API has no meaningful Last-Modified, so this
+    # hashes the response body post-fetch to skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    pattern: "type=cot_disaggregated_futures/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      CFTC Commitments of Traders — Disaggregated Futures-Only report. Weekly (Tuesday)
+      open interest and long/short/spread positions by trader category — producer/
+      merchant, swap dealer, managed money, other reportables, and nonreportables — one
+      row per (report_date, contract market). A different CFTC dataset from cftc_trades
+      (DTCC GTR OTC swap dissemination): this is the futures-market positioning report,
+      sourced directly from CFTC's own public Socrata endpoint (resource 72hh-3qpy), not
+      DTCC. Series starts 2006-06-13 — the true start of the Disaggregated report, not a
+      fetch limit (the Legacy COT report, a different resource, goes back to 1986).
+      Source: publicreporting.cftc.gov/resource/72hh-3qpy.json.
+
+    dimensions:
+      type:
+        - cot_disaggregated_futures
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2006}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        minYear: 2006
+        dataLag: 0
+
+    columns:
+      - name: report_date
+        type: date
+        nullable: false
+        expression: 'TRY_CAST(src."report_date_as_yyyy_mm_dd" AS DATE)'
+        comment: Tuesday report date
+      - name: report_week
+        type: string
+        nullable: true
+        expression: 'src."yyyy_report_week_ww"'
+      - name: market_and_exchange_name
+        type: string
+        nullable: true
+        expression: 'src."market_and_exchange_names"'
+      - name: contract_market_name
+        type: string
+        nullable: true
+        expression: 'src."contract_market_name"'
+      - name: cftc_contract_market_code
+        type: string
+        nullable: false
+        expression: 'src."cftc_contract_market_code"'
+        comment: Contract market code — PK component
+      - name: cftc_market_code
+        type: string
+        nullable: true
+        expression: 'src."cftc_market_code"'
+      - name: cftc_region_code
+        type: string
+        nullable: true
+        expression: 'src."cftc_region_code"'
+      - name: cftc_commodity_code
+        type: string
+        nullable: true
+        expression: 'src."cftc_commodity_code"'
+      - name: commodity_name
+        type: string
+        nullable: true
+        expression: 'src."commodity_name"'
+      - name: commodity
+        type: string
+        nullable: true
+        expression: 'src."commodity"'
+      - name: commodity_subgroup_name
+        type: string
+        nullable: true
+        expression: 'src."commodity_subgroup_name"'
+      - name: commodity_group_name
+        type: string
+        nullable: true
+        expression: 'src."commodity_group_name"'
+      - name: contract_units
+        type: string
+        nullable: true
+        expression: 'src."contract_units"'
+      - name: open_interest_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."open_interest_all" AS BIGINT)'
+      - name: producer_merchant_long_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."prod_merc_positions_long" AS BIGINT)'
+      - name: producer_merchant_short_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."prod_merc_positions_short" AS BIGINT)'
+      - name: swap_dealer_long_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."swap_positions_long_all" AS BIGINT)'
+      - name: swap_dealer_short_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."swap__positions_short_all" AS BIGINT)'
+      - name: swap_dealer_spread_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."swap__positions_spread_all" AS BIGINT)'
+      - name: money_manager_long_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."m_money_positions_long_all" AS BIGINT)'
+      - name: money_manager_short_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."m_money_positions_short_all" AS BIGINT)'
+      - name: money_manager_spread_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."m_money_positions_spread" AS BIGINT)'
+      - name: other_reportable_long_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."other_rept_positions_long" AS BIGINT)'
+      - name: other_reportable_short_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."other_rept_positions_short" AS BIGINT)'
+      - name: other_reportable_spread_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."other_rept_positions_spread" AS BIGINT)'
+      - name: total_reportable_long_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."tot_rept_positions_long_all" AS BIGINT)'
+      - name: total_reportable_short_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."tot_rept_positions_short" AS BIGINT)'
+      - name: nonreportable_long_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."nonrept_positions_long_all" AS BIGINT)'
+      - name: nonreportable_short_all
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."nonrept_positions_short_all" AS BIGINT)'
+      - name: traders_total_all
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."traders_tot_all" AS INTEGER)'
+      - name: concentration_net_top4_long_pct
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."conc_net_le_4_tdr_long_all" AS DOUBLE)'
+      - name: concentration_net_top4_short_pct
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."conc_net_le_4_tdr_short_all" AS DOUBLE)'
+      - name: concentration_net_top8_long_pct
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."conc_net_le_8_tdr_long_all" AS DOUBLE)'
+      - name: concentration_net_top8_short_pct
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."conc_net_le_8_tdr_short_all" AS DOUBLE)'
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year (partition key)
+
+    constraints:
+      primaryKey: [report_date, cftc_contract_market_code]
+
+    source:
+      type: http
+      # SoQL slices the year partition directly from report_date_as_yyyy_mm_dd; a full
+      # year of weekly disaggregated positions across all tracked markets is well under
+      # Socrata's 50000-row page cap (~13k rows/year), so no OFFSET pagination is needed.
+      url: "https://publicreporting.cftc.gov/resource/72hh-3qpy.json?$where=date_extract_y(report_date_as_yyyy_mm_dd)={year}&$limit=50000&$order=report_date_as_yyyy_mm_dd,cftc_contract_market_code"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cot_disaggregated_futures/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/cftc"
+        tableName: cot_disaggregated_futures
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 views:
 
   - name: rate_swaps
