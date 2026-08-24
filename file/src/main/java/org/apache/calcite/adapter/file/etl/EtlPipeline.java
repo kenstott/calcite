@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /**
  * Orchestrates ETL pipeline execution from HTTP sources to Iceberg or Parquet tables.
@@ -655,9 +656,20 @@ public class EtlPipeline {
       // hash-type is post-download and is handled after the fetch; deferred for now.
       //
       FreshnessConfig freshnessConfig = config.getFreshness();
+      // The pipeline-level probe below is called with an EMPTY variable map (there is no single
+      // "the" partition for a templated source), so a source URL still carrying a {var}
+      // placeholder — e.g. {effective_year} — cannot be substituted and is not a valid URI
+      // (curly braces are illegal URI characters). Probing it always throws, is always caught,
+      // and always falls through to "proceeding with full fetch" — the exact behavior the
+      // per-period gate below documents as the intended no-op for templated URLs. Skip the
+      // attempt entirely for a templated URL rather than log a spurious WARN on every run; the
+      // per-unit probe in processSingleBatch (below) does the real check with the substituted
+      // concrete URL for each fetch unit.
+      boolean sourceUrlIsTemplated = isUrlTemplated(config.getSource(), freshnessConfig);
       if (freshnessConfig != null
           && freshnessConfig.getType() != FreshnessConfig.Type.HASH
-          && dataSource instanceof HttpSource) {
+          && dataSource instanceof HttpSource
+          && !sourceUrlIsTemplated) {
         HttpSource httpSource = (HttpSource) dataSource;
         try {
           HttpSource.ProbeResult probeResult =
@@ -1690,6 +1702,29 @@ public class EtlPipeline {
         }
       }
     }
+  }
+
+  /** Matches a {@code {varName}} dimension-variable placeholder in a URL template. */
+  private static final Pattern URL_TEMPLATE_VAR = Pattern.compile("\\{[^{}]+\\}");
+
+  /**
+   * True when the pipeline-level freshness probe's URL (the effective URL substituted with an
+   * empty variable map — there is no single partition to probe at this scope) would still carry
+   * an unresolved {@code {varName}} placeholder, e.g. {@code {effective_year}}. Curly braces are
+   * not valid URI characters, so probing such a URL always throws; the per-unit probe in
+   * {@code processSingleBatch} is the one that actually checks freshness for a templated source,
+   * using each fetch unit's concrete substituted URL.
+   */
+  private static boolean isUrlTemplated(HttpSourceConfig sourceConfig,
+      FreshnessConfig freshnessConfig) {
+    if (sourceConfig == null) {
+      return false;
+    }
+    String probeUrl = freshnessConfig != null && freshnessConfig.getProbeUrl() != null
+        && !freshnessConfig.getProbeUrl().isEmpty()
+        ? freshnessConfig.getProbeUrl()
+        : sourceConfig.getEffectiveUrl(Collections.<String, String>emptyMap());
+    return probeUrl != null && URL_TEMPLATE_VAR.matcher(probeUrl).find();
   }
 
   /** True when DQ sample mode is active ({@code GOVDATA_DQ=true} as system property or env). */
