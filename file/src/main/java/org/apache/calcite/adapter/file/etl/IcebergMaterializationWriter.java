@@ -1114,12 +1114,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(rows, partVars);
     if (dataFile != null) {
       pendingDataFiles.add(dataFile);
-      if (commitPerPartition) {
+      if (commitPerPartition || overwritePartitions) {
         // Remember every file written for this partition, not just the newest. A partition is
         // committed with replacePartitions, which swaps in exactly the files handed to it — so
         // a second commit for the same partition must carry the earlier files too or it would
         // drop them. Keeping the cumulative list makes re-committing a superset, which is
-        // idempotent.
+        // idempotent. Needed under overwritePartitions regardless of commitPerPartition: a run
+        // large enough to cross COMMIT_FILE_THRESHOLD more than once for the same partition
+        // hits this same replace-drops-earlier-files hazard via the intermediate/final commit
+        // path in commitInChunks, not just the per-partition path below.
         List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(partitionKey);
         if (forPartition == null) {
           forPartition = new ArrayList<org.apache.iceberg.DataFile>();
@@ -1414,12 +1417,25 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private void commitInChunks(List<org.apache.iceberg.DataFile> files) throws IOException {
     int total = files.size();
     if (overwritePartitions) {
+      // replacePartitionsDataFiles fully replaces whatever partitions its files touch — it does
+      // not merge with a prior commit's files for the same partition. A run whose volume crosses
+      // COMMIT_FILE_THRESHOLD more than once (intermediate commit, then another intermediate or
+      // the final commit) would otherwise call this per chunk, each chunk's replace silently
+      // dropping the previous chunk's files for any partition both chunks touched. Committing
+      // every partition's full cumulative file list (tracked in filesByPartition, see
+      // flushPartition) instead of just this call's `files` argument makes every commit a
+      // superset of the table's true current state, so it's correct and idempotent regardless of
+      // how many times or in what grouping a partition gets flushed across the run.
+      List<org.apache.iceberg.DataFile> cumulative = new ArrayList<org.apache.iceberg.DataFile>();
+      for (List<org.apache.iceberg.DataFile> forPartition : filesByPartition.values()) {
+        cumulative.addAll(forPartition);
+      }
       long commitStart = System.currentTimeMillis();
-      tableWriter.replacePartitionsDataFiles(files);
-      totalCommittedFiles += total;
+      tableWriter.replacePartitionsDataFiles(cumulative);
+      totalCommittedFiles = cumulative.size();
       long elapsed = System.currentTimeMillis() - commitStart;
-      LOGGER.info("Replace-partitions committed {} files in {}ms ({} total committed)",
-          total, elapsed, totalCommittedFiles);
+      LOGGER.info("Replace-partitions committed {} files ({} passed to this call) in {}ms "
+          + "({} total committed)", cumulative.size(), total, elapsed, totalCommittedFiles);
       return;
     }
     int chunkSize = COMMIT_FILE_THRESHOLD > 0 ? COMMIT_FILE_THRESHOLD : 1000;
@@ -2653,11 +2669,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Prune superseded metadata.json version files if configured — see
     // IcebergTableWriter#pruneMetadataFiles for why this is a separate knob from the maintenance
     // above (this writer's commit path doesn't honor Iceberg's standard properties for it). An
-    // explicit iceberg.metadataPreviousVersionsMax always wins; otherwise commitPerPartition
-    // tables get DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX automatically, since that's the
-    // setting that makes metadata.json accumulate one-per-partition instead of one-per-run.
+    // explicit iceberg.metadataPreviousVersionsMax always wins; otherwise commitPerPartition OR
+    // overwritePartitions tables get DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX automatically,
+    // since both now commit the cumulative per-partition state (see flushPartition/
+    // commitInChunks) whenever a run crosses COMMIT_FILE_THRESHOLD more than once — the same
+    // metadata.json-accumulates-one-per-partition growth pattern either way.
     int effectiveMetadataMax = icebergConfig != null ? icebergConfig.getMetadataPreviousVersionsMax() : 0;
-    if (effectiveMetadataMax <= 0 && commitPerPartition) {
+    if (effectiveMetadataMax <= 0 && (commitPerPartition || overwritePartitions)) {
       effectiveMetadataMax = DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX;
     }
     if (tableWriter != null && effectiveMetadataMax > 0) {
