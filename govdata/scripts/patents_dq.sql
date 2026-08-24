@@ -129,6 +129,17 @@ SELECT 'patents', 'patent_grants', 'T7_grant_year_coverage',
   n, 2, 'Distinct grant_year values — warn if < 2 (daily worker or PatentsView 2026 release pending)'
 FROM (SELECT COUNT(DISTINCT grant_year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true));
 
+-- T8: patent_id duplication (primaryKey: [patent_id]). Catches the effective_year/dataLag
+-- partition-shift class of bug (a "year=Y" fetch physically landing in a different year's
+-- partition, then appending rather than replacing on repeat writes) and the overwritePartitions
+-- chunked-commit class (a large run's intermediate and final commits each replacing only their
+-- own delta) — both produce exact row multiples on this table's own primary key.
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate patent_id'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT patent_id) AS dups FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: patent_assignees
 -- ─────────────────────────────────────────────────────────────
@@ -484,6 +495,15 @@ SELECT 'patents', 'patent_claims', 'T7_claim_text_not_blank',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true)
       WHERE claim_text IS NOT NULL AND TRIM(claim_text) = '');
 
+-- T8: (patent_id, claim_sequence) duplication (primaryKey: [patent_id, claim_sequence]). See
+-- patent_grants' T8 above for the bug classes this catches.
+INSERT INTO dq_results
+SELECT 'patents', 'patent_claims', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate (patent_id, claim_sequence)'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT (patent_id, claim_sequence)) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_claims', allow_moved_paths := true));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: patent_summaries
 -- ─────────────────────────────────────────────────────────────
@@ -579,6 +599,15 @@ SELECT 'patents', 'patent_summaries', 'T7_summary_text_not_blank',
   bad, 0, 'Rows with non-null summary_text that is empty or whitespace-only'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true)
       WHERE summary_text IS NOT NULL AND TRIM(summary_text) = '');
+
+-- T8: patent_id duplication (primaryKey: [patent_id]). See patent_grants' T8 above for the bug
+-- classes this catches.
+INSERT INTO dq_results
+SELECT 'patents', 'patent_summaries', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate patent_id'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT patent_id) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_summaries', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: trademark_applications
@@ -785,6 +814,48 @@ SELECT 'patents', tbl, 'existence',
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
 
+-- ============================================================================
+-- T8 — primary-key duplication for the 5 tables above (deepening the deliberately-minimal
+-- existence-only block per its own stated intent). Each shares the trademark_case_file dataLag/
+-- valueSource anchor bug's blast radius; this is the check that would catch a recurrence — see
+-- patent_grants' T8 above for the bug classes involved. Per constraints.trademark_* in
+-- patents-schema.yaml.
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_case_file', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate serial_no'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT serial_no) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_case_file', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_owner', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate (serial_no, own_seq)'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT (serial_no, own_seq)) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_owner', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_classification', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate (serial_no, class_id)'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT (serial_no, class_id)) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_classification', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_intl_class', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate (serial_no, intl_class_cd)'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT (serial_no, intl_class_cd)) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_intl_class', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'patents', 'trademark_statement', 'T8_pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Rows sharing a duplicate (serial_no, statement_type_cd)'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT (serial_no, statement_type_cd)) AS dups
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_statement', allow_moved_paths := true));
 
 -- ============================================================================
 -- VIEW: patent_activity_by_county (patent_grants + primary-assignee patent_locations
@@ -814,15 +885,20 @@ FROM (
     AND pl.county_fips IS NOT NULL
 );
 
+-- Composes state_fips || county_fips (PatentsView's native 2-digit + 3-digit decomposed
+-- format) into the standard 5-digit FIPS census.acs_education keys on -- must match the
+-- patent_activity_by_county view's own join expression (patents-schema.yaml) exactly, or this
+-- check silently measures a different (and wrong) join than the one the view actually runs.
 INSERT INTO dq_results
 SELECT 'patents', 'patent_activity_by_county', 'T7_census_education_join_coverage',
   CASE WHEN matched > 0 THEN 'pass' ELSE 'warn' END, matched, 1,
-  'patent_activity_by_county county-years with a matching census.acs_education row (cross-schema join on county_fips+year)'
+  'patent_activity_by_county county-years with a matching census.acs_education row (cross-schema join on state_fips||county_fips + year)'
 FROM (
   SELECT COUNT(*) AS matched
   FROM (
     SELECT
       pg.grant_year,
+      pl.state_fips,
       pl.county_fips
     FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true) pg
     JOIN (
@@ -841,7 +917,7 @@ FROM (
     SELECT "year", county_fips
     FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_education', allow_moved_paths := true)
     WHERE geography = 'county'
-  ) edu ON edu.county_fips = grants.county_fips AND edu."year" = grants.grant_year
+  ) edu ON edu.county_fips = (grants.state_fips || grants.county_fips) AND edu."year" = grants.grant_year
 );
 
 SELECT schema, tbl, test, status, value, threshold, detail
