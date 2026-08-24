@@ -34,12 +34,12 @@ public class CmsHospitalQualityResponseTransformer extends AbstractOpenFdaRespon
     put(row, "hospital_ownership", text(record, "hospital_ownership"));
     put(row, "emergency_services", text(record, "emergency_services"));
     put(row, "overall_rating", text(record, "hospital_overall_rating"));
-    put(row, "mort_measures_better", text(record, "mort_measures_better"));
-    put(row, "mort_measures_worse", text(record, "mort_measures_worse"));
-    put(row, "safety_measures_better", text(record, "safety_measures_better"));
-    put(row, "safety_measures_worse", text(record, "safety_measures_worse"));
-    put(row, "readm_measures_better", text(record, "readm_measures_better"));
-    put(row, "readm_measures_worse", text(record, "readm_measures_worse"));
+    put(row, "mort_measures_better", text(record, "count_of_mort_measures_better"));
+    put(row, "mort_measures_worse", text(record, "count_of_mort_measures_worse"));
+    put(row, "safety_measures_better", text(record, "count_of_safety_measures_better"));
+    put(row, "safety_measures_worse", text(record, "count_of_safety_measures_worse"));
+    put(row, "readm_measures_better", text(record, "count_of_readm_measures_better"));
+    put(row, "readm_measures_worse", text(record, "count_of_readm_measures_worse"));
     put(row, "patient_exp_rating", text(record, "pt_exp_group_measure_count"));
     put(row, "birthing_friendly", text(record, "meets_criteria_for_birthing_friendly_designation"));
     put(row, "type", "cms_hospital_quality");
