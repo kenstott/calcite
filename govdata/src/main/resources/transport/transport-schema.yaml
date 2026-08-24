@@ -145,6 +145,19 @@ dimension_values:
     type: list
     values: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
+  # FHWA publishes the compiled national NBI file for data-year Y around June of that
+  # same year (verified 2026-08-24: 2025allstatesallrecsdel.zip exists, last-modified
+  # 2025-06-16; 2026's equivalent 404s as of this writing). dataLag 1 always requests a
+  # year already published regardless of when in the calendar year the ETL runs, rather
+  # than depending on a releaseMonth gate for a same-year release.
+  nbi_year_range: &nbi_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2018}"
+    minYear: 1992
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+    descending: true
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -2263,6 +2276,247 @@ partitionedTables:
         incrementalTtlDays: 30
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # NBI BRIDGES — FHWA National Bridge Inventory (delta by year, delimited zip)
+  # ---------------------------------------------------------------------------
+  - name: bridges
+    # Freshness gate: FHWA bulk zip per year on a fixed static path. A Last-Modified
+    # probe skips the re-download and re-materialize on unchanged runs (fails open).
+    freshness:
+      type: last_modified
+    pattern: "type=bridges/year=*/*.parquet"
+    partitions: *standard_partitions
+    # Single-fetch bulk table (one national zip per year, dimensions: [type, year] only)
+    # — see the govdata-dq-patterns single-fetch-bulk caveat: dqRowLimit takes the first
+    # N rows of the one stream (rows are grouped by STATE_CODE_001 ascending), not a
+    # representative cross-section. Acceptable for a smoke test; prod ignores the cap.
+    dqRowLimit: 20000
+    comment: >
+      FHWA National Bridge Inventory — one row per bridge on public roads, per annual
+      data-year snapshot. Deck/superstructure/substructure condition ratings (0-9, N),
+      FHWA's own precomputed bridge_condition (Good/Fair/Poor) and lowest_rating summary
+      fields, location, year built/reconstructed, traffic, and improvement-cost fields
+      (bridge/roadway/total, plus year_of_imp) for federal-spending comparisons. The
+      "delimited" national file uses a single-quote text qualifier that this table does
+      not strip (isQuoted only supports RFC4180 double-quote parsing) — a handful of
+      free-text columns (e.g. features_desc, facility_carried) carry literal leading/
+      trailing single quotes; harmless for the numeric/coded columns this table curates.
+      decimal_latitude/decimal_longitude are computed from the source's packed
+      DDMMSS.ss / DDDMMSS.ss fields (Items 16/17) using length-relative substring
+      extraction (minutes/seconds anchored to the end of the string, degrees to
+      whatever remains at the front) rather than fixed character positions — the
+      upstream CSV staging strips a leading zero from purely-numeric columns (e.g.
+      Item 17 "087341348" arrives as "87341348"), which silently shifts a fixed-position
+      split and was caught live producing -873.68 instead of -87.57 for an Alabama
+      bridge; county_code is zero-padded back to 3 digits for the same reason. The raw
+      LAT_016/LONG_017 fields are not carried through.
+      Source: fhwa.dot.gov/bridge/nbi/{year}allstatesallrecsdel.zip (see
+      fhwa.dot.gov/bridge/nbi/ascii.cfm).
+
+    dimensions:
+      type:
+        - bridges
+      year: *nbi_year_range
+
+    columns:
+      - name: state_code
+        type: string
+        nullable: true
+        expression: 'lpad(CAST(TRY_CAST(src."STATE_CODE_001" AS INTEGER) AS VARCHAR), 2, ''0'')'
+        comment: 2-digit NBI/FIPS state code (FK to geo.state_ref)
+      - name: structure_number
+        type: string
+        nullable: false
+        expression: 'src."STRUCTURE_NUMBER_008"'
+        comment: Structure number, unique within state — PK component
+      - name: county_code
+        type: string
+        nullable: true
+        expression: 'lpad(CAST(TRY_CAST(src."COUNTY_CODE_003" AS INTEGER) AS VARCHAR), 3, ''0'')'
+        comment: 3-digit county code component (FK component to geo.counties via state_code+county_code)
+      - name: facility_carried
+        type: string
+        nullable: true
+        expression: 'src."FACILITY_CARRIED_007"'
+      - name: location
+        type: string
+        nullable: true
+        expression: 'src."LOCATION_009"'
+      - name: features_desc
+        type: string
+        nullable: true
+        expression: 'src."FEATURES_DESC_006A"'
+        comment: Feature intersected (waterway, road, railroad, etc.)
+      - name: decimal_latitude
+        type: double
+        nullable: true
+        expression: >-
+          TRY_CAST(SUBSTRING(TRIM(src."LAT_016"), 1, LENGTH(TRIM(src."LAT_016")) - 6) AS DOUBLE)
+          + TRY_CAST(SUBSTRING(TRIM(src."LAT_016"), LENGTH(TRIM(src."LAT_016")) - 5, 2) AS DOUBLE) / 60.0
+          + TRY_CAST(SUBSTRING(TRIM(src."LAT_016"), LENGTH(TRIM(src."LAT_016")) - 3, 4) AS DOUBLE) / 100.0 / 3600.0
+        comment: >-
+          Decoded from packed NBI Item 16 (DDMMSS.ss). Minutes/seconds are taken from the
+          right end of the string rather than a fixed offset: the upstream CSV staging
+          strips a leading zero from purely-numeric columns (confirmed live — Item 17
+          "087341348" arrives as "87341348"), which a fixed-position SUBSTRING misreads
+          as a shifted degrees/minutes/seconds split. Length-relative extraction gives the
+          same correct value whether or not the leading zero survived.
+      - name: decimal_longitude
+        type: double
+        nullable: true
+        expression: >-
+          -1.0 * (TRY_CAST(SUBSTRING(TRIM(src."LONG_017"), 1, LENGTH(TRIM(src."LONG_017")) - 6) AS DOUBLE)
+          + TRY_CAST(SUBSTRING(TRIM(src."LONG_017"), LENGTH(TRIM(src."LONG_017")) - 5, 2) AS DOUBLE) / 60.0
+          + TRY_CAST(SUBSTRING(TRIM(src."LONG_017"), LENGTH(TRIM(src."LONG_017")) - 3, 4) AS DOUBLE) / 100.0 / 3600.0)
+        comment: >-
+          Decoded from packed NBI Item 17 (DDDMMSS.ss); negated (US bridges are West).
+          Length-relative extraction — see decimal_latitude's comment; longitude degrees
+          is normally 3 digits (leading zero for <100°) and is exactly where the upstream
+          leading-zero stripping was caught: a fixed SUBSTRING(1,3) silently read 4 digits
+          of degrees once the zero was gone, producing e.g. -873.68 instead of -87.57 for
+          an Alabama bridge.
+      - name: year_built
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR_BUILT_027" AS INTEGER)'
+      - name: year_reconstructed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR_RECONSTRUCTED_106" AS INTEGER)'
+      - name: traffic_lanes_on
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."TRAFFIC_LANES_ON_028A" AS INTEGER)'
+      - name: avg_daily_traffic
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."ADT_029" AS INTEGER)'
+      - name: year_adt
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR_ADT_030" AS INTEGER)'
+      - name: deck_condition
+        type: string
+        nullable: true
+        expression: 'src."DECK_COND_058"'
+        comment: NBI condition code 0-9 (9=excellent) or N (not applicable)
+      - name: superstructure_condition
+        type: string
+        nullable: true
+        expression: 'src."SUPERSTRUCTURE_COND_059"'
+      - name: substructure_condition
+        type: string
+        nullable: true
+        expression: 'src."SUBSTRUCTURE_COND_060"'
+      - name: culvert_condition
+        type: string
+        nullable: true
+        expression: 'src."CULVERT_COND_062"'
+      - name: structural_eval
+        type: string
+        nullable: true
+        expression: 'src."STRUCTURAL_EVAL_067"'
+      - name: bridge_condition
+        type: string
+        nullable: true
+        expression: 'src."BRIDGE_CONDITION"'
+        comment: FHWA-precomputed summary — G(ood)/F(air)/P(oor)
+      - name: lowest_rating
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."LOWEST_RATING" AS INTEGER)'
+      - name: deck_area_sqm
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."DECK_AREA" AS DOUBLE)'
+      - name: structure_length_m
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."STRUCTURE_LEN_MT_049" AS DOUBLE)'
+      - name: main_unit_spans
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."MAIN_UNIT_SPANS_045" AS INTEGER)'
+      - name: date_of_inspection
+        type: string
+        nullable: true
+        expression: 'src."DATE_OF_INSPECT_090"'
+        comment: MMYYYY per the NBI coding guide
+      - name: inspect_freq_months
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."INSPECT_FREQ_MONTHS_091" AS INTEGER)'
+      - name: bridge_imp_cost_thousands
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."BRIDGE_IMP_COST_094" AS DOUBLE)'
+      - name: roadway_imp_cost_thousands
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ROADWAY_IMP_COST_095" AS DOUBLE)'
+      - name: total_imp_cost_thousands
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."TOTAL_IMP_COST_096" AS DOUBLE)'
+      - name: year_of_imp
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR_OF_IMP_097" AS INTEGER)'
+      - name: owner
+        type: string
+        nullable: true
+        expression: 'src."OWNER_022"'
+      - name: functional_class
+        type: string
+        nullable: true
+        expression: 'src."FUNCTIONAL_CLASS_026"'
+      - name: highway_system
+        type: string
+        nullable: true
+        expression: 'src."HIGHWAY_SYSTEM_104"'
+      - name: scour_critical
+        type: string
+        nullable: true
+        expression: 'src."SCOUR_CRITICAL_113"'
+        comment: Scour vulnerability rating code (safety-critical for waterway crossings)
+
+    source:
+      type: http
+      url: "https://www.fhwa.dot.gov/bridge/nbi/{effective_year}allstatesallrecsdel.zip"
+      method: GET
+      # Single entry per zip (e.g. 2024AllRecordsDelimitedAllStates.txt).
+      extractPattern: "*.txt"
+      response:
+        format: csv
+        hasHeader: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bridges/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: bridges
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2424,6 +2678,14 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_fips]
       - columns: [dest_state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  bridges:
+    primaryKey: [year, state_code, structure_number]
+    foreignKeys:
+      - columns: [state_code]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]

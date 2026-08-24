@@ -349,12 +349,64 @@ WITH counts AS (
   SELECT 'fmcsa_carriers'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/fmcsa_carriers', allow_moved_paths := true) LIMIT 1))
   UNION ALL
   SELECT 'ntsb_aviation_accidents', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/ntsb_aviation_accidents', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
+  SELECT 'bridges'                , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true) LIMIT 1))
 )
 SELECT 'transport', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
 FROM counts;
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: bridges (FHWA NBI; partition cols: type, year; dqRowLimit 20000 — single-fetch
+-- bulk table, so the DQ sample is the first N rows of one year's national file, not a
+-- representative cross-section — see the dqRowLimit comment on the table in the schema)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'bridges', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 bridge rows (DQ-sampled, single fetch)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridges', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridges', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_code or structure_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true) WHERE state_code IS NULL OR structure_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridges', 'T7_condition_code_domain',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0, 'deck_condition values outside 0-9 or N'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true)
+      WHERE deck_condition IS NOT NULL AND NOT regexp_matches(deck_condition, '^[0-9N]$'));
+
+-- Regression guard: decimal_latitude/decimal_longitude decode NBI's packed DDMMSS.ss /
+-- DDDMMSS.ss fields with length-relative substring extraction specifically because a
+-- fixed-position split silently misreads once the upstream CSV staging strips a source
+-- column's leading zero (caught live: -873.68 instead of -87.57 for an Alabama bridge).
+-- Bound to plausible CONUS+territories coordinates. WARN not FAIL: verified live that a
+-- small fraction of implausible values (e.g. LONG_017="865391200" for an Alabama county
+-- bridge, structure 019930) are genuinely bad in NBI's own source data, not a decode bug
+-- — the raw field itself has no valid degrees/minutes/seconds split. ~4/20000 in a DQ
+-- sample (0.02%) is consistent with known NBI location-field QA gaps across state DOT
+-- submissions; a jump far above that ratio would indicate a real regression.
+INSERT INTO dq_results
+SELECT 'transport', 'bridges', 'T7_latlong_plausible',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'decimal_latitude/decimal_longitude outside plausible US range (lat 13-72, lon -180..-64) — expect a small count from source data noise, not zero'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true)
+      WHERE (decimal_latitude IS NOT NULL AND (decimal_latitude < 13 OR decimal_latitude > 72))
+         OR (decimal_longitude IS NOT NULL AND (decimal_longitude < -180 OR decimal_longitude > -64)));
 
 
 SELECT schema, tbl, test, status, value, threshold, detail
