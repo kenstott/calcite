@@ -932,8 +932,15 @@ public class EtlPipeline {
 
           // Skip-if-materialized: if tracker says unprocessed but Iceberg already has
           // the partition data, mark all combos as processed and skip regeneration.
-          if (!existingIcebergPartitions.isEmpty() && !icebergPartitionColumns.isEmpty()
-              && !unprocessedIndices.isEmpty()) {
+          // Only sound when this Iceberg partition key uniquely identifies a single fetch
+          // combo (partCombos.size() == 1) — e.g. one year-snapshot fetch per year partition.
+          // When the Iceberg partition columns are coarser than the fetch dimensions (a
+          // table fans out over additional dimensions, such as state/product, within a
+          // single Iceberg partition), partition *existence* only proves some combo in the
+          // partition was fetched, not that every combo was — so the shortcut must not
+          // apply and per-combo tracking (above) remains the sole authority.
+          if (partCombos.size() == 1 && !existingIcebergPartitions.isEmpty()
+              && !icebergPartitionColumns.isEmpty() && !unprocessedIndices.isEmpty()) {
             // Extract the Iceberg partition key from the first unprocessed combo
             Map<String, String> sampleCombo = partCombos.get(unprocessedIndices.iterator().next());
             Map<String, String> icebergKey = new LinkedHashMap<String, String>();
