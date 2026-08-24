@@ -1481,13 +1481,33 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       try {
         return transformRowsWithDuckDb(rows, columns, partitionVariables);
       } catch (Exception e) {
-        // State the blast radius. DuckDB fails the WHOLE batch on one bad value, and the Java
-        // evaluator below only recognizes a handful of expression shapes — anything else falls
-        // through to null. So a single malformed row can null a column for all N rows here, and
-        // the bare "falling back" wording read as a harmless downgrade rather than data loss.
+        // The Java evaluator below only recognizes a handful of expression shapes — anything
+        // else silently returns null. Falling through unconditionally would write a full table
+        // of nulls for a column whose expression the fallback can never compute, no matter the
+        // row's data — exactly how econ.wage_growth.date (a multi-operator `||` concatenation)
+        // went unnoticed for every year but one: DuckDB, the primary evaluator, handles it fine,
+        // but whatever tripped this batch into the fallback met a matcher with no case for it.
+        // Fail loudly instead of writing wrong data for those columns.
+        List<String> unsupported = new ArrayList<String>();
+        for (ColumnConfig col : columns) {
+          if (col.isComputed() && col.getExpression() != null
+              && !isFallbackExpressionShapeSupported(col.getExpression())) {
+            unsupported.add(col.getName());
+          }
+        }
+        if (!unsupported.isEmpty()) {
+          throw new IllegalStateException(
+              "DuckDB expression evaluation failed for a batch of " + rows.size() + " rows, and "
+                  + "the Java fallback has no supported shape for column(s) " + unsupported
+                  + " — every row in this batch would come back null for those columns, not just "
+                  + "the row that tripped the primary evaluator. Failing the batch instead of "
+                  + "writing wrong data: " + e.getMessage(), e);
+        }
+        // Every computed column's expression IS one the Java evaluator can compute — a single
+        // malformed value tripped the primary path, and the fallback below still nulls only the
+        // field(s) that fail to coerce, not the whole batch.
         LOGGER.warn("DuckDB expression evaluation failed for a batch of {} rows — falling back to "
-            + "the Java evaluator, which nulls any expression it cannot parse for EVERY row in "
-            + "this batch, not just the offending one: {}", rows.size(), e.getMessage());
+            + "the Java evaluator: {}", rows.size(), e.getMessage());
       }
     }
 
@@ -1594,6 +1614,95 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return null;
   }
 
+  /** Pattern: {@code src."FIELDNAME"} or {@code src.FIELDNAME}. Shared with
+   * {@link #isFallbackExpressionShapeSupported(String)} so the shape check and the evaluator
+   * agree on exactly what counts as recognized. */
+  private static final Pattern SRC_FIELD_PATTERN = Pattern.compile("^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
+
+  /** Pattern: a bare field name, e.g. {@code table_name} or {@code "field_name"}. */
+  private static final Pattern BARE_FIELD_PATTERN =
+      Pattern.compile("^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
+
+  /** Pattern: {@code TRY_CAST(src."FIELDNAME" AS TYPE)} or {@code CAST(src."FIELDNAME" AS TYPE)}. */
+  private static final Pattern CAST_PATTERN = Pattern.compile(
+      "^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code CAST(FIELDNAME AS TYPE)} without the {@code src.} prefix. */
+  private static final Pattern BARE_CAST_PATTERN = Pattern.compile(
+      "^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code REPLACE(src."FIELDNAME", 'old', 'new')}. */
+  private static final Pattern REPLACE_PATTERN = Pattern.compile(
+      "^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code TRY_CAST(REPLACE(src."FIELDNAME", 'old', 'new') AS TYPE)}. */
+  private static final Pattern CAST_REPLACE_PATTERN = Pattern.compile(
+      "^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*"
+          + "'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code SUBSTRING(src."FIELDNAME", start, length)}. */
+  private static final Pattern SUBSTRING_PATTERN = Pattern.compile(
+      "^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code RIGHT(src."FIELDNAME", length)}. */
+  private static final Pattern RIGHT_PATTERN = Pattern.compile(
+      "^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code COALESCE(src."FIELD1", src."FIELD2", ...)}. */
+  private static final Pattern COALESCE_PATTERN = Pattern.compile("^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /** Pattern: {@code printf('format', src."FIELD" | FIELD)}. */
+  private static final Pattern PRINTF_PATTERN = Pattern.compile(
+      "^\\s*printf\\s*\\(\\s*'([^']*)'\\s*,\\s*(?:src\\.\"?)?([A-Za-z0-9_]+)\"?\\s*\\)\\s*$",
+      Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Returns whether {@code expr}'s syntax matches any shape {@link #evaluateExpression} knows
+   * how to compute, independent of any row's actual data.
+   *
+   * <p>Used by {@link #transformRows} to tell "this column's value is missing for this
+   * particular row" (a real, expected null — every pattern above already returns null for that
+   * case) apart from "the Java fallback has no idea how to compute this column at all" (every
+   * row in the batch would silently come back null, table-wide, which is exactly how
+   * {@code econ.wage_growth.date}'s multi-operator {@code ||} concatenation expression went
+   * unnoticed for every year but one — DuckDB, the primary evaluator, handles it fine, but
+   * whatever tripped it into the fallback for those batches met a matcher with no case for string
+   * concatenation and got a full table of nulls instead of a loud failure).
+   */
+  private boolean isFallbackExpressionShapeSupported(String expr) {
+    if (expr == null || expr.isEmpty()) {
+      return true;
+    }
+    String dateFn = expr.trim();
+    boolean dateFnParens = dateFn.endsWith("()");
+    if (dateFnParens) {
+      dateFn = dateFn.substring(0, dateFn.length() - 2).trim();
+    }
+    if (dateFn.equalsIgnoreCase("CURRENT_DATE") || dateFn.equalsIgnoreCase("CURRENT_TIMESTAMP")
+        || (dateFnParens && (dateFn.equalsIgnoreCase("today") || dateFn.equalsIgnoreCase("curdate")
+            || dateFn.equalsIgnoreCase("current_date") || dateFn.equalsIgnoreCase("now")
+            || dateFn.equalsIgnoreCase("getdate") || dateFn.equalsIgnoreCase("current_timestamp")))) {
+      return true;
+    }
+    return SRC_FIELD_PATTERN.matcher(expr).matches()
+        || BARE_FIELD_PATTERN.matcher(expr).matches()
+        || CAST_PATTERN.matcher(expr).matches()
+        || BARE_CAST_PATTERN.matcher(expr).matches()
+        || REPLACE_PATTERN.matcher(expr).matches()
+        || CAST_REPLACE_PATTERN.matcher(expr).matches()
+        || SUBSTRING_PATTERN.matcher(expr).matches()
+        || RIGHT_PATTERN.matcher(expr).matches()
+        || COALESCE_PATTERN.matcher(expr).matches()
+        || PRINTF_PATTERN.matcher(expr).matches();
+  }
+
   /**
    * Evaluates a simple SQL expression against a source row.
    *
@@ -1638,18 +1747,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: src."FIELDNAME" or src.FIELDNAME (with src. prefix)
-    Pattern srcFieldPattern =
-        Pattern.compile("^\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*$");
-    Matcher srcFieldMatcher = srcFieldPattern.matcher(expr);
+    Matcher srcFieldMatcher = SRC_FIELD_PATTERN.matcher(expr);
     if (srcFieldMatcher.matches()) {
       String fieldName = srcFieldMatcher.group(1);
       return getValueCaseInsensitive(row, fieldName);
     }
 
     // Pattern: bare field name (without src. prefix) - e.g., "table_name" or "field_name"
-    Pattern bareFieldPattern =
-        Pattern.compile("^\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s*$");
-    Matcher bareFieldMatcher = bareFieldPattern.matcher(expr);
+    Matcher bareFieldMatcher = BARE_FIELD_PATTERN.matcher(expr);
     if (bareFieldMatcher.matches()) {
       String fieldName = bareFieldMatcher.group(1);
       // Only treat as field reference if the field exists in the row
@@ -1662,10 +1767,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: TRY_CAST(src."FIELDNAME" AS TYPE) or CAST(src."FIELDNAME" AS TYPE)
-    Pattern castPattern =
-        Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher castMatcher = castPattern.matcher(expr);
+    Matcher castMatcher = CAST_PATTERN.matcher(expr);
     if (castMatcher.matches()) {
       String fieldName = castMatcher.group(1);
       String targetType = castMatcher.group(2).toUpperCase(Locale.ROOT);
@@ -1674,10 +1776,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: CAST(FIELDNAME AS TYPE) without src. prefix
-    Pattern bareCastPattern =
-        Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*\"?([A-Za-z][A-Za-z0-9_]*)\"?\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher bareCastMatcher = bareCastPattern.matcher(expr);
+    Matcher bareCastMatcher = BARE_CAST_PATTERN.matcher(expr);
     if (bareCastMatcher.matches()) {
       String fieldName = bareCastMatcher.group(1);
       String targetType = bareCastMatcher.group(2).toUpperCase(Locale.ROOT);
@@ -1686,10 +1785,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: REPLACE(src."FIELDNAME", 'old', 'new') - for comma handling in numbers
-    Pattern replacePattern =
-        Pattern.compile("^\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher replaceMatcher = replacePattern.matcher(expr);
+    Matcher replaceMatcher = REPLACE_PATTERN.matcher(expr);
     if (replaceMatcher.matches()) {
       String fieldName = replaceMatcher.group(1);
       String oldStr = replaceMatcher.group(2);
@@ -1702,10 +1798,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: TRY_CAST(REPLACE(src."FIELDNAME", 'old', 'new') AS TYPE)
-    Pattern castReplacePattern =
-        Pattern.compile("^\\s*(?:TRY_)?CAST\\s*\\(\\s*REPLACE\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*'([^']*)'\\s*,\\s*'([^']*)'\\s*\\)\\s+AS\\s+(\\w+)\\s*\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher castReplaceMatcher = castReplacePattern.matcher(expr);
+    Matcher castReplaceMatcher = CAST_REPLACE_PATTERN.matcher(expr);
     if (castReplaceMatcher.matches()) {
       String fieldName = castReplaceMatcher.group(1);
       String oldStr = castReplaceMatcher.group(2);
@@ -1720,10 +1813,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: SUBSTRING(src."FIELDNAME", start, length) - extract substring
-    Pattern substringPattern =
-        Pattern.compile("^\\s*SUBSTRING\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher substringMatcher = substringPattern.matcher(expr);
+    Matcher substringMatcher = SUBSTRING_PATTERN.matcher(expr);
     if (substringMatcher.matches()) {
       String fieldName = substringMatcher.group(1);
       int start = Integer.parseInt(substringMatcher.group(2));
@@ -1742,10 +1832,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: RIGHT(src."FIELDNAME", length) - extract rightmost characters
-    Pattern rightPattern =
-        Pattern.compile("^\\s*RIGHT\\s*\\(\\s*src\\.\"?([A-Za-z0-9_]+)\"?\\s*,\\s*(\\d+)\\s*\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher rightMatcher = rightPattern.matcher(expr);
+    Matcher rightMatcher = RIGHT_PATTERN.matcher(expr);
     if (rightMatcher.matches()) {
       String fieldName = rightMatcher.group(1);
       int length = Integer.parseInt(rightMatcher.group(2));
@@ -1761,10 +1848,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     // Pattern: COALESCE(src."FIELD1", src."FIELD2", ...) - returns first non-null value
-    Pattern coalescePattern =
-        Pattern.compile("^\\s*COALESCE\\s*\\((.+)\\)\\s*$",
-        Pattern.CASE_INSENSITIVE);
-    Matcher coalesceMatcher = coalescePattern.matcher(expr);
+    Matcher coalesceMatcher = COALESCE_PATTERN.matcher(expr);
     if (coalesceMatcher.matches()) {
       String argsStr = coalesceMatcher.group(1);
       // Split by comma, but handle quoted field names
@@ -1783,11 +1867,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     // Pattern: printf('format', src."FIELD" | FIELD) - C-style string formatting
     // DuckDB printf uses C-style format strings identical to Java String.format
-    Pattern printfPattern =
-        Pattern.compile(
-            "^\\s*printf\\s*\\(\\s*'([^']*)'\\s*,\\s*(?:src\\.\"?)?([A-Za-z0-9_]+)\"?\\s*\\)\\s*$",
-            Pattern.CASE_INSENSITIVE);
-    Matcher printfMatcher = printfPattern.matcher(expr);
+    Matcher printfMatcher = PRINTF_PATTERN.matcher(expr);
     if (printfMatcher.matches()) {
       String format = printfMatcher.group(1);
       String fieldName = printfMatcher.group(2);

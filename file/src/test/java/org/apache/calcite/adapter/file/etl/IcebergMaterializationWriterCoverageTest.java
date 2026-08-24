@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -794,6 +795,10 @@ public class IcebergMaterializationWriterCoverageTest {
   }
 
   @Test void testExpressionEvaluationUnrecognized() throws Exception {
+    // DuckDB can't evaluate SOME_UNKNOWN_FUNC either (unknown function), so this batch trips
+    // the Java fallback. Neither evaluator can compute "complex" for any row here, so the write
+    // must fail loudly instead of silently committing a row with "complex" left null — the same
+    // failure mode that let econ.wage_growth.date go unnoticed for 17 of its 18 years.
     IcebergMaterializationWriter writer =
         new IcebergMaterializationWriter(storageProvider, warehousePath, null);
 
@@ -819,8 +824,9 @@ public class IcebergMaterializationWriterCoverageTest {
     row.put("id", 1);
     data.add(row);
 
-    long result = writer.writeBatch(data.iterator(), Collections.<String, String>emptyMap());
-    assertEquals(1, result);
+    Iterator<Map<String, Object>> iterator = data.iterator();
+    Map<String, String> emptyMap = Collections.<String, String>emptyMap();
+    assertThrows(IOException.class, () -> writer.writeBatch(iterator, emptyMap));
   }
 
   // ---- castValue tests (exercised through expressions) ----
