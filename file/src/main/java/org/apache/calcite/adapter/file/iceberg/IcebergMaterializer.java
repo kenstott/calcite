@@ -259,6 +259,20 @@ public class IcebergMaterializer {
     // correction actually lands instead of being silently dropped by the exclude-if-already-
     // present accession dedup. Empty for a normal (non-forced) materialization — the common case.
     private final Set<String> forceAccessions;
+    // Post-commit maintenance/compaction knobs, sourced from the table's schema YAML (materialize
+    // .iceberg block) by the caller. Default to true/on, matching this class's historical
+    // unconditional behavior, so a caller that does not wire these up (or a table config missing
+    // the iceberg block) keeps compacting/expiring exactly as before.
+    private final boolean runCompaction;
+    private final long compactionTargetFileSizeBytes;
+    private final int compactionMinFiles;
+    private final long compactionSmallFileSizeBytes;
+    private final boolean runMaintenance;
+    private final int snapshotRetentionDays;
+    // Column order compaction should sort rewritten files by (e.g. [cik, accession_number]),
+    // sourced from materialize.iceberg.sortOrder. Empty means bin-pack only -- see
+    // IcebergTableWriter#declaredSortOrder.
+    private final List<String> sortOrder;
 
     private MaterializationConfig(Builder builder) {
       this.sourcePattern = builder.sourcePattern;
@@ -292,6 +306,18 @@ public class IcebergMaterializer {
           ? builder.fixedPartitionValues : Collections.<String, String>emptyMap();
       this.forceAccessions = builder.forceAccessions != null
           ? builder.forceAccessions : Collections.<String>emptySet();
+      this.runCompaction = builder.runCompactionSet ? builder.runCompaction : true;
+      this.compactionTargetFileSizeBytes = builder.compactionTargetFileSizeBytes > 0
+          ? builder.compactionTargetFileSizeBytes : 128L * 1024 * 1024; // 128MB default
+      this.compactionMinFiles = builder.compactionMinFiles > 0 ? builder.compactionMinFiles : 10;
+      this.compactionSmallFileSizeBytes = builder.compactionSmallFileSizeBytes > 0
+          ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
+      this.runMaintenance = builder.runMaintenanceSet ? builder.runMaintenance : true;
+      this.snapshotRetentionDays = builder.snapshotRetentionDays > 0
+          ? builder.snapshotRetentionDays : 7;
+      this.sortOrder = builder.sortOrder != null
+          ? Collections.<String>unmodifiableList(new ArrayList<String>(builder.sortOrder))
+          : Collections.<String>emptyList();
     }
 
     public Set<String> getForceAccessions() {
@@ -448,6 +474,47 @@ public class IcebergMaterializer {
       return !incrementalKeys.isEmpty();
     }
 
+    /**
+     * Whether to bin-pack small committed files into fewer, larger ones after a successful
+     * materialization. Sourced from the table's {@code materialize.iceberg.runCompaction} config;
+     * defaults to {@code true} when unset.
+     */
+    public boolean isRunCompaction() {
+      return runCompaction;
+    }
+
+    public long getCompactionTargetFileSizeBytes() {
+      return compactionTargetFileSizeBytes;
+    }
+
+    public int getCompactionMinFiles() {
+      return compactionMinFiles;
+    }
+
+    public long getCompactionSmallFileSizeBytes() {
+      return compactionSmallFileSizeBytes;
+    }
+
+    /**
+     * Whether to expire old snapshots after a successful materialization. Sourced from
+     * {@code materialize.iceberg.runMaintenance}; defaults to {@code true} when unset.
+     */
+    public boolean isRunMaintenance() {
+      return runMaintenance;
+    }
+
+    public int getSnapshotRetentionDays() {
+      return snapshotRetentionDays;
+    }
+
+    /**
+     * Column order compaction should sort rewritten files by (e.g. {@code [cik,
+     * accession_number]}). Empty (the default) means compaction bin-packs without sorting.
+     */
+    public List<String> getSortOrder() {
+      return sortOrder;
+    }
+
     public static Builder builder() {
       return new Builder();
     }
@@ -479,6 +546,15 @@ public class IcebergMaterializer {
       private boolean filePassthrough;
       private Map<String, String> fixedPartitionValues;
       private Set<String> forceAccessions;
+      private boolean runCompaction;
+      private boolean runCompactionSet;
+      private long compactionTargetFileSizeBytes;
+      private int compactionMinFiles;
+      private long compactionSmallFileSizeBytes;
+      private boolean runMaintenance;
+      private boolean runMaintenanceSet;
+      private int snapshotRetentionDays;
+      private List<String> sortOrder;
 
       public Builder sourcePattern(String sourcePattern) {
         this.sourcePattern = sourcePattern;
@@ -631,6 +707,54 @@ public class IcebergMaterializer {
        */
       public Builder dedupIgnoreColumns(List<String> dedupIgnoreColumns) {
         this.dedupIgnoreColumns = dedupIgnoreColumns;
+        return this;
+      }
+
+      /**
+       * Whether to bin-pack small files after a successful materialization. Unset (default)
+       * behaves as {@code true} — see {@link MaterializationConfig#isRunCompaction()}.
+       */
+      public Builder runCompaction(boolean runCompaction) {
+        this.runCompaction = runCompaction;
+        this.runCompactionSet = true;
+        return this;
+      }
+
+      public Builder compactionTargetFileSizeBytes(long compactionTargetFileSizeBytes) {
+        this.compactionTargetFileSizeBytes = compactionTargetFileSizeBytes;
+        return this;
+      }
+
+      public Builder compactionMinFiles(int compactionMinFiles) {
+        this.compactionMinFiles = compactionMinFiles;
+        return this;
+      }
+
+      public Builder compactionSmallFileSizeBytes(long compactionSmallFileSizeBytes) {
+        this.compactionSmallFileSizeBytes = compactionSmallFileSizeBytes;
+        return this;
+      }
+
+      /**
+       * Whether to expire old snapshots after a successful materialization. Unset (default)
+       * behaves as {@code true} — see {@link MaterializationConfig#isRunMaintenance()}.
+       */
+      public Builder runMaintenance(boolean runMaintenance) {
+        this.runMaintenance = runMaintenance;
+        this.runMaintenanceSet = true;
+        return this;
+      }
+
+      public Builder snapshotRetentionDays(int snapshotRetentionDays) {
+        this.snapshotRetentionDays = snapshotRetentionDays;
+        return this;
+      }
+
+      /**
+       * Column order compaction should sort rewritten files by. Unset/empty means bin-pack only.
+       */
+      public Builder sortOrder(List<String> sortOrder) {
+        this.sortOrder = sortOrder;
         return this;
       }
 
@@ -800,6 +924,11 @@ public class IcebergMaterializer {
     }
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
 
+    // Stamp the declared sort order onto the table so compaction (which reads it back off the
+    // table rather than taking it as a compactSmallFiles argument) honours it. No-op when
+    // unchanged or empty -- see IcebergTableWriter#recordDeclaredSortOrder.
+    writer.recordDeclaredSortOrder(config.getSortOrder());
+
     // Forced accessions: delete their existing rows before this batch writes, so the corrected
     // replacement actually lands instead of being silently excluded by getExcludedAccessions'
     // accession-already-present check further down. See IcebergTableWriter#deleteRows.
@@ -860,23 +989,41 @@ public class IcebergMaterializer {
 
     LOGGER.info("Materialization complete: {}", result);
 
-    // Run maintenance and record completion if we actually wrote data
-    if (result.isFullySuccessful() && totalRowsWritten > 0) {
-      writer.runMaintenance(7);  // expire snapshots older than 7d; expiry is the only reclaimer
-
-      // Compact small files to reduce metadata overhead for iceberg_scan queries
-      try {
-        long targetSize = 128 * 1024 * 1024; // 128MB
-        int minFiles = 10;
-        long smallFileSize = 10 * 1024 * 1024; // 10MB
-        int compacted = writer.compactSmallFiles(targetSize, minFiles, smallFileSize);
-        if (compacted > 0) {
-          LOGGER.info("Compacted {} partitions for '{}'", compacted, config.getTargetTableId());
-        }
-      } catch (Exception e) {
-        LOGGER.warn("Compaction failed for '{}': {}", config.getTargetTableId(), e.getMessage());
+    // Run maintenance/compaction on whatever was successfully committed, independent of whether
+    // every batch in this call succeeded. A partial failure (e.g. one bad accession among
+    // hundreds of thousands) must not silently and permanently block compaction of the rows that
+    // DID land -- previously this block required isFullySuccessful(), and SEC's document-ETL
+    // scale made a zero-failure pass the exception rather than the rule, so compaction effectively
+    // never ran. Table-complete tracking below stays gated on full success, since a failed batch's
+    // accessions must remain eligible for retry.
+    if (totalRowsWritten > 0) {
+      if (failedCount > 0) {
+        LOGGER.warn("{} of {} batches failed for '{}'; running maintenance/compaction on the {} "
+            + "successfully written batch(es) anyway",
+            failedCount, successCount + failedCount, config.getTargetTableId(), successCount);
       }
 
+      if (config.isRunMaintenance()) {
+        writer.runMaintenance(config.getSnapshotRetentionDays());
+      }
+
+      if (config.isRunCompaction()) {
+        // Compact small files to reduce metadata overhead for iceberg_scan queries
+        try {
+          int compacted = writer.compactSmallFiles(config.getCompactionTargetFileSizeBytes(),
+              config.getCompactionMinFiles(), config.getCompactionSmallFileSizeBytes());
+          if (compacted > 0) {
+            LOGGER.info("Compacted {} partitions for '{}'", compacted, config.getTargetTableId());
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Compaction failed for '{}': {}", config.getTargetTableId(), e.getMessage());
+        }
+      }
+    } else {
+      LOGGER.info("Skipping maintenance for '{}' (0 rows written)", config.getTargetTableId());
+    }
+
+    if (result.isFullySuccessful() && totalRowsWritten > 0) {
       // Always mark table complete (with watermark if available, without otherwise)
       incrementalTracker.markTableCompleteWithSourceWatermark(
           config.getTargetTableId(),
@@ -890,8 +1037,6 @@ public class IcebergMaterializer {
       } else {
         LOGGER.info("Marked table '{}' complete ({} rows)", config.getTargetTableId(), totalRowsWritten);
       }
-    } else if (result.isFullySuccessful()) {
-      LOGGER.info("Skipping maintenance for '{}' (0 rows written)", config.getTargetTableId());
     }
 
     return result;

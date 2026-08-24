@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +77,63 @@ public class IcebergMaterializerTest {
     assertEquals(2024, config.getEndYear());
     assertEquals(4, config.getThreads());
     assertEquals("Income by geography", config.getDescription());
+  }
+
+  @Test void testMaterializationConfigCompactionDefaultsToOn() {
+    // A config that never calls the compaction/maintenance builder methods (e.g. a table whose
+    // schema declares no materialize.iceberg block) must still compact and expire snapshots --
+    // matching this class's historical unconditional behavior -- rather than silently going dark
+    // because the caller did not know to wire the knobs up.
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern("data/*.parquet")
+            .targetTableId("test")
+            .build();
+
+    assertEquals(true, config.isRunCompaction());
+    assertEquals(128L * 1024 * 1024, config.getCompactionTargetFileSizeBytes());
+    assertEquals(10, config.getCompactionMinFiles());
+    assertEquals(10L * 1024 * 1024, config.getCompactionSmallFileSizeBytes());
+    assertEquals(true, config.isRunMaintenance());
+    assertEquals(7, config.getSnapshotRetentionDays());
+    assertEquals(Collections.emptyList(), config.getSortOrder());
+  }
+
+  @Test void testMaterializationConfigCompactionHonorsSchemaOverrides() {
+    // Values as SecSchemaFactory#buildMaterializationConfig reads them out of a table's
+    // materialize.iceberg YAML block (e.g. sec-schema.yaml's iceberg_defaults anchor).
+    IcebergMaterializer.MaterializationConfig config =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern("data/*.parquet")
+            .targetTableId("test")
+            .runCompaction(true)
+            .compactionTargetFileSizeBytes(134217728L)
+            .compactionMinFiles(5)
+            .compactionSmallFileSizeBytes(5L * 1024 * 1024)
+            .runMaintenance(true)
+            .snapshotRetentionDays(14)
+            .sortOrder(Arrays.asList("cik", "accession_number"))
+            .build();
+
+    assertEquals(true, config.isRunCompaction());
+    assertEquals(134217728L, config.getCompactionTargetFileSizeBytes());
+    assertEquals(5, config.getCompactionMinFiles());
+    assertEquals(5L * 1024 * 1024, config.getCompactionSmallFileSizeBytes());
+    assertEquals(true, config.isRunMaintenance());
+    assertEquals(14, config.getSnapshotRetentionDays());
+    assertEquals(Arrays.asList("cik", "accession_number"), config.getSortOrder());
+
+    // An explicit false must stick -- distinguishing "never called" (defaults to true) from
+    // "called with false" is the whole point of the runCompactionSet/runMaintenanceSet flags.
+    IcebergMaterializer.MaterializationConfig disabled =
+        IcebergMaterializer.MaterializationConfig.builder()
+            .sourcePattern("data/*.parquet")
+            .targetTableId("test")
+            .runCompaction(false)
+            .runMaintenance(false)
+            .build();
+    assertEquals(false, disabled.isRunCompaction());
+    assertEquals(false, disabled.isRunMaintenance());
   }
 
   @Test void testMaterializationConfigSupportsIncremental() {

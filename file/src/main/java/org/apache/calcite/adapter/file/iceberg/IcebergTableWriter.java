@@ -1310,14 +1310,14 @@ public class IcebergTableWriter {
    *
    * <p>This exists because the convenience overloads used to default to
    * {@code Collections.emptyList()}, which silently discarded a declared order for any caller
-   * that did not know to pass one — {@code IcebergMaterializer} and {@code CompactionRunner}
-   * both call the short form and neither has the materialize config in scope. The result was a
-   * table declaring {@code sortOrder:} in its schema and getting bin-packed anyway, with nothing
-   * in the log to say so, leaving the order achievable only by a manual heal.
+   * that did not know to pass one — e.g. {@code CompactionRunner}, a standalone maintenance
+   * entry point with no materialize config in scope at all.
    *
    * <p>Reading it from the table's own properties fixes every caller at once, including future
    * ones, and keeps the declaration as the single switch: declared means sort, absent means
-   * bin-pack.
+   * bin-pack. Every caller that DOES have the config in scope (both {@code
+   * IcebergMaterializationWriter} and {@code IcebergMaterializer}) still calls {@link
+   * #recordDeclaredSortOrder} to keep the table's stamped property in sync with the schema.
    */
   public java.util.List<String> declaredSortOrder() {
     String declared = table.properties().get(SORT_ORDER_PROPERTY);

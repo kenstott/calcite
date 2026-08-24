@@ -280,17 +280,22 @@ public class IcebergMaintenanceRunner {
       return 0;
     }
 
+    // Expire old snapshots every real pass, not just when this pass goes on to compact -- a
+    // table needing no file rewrite (partitionsNeedingCompaction == 0 below) can still be
+    // carrying hundreds of superseded snapshots that only expiry reclaims, same rationale as
+    // maintenanceOnly above. Skipped here when --heal-sort already expired above, immediately
+    // before its rewrite (RewriteFiles needs fresh snapshot lineage to commit).
+    if (!config.healSort) {
+      System.out.println("\nExpiring old snapshots first...");
+      writer.runMaintenance(config.expireSnapshotsDays);
+      table.refresh();
+    }
+    System.out.println("  Snapshots after cleanup: " + countSnapshots(table));
+
     if (partitionsNeedingCompaction == 0) {
       System.out.println("No partitions need compaction.");
       return 0;
     }
-
-    // First expire old snapshots to clean up lineage
-    // (RewriteFiles needs valid snapshot lineage to commit)
-    System.out.println("\nExpiring old snapshots first (required for compaction)...");
-    writer.runMaintenance(config.expireSnapshotsDays);
-    table.refresh();
-    System.out.println("  Snapshots after cleanup: " + countSnapshots(table));
 
     // Run compaction
     System.out.println("\nRunning compaction...");

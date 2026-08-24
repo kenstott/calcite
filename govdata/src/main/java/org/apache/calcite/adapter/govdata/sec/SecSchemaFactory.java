@@ -1680,6 +1680,16 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       if (retentionObj instanceof Number) {
         builder.snapshotRetentionDays(((Number) retentionObj).intValue());
       }
+      Object sortOrderObj = icebergConfig.get("sortOrder");
+      if (sortOrderObj instanceof List) {
+        List<String> sortOrder = new ArrayList<>();
+        for (Object col : (List<?>) sortOrderObj) {
+          if (col != null) {
+            sortOrder.add(String.valueOf(col));
+          }
+        }
+        builder.sortOrder(sortOrder);
+      }
     }
 
     return builder
