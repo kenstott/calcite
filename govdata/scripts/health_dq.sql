@@ -1212,6 +1212,12 @@ FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true))
     WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
 
+-- T5: all_same_value (population_data_year, physician_data_year excluded: AHRF is a wide
+-- file with year-suffixed column families, not a year-series table — the transformer
+-- picks ONE newest-year suffix per family per load and stamps every county row with it
+-- (see AhrfPhysicianSupplyTransformer + the table comment in health-schema.yaml), so
+-- these two columns are legitimately constant across the whole table on every load, the
+-- same point-in-time-snapshot pattern as banking.summary's nationwide-rollup exception.)
 INSERT INTO dq_results
 SELECT 'health', 'ahrf_physician_supply', 'T5_all_same_value',
   CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
@@ -1219,7 +1225,8 @@ SELECT 'health', 'ahrf_physician_supply', 'T5_all_same_value',
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_supply', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type', 'population_data_year', 'physician_data_year')));
 
 INSERT INTO dq_results
 SELECT 'health', 'ahrf_physician_supply', 'T6_pk_nulls',
