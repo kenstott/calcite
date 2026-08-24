@@ -201,7 +201,12 @@ partitionedTables:
     dimensions:
       type:
         - patent_grants
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor: g_patent.tsv self-partitions by
+      # grant_date with no publish lag (unlike ACS/TIGER-style schemas the anchor's dataLag=1
+      # is meant for), so year IS grant_year with no effective_year offset needed.
+      year:
+        <<: *year_range
+        dataLag: 0
       quarter: *current_quarter
 
     columns:
@@ -250,12 +255,11 @@ partitionedTables:
         pattern: "type=patent_grants/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: patent_grants
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
