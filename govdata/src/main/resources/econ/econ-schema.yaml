@@ -1188,6 +1188,389 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- FOOD CPI ---
+  - name: food_cpi
+    pattern: "type=food_cpi/frequency=*/year=*/food_cpi.parquet"
+    partitions: *standard_partitions
+    # BLS republishes cu.data.11.USFoodBeverage on every monthly CPI release. A HEAD probe of
+    # Last-Modified re-triggers ingest when the file changes, matching the BEA bulk-download
+    # tables (state_gdp, state_personal_income) rather than a month cache-buster dimension.
+    freshness:
+      type: last_modified
+    comment: >
+      Monthly CPI-U Food at Home (SAF11 + its 6 subcomponents: cereals/bakery, meats/poultry/
+      fish/eggs, dairy, fruits/vegetables, nonalcoholic beverages, other) and Food Away From Home
+      (SEFV), U.S. city average only (area 0000), not seasonally adjusted (base 1982-84=100).
+      NATIONAL ONLY — confirmed against BLS's cu.series catalog, which also publishes SAF11 (but
+      not its subcomponents or SEFV) for the 4 Census regions, several size classes, and ~23
+      individual metro areas; those live in BLS's region-grouped bulk files (cu.data.3-10, not
+      cu.data.11.USFoodBeverage) and are not loaded here. For all-items regional/metro CPI see
+      regional_cpi/metro_cpi.
+
+    dimensions:
+      type:
+        - food_cpi
+      frequency: *monthly_frequency
+
+    # BLS CU-program bulk flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS CPI series identifier. This table is long-format: one row per (series, period), so
+          ALWAYS filter on series. The 8 series loaded are: CUUR0000SAF11 (Food at home),
+          CUUR0000SAF111 (Cereals and bakery products), CUUR0000SAF112 (Meats, poultry, fish, and
+          eggs), CUUR0000SAF113 (Dairy and related products), CUUR0000SAF114 (Fruits and
+          vegetables), CUUR0000SAF115 (Nonalcoholic beverages), CUUR0000SAF116 (Other food at
+          home), CUUR0000SEFV (Food away from home). All are index levels, not rates — compute
+          inflation as a period-over-period change.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 for monthly)
+        source: period
+      - name: periodName
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
+      - name: value
+        type: double
+        nullable: true
+        comment: Price index value (base period = 100)
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point
+        source: footnote_codes
+
+    # Bulk flat-file source — one file covers the full 1967-present history for all US Food and
+    # Beverage item series in a single ~6.6MB download, versus per-series/per-year API calls.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/cu/cu.data.11.USFoodBeverage"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      # National U.S. city average (area 0000) only, NSA (CUUR), Food at home + 6 subcomponents +
+      # Food away from home. Excludes size-class (N000/S000) rows and deeper item sub-splits
+      # (e.g. SAF1121 Beef and veal) that the bulk file also carries.
+      rowFilter:
+        column: series_id
+        pattern: '^CUUR0000(SAF11[1-6]?|SEFV)$'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=food_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- REGIONAL FOOD CPI ---
+  - name: regional_food_cpi
+    pattern: "type=regional_food_cpi/frequency=*/year=*/regional_food_cpi.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly CPI-U Food at Home (SAF11) index level (not seasonally adjusted, base 1982-84=100)
+      for the 4 U.S. Census regions (Northeast, Midwest, South, West). Sibling to regional_cpi
+      (all items) — same 4 region area codes, item SAF11 instead of SA0. Food at Home
+      subcomponents and Food Away From Home are not published sub-nationally by BLS (confirmed
+      against cu.series — only the top-level SAF11 aggregate has region/metro rows); for those,
+      see food_cpi (national only). For metro-area food CPI, see metro_food_cpi.
+    columns:
+      - name: date
+        type: date
+        nullable: true
+        comment: >
+          Observation date, first day of the month, derived from the BLS year and period fields
+          (period M01-M12). BlsResponseTransformer emits year and period rather than a date.
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS series identifier. This table is long-format: one row per (series, period), so ALWAYS
+          filter on series. The 4 series loaded are CPI-U Food at Home, not seasonally adjusted, for
+          the four Census regions: CUUR0100SAF11 Northeast, CUUR0200SAF11 Midwest, CUUR0300SAF11
+          South, CUUR0400SAF11 West. Series ID format is CUUR{area}SAF11, so the embedded 4
+          characters are the Census region code. BlsResponseTransformer emits only series, year,
+          period, periodName, value, latest and footnotes — the area_code and area_name columns are
+          not populated by the current ingest. Index levels (1982-84=100), not rates.
+      - name: area_code
+        type: string
+        nullable: true
+        comment: >
+          Census region code, derived from series positions 5-8 (CUUR{area}SAF11):
+          0100 Northeast, 0200 Midwest, 0300 South, 0400 West.
+        expression: "SUBSTRING(series, 5, 4)"
+      - name: area_name
+        type: string
+        nullable: true
+        comment: >
+          Census region name for the area code, matching econ_reference.bls_geographies.geo_name
+          and the censusRegions map in /bls/bls-constants.yaml.
+        expression: "CASE SUBSTRING(series, 5, 4) WHEN '0100' THEN 'Northeast' WHEN '0200' THEN 'Midwest' WHEN '0300' THEN 'South' WHEN '0400' THEN 'West' ELSE NULL END"
+      - name: value
+        type: double
+        nullable: true
+        comment: >
+          CPI Food at Home index level for the region (base period 1982-84 = 100), not a rate.
+          Compute period-over-period inflation as a change over this index.
+    dimensions:
+      type:
+        - regional_food_cpi
+      frequency: *monthly_frequency
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        releaseMonth: 2  # BLS monthly data complete by mid-January
+
+    # API Configuration
+    download:
+      enabled: true
+      method: POST
+      baseUrl: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      authentication:
+        type: json_body
+        paramName: registrationkey
+        envVar: BLS_API_KEY
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      enabled: true
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid:  # Regional Food at Home CPI series - 4 Census regions
+          - "CUUR0100SAF11"   # Northeast - Food at home
+          - "CUUR0200SAF11"   # Midwest - Food at home
+          - "CUUR0300SAF11"   # South - Food at home
+          - "CUUR0400SAF11"   # West - Food at home
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        errorPath: "message"  # BLS API returns errors in message array
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=regional_food_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # --- METRO FOOD CPI ---
+  - name: metro_food_cpi
+    pattern: "type=metro_food_cpi/frequency=*/year=*/metro_food_cpi.parquet"
+    partitions: *standard_partitions
+
+    dimensions:
+      type:
+        - metro_food_cpi
+      frequency: *monthly_frequency
+      year:
+        type: yearRange
+        start: "{env:GOVDATA_START_YEAR:2020}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        releaseMonth: 2  # BLS monthly data complete by mid-January
+
+    comment: >
+      Monthly CPI-U Food at Home (SAF11) index level (not seasonally adjusted, base 1982-84=100)
+      for the same 20 major U.S. metropolitan areas as metro_cpi (all items) — item SAF11 instead
+      of SA0. Confirmed against BLS's cu.series catalog: every metro metro_cpi loads also
+      publishes SAF11. For 4-region-level food CPI instead of metro, see regional_food_cpi. For
+      national food CPI (with subcomponents + food away from home), see food_cpi.
+    columns:
+      - name: date
+        type: date
+        nullable: true
+        comment: >
+          Observation date, first day of the month, derived from the BLS year and period fields
+          (period M01-M12). BlsResponseTransformer emits year and period rather than a date.
+        expression: "year || '-' || LPAD(CAST(CAST(SUBSTRING(period, 2, 2) AS INTEGER) AS VARCHAR), 2, '0') || '-01'"
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS series identifier, format CUUR{area}SAF11 — the embedded 4 characters are the BLS
+          CPI area code. Filter on series: BlsResponseTransformer emits only series, year, period,
+          periodName, value, latest and footnotes, so the area_code and area_name columns are not
+          populated by the current ingest (SUBSTRING(series, 5, 4) recovers the area code). This
+          table is long-format, one row per (series, period). All 20 series are CPI-U Food at Home,
+          not seasonally adjusted (index, base period = 100), one per metro area — the identical
+          20-metro set as metro_cpi (see that table's comment for the full area code list). Names
+          follow the authoritative BLS decoder (https://download.bls.gov/pub/time.series/cu/cu.area).
+      - name: area_code
+        type: string
+        nullable: true
+        comment: >
+          BLS CPI area code, derived from series positions 5-8 (CUUR{area}SAF11). Join to
+          econ_reference.bls_geographies (metro_cpi_area_code) for CBSA and publication codes.
+        expression: "SUBSTRING(series, 5, 4)"
+      - name: area_name
+        type: string
+        nullable: true
+        comment: >
+          Metro area name for the CPI area code. Spellings follow the BLS CU decoder
+          (https://download.bls.gov/pub/time.series/cu/cu.area), which differs cosmetically from
+          econ_reference.bls_geographies.geo_name in places (e.g. 'St.Paul' vs 'St. Paul') — join
+          bls_geographies on area_code, never on the name.
+        expression: "CASE SUBSTRING(series, 5, 4) WHEN 'S12A' THEN 'New York-Newark-Jersey City, NY-NJ-PA' WHEN 'S12B' THEN 'Philadelphia-Camden-Wilmington, PA-NJ-DE-MD' WHEN 'S23A' THEN 'Chicago-Naperville-Elgin, IL-IN-WI' WHEN 'S23B' THEN 'Detroit-Warren-Dearborn, MI' WHEN 'S24A' THEN 'Minneapolis-St.Paul-Bloomington, MN-WI' WHEN 'S24B' THEN 'St. Louis, MO-IL' WHEN 'S35A' THEN 'Washington-Arlington-Alexandria, DC-VA-MD-WV' WHEN 'S35B' THEN 'Miami-Fort Lauderdale-West Palm Beach, FL' WHEN 'S35C' THEN 'Atlanta-Sandy Springs-Roswell, GA' WHEN 'S35D' THEN 'Tampa-St. Petersburg-Clearwater, FL' WHEN 'S35E' THEN 'Baltimore-Columbia-Towson, MD' WHEN 'S37B' THEN 'Houston-The Woodlands-Sugar Land, TX' WHEN 'S48A' THEN 'Phoenix-Mesa-Scottsdale, AZ' WHEN 'S48B' THEN 'Denver-Aurora-Lakewood, CO' WHEN 'S49A' THEN 'Los Angeles-Long Beach-Anaheim, CA' WHEN 'S49B' THEN 'San Francisco-Oakland-Hayward, CA' WHEN 'S49C' THEN 'Riverside-San Bernardino-Ontario, CA' WHEN 'S49D' THEN 'Seattle-Tacoma-Bellevue, WA' WHEN 'S49E' THEN 'San Diego-Carlsbad, CA' WHEN 'S49G' THEN 'Urban Alaska' ELSE NULL END"
+      - name: value
+        type: double
+        nullable: true
+        comment: >
+          CPI Food at Home index level for the area (base period 1982-84 = 100), not a rate.
+
+    # API Configuration - series IDs directly in request body
+    # Same 20 CPI area codes as metro_cpi (all-items sibling); item code SAF11 instead of SA0.
+    download:
+      enabled: true
+      method: POST
+      baseUrl: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      authentication:
+        type: json_body
+        paramName: registrationkey
+        envVar: BLS_API_KEY
+
+    # HTTP Source configuration for EtlPipeline
+    source:
+      type: http
+      enabled: true
+      url: "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+      method: POST
+      headers:
+        Content-Type: "application/json"
+      body:
+        seriesid:  # Metro Food at Home CPI series
+          - CUURS12ASAF11  # New York-Newark-Jersey City, NY-NJ-PA
+          - CUURS12BSAF11  # Philadelphia-Camden-Wilmington, PA-NJ-DE-MD
+          - CUURS23ASAF11  # Chicago-Naperville-Elgin, IL-IN-WI
+          - CUURS23BSAF11  # Detroit-Warren-Dearborn, MI
+          - CUURS24ASAF11  # Minneapolis-St.Paul-Bloomington, MN-WI
+          - CUURS24BSAF11  # St. Louis, MO-IL
+          - CUURS35ASAF11  # Washington-Arlington-Alexandria, DC-VA-MD-WV
+          - CUURS35BSAF11  # Miami-Fort Lauderdale-West Palm Beach, FL
+          - CUURS35CSAF11  # Atlanta-Sandy Springs-Roswell, GA
+          - CUURS35DSAF11  # Tampa-St. Petersburg-Clearwater, FL
+          - CUURS35ESAF11  # Baltimore-Columbia-Towson, MD
+          - CUURS37BSAF11  # Houston-The Woodlands-Sugar Land, TX
+          - CUURS48ASAF11  # Phoenix-Mesa-Scottsdale, AZ
+          - CUURS48BSAF11  # Denver-Aurora-Lakewood, CO
+          - CUURS49ASAF11  # Los Angeles-Long Beach-Anaheim, CA
+          - CUURS49BSAF11  # San Francisco-Oakland-Hayward, CA
+          - CUURS49CSAF11  # Riverside-San Bernardino-Ontario, CA
+          - CUURS49DSAF11  # Seattle-Tacoma-Bellevue, WA
+          - CUURS49ESAF11  # San Diego-Carlsbad, CA
+          - CUURS49GSAF11  # Urban Alaska
+        startyear: "{year}"
+        endyear: "{year}"
+        registrationkey: "{env:BLS_API_KEY}"
+      response:
+        format: json
+        errorPath: "message"  # BLS API returns errors in message array
+      rateLimit:
+        requestsPerSecond: 0.9
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Custom hooks for BLS response handling
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BlsResponseTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=metro_food_cpi/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- STATE INDUSTRY ---
   - name: state_industry
     pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
@@ -6537,6 +6920,18 @@ constraints:
       - frequency
       - year
 
+  food_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
+  regional_food_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+
   metro_cpi:
     primaryKey:
       - type
@@ -6550,6 +6945,20 @@ constraints:
         targetColumns:
           - metro_cpi_area_code
         comment: Links metro CPI data to BLS geography reference for CBSA lookups and geographic analysis
+
+  metro_food_cpi:
+    primaryKey:
+      - type
+      - frequency
+      - year
+    foreignKeys:
+      - columns:
+          - area_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: bls_geographies
+        targetColumns:
+          - metro_cpi_area_code
+        comment: Links metro food CPI data to BLS geography reference for CBSA lookups and geographic analysis
 
   state_industry:
     primaryKey:

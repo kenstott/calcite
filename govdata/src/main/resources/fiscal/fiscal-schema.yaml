@@ -1432,6 +1432,146 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # SNAP BENEFITS BY GEOGRAPHY — USDA FNA state monthly participation & cost
+  # ---------------------------------------------------------------------------
+  # Implemented by SnapBenefitsProvider.java, verified live 2026-08-24 against the
+  # real download (26,349 rows, FY1989-2026, all 56 geographies resolved, zero
+  # unresolved FIPS — see the class javadoc for full parsing notes). Key facts:
+  #
+  #   URL: https://www.fna.usda.gov/sites/default/files/resource-files/snap-zip-fy69tocurrent-8.zip
+  #   (linked from the "National and/or State Level Monthly and/or Annual Data" row
+  #   on https://www.fna.usda.gov/pd/supplemental-nutrition-assistance-program-snap)
+  #
+  #   - fna.usda.gov silently hangs (no 403, 0 bytes, holds the connection) on GET
+  #     with a UA not prefixed 'Mozilla/5.0' — see [[usda-fna-akamai-browser-ua-required]].
+  #     FiscalHttp's shared UA already satisfies this; no override needed.
+  #   - The zip contains one workbook per fiscal year, FY1989-present (pre-FY89 is
+  #     a separate national-only file, not loaded here): FY89-FY19 as legacy .xls
+  #     (BIFF), FY20-present as .xlsx (OOXML) — POI's WorkbookFactory handles both.
+  #   - Each workbook has (in the vintages inspected) 8 sheets: 7 FNS regional
+  #     offices (NERO, MARO, SERO, MWRO, SWRO, MPRO, WRO — some vintages carry a
+  #     trailing space in the sheet name) plus 'US Summary' (skipped — national
+  #     rollup, not a state). States are NOT one-per-sheet; each sheet stacks its
+  #     states as blocks: a row with just the state name, then 12 monthly data
+  #     rows ('Oct 2023' .. 'Sep 2024'), then a 'Total' row (FY average/sum,
+  #     emitted with month=NULL), then a blank separator row before the next
+  #     state. The FNS regional-office grouping is not the Census region — not
+  #     exposed as area_code/region; parsed per-block by state name only.
+  #   - 56 geographies total: 50 states + DC + Guam + Puerto Rico + Virgin Islands
+  #     + American Samoa + Commonwealth of Northern Mariana Islands. The source has
+  #     no FIPS/abbreviation column anywhere — only the English state name as the
+  #     block header — resolved via a hardcoded name->FIPS map (the mirror image
+  #     of econ's state_wages FIPS->name map).
+  #   - Column layout is NOT stable across vintages: FY89-FY19 (.xls) order is
+  #     Household, Persons, Cost-Per-Household, Cost-Per-Person, Cost; FY20+
+  #     (.xlsx) order is Household, Persons, Cost, Cost-Per-Household,
+  #     Cost-Per-Person. Selected by file extension, not by re-reading headers per
+  #     workbook (only these 2 layouts were observed across FY89-FY26).
+  #   - Not-yet-reported months in the current FY are the literal string '--' in
+  #     every numeric cell, not blank/null — parsed to SQL NULL.
+  - name: snap_benefits_by_geography
+    # Freshness gate: landing/index page, same pattern as ssa_benefits_by_geography —
+    # a Last-Modified probe skips re-download/re-materialize on unchanged runs.
+    freshness:
+      type: last_modified
+    pattern: "type=snap_benefits_by_geography/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      SNAP (Supplemental Nutrition Assistance Program) persons/households participating
+      and total/average monthly benefits, by state x year x month — the nutrition-
+      assistance counterpart to ssa_benefits_by_geography's income-benefits data, both
+      geo-keyed and comparable against usaspending_by_state. USDA FNA publishes one zip
+      covering FY1989-present (one workbook per fiscal year inside), not a per-year URL,
+      so this table has no year fetch dimension — the provider parses the full history
+      from one download and materialize partitions by the year column found in each row,
+      same as fiscal's other single-workbook bulk sources. Excludes P-EBT (Pandemic EBT)
+      figures, which USDA reports separately.
+
+    dimensions:
+      type:
+        - snap_benefits_by_geography
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - <<: *state_abbr_column
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name, exactly as the workbook's block-header row spells it
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (Oct-Sep)
+      - name: month
+        type: integer
+        nullable: true
+        comment: Calendar month (1-12); null for the per-state fiscal-year Total row
+      - name: persons_participating
+        type: long
+        nullable: true
+        comment: Average monthly persons receiving SNAP benefits
+      - name: households_participating
+        type: long
+        nullable: true
+        comment: Average monthly households receiving SNAP benefits
+      - name: total_benefits_usd
+        type: double
+        nullable: true
+        comment: Total SNAP benefits issued, USD
+      - name: avg_monthly_benefit_per_person_usd
+        type: double
+        nullable: true
+        comment: Average monthly benefit per person, USD
+      - name: avg_monthly_benefit_per_household_usd
+        type: double
+        nullable: true
+        comment: Average monthly benefit per household, USD
+
+    source:
+      type: http
+      # Nominal source — like ssa_benefits_by_geography's SsaBenefitsProvider, the
+      # actual zip/xls/xlsx fetch and parse happens entirely in the custom
+      # dataProvider below; there is no generic response.format for a zip of
+      # mixed-vintage Excel workbooks with per-state block layouts.
+      url: "https://www.fna.usda.gov/sites/default/files/resource-files/snap-zip-fy69tocurrent-8.zip"
+      method: GET
+      headers:
+        # fna.usda.gov hangs (no 403, just 0 bytes) on a non-browser UA for GET —
+        # see [[usda-fna-akamai-browser-ua-required]]. Must be a real browser UA.
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SnapBenefitsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=snap_benefits_by_geography/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: snap_benefits_by_geography
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # CENSUS GOVS-FINANCE INDIVIDUAL UNIT FILE — Individual_Unit_File.zip (snapshot per year)
   # ---------------------------------------------------------------------------
   - name: govt_finance_by_unit
@@ -1785,6 +1925,14 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
         targetColumns: [county_fips]
+
+  snap_benefits_by_geography:
+    primaryKey: [year, month, state_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   ssa_benefits_by_geography_acs:
     primaryKey: [year, county_fips]
