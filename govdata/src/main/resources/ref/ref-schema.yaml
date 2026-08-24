@@ -2986,6 +2986,46 @@ views:
         AND r.relationship_status = 'ACTIVE'
         AND r.registration_status = 'PUBLISHED'
 
+  - name: gleif_ownership_ancestry
+    comment: >
+      Full multi-hop ownership chain per entity, walking IS_DIRECTLY_CONSOLIDATED_BY edges from
+      current_gleif_relationships (ACTIVE/PUBLISHED only) via a recursive CTE. GLEIF's own
+      IS_ULTIMATELY_CONSOLIDATED_BY shortcut reports only the top of the chain and hides every
+      intermediate holding company: HSBC Bank USA sits 4 hops below HSBC Holdings plc via direct
+      edges (HSBC USA Inc. -> HSBC North America Holdings Inc. -> HSBC Overseas Holdings (UK)
+      Ltd. -> HSBC Holdings plc), but IS_ULTIMATELY_CONSOLIDATED_BY reports that as one hop.
+      One row per (entity, ancestor): lei is the entity being looked up, immediate_parent_lei is
+      that entity's own direct parent (constant across all of its rows), ancestor_lei is the
+      entity found at this depth (1 = immediate parent), path is the full lei chain from lei to
+      ancestor_lei inclusive, and ancestor_is_ultimate is true when ancestor_lei has no further
+      direct parent of its own. The cycle guard (path exclusion, plus a depth<50 backstop) is load
+      -bearing: nothing upstream guarantees the direct-consolidation edges are acyclic. Live-
+      verified: 116,978 rows / 89,392 distinct entities / max depth 9 over the full forest.
+    sql: >
+      WITH RECURSIVE direct_edges AS (
+        SELECT start_node_id AS child_lei, end_node_id AS parent_lei
+        FROM current_gleif_relationships
+        WHERE relationship_type = 'IS_DIRECTLY_CONSOLIDATED_BY'
+          AND relationship_status = 'ACTIVE'
+          AND registration_status = 'PUBLISHED'
+      ),
+      ancestry(lei, immediate_parent_lei, ancestor_lei, depth, path) AS (
+        SELECT child_lei, parent_lei, parent_lei, 1, [child_lei, parent_lei]
+        FROM direct_edges
+        UNION ALL
+        SELECT a.lei, a.immediate_parent_lei, e.parent_lei, a.depth + 1,
+               list_append(a.path, e.parent_lei)
+        FROM ancestry a
+        JOIN direct_edges e ON e.child_lei = a.ancestor_lei
+        WHERE NOT list_contains(a.path, e.parent_lei)
+          AND a.depth < 50
+      )
+      SELECT lei, immediate_parent_lei, ancestor_lei, depth, path,
+             NOT EXISTS (
+               SELECT 1 FROM direct_edges d WHERE d.child_lei = ancestor_lei
+             ) AS ancestor_is_ultimate
+      FROM ancestry
+
   - name: org_entity_sec
     comment: >
       Defect Register Recommendation 1. canonical_org_entity's own sec_cik column is populated
