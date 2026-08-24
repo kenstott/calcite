@@ -189,6 +189,19 @@ for s in "${_schemas[@]}"; do
 
   _cursor=$_v
   while [ "$_cursor" -lt "$_now" ]; do
+    # Re-check liveness before EVERY slice, not just once at pass start: a schema idle when the
+    # pass began can start a new worker minutes into a long slice-walk (sec's own backlog ran
+    # over an hour per slice before its metadata bloat was pruned) — copying on into that slice
+    # would race the new writer's compaction exactly as the pass-start check exists to prevent.
+    # Held sentinel resumes next pass once the writer clears, same as active-from-the-start.
+    detect_active_schemas "$SCRIPT_DIR/runs/pids"
+    case " $ACTIVE_SCHEMAS " in
+      *" $s "*)
+        log_info "sync-to-r2: [$s] new writer started mid-pass — holding at $(date -u -d "@$_v" +%Y-%m-%dT%H:%MZ)"
+        break
+        ;;
+    esac
+
     _slice_end=$(( _cursor + SLICE ))
     [ "$_slice_end" -gt "$_now" ] && _slice_end=$_now
 
