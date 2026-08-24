@@ -763,7 +763,14 @@ partitionedTables:
     dimensions:
       type:
         - patent_claims
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor: g_claims_{year}.tsv.zip is
+      # PatentsView's per-year claims subset of the same grant-year disclosure g_patent.tsv
+      # self-partitions by (same product family, same quarterly cadence, no separate publish
+      # lag) — confirmed live: 2022 held 2x and 2024 held 3x duplication with several years
+      # (2010-2012, 2014, 2018, 2023) missing entirely, the same signature as patent_grants.
+      year:
+        <<: *year_range
+        dataLag: 0
       quarter: *current_quarter
 
     columns:
@@ -808,12 +815,11 @@ partitionedTables:
         pattern: "type=patent_claims/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: patent_claims
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
@@ -835,7 +841,13 @@ partitionedTables:
     dimensions:
       type:
         - patent_summaries
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor: g_brf_sum_text_{year}.tsv.zip is
+      # the same PatentsView per-year, self-partitioned product family as patent_claims/
+      # patent_grants, with no separate publish lag — confirmed live: 2024 held 546,869 rows
+      # for 326,869 distinct patent_id (220,000 duplicate rows) with years 2010-2017 missing.
+      year:
+        <<: *year_range
+        dataLag: 0
       quarter: *current_quarter
 
     columns:
@@ -864,12 +876,11 @@ partitionedTables:
         pattern: "type=patent_summaries/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: patent_summaries
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
@@ -892,7 +903,17 @@ partitionedTables:
     dimensions:
       type:
         - trademark_case_file
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor: AbstractTrademarkFileTransformer
+      # builds the TRCFECO2 snapshot URL directly from effective_year and filters case_file
+      # rows to filing_dt starting with that same year — a self-partitioning fetch with no
+      # separate publish lag (the isPublished() catalog gate already handles snapshots USPTO
+      # has not yet released). Confirmed live: 2021 held 608,198 rows for 304,099 distinct
+      # serial_no and 2023 held 548,404 rows for 274,202 distinct serial_no — exact 2.00x
+      # duplication in both years — while 2024/2025 are missing entirely even though sibling
+      # patent tables have current data through 2025.
+      year:
+        <<: *year_range
+        dataLag: 0
     columns:
       - name: serial_no
         type: string
@@ -1016,12 +1037,11 @@ partitionedTables:
         pattern: "type=trademark_case_file/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_case_file
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
@@ -1036,7 +1056,13 @@ partitionedTables:
     dimensions:
       type:
         - trademark_owner
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor — same TRCFECO2 self-partitioning
+      # fetch as trademark_case_file (see its comment); no separate publish lag. Confirmed
+      # live: 2021 held 173,612 rows for 85,393 distinct serial_no and 2023 held 173,654 rows
+      # for 85,464 distinct serial_no (both ~2.03x), and 2024/2025 are missing entirely.
+      year:
+        <<: *year_range
+        dataLag: 0
     columns:
       - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
       - {name: own_seq, type: string, nullable: true, comment: "Sequence of owner records within the same party type"}
@@ -1070,12 +1096,11 @@ partitionedTables:
         pattern: "type=trademark_owner/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_owner
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
@@ -1090,7 +1115,13 @@ partitionedTables:
     dimensions:
       type:
         - trademark_classification
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor — same TRCFECO2 self-partitioning
+      # fetch as trademark_case_file (see its comment); no separate publish lag. Confirmed
+      # live: 2024/2025 are missing entirely even though sibling patent tables have current
+      # data through 2025 — the same coverage-gap signature caused by the spurious 1-year shift.
+      year:
+        <<: *year_range
+        dataLag: 0
     columns:
       - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
       - {name: class_id, type: string, nullable: true, comment: "Unique identifier for the classification record"}
@@ -1116,12 +1147,11 @@ partitionedTables:
         pattern: "type=trademark_classification/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_classification
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
@@ -1136,7 +1166,13 @@ partitionedTables:
     dimensions:
       type:
         - trademark_intl_class
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor — same TRCFECO2 self-partitioning
+      # fetch as trademark_case_file (see its comment); no separate publish lag. Confirmed
+      # live: 2024/2025 are missing entirely even though sibling patent tables have current
+      # data through 2025 — the same coverage-gap signature caused by the spurious 1-year shift.
+      year:
+        <<: *year_range
+        dataLag: 0
     columns:
       - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
       - {name: intl_class_cd, type: string, nullable: true, comment: "International (Nice) class code"}
@@ -1154,12 +1190,11 @@ partitionedTables:
         pattern: "type=trademark_intl_class/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_intl_class
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
@@ -1174,7 +1209,13 @@ partitionedTables:
     dimensions:
       type:
         - trademark_statement
-      year: *year_range
+      # dataLag=0, overriding the shared year_range anchor — same TRCFECO2 self-partitioning
+      # fetch as trademark_case_file (see its comment); no separate publish lag. Confirmed
+      # live: 2024/2025 are missing entirely even though sibling patent tables have current
+      # data through 2025 — the same coverage-gap signature caused by the spurious 1-year shift.
+      year:
+        <<: *year_range
+        dataLag: 0
     columns:
       - {name: serial_no, type: string, nullable: false, comment: "Corresponding case file serial number"}
       - {name: statement_type_cd, type: string, nullable: true, comment: "Statement type category code"}
@@ -1195,12 +1236,11 @@ partitionedTables:
         pattern: "type=trademark_statement/year=*/"
       partition:
         columns: [type, year]
-        valueSource:
-          year: effective_year
       iceberg:
         <<: *compaction_defaults
         <<: *patents_iceberg_common
         tableName: trademark_statement
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
