@@ -1050,8 +1050,6 @@ partitionedTables:
         nullable: true
         comment: Whether the consumer opted to publish a complaint narrative
 
-    backfill_period: annual
-
     source:
       type: http
       url: "https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/"
