@@ -1,22 +1,27 @@
 # ============================================================================
 # U.S. Federal Officials Schema (OFFICIALS)
 # ============================================================================
-# Data Sources (official / primary only — no community-maintained aggregators):
+# Data Sources (primarily official; one documented community-aggregator exception):
 #   - Congress.gov API (api.congress.gov) — Library of Congress
 #     * /v3/member       — every House/Senate member, current + historical
 #     * /v3/nomination   — PAS (Senate-confirmed) presidential nominations,
 #                          the live appointed-officials pipeline
 #   - Federal Judicial Center (fjc.gov) — Administrative Office of the U.S. Courts
 #     * judges.csv       — every Article III judge, all appointments, career dates
+#   - unitedstates/congress-legislators (GitHub, CC0) — committees, subcommittees,
+#     and current committee/subcommittee membership rosters. Added 2026-08-24 as this
+#     schema's one community-aggregator exception, after confirming live that no
+#     official source carries this data: the Congress.gov API's /v3/committee
+#     endpoint exposes committee metadata, bills, reports, and nominations, but NOT
+#     jurisdiction text or member roster assignments (verified against the live API,
+#     not assumed). The unitedstates project scrapes House/Senate committee pages on
+#     an automated, near-continuous cadence and is the de facto standard this data
+#     is sourced from across the open-government tooling ecosystem.
 #
 # Explicitly out of scope for this schema:
-#   - unitedstates/congress-legislators (community GitHub project, not official)
 #   - Direct Bioguide scrape (bioguide.congress.gov blocks non-browser clients via
 #     Cloudflare; the same bioguide IDs/bios are exposed officially through the
 #     Congress.gov member endpoint instead)
-#   - Committee membership rosters — the Congress.gov API committee endpoint exposes
-#     committee metadata, reports, and documents but NOT member roster assignments;
-#     no official structured source for that was found. Revisit if one surfaces.
 #   - GPO Plum Book — official but published as a quadrennial PDF; govinfo.gov's
 #     structured collection endpoint is currently erroring server-side. Revisit.
 #   - State-level elected/appointed officials — no federal aggregator exists; each
@@ -30,16 +35,18 @@ dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
-  Federally elected and federally appointed officeholders, sourced exclusively from
-  official U.S. government systems of record. `members` covers every person who has
-  served in the House or Senate (Congress.gov API, the modernized successor to the
-  Biographical Directory of the U.S. Congress). `nominations` covers PAS nominations —
-  the live pipeline of Senate-confirmed appointed officials, from receipt through
-  committee action to confirmation/withdrawal. `federal_judges` covers every Article III
-  judge ever commissioned, including appointing president and confirmation history, from
-  the Federal Judicial Center's own biographical database. No community-maintained
-  aggregator is used anywhere in this schema — every table traces to the government
-  body that is itself the system of record for that data.
+  Federally elected and federally appointed officeholders. `members` covers every
+  person who has served in the House or Senate (Congress.gov API, the modernized
+  successor to the Biographical Directory of the U.S. Congress). `nominations` covers
+  PAS nominations — the live pipeline of Senate-confirmed appointed officials, from
+  receipt through committee action to confirmation/withdrawal. `federal_judges` covers
+  every Article III judge ever commissioned, including appointing president and
+  confirmation history, from the Federal Judicial Center's own biographical database.
+  `committees` and `committee_membership` cover House/Senate/Joint committee structure,
+  jurisdiction, and current rosters — the one table pair in this schema sourced from a
+  community-maintained aggregator (unitedstates/congress-legislators) rather than a
+  government system of record directly, because no official source exposes committee
+  membership or jurisdiction in structured form; see the header comment above.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -369,6 +376,14 @@ partitionedTables:
     hooks:
       # Implemented and verified against a live keyed response (2026-08-01).
       responseTransformer: "org.apache.calcite.adapter.govdata.officials.NominationTransformer"
+      # Congress.gov's OFFSET-paginated /v3/nomination has no documented secondary sort
+      # key, and many nominations in the same congress share an identical updateDate
+      # (batch confirmations from one executive session) — confirmed live (2026-08-24)
+      # that a record can land in two adjacent pages' windows, producing an exact
+      # (congress, citation) duplicate row. See NominationDedupTransformer.
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.officials.NominationDedupTransformer"
 
     materialize:
       format: iceberg
@@ -716,6 +731,181 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ---------------------------------------------------------------------------
+  # COMMITTEES — House/Senate/Joint committees + subcommittees (unitedstates/congress-legislators)
+  # ---------------------------------------------------------------------------
+  - name: committees
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=committees/*.parquet"
+    partitions: *type_partition
+    comment: >
+      House, Senate, and Joint standing/select committees and their subcommittees, from
+      the unitedstates/congress-legislators project's committees-current.yaml — a
+      CC0-licensed, near-continuously-updated mirror of official House/Senate committee
+      pages. The one community-aggregator source in this schema: verified live that the
+      Congress.gov API's /v3/committee endpoint carries no jurisdiction text and no
+      member roster (see the schema header). One row per full committee and one row per
+      subcommittee, linked via parent_committee_id; committee_id is the join key into
+      committee_membership.
+
+    dimensions:
+      type:
+        - committees
+
+    columns:
+      - name: committee_id
+        type: string
+        nullable: false
+        comment: >
+          thomas_id (full committee) or parent thomas_id + subcommittee thomas_id
+          (subcommittee, e.g. HSAG + 15 = HSAG15) — PK, and the join key into
+          committee_membership.
+      - name: chamber
+        type: string
+        nullable: true
+        comment: house, senate, or joint
+      - name: name
+        type: string
+        nullable: true
+      - name: parent_committee_id
+        type: string
+        nullable: true
+        comment: NULL for a full committee; the parent's committee_id for a subcommittee
+      - name: is_subcommittee
+        type: boolean
+        nullable: true
+      - name: url
+        type: string
+        nullable: true
+      - name: minority_url
+        type: string
+        nullable: true
+      - name: jurisdiction
+        type: string
+        nullable: true
+        comment: Legislative jurisdiction, free text (populated for most House committees; sparse elsewhere)
+      - name: jurisdiction_source
+        type: string
+        nullable: true
+      - name: address
+        type: string
+        nullable: true
+      - name: phone
+        type: string
+        nullable: true
+      - name: rss_url
+        type: string
+        nullable: true
+
+    source:
+      type: http
+      url: "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/committees-current.yaml"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.officials.CongressCommitteesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committees/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: committees
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # COMMITTEE_MEMBERSHIP — current committee/subcommittee rosters (unitedstates/congress-legislators)
+  # ---------------------------------------------------------------------------
+  - name: committee_membership
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=committee_membership/*.parquet"
+    partitions: *type_partition
+    comment: >
+      Current committee/subcommittee rosters, from the unitedstates/congress-legislators
+      project's committee-membership-current.yaml. One row per (committee, member)
+      assignment for the sitting Congress. committee_id joins to
+      committees.committee_id; bioguide_id joins to members.bioguide_id — this file has
+      no congress number of its own (it is always the current roster), so join against
+      the member's most recent congress rather than a specific one (see
+      current_members).
+
+    dimensions:
+      type:
+        - committee_membership
+
+    columns:
+      - name: committee_id
+        type: string
+        nullable: false
+      - name: bioguide_id
+        type: string
+        nullable: true
+      - name: member_name
+        type: string
+        nullable: true
+      - name: party
+        type: string
+        nullable: true
+        comment: majority or minority
+      - name: rank
+        type: integer
+        nullable: true
+        comment: Seniority rank within the committee for this party (1 = chair/ranking member)
+      - name: title
+        type: string
+        nullable: true
+        comment: e.g. Chairman, Ranking Member; null for other members
+
+    source:
+      type: http
+      url: "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/committee-membership-current.yaml"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.officials.CongressCommitteeMembershipTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committee_membership/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: committee_membership
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
   # ELECTORAL_COLLEGE_VOTES — presidential/VP electoral votes by state, per election
   # ---------------------------------------------------------------------------
   - name: electoral_college_votes
@@ -936,6 +1126,20 @@ constraints:
     # to members/nominations either: appointing_president_N is a free-text name, not an
     # ID — matching it to a member or nominee would be name-matching, not a real key
     # relationship, and isn't attempted here.
+  committees:
+    primaryKey: [committee_id]
+  committee_membership:
+    # Non-enforcing: bioguide_id targets one component of members' composite
+    # [bioguide_id, congress] key, since this file carries no congress number of its
+    # own (see the table comment) — documentary, matching state_name's FK below.
+    primaryKey: [committee_id, bioguide_id]
+    foreignKeys:
+      - columns: [committee_id]
+        targetTable: committees
+        targetColumns: [committee_id]
+      - columns: [bioguide_id]
+        targetTable: members
+        targetColumns: [bioguide_id]
   electoral_college_votes:
     primaryKey: [year, state_name, office, candidate_name]
     foreignKeys:

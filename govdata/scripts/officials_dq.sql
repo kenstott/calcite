@@ -1,13 +1,14 @@
 -- dq-lookback: 1
 -- Officials Data Quality Checks
 -- Schema: officials
--- Tables: members, nominations, federal_judges
+-- Tables: members, nominations, federal_judges, committees, committee_membership
 -- All tables are Iceberg; reads via iceberg_scan.
 -- No `year` dimension anywhere in this schema — members/nominations partition by
 -- `congress` (bounded by GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS, default 117-119,
--- NOT full 1789-present history), federal_judges is a single etag-gated snapshot.
+-- NOT full 1789-present history), federal_judges/committees/committee_membership are
+-- single etag-gated snapshots.
 -- T4/T5 exclude partition columns 'type' and 'congress' (members/nominations) / 'type'
--- (federal_judges).
+-- (federal_judges, committees, committee_membership).
 -- Row-count thresholds below are conservative floors derived from live API pagination
 -- counts observed 2026-08-01, not exact expected values (congress activity varies).
 
@@ -41,6 +42,10 @@ FROM (
   SELECT 'nominations',              COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/nominations')
   UNION ALL
   SELECT 'federal_judges',           COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/federal_judges')
+  UNION ALL
+  SELECT 'committees',                COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/committees')
+  UNION ALL
+  SELECT 'committee_membership',      COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership')
 );
 
 -- ─────────────────────────────────────────────────────────────
@@ -277,6 +282,122 @@ SELECT 'officials', 'federal_judges', 'T7_multi_appointment_coverage',
   n, 1, 'Judges with court_type_2 populated (elevated/multiple appointments)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_judges', allow_moved_paths := true)
       WHERE court_type_2 IS NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committees
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'committees', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true));
+
+-- T2: row_count (House + Senate + Joint full committees plus subcommittees; ~40 full
+-- committees and ~150 subcommittees observed live 2026-08-24, floor set conservatively)
+INSERT INTO dq_results
+SELECT 'officials', 'committees', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Expected at least 100 committee + subcommittee rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — jurisdiction/jurisdiction_source/minority_url/rss_url are
+-- genuinely sparse (populated mainly for House full committees, per the source), so
+-- exclude them rather than warn on a documented source-shape gap every run.
+INSERT INTO dq_results
+SELECT 'officials', 'committees', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'jurisdiction', 'jurisdiction_source', 'minority_url', 'rss_url', 'parent_committee_id')
+  )
+);
+
+-- T6: pk_nulls (committee_id NOT NULL)
+INSERT INTO dq_results
+SELECT 'officials', 'committees', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL committee_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true) WHERE committee_id IS NULL);
+
+-- T7: subcommittees exist and link to a real parent (regression guard for the
+-- thomas_id + subcommittee thomas_id composite-id logic in CongressCommitteesTransformer)
+INSERT INTO dq_results
+SELECT 'officials', 'committees', 'T7_subcommittee_parent_linkage',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Subcommittee rows whose parent_committee_id has no matching full-committee row'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true) sub
+  WHERE sub.is_subcommittee = true
+    AND NOT EXISTS (
+      SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committees', allow_moved_paths := true) parent
+      WHERE parent.committee_id = sub.parent_committee_id AND parent.is_subcommittee = false
+    )
+);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committee_membership
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'committee_membership', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership', allow_moved_paths := true));
+
+-- T2: row_count (~150 committees+subcommittees x ~15-40 members each)
+INSERT INTO dq_results
+SELECT 'officials', 'committee_membership', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 committee-membership rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols — title is EXPECTED mostly-null (only chairs/ranking members get one)
+INSERT INTO dq_results
+SELECT 'officials', 'committee_membership', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'title')
+  )
+);
+
+-- T6: pk_nulls (committee_id NOT NULL; bioguide_id is nullable — a few historical
+-- membership entries in the source carry no bioguide, not treated as a failure)
+INSERT INTO dq_results
+SELECT 'officials', 'committee_membership', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL committee_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership', allow_moved_paths := true) WHERE committee_id IS NULL);
+
+-- T7: party values
+INSERT INTO dq_results
+SELECT 'officials', 'committee_membership', 'T7_party_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Rows with party NOT IN (''majority'',''minority'')'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership', allow_moved_paths := true)
+      WHERE party IS NOT NULL AND party NOT IN ('majority', 'minority'));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: electoral_college_votes
