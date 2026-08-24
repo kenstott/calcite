@@ -568,12 +568,17 @@ public class IcebergMaterializationWriterTest {
         .source("raw_date")
         .dateFormat("DD_MON_YY")
         .build();
-    // Forces hasDuckDbExpressions=true AND makes the DuckDB primary path itself throw, so the
-    // whole batch falls back to the Java per-row loop that dispatches dateCol's Java parser.
+    // Forces hasDuckDbExpressions=true AND makes the DuckDB primary path itself throw (the
+    // referenced column doesn't exist), so the whole batch falls back to the Java per-row loop
+    // that dispatches dateCol's Java parser. Uses a CAST(src."..." AS TYPE) shape rather than an
+    // unknown function so isFallbackExpressionShapeSupported() still recognizes it — this test is
+    // about the dateFormat mismatch alone not failing the batch, not about the unsupported-shape
+    // fail-loud path added for econ.wage_growth.date (see IcebergMaterializationWriterCoverageTest
+    // #testExpressionEvaluationUnrecognized for that case).
     ColumnConfig brokenCol = ColumnConfig.builder()
         .name("broken")
         .type("string")
-        .expression("NOT_A_REAL_FUNCTION(nonexistent_column)")
+        .expression("CAST(src.\"nonexistent_column\" AS VARCHAR)")
         .build();
 
     MaterializeConfig config =
