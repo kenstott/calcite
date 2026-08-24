@@ -78,6 +78,11 @@ public class IcebergMaterializer {
   private static final long DEFAULT_RETRY_DELAY_MS = 30000;
   private static final int DEFAULT_THREADS = 2;
   private static final int DEFAULT_FILE_CHUNK_SIZE = 5000;
+  // This materializer commits once per accession/batch, the same one-commit-per-partition
+  // pattern IcebergMaterializationWriter's DEFAULT_COMMIT_PER_PARTITION_METADATA_MAX exists for
+  // -- expiring snapshots does not remove the resulting per-commit v{N}.metadata.json files, so
+  // every caller here needs the same automatic fallback, not just callers that opt in explicitly.
+  private static final int DEFAULT_METADATA_PREVIOUS_VERSIONS_MAX = 20;
 
   /**
    * Per-chunk DuckDB query timeout in seconds. DuckDB JDBC does not implement
@@ -269,6 +274,13 @@ public class IcebergMaterializer {
     private final long compactionSmallFileSizeBytes;
     private final boolean runMaintenance;
     private final int snapshotRetentionDays;
+    // v{N}.metadata.json pruning, separate from runMaintenance/expireSnapshots -- see
+    // IcebergMaterializationWriter's identical knob for why: this table's commit pattern (one
+    // commit per accession/batch) accumulates a metadata.json version per commit, and expiring
+    // snapshots does not remove the now-unreferenced standalone version files themselves. 0
+    // (unset) falls back to DEFAULT_METADATA_PREVIOUS_VERSIONS_MAX below, matching every SEC
+    // table's high-commit-frequency write pattern.
+    private final int metadataPreviousVersionsMax;
     // Column order compaction should sort rewritten files by (e.g. [cik, accession_number]),
     // sourced from materialize.iceberg.sortOrder. Empty means bin-pack only -- see
     // IcebergTableWriter#declaredSortOrder.
@@ -315,6 +327,8 @@ public class IcebergMaterializer {
       this.runMaintenance = builder.runMaintenanceSet ? builder.runMaintenance : true;
       this.snapshotRetentionDays = builder.snapshotRetentionDays > 0
           ? builder.snapshotRetentionDays : 7;
+      this.metadataPreviousVersionsMax = builder.metadataPreviousVersionsMax > 0
+          ? builder.metadataPreviousVersionsMax : DEFAULT_METADATA_PREVIOUS_VERSIONS_MAX;
       this.sortOrder = builder.sortOrder != null
           ? Collections.<String>unmodifiableList(new ArrayList<String>(builder.sortOrder))
           : Collections.<String>emptyList();
@@ -508,6 +522,15 @@ public class IcebergMaterializer {
     }
 
     /**
+     * Keep only the N most recent {@code v{N}.metadata.json} files after maintenance expires
+     * snapshots. Sourced from {@code materialize.iceberg.metadataPreviousVersionsMax}; defaults
+     * to {@link #DEFAULT_METADATA_PREVIOUS_VERSIONS_MAX} when unset.
+     */
+    public int getMetadataPreviousVersionsMax() {
+      return metadataPreviousVersionsMax;
+    }
+
+    /**
      * Column order compaction should sort rewritten files by (e.g. {@code [cik,
      * accession_number]}). Empty (the default) means compaction bin-packs without sorting.
      */
@@ -554,6 +577,7 @@ public class IcebergMaterializer {
       private boolean runMaintenance;
       private boolean runMaintenanceSet;
       private int snapshotRetentionDays;
+      private int metadataPreviousVersionsMax;
       private List<String> sortOrder;
 
       public Builder sourcePattern(String sourcePattern) {
@@ -747,6 +771,11 @@ public class IcebergMaterializer {
 
       public Builder snapshotRetentionDays(int snapshotRetentionDays) {
         this.snapshotRetentionDays = snapshotRetentionDays;
+        return this;
+      }
+
+      public Builder metadataPreviousVersionsMax(int metadataPreviousVersionsMax) {
+        this.metadataPreviousVersionsMax = metadataPreviousVersionsMax;
         return this;
       }
 
@@ -1005,6 +1034,16 @@ public class IcebergMaterializer {
 
       if (config.isRunMaintenance()) {
         writer.runMaintenance(config.getSnapshotRetentionDays());
+
+        // Must run after runMaintenance, never before: expiry is what makes it safe to delete a
+        // superseded v{N}.metadata.json (a not-yet-expired snapshot can still need one), and this
+        // materializer never called this at all previously -- every table it writes (SEC's
+        // document-ETL tables) accumulated one metadata.json per commit indefinitely.
+        int pruned = writer.pruneMetadataFiles(config.getMetadataPreviousVersionsMax());
+        if (pruned > 0) {
+          LOGGER.info("Pruned {} superseded metadata.json file(s) for '{}'",
+              pruned, config.getTargetTableId());
+        }
       }
 
       if (config.isRunCompaction()) {

@@ -140,6 +140,11 @@ public class IcebergMaintenanceRunner {
           ? config.warehouse.substring(0, config.warehouse.length() - 1) : config.warehouse;
       String tableLocation = base + "/" + config.tableName.replace('.', '/');
       System.out.println("\nChecking version-hint.text for " + tableLocation + "...");
+      if (config.dryRun) {
+        System.out.println("[dry-run] would repoint version-hint.text if it points at an "
+            + "uncommitted metadata.json, no changes made");
+        return 0;
+      }
       int repaired = IcebergTableWriter.repairVersionHint(tableLocation, repairStorageProvider);
       if (repaired < 0) {
         System.out.println("Nothing to repair (hint already valid, or no earlier valid "
@@ -166,8 +171,22 @@ public class IcebergMaintenanceRunner {
     // this table layout's unbounded v{N}.metadata.json growth, see IcebergTableWriter#
     // pruneMetadataFiles) so this stays fast even against a table with a large scan plan.
     if (config.pruneMetadataVersions > 0) {
+      if (config.dryRun) {
+        System.out.println("\n[dry-run] would expire snapshots older than "
+            + config.expireSnapshotsDays + " days, then prune metadata.json versions down to "
+            + config.pruneMetadataVersions + " most recent");
+        return 0;
+      }
       StorageProvider pruneStorageProvider = buildStorageProvider(config);
       IcebergTableWriter pruneWriter = new IcebergTableWriter(table, pruneStorageProvider);
+      // Snapshot retention must run before pruning: an unexpired snapshot can still reference an
+      // older v{N}.metadata.json (via the table's metadata log / as its own current pointer at
+      // commit time), so pruning ahead of expiry risks deleting a file a live snapshot needs.
+      // Expiry first guarantees every metadata.json still present belongs only to snapshots that
+      // have already been reclaimed, making it safe to prune down to the N most recent.
+      System.out.println("\nExpiring old snapshots first (required before metadata pruning)...");
+      pruneWriter.runMaintenance(config.expireSnapshotsDays);
+      table.refresh();
       System.out.println("\nPruning metadata.json versions, keeping "
           + config.pruneMetadataVersions + " most recent...");
       int pruned = pruneWriter.pruneMetadataFiles(config.pruneMetadataVersions);
@@ -228,6 +247,11 @@ public class IcebergMaintenanceRunner {
     // carry hundreds of superseded snapshots pinning stale files. expireSnapshots transactionally
     // reclaims those without the churn (and risk) of an unnecessary rewrite.
     if (config.maintenanceOnly) {
+      if (config.dryRun) {
+        System.out.println("\n[dry-run] would expire snapshots older than "
+            + config.expireSnapshotsDays + " days");
+        return 0;
+      }
       System.out.println("\nMaintenance-only: expiring snapshots older than "
           + config.expireSnapshotsDays + " days (expiry transactionally reclaims unreachable "
           + "files; no hand-rolled orphan deletion)...");
