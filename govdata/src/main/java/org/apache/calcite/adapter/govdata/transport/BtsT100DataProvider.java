@@ -84,6 +84,19 @@ public class BtsT100DataProvider implements DataProvider {
   /** Emitted columns that are numeric (parsed to Double). */
   private static final Map<String, Boolean> NUMERIC = buildNumeric();
 
+  /**
+   * Max full (GET+POST) handshake attempts. Verified live (2026-08-24) that a fresh
+   * sequential GET-then-POST handshake reliably succeeds on the first try when run in
+   * isolation (both a curl reproduction and a standalone single-threaded Java
+   * reproduction of this exact request sequence got the real ZIP immediately) — the
+   * HTML-instead-of-ZIP symptom only appears under this pipeline's concurrent
+   * multi-year fetch load, consistent with F5's per-session/rate heuristics rejecting
+   * an overlapping or reused session rather than a defect in the request itself. So a
+   * failed attempt retries with an entirely fresh handshake (new GET, new cookies, new
+   * viewstate) rather than reusing anything from the failed attempt.
+   */
+  private static final int MAX_HANDSHAKE_ATTEMPTS = 3;
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
     String year = variables.get("effective_year");
@@ -101,19 +114,34 @@ public class BtsT100DataProvider implements DataProvider {
       baseUrl = config.getSource().getUrl();
     }
 
-    // Step 1 — GET the form; capture cookies + hidden fields.
-    GetResult form = httpGet(baseUrl);
-    String viewState = scrape(form.body, "__VIEWSTATE");
-    String viewStateGen = scrape(form.body, "__VIEWSTATEGENERATOR");
-    String eventValidation = scrape(form.body, "__EVENTVALIDATION");
-    if (viewState == null || eventValidation == null) {
-      throw new IOException("t100_segments: could not scrape ASP.NET hidden fields from "
-          + baseUrl + " (page-specific __VIEWSTATE/__EVENTVALIDATION missing)");
-    }
+    byte[] zip = null;
+    IOException lastFailure = null;
+    for (int attempt = 1; attempt <= MAX_HANDSHAKE_ATTEMPTS; attempt++) {
+      try {
+        // Step 1 — GET the form; capture cookies + hidden fields.
+        GetResult form = httpGet(baseUrl);
+        String viewState = scrape(form.body, "__VIEWSTATE");
+        String viewStateGen = scrape(form.body, "__VIEWSTATEGENERATOR");
+        String eventValidation = scrape(form.body, "__EVENTVALIDATION");
+        if (viewState == null || eventValidation == null) {
+          throw new IOException("t100_segments: could not scrape ASP.NET hidden fields from "
+              + baseUrl + " (page-specific __VIEWSTATE/__EVENTVALIDATION missing)");
+        }
 
-    // Step 2 — POST the postback; body is the ZIP.
-    String body = buildPostBody(viewState, viewStateGen, eventValidation, year);
-    byte[] zip = httpPostForZip(baseUrl, form.cookies, body);
+        // Step 2 — POST the postback; body is the ZIP.
+        String body = buildPostBody(viewState, viewStateGen, eventValidation, year);
+        zip = httpPostForZip(baseUrl, form.cookies, body);
+        lastFailure = null;
+        break;
+      } catch (IOException e) {
+        lastFailure = e;
+        LOGGER.warn("t100_segments: handshake attempt {}/{} failed for year {} ({})",
+            attempt, MAX_HANDSHAKE_ATTEMPTS, year, e.getMessage());
+      }
+    }
+    if (zip == null) {
+      throw lastFailure;
+    }
 
     List<Map<String, Object>> rows = parseZip(zip, year);
     LOGGER.info("t100_segments: {} segment rows for year {}", rows.size(), year);
@@ -221,15 +249,25 @@ public class BtsT100DataProvider implements DataProvider {
   }
 
   private List<Map<String, Object>> parseZip(byte[] zip, String year) throws IOException {
+    // Every TranStats download zip carries a small Documentation.csv (field-name legend)
+    // alongside the real data CSV — verified live (2026-08-24): a 1KB SYS_FIELD_NAME/
+    // FIELD_DESC file plus the real ~57MB T_T100D_SEGMENT_ALL_CARRIER.csv, in that
+    // entry order. Taking the first ".csv" entry silently parsed the documentation file
+    // instead, producing ~19 near-all-null rows with none of COLUMN_MAP's keys matching
+    // its SYS_FIELD_NAME/FIELD_DESC header. Skip it explicitly rather than relying on
+    // entry order.
     try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zip))) {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
-        if (entry.getName().toLowerCase().endsWith(".csv")) {
+        String name = entry.getName();
+        if (name.toLowerCase().endsWith(".csv")
+            && !name.equalsIgnoreCase("Documentation.csv")) {
           return parseCsv(zis);
         }
       }
     }
-    throw new IOException("t100_segments: no CSV entry in the downloaded zip for year " + year);
+    throw new IOException("t100_segments: no non-documentation CSV entry in the downloaded zip "
+        + "for year " + year);
   }
 
   private List<Map<String, Object>> parseCsv(InputStream in) throws IOException {
