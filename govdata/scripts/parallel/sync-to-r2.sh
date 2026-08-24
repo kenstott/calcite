@@ -28,9 +28,16 @@
 # Runs continuously (one pass every GOVDATA_R2_SYNC_INTERVAL seconds) from
 # run-scheduled.sh when PROD_* publish creds are set.
 # Can also be run manually: govdata/scripts/parallel/sync-to-r2.sh [--dry-run] [--verbose]
+#   [--schemas schema1,schema2]
 # --verbose (or GOVDATA_R2_SYNC_VERBOSE=1) adds rclone -v so each file transfer logs a
 # "Copied (new)"/"Copied (replaced existing)" line instead of only the --stats summary —
 # use it to see exactly which files a slice is moving.
+# --schemas restricts the pass to a comma/space-separated subset of schemas (e.g. a targeted
+# resync after rewinding one schema's sentinel) instead of walking every schema in the bucket.
+# Every named schema must exist as a top-level prefix in the source bucket; an unknown name
+# fails loudly rather than silently syncing a subset (same policy as the empty-listing check
+# below). Per-schema sentinels are untouched by this flag — an unlisted schema is simply not
+# visited this pass, not treated as caught up.
 #
 set -euo pipefail
 
@@ -52,11 +59,13 @@ configure_r2_remote
 
 DRY_RUN=false
 VERBOSE="${GOVDATA_R2_SYNC_VERBOSE:-false}"
-for _a in "$@"; do
-  case "$_a" in
-    --dry-run) DRY_RUN=true ;;
-    --verbose|--debug) VERBOSE=true ;;
-    *) log_error "sync-to-r2: unknown argument: $_a"; exit 2 ;;
+SCHEMAS_FILTER=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=true; shift ;;
+    --verbose|--debug) VERBOSE=true; shift ;;
+    --schemas) SCHEMAS_FILTER="$2"; shift 2 ;;
+    *) log_error "sync-to-r2: unknown argument: $1"; exit 2 ;;
   esac
 done
 _VERBOSE_FLAG=""
@@ -101,6 +110,36 @@ if [ "${#_schemas[@]}" -eq 0 ]; then
   log_error "sync-to-r2: FATAL — no schemas (top-level prefixes) found under ${BUCKETS[0]}"
   exit 1
 fi
+
+# --schemas restricts _schemas to the requested subset. Validate every requested name against
+# what's actually present rather than silently filtering to nothing on a typo.
+if [ -n "$SCHEMAS_FILTER" ]; then
+  IFS=', ' read -r -a _requested <<< "$SCHEMAS_FILTER"
+  _filtered=()
+  _unknown=()
+  for _r in "${_requested[@]}"; do
+    [ -z "$_r" ] && continue
+    _found=false
+    for _s in "${_schemas[@]}"; do
+      [ "$_s" = "$_r" ] && { _found=true; break; }
+    done
+    if $_found; then
+      _filtered+=("$_r")
+    else
+      _unknown+=("$_r")
+    fi
+  done
+  if [ "${#_unknown[@]}" -gt 0 ]; then
+    log_error "sync-to-r2: FATAL — --schemas named unknown schema(s): ${_unknown[*]}"
+    exit 2
+  fi
+  if [ "${#_filtered[@]}" -eq 0 ]; then
+    log_error "sync-to-r2: FATAL — --schemas resolved to no schemas"
+    exit 2
+  fi
+  _schemas=("${_filtered[@]}")
+fi
+
 log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s ($( $DRY_RUN && echo 'DRY RUN' || echo 'LIVE'))"
 
 # --- Detect schemas with an active ETL writer ----------------------------------------
@@ -159,7 +198,11 @@ for s in "${_schemas[@]}"; do
     _lo=$(( _cursor - BUFFER )); [ "$_lo" -lt 0 ] && _lo=0
     _max_age=$(( _now - _lo ))
     _min_age=$(( _now - _slice_end )); [ "$_min_age" -lt 0 ] && _min_age=0
-    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --stats 60s $_VERBOSE_FLAG"
+    # --checkers raised from rclone's default (8) to 32: --no-traverse means every candidate
+    # file is checked against R2 individually (one HEAD each), and that check phase — not the
+    # transfer phase --transfers already covers — is what a WAN-latency-bound R2 endpoint
+    # bottlenecks on when a slice has thousands of candidates.
+    _slice_flags="--min-age ${_min_age}s --max-age ${_max_age}s --no-traverse --transfers 16 --checkers 32 --stats 60s $_VERBOSE_FLAG"
     $DRY_RUN && _slice_flags="$_slice_flags --dry-run"
 
     log_info "sync-to-r2: [$s] slice $(date -u -d "@$_lo" +%Y-%m-%dT%H:%MZ) .. $(date -u -d "@$_slice_end" +%Y-%m-%dT%H:%MZ)"
