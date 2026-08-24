@@ -1448,7 +1448,10 @@ views:
       US assignee counts toward that assignee's county. patent_grants only
       covers GOVDATA_START_YEAR+ (2010 by default); acs_education starts 2014
       and county_wages starts 2020 by default, so years outside a source's
-      coverage window return null enrichment columns, not zero.
+      coverage window return null enrichment columns, not zero. The enrichment
+      joins compose pl.state_fips || pl.county_fips (2-digit + 3-digit,
+      PatentsView's native decomposed format) into the standard 5-digit FIPS
+      both census.acs_education and econ.county_wages key on.
     sql: >
       SELECT
         pg.grant_year,
@@ -1473,12 +1476,12 @@ views:
           ROUND(100.0 * bachelors / NULLIF(pop_25_plus, 0), 2) AS bachelors_pct
         FROM "census"."acs_education"
         WHERE geography = 'county'
-      ) edu ON edu.county_fips = pl.county_fips AND edu."year" = pg.grant_year
+      ) edu ON edu.county_fips = (pl.state_fips || pl.county_fips) AND edu."year" = pg.grant_year
       LEFT JOIN (
         SELECT "year", county_fips, annual_avg_wkly_wage
         FROM "econ"."county_wages"
         WHERE industry_code = '10' AND own_code = '0'
-      ) wages ON wages.county_fips = pl.county_fips AND wages."year" = pg.grant_year
+      ) wages ON wages.county_fips = (pl.state_fips || pl.county_fips) AND wages."year" = pg.grant_year
       WHERE pg.withdrawn IS NOT TRUE
         AND pl.county_fips IS NOT NULL
       GROUP BY pg.grant_year, pl.state_fips, pl.county_fips, edu.bachelors_pct, wages.annual_avg_wkly_wage
