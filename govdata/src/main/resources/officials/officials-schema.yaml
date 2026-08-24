@@ -976,11 +976,11 @@ partitionedTables:
       method: GET
       response:
         format: text
-      skipOn: [404]  # non-election years have no page — expected gap, not a failure
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
         maxRetries: 3
+        skipOn: [404]  # non-election years have no page — expected gap, not a failure
       rawCache:
         enabled: true
 
