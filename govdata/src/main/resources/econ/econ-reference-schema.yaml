@@ -918,10 +918,12 @@ constraints:
       table_name alone — the former section categorization named in an earlier PK here was
       never populated and the partition column was renamed section->type in commit
       a2c400aaa, so the table no longer has a section column (see the columns block above
-      and national_accounts_enriched's comment in econ-schema.yaml). Declaring table_name
-      unique lets a planner recognize national_accounts_tables (a plain scan over this
-      table, econ-schema.yaml) as the cheap path for discovering table_id values instead of
-      DISTINCT-ing through the national_accounts_enriched join.
+      and national_accounts_enriched's comment in econ-schema.yaml). table_name unique is a
+      correctness fact about this table, not a query-planner lever: national_accounts_enriched's
+      LEFT JOIN against it can't be skipped based on that uniqueness, and skipping it would only
+      drop this table's own small scan anyway — table_id is sourced from national_accounts, the
+      large side of that join, not from here. Discovering table_id values cheaply means querying
+      national_accounts_tables directly, not DISTINCT-ing through national_accounts_enriched.
 
   naics_sectors:
     primaryKey:
