@@ -115,16 +115,17 @@ column_templates:
 
 dimension_values:
 
-  # IRS SOI ZIP/county files publish ~2.5 years after the tax year; as of 2026
-  # the newest posted is TY2022. dataLag 4 targets the newest fully-available
-  # data year (effective_year = publish_year - 4) so no request 404-poisons.
-  # Lower this to 3/2 as TY2023/TY2024 post.
+  # IRS SOI ZIP/county files publish ~2.5 years after the tax year; as of
+  # 25 Aug 2026 the newest posted is TY2023 (irs.gov/statistics/soi-tax-stats-
+  # county-data, confirmed live). dataLag 3 targets the newest fully-available
+  # data year (effective_year = publish_year - 3) so no request 404-poisons.
+  # Lower this to 2 as TY2024 posts.
   soi_year_range: &soi_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
     minYear: 2011
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 4
+    dataLag: 3
     descending: true
 
   # SOI migration is published as a year pair (e.g. 2021->2022 == "2122"); the
