@@ -508,8 +508,16 @@ public class EtlPipelineDeepCoverageTest5 {
         (long) m.invoke(pipeline, config, new HashMap<String, String>(), ds, w, 1, "no_dw_batch");
     assertEquals(3L, rows);
     verify(w).writeBatch(any(Iterator.class), any(Map.class));
-    verify(tracker).markProcessedWithRowCount(
+    // The combo mark is deferred until writer.commit() succeeds (see pendingComboMarks) rather
+    // than applied immediately here — a failed commit must not leave a combo marked complete for
+    // rows that were only buffered, never made durable. processSingleBatch alone (no commit())
+    // must NOT have called the tracker yet.
+    verify(tracker, never()).markProcessedWithRowCount(
         eq("no_dw_batch"), eq("no_dw_batch"), any(Map.class), any(), eq(3L));
+    java.lang.reflect.Field pendingField = EtlPipeline.class.getDeclaredField("pendingComboMarks");
+    pendingField.setAccessible(true);
+    assertEquals(1, ((java.util.Collection<?>) pendingField.get(pipeline)).size(),
+        "the combo mark must be queued in pendingComboMarks instead");
   }
 
   // -----------------------------------------------------------------------

@@ -30,9 +30,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -139,6 +141,33 @@ public class EtlPipeline {
    */
   private final Map<String, String> pendingUnitFreshnessTokens =
       new ConcurrentHashMap<String, String>();
+
+  /**
+   * Per-combo completion marks for combos SUCCESSFULLY written this run, captured by
+   * {@link #markCombosProcessed} but not applied to the tracker until {@code writer.commit()}
+   * succeeds — same reasoning as {@link #pendingUnitFreshnessTokens} above, applied to the more
+   * consequential marker. A combo whose rows were only buffered, not yet durably committed, must
+   * not be recorded {@code state=complete}: found live, fec.committee_contributions was marked
+   * complete for 3 combos (2022/2024/2026, ~1.45M rows) even though every retry of the single
+   * Iceberg commit covering all three threw {@code AlreadyExistsException} and none of those rows
+   * ever reached the table — downstream tooling (e.g. force-reprocess.sh's validation) trusted the
+   * tracker and reported a successful reprocess that never actually happened.
+   */
+  private final Queue<PendingComboMark> pendingComboMarks =
+      new ConcurrentLinkedQueue<PendingComboMark>();
+
+  /** One deferred {@link #markCombosProcessed} call, held until the pipeline's commit succeeds. */
+  private static final class PendingComboMark {
+    final String pipelineName;
+    final Map<String, String> markKey;
+    final long rowCount;
+
+    PendingComboMark(String pipelineName, Map<String, String> markKey, long rowCount) {
+      this.pipelineName = pipelineName;
+      this.markKey = markKey;
+      this.rowCount = rowCount;
+    }
+  }
 
   /**
    * Creates a new ETL pipeline.
@@ -1654,6 +1683,18 @@ public class EtlPipeline {
         LOGGER.info("Pipeline '{}': persisted {} per-unit freshness tokens (committed units)",
             pipelineName, pendingUnitFreshnessTokens.size());
       }
+      // Apply deferred per-combo completion marks — reaching this point means writer.commit()
+      // above succeeded, so every combo buffered this run is now durable. Must run before
+      // markCompletedPeriods below, which reads this same per-combo tracker state to decide
+      // whether a period's full combo set is complete.
+      if (!pendingComboMarks.isEmpty()) {
+        for (PendingComboMark mark : pendingComboMarks) {
+          incrementalTracker.markProcessedWithRowCount(
+              mark.pipelineName, mark.pipelineName, mark.markKey, null, mark.rowCount);
+        }
+        LOGGER.info("Pipeline '{}': applied {} deferred combo-completion marks after clean commit",
+            pipelineName, pendingComboMarks.size());
+      }
       // Per-period markers: mark each period whose full combo set is now processed,
       // even if OTHER periods in this table failed — markCompletedPeriods self-guards
       // via the per-combo tracker, so a period with any unprocessed combo is never marked.
@@ -2448,11 +2489,13 @@ public class EtlPipeline {
     for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
       // Enrich each fine combo at backfillPeriod granularity — today-identical key
       Map<String, String> markKey = enrichWithPeriodBounds(combo, backfillPeriod);
-      incrementalTracker.markProcessedWithRowCount(
-          pipelineName, pipelineName, markKey, null, rowCount);
+      // Deferred to pendingComboMarks — applied to the tracker only after writer.commit()
+      // succeeds (see that field's doc). The rows for this combo are buffered in the writer at
+      // this point, not yet durable.
+      pendingComboMarks.add(new PendingComboMark(pipelineName, markKey, rowCount));
     }
     if (fetchUnit.isCoalesced()) {
-      LOGGER.info("Coalesced fetch unit: marked {} fine combos processed for '{}'",
+      LOGGER.info("Coalesced fetch unit: deferred {} fine combos processed for '{}' pending commit",
           fetchUnit.getCombosToMark().size(), pipelineName);
     }
   }
