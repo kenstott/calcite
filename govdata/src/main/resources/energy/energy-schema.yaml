@@ -292,9 +292,9 @@ partitionedTables:
         type: boolean
         nullable: true
         comment: >
-          True when sector_code is a rollup/aggregate sector code (e.g. 'ALL') rather
-          than a true leaf-level sector, so it should be excluded from a naive SUM
-          alongside its constituent sectors.
+          True when sector_code is a rollup/aggregate sector code (90, 94-99) rather
+          than a true leaf-level sector (1-8), so it should be excluded from a naive
+          SUM alongside its constituent sectors.
       - name: generation_thousand_mwh
         type: double
         nullable: true

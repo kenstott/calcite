@@ -37,11 +37,20 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
           "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX",
           "UT", "VT", "VA", "WA", "WV", "WI", "WY")));
 
-  /** Sector codes that are rollups/aggregations of other sector codes rather
-   * than true leaf-level sectors. */
+  /** Fuel (energy source) codes that are rollups/aggregations of other fuel
+   * codes rather than true leaf-level fuels. */
   private static final Set<String> ROLLUP_CODES =
       Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
           "ALL", "FOS", "REN", "AOR", "COW", "PET", "TSN")));
+
+  /** Sector codes that are rollups/aggregations of other sector codes rather
+   * than true leaf-level sectors. Leaf sectors are numbered 1-8 (Electric
+   * Utility, IPP Non-CHP/CHP, Commercial Non-CHP/CHP, Industrial Non-CHP/CHP,
+   * Residential); these codes are the distinct, disjoint domain of aggregate
+   * sector ids EIA reports alongside them. */
+  private static final Set<String> SECTOR_ROLLUP_CODES =
+      Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+          "90", "94", "95", "96", "97", "98", "99")));
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -121,7 +130,7 @@ public class EiaElectricityGenerationTransformer extends EiaV2Transformer
         String sectorCode = getString(row, "sectorid");
         if (sectorCode != null) {
           out.put("sector_code", sectorCode);
-          out.put("sector_is_rollup", ROLLUP_CODES.contains(sectorCode));
+          out.put("sector_is_rollup", SECTOR_ROLLUP_CODES.contains(sectorCode));
         } else {
           out.putNull("sector_code");
           out.putNull("sector_is_rollup");

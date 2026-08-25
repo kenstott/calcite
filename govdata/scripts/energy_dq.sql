@@ -114,6 +114,19 @@ SELECT
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation', allow_moved_paths := true)
 WHERE generation_thousand_mwh IS NOT NULL AND generation_thousand_mwh < 0;
 
+-- T9: sector_is_rollup must be true for every aggregate sector code (90, 94-99)
+-- and false for every leaf sector code (1-8) -- guards against the copy-pasted
+-- fuel ROLLUP_CODES set silently misclassifying the sector axis.
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_generation', 'T9_sector_rollup_flag',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'sector_code in (90,94,95,96,97,98,99) requires sector_is_rollup=true, sector_code in (1..8) requires sector_is_rollup=false'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation', allow_moved_paths := true)
+WHERE (sector_code IN ('90','94','95','96','97','98','99') AND sector_is_rollup = false)
+   OR (sector_code IN ('1','2','3','4','5','6','7','8') AND sector_is_rollup = true);
+
 -- ============================================================
 -- eia_electricity_prices
 -- ============================================================
