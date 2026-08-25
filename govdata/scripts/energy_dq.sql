@@ -7,7 +7,8 @@
 --         eia_utility_annual, eia_power_plants, eia_capacity_changes,
 --         eia_fossil_fuel_production, eia_state_energy_consumption,
 --         eia_natural_gas_storage, eia_petroleum_stocks,
---         eia_crude_oil_imports, eia_refinery_operations, eia_coal_mines
+--         eia_crude_oil_imports, eia_refinery_operations, eia_coal_mines,
+--         ev_charging_stations
 -- Storage: Iceberg (iceberg_scan)
 --
 -- Worker coverage verified by T8 checks:
@@ -952,6 +953,87 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_coal_mines', allow_moved_paths := true)
   WHERE production_short_tons IS NOT NULL AND production_short_tons < 0
+) t;
+
+-- ============================================================
+-- ev_charging_stations
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'ev_charging_stations', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true);
+
+-- T2: row_count — confirmed live 25 Aug 2026: 89,775 electric stations nationwide
+INSERT INTO dq_results
+SELECT
+  'energy', 'ev_charging_stations', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 50000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 50000, 'expected >= 50000 electric charging stations nationwide'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'ev_charging_stations', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'ev_charging_stations', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- country is expected constant 'US' — AFDC's default (no country param) returns
+    -- only US stations, matching every other table in this US-federal-data warehouse.
+    AND column_name NOT IN ('type', 'country')
+) t;
+
+-- T6: pk_nulls (id NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'ev_charging_stations', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'id IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true)
+WHERE id IS NULL;
+
+-- T7: expected_values — lat/long in plausible range (covers US + territories + CA/MX per registry),
+-- and port counts non-negative where present
+INSERT INTO dq_results
+SELECT
+  'energy', 'ev_charging_stations', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'latitude/longitude out of [-90,90]/[-180,180] range, or negative port counts'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ev_charging_stations', allow_moved_paths := true)
+  WHERE (latitude IS NOT NULL AND (latitude < -90 OR latitude > 90))
+     OR (longitude IS NOT NULL AND (longitude < -180 OR longitude > 180))
+     OR (ev_dc_fast_num IS NOT NULL AND ev_dc_fast_num < 0)
+     OR (ev_level1_evse_num IS NOT NULL AND ev_level1_evse_num < 0)
+     OR (ev_level2_evse_num IS NOT NULL AND ev_level2_evse_num < 0)
 ) t;
 
 -- ============================================================

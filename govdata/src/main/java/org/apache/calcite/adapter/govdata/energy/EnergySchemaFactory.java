@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.energy;
 
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.govdata.GovDataSubSchemaFactory;
 
 import org.slf4j.Logger;
@@ -48,6 +49,10 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       "eia_coal_mines"
   ));
 
+  private static final Set<String> NREL_TABLES = new HashSet<>(Arrays.asList(
+      "ev_charging_stations"
+  ));
+
   @Override
   public String getSchemaResourceName() {
     return "/energy/energy-schema.yaml";
@@ -63,6 +68,11 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
     LOGGER.debug("Configuring hooks for ENERGY schema");
 
     Set<String> enabledSources = parseEnabledSources(operand);
+    boolean apiDataGovPresent = isApiDataGovPresent();
+    if (!apiDataGovPresent) {
+      LOGGER.info("ENERGY: API_DATA_GOV absent — ev_charging_stations disabled "
+          + "(EIA/MSHA tables unaffected)");
+    }
 
     for (final String tableName : EIA_API_TABLES) {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "eia_api", enabledSources));
@@ -76,6 +86,11 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "msha", enabledSources));
     }
 
+    for (final String tableName : NREL_TABLES) {
+      builder.isEnabled(tableName,
+          ctx -> apiDataGovPresent && isTableEnabled(tableName, "nrel", enabledSources));
+    }
+
     LOGGER.debug("Configured ENERGY schema hooks: enabledSources={}",
         enabledSources != null ? enabledSources : "all");
   }
@@ -86,6 +101,12 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       return false;
     }
     return true;
+  }
+
+  /** Resolves {@code ${API_DATA_GOV}} through the sanctioned VariableResolver (env/property). */
+  private boolean isApiDataGovPresent() {
+    String key = VariableResolver.resolveEnvVars("${API_DATA_GOV:}");
+    return key != null && !key.trim().isEmpty();
   }
 
   private Set<String> parseEnabledSources(Map<String, Object> operand) {

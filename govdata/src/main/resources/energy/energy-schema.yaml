@@ -13,6 +13,8 @@
 #   - EIA Petroleum Imports (EIA-814 monthly XLSX)
 #   - MSHA Bulk Pipeline (pipe-delimited CSV ZIP)
 #       - Coal mine production and demographics (MinesProdYearly)
+#   - NREL Alternative Fuels Data Center API (developer.nlr.gov, api.data.gov key)
+#       - EV charging station registry, port counts by level, connector types
 #
 # Features:
 #   - Cross-references with geo.states via state_abbr
@@ -1789,6 +1791,212 @@ partitionedTables:
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
+  # ---------------------------------------------------------------------------
+  # EV CHARGING STATIONS - NREL Alternative Fuels Data Center station registry
+  # ---------------------------------------------------------------------------
+  - name: ev_charging_stations
+    # Live station registry (openings/closings continuous) — freshness-gated snapshot,
+    # not year-partitioned. AFDC returns a Last-Modified header (confirmed live via
+    # curl -sI), no ETag.
+    freshness:
+      type: last_modified
+    pattern: "type=ev_charging_stations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      NREL Alternative Fuels Data Center (AFDC) public electric charging station
+      registry — one row per station. Station-level port counts by charging level
+      (ev_dc_fast_num / ev_level1_evse_num / ev_level2_evse_num) and available
+      connector types (ev_connector_types, comma-separated — e.g. CHADEMO, J1772,
+      J1772COMBO, TESLA). Does not model AFDC's per-charger connector/power
+      breakdown (ev_charging_units) — deeper than any known query needs; the
+      station-level aggregate counts and connector list answer "how much charging
+      capacity exists where." Whole registry re-fetched and overwritten each run
+      when Last-Modified changes (confirmed live: ~90K electric stations, 200-row
+      page cap). Cross-references geo.states via state_abbr. Source:
+      developer.nlr.gov (NREL's API host as of the 29 May 2026 migration off the
+      retired developer.nrel.gov domain; confirmed live).
+
+    dimensions:
+      type:
+        - ev_charging_stations
+
+    columns:
+      - name: id
+        type: long
+        nullable: false
+        comment: AFDC station ID (PK)
+      - name: station_name
+        type: string
+        nullable: true
+        comment: Station name
+      - name: street_address
+        type: string
+        nullable: true
+        comment: Street address
+      - name: intersection_directions
+        type: string
+        nullable: true
+        comment: Free-text directions to the station
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - <<: *state_abbr_column
+      - name: zip
+        type: string
+        nullable: true
+        comment: ZIP code
+      - name: country
+        type: string
+        nullable: true
+        comment: ISO country code (station registry also covers CA/MX)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Station latitude
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Station longitude
+      - name: access_code
+        type: string
+        nullable: true
+        comment: "'public' or 'private'"
+      - name: access_days_time
+        type: string
+        nullable: true
+        comment: Free-text access hours
+      - name: access_detail_code
+        type: string
+        nullable: true
+        comment: Access restriction detail code, when access_code is private
+      - name: groups_with_access_code
+        type: string
+        nullable: true
+        comment: Groups permitted access (e.g. 'Public', 'Private')
+      - name: facility_type
+        type: string
+        nullable: true
+        comment: Facility type (e.g. 'FLEET_GOVT', 'HOTEL', 'PARKING_GARAGE')
+      - name: owner_type_code
+        type: string
+        nullable: true
+        comment: Owner type code (e.g. 'LG'=local govt, 'SG'=state govt, 'P'=private, 'T'=utility)
+      - name: status_code
+        type: string
+        nullable: true
+        comment: Station status ('E'=available, 'P'=planned, 'T'=temporarily unavailable)
+      - name: open_date
+        type: date
+        nullable: true
+        comment: Date the station opened
+      - name: date_last_confirmed
+        type: date
+        nullable: true
+        comment: Date AFDC last confirmed this record
+      - name: expected_date
+        type: date
+        nullable: true
+        comment: Expected opening date, for planned stations
+      - name: updated_at
+        type: timestamp
+        nullable: true
+        comment: AFDC's last-updated timestamp for this record
+      - name: ev_connector_types
+        type: string
+        nullable: true
+        comment: Comma-separated connector types available (e.g. 'CHADEMO,J1772,J1772COMBO')
+      - name: ev_dc_fast_num
+        type: integer
+        nullable: true
+        comment: Count of DC fast charging ports
+      - name: ev_level1_evse_num
+        type: integer
+        nullable: true
+        comment: Count of Level 1 charging ports
+      - name: ev_level2_evse_num
+        type: integer
+        nullable: true
+        comment: Count of Level 2 charging ports
+      - name: ev_network
+        type: string
+        nullable: true
+        comment: Charging network operator (e.g. 'TESLA', 'CHARGEPOINT', 'Non-Networked')
+      - name: ev_network_web
+        type: string
+        nullable: true
+        comment: Network operator website
+      - name: ev_pricing
+        type: string
+        nullable: true
+        comment: Free-text pricing description
+      - name: ev_workplace_charging
+        type: boolean
+        nullable: true
+        comment: Whether this is workplace charging
+      - name: ev_renewable_source
+        type: string
+        nullable: true
+        comment: On-site renewable generation source, when present
+      - name: restricted_access
+        type: boolean
+        nullable: true
+        comment: Whether access is restricted
+      - name: maximum_vehicle_class
+        type: string
+        nullable: true
+        comment: Maximum vehicle class served (e.g. 'LD', 'MD', 'HD')
+      - name: station_phone
+        type: string
+        nullable: true
+        comment: Station contact phone number
+      - name: geocode_status
+        type: string
+        nullable: true
+        comment: AFDC geocoding confidence status
+
+    source:
+      type: http
+      url: "https://developer.nlr.gov/api/alt-fuel-stations/v1.json"
+      method: GET
+      parameters:
+        api_key: "${API_DATA_GOV}"
+        fuel_type: "ELEC"
+      response:
+        format: json
+        dataPath: "fuel_stations"
+        pagination:
+          type: OFFSET
+          pageSize: 200
+          limitParam: "limit"
+          offsetParam: "offset"
+          countPath: "total_results"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.NrelEvChargingStationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ev_charging_stations/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: ev_charging_stations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1893,6 +2101,14 @@ constraints:
         targetSchema: geo
         targetTable: counties
         targetColumns: [county_fips]
+
+  ev_charging_stations:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
 # ============================================================================
 # VIEWS
