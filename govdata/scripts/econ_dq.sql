@@ -801,8 +801,27 @@ FROM (
       'LNS11327659', 'LNS11327660', 'LNS11327689', 'LNS11327662',
       'LNS12327659', 'LNS12327660', 'LNS12327689', 'LNS12327662',
       'LNS14000003', 'LNS14000006', 'LNS14000009', 'LNS14032183',
-      'LNS14000025', 'LNS14000026', 'LNS14000012')
+      'LNS14000025', 'LNS14000026', 'LNS14000012',
+      'LNU04049526', 'LNU04049601', 'LNU04066408')
     AND (value < 0 OR value > 100)
+);
+
+-- employment_statistics: veteran-status labor force/employment/unemployment level series
+-- (thousands, not seasonally adjusted) must be non-negative
+INSERT INTO dq_results
+SELECT
+  'econ', 'employment_statistics', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where a veteran-status labor force/employment/unemployment level series is negative'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics', allow_moved_paths := true)
+  WHERE series IN (
+      'LNU01049526', 'LNU02049526', 'LNU03049526',
+      'LNU01049601', 'LNU02049601', 'LNU03049601',
+      'LNU01066408', 'LNU02066408', 'LNU03066408')
+    AND value < 0
 );
 
 -- inflation_metrics: CPI All Urban (CUUR0000SA0) index value should be > 0

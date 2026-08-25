@@ -516,7 +516,7 @@ partitionedTables:
     pattern: "type=employment_statistics/frequency=*/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
-      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted). Updated monthly with seasonal adjustments.
+      U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted), and CPS labor force/employment/unemployment level and unemployment rate broken out by veteran status (total veterans, nonveterans, Gulf War-era II veterans; not seasonally adjusted). Updated monthly with seasonal adjustments.
 
     # Dimension definitions for iteration
     dimensions:
@@ -563,9 +563,15 @@ partitionedTables:
           CES0000000001 total nonfarm employment (thousands);
           CES0500000001 total private employment (thousands);
           CES0500000002 average weekly hours, all employees, total private;
-          CES0500000007 average weekly hours, production and nonsupervisory employees, total private.
-          All LNS (CPS) series are seasonally adjusted. Use SELECT DISTINCT series to see what a
-          given partition actually contains.
+          CES0500000007 average weekly hours, production and nonsupervisory employees, total private;
+          CPS labor force level / employment level / unemployment level (thousands) / unemployment
+          rate (percent) by veteran status, 18+, not seasonally adjusted (BLS publishes no seasonally
+          adjusted veteran breakout) —
+          LNU01049526/LNU02049526/LNU03049526/LNU04049526 total veterans,
+          LNU01049601/LNU02049601/LNU03049601/LNU04049601 nonveterans,
+          LNU01066408/LNU02066408/LNU03066408/LNU04066408 Gulf War-era II veterans.
+          All LNS (CPS) series are seasonally adjusted; the LNU veteran-status series are not.
+          Use SELECT DISTINCT series to see what a given partition actually contains.
       - name: year
         type: integer
         nullable: true
@@ -592,6 +598,11 @@ partitionedTables:
         comment: Any footnotes or qualifiers for the data point
 
     # API Configuration
+    # NOTE: this `download:` block (including seriesList below) is legacy/unused by the
+    # active file.etl HttpSource pipeline — confirmed live 25 Aug 2026: editing seriesList
+    # here has zero effect on the actual BLS request. The real, executed request body is
+    # `source.body.seriesid` further below (a separately inlined list — "variables don't
+    # support lists" per its own comment). Add/remove series there, not here.
     download:
       enabled: true
       method: POST
@@ -707,6 +718,21 @@ partitionedTables:
           - "CES0500000001" # Total private employment, all employees (thousands)
           - "CES0500000002" # Average weekly hours, all employees, total private
           - "CES0500000007" # Average weekly hours, production and nonsupervisory employees, total private
+          # CPS labor force/employment/unemployment level (thousands) and unemployment rate
+          # (percent) by veteran status, 18+, not seasonally adjusted (BLS publishes no
+          # seasonally adjusted veteran-status breakout)
+          - "LNU01049526"   # Civilian labor force level - total veterans
+          - "LNU02049526"   # Employment level - total veterans
+          - "LNU03049526"   # Unemployment level - total veterans
+          - "LNU04049526"   # Unemployment rate - total veterans
+          - "LNU01049601"   # Civilian labor force level - nonveterans
+          - "LNU02049601"   # Employment level - nonveterans
+          - "LNU03049601"   # Unemployment level - nonveterans
+          - "LNU04049601"   # Unemployment rate - nonveterans
+          - "LNU01066408"   # Civilian labor force level - Gulf War-era II veterans
+          - "LNU02066408"   # Employment level - Gulf War-era II veterans
+          - "LNU03066408"   # Unemployment level - Gulf War-era II veterans
+          - "LNU04066408"   # Unemployment rate - Gulf War-era II veterans
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
