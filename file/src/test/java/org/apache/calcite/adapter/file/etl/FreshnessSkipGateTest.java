@@ -525,6 +525,69 @@ class FreshnessSkipGateTest {
   }
 
   /**
+   * HASH-type freshness with {@code trailing_window} set must scope its post-download token
+   * PER FETCH UNIT, not per pipeline — otherwise processing year=2023 then year=2024 in the same
+   * run would compare 2024's hash against 2023's just-stored hash (a single pipeline-scoped
+   * token), always see "different", and always write, even when neither year's content actually
+   * changed since the last run.
+   *
+   * <p>Runs a two-year (2023, 2024) HASH+trailing_window pipeline twice with IDENTICAL fetched
+   * data both times. The first run writes both years (no prior tokens). The second run must write
+   * NEITHER year — proving each year's hash was compared against its OWN prior token, not a
+   * cross-contaminated shared one.
+   */
+  @Test void testHashFreshnessScopedPerUnitWhenTrailingWindowSet() throws IOException {
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryFreshnessTracker tracker = new MemoryFreshnessTracker();
+
+    Map<String, Object> hashFreshnessMap = new HashMap<String, Object>();
+    hashFreshnessMap.put("type", "hash");
+    hashFreshnessMap.put("trailing_window", 2);
+    FreshnessConfig freshnessConfig = FreshnessConfig.fromMap(hashFreshnessMap);
+
+    // Probe result is irrelevant for HASH (post-download only; HttpSource#probe returns an empty
+    // result for HASH and the pre-download token path always passes a null `content`), but a
+    // StubHttpSource is still required so `dataSource instanceof HttpSource` gates the hash check.
+    HttpSource.ProbeResult probeResult = new HttpSource.ProbeResult(new HashMap<String, String>(), null);
+    StubHttpSource stubSource = new StubHttpSource(
+        HttpSourceConfig.builder().url("https://example.invalid/api/{year}").build(),
+        probeResult);
+
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("value", "stable");
+    CountingDataProvider provider = new CountingDataProvider(Collections.singletonList(row));
+    CountingDataWriter writer = new CountingDataWriter();
+
+    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024);
+
+    // --- First run: no per-unit tokens yet — both years must be written. ---
+    StubProbePipeline run1 = new StubProbePipeline(
+        config, sp, tempDir.toString(), tracker, provider, writer, stubSource);
+    run1.execute();
+    assertEquals(2, writer.writeCount.get(),
+        "First run must write both years (no prior hash tokens)");
+
+    Set<String> perUnitKeys = new HashSet<String>();
+    for (String k : tracker.tokenKeys()) {
+      if (k.contains("::")) {
+        perUnitKeys.add(k);
+      }
+    }
+    assertEquals(2, perUnitKeys.size(),
+        "Each year must persist its OWN hash token (got " + tracker.tokenKeys() + ")");
+
+    // --- Second run: identical data for both years — neither should be re-written. ---
+    writer.writeCount.set(0);
+    StubProbePipeline run2 = new StubProbePipeline(
+        config, sp, tempDir.toString(), tracker, provider, writer, stubSource);
+    run2.execute();
+    assertEquals(0, writer.writeCount.get(),
+        "Second run must skip writing both years — each year's hash is unchanged from its OWN "
+            + "prior token, not a cross-contaminated pipeline-scoped one");
+  }
+
+  /**
    * When {@code freshness} is absent (null), the pipeline runs unconditionally —
    * preserving today's behavior (back-compat).
    */

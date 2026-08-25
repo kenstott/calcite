@@ -217,6 +217,14 @@ partitionedTables:
   # EIA ELECTRICITY GENERATION - Monthly generation and fuel consumption by state
   # ---------------------------------------------------------------------------
   - name: eia_electricity_generation
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_elec_gen/year=*/month=*/*.parquet"
     # DQ sample cap (GOVDATA_DQ mode): ~120k rows/year (state × source × sector × 12 months),
     # fetched per-year (backfill_period: annual) via ~24 paginated EIA API pages. Cap each
@@ -358,6 +366,14 @@ partitionedTables:
   # EIA ELECTRICITY PRICES - Annual retail electricity sales and prices by state
   # ---------------------------------------------------------------------------
   - name: eia_electricity_prices
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_elec_price/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -450,6 +466,14 @@ partitionedTables:
   # EIA UTILITY ANNUAL - EIA-861 Annual Electric Power Industry Report
   # ---------------------------------------------------------------------------
   - name: eia_utility_annual
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_utility/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -612,6 +636,14 @@ partitionedTables:
   # EIA POWER PLANTS - EIA-860 Annual Electric Generator Report
   # ---------------------------------------------------------------------------
   - name: eia_power_plants
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_plant/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -803,6 +835,14 @@ partitionedTables:
   # EIA CAPACITY CHANGES - EIA-860M Monthly Generator Capacity Changes
   # ---------------------------------------------------------------------------
   - name: eia_capacity_changes
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_capacity/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -933,6 +973,14 @@ partitionedTables:
   # EIA FOSSIL FUEL PRODUCTION - Crude oil and natural gas production
   # ---------------------------------------------------------------------------
   - name: eia_fossil_fuel_production
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_fossil/year=*/month=*/*.parquet"
     partitions: *standard_partitions_monthly
     comment: >
@@ -1256,6 +1304,14 @@ partitionedTables:
   # EIA PETROLEUM STOCKS - Weekly petroleum product stocks by PADD
   # ---------------------------------------------------------------------------
   - name: eia_petroleum_stocks
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_pet_stocks/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1366,6 +1422,14 @@ partitionedTables:
   # EIA CRUDE OIL IMPORTS - EIA-814 Monthly Import Survey
   # ---------------------------------------------------------------------------
   - name: eia_crude_oil_imports
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_crude_imp/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1483,6 +1547,14 @@ partitionedTables:
   # EIA REFINERY OPERATIONS - Monthly refinery input and capacity data
   # ---------------------------------------------------------------------------
   - name: eia_refinery_operations
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=eia_refinery/year=*/month=*/*.parquet"
     partitions: *standard_partitions_monthly
     comment: >
@@ -1590,6 +1662,14 @@ partitionedTables:
   # MSHA COAL MINES - MSHA MinesProdYearly coal production data
   # ---------------------------------------------------------------------------
   - name: eia_coal_mines
+    # EIA states its monthly series are "preliminary, likely to be revised the
+    # following month," plus a later annual revision -- continuous revision, not a Jan-Feb-only
+    # window. trailing_window: 2 (year-grain, current + prior year) is a partial mitigation, not
+    # a full fix for EIA's every-month churn, but stops the period-completion gate from freezing
+    # the year permanently.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=msha_coal/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >

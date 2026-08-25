@@ -505,6 +505,14 @@ partitionedTables:
 
   # --- EMPLOYMENT STATISTICS ---
   - name: employment_statistics
+    # Freshness gate: BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision. Without trailing_window, the
+    # pipeline's period-completion gate marks each year 'complete' the first time it succeeds and
+    # never re-checks it — trailing_window force-reopens the current + prior year every run; the
+    # hash check then skips the write (no new snapshot) unless BLS actually revised the data.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=employment_statistics/frequency=*/year=*/*.parquet"
     partitions: *standard_partitions
     comment: >
@@ -743,6 +751,13 @@ partitionedTables:
 
   # --- INFLATION METRICS ---
   - name: inflation_metrics
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=inflation_metrics/frequency=*/year=*/inflation_metrics.parquet"
     partitions: *standard_partitions
     comment: >
@@ -880,6 +895,13 @@ partitionedTables:
 
   # --- REGIONAL CPI ---
   - name: regional_cpi
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=regional_cpi/frequency=*/year=*/regional_cpi.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1004,6 +1026,13 @@ partitionedTables:
 
   # --- METRO CPI ---
   - name: metro_cpi
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=metro_cpi/frequency=*/year=*/metro_cpi.parquet"
     partitions: *standard_partitions
 
@@ -1301,6 +1330,13 @@ partitionedTables:
 
   # --- REGIONAL FOOD CPI ---
   - name: regional_food_cpi
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=regional_food_cpi/frequency=*/year=*/regional_food_cpi.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1427,6 +1463,13 @@ partitionedTables:
 
   # --- METRO FOOD CPI ---
   - name: metro_food_cpi
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=metro_food_cpi/frequency=*/year=*/metro_food_cpi.parquet"
     partitions: *standard_partitions
 
@@ -1573,6 +1616,13 @@ partitionedTables:
 
   # --- STATE INDUSTRY ---
   - name: state_industry
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=state_industry/frequency=*/year=*/state_industry.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1835,6 +1885,13 @@ partitionedTables:
 
   # --- METRO INDUSTRY ---
   - name: metro_industry
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=metro_industry/frequency=*/year=*/metro_industry.parquet"
     partitions: *standard_partitions
     comment: >
@@ -1951,6 +2008,13 @@ partitionedTables:
 
   # --- METRO WAGES ---
   - name: metro_wages
+    # BLS QCEW revises the most recent quarters as it finalizes each year's annual
+    # figures. trailing_window force-reopens the current + prior year every run so the
+    # period-completion gate doesn't freeze them permanently; year-grain only (does not model
+    # QCEW's within-year quarterly revision cycle) -- a partial mitigation, not a complete fix.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=metro_wages/frequency=*/year=*/metro_wages.parquet"
     partitions: *standard_partitions
     comment: >
@@ -2189,6 +2253,13 @@ partitionedTables:
 
   # --- COUNTY WAGES ---
   - name: county_wages
+    # BLS QCEW revises the most recent quarters as it finalizes each year's annual
+    # figures. trailing_window force-reopens the current + prior year every run so the
+    # period-completion gate doesn't freeze them permanently; year-grain only (does not model
+    # QCEW's within-year quarterly revision cycle) -- a partial mitigation, not a complete fix.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=county_wages/frequency=*/year=*/county_wages.parquet"
     # DQ sample cap (GOVDATA_DQ mode): same QCEW annual bulk as county_qcew, county-filtered
     # to all ~6,038 county area codes x industries (millions of rows/year). Cap the stream so
@@ -2311,6 +2382,13 @@ partitionedTables:
 
   # --- JOLTS REGIONAL ---
   - name: jolts_regional
+    # JOLTS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
+    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # write when the source file is unrevised for that year.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=jolts_regional/frequency=*/year=*/jolts_regional.parquet"
     partitions: *standard_partitions
     sourcePaths:
@@ -2474,6 +2552,13 @@ partitionedTables:
 
   # --- JOLTS INDUSTRY (national industry detail) ---
   - name: jolts_industry
+    # JOLTS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
+    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # write when the source file is unrevised for that year.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=jolts_industry/frequency=*/year=*/jolts_industry.parquet"
     partitions: *standard_partitions
     sourcePaths:
@@ -2612,6 +2697,13 @@ partitionedTables:
 
   # --- JOLTS STATE ---
   - name: jolts_state
+    # JOLTS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual benchmark update (same cadence as employment_statistics).
+    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # write when the source file is unrevised for that year.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=jolts_state/frequency=*/year=*/jolts_state.parquet"
     partitions: *standard_partitions
     sourcePaths:
@@ -2759,6 +2851,13 @@ partitionedTables:
 
   # --- WAGE GROWTH ---
   - name: wage_growth
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=wage_growth/frequency=*/year=*/wage_growth.parquet"
     partitions: *standard_partitions
     comment: >
@@ -2868,6 +2967,13 @@ partitionedTables:
 
   # --- LABOR PRODUCTIVITY ---
   - name: labor_productivity
+    # BLS revises recent quarters of the Major Sector Productivity series and
+    # restates the prior calendar year in its annual benchmark update. trailing_window
+    # force-reopens the current + prior year every run; the hash check skips the write when
+    # unrevised (year-grain only -- does not separately re-check quarter-level revision).
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=labor_productivity/frequency=*/year=*/labor_productivity.parquet"
     partitions: *standard_partitions
     comment: >
@@ -2975,6 +3081,13 @@ partitionedTables:
 
   # --- REGIONAL EMPLOYMENT ---
   - name: regional_employment
+    # BLS revises the prior 1-2 months on every monthly release and restates the
+    # prior calendar year in its annual February benchmark revision (same cadence as
+    # employment_statistics). trailing_window force-reopens the current + prior year every run so
+    # the period-completion gate doesn't freeze them; the hash check skips the write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=regional_employment/year=*/regional_employment.parquet"
     partitions:
       style: hive
@@ -3474,6 +3587,13 @@ partitionedTables:
 
   # --- FRED INDICATORS ---
   - name: fred_indicators
+    # FRED series mirror the revision cadence of their underlying source (e.g.
+    # PAYEMS mirrors BLS CES -- prior months revised monthly, prior year restated each February).
+    # trailing_window force-reopens the current + prior year every run; the hash check skips the
+    # write when unrevised.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=fred_indicators/series=*/year=*/month=*/fred_indicators.parquet"
     partitions:
       style: hive
@@ -3722,6 +3842,14 @@ partitionedTables:
 
   # --- NATIONAL ACCOUNTS ---
   - name: national_accounts
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=national_accounts/frequency=*/year=*/tablename=*/national_accounts.parquet"
     partitions:
       style: hive
@@ -3919,6 +4047,14 @@ partitionedTables:
 
   # --- REGIONAL PRICE PARITIES ---
   - name: regional_price_parities
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=regional_price_parities/year=*/tablename=*/regional_price_parities.parquet"
     partitions:
       style: hive
@@ -4709,6 +4845,14 @@ partitionedTables:
   # NOTE: This table uses per-API-call approach which is slow and memory-intensive.
   # Consider using state_personal_income (SAINC bulk), state_gdp (SAGDP bulk), etc. instead.
   - name: regional_income
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=*/year=*/*.parquet"
     partitions:
       style: hive
@@ -4988,6 +5132,14 @@ partitionedTables:
 
   # --- ITA DATA ---
   - name: ita_data
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=ita_data/frequency=*/year=*/indicator=*/ita_data.parquet"
     partitions:
       style: hive
@@ -5195,6 +5347,14 @@ partitionedTables:
   # (Country/Industry) x year. See views fdi_data (tall union) and
   # fdi_by_country (wide pivot).
   - name: fdi_direct_investment
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=fdi_direct_investment/direction=*/classification=*/year=*/fdi_direct_investment.parquet"
     partitions:
       style: hive
@@ -5335,6 +5495,14 @@ partitionedTables:
         compactionMinFiles: 5
 
   - name: fdi_activities
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=fdi_activities/direction=*/classification=*/year=*/fdi_activities.parquet"
     partitions:
       style: hive
@@ -5412,6 +5580,14 @@ partitionedTables:
   # TypeOfInvestment=All&Component=All&Frequency=A&Year=2022 -> 200 with the
   # field set mapped below.
   - name: iip_positions
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=iip_positions/frequency=*/year=*/iip_positions.parquet"
     partitions:
       style: hive
@@ -5542,6 +5718,14 @@ partitionedTables:
 
   # --- GDP STATISTICS ---
   - name: gdp_statistics
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=gdp_statistics/frequency=*/year=*/gdp_statistics.parquet"
     partitions: *standard_partitions
     comment: >
@@ -5649,6 +5833,14 @@ partitionedTables:
 
   # --- INDUSTRY GDP ---
   - name: industry_gdp
+    # BEA advances quarterly GDP-family estimates (advance -> second -> third,
+    # about a month apart) and can restate multiple prior years in its annual/comprehensive NIPA
+    # and regional revisions. trailing_window: 2 (year-grain, current + prior year) is a partial
+    # mitigation, not a complete fix -- it won't catch a comprehensive revision reaching back
+    # further than one year, but it stops the period-completion gate from freezing forever.
+    freshness:
+      type: hash
+      trailing_window: 2
     pattern: "type=industry_gdp/frequency=*/year=*/industry=*/industry_gdp.parquet"
     dimensions:
       type:

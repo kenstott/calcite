@@ -26,6 +26,18 @@ import java.util.Map;
  *   count_probe: { url: "...?resultsPerPage=1", path: "$.totalResults" }
  * }</pre>
  *
+ * <p>For a period-dimensioned table (e.g. a per-year templated fetch), {@code trailing_window}
+ * forces the most recent N periods to always be re-attempted, regardless of any "complete" or
+ * self-heal marker — the source may still revise recently-published periods (e.g. BLS's annual
+ * February benchmark revision restates the prior calendar year). The freshness check (typically
+ * {@code hash}) then decides whether the re-fetch actually results in a write:
+ *
+ * <pre>{@code
+ * freshness:
+ *   type: hash
+ *   trailing_window: 2
+ * }</pre>
+ *
  * <p>For a GraphQL source, a small POST query reads a cheap signal (e.g. the global
  * max {@code updatedAt}) and {@code path} extracts the comparable value:
  *
@@ -102,10 +114,12 @@ final class FreshnessConfig {
   private final String queryPath;
   private final String normalize;
   private final String watermarkVar;
+  private final Integer trailingWindow;
 
   private FreshnessConfig(Type type, String probeUrl, String versionField,
       String checksumUrl, boolean objectMetadata, String countUrl, String countPath,
-      String query, String queryPath, String normalize, String watermarkVar) {
+      String query, String queryPath, String normalize, String watermarkVar,
+      Integer trailingWindow) {
     this.type = type;
     this.probeUrl = probeUrl;
     this.versionField = versionField;
@@ -117,6 +131,7 @@ final class FreshnessConfig {
     this.queryPath = queryPath;
     this.normalize = normalize;
     this.watermarkVar = watermarkVar;
+    this.trailingWindow = trailingWindow;
   }
 
   Type getType() {
@@ -180,6 +195,16 @@ final class FreshnessConfig {
   }
 
   /**
+   * Number of most-recent periods (by {@code year}, compared against the actual current
+   * calendar year) that must always be re-attempted, regardless of any "complete" or self-heal
+   * marker. Null (absent {@code trailing_window}) disables reopening — the default, unchanged
+   * behavior. See {@link EtlPipeline}'s trailing-window reopen logic.
+   */
+  Integer getTrailingWindow() {
+    return trailingWindow;
+  }
+
+  /**
    * Parses a {@code freshness:} map, or returns null if absent/invalid (freshness off).
    */
   @SuppressWarnings("unchecked")
@@ -208,11 +233,26 @@ final class FreshnessConfig {
     String queryPath = asString(map.get("path"));
     String normalize = asString(map.get("normalize"));
     String watermarkVar = asString(map.get("watermark_var"));
+    Integer trailingWindow = asInteger(map.get("trailing_window"));
     return new FreshnessConfig(type, probeUrl, versionField, checksumUrl, objectMetadata,
-        countUrl, countPath, query, queryPath, normalize, watermarkVar);
+        countUrl, countPath, query, queryPath, normalize, watermarkVar, trailingWindow);
   }
 
   private static String asString(Object o) {
     return o == null ? null : String.valueOf(o);
+  }
+
+  private static Integer asInteger(Object o) {
+    if (o == null) {
+      return null;
+    }
+    if (o instanceof Number) {
+      return ((Number) o).intValue();
+    }
+    try {
+      return Integer.parseInt(String.valueOf(o).trim());
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 }

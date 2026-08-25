@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -359,6 +360,9 @@ public class EtlPipeline {
       // This works for both Parquet and Iceberg formats
       MaterializeConfig materializeConfig = config.getMaterialize();
       String configHash = IncrementalTracker.computeConfigHash(config.getDimensions());
+      // Read once, early: used both by the trailing-window force-reopen (Phase 2, below) and by
+      // the freshness skip-gates (Phase 3b / processSingleBatch).
+      FreshnessConfig freshnessConfig = config.getFreshness();
 
       // Completion markers are a *period* concept — a marker means "done for time period T".
       // A non-period table has no T, so completion / self-heal / per-period filtering does not
@@ -537,6 +541,18 @@ public class EtlPipeline {
         // even if a per-combo TTL would otherwise re-queue it.
         removePeriodCompleteIndices(pipelineName, combinations, standardUnprocessedIndices);
 
+        // Force-reopen freshness.trailing_window periods (e.g. the current year + prior year for
+        // employment_statistics — BLS's Feb benchmark revision restates the prior calendar year).
+        // Every gate above is permanent once a combo is first fully processed: the per-combo
+        // tracker (the bulk filterUnprocessed / Phase 1.5 self-heal quick-check above) and the
+        // per-period 'complete' marker just consulted by removePeriodCompleteIndices have no
+        // automatic re-check tied to the calendar. Rather than special-case each of those gates,
+        // re-add any trailing-window combo here regardless of which one dropped it; the
+        // hash-freshness gate in processSingleBatch then decides whether the re-fetch actually
+        // results in a write (skip-vs-overwrite), so an unrevised period churns no new snapshot.
+        reopenTrailingWindowPeriods(pipelineName, freshnessConfig, combinations,
+            standardUnprocessedIndices);
+
         // Unavailable skip: drop any combo whose latest marker is state="unavailable" and the
         // retry window has not elapsed (per-schema errorHandling.notFoundRetryDays, default 7).
         // These are upstream 404s — the resource was not yet published; there is no point
@@ -655,7 +671,6 @@ public class EtlPipeline {
       // commit, skip the fetch and the materialize — no new Iceberg snapshot is created.
       // hash-type is post-download and is handled after the fetch; deferred for now.
       //
-      FreshnessConfig freshnessConfig = config.getFreshness();
       // The pipeline-level probe below is called with an EMPTY variable map (there is no single
       // "the" partition for a templated source), so a source URL still carrying a {var}
       // placeholder — e.g. {effective_year} — cannot be substituted and is not a valid URI
@@ -741,9 +756,19 @@ public class EtlPipeline {
       // units by their full fetch-variable set, so per-state tokens are tracked independently.
       boolean templatedMultiUnitFetch =
           config.getDimensions() != null && !config.getDimensions().isEmpty();
+      // HASH stays excluded from this pre-download probe path UNLESS trailing_window is set: HASH
+      // can only be computed from the downloaded body (HttpSource#probe's HASH case is a
+      // documented no-op — empty ProbeResult, no request — and FreshnessCheck#token returns null
+      // for HASH when passed a null `content`, which this call always does), so relaxing the
+      // exclusion never routes HASH through a pre-download skip here. The real per-unit HASH skip
+      // is the post-download gate in processSingleBatch (hashFreshnessActive), which trailing
+      // periods now also engage per-unit — see the per-unit hash token scoping there.
+      boolean hashPreDownloadExcluded = freshnessConfig != null
+          && freshnessConfig.getType() == FreshnessConfig.Type.HASH
+          && freshnessConfig.getTrailingWindow() == null;
       perUnitFreshnessEnabled = (hasPeriod || templatedMultiUnitFetch)
           && freshnessConfig != null
-          && freshnessConfig.getType() != FreshnessConfig.Type.HASH
+          && !hashPreDownloadExcluded
           && dataSource instanceof HttpSource;
       // Probe+capture always runs (to seed the token on a cold run); only the skip is gated on
       // having committed data, exactly like the pipeline-level gate above.
@@ -2081,13 +2106,26 @@ public class EtlPipeline {
     boolean hashFreshnessActive = freshnessConfigForHash != null
         && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
         && dataSource instanceof HttpSource;
+    // A per-year (or otherwise per-unit) templated table with trailing_window set processes
+    // MULTIPLE units in one run (e.g. year=2025 then year=2026). The bare pipelineName token
+    // below is a SINGLE scalar for the whole pipeline: comparing unit N's hash against the token
+    // unit N-1 just wrote would always see "different" and always write, defeating the point of
+    // the check (churns a snapshot every run, though not unsafe). Scope the token per-unit here,
+    // same as the ETAG/LAST_MODIFIED per-unit gate above (unitKey = pipeline::freshnessUnitKey).
+    // Existing pipeline-scoped HASH tables (house_price_index, fair_market_rents — single-URL,
+    // one unit per run) do not set trailing_window, so their behavior is unchanged.
+    boolean hashTokenPerUnit = hashFreshnessActive
+        && freshnessConfigForHash.getTrailingWindow() != null;
+    String hashTokenKey = hashTokenPerUnit
+        ? pipelineName + "::" + freshnessUnitKey(variables)
+        : pipelineName;
     // hashFreshnessToken is set if we computed a hash and must store it post-write
     String hashFreshnessToken = null;
     if (hashFreshnessActive) {
       // Stream the chain once through a multiset hash — O(1) memory, order-independent.
       String currentHash = hashRowsStreaming(data);
       closeQuietly(data);
-      String previousHash = incrementalTracker.getFreshnessToken(pipelineName);
+      String previousHash = incrementalTracker.getFreshnessToken(hashTokenKey);
       // Only skip when committed data exists to preserve. Under forceReprocessAll (no Iceberg data /
       // purged / cleared marker) we still capture+persist the hash below, but must WRITE this run —
       // otherwise an unchanged source after a purge would skip forever and leave the table empty.
@@ -2211,6 +2249,8 @@ public class EtlPipeline {
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final boolean finalComputedDeltaStreaming = computedDeltaStreaming;
     final String finalHashFreshnessToken = hashFreshnessToken;
+    final boolean finalHashTokenPerUnit = hashTokenPerUnit;
+    final String finalHashTokenKey = hashTokenKey;
     // The write consumes `data`, which on a hash-CHANGED run is the re-fetched chain (not
     // sourceChain). Close that chain after the write; sourceChain is closed too (idempotent,
     // already drained/closed by the hash branch) when it is a different object.
@@ -2267,11 +2307,20 @@ public class EtlPipeline {
                   computedDeltaHwm[0], pipelineName);
             }
           }
-          // Persist hash freshness token after a successful write
+          // Persist hash freshness token after a successful write. Per-unit (trailing_window)
+          // tokens are deferred to pendingUnitFreshnessTokens — published only after the
+          // whole-pipeline writer.commit() succeeds, same as the ETAG/LAST_MODIFIED per-unit gate
+          // above — so a later commit failure can't leave a token recorded for data that was
+          // never actually made durable. Pipeline-scoped (non-trailing-window) HASH tables keep
+          // the prior immediate-write behavior unchanged.
           if (finalHashFreshnessToken != null) {
-            incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
-            LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
-                finalHashFreshnessToken, pipelineName);
+            if (finalHashTokenPerUnit) {
+              pendingUnitFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);
+            } else {
+              incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
+              LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
+                  finalHashFreshnessToken, pipelineName);
+            }
           }
         }
 
@@ -2782,6 +2831,12 @@ public class EtlPipeline {
    *   <li>Existing partitions are a subset of expected combinations (not stale)</li>
    * </ol>
    *
+   * <p>Marking a combo processed here (an existing partition = "done") is otherwise permanent,
+   * same as a real successful write — this method does not need its own trailing-window
+   * special-case because {@link #reopenTrailingWindowPeriods} runs after this method's result
+   * feeds into the Phase 2 unprocessed set and unconditionally re-adds any trailing-window combo,
+   * regardless of whether this self-heal (or the plain per-combo tracker) is what excluded it.
+   *
    * @param pipelineName Pipeline name for cache key
    * @param config Pipeline configuration
    * @param combinations Expected dimension combinations
@@ -3156,6 +3211,67 @@ public class EtlPipeline {
     if (removed > 0) {
       LOGGER.info("Per-period skip: dropped {} of {} combos already marked complete for '{}'",
           removed, removed + unprocessedIndices.size(), pipelineName);
+    }
+  }
+
+  /**
+   * Force-reopens combos whose period falls within {@code freshness.trailing_window}, adding
+   * them back into {@code unprocessedIndices} regardless of whatever excluded them — the
+   * per-combo tracker's permanent "already processed" state (from a prior successful write, or
+   * from Phase 1.5's self-heal treating an existing Iceberg partition as done) or the per-period
+   * 'complete' marker. No-op when the freshness config has no {@code trailing_window} set.
+   *
+   * @param pipelineName       the pipeline name
+   * @param freshnessConfig    the pipeline's freshness config, or null
+   * @param combinations       all combinations (indexed by the set entries)
+   * @param unprocessedIndices mutable set of indices considered unprocessed; combos within the
+   *                           trailing window are added back in place
+   */
+  private void reopenTrailingWindowPeriods(String pipelineName, FreshnessConfig freshnessConfig,
+      List<Map<String, String>> combinations, Set<Integer> unprocessedIndices) {
+    if (freshnessConfig == null || freshnessConfig.getTrailingWindow() == null
+        || combinations == null || combinations.isEmpty()) {
+      return;
+    }
+    int reopened = 0;
+    for (int i = 0; i < combinations.size(); i++) {
+      if (isWithinTrailingWindow(freshnessConfig, combinations.get(i))
+          && unprocessedIndices.add(i)) {
+        reopened++;
+      }
+    }
+    if (reopened > 0) {
+      LOGGER.info("Trailing window: force-reopened {} combo(s) within trailing_window={} for "
+          + "'{}', regardless of prior completion/self-heal state",
+          reopened, freshnessConfig.getTrailingWindow(), pipelineName);
+    }
+  }
+
+  /**
+   * True if {@code combo}'s {@code year} is within the most recent {@code trailing_window}
+   * periods, compared against the actual current calendar year — e.g. {@code trailing_window: 2}
+   * means the current year and the immediately prior year. Reuses the same
+   * {@link Calendar#YEAR}-based "current year" calculation already used by
+   * {@link DimensionIterator}'s YEAR_RANGE resolution, rather than a second ad-hoc clock. Combos
+   * with no (or an unparsable) {@code year} are never in the trailing window — a table without a
+   * canonical year dimension has nothing for {@code trailing_window} to compare against.
+   */
+  private static boolean isWithinTrailingWindow(FreshnessConfig freshnessConfig,
+      Map<String, String> combo) {
+    Integer trailingWindow = freshnessConfig.getTrailingWindow();
+    if (trailingWindow == null || trailingWindow <= 0 || combo == null) {
+      return false;
+    }
+    String yearStr = combo.get("year");
+    if (yearStr == null || yearStr.isEmpty()) {
+      return false;
+    }
+    try {
+      int year = Integer.parseInt(yearStr);
+      int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+      return currentYear - year <= trailingWindow - 1;
+    } catch (NumberFormatException e) {
+      return false;
     }
   }
 
