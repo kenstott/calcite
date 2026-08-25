@@ -262,16 +262,40 @@ class FreshnessSkipGateTest {
    */
   static final class CountingDataWriter implements DataWriter {
     final AtomicInteger writeCount = new AtomicInteger();
+    final List<String> writtenYears = new ArrayList<String>();
 
     @Override public long write(EtlPipelineConfig config,
         Iterator<Map<String, Object>> data, Map<String, String> variables) {
       writeCount.incrementAndGet();
+      writtenYears.add(variables.get("year"));
       long count = 0;
       while (data.hasNext()) {
         data.next();
         count++;
       }
       return count;
+    }
+  }
+
+  /**
+   * {@link DataProvider} whose returned rows vary by the {@code year} fetch variable, so a test
+   * can change ONE period's content between runs while leaving another period's content
+   * identical — simulating a genuine upstream revision of a single period rather than a
+   * first-ever fetch (previousToken == null) or a wholesale content change of every period.
+   */
+  static final class VaryingDataProvider implements DataProvider {
+    final AtomicInteger fetchCount = new AtomicInteger();
+    final Map<String, List<Map<String, Object>>> rowsByYear;
+
+    VaryingDataProvider(Map<String, List<Map<String, Object>>> rowsByYear) {
+      this.rowsByYear = rowsByYear;
+    }
+
+    @Override public Iterator<Map<String, Object>> fetch(
+        EtlPipelineConfig config, Map<String, String> variables) {
+      fetchCount.incrementAndGet();
+      List<Map<String, Object>> rows = rowsByYear.get(variables.get("year"));
+      return new ArrayList<Map<String, Object>>(rows).iterator();
     }
   }
 
@@ -585,6 +609,72 @@ class FreshnessSkipGateTest {
     assertEquals(0, writer.writeCount.get(),
         "Second run must skip writing both years — each year's hash is unchanged from its OWN "
             + "prior token, not a cross-contaminated pipeline-scoped one");
+  }
+
+  /**
+   * The complement to {@link #testHashFreshnessScopedPerUnitWhenTrailingWindowSet}: that test
+   * only proves "no prior token → write" and "identical content → skip". Neither proves the
+   * scenario trailing_window exists for — an upstream agency REVISING a period's data (e.g. BLS
+   * restating a prior year in its February benchmark) — because "no prior token" is a first-ever
+   * fetch, not a changed re-fetch of a period already held.
+   *
+   * <p>Seeds two years with stable content (both write, tokens persist), then re-runs with 2023's
+   * content changed and 2024's left identical, and asserts exactly 2023 is rewritten while 2024
+   * is still skipped — proving a genuine per-unit content change is detected and overwrites only
+   * the affected partition, not the whole table.
+   */
+  @Test void testHashFreshnessDetectsChangedYearAndLeavesOtherUnchanged() throws IOException {
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryFreshnessTracker tracker = new MemoryFreshnessTracker();
+
+    Map<String, Object> hashFreshnessMap = new HashMap<String, Object>();
+    hashFreshnessMap.put("type", "hash");
+    hashFreshnessMap.put("trailing_window", 2);
+    FreshnessConfig freshnessConfig = FreshnessConfig.fromMap(hashFreshnessMap);
+
+    HttpSource.ProbeResult probeResult = new HttpSource.ProbeResult(new HashMap<String, String>(), null);
+    StubHttpSource stubSource = new StubHttpSource(
+        HttpSourceConfig.builder().url("https://example.invalid/api/{year}").build(),
+        probeResult);
+
+    EtlPipelineConfig config = buildPeriodConfig(freshnessConfig, 2023, 2024);
+
+    Map<String, Object> stableRow = new HashMap<String, Object>();
+    stableRow.put("id", 1);
+    stableRow.put("value", "stable");
+
+    Map<String, List<Map<String, Object>>> initialRows =
+        new HashMap<String, List<Map<String, Object>>>();
+    initialRows.put("2023", Collections.singletonList(stableRow));
+    initialRows.put("2024", Collections.singletonList(stableRow));
+
+    // --- First run: no prior tokens — both years write, seeding a hash token each. ---
+    VaryingDataProvider provider1 = new VaryingDataProvider(initialRows);
+    CountingDataWriter writer1 = new CountingDataWriter();
+    new StubProbePipeline(config, sp, tempDir.toString(), tracker, provider1, writer1, stubSource)
+        .execute();
+    assertEquals(2, writer1.writeCount.get(), "First run must write both years");
+
+    // --- Second run: 2023's content actually changed (a revision); 2024 is untouched. ---
+    Map<String, Object> revisedRow = new HashMap<String, Object>();
+    revisedRow.put("id", 1);
+    revisedRow.put("value", "revised");
+
+    Map<String, List<Map<String, Object>>> revisedRows =
+        new HashMap<String, List<Map<String, Object>>>();
+    revisedRows.put("2023", Collections.singletonList(revisedRow));
+    revisedRows.put("2024", Collections.singletonList(stableRow));
+
+    VaryingDataProvider provider2 = new VaryingDataProvider(revisedRows);
+    CountingDataWriter writer2 = new CountingDataWriter();
+    new StubProbePipeline(config, sp, tempDir.toString(), tracker, provider2, writer2, stubSource)
+        .execute();
+
+    assertEquals(1, writer2.writeCount.get(),
+        "Second run must write exactly ONE year — the one whose content actually changed");
+    assertEquals(Collections.singletonList("2023"), writer2.writtenYears,
+        "The rewritten year must be 2023 (the changed one), not 2024 (unchanged, must stay "
+            + "skipped) — proves the hash-changed branch fires per-unit, not table-wide");
   }
 
   /**
