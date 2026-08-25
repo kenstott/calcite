@@ -79,7 +79,6 @@ public class OfficialsSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for OFFICIALS schema");
-    deriveCongressRange(operand);
   }
 
   /**
@@ -90,13 +89,21 @@ public class OfficialsSchemaFactory implements GovDataSubSchemaFactory {
    * direct model) goes through — rather than relying on any caller to separately compute and
    * pass a Congress number.
    *
+   * <p>Must run from {@link #deriveEarlyProperties}, not {@link #configureSchemaHooks}: the
+   * latter is invoked by {@code ModelLifecycleProcessor} after this schema's YAML resource has
+   * already been parsed and its {@code congress_range} dimension's
+   * {@code ${GOVDATA_START_CONGRESS:117}} placeholder already resolved — a system property set
+   * that late can never affect the current schema build (confirmed live: the property read back
+   * correctly immediately after being set, while the dimension config logged moments later
+   * still showed the literal 117-119 default).
+   *
    * <p>Presidential-election-year tables need no equivalent: they're plain annual ranges on
    * GOVDATA_START_YEAR/END_YEAR directly, and a non-election year already resolves as an
    * expected zero-row gap at the source (electoral_college_votes' skipOn: [404];
    * presidential_election_results' transformer logging and returning zero rows for a year with
    * no matching link) — no dimension-level derivation needed.
    */
-  private void deriveCongressRange(Map<String, Object> operand) {
+  @Override public void deriveEarlyProperties(Map<String, Object> operand) {
     Object startYearObj = operand.get("startYear");
     Object endYearObj = operand.get("endYear");
     if (startYearObj == null || endYearObj == null) {

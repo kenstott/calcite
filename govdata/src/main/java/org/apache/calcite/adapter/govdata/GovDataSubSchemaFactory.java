@@ -104,6 +104,28 @@ public interface GovDataSubSchemaFactory extends SubSchemaFactory {
   void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand);
 
   /**
+   * Derives and sets any system properties this schema's own YAML resource needs resolved
+   * during {@code dimension_values}/dimension-config parsing.
+   *
+   * <p>Called by {@link GovDataSchemaFactory#create} immediately after
+   * {@code setCrossSchemaProperties}, before the schema's YAML resource is loaded and its
+   * {@code ${VAR:default}} placeholders are resolved into {@link
+   * org.apache.calcite.adapter.file.etl.DimensionConfig} objects. {@link #configureSchemaHooks}
+   * runs too late for this: it is invoked by {@code ModelLifecycleProcessor} well after
+   * dimension parsing has already resolved and cached those placeholders — a system property
+   * set there can never affect the current schema build, only (accidentally) a later one within
+   * the same JVM. Default no-op; override only when a schema needs to derive one operand value
+   * (e.g. a Congress number) into another before dimension resolution, the way
+   * {@code OfficialsSchemaFactory} derives {@code GOVDATA_START_CONGRESS}/
+   * {@code GOVDATA_END_CONGRESS} from the standard {@code startYear}/{@code endYear} operand.
+   *
+   * @param operand Configuration operand from model file
+   */
+  default void deriveEarlyProperties(Map<String, Object> operand) {
+    // No-op by default.
+  }
+
+  /**
    * Registers this schema's own hooks ({@link #configureSchemaHooks}), then layers a generic
    * {@code enabledTables} gate on top for every table the schema's YAML declares
    * ({@code partitionedTables} + {@code tables}).

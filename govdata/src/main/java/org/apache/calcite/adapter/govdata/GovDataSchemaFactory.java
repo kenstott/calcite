@@ -196,6 +196,15 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Get the appropriate sub-schema factory
     SubSchemaFactory factory = getFactoryForDataSource(dataSource);
 
+    // Give the sub-schema factory a chance to derive its own system properties (e.g. a Congress
+    // number from startYear/endYear) BEFORE the schema's YAML resource is loaded and its
+    // ${VAR:default} placeholders resolved below — configureSchemaHooks (called much later, by
+    // ModelLifecycleProcessor) runs after dimension parsing has already happened and cannot
+    // affect it. See GovDataSubSchemaFactory#deriveEarlyProperties.
+    if (factory instanceof GovDataSubSchemaFactory) {
+      ((GovDataSubSchemaFactory) factory).deriveEarlyProperties(operand);
+    }
+
     // Dependency data sources (e.g. econ needs econ_reference) are no longer pre-processed
     // here. That used to be required so a schema's views wouldn't fail when created before
     // their cross-schema reference existed — DuckDBPendingViews.createOnDemand now resolves
