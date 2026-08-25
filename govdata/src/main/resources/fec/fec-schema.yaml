@@ -642,8 +642,12 @@ partitionedTables:
 
     comment: >
       Itemized individual (donor-level) contributions to federal committees exceeding
-      $200 per cycle, with a transaction_type breakdown (15=contribution, 15E=earmarked,
-      22Y=refund). Largest FEC dataset (~4-5GB per cycle, 20M+ records); contains donor
+      $200 per cycle. transaction_type spans both ordinary contributions (15/15E/22Y) AND
+      code 10 (giving to Super PACs/Hybrid PACs/nonfederal soft-money accounts) — 10 is
+      uncapped and by dollar volume is typically the single largest code (2024: $6.2B vs.
+      $3.6B for 15), so a query that only knows 15/15E/22Y silently undercounts total giving,
+      especially per-donor. See the transaction_type column comment for the full code list.
+      Largest FEC dataset (~4-5GB per cycle, 20M+ records); contains donor
       name, employer, occupation, amount, date, and memo text (vectorized for inferred
       relationship discovery). Distinct from committee_contributions (committee-to-candidate
       money) and intercommittee_transactions (committee-to-committee transfers).
@@ -670,7 +674,20 @@ partitionedTables:
       - name: transaction_type
         type: string
         nullable: true
-        comment: Transaction type code (15=contribution, 15E=earmarked, 22Y=refund)
+        comment: >
+          FEC transaction type code (source: FEC transaction-type-code-descriptions).
+          15=contribution (individual/partnership/LLC), 15C=contribution from candidate,
+          15E=earmarked contribution, 22Y=contribution refund, 10=contribution to
+          Super PAC/Hybrid PAC/nonfederal soft-money account (uncapped, no 15/15E individual
+          limit — usually the largest single code by dollar volume, e.g. $6.2B vs $3.6B for
+          15 in 2024), 11=Native American Tribe contribution, 21Y=Native American Tribe
+          refund, 20Y=nonfederal refund, 24I=earmarked passed by intermediary committee
+          (intermediary out), 24T=earmarked passed from intermediary's treasury (treasury
+          out), 19=electioneering communication donation received,
+          30/30E/30T=Convention Account receipt (individual/earmarked/tribe),
+          31/31E/31T=Headquarters Account receipt (individual/earmarked/tribe),
+          32/32E/32T=Recount Account receipt (individual/earmarked/tribe),
+          41Y=Headquarters Account refund, 42Y=Recount Account refund.
         source: TRANSACTION_TP
       - name: entity_type
         type: string

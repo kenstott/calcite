@@ -360,6 +360,23 @@ SELECT 'fec', 'individual_contributions', 'T7_amount_reasonableness',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/individual_contributions', allow_moved_paths := true)
       WHERE amount IS NOT NULL AND amount > 100000);
 
+-- T8: transaction_type domain — every code present must be one of the ones documented on the
+-- column (fec-schema.yaml). Catches a repeat of the original defect: code '10' (Super PAC/
+-- Hybrid PAC/soft-money giving, ~$6.2B in 2024, the single largest code by dollar volume) was
+-- silently absent from the docs, so a caller filtering to "the documented codes" undercounted
+-- megadonor totals with no error. This fails loud instead if FEC ever ships a new code.
+INSERT INTO dq_results
+SELECT 'fec', 'individual_contributions', 'T8_transaction_type_documented',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'transaction_type value outside the documented set — update the column comment in fec-schema.yaml'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/individual_contributions', allow_moved_paths := true)
+WHERE transaction_type IS NOT NULL
+  AND transaction_type NOT IN (
+    '15','15C','15E','22Y','10','11','21Y','20Y','24I','24T','19',
+    '30','30E','30T','31','31E','31T','32','32E','32T','41Y','42Y'
+  );
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: committee_contributions
 -- ─────────────────────────────────────────────────────────────
