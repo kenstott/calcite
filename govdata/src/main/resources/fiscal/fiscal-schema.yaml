@@ -115,17 +115,27 @@ column_templates:
 
 dimension_values:
 
-  # IRS SOI ZIP/county files publish ~2.5 years after the tax year; as of
-  # 25 Aug 2026 the newest posted is TY2023 (irs.gov/statistics/soi-tax-stats-
-  # county-data, confirmed live). dataLag 3 targets the newest fully-available
-  # data year (effective_year = publish_year - 3) so no request 404-poisons.
-  # Lower this to 2 as TY2024 posts.
-  soi_year_range: &soi_year_range
+  # IRS SOI county-data and ZIP-code-data publish on independent schedules, confirmed
+  # live 25 Aug 2026: 23incyallagi.csv (county, TY2023) is up, but 23zpallagi.csv (ZIP,
+  # TY2023) still 404s with no 2023 ZIP-code-data page live yet — 22zpallagi.csv (TY2022)
+  # is the newest ZIP file actually posted. A single shared dataLag can't be correct for
+  # both once the two series diverge like this, so each gets its own anchor. Lower each
+  # independently as its own next tax year posts — do not recombine into one anchor,
+  # that's what caused this (govdata/fiscal, 25 Aug 2026).
+  soi_county_year_range: &soi_county_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
     minYear: 2011
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
+    descending: true
+
+  soi_zip_year_range: &soi_zip_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 2011
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 4
     descending: true
 
   # SOI migration is published as a year pair (e.g. 2021->2022 == "2122"); the
@@ -232,7 +242,7 @@ partitionedTables:
     dimensions:
       type:
         - soi_income_by_zip
-      year: *soi_year_range
+      year: *soi_zip_year_range
 
     columns:
       - <<: *state_fips_column
@@ -392,7 +402,7 @@ partitionedTables:
     dimensions:
       type:
         - soi_income_by_county
-      year: *soi_year_range
+      year: *soi_county_year_range
 
     columns:
       - <<: *state_fips_column
