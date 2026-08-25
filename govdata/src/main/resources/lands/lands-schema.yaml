@@ -1010,7 +1010,11 @@ partitionedTables:
       - name: gross_acres
         type: double
         nullable: true
-        comment: Approximate unit area in acres (derived from GIS shape area)
+        comment: >
+          Approximate unit area in acres, derived from the ArcGIS Shape__Area attribute
+          (always returned in the layer's Web Mercator storage SR regardless of outSR) with
+          a cos(lat)^2 correction for Mercator's latitude-dependent area inflation, using the
+          geometry's mean vertex latitude as the representative point.
 
     # NPS unit boundaries change rarely; the service returns a stable Last-Modified, so probe it
     # and skip re-ingest of this (non-period) table when the boundary set is unchanged.

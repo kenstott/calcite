@@ -370,6 +370,19 @@ SELECT 'lands', 'nps_units', 'T7_gross_acres_positive',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_units', allow_moved_paths := true)
       WHERE gross_acres IS NOT NULL AND gross_acres <= 0);
 
+-- T7: gross_acres plausible magnitude — [0.01, 20,000,000] acres. Catches the class of bug
+-- where Shape__Area (always returned in the layer's Web Mercator storage SR regardless of
+-- outSR) is converted without correcting for Mercator's latitude-dependent area inflation,
+-- which understates real acreage by many orders of magnitude rather than merely skewing it.
+-- Floor is below the smallest real unit (Thaddeus Kosciuszko National Memorial, ~0.028
+-- acres — a single house) so genuine tiny urban memorials don't false-fail.
+INSERT INTO dq_results
+SELECT 'lands', 'nps_units', 'T7_gross_acres_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows with gross_acres outside [0.01, 20000000] -- smallest real units run a fraction of an acre, largest (Wrangell-St. Elias) is ~13.2M'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_units', allow_moved_paths := true)
+      WHERE gross_acres IS NOT NULL AND (gross_acres < 0.01 OR gross_acres > 20000000));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: nps_visitation  (XML API, monthly only, no camping cols)
 -- ─────────────────────────────────────────────────────────────

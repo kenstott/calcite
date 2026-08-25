@@ -250,12 +250,18 @@ partitionedTables:
     pattern: "type=nass_crop_production/year=*/*.parquet"
     partitions: *nass_partitions
     comment: >
-      USDA NASS QuickStats field-crop statistics (production, area planted, area
-      harvested, yield) by county and state, annual. Tall layout — filter
-      statisticcat_desc for a specific measure and unit_desc for its unit. Joins to
-      geo.counties via the derived county_fips column and to geo.states via
-      state_fips_code; also joinable to disasters drought/storm tables by county+year
-      for yield-impact analysis.
+      USDA NASS QuickStats field-crop statistics — production, area planted, area
+      harvested, yield, condition, and progress — by county and state. Tall layout —
+      filter statisticcat_desc for a specific measure and unit_desc for its unit;
+      reference_period_desc is annual ('YEAR') for production/yield/area but weekly
+      ('WEEK #nn') or monthly for condition/progress measures, so filter statisticcat_desc
+      before comparing reference_period_desc across rows. NassQuickStatsTransformer drops
+      the in-season forecast vintages NASS also publishes for production/yield
+      (reference_period_desc 'YEAR - AUG/SEP/OCT/NOV FORECAST') so this table carries only
+      each year's final published annual estimate for those measures, not every revision.
+      Joins to geo.counties via the derived county_fips column and to geo.states via
+      state_fips_code; also joinable to disasters drought/storm tables by county+year for
+      yield-impact analysis.
 
     dimensions:
       type:
@@ -340,9 +346,13 @@ partitionedTables:
       state, annual — cattle, hogs, sheep, chickens, turkeys, etc. Fetched with
       statisticcat_desc=INVENTORY only, so production/marketings for animals &
       products are not in this table. Tall layout; use commodity_desc + class_desc
-      for a specific animal class and unit_desc for the unit (HEAD). Joins to
-      geo.counties via the derived county_fips column and to geo.states via
-      state_fips_code.
+      for a specific animal class and unit_desc for the unit (HEAD). reference_period_desc
+      cadence varies by series: most classes report one annual snapshot ('FIRST OF JAN'),
+      but on-feed cattle classes report a separate row per month ('FIRST OF JAN' through
+      'FIRST OF DEC') — summing across reference_period_desc for those classes double-,
+      triple-, or 12x-counts the same animals rather than adding distinct populations.
+      Filter to a single reference_period_desc before aggregating. Joins to geo.counties
+      via the derived county_fips column and to geo.states via state_fips_code.
 
     dimensions:
       type:

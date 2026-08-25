@@ -109,8 +109,17 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
       }
 
       ArrayNode out = MAPPER.createArrayNode();
+      int skippedForecasts = 0;
       for (JsonNode record : data) {
+        if (isForecastVintage(record)) {
+          skippedForecasts++;
+          continue;
+        }
         out.add(transformRecord(record));
+      }
+      if (skippedForecasts > 0) {
+        LOGGER.debug("NASS: dropped {} in-season forecast-vintage records for {}",
+            skippedForecasts, context.getDimensionValues());
       }
       LOGGER.debug("NASS: transformed {} records for {}", out.size(),
           context.getDimensionValues());
@@ -123,6 +132,20 @@ public class NassQuickStatsTransformer implements ResponseTransformer {
           context.getUrl(), e.getMessage());
       throw new RuntimeException("Failed to transform NASS response: " + e.getMessage(), e);
     }
+  }
+
+  /**
+   * NASS publishes in-season forecast vintages (reference_period_desc "YEAR - AUG/SEP/OCT/
+   * NOV FORECAST") alongside each year's final annual estimate ("YEAR") for the same
+   * (commodity, state, year, statisticcat_desc, unit_desc) key -- without this filter a
+   * naive aggregation double/triple/quintuple counts the same underlying figure. Weekly
+   * ("WEEK #nn") and monthly condition/progress reference periods are a different,
+   * legitimately multi-row measure and are not affected by this pattern.
+   */
+  private boolean isForecastVintage(JsonNode record) {
+    String referencePeriod = getTextValue(record, "reference_period_desc");
+    return referencePeriod != null
+        && referencePeriod.startsWith("YEAR - ") && referencePeriod.endsWith(" FORECAST");
   }
 
   private ObjectNode transformRecord(JsonNode record) {

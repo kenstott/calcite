@@ -49,6 +49,17 @@ SELECT 'ag', 'nass_crop_production', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_production', allow_moved_paths := true) WHERE short_desc IS NULL);
 
+-- T7: no in-season forecast vintages -- NassQuickStatsTransformer drops
+-- reference_period_desc values matching 'YEAR - % FORECAST' (the in-season revisions NASS
+-- publishes ahead of each year's final production/yield estimate). Their presence means the
+-- transformer-side filter was bypassed and forecast/final revisions are stacking under the
+-- same key again. Weekly ('WEEK #nn') and monthly condition/progress reference periods are
+-- untouched by this check -- they are a different, legitimately multi-row measure.
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_production', 'T7_no_forecast_vintages',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with reference_period_desc LIKE ''YEAR - % FORECAST'''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_production', allow_moved_paths := true) WHERE reference_period_desc LIKE 'YEAR - % FORECAST');
+
 -- ------------------------------------------------------------
 -- TABLE: nass_livestock_inventory (partition cols: type, year; PK id col: short_desc)
 -- ------------------------------------------------------------

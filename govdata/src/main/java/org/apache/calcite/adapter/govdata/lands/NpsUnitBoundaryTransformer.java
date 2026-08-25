@@ -25,9 +25,15 @@ import org.slf4j.LoggerFactory;
  * Transforms NPS ArcGIS FeatureServer responses into {@code nps_units} rows.
  *
  * <p>Input: ArcGIS query JSON from the NPS hosted feature service.
- * {@code STATE} is a 2-character state abbreviation (not FIPS). {@code Shape__Area} is in
- * square meters and is converted to acres by dividing by 4046.856.
- * {@code GIS_ACRES}, {@code DATE_EST}, and {@code COUNTY_FIPS} are not available.
+ * {@code STATE} is a 2-character state abbreviation (not FIPS). {@code Shape__Area} is
+ * always computed by the service in the layer's storage spatial reference (Web Mercator,
+ * EPSG:3857/102100) regardless of any {@code outSR} requested on the query — reprojecting
+ * the returned geometry does not change the attribute. Web Mercator inflates area by
+ * {@code 1/cos(lat)^2}, so a raw conversion understates every unit and is wrong by 5-6x at
+ * Alaska latitudes; this is corrected using the geometry's mean vertex latitude (recovered
+ * via the inverse Mercator projection) before converting to acres.
+ * {@code GIS_ACRES}, {@code DATE_EST}, and {@code COUNTY_FIPS} are not available on any
+ * layer of this FeatureServer.
  * <pre>
  * {
  *   "features": [
@@ -39,7 +45,8 @@ import org.slf4j.LoggerFactory;
  *         "STATE": "CA",
  *         "REGION": "Pacific West",
  *         "Shape__Area": 9640234567.0
- *       }
+ *       },
+ *       "geometry": { "rings": [ [ [x, y], [x, y], ... ] ] }
  *     }
  *   ]
  * }
@@ -54,6 +61,7 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final double SQ_METERS_PER_ACRE = 4046.856;
+  private static final double WEB_MERCATOR_EARTH_RADIUS_M = 6378137.0;
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -89,7 +97,7 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
         row.put("unit_type", textOrNull(attrs, "UNIT_TYPE"));
         row.put("state_abbr", textOrNull(attrs, "STATE"));
         row.put("region", textOrNull(attrs, "REGION"));
-        row.put("gross_acres", sqMetersToAcres(attrs, "Shape__Area"));
+        row.put("gross_acres", sqMetersToAcres(attrs, feature.path("geometry")));
         result.add(row);
       }
 
@@ -106,11 +114,46 @@ public class NpsUnitBoundaryTransformer implements ResponseTransformer {
     return val.isNull() || val.isMissingNode() ? null : val.asText(null);
   }
 
-  private Double sqMetersToAcres(JsonNode node, String field) {
-    JsonNode val = node.path(field);
+  private Double sqMetersToAcres(JsonNode attrs, JsonNode geometry) {
+    JsonNode val = attrs.path("Shape__Area");
     if (val.isNull() || val.isMissingNode()) {
       return null;
     }
-    return val.asDouble() / SQ_METERS_PER_ACRE;
+    double webMercatorSqMeters = val.asDouble();
+    double correction = webMercatorAreaCorrection(geometry);
+    return webMercatorSqMeters * correction / SQ_METERS_PER_ACRE;
+  }
+
+  /**
+   * Web Mercator scales area by {@code 1/cos(lat)^2} relative to the true ellipsoidal area.
+   * Returns {@code cos(lat)^2} for the geometry's mean vertex latitude (recovered via the
+   * inverse Mercator projection), or {@code 1.0} (no correction) if no ring vertices are
+   * available to derive a representative latitude from.
+   */
+  private double webMercatorAreaCorrection(JsonNode geometry) {
+    JsonNode rings = geometry.path("rings");
+    if (!rings.isArray() || rings.isEmpty()) {
+      return 1.0;
+    }
+    double ySum = 0.0;
+    long yCount = 0;
+    for (JsonNode ring : rings) {
+      if (!ring.isArray()) {
+        continue;
+      }
+      for (JsonNode vertex : ring) {
+        if (vertex.isArray() && vertex.size() >= 2) {
+          ySum += vertex.get(1).asDouble();
+          yCount++;
+        }
+      }
+    }
+    if (yCount == 0) {
+      return 1.0;
+    }
+    double meanY = ySum / yCount;
+    double lat = 2 * Math.atan(Math.exp(meanY / WEB_MERCATOR_EARTH_RADIUS_M)) - Math.PI / 2;
+    double cosLat = Math.cos(lat);
+    return cosLat * cosLat;
   }
 }
