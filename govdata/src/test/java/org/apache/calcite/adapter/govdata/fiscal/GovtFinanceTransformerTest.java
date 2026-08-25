@@ -71,6 +71,20 @@ class GovtFinanceTransformerTest {
         findZipUrl(html));
   }
 
+  @Test void testResolvesProtocolRelativeHrefToWww2Host() throws Exception {
+    // Real live 2013 landing page href, confirmed 25 Aug 2026: a protocol-relative URL pointing
+    // at www2.census.gov, a different host than the www.census.gov landing page. Treating this
+    // like a site-root-relative path (the pre-fix behavior) produces the malformed
+    // https://www.census.gov//www2.census.gov/... and downloadBytes() throws for every year
+    // whose zip link uses this shape.
+    String html = "<html><body><a href=\"//www2.census.gov/programs-surveys/gov-finances/"
+        + "tables/2013/summary-tables/2013_Individual_Unit_file.zip\">Data</a></body></html>";
+    assertEquals(
+        "https://www2.census.gov/programs-surveys/gov-finances/tables/2013/summary-tables/"
+            + "2013_Individual_Unit_file.zip",
+        findZipUrl(html));
+  }
+
   @Test void testResolvesRelativeHrefAgainstCensusHost() throws Exception {
     String html = "<html><body><a href=\"/programs-surveys/gov-finances/tables/2016/"
         + "2016_Individual_Unit_file.zip\">Data</a></body></html>";

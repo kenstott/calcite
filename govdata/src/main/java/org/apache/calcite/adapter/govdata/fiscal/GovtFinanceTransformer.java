@@ -120,10 +120,27 @@ public class GovtFinanceTransformer implements ResponseTransformer {
     for (Element link : doc.select("a[href]")) {
       String href = link.attr("href");
       if (ZIP_LINK_PATTERN.matcher(href).find()) {
-        return href.startsWith("http") ? href : "https://www.census.gov" + href;
+        return resolveHref(href);
       }
     }
     return null;
+  }
+
+  /**
+   * Resolves an anchor href to an absolute URL. Confirmed live to appear in three shapes across
+   * years: absolute ({@code https://www2.census.gov/...}, most years), site-root-relative
+   * ({@code /data/...}), and protocol-relative ({@code //www2.census.gov/...}, 2013/2016 — a
+   * different host than the www.census.gov landing page, so it cannot be treated as a relative
+   * path or the result is the malformed https://www.census.gov//www2.census.gov/...).
+   */
+  private String resolveHref(String href) {
+    if (href.startsWith("http")) {
+      return href;
+    }
+    if (href.startsWith("//")) {
+      return "https:" + href;
+    }
+    return "https://www.census.gov" + href;
   }
 
   private byte[] extractDataFile(byte[] zipBytes) throws IOException {
