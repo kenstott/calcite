@@ -44,8 +44,19 @@ import java.util.Map;
  *
  * <p>CDO returns one row per datatype per station per month. This transformer
  * pivots those rows into one output record per (station_id, month) with each
- * datatype mapped to its planned column. Values stored in tenths of a unit
- * (temperature, precipitation) are divided by 10 to produce standard units.
+ * datatype mapped to its planned column.
+ *
+ * <p>The query below deliberately omits {@code units=metric}: NOAA applies the
+ * absolute-temperature (F&deg;-32)&times;5/9 conversion formula even to
+ * *-STDDEV datatypes (a delta, not an absolute value) when metric units are
+ * requested, which corrupts standard deviations into negative numbers &mdash;
+ * confirmed live. Fetching everything in CDO's default "standard" units and
+ * converting each field here, with the correct formula per field, avoids that
+ * bug. Standard-unit raw scales (confirmed live against the CDO API, cross-
+ * checked against its own {@code units=metric} output where that is safe to
+ * trust): temperature normals are tenths of &deg;F; precipitation normal is
+ * hundredths of an inch; snowfall normal is tenths of an inch; stddev fields
+ * are tenths of a &deg;F <em>delta</em> (no -32 offset applies).
  *
  * <p>{@code county_fips} is set to null; it requires a post-ETL join against
  * {@code ghcnd_stations_with_county}.
@@ -122,25 +133,27 @@ public class ClimateNormalsTransformer implements ResponseTransformer {
 
         switch (datatype) {
         case "MLY-TMAX-NORMAL":
-          rec.normalTmaxC = rawValue / 10.0;
+          rec.normalTmaxC = tenthsFahrenheitToCelsius(rawValue);
           break;
         case "MLY-TMIN-NORMAL":
-          rec.normalTminC = rawValue / 10.0;
+          rec.normalTminC = tenthsFahrenheitToCelsius(rawValue);
           break;
         case "MLY-TAVG-NORMAL":
-          rec.normalTavgC = rawValue / 10.0;
+          rec.normalTavgC = tenthsFahrenheitToCelsius(rawValue);
           break;
         case "MLY-PRCP-NORMAL":
-          rec.normalPrcpMm = rawValue / 10.0;
+          // Hundredths of an inch -> mm.
+          rec.normalPrcpMm = (rawValue / 100.0) * MM_PER_INCH;
           break;
         case "MLY-SNOW-NORMAL":
-          rec.normalSnowMm = rawValue;
+          // Tenths of an inch -> mm.
+          rec.normalSnowMm = (rawValue / 10.0) * MM_PER_INCH;
           break;
         case "MLY-TMAX-STDDEV":
-          rec.tmaxStddev = rawValue / 10.0;
+          rec.tmaxStddev = tenthsFahrenheitDeltaToCelsius(rawValue);
           break;
         case "MLY-TMIN-STDDEV":
-          rec.tminStddev = rawValue / 10.0;
+          rec.tminStddev = tenthsFahrenheitDeltaToCelsius(rawValue);
           break;
         default:
           break;
@@ -177,6 +190,18 @@ public class ClimateNormalsTransformer implements ResponseTransformer {
       throw new RuntimeException("Climate Normals: Failed to parse response for "
           + context.getUrl(), e);
     }
+  }
+
+  private static final double MM_PER_INCH = 25.4;
+
+  /** Converts a raw value in tenths of &deg;F to an absolute temperature in &deg;C. */
+  private static double tenthsFahrenheitToCelsius(double tenthsF) {
+    return ((tenthsF / 10.0) - 32.0) * 5.0 / 9.0;
+  }
+
+  /** Converts a raw value in tenths of a &deg;F delta (e.g. a stddev) to a &deg;C delta -- no -32 offset. */
+  private static double tenthsFahrenheitDeltaToCelsius(double tenthsF) {
+    return (tenthsF / 10.0) * 5.0 / 9.0;
   }
 
   private static void putNullableDouble(ObjectNode row, String field, Double value) {

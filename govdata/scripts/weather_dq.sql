@@ -645,14 +645,16 @@ FROM (
   WHERE month IS NOT NULL
 );
 
--- climate_normals_monthly: normal_tmax_c range — CDO normals are in °F despite the _c suffix (ETL naming)
+-- climate_normals_monthly: normal_tmax_c range — real Celsius bounds; ClimateNormalsTransformer
+-- converts CDO's raw standard-unit (°F) response to true Celsius, so this now actually verifies
+-- the _c suffix rather than tolerating a mislabeled °F value.
 INSERT INTO dq_results
 SELECT 'weather', 'climate_normals_monthly', 'normal_tmax_range',
   CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END,
   CAST(bad AS VARCHAR), '0',
-  'rows with normal_tmax_c out of [-60,130] (values are °F)'
+  'rows with normal_tmax_c out of [-50,55] (true Celsius bounds)'
 FROM (
-  SELECT SUM(CASE WHEN normal_tmax_c < -60 OR normal_tmax_c > 130 THEN 1 ELSE 0 END) AS bad
+  SELECT SUM(CASE WHEN normal_tmax_c < -50 OR normal_tmax_c > 55 THEN 1 ELSE 0 END) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly', allow_moved_paths=true)
   WHERE normal_tmax_c IS NOT NULL
 );

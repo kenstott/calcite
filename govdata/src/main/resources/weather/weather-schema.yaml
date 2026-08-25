@@ -1239,9 +1239,12 @@ partitionedTables:
     partitions: *normals_partitions
     comment: >
       NOAA CDO Monthly Climate Normals (NORMAL_MLY dataset, 1981-2010 period).
-      One row per station per month. Values are in metric units (°C, mm).
-      CDO returns temperature in tenths of °C and precipitation in tenths of mm;
-      the transformer divides by 10 to produce standard units. county_fips is joined
+      One row per station per month. Values are in metric units (°C, mm). CDO's
+      raw response is in its "standard" units (tenths of °F for temperature,
+      hundredths of an inch for precipitation, tenths of an inch for snowfall);
+      ClimateNormalsTransformer converts each to metric with the correct formula
+      per field (absolute temperatures use (°F-32)×5/9; the two stddev columns
+      are a delta and use ×5/9 with no -32 offset). county_fips is joined
       from ghcnd_stations_with_county. Requires NOAA_CDO_TOKEN. Static dataset —
       update logic is not needed until NOAA releases a new 30-year period.
       Cross-references ghcnd_stations_with_county via station_id.
