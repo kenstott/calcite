@@ -1997,6 +1997,117 @@ partitionedTables:
         snapshotRetentionDays: 7
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # EIA DRILLING ACTIVITY - EIA STEO (Short-Term Energy Outlook) Table 10a,
+  # the successor to the standalone Drilling Productivity Report (folded in
+  # June 2024) — rig counts, wells drilled/completed, and DUC inventory by
+  # DPR region.
+  # ---------------------------------------------------------------------------
+  - name: eia_drilling_activity
+    # STEO revises recent months on every release; single cumulative fetch
+    # (all history in one request, well under the 5000-row page cap) makes a
+    # hash-based freshness check the natural fit — no year windowing needed.
+    freshness:
+      type: hash
+    pattern: "type=eia_drilling_activity/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      EIA Short-Term Energy Outlook (STEO) Table 10a upstream drilling activity —
+      active rig count, new wells drilled, new wells completed, and drilled-but-
+      uncompleted (DUC) well inventory, monthly, for the 6 regions STEO covers
+      (Permian, Bakken, Eagle Ford, Appalachia, Haynesville, and Rest of Lower 48
+      excluding Gulf of America). This is the successor to EIA's standalone
+      Drilling Productivity Report, folded into STEO as Table 10a in June 2024
+      (confirmed live: full 2013-01 through present history, 24 series, ~3,900
+      rows, one request). Rig counts/wells drilled lead crude and gas production
+      by months, which energy's production/capacity tables alone cannot show.
+      One row per (region, metric, period). Whole series set re-fetched and
+      overwritten each run when content changes.
+
+    dimensions:
+      type:
+        - eia_drilling_activity
+
+    columns:
+      - name: series_id
+        type: string
+        nullable: false
+        comment: EIA STEO series ID (e.g. 'RIGSPM'); PK component with period
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full EIA series description
+      - name: region_code
+        type: string
+        nullable: true
+        comment: DPR region code decoded from series_id (PM/BK/EF/AP/HA/R48)
+      - name: region_name
+        type: string
+        nullable: true
+        comment: >
+          Region name decoded from series_id (Permian/Bakken/Eagle Ford/
+          Appalachia/Haynesville/Rest of Lower 48 excluding Gulf of America)
+      - name: metric_code
+        type: string
+        nullable: true
+        comment: Metric decoded from series_id (RIGS/NWD/NWC/DUCS)
+      - name: metric_name
+        type: string
+        nullable: true
+        comment: >
+          Metric name decoded from series_id (Active Rigs/New Wells Drilled/
+          New Wells Completed/Drilled but Uncompleted Wells)
+      - name: period
+        type: string
+        nullable: false
+        comment: Report period, YYYY-MM; PK component with series_id
+      - name: report_year
+        type: integer
+        nullable: true
+        comment: Calendar year parsed from period
+      - name: report_month
+        type: integer
+        nullable: true
+        comment: Calendar month (1-12) parsed from period
+      - name: value
+        type: double
+        nullable: true
+        comment: >
+          Metric value — rig count and well counts are physical counts (not
+          dollars/percent); DUC is an end-of-month inventory level, not a flow
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/steo/data/?frequency=monthly&data[0]=value&facets[seriesId][]=RIGSPM&facets[seriesId][]=NWDPM&facets[seriesId][]=NWCPM&facets[seriesId][]=DUCSPM&facets[seriesId][]=RIGSBK&facets[seriesId][]=NWDBK&facets[seriesId][]=NWCBK&facets[seriesId][]=DUCSBK&facets[seriesId][]=RIGSEF&facets[seriesId][]=NWDEF&facets[seriesId][]=NWCEF&facets[seriesId][]=DUCSEF&facets[seriesId][]=RIGSAP&facets[seriesId][]=NWDAP&facets[seriesId][]=NWCAP&facets[seriesId][]=DUCSAP&facets[seriesId][]=RIGSHA&facets[seriesId][]=NWDHA&facets[seriesId][]=NWCHA&facets[seriesId][]=DUCSHA&facets[seriesId][]=RIGSR48&facets[seriesId][]=NWDR48&facets[seriesId][]=NWCR48&facets[seriesId][]=DUCSR48"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaDrillingActivityTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_drilling_activity/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_drilling_activity
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2109,6 +2220,9 @@ constraints:
         targetSchema: geo
         targetTable: state_ref
         targetColumns: [state_abbr]
+
+  eia_drilling_activity:
+    primaryKey: [series_id, period]
 
 # ============================================================================
 # VIEWS

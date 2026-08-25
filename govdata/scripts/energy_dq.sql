@@ -8,7 +8,7 @@
 --         eia_fossil_fuel_production, eia_state_energy_consumption,
 --         eia_natural_gas_storage, eia_petroleum_stocks,
 --         eia_crude_oil_imports, eia_refinery_operations, eia_coal_mines,
---         ev_charging_stations
+--         ev_charging_stations, eia_drilling_activity
 -- Storage: Iceberg (iceberg_scan)
 --
 -- Worker coverage verified by T8 checks:
@@ -1034,6 +1034,83 @@ FROM (
      OR (ev_dc_fast_num IS NOT NULL AND ev_dc_fast_num < 0)
      OR (ev_level1_evse_num IS NOT NULL AND ev_level1_evse_num < 0)
      OR (ev_level2_evse_num IS NOT NULL AND ev_level2_evse_num < 0)
+) t;
+
+-- ============================================================
+-- eia_drilling_activity
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_drilling_activity', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true);
+
+-- T2: row_count — confirmed live 25 Aug 2026: 24 series x ~163 months = 3912 rows
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_drilling_activity', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 3000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 3000, 'expected >= 3000 rows across 24 series (6 regions x 4 metrics)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_drilling_activity', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_drilling_activity', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type')
+) t;
+
+-- T6: pk_nulls (series_id, period NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_drilling_activity', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'series_id IS NULL OR period IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true)
+WHERE series_id IS NULL OR period IS NULL;
+
+-- T7: expected_values — rig/well/DUC counts are non-negative where present, and
+-- every series_id decodes to a known region_code/metric_code (validates the
+-- transformer's prefix/suffix parsing against the fixed 24-series set)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_drilling_activity', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0,
+  'negative value, or series_id with undecoded region_code/metric_code'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true)
+  WHERE (value IS NOT NULL AND value < 0)
+     OR region_code IS NULL OR metric_code IS NULL
 ) t;
 
 -- ============================================================
