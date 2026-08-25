@@ -446,6 +446,19 @@ SELECT 'fec', 'committee_contributions', 'T7_amendment_indicator',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/committee_contributions', allow_moved_paths := true)
       WHERE amendment_indicator IS NOT NULL AND amendment_indicator NOT IN ('N', 'A', 'T'));
 
+-- T8: transaction_date plausibility — guards against a raw unparsed MMDDYYYY string ("12242020")
+-- landing in coerceValue's DATE case as a Number and being silently read as a literal epoch-day
+-- count (e.g. 35487-07-07). IcebergTableWriter now bound-checks the year itself (fails loud via
+-- onCoercionFailure instead of writing garbage), but this catches any row that still slipped
+-- through, or a recurrence via a different code path.
+INSERT INTO dq_results
+SELECT 'fec', 'committee_contributions', 'T8_transaction_date_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'transaction_date year outside 1990-2030'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fec/committee_contributions', allow_moved_paths := true)
+      WHERE transaction_date IS NOT NULL
+        AND (EXTRACT(year FROM transaction_date) < 1990 OR EXTRACT(year FROM transaction_date) > 2030));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: intercommittee_transactions
 -- ─────────────────────────────────────────────────────────────

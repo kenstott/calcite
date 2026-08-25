@@ -82,6 +82,15 @@ public class IcebergTableWriter {
   private static final int MAX_RECORDS_PER_COMPACTION_FILE = 2_000_000;
 
   /**
+   * Plausible calendar-year bounds for a DATE column fed a raw {@link Number} (an epoch-day
+   * count). Wide enough for any real government dataset in this repo (historical census/weather
+   * data included) while still rejecting an implausible year like 35487 -- the signature of an
+   * unparsed date string being misread as a literal epoch-day count.
+   */
+  private static final int MIN_PLAUSIBLE_DATE_YEAR = 1500;
+  private static final int MAX_PLAUSIBLE_DATE_YEAR = 2200;
+
+  /**
    * Sentinel returned by {@link #coerceValue(String, Object, org.apache.iceberg.types.Type)}
    * when a column's {@code onCoercionFailure: DROP} policy applies to an unparseable value —
    * the caller in {@link #writeRecords} drops the whole row rather than writing it with the
@@ -972,7 +981,21 @@ public class IcebergTableWriter {
           return value;
         }
         if (value instanceof Number) {
-          return java.time.LocalDate.ofEpochDay(((Number) value).longValue());
+          // java.time.LocalDate supports years up to 999,999,999, so an implausible epoch-day
+          // count (e.g. a raw unparsed "MMDDYYYY" string like "12242020" landing here as a
+          // Number instead of going through its declared dateFormat parser) never throws --
+          // it silently constructs a real-looking date like 35487-07-07. Bound-check against a
+          // generous real-world calendar range instead of accepting any Number, so this class of
+          // upstream parsing miss fails loudly via the column's onCoercionFailure policy instead
+          // of writing a corrupted date with no error (found live: fec.committee_contributions
+          // .transaction_date, every row, during a window a date-format fix didn't yet cover).
+          long epochDay = ((Number) value).longValue();
+          java.time.LocalDate parsed = java.time.LocalDate.ofEpochDay(epochDay);
+          int year = parsed.getYear();
+          if (year < MIN_PLAUSIBLE_DATE_YEAR || year > MAX_PLAUSIBLE_DATE_YEAR) {
+            return handleCoercionFailure(fieldName, value, "DATE", null);
+          }
+          return parsed;
         }
         if (value instanceof java.sql.Date) {
           return ((java.sql.Date) value).toLocalDate();

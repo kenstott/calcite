@@ -127,6 +127,44 @@ class IcebergTableWriterCoercionPolicyTest {
     assertThrows(IllegalStateException.class, () -> writer.writeRecords(records, null));
   }
 
+  // ---- Implausible-epoch-day Number guard (fec.committee_contributions.transaction_date) ----
+
+  @Test void testImplausibleEpochDayNumberFailsInsteadOfSilentlyCorrupting() {
+    // Reproduces the live corruption: an unparsed 8-digit MMDDYYYY date string ("12242020",
+    // meant to become 2020-12-24) reaching coerceValue's DATE case as a raw Number instead of
+    // going through its declared dateFormat parser. Before the bound check, LocalDate.ofEpochDay
+    // happily accepted it and silently wrote 35487-07-07 -- no error, no warning that would
+    // survive a WARN policy's log line, just a wrong date. FAIL makes the corruption visible here.
+    Table table = newTable(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "d", Types.DateType.get()));
+    Map<String, String> policies = Collections.singletonMap("d", "FAIL");
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider, policies);
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    records.add(row("bad", "d", 12242020L));
+
+    IllegalStateException ex = assertThrows(IllegalStateException.class,
+        () -> writer.writeRecords(records, null));
+    assertTrue(ex.getMessage().contains("d"), "error should name the failing column");
+  }
+
+  @Test void testPlausibleEpochDayNumberStillWritesCorrectDate() throws Exception {
+    // A genuine epoch-day count for a real calendar date (2024-01-15) must still work --
+    // the guard bounds the year, it doesn't reject every Number.
+    Table table = newTable(
+        Types.NestedField.optional(1, "name", Types.StringType.get()),
+        Types.NestedField.optional(2, "d", Types.DateType.get()));
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+
+    List<Map<String, Object>> records = new ArrayList<>();
+    records.add(row("ok", "d", (int) java.time.LocalDate.of(2024, 1, 15).toEpochDay()));
+
+    DataFile df = writer.writeRecords(records, null);
+    assertNotNull(df);
+    assertEquals(1, df.recordCount());
+  }
+
   // ---- DROP ----
 
   @Test void testDropPolicyOmitsOnlyTheBadRow() throws Exception {
