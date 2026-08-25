@@ -607,13 +607,20 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/
 -- existing one instead of replacing it (found live: exact 6x duplication, $18.1B real FY2023
 -- royalties read back as $71B).
 INSERT INTO dq_results
+-- county_fips alone is not a full grain: ONRR carries multiple distinct rows sharing one FIPS
+-- (e.g. "Kenai (Pre)" vs "Kenai (Post)", "Mobile" vs "Mobile Offshore" county_name; distinct
+-- offshore_region values for the same NULL county_fips) -- found live when the first version of
+-- this check flagged 795 false-positive "duplicates" that were genuinely different rows. The
+-- true grain is every descriptive column; only revenue is the measure.
 SELECT 'lands', 'onrr_revenues', 'T8_no_pk_duplication',
   CASE WHEN total_rows = distinct_pk_rows THEN 'pass' ELSE 'fail' END,
   total_rows, distinct_pk_rows,
-  'total_rows must equal distinct_pk_rows (fiscal_year,county_fips,land_class,commodity,revenue_type,product) -- otherwise the bulk CSV is being appended, not replaced'
+  'total_rows must equal distinct_pk_rows (every descriptive column) -- otherwise the bulk CSV is being appended, not replaced'
 FROM (
   SELECT COUNT(*) AS total_rows,
-         COUNT(DISTINCT (fiscal_year, county_fips, land_class, commodity, revenue_type, product)) AS distinct_pk_rows
+         COUNT(DISTINCT (fiscal_year, land_class, land_category, state_name, county_name,
+                          county_fips, offshore_region, revenue_type, mineral_lease_type,
+                          commodity, product)) AS distinct_pk_rows
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/onrr_revenues', allow_moved_paths := true)
 );
 

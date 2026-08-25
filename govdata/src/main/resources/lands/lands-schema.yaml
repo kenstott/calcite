@@ -1211,12 +1211,16 @@ partitionedTables:
     comment: >
       Office of Natural Resources Revenue (ONRR) royalty payments for oil, gas, coal,
       and other minerals extracted from federal and tribal lands, full history from
-      FY 2004 in a single bulk download. Row grain follows the primary key:
-      fiscal_year × county_fips × land_class × commodity × revenue_type × product;
-      state_name/county_name/county_fips are null for offshore rows, which carry
-      offshore_region instead. Primary financial link between BLM-managed subsurface
-      rights and SEC 10-K disclosures for E&P and mining companies. Source:
-      revenuedata.onrr.gov (domain moved from revenuedata.doi.gov in 2024).
+      FY 2004 in a single bulk download. Row grain is every descriptive column together
+      (fiscal_year, land_class, land_category, state_name, county_name, county_fips,
+      offshore_region, revenue_type, mineral_lease_type, commodity, product) — revenue
+      is the only measure. county_fips alone does not identify a row: ONRR carries
+      multiple distinct rows sharing one FIPS (e.g. "Kenai (Pre)" vs "Kenai (Post)"
+      county_name), and offshore rows (null state_name/county_name/county_fips) are
+      distinguished by offshore_region instead. Primary financial link between
+      BLM-managed subsurface rights and SEC 10-K disclosures for E&P and mining
+      companies. Source: revenuedata.onrr.gov (domain moved from revenuedata.doi.gov
+      in 2024).
 
     dimensions:
       type:
